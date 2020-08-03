@@ -43,8 +43,8 @@ def fail(msg):
     exit(1)
 
 
-def assertResponse(response):
-    if response.status_code != 200:
+def assertResponse(response, acceptedResponses=[200]):
+    if response.status_code not in acceptedResponses:
         print("Test failed on URL: {}".format(response.url))
         # stdout/stderr from both services is A LOT of text.
         # Confusing to dump all that to console.
@@ -155,7 +155,8 @@ assertResponse(
         f"http://localhost:5001/bank-accounts/{BANK_ACCOUNT_LABEL}/payment-initiations/{PREPARED_PAYMENT_UUID}/submit",
         json=dict(),
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
-    )
+    ),
+    [500]
 )
 
 print("Test passed!")

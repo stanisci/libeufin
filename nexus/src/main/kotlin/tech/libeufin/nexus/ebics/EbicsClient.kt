@@ -224,7 +224,9 @@ suspend fun doEbicsUploadTransaction(
         EbicsReturnCode.EBICS_OK -> {
         }
         else -> {
-            throw NexusError(HttpStatusCode.InternalServerError, "unexpected return code")
+            throw NexusError(HttpStatusCode.InternalServerError,
+                "Unexpected EBICS return code: ${txResp.technicalReturnCode}"
+            )
         }
     }
 }
