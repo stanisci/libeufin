@@ -326,7 +326,6 @@ fun buildCamtString(type: Int, subscriberIban: String, history: MutableList<RawP
                                 } // date of assets' actual (un)availability
                                 element("AcctSvcrRef") {
                                     val uid = if (it.uid != null) it.uid.toString() else {
-                                        LOGGER.error("")
                                         throw EbicsRequestError(
                                             errorCode = "091116",
                                             errorText = "EBICS_PROCESSING_ERROR"
@@ -485,7 +484,10 @@ private fun constructCamtResponse(
                     date = importDateFromMillis(it[date]).toDashedDate(),
                     amount = it[amount],
                     currency = it[currency],
-                    uid = "${it[pmtInfId]}-${it[msgId]}"
+                    // The line below produces a value too long (>35 chars),
+                    // and it makes the document invalid!
+                    // uid = "${it[pmtInfId]}-${it[msgId]}"
+                    uid = "${it[pmtInfId]}"
                 )
             )
         }
@@ -572,7 +574,7 @@ private fun handleCct(paymentRequest: String, initiatorName: String, ctx: Reques
     transaction {
         try {
             BankAccountTransactionsTable.insert {
-                it[account] = getBankAccountFromPain(parseResult).id
+                it[account] = getBankAccountFromIban(parseResult.debitorIban).id
                 it[creditorIban] = parseResult.creditorIban
                 it[creditorName] = parseResult.creditorName
                 it[debitorIban] = parseResult.debitorIban

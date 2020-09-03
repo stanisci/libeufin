@@ -33,7 +33,7 @@ def assertResponse(response):
         print("Test failed on URL: {}".format(response.url))
         # stdout/stderr from both services is A LOT of text.
         # Confusing to dump all that to console.
-        print("Check sandbox.log, probably under /tmp")
+        print("Status code was: " + str(response.status_code))
         exit(1)
     # Allows for finer grained checks.
     return response

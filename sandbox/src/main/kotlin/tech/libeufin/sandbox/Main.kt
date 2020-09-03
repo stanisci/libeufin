@@ -75,7 +75,7 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorName
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
-import java.util.UUID
+import kotlin.random.Random
 
 class CustomerNotFound(id: String?) : Exception("Customer ${id} not found")
 class BadInputData(inputData: String?) : Exception("Customer provided invalid input data: ${inputData}")
@@ -263,19 +263,24 @@ fun serverMain(dbName: String) {
              */
             post("/admin/payments") {
                 val body = call.receive<RawPayment>()
+                val random = Random.nextLong()
                 transaction {
-                   BankAccountTransactionsTable.insert {
-                       it[creditorIban] = body.creditorIban
-                       it[creditorBic] = body.creditorBic
-                       it[creditorName] = body.creditorName
-                       it[debitorIban] = body.debitorIban
-                       it[debitorBic] = body.debitorBic
-                       it[debitorName] = body.debitorName
-                       it[subject] = body.subject
-                       it[amount] = body.amount
-                       it[currency] = body.currency
-                       it[date] = Instant.now().toEpochMilli()
-                   }
+                    val debitorBankAccount = getBankAccountFromIban(body.debitorIban).id
+                    BankAccountTransactionsTable.insert {
+                        it[creditorIban] = body.creditorIban
+                        it[creditorBic] = body.creditorBic
+                        it[creditorName] = body.creditorName
+                        it[debitorIban] = body.debitorIban
+                        it[debitorBic] = body.debitorBic
+                        it[debitorName] = body.debitorName
+                        it[subject] = body.subject
+                        it[amount] = body.amount
+                        it[currency] = body.currency
+                        it[date] = Instant.now().toEpochMilli()
+                        it[pmtInfId] = random.toString()
+                        it[msgId] = random.toString()
+                        it[account] = debitorBankAccount
+                    }
                 }
                 call.respondText("Payment created")
                 return@post

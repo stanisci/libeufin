@@ -38,15 +38,14 @@ fun getOrderTypeFromTransactionId(transactionID: String): String {
     return uploadTransaction.orderType
 }
 
-fun getBankAccountFromPain(painParseResult: PainParseResult): BankAccountEntity {
+fun getBankAccountFromIban(iban: String): BankAccountEntity {
     return transaction {
         BankAccountEntity.find(
-            BankAccountsTable.iban eq
-                    painParseResult.debitorIban
+            BankAccountsTable.iban eq iban
         )
     }.firstOrNull() ?: throw SandboxError(
         HttpStatusCode.NotFound,
-        "Did not find a bank account for ${painParseResult.debitorIban}"
+        "Did not find a bank account for ${iban}"
     )
 }
 
