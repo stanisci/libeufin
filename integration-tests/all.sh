@@ -9,3 +9,4 @@ set -e
 ./test-taler-facade.py
 ./test-bankConnection.py
 ./test-ebics-double-payment-submission.py
+echo "All tests passed."

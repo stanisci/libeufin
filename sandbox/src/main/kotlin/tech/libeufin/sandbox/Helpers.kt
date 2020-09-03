@@ -38,6 +38,18 @@ fun getOrderTypeFromTransactionId(transactionID: String): String {
     return uploadTransaction.orderType
 }
 
+fun getBankAccountFromPain(painParseResult: PainParseResult): BankAccountEntity {
+    return transaction {
+        BankAccountEntity.find(
+            BankAccountsTable.iban eq
+                    painParseResult.debitorIban
+        )
+    }.firstOrNull() ?: throw SandboxError(
+        HttpStatusCode.NotFound,
+        "Did not find a bank account for ${painParseResult.debitorIban}"
+    )
+}
+
 fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccountEntity {
     return transaction {
         BankAccountEntity.find(BankAccountsTable.subscriber eq subscriber.id)

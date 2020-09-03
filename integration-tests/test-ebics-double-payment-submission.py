@@ -45,12 +45,9 @@ def fail(msg):
 
 def assertResponse(response, acceptedResponses=[200]):
     if response.status_code not in acceptedResponses:
-        print("Test failed on URL: {}".format(response.url))
-        # stdout/stderr from both services is A LOT of text.
-        # Confusing to dump all that to console.
-        print("Check nexus.log and sandbox.log, probably under /tmp")
+        print("Test failed on URL: {}, status: {}/{}".format(
+            response.url, response.status_code, acceptedResponses))
         exit(1)
-    # Allows for finer grained checks.
     return response
 
 startNexus(NEXUS_DB)
@@ -143,6 +140,7 @@ assertResponse(
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )
+print("First payment done")
 # mark the payment as not submitted directly
 # into the database.
 check_call(["sqlite3", NEXUS_DB, f"UPDATE PaymentInitiations SET submitted = false WHERE id = '{PREPARED_PAYMENT_UUID}'"]) 
@@ -154,9 +152,9 @@ assertResponse(
     post(
         f"http://localhost:5001/bank-accounts/{BANK_ACCOUNT_LABEL}/payment-initiations/{PREPARED_PAYMENT_UUID}/submit",
         json=dict(),
-        headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
+        headers=dict(Authorization=USER_AUTHORIZATION_HEADER)
     ),
-    [500]
+    acceptedResponses = [500]
 )
 
 print("Test passed!")

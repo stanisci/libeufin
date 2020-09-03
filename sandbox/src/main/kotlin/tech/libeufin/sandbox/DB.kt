@@ -246,7 +246,7 @@ class EbicsUploadTransactionChunkEntity(id: EntityID<String>) : Entity<String>(i
 /**
  * Table that keeps all the payments initiated by PAIN.001.
  */
-object BankAccountTransactionsTable : IntIdTable() {
+object BankAccountTransactionsTable : Table() {
     val creditorIban = text("creditorIban")
     val creditorBic = text("creditorBic").nullable()
     val creditorName = text("creditorName")
@@ -260,8 +260,11 @@ object BankAccountTransactionsTable : IntIdTable() {
     val pmtInfId = text("pmtInfId")
     val msgId = text("msgId")
     val account = reference("account", BankAccountsTable)
+
+    override val primaryKey = PrimaryKey(pmtInfId, msgId)
 }
 
+/*
 class BankAccountTransactionsEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<BankAccountTransactionsEntity>(BankAccountTransactionsTable)
 
@@ -279,6 +282,7 @@ class BankAccountTransactionsEntity(id: EntityID<Int>) : IntEntity(id) {
     var msgId by BankAccountTransactionsTable.msgId
     var account by BankAccountEntity referencedOn BankAccountTransactionsTable.account
 }
+*/
 
 /**
  * Table that keeps information about which bank accounts (iban+bic+name)

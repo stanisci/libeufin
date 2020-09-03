@@ -63,7 +63,7 @@ def startSandbox(dbname="sandbox-test.sqlite3"):
             get("http://localhost:5000/")
         except:
             if i == 9:
-                stdout, stderr = nexus.communicate()
+                stdout, stderr = sandbox.communicate()
                 print("Sandbox timed out")
                 print("{}\n{}".format(stdout.decode(), stderr.decode()))
                 exit(77)

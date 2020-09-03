@@ -572,6 +572,7 @@ private fun handleCct(paymentRequest: String, initiatorName: String, ctx: Reques
     transaction {
         try {
             BankAccountTransactionsTable.insert {
+                it[account] = getBankAccountFromPain(parseResult).id
                 it[creditorIban] = parseResult.creditorIban
                 it[creditorName] = parseResult.creditorName
                 it[debitorIban] = parseResult.debitorIban
@@ -1069,7 +1070,6 @@ private fun handleEbicsUploadTransactionTransmission(requestContext: RequestCont
                     signedData,
                     requestContext.clientSigPub
                 )
-
                 if (!res1) {
                     throw EbicsInvalidRequestError()
                 }
@@ -1094,7 +1094,7 @@ private fun handleEbicsUploadTransactionTransmission(requestContext: RequestCont
     }
 }
 // req.header.static.hostID.
-private fun makeReqestContext(requestObject: EbicsRequest): RequestContext {
+private fun makeRequestContext(requestObject: EbicsRequest): RequestContext {
     val staticHeader = requestObject.header.static
     val requestedHostId = staticHeader.hostID
     val ebicsHost =
@@ -1203,7 +1203,7 @@ suspend fun ApplicationCall.ebicsweb() {
             val requestObject = requestDocument.toObject<EbicsRequest>()
             val responseXmlStr = transaction {
                 // Step 1 of 3:  Get information about the host and subscriber
-                val requestContext = makeReqestContext(requestObject)
+                val requestContext = makeRequestContext(requestObject)
                 // Step 2 of 3:  Validate the signature
                 val verifyResult = XMLUtil.verifyEbicsDocument(requestDocument, requestContext.clientAuthPub)
                 if (!verifyResult) {
