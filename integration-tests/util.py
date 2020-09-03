@@ -8,6 +8,25 @@ import atexit
 from pathlib import Path
 import sys
 
+class CheckJsonField:
+    def __init__(self, name, nested = []):
+        self.name = name
+        self.nested = nested
+
+    def check(self, json):
+        if self.name not in json:
+            print(f"'{self.name}' not found in the JSON.")
+            sys.exit(1)
+        for nested_check in self.nested:
+            self.nested_check.check(json.get(self.name))
+
+class CheckJsonTop:
+    def __init__(self, *args):
+        self.checks = args
+
+    def check(self, json):
+        for check in self.checks:
+            check.check(json)
 
 def checkPort(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
