@@ -13,7 +13,7 @@ Running the sandbox
 Run the sandbox with the following command
 
 $ cd <this repository>
-$ ./gradlew run --console=plain -p sandbox
+$ ./gradlew sandbox:run --console=plain --args=serve [--db-name=<my-db>]
 
 Documentation
 =============

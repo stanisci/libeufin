@@ -12,7 +12,7 @@ Running Nexus
 Run the Nexus with the following command
 
 $ cd <top-level directory of this repository>
-$ ./gradlew run --console=plain -p nexus
+$ ./gradlew nexus:run --console=plain --args=serve [--db-name=<my-db>]
 
 Installing the Nexus start script along the project files
 =========================================================
