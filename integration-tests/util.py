@@ -27,6 +27,7 @@ class CheckJsonTop:
     def check(self, json):
         for check in self.checks:
             check.check(json)
+        return json
 
 def checkPort(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
