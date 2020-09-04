@@ -8,7 +8,7 @@ import socket
 import hashlib
 import base64
 
-from util import startNexus, startSandbox
+from util import startNexus, startSandbox, CheckJsonTop as V, CheckJsonField as F
 
 # Steps implemented in this test.
 #
@@ -104,7 +104,8 @@ assertResponse(
     post(
         "http://localhost:5001/users",
         headers=dict(Authorization=ADMIN_AUTHORIZATION_HEADER),
-        json=dict(username=USERNAME, password=PASSWORD),
+        json=V(F("username"), F("password")).check(
+           dict(username=USERNAME, password=PASSWORD)),
     )
 )
 
