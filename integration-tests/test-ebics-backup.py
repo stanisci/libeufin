@@ -8,7 +8,7 @@ import socket
 import hashlib
 import base64
 
-from util import startNexus, startSandbox, CheckJsonTop as V, CheckJsonField as F
+from util import startNexus, startSandbox, CheckJsonTop as T, CheckJsonField as F
 
 # Steps implemented in this test.
 #
@@ -104,7 +104,7 @@ assertResponse(
     post(
         "http://localhost:5001/users",
         headers=dict(Authorization=ADMIN_AUTHORIZATION_HEADER),
-        json=V(F("username"), F("password")).check(
+        json=T(F("username"), F("password")).check(
            dict(username=USERNAME, password=PASSWORD)),
     )
 )
@@ -112,17 +112,24 @@ assertResponse(
 print("creating bank connection")
 
 # 1.b, make a ebics bank connection for the new user.
+check_bankConnection_request = T(
+    F("source"),
+    F("name"),
+    F("data", T(
+        F("ebicsURL"), F("hostID"), F("partnerID"), F("userID")
+    ))
+)
 assertResponse(
     post(
         "http://localhost:5001/bank-connections",
-        json=dict(
+        json=check_bankConnection_request.check(dict(
             name="my-ebics",
             source="new",
             type="ebics",
             data=dict(
                 ebicsURL=EBICS_URL, hostID=HOST_ID, partnerID=PARTNER_ID, userID=USER_ID
             ),
-        ),
+        )),
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )

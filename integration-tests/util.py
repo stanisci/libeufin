@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 
 class CheckJsonField:
-    def __init__(self, name, nested = []):
+    def __init__(self, name, nested = None):
         self.name = name
         self.nested = nested
 
@@ -17,8 +17,8 @@ class CheckJsonField:
         if self.name not in json:
             print(f"'{self.name}' not found in the JSON.")
             sys.exit(1)
-        for nested_check in self.nested:
-            self.nested_check.check(json.get(self.name))
+        if self.nested:
+            self.nested.check(json.get(self.name))
 
 class CheckJsonTop:
     def __init__(self, *args):
