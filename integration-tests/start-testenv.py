@@ -7,6 +7,7 @@ import os
 import socket
 import hashlib
 import base64
+from json_checks import checkNewUserRequest, checkNewEbicsConnection, checkImportAccount
 from util import startNexus, startSandbox, assertResponse
 
 # Nexus user details
@@ -258,7 +259,7 @@ assertResponse(
     post(
         "http://localhost:5001/users",
         headers=dict(Authorization=ADMIN_AUTHORIZATION_HEADER),
-        json=dict(username=USERNAME, password=PASSWORD),
+        json=checkNewUserRequest(dict(username=USERNAME, password=PASSWORD)),
     )
 )
 
@@ -268,14 +269,14 @@ print("creating bank connection")
 assertResponse(
     post(
         "http://localhost:5001/bank-connections",
-        json=dict(
+        json=checkNewEbicsConnection(dict(
             name="my-ebics-1",
             source="new",
             type="ebics",
             data=dict(
                 ebicsURL=EBICS_URL, hostID=BC1_HOST_ID, partnerID=BC1_PARTNER_ID, userID=BC1_USER_ID
             ),
-        ),
+        )),
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )
@@ -375,10 +376,10 @@ assertResponse(
 assertResponse(
     post(
         "http://localhost:5001/bank-connections/my-ebics-1/import-account",
-        json=dict(
+        json=checkImportAccount(dict(
           offeredAccountId=BC1_SUBSCRIBER1_BANK_ACCOUNT_LABEL,
           nexusBankAccountId=BC1_SUBSCRIBER1_BANK_ACCOUNT_LABEL
-        ),
+        )),
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )
