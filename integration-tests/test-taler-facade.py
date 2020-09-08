@@ -8,7 +8,7 @@ import socket
 import hashlib
 import base64
 
-from util import startNexus, startSandbox
+from util import startNexus, startSandbox, assertResponse
 
 # Nexus user details
 USERNAME = "person"
@@ -43,16 +43,6 @@ SANDBOX_DB="test-sandbox.sqlite3"
 def fail(msg):
     print(msg)
     exit(1)
-
-def assertResponse(response):
-    if response.status_code != 200:
-        print("Test failed on URL: {}".format(response.url))
-        # stdout/stderr from both services is A LOT of text.
-        # Confusing to dump all that to console.
-        print("Check nexus.log and sandbox.log, probably under /tmp")
-        exit(1)
-    # Allows for finer grained checks.
-    return response
 
 startNexus(NEXUS_DB)
 startSandbox(SANDBOX_DB)

@@ -8,7 +8,7 @@ import socket
 import hashlib
 import base64
 
-from util import startSandbox
+from util import startSandbox, assertResponse
 
 # EBICS details
 EBICS_URL = "http://localhost:5000/ebicsweb"
@@ -27,16 +27,6 @@ BANK_ACCOUNT_LABEL = "savings"
 def fail(msg):
     print(msg)
     exit(1)
-
-def assertResponse(response):
-    if response.status_code != 200:
-        print("Test failed on URL: {}".format(response.url))
-        # stdout/stderr from both services is A LOT of text.
-        # Confusing to dump all that to console.
-        print("Status code was: " + str(response.status_code))
-        exit(1)
-    # Allows for finer grained checks.
-    return response
 
 startSandbox()
 

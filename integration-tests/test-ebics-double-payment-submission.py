@@ -7,7 +7,7 @@ import os
 import hashlib
 import base64
 
-from util import startNexus, startSandbox
+from util import startNexus, startSandbox, assertResponse
 
 # Nexus user details
 USERNAME = "person"
@@ -42,13 +42,6 @@ def fail(msg):
     print(msg)
     exit(1)
 
-
-def assertResponse(response, acceptedResponses=[200]):
-    if response.status_code not in acceptedResponses:
-        print("Test failed on URL: {}, status: {}/{}".format(
-            response.url, response.status_code, acceptedResponses))
-        exit(1)
-    return response
 
 startNexus(NEXUS_DB)
 startSandbox()
