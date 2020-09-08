@@ -17,6 +17,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
+import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -24,6 +25,7 @@ import org.junit.Test
 import tech.libeufin.sandbox.BankAccountTransactionsTable
 import tech.libeufin.sandbox.BankAccountTransactionsTable.msgId
 import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
+import tech.libeufin.sandbox.BankAccountsTable
 import tech.libeufin.util.millis
 import tech.libeufin.util.parseDashedDate
 import java.io.File
@@ -67,6 +69,7 @@ class DBTest {
             transaction {
                 SchemaUtils.create(BankAccountTransactionsTable)
                 BankAccountTransactionsTable.insert {
+                    it[account] = EntityID(0, BankAccountsTable)
                     it[creditorIban] = "earns"
                     it[creditorBic] = "BIC"
                     it[creditorName] = "Creditor Name"
