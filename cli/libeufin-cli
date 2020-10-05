@@ -11,8 +11,6 @@ from getpass import getpass
 
 @click.group(help="""
 General utility to invoke HTTP REST services offered by Nexus.
-Consider also invoking the 'nexus' command directly, for example
-to create new users.
 """
 )
 def cli():
