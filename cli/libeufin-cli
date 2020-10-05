@@ -20,11 +20,6 @@ def cli():
 
 @cli.group()
 @click.pass_context
-def users(ctx):
-    pass
-
-@cli.group()
-@click.pass_context
 def connections(ctx):
     pass
 
@@ -37,14 +32,6 @@ def accounts(ctx):
 @click.pass_context
 def sandbox(ctx):
     pass
-
-@users.command(help="add a new user to nexus")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
-@click.argument("nexus-base-url")
-def new_user(nexus_user_id, nexus_password, nexus_base_url):
-
-
 
 @connections.command(help="export backup")
 @click.option("--connection-name", help="Name of the bank connection to backup", required=True)
@@ -163,7 +150,7 @@ def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
 @click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("nexus-base-url")
 @click.pass_obj
-def bootstrap_connections(obj, connection_name, nexus_user_id, nexus_password, nexus_base_url):
+def bootstrap_connection(obj, connection_name, nexus_user_id, nexus_password, nexus_base_url):
     url = urljoin(nexus_base_url, "/bank-connections/{}/connect".format(connection_name))
     try:
         resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))

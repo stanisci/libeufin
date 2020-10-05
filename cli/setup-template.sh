@@ -65,13 +65,13 @@ sleep 2
 
 # create a user
 echo "Creating a nexus user (giving time to settle)"
-nexus superuser --db-name $1 --password $NEXUS_PASSWORD $NEXUS_USER
+libeufin-nexus superuser --db-name $1 --password $NEXUS_PASSWORD $NEXUS_USER
 sleep 2
 
 # create a bank connection
 echo Creating a bank connection for such user
 ./libeufin-cli \
-  bank-connection \
+  connections \
     new-ebics-connection \
       --connection-name $NEXUS_BANK_CONNECTION_NAME \
       --ebics-url $EBICS_BASE_URL \
@@ -80,15 +80,15 @@ echo Creating a bank connection for such user
       --ebics-user-id $EBICS_USER_ID \
       --nexus-user-id $NEXUS_USER \
       --nexus-password $NEXUS_PASSWORD \
-      $NEXUS_URL
+      $NEXUS_URL > /dev/null
 sleep 2
 
 # Bootstrapping such connection
 echo Bootstrapping the bank connection
 ./libeufin-cli \
-  bank-connection \
-    bootstrap-bank-connection \
+  connections \
+    bootstrap-connection \
       --connection-name $NEXUS_BANK_CONNECTION_NAME \
       --nexus-user-id $NEXUS_USER \
       --nexus-password $NEXUS_PASSWORD \
-      $NEXUS_URL
+      $NEXUS_URL > /dev/null
