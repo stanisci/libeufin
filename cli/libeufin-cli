@@ -20,12 +20,17 @@ def cli():
 
 @cli.group()
 @click.pass_context
-def bank_connection(ctx):
+def users(ctx):
     pass
 
 @cli.group()
 @click.pass_context
-def bank_accounts(ctx):
+def connections(ctx):
+    pass
+
+@cli.group()
+@click.pass_context
+def accounts(ctx):
     pass
 
 @cli.group()
@@ -33,7 +38,15 @@ def bank_accounts(ctx):
 def sandbox(ctx):
     pass
 
-@bank_connection.command(help="export backup")
+@users.command(help="add a new user to nexus")
+@click.option("--nexus-user-id", help="Nexus user ID", required=True)
+@click.option("--nexus-password", help="Nexus password", required=True)
+@click.argument("nexus-base-url")
+def new_user(nexus_user_id, nexus_password, nexus_base_url):
+
+
+
+@connections.command(help="export backup")
 @click.option("--connection-name", help="Name of the bank connection to backup", required=True)
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
@@ -59,7 +72,7 @@ def export_backup(obj, connection_name, nexus_user_id, nexus_password, passphras
     print("Backup stored in {}".format(output_file))
 
 
-@bank_connection.command(help="delete bank connection")
+@connections.command(help="delete bank connection")
 @click.option("--connection-name", help="Name of the bank connection to backup", required=True)
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
@@ -80,7 +93,7 @@ def delete(obj, connection_name, nexus_user_id, nexus_password, nexus_base_url):
 
     print(resp.content.decode("utf-8"))
 
-@bank_connection.command(help="restore backup")
+@connections.command(help="restore backup")
 @click.option("--connection-name", help="Name of the bank connection to backup", required=True)
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
@@ -118,7 +131,7 @@ def restore_backup(obj, backup_file, passphrase, nexus_base_url, nexus_user_id, 
     print(resp.content.decode("utf-8"))
 
 
-@bank_connection.command(help="make new Ebics bank connection")
+@connections.command(help="make new Ebics bank connection")
 @click.option("--connection-name", help="Connection ID", required=True)
 @click.option("--ebics-url", help="EBICS URL", required=True)
 @click.option("--host-id", help="Host ID", required=True)
@@ -144,13 +157,13 @@ def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
         exit(1)
     print(resp.content.decode("utf-8"))
 
-@bank_connection.command(help="bootstrap the bank connection")
+@connections.command(help="bootstrap the bank connection")
 @click.option("--connection-name", help="Connection ID", required=True)
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("nexus-base-url")
 @click.pass_obj
-def bootstrap_bank_connection(obj, connection_name, nexus_user_id, nexus_password, nexus_base_url):
+def bootstrap_connections(obj, connection_name, nexus_user_id, nexus_password, nexus_base_url):
     url = urljoin(nexus_base_url, "/bank-connections/{}/connect".format(connection_name))
     try:
         resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
@@ -159,7 +172,7 @@ def bootstrap_bank_connection(obj, connection_name, nexus_user_id, nexus_passwor
         return
     print(resp.content.decode("utf-8"))
 
-@bank_connection.command(help="import one bank account, chosen from the downloaded ones")
+@connections.command(help="import one bank account, chosen from the downloaded ones")
 @click.option("--connection-name", help="Connection ID", required=True)
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
@@ -184,7 +197,7 @@ def import_bank_account(obj, connection_name, nexus_user_id, nexus_password, nex
         return
     print(resp.content.decode("utf-8"))
 
-@bank_connection.command(help="download bank accounts in raw format WITHOUT importing them")
+@connections.command(help="download bank accounts in raw format WITHOUT importing them")
 @click.option("--connection-name", help="Connection ID", required=True)
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
@@ -201,7 +214,7 @@ def download_bank_accounts(obj, connection_name, nexus_user_id, nexus_password, 
     print(resp.content.decode("utf-8"))
 
 
-@bank_connection.command(help="list offered (= downloaded) bank accounts")
+@connections.command(help="list offered (= downloaded) bank accounts")
 @click.option("--connection-name", help="Connection ID", required=True)
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
@@ -217,7 +230,7 @@ def list_offered_bank_accounts(obj, connection_name, nexus_user_id, nexus_passwo
         return
     print(resp.content.decode("utf-8"))
 
-@bank_accounts.command(help="list imported bank accounts")
+@accounts.command(help="list imported bank accounts")
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("nexus-base-url")
@@ -231,7 +244,7 @@ def list_bank_accounts(obj, nexus_user_id, nexus_password, nexus_base_url):
         return
     print(resp.content.decode("utf-8"))
 
-@bank_accounts.command(help="prepare payment debiting 'account-name'")
+@accounts.command(help="prepare payment debiting 'account-name'")
 @click.option("--account-name", help="bank account name", required=True)
 @click.option("--credit-iban", help="IBAN that will receive the payment", required=True)
 @click.option("--credit-bic", help="BIC that will receive the payment", required=False)
@@ -261,7 +274,7 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
     print(resp.content.decode("utf-8"))
 
 
-@bank_accounts.command(help="submit a prepared payment")
+@accounts.command(help="submit a prepared payment")
 @click.option("--account-name", help="bank account name", required=True)
 @click.option("--payment-uuid", help="payment unique identifier", required=True)
 @click.option("--nexus-user-id", help="nexus user id", required=True)
@@ -279,7 +292,7 @@ def submit_payment(obj, account_name, payment_uuid, nexus_user_id, nexus_passwor
         return
     print(resp.content.decode("utf-8"))
 
-@bank_accounts.command(help="fetch transactions from the bank")
+@accounts.command(help="fetch transactions from the bank")
 @click.option("--account-name", help="bank account name", required=True)
 @click.option("--nexus-user-id", help="nexus user id", required=True)
 @click.option("--nexus-password", help="nexus user password", required=True)
@@ -296,7 +309,7 @@ def fetch_transactions(obj, account_name, nexus_user_id, nexus_password, nexus_b
         return
     print(resp.content.decode("utf-8"))
 
-@bank_accounts.command(help="get transactions from the simplified nexus JSON API")
+@accounts.command(help="get transactions from the simplified nexus JSON API")
 @click.option("--account-name", help="bank account name", required=True)
 @click.option("--nexus-user-id", help="nexus user id", required=True)
 @click.option("--nexus-password", help="nexus user password", required=True)
