@@ -200,8 +200,20 @@ def download_bank_accounts(obj, connection_name, nexus_user_id, nexus_password, 
         return
     print(resp.content.decode("utf-8"))
 
+@connections.command(help="list the connections")
+@click.option("--nexus-user-id", help="Nexus user ID", required=True)
+@click.option("--nexus-password", help="Nexus password", required=True)
+@click.argument("nexus-base-url")
+def list_connections(nexus_user_id, nexus_password, nexus_base_url):
+    url = urljoin(nexus_base_url, "/bank-connections/")
+    try:
+        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+    except Exception:
+        print("Could not reach nexus")
+        return
+    print(resp.content.decode("utf-8"))
 
-@connections.command(help="list offered (= downloaded) bank accounts")
+@connections.command(help="list bank accounts hosted at one connection")
 @click.option("--connection-name", help="Connection ID", required=True)
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
@@ -259,7 +271,6 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
         print("Could not reach nexus")
         return
     print(resp.content.decode("utf-8"))
-
 
 @accounts.command(help="submit a prepared payment")
 @click.option("--account-name", help="bank account name", required=True)
