@@ -299,7 +299,7 @@ def fetch_transactions(obj, account_name, nexus_user_id, nexus_password, nexus_b
         nexus_base_url, "/bank-accounts/{}/fetch-transactions".format(account_name)
     )
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = post(url, auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
     except Exception:
         print("Could not reach nexus")
         return
