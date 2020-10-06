@@ -142,13 +142,13 @@ def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
         exit(1)
     print(resp.content.decode("utf-8"))
 
-@connections.command(help="bootstrap the bank connection")
+@connections.command(help="synchronize the bank connection")
 @click.option("--connection-name", help="Connection ID", required=True)
 @click.option("--nexus-user-id", help="Nexus user ID", required=True)
 @click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("nexus-base-url")
 @click.pass_obj
-def bootstrap_connection(obj, connection_name, nexus_user_id, nexus_password, nexus_base_url):
+def sync(obj, connection_name, nexus_user_id, nexus_password, nexus_base_url):
     url = urljoin(nexus_base_url, "/bank-connections/{}/connect".format(connection_name))
     try:
         resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
@@ -218,22 +218,7 @@ def list_connections(nexus_user_id, nexus_password, nexus_base_url):
 @click.argument("nexus-base-url")
 @click.pass_obj
 def list_offered_bank_accounts(obj, connection_name, nexus_user_id, nexus_password, nexus_base_url):
-    # FIXME/NOTE: the 'ebics' part will soon go away.
     url = urljoin(nexus_base_url, "/bank-connections/{}/accounts".format(connection_name))
-    try:
-        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
-    except Exception:
-        print("Could not reach nexus")
-        return
-    print(resp.content.decode("utf-8"))
-
-@accounts.command(help="list imported bank accounts")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
-@click.argument("nexus-base-url")
-@click.pass_obj
-def list_bank_accounts(obj, nexus_user_id, nexus_password, nexus_base_url):
-    url = urljoin(nexus_base_url, "/bank-accounts")
     try:
         resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
     except Exception:
