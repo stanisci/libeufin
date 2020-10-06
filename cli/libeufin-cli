@@ -41,6 +41,12 @@ def cli():
 
 @cli.group()
 @click.pass_context
+def taler_facade(ctx):
+    ctx.obj = NexusAccess(*fetch_env())
+    pass
+
+@cli.group()
+@click.pass_context
 def connections(ctx):
     ctx.obj = NexusAccess(*fetch_env())
     pass
@@ -290,6 +296,29 @@ def transactions(obj, account_name):
         return
     print(resp.content.decode("utf-8"))
 
+@taler_facade.command(help="create a new Taler facade")
+@click.option("--facade-name", help="Name of the Taler facade", required=True)
+@click.argument("connection-name")
+@click.argument("account-name")
+@click.pass_obj
+def new_facade(obj, facade_name, connection_name, account_name):
+    url = urljoin(nexus_base_url, "/facades")
+    try:
+        resp = post(url, json=dict(
+            name=facade_name,
+            type="taler-wire-gateway",
+            creator=nexus_user_id,
+            config=dict(
+                bankAccount=account_name,
+                bankConnection=connection_name,
+                reserveTransferLevel="UNUSED",
+                intervalIncremental="UNUSED"
+            )
+        ))
+    except Exception:
+        print("Could not reach sandbox")
+        return
+    print(resp.content.decode("utf-8"))
 
 @sandbox.command(help="activate a Ebics host")
 @click.option("--host-id", help="Ebics host ID", required=True)
