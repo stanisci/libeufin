@@ -57,13 +57,11 @@ def sandbox(ctx):
     pass
 
 @connections.command(help="export backup")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
 @click.option("--passphrase", help="Passphrase for locking the backup", required=True)
 @click.option("--output-file", help="Where to store the backup", required=True)
 @click.argument("connection-name")
 @click.pass_obj
-def export_backup(obj, connection_name, nexus_user_id, nexus_password, passphrase, output_file):
+def export_backup(obj, connection_name, passphrase, output_file):
     url = urljoin(nexus_base_url, "/bank-connections/{}/export-backup".format(connection_name))
     try:
         resp = post(
@@ -82,11 +80,9 @@ def export_backup(obj, connection_name, nexus_user_id, nexus_password, passphras
 
 
 @connections.command(help="delete bank connection")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("connection-name")
 @click.pass_obj
-def delete(obj, connection_name, nexus_user_id, nexus_password):
+def delete(obj, connection_name):
 
     url = urljoin(nexus_base_url, "/bank-connections/delete-connection".format(connection_name))
     try:
@@ -102,13 +98,11 @@ def delete(obj, connection_name, nexus_user_id, nexus_password):
     print(resp.content.decode("utf-8"))
 
 @connections.command(help="restore backup")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
 @click.option("--backup-file", help="Back file", required=True)
 @click.option("--passphrase", help="Passphrase for locking the backup", required=True)
 @click.argument("connection-name")
 @click.pass_obj
-def restore_backup(obj, backup_file, passphrase, nexus_user_id, nexus_password, connection_name):
+def restore_backup(obj, backup_file, passphrase, connection_name):
     url = urljoin(nexus_base_url, "/bank-connections")
     try:
         backup = open(backup_file, "r")
@@ -143,12 +137,10 @@ def restore_backup(obj, backup_file, passphrase, nexus_user_id, nexus_password, 
 @click.option("--host-id", help="Host ID", required=True)
 @click.option("--partner-id", help="Partner ID", required=True)
 @click.option("--ebics-user-id", help="Ebics user ID", required=True)
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("connection-name")
 @click.pass_obj
 def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
-                         nexus_user_id, nexus_password, ebics_user_id):
+                         ebics_user_id):
     url = urljoin(nexus_base_url, "/bank-connections")
     body = dict(
         name=connection_name,
@@ -164,11 +156,9 @@ def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
     print(resp.content.decode("utf-8"))
 
 @connections.command(help="synchronize the bank connection")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("connection-name")
 @click.pass_obj
-def sync(obj, connection_name, nexus_user_id, nexus_password):
+def sync(obj, connection_name):
     url = urljoin(nexus_base_url, "/bank-connections/{}/connect".format(connection_name))
     try:
         resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
@@ -178,13 +168,11 @@ def sync(obj, connection_name, nexus_user_id, nexus_password):
     print(resp.content.decode("utf-8"))
 
 @connections.command(help="import one bank account, chosen from the downloaded ones")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
 @click.option("--offered-account-id", help="Name of the account to import", required=True)
 @click.option("--nexus-bank-account-id", help="Name to give to the imported account", required=True)
 @click.argument("connection-name")
 @click.pass_obj
-def import_bank_account(obj, connection_name, nexus_user_id, nexus_password, offered_account_id, nexus_bank_account_id):
+def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_account_id):
     url = urljoin(nexus_base_url, "/bank-connections/{}/import-account".format(connection_name))
     try:
         resp = post(
@@ -202,11 +190,9 @@ def import_bank_account(obj, connection_name, nexus_user_id, nexus_password, off
     print(resp.content.decode("utf-8"))
 
 @connections.command(help="download bank accounts in raw format WITHOUT importing them")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("connection-name")
 @click.pass_obj
-def download_bank_accounts(obj, connection_name, nexus_user_id, nexus_password):
+def download_bank_accounts(obj, connection_name):
     url = urljoin(nexus_base_url, "/bank-connections/{}/fetch-accounts".format(connection_name))
     try:
         resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
@@ -216,9 +202,7 @@ def download_bank_accounts(obj, connection_name, nexus_user_id, nexus_password):
     print(resp.content.decode("utf-8"))
 
 @connections.command(help="list the connections")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
-def list_connections(nexus_user_id, nexus_password):
+def list_connections():
     url = urljoin(nexus_base_url, "/bank-connections/")
     try:
         resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
@@ -228,11 +212,9 @@ def list_connections(nexus_user_id, nexus_password):
     print(resp.content.decode("utf-8"))
 
 @connections.command(help="list bank accounts hosted at one connection")
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("connection-name")
 @click.pass_obj
-def list_offered_bank_accounts(obj, connection_name, nexus_user_id, nexus_password):
+def list_offered_bank_accounts(obj, connection_name):
     url = urljoin(nexus_base_url, "/bank-connections/{}/accounts".format(connection_name))
     try:
         resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
@@ -247,12 +229,10 @@ def list_offered_bank_accounts(obj, connection_name, nexus_user_id, nexus_passwo
 @click.option("--credit-name", help="Legal name that will receive the payment", required=True)
 @click.option("--payment-amount", help="Amount to be paid (<currency>:X.Y)", required=True)
 @click.option("--payment-subject", help="Subject of this payment", required=True)
-@click.option("--nexus-user-id", help="Nexus user ID", required=True)
-@click.option("--nexus-password", help="Nexus password", required=True)
 @click.argument("account-name")
 @click.pass_obj
 def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
-                    nexus_user_id, nexus_password, payment_amount, payment_subject):
+                    payment_amount, payment_subject):
     url = urljoin(nexus_base_url, "/bank-accounts/{}/prepared-payments".format(account_name))
     body = dict(
         iban=credit_iban,
@@ -271,11 +251,9 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
 
 @accounts.command(help="submit a prepared payment")
 @click.option("--payment-uuid", help="payment unique identifier", required=True)
-@click.option("--nexus-user-id", help="nexus user id", required=True)
-@click.option("--nexus-password", help="nexus user password", required=True)
 @click.argument("account-name")
 @click.pass_obj
-def submit_payment(obj, account_name, payment_uuid, nexus_user_id, nexus_password):
+def submit_payment(obj, account_name, payment_uuid):
     url = urljoin(
         nexus_base_url, "/bank-accounts/{}/prepared-payments/{}/submit".format(account_name, payment_uuid)
     )
@@ -287,11 +265,9 @@ def submit_payment(obj, account_name, payment_uuid, nexus_user_id, nexus_passwor
     print(resp.content.decode("utf-8"))
 
 @accounts.command(help="fetch transactions from the bank")
-@click.option("--nexus-user-id", help="nexus user id", required=True)
-@click.option("--nexus-password", help="nexus user password", required=True)
 @click.argument("account-name")
 @click.pass_obj
-def fetch_transactions(obj, account_name, nexus_user_id, nexus_password):
+def fetch_transactions(obj, account_name):
     url = urljoin(
         nexus_base_url, "/bank-accounts/{}/fetch-transactions".format(account_name)
     )
@@ -303,11 +279,9 @@ def fetch_transactions(obj, account_name, nexus_user_id, nexus_password):
     print(resp.content.decode("utf-8"))
 
 @accounts.command(help="get transactions from the simplified nexus JSON API")
-@click.option("--nexus-user-id", help="nexus user id", required=True)
-@click.option("--nexus-password", help="nexus user password", required=True)
 @click.argument("account-name")
 @click.pass_obj
-def transactions(obj, account_name, nexus_user_id, nexus_password):
+def transactions(obj, account_name):
     url = urljoin(nexus_base_url, "/bank-accounts/{}/transactions".format(account_name))
     try:
         resp = get(url, auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
