@@ -15,7 +15,7 @@ def fetch_env():
     try:
         nexus_base_url = os.environ["NEXUS_BASE_URL"]
         nexus_username = os.environ["NEXUS_USERNAME"]
-        nexus_password = os.environ["NEXUS_PASSWORD"]
+        obj.nexus_password = os.environ["NEXUS_PASSWORD"]
     except KeyError:
         print(
             "Please ensure that NEXUS_BASE_URL,"
@@ -24,7 +24,7 @@ def fetch_env():
         )
         sys.exit(1)
 
-    return nexus_base_url, nexus_username, nexus_password 
+    return nexus_base_url, nexus_username, nexus_password
 
 class NexusAccess:
     def __init__(self, nexus_base_url, username, password):
@@ -72,7 +72,7 @@ def export_backup(obj, connection_name, passphrase, output_file):
     try:
         resp = post(
             url, json=dict(passphrase=passphrase),
-            auth=auth.HTTPBasicAuth(nexus_user_id, nexus_password)
+            auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
         )
     except Exception:
         print("Could not reach nexus")
@@ -95,7 +95,7 @@ def delete(obj, connection_name):
         resp = post(
             url,
             json=dict(bankConnectionId=connection_name),
-            auth=auth.HTTPBasicAuth(nexus_user_id, nexus_password)
+            auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
         )
     except Exception:
         print("Could not reach nexus")
@@ -128,7 +128,7 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
                 passphrase=passphrase,
                 source="backup"
             ),
-            auth=auth.HTTPBasicAuth(nexus_user_id, nexus_password)
+            auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
 
         )
     except Exception:
@@ -155,7 +155,7 @@ def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
         data=dict(ebicsURL=ebics_url, hostID=host_id, partnerID=partner_id, userID=ebics_user_id)
     )
     try:
-        resp = post(url, json=body, auth=auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus")
         exit(1)
@@ -167,7 +167,7 @@ def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
 def sync(obj, connection_name):
     url = urljoin(nexus_base_url, "/bank-connections/{}/connect".format(connection_name))
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus")
         return
@@ -187,7 +187,7 @@ def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_acc
                 offeredAccountId=offered_account_id,
                 nexusBankAccountId=nexus_bank_account_id
             ),
-            auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password)
+            auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
         )
     except Exception as ee:
         print(ee)
@@ -201,7 +201,7 @@ def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_acc
 def download_bank_accounts(obj, connection_name):
     url = urljoin(nexus_base_url, "/bank-connections/{}/fetch-accounts".format(connection_name))
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus")
         return
@@ -211,7 +211,7 @@ def download_bank_accounts(obj, connection_name):
 def list_connections():
     url = urljoin(nexus_base_url, "/bank-connections/")
     try:
-        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus")
         return
@@ -223,7 +223,7 @@ def list_connections():
 def list_offered_bank_accounts(obj, connection_name):
     url = urljoin(nexus_base_url, "/bank-connections/{}/accounts".format(connection_name))
     try:
-        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus")
         return
@@ -249,7 +249,7 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
     )
 
     try:
-        resp = post(url, json=body, auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = post(url, json=body, auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus")
         return
@@ -264,7 +264,7 @@ def submit_payment(obj, account_name, payment_uuid):
         nexus_base_url, "/bank-accounts/{}/prepared-payments/{}/submit".format(account_name, payment_uuid)
     )
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus")
         return
@@ -278,7 +278,7 @@ def fetch_transactions(obj, account_name):
         nexus_base_url, "/bank-accounts/{}/fetch-transactions".format(account_name)
     )
     try:
-        resp = post(url, auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = post(url, auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus")
         return
@@ -290,7 +290,7 @@ def fetch_transactions(obj, account_name):
 def transactions(obj, account_name):
     url = urljoin(nexus_base_url, "/bank-accounts/{}/transactions".format(account_name))
     try:
-        resp = get(url, auth = auth.HTTPBasicAuth(nexus_user_id, nexus_password))
+        resp = get(url, auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus")
         return
@@ -304,10 +304,13 @@ def transactions(obj, account_name):
 def new_facade(obj, facade_name, connection_name, account_name):
     url = urljoin(nexus_base_url, "/facades")
     try:
-        resp = post(url, json=dict(
+        resp = post(
+            url,
+            auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password,
+            json=dict(
             name=facade_name,
             type="taler-wire-gateway",
-            creator=nexus_user_id,
+            creator=obj.nexus_user_id,
             config=dict(
                 bankAccount=account_name,
                 bankConnection=connection_name,
