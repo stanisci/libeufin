@@ -12,6 +12,8 @@ from urllib.parse import urljoin
 from getpass import getpass
 
 def fetch_env():
+    if "--help" in sys.argv:
+        return []
     try:
         nexus_base_url = os.environ["NEXUS_BASE_URL"]
         nexus_username = os.environ["NEXUS_USERNAME"]
@@ -22,20 +24,15 @@ def fetch_env():
             " NEXUS_USERNAME, NEXUS_PASSWORD exist"
             " in the environment"
         )
-        sys.exit(1)
-
     return nexus_base_url, nexus_username, nexus_password
 
 class NexusAccess:
-    def __init__(self, nexus_base_url, username, password):
+    def __init__(self, nexus_base_url=None, username=None, password=None):
         self.nexus_base_url = nexus_base_url,
         self.username = username
         self.password = password
 
-@click.group(help="""
-General utility to invoke HTTP REST services offered by Nexus.
-"""
-)
+@click.group(help="General utility to invoke HTTP REST services offered by Nexus.")
 def cli():
     pass
 
@@ -317,7 +314,7 @@ def new_facade(obj, facade_name, connection_name, account_name):
                 reserveTransferLevel="UNUSED",
                 intervalIncremental="UNUSED"
             )
-        ))
+        )))
     except Exception:
         print("Could not reach sandbox")
         return
