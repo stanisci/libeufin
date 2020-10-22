@@ -9,6 +9,14 @@ import hashlib
 import base64
 
 from util import startNexus, startSandbox, CheckJsonTop as T, CheckJsonField as F, assertResponse
+from json_checks import (
+    checkSandboxEbicsHosts,
+    checkSandboxEbicsSubscriber,
+    checkSandboxBankAccount,
+    checkNewEbicsConnection,
+    checkNewUserRequest,
+    checkBackupDetails
+)
 
 # Steps implemented in this test.
 #
@@ -63,7 +71,7 @@ startSandbox()
 assertResponse(
     post(
         "http://localhost:5000/admin/ebics/host",
-        json=dict(hostID=HOST_ID, ebicsVersion=EBICS_VERSION),
+        json=checkSandboxEbicsHosts(dict(hostID=HOST_ID, ebicsVersion=EBICS_VERSION)),
     )
 )
 
@@ -71,21 +79,22 @@ assertResponse(
 assertResponse(
     post(
         "http://localhost:5000/admin/ebics/subscribers",
-        json=dict(hostID=HOST_ID, partnerID=PARTNER_ID, userID=USER_ID),
+        json=checkSandboxEbicsSubscriber(dict(hostID=HOST_ID, partnerID=PARTNER_ID, userID=USER_ID)),
     )
 )
 
 # 0.c
+
 assertResponse(
     post(
         "http://localhost:5000/admin/ebics/bank-accounts",
-        json=dict(
+        json=checkSandboxBankAccount(dict(
             subscriber=dict(hostID=HOST_ID, partnerID=PARTNER_ID, userID=USER_ID),
             iban=SUBSCRIBER_IBAN,
             bic=SUBSCRIBER_BIC,
             name=SUBSCRIBER_NAME,
             label=BANK_ACCOUNT_LABEL,
-        ),
+        )),
     )
 )
 
@@ -94,25 +103,17 @@ assertResponse(
     post(
         "http://localhost:5001/users",
         headers=dict(Authorization=ADMIN_AUTHORIZATION_HEADER),
-        json=T(F("username"), F("password")).check(
-           dict(username=USERNAME, password=PASSWORD)),
+        json=checkNewUserRequest(dict(username=USERNAME, password=PASSWORD))
     )
 )
 
 print("creating bank connection")
 
 # 1.b, make a ebics bank connection for the new user.
-check_bankConnection_request = T(
-    F("source"),
-    F("name"),
-    F("data", T(
-        F("ebicsURL"), F("hostID"), F("partnerID"), F("userID")
-    ))
-)
 assertResponse(
     post(
         "http://localhost:5001/bank-connections",
-        json=check_bankConnection_request.check(dict(
+        json=checkNewEbicsConnection(dict(
             name="my-ebics",
             source="new",
             type="ebics",
@@ -129,7 +130,7 @@ print("saving a backup copy")
 resp = assertResponse(
     post(
         "http://localhost:5001/bank-connections/my-ebics/export-backup",
-        json=dict(passphrase="secret"),
+        json=checkBackupDetails(dict(passphrase="secret")),
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )

@@ -25,5 +25,31 @@ def checkNewEbicsConnection(json):
     return c.check(json)
 
 def checkImportAccount(json):
-    c = T(F("nexusBankAccountId"), F("offeredAccountId"))
+    c = T(F("nexusBankAccountId"),
+          F("offeredAccountId"))
     return c.check(json)
+
+def checkSandboxEbicsHosts(json):
+    c = T(F("hostID"),
+          F("ebicsVersion"))
+    return c.check(json)
+
+def checkSandboxEbicsSubscriber(json):
+    c = T(F("hostID"),
+          F("userID"),
+          F("partnerID"),
+          F("systemID", optional=True))
+    return c.check(json)
+
+def checkSandboxBankAccount(json):
+    c = T(
+        F("iban"),
+        F("bic"),
+        F("name"),
+        F("subscriber"),
+        F("label")
+    )
+    return c.check(json)
+
+def checkBackupDetails(json):
+    return T(F("passphrase")).check(json)

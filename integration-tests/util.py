@@ -9,12 +9,13 @@ from pathlib import Path
 import sys
 
 class CheckJsonField:
-    def __init__(self, name, nested = None):
+    def __init__(self, name, nested=None, optional=False):
         self.name = name
         self.nested = nested
+        self.optional = optional
 
     def check(self, json):
-        if self.name not in json:
+        if self.name not in json and not self.optional:
             print(f"'{self.name}' not found in the JSON.")
             sys.exit(1)
         if self.nested:
@@ -44,7 +45,6 @@ def kill(name, s):
     print(f"terminating {name} ...")
     s.terminate()
     s.wait()
-    print("terminated!")
 
 
 def startSandbox(dbname="sandbox-test.sqlite3"):
