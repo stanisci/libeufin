@@ -10,6 +10,16 @@ def checkNewUserRequest(json):
     c = T(F("username"), F("password"))
     return c.check(json)
 
+def checkPreparePayment(json):
+    c = T(
+        F("iban"),
+        F("bic"),
+        F("name"),
+        F("subject"),
+        F("amount")
+    )
+    return c.check(json)
+
 def checkNewEbicsConnection(json):
     c = T(
             F("source"),

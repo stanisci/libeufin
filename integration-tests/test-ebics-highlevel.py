@@ -7,6 +7,7 @@ import hashlib
 import base64
 
 from util import startNexus, startSandbox, assertResponse
+from json_checks import checkNewEbicsConnection, checkPreparePayment
 
 # Steps implemented in this test.
 #
@@ -114,14 +115,14 @@ print("creating bank connection")
 assertResponse(
     post(
         "http://localhost:5001/bank-connections",
-        json=dict(
+        json=checkNewEbicsConnection(dict(
             name="my-ebics",
             source="new",
             type="ebics",
             data=dict(
                 ebicsURL=EBICS_URL, hostID=HOST_ID, partnerID=PARTNER_ID, userID=USER_ID
             ),
-        ),
+        )),
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )
@@ -170,13 +171,13 @@ resp = assertResponse(
         "http://localhost:5001/bank-accounts/{}/payment-initiations".format(
             BANK_ACCOUNT_LABEL
         ),
-        json=dict(
+        json=checkPreparePayment(dict(
             iban="FR7630006000011234567890189",
             bic="AGRIFRPP",
             name="Jacques La Fayette",
             subject="integration test",
             amount="EUR:1",
-        ),
+        )),
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )
