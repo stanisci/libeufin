@@ -20,6 +20,21 @@ def checkPreparePayment(json):
     )
     return c.check(json)
 
+def checkPreparedPaymentResponse(json):
+    c = T(F("uuid"))
+    return c.check(json)
+
+def checkTransaction(json):
+    c = T(
+            F("account"),
+            F("counterpartIban"),
+            F("counterpartBic"),
+            F("counterpartName"),
+            F("amount"),
+            F("date"),
+            F("subject")
+    )
+
 def checkNewEbicsConnection(json):
     c = T(
             F("source"),

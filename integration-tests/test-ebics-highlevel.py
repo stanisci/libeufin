@@ -7,7 +7,7 @@ import hashlib
 import base64
 
 from util import startNexus, startSandbox, assertResponse
-from json_checks import checkNewEbicsConnection, checkPreparePayment
+from json_checks import checkNewEbicsConnection, checkPreparePayment, checkTransaction, checkPreparedPaymentResponse
 
 # Steps implemented in this test.
 #
@@ -181,9 +181,8 @@ resp = assertResponse(
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )
+checkPreparedPaymentResponse(resp)
 PREPARED_PAYMENT_UUID = resp.json().get("uuid")
-if PREPARED_PAYMENT_UUID == None:
-    fail("Payment UUID not received")
 
 # 5.b, submit payment initiation
 assertResponse(
@@ -210,9 +209,10 @@ resp = assertResponse(
 )
 
 transactions = resp.json().get("transactions")
-
 if len(transactions) != 1:
     print(transactions)
     fail(f"Unexpected number of transactions ({len(transactions)}); should be 1")
+
+checkTransactions(transactions[0])
 
 print("Test passed!")
