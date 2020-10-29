@@ -7,6 +7,7 @@ import hashlib
 import base64
 
 from util import startNexus, startSandbox, assertResponse
+from json_checks import checkDeleteConnection, checkConnectionListElement, checkBankConnection
 
 # Nexus user details
 USERNAME = "person"
@@ -119,7 +120,7 @@ assertResponse(
 assertResponse(
     post(
         "http://localhost:5001/bank-connections/delete-connection",
-        json=dict(bankConnectionId="my-ebics")
+        json=checkDeleteConnection(dict(bankConnectionId="my-ebics"))
     )
 )
 
@@ -131,8 +132,16 @@ connectionsList = resp.json().get("bankConnections")
 assert(connectionsList != None)
 
 for el in connectionsList:
+    checkConnectionListElement(el)
     if el.get("name") == "my-ebics":
         print("fail: account not deleted!")
         exit(1)
+
+resp = assertResponse(
+    get("http://localhost:5001/bank-connections/my-ebics-new",
+        headers=dict(Authorization=USER_AUTHORIZATION_HEADER)
+    )
+)
+checkBankConnection(resp.json())
 
 print("Test passed!")

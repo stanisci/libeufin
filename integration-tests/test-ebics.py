@@ -3,12 +3,12 @@
 from requests import post, get
 from subprocess import call, Popen, PIPE
 from time import sleep
+from util import startNexus, startSandbox, assertResponse
+from json_checks import checkFetchTransactions, checkPreparedPaymentElement
 import os
 import socket
 import hashlib
 import base64
-
-from util import startNexus, startSandbox, assertResponse
 
 # Steps implemented in this test.
 #
@@ -212,6 +212,13 @@ PREPARED_PAYMENT_UUID = resp.json().get("uuid")
 if PREPARED_PAYMENT_UUID == None:
     fail("Payment UUID not received")
 
+resp = assertResponse(
+    get(f"http://localhost:5001/bank-accounts/{BANK_ACCOUNT_LABEL}/payment-initiations/{PREPARED_PAYMENT_UUID}",
+        headers=dict(Authorization=USER_AUTHORIZATION_HEADER)
+    )
+)
+checkPreparedPaymentElement(resp.json())
+
 # 5.b, submit prepared statement
 assertResponse(
     post(
@@ -225,7 +232,7 @@ assertResponse(
 assertResponse(
     post(
         f"http://localhost:5001/bank-accounts/{BANK_ACCOUNT_LABEL}/fetch-transactions",
-        json=dict(level="all", rangeType="all"),
+        json=checkFetchTransactions(dict(level="all", rangeType="all")),
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )

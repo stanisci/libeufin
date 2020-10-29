@@ -7,6 +7,7 @@ import hashlib
 import base64
 
 from util import startNexus, startSandbox, assertResponse
+from json_checks import checkNewUserRequest, checkBankAccountElement
 
 # Nexus user details
 USERNAME = "person"
@@ -153,6 +154,7 @@ listOfferedAccountsAfter = assertResponse(
 )
 
 for el in listOfferedAccountsAfter.json().get("accounts"):
+    checkBankAccountElement(el)
     if el.get("nexusBankAccountId") == "savings-at-nexus":
         exit(0)
         print("Test passed!")

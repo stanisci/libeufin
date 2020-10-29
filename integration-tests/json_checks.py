@@ -10,6 +10,15 @@ def checkNewUserRequest(json):
     c = T(F("username"), F("password"))
     return c.check(json)
 
+def checkBankAccountElement(json):
+    c = T(
+        F("nexusBankAccountId"),
+        F("iban"),
+        F("bic"),
+        F("ownerName")
+    )
+    return c.check(json)
+
 def checkPreparePayment(json):
     c = T(
         F("iban"),
@@ -20,8 +29,49 @@ def checkPreparePayment(json):
     )
     return c.check(json)
 
+def checkBankConnection(json):
+    c = T(
+        F("bankConnectionId"),
+        F("bankConnectionType"),
+        F("ready"),
+        F("bankKeysReviewed")
+    )
+    return c.check(json)
+
+def checkDeleteConnection(json):
+    c = T(F("bankConnectionId"))
+    return c.check(json)
+
+def checkConnectionListElement(json):
+    c = T(
+        F("name"),
+        F("type")
+    )
+    return c.check(json)
+
 def checkPreparedPaymentResponse(json):
     c = T(F("uuid"))
+    return c.check(json)
+
+def checkPreparedPaymentElement(json):
+    c = T(
+        F("paymentInitiationId"),
+        F("submitted"),
+        F("creditorIban"),
+        F("creditorBic"),
+        F("creditorName"),
+        F("amount"),
+        F("subject"),
+        F("submissionDate"),
+        F("preparationDate")
+    )
+    return c.check(json)
+
+def checkFetchTransactions(json):
+    c = T(
+            F("rangeType"),
+            F("level")
+    )
     return c.check(json)
 
 def checkTransaction(json):
@@ -34,6 +84,7 @@ def checkTransaction(json):
             F("date"),
             F("subject")
     )
+    return c.check(json)
 
 def checkNewEbicsConnection(json):
     c = T(

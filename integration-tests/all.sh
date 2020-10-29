@@ -6,7 +6,7 @@ set -e
 ./test-ebics-highlevel.py
 ./test-ebics.py
 ./test-sandbox.py
-./test-taler-facade.py
+./test-taler-facade.py 
 ./test-bankConnection.py
 ./test-ebics-double-payment-submission.py
 echo "All tests passed."

@@ -119,7 +119,7 @@ fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
 fun authenticateRequest(request: ApplicationRequest): NexusUserEntity {
     val authorization = request.headers["Authorization"]
     val headerLine = if (authorization == null) throw NexusError(
-        HttpStatusCode.BadRequest, "Authentication:-header line not found"
+        HttpStatusCode.BadRequest, "Authorization header not found"
     ) else authorization
     val (username, password) = extractUserAndPassword(headerLine)
     val user = NexusUserEntity.find {

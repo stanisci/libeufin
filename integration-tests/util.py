@@ -16,7 +16,7 @@ class CheckJsonField:
 
     def check(self, json):
         if self.name not in json and not self.optional:
-            print(f"'{self.name}' not found in the JSON.")
+            print(f"'{self.name}' not found in the JSON: {json}.")
             sys.exit(1)
         if self.nested:
             self.nested.check(json.get(self.name))

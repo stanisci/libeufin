@@ -181,7 +181,7 @@ resp = assertResponse(
         headers=dict(Authorization=USER_AUTHORIZATION_HEADER),
     )
 )
-checkPreparedPaymentResponse(resp)
+checkPreparedPaymentResponse(resp.json())
 PREPARED_PAYMENT_UUID = resp.json().get("uuid")
 
 # 5.b, submit payment initiation
@@ -213,6 +213,6 @@ if len(transactions) != 1:
     print(transactions)
     fail(f"Unexpected number of transactions ({len(transactions)}); should be 1")
 
-checkTransactions(transactions[0])
+checkTransaction(transactions[0])
 
 print("Test passed!")
