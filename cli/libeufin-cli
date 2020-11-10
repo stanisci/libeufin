@@ -17,18 +17,19 @@ def fetch_env():
     try:
         nexus_base_url = os.environ["NEXUS_BASE_URL"]
         nexus_username = os.environ["NEXUS_USERNAME"]
-        obj.nexus_password = os.environ["NEXUS_PASSWORD"]
+        nexus_password = os.environ["NEXUS_PASSWORD"]
     except KeyError:
         print(
             "Please ensure that NEXUS_BASE_URL,"
             " NEXUS_USERNAME, NEXUS_PASSWORD exist"
             " in the environment"
         )
+        sys.exit(1)
     return nexus_base_url, nexus_username, nexus_password
 
 class NexusAccess:
     def __init__(self, nexus_base_url=None, username=None, password=None):
-        self.nexus_base_url = nexus_base_url,
+        self.nexus_base_url = nexus_base_url
         self.username = username
         self.password = password
 
@@ -72,7 +73,7 @@ def export_backup(obj, connection_name, passphrase, output_file):
             auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
         )
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus at " + url)
         exit(1)
 
     output = open(output_file, "w+")
@@ -95,7 +96,7 @@ def delete(obj, connection_name):
             auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
         )
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus at " + url)
         exit(1)
 
     print(resp.content.decode("utf-8"))
@@ -129,7 +130,7 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
 
         )
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus at " + url)
         exit(1)
 
     print(resp.content.decode("utf-8"))
@@ -144,7 +145,7 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
 @click.pass_obj
 def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
                          ebics_user_id):
-    url = urljoin(nexus_base_url, "/bank-connections")
+    url = urljoin(obj.nexus_base_url, "/bank-connections")
     body = dict(
         name=connection_name,
         source="new",
@@ -152,9 +153,9 @@ def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
         data=dict(ebicsURL=ebics_url, hostID=host_id, partnerID=partner_id, userID=ebics_user_id)
     )
     try:
-        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
-        print("Could not reach nexus")
+        print(f"Could not reach nexus at {url}: {resp.json()}")
         exit(1)
     print(resp.content.decode("utf-8"))
 
@@ -162,11 +163,11 @@ def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
 @click.argument("connection-name")
 @click.pass_obj
 def sync(obj, connection_name):
-    url = urljoin(nexus_base_url, "/bank-connections/{}/connect".format(connection_name))
+    url = urljoin(obj.nexus_base_url, f"/bank-connections/{connection_name}/connect")
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
-        print("Could not reach nexus")
+        print(f"Could not reach nexus at {url}")
         return
     print(resp.content.decode("utf-8"))
 
@@ -188,7 +189,7 @@ def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_acc
         )
     except Exception as ee:
         print(ee)
-        print("Could not reach nexus")
+        print("Could not reach nexus at " + url)
         return
     print(resp.content.decode("utf-8"))
 
@@ -200,7 +201,7 @@ def download_bank_accounts(obj, connection_name):
     try:
         resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus at " + url)
         return
     print(resp.content.decode("utf-8"))
 
@@ -210,7 +211,7 @@ def list_connections():
     try:
         resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus at " + url)
         return
     print(resp.content.decode("utf-8"))
 
@@ -222,7 +223,7 @@ def list_offered_bank_accounts(obj, connection_name):
     try:
         resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus at " + url)
         return
     print(resp.content.decode("utf-8"))
 
@@ -248,7 +249,7 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
     try:
         resp = post(url, json=body, auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus at " + url)
         return
     print(resp.content.decode("utf-8"))
 
@@ -263,7 +264,7 @@ def submit_payment(obj, account_name, payment_uuid):
     try:
         resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus at" + url)
         return
     print(resp.content.decode("utf-8"))
 
@@ -277,7 +278,7 @@ def fetch_transactions(obj, account_name):
     try:
         resp = post(url, auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus " + url)
         return
     print(resp.content.decode("utf-8"))
 
@@ -289,7 +290,7 @@ def transactions(obj, account_name):
     try:
         resp = get(url, auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
-        print("Could not reach nexus")
+        print("Could not reach nexus " + url)
         return
     print(resp.content.decode("utf-8"))
 

@@ -3,8 +3,9 @@
 # Such template sets an env up using the Python CLI.
 # The setup goes until exchanging keys with the sandbox.
 
-set -e
+set -eu
 
+SANDBOX_URL="http://localhost:5000"
 EBICS_HOST_ID=ebicshost
 EBICS_PARTNER_ID=ebicspartner
 EBICS_USER_ID=ebicsuser
@@ -23,6 +24,10 @@ if test -z $1; then
   echo usage: ./setup-template.sh PATH-TO-NEXUS-DB
   exit 1
 fi
+
+export NEXUS_BASE_URL="http://localhost:5001/"
+export NEXUS_USERNAME=$NEXUS_USER
+export NEXUS_PASSWORD=$NEXUS_PASSWORD
 
 ########## setup sandbox #############
 
@@ -73,22 +78,14 @@ echo Creating a bank connection for such user
 ./libeufin-cli \
   connections \
     new-ebics-connection \
-      --connection-name $NEXUS_BANK_CONNECTION_NAME \
       --ebics-url $EBICS_BASE_URL \
       --host-id $EBICS_HOST_ID \
       --partner-id $EBICS_PARTNER_ID \
       --ebics-user-id $EBICS_USER_ID \
-      --nexus-user-id $NEXUS_USER \
-      --nexus-password $NEXUS_PASSWORD \
-      $NEXUS_URL > /dev/null
+      $NEXUS_BANK_CONNECTION_NAME > /dev/null
 sleep 2
 
 # Bootstrapping such connection
 echo Bootstrapping the bank connection
 ./libeufin-cli \
-  connections \
-    bootstrap-connection \
-      --connection-name $NEXUS_BANK_CONNECTION_NAME \
-      --nexus-user-id $NEXUS_USER \
-      --nexus-password $NEXUS_PASSWORD \
-      $NEXUS_URL > /dev/null
+  connections sync $NEXUS_BANK_CONNECTION_NAME > /dev/null
