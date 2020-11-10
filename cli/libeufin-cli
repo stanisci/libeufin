@@ -227,6 +227,17 @@ def list_offered_bank_accounts(obj, connection_name):
         return
     print(resp.content.decode("utf-8"))
 
+@accounts.command(help="show accounts belonging to calling user")
+@click.pass_obj
+def show(obj):
+    url = urljoin(obj.nexus_base_url, "/bank-accounts")
+    try:
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception as e:
+        print(f"Could not reach nexus at {url}, error: {e}")
+        return
+    print(resp.content.decode("utf-8"))
+
 @accounts.command(help="prepare payment debiting 'account-name'")
 @click.option("--credit-iban", help="IBAN that will receive the payment", required=True)
 @click.option("--credit-bic", help="BIC that will receive the payment", required=False)
@@ -247,7 +258,7 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
     )
 
     try:
-        resp = post(url, json=body, auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
     except Exception:
         print("Could not reach nexus at " + url)
         return
