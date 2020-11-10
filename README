@@ -1,0 +1,24 @@
+Installing LibEuFin
+===================
+
+$ ./bootstrap
+$ ./configure --prefix=$PFX
+$ make install
+
+If the previous step succeeded, libeufin-nexus and a
+command line client (libeufin-cli) should be found under
+$PFX/bin.
+
+Conversely, the Sandbox needs to be explicitly installed,
+with the following command:
+
+$ make install-sandbox
+
+If the previous command succeeded, libeufin-sandbox
+should be found under $PFX/bin as well.
+
+Launching LibEuFin
+==================
+
+All the three commands can be launched with the "--help"
+option, and show how they can be invoked!
