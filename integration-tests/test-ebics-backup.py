@@ -18,20 +18,6 @@ from json_checks import (
     checkBackupDetails
 )
 
-# Steps implemented in this test.
-#
-# 0 Prepare sandbox.
-#  -> (a) Make a EBICS host, (b) make a EBICS subscriber
-#     for the test runner, and (c) assign a IBAN to such
-#     subscriber.
-#
-# 1 Prepare nexus.
-#  -> (a) Make a Nexus user, (b) make a EBICS subscriber
-#     associated to that user
-
-# 2 Save and restore a backup.
-# 3 Send INI & HIA to the bank.
-
 # Nexus user details
 USERNAME = "person"
 PASSWORD = "y"

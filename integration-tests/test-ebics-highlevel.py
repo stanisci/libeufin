@@ -9,31 +9,6 @@ import base64
 from util import startNexus, startSandbox, assertResponse
 from json_checks import checkNewEbicsConnection, checkPreparePayment, checkTransaction, checkPreparedPaymentResponse
 
-# Steps implemented in this test.
-#
-# 0 Prepare sandbox.
-#  -> (a) Make a EBICS host, (b) make a EBICS subscriber
-#     for the test runner, and (c) assign a IBAN to such
-#     subscriber.
-#
-# 1 Prepare nexus.
-#  -> (a) Make a Nexus user, (b) make a EBICS subscriber
-#     associated to that user
-#
-# 2 Prepare the Ebics bank connection for the nexus user.
-#  -> (a) Upload keys from Nexus to the Bank (INI & HIA),
-#     (b) Download key from the Bank (HPB) to the Nexus,
-#     and (c) Fetch the bank account owned by that subscriber
-#     at the bank.
-
-# 3 Request history from the Nexus to the Bank (C53).
-# 4 Verify that history is empty.
-# 5 Issue a payment from Nexus
-#  -> (a) Prepare & (b) trigger CCT.
-# 6 Request history after submitting the payment,
-#   from Nexus to Bank.
-# 7 Verify that previous payment shows up.
-
 # Nexus user details
 USERNAME = "person"
 PASSWORD = "y"
