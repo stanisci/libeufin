@@ -89,3 +89,8 @@ sleep 2
 echo Bootstrapping the bank connection
 ./libeufin-cli \
   connections sync $NEXUS_BANK_CONNECTION_NAME > /dev/null
+
+echo The following exports will make it possible to access Nexus:
+echo export NEXUS_BASE_URL="http://localhost:5001/"
+echo export NEXUS_USERNAME=$NEXUS_USER
+echo export NEXUS_PASSWORD=$NEXUS_PASSWORD
