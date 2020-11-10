@@ -66,11 +66,11 @@ def sandbox(ctx):
 @click.argument("connection-name")
 @click.pass_obj
 def export_backup(obj, connection_name, passphrase, output_file):
-    url = urljoin(nexus_base_url, "/bank-connections/{}/export-backup".format(connection_name))
+    url = urljoin(obj.nexus_base_url, "/bank-connections/{}/export-backup".format(connection_name))
     try:
         resp = post(
             url, json=dict(passphrase=passphrase),
-            auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
     except Exception:
         print("Could not reach nexus at " + url)
@@ -88,12 +88,12 @@ def export_backup(obj, connection_name, passphrase, output_file):
 @click.pass_obj
 def delete(obj, connection_name):
 
-    url = urljoin(nexus_base_url, "/bank-connections/delete-connection".format(connection_name))
+    url = urljoin(obj.nexus_base_url, "/bank-connections/delete-connection".format(connection_name))
     try:
         resp = post(
             url,
             json=dict(bankConnectionId=connection_name),
-            auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
     except Exception:
         print("Could not reach nexus at " + url)
@@ -107,7 +107,7 @@ def delete(obj, connection_name):
 @click.argument("connection-name")
 @click.pass_obj
 def restore_backup(obj, backup_file, passphrase, connection_name):
-    url = urljoin(nexus_base_url, "/bank-connections")
+    url = urljoin(obj.nexus_base_url, "/bank-connections")
     try:
         backup = open(backup_file, "r")
     except Exception:
@@ -126,7 +126,7 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
                 passphrase=passphrase,
                 source="backup"
             ),
-            auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
 
         )
     except Exception:
@@ -177,7 +177,7 @@ def sync(obj, connection_name):
 @click.argument("connection-name")
 @click.pass_obj
 def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_account_id):
-    url = urljoin(nexus_base_url, "/bank-connections/{}/import-account".format(connection_name))
+    url = urljoin(obj.nexus_base_url, "/bank-connections/{}/import-account".format(connection_name))
     try:
         resp = post(
             url,
@@ -185,7 +185,7 @@ def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_acc
                 offeredAccountId=offered_account_id,
                 nexusBankAccountId=nexus_bank_account_id
             ),
-            auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password)
+            auth = auth.HTTPBasicAuth(obj.username, obj.password)
         )
     except Exception as ee:
         print(ee)
@@ -197,19 +197,20 @@ def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_acc
 @click.argument("connection-name")
 @click.pass_obj
 def download_bank_accounts(obj, connection_name):
-    url = urljoin(nexus_base_url, "/bank-connections/{}/fetch-accounts".format(connection_name))
+    url = urljoin(obj.nexus_base_url, "/bank-connections/{}/fetch-accounts".format(connection_name))
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus at " + url)
         return
     print(resp.content.decode("utf-8"))
 
 @connections.command(help="list the connections")
-def list_connections():
-    url = urljoin(nexus_base_url, "/bank-connections/")
+@click.pass_obj
+def list_connections(obj):
+    url = urljoin(obj.nexus_base_url, "/bank-connections/")
     try:
-        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus at " + url)
         return
@@ -219,9 +220,9 @@ def list_connections():
 @click.argument("connection-name")
 @click.pass_obj
 def list_offered_bank_accounts(obj, connection_name):
-    url = urljoin(nexus_base_url, "/bank-connections/{}/accounts".format(connection_name))
+    url = urljoin(obj.nexus_base_url, "/bank-connections/{}/accounts".format(connection_name))
     try:
-        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus at " + url)
         return
@@ -248,7 +249,7 @@ def show(obj):
 @click.pass_obj
 def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
                     payment_amount, payment_subject):
-    url = urljoin(nexus_base_url, "/bank-accounts/{}/prepared-payments".format(account_name))
+    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/prepared-payments".format(account_name))
     body = dict(
         iban=credit_iban,
         bic=credit_bic,
@@ -258,7 +259,7 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
     )
 
     try:
-        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus at " + url)
         return
@@ -270,10 +271,11 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
 @click.pass_obj
 def submit_payment(obj, account_name, payment_uuid):
     url = urljoin(
-        nexus_base_url, "/bank-accounts/{}/prepared-payments/{}/submit".format(account_name, payment_uuid)
+        obj.nexus_base_url,
+        "/bank-accounts/{}/prepared-payments/{}/submit".format(account_name, payment_uuid)
     )
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus at" + url)
         return
@@ -284,10 +286,10 @@ def submit_payment(obj, account_name, payment_uuid):
 @click.pass_obj
 def fetch_transactions(obj, account_name):
     url = urljoin(
-        nexus_base_url, "/bank-accounts/{}/fetch-transactions".format(account_name)
+        obj.nexus_base_url, "/bank-accounts/{}/fetch-transactions".format(account_name)
     )
     try:
-        resp = post(url, auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = post(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus " + url)
         return
@@ -297,9 +299,9 @@ def fetch_transactions(obj, account_name):
 @click.argument("account-name")
 @click.pass_obj
 def transactions(obj, account_name):
-    url = urljoin(nexus_base_url, "/bank-accounts/{}/transactions".format(account_name))
+    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/transactions".format(account_name))
     try:
-        resp = get(url, auth = auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password))
+        resp = get(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus " + url)
         return
@@ -311,15 +313,15 @@ def transactions(obj, account_name):
 @click.argument("account-name")
 @click.pass_obj
 def new_facade(obj, facade_name, connection_name, account_name):
-    url = urljoin(nexus_base_url, "/facades")
+    url = urljoin(obj.nexus_base_url, "/facades")
     try:
         resp = post(
             url,
-            auth=auth.HTTPBasicAuth(obj.nexus_user_id, obj.nexus_password,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password,
             json=dict(
             name=facade_name,
             type="taler-wire-gateway",
-            creator=obj.nexus_user_id,
+            creator=obj.username,
             config=dict(
                 bankAccount=account_name,
                 bankConnection=connection_name,
