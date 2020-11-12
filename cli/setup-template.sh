@@ -5,17 +5,20 @@
 
 set -eu
 
+# EBICS details.
 SANDBOX_URL="http://localhost:5000"
 EBICS_HOST_ID=ebicshost
 EBICS_PARTNER_ID=ebicspartner
 EBICS_USER_ID=ebicsuser
 EBICS_BASE_URL="$SANDBOX_URL/ebicsweb"
 
+# A bank account details.
 IBAN=x
 BIC=y
 PERSON_NAME=z
 ACCOUNT_NAME=a
 
+# A Nexus user details.
 NEXUS_USER=u
 NEXUS_PASSWORD=p
 NEXUS_BANK_CONNECTION_NAME=b
@@ -25,6 +28,7 @@ if test -z $1; then
   exit 1
 fi
 
+# Exports needed by the CLI.
 export NEXUS_BASE_URL="http://localhost:5001/"
 export NEXUS_USERNAME=$NEXUS_USER
 export NEXUS_PASSWORD=$NEXUS_PASSWORD
@@ -85,12 +89,13 @@ echo Creating a bank connection for such user
       $NEXUS_BANK_CONNECTION_NAME > /dev/null
 sleep 2
 
-# Bootstrapping such connection
+# Bootstrapping such connection.
 echo Bootstrapping the bank connection
 ./libeufin-cli \
   connections sync $NEXUS_BANK_CONNECTION_NAME > /dev/null
 
-echo The following exports will make it possible to access Nexus:
-echo export NEXUS_BASE_URL="http://localhost:5001/"
-echo export NEXUS_USERNAME=$NEXUS_USER
-echo export NEXUS_PASSWORD=$NEXUS_PASSWORD
+# Download bank accounts.
+echo Download bank accounts
+./libeufin-cli \
+  connections download-bank-accounts \
+    $NEXUS_BANK_CONNECTION_NAME > /dev/null
