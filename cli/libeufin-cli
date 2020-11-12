@@ -187,9 +187,8 @@ def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_acc
             ),
             auth = auth.HTTPBasicAuth(obj.username, obj.password)
         )
-    except Exception as ee:
-        print(ee)
-        print("Could not reach nexus at " + url)
+    except Exception as e:
+        print(f"Could not reach nexus at {url}: {e}")
         return
     print(resp.content.decode("utf-8"))
 

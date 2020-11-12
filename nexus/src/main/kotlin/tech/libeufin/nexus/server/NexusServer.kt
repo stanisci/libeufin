@@ -281,7 +281,12 @@ fun serverMain(dbName: String, host: String) {
         routing {
             get("/config") {
                  call.respond(
-                     object {val version = "0.0.0"; val currency = "EUR"}
+                     object {
+                         val version = "0.0.0"
+                         val currency = "EUR"
+                         val databaseType = "sqlite"
+                         val databaseName = dbName
+                     }
                  )
                 return@get
             }
