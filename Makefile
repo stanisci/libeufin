@@ -12,3 +12,6 @@ install-nexus:
 install-cli:
 	@echo Installing CLI.
 	@cp cli/libeufin-cli $(prefix)/bin
+
+assemble:
+	@./gradlew assemble
