@@ -98,4 +98,4 @@ echo Download bank accounts
 
 echo Note: NEXUS_USERNAME, NEXUS_PASSWORD, and NEXUS_BASE_URL
 echo have been *already* exported in this shell.  Bank connection
-echo $(tput bold)a$(tput sgr0) can be soon used via the $(tput bold)libeufin-cli$(tput sgr0) utility!
+echo $(tput bold)$NEXUS_BANK_CONNECTION_NAME$(tput sgr0) can be soon used via the $(tput bold)libeufin-cli$(tput sgr0) utility!
