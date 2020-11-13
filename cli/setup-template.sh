@@ -69,8 +69,8 @@ sleep 2
 
 # create a user
 NEXUS_DATABASE=$(curl -s $NEXUS_BASE_URL/service-config | jq .dbConn | tr -d \" | awk -F: '{print $2}')
-echo "Creating a nexus superuser (db: $NEXUS_DATABASE)"
-libeufin-nexus superuser --db-name $NEXUS_DATABASE --password $NEXUS_PASSWORD $NEXUS_USER
+echo "Creating a nexus superuser"
+libeufin-nexus superuser --db-name $NEXUS_DATABASE --password $NEXUS_PASSWORD $NEXUS_USER &> /dev/null
 sleep 2
 
 # create a bank connection
@@ -95,3 +95,7 @@ echo Download bank accounts
 ./libeufin-cli \
   connections download-bank-accounts \
     $NEXUS_BANK_CONNECTION_NAME > /dev/null
+
+echo Note: NEXUS_USERNAME, NEXUS_PASSWORD, and NEXUS_BASE_URL
+echo have been *already* exported in this shell.  Bank connection
+echo $(tput bold)a$(tput sgr0) can be soon used via the $(tput bold)libeufin-cli$(tput sgr0) utility!
