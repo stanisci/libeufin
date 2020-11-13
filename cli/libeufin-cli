@@ -315,20 +315,21 @@ def new_facade(obj, facade_name, connection_name, account_name):
     try:
         resp = post(
             url,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
             json=dict(
-            name=facade_name,
-            type="taler-wire-gateway",
-            creator=obj.username,
-            config=dict(
-                bankAccount=account_name,
-                bankConnection=connection_name,
-                reserveTransferLevel="UNUSED",
-                intervalIncremental="UNUSED"
+                name=facade_name,
+                type="taler-wire-gateway",
+                creator=obj.username,
+                config=dict(
+                    bankAccount=account_name,
+                    bankConnection=connection_name,
+                    reserveTransferLevel="UNUSED",
+                    intervalIncremental="UNUSED"
+                )
             )
-        )))
-    except Exception:
-        print("Could not reach sandbox")
+        )
+    except Exception as e:
+        print(f"Could not reach nexus (at {obj.nexus_base_url}): {e}")
         exit(1)
     print(resp.content.decode("utf-8"))
 
