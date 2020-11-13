@@ -46,6 +46,43 @@ def kill(name, s):
     s.terminate()
     s.wait()
 
+def flushTablesSandbox(dbName):
+    check_call(
+        ["sqlite3",
+         dbName,
+         "DELETE FROM BankAccountReports",
+         "DELETE FROM EbicsOrderSignatures",
+         "DELETE FROM BankAccountStatements",
+         "DELETE FROM EbicsSubscriberPublicKeys",
+         "DELETE FROM BankAccountTransactions",
+         "DELETE FROM EbicsSubscribers",
+         "DELETE FROM BankAccounts",
+         "DELETE FROM EbicsUploadTransactionChunks",
+         "DELETE FROM EbicsDownloadTransactions",
+         "DELETE FROM EbicsUploadTransactions",
+         "DELETE FROM EbicsHosts"
+        ]
+     )
+
+def flushTablesNexus(dbName):
+    check_call(
+        ["sqlite3",
+         dbName,
+         "DELETE FROM EbicsSubscribers",
+         "DELETE FROM NexusBankTransactions",
+         "DELETE FROM TalerFacadeState",
+         "DELETE FROM Facades",
+         "DELETE FROM NexusScheduledTasks",
+         "DELETE FROM TalerIncomingPayments",
+         "DELETE FROM NexusBankAccounts",
+         "DELETE FROM NexusUsers",
+         "DELETE FROM TalerRequestedPayments",
+         "DELETE FROM NexusBankConnections",
+         "DELETE FROM OfferedBankAccounts",
+         "DELETE FROM NexusBankMessages",
+         "DELETE FROM PaymentInitiations"
+        ]
+    )
 
 def startSandbox(dbname="sandbox-test.sqlite3"):
     db_full_path = str(Path.cwd() / dbname)
