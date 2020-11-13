@@ -135,5 +135,6 @@ def test_empty_history():
     )
     assert len(resp.json().get("transactions")) == 0
 
+# FIXME: find a way to reset the database between tests.
 # flushTablesNexus(NEXUS_DB)
 # flushTablesSandbox(SANDBOX_DB)
