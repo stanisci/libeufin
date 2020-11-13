@@ -13,7 +13,7 @@ EBICS_USER_ID=ebicsuser
 EBICS_BASE_URL="$SANDBOX_URL/ebicsweb"
 
 # A bank account details.
-IBAN=x
+IBAN=LU150102294655243148
 BIC=y
 PERSON_NAME=z
 ACCOUNT_NAME=a
@@ -99,3 +99,4 @@ echo Download bank accounts
 echo Note: NEXUS_USERNAME, NEXUS_PASSWORD, and NEXUS_BASE_URL
 echo have been *already* exported in this shell.  Bank connection
 echo $(tput bold)$NEXUS_BANK_CONNECTION_NAME$(tput sgr0) can be soon used via the $(tput bold)libeufin-cli$(tput sgr0) utility!
+exec bash

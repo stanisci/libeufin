@@ -247,7 +247,7 @@ def show(obj):
 @click.pass_obj
 def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
                     payment_amount, payment_subject):
-    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/prepared-payments".format(account_name))
+    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/payment-initiations".format(account_name))
     body = dict(
         iban=credit_iban,
         bic=credit_bic,
@@ -270,7 +270,7 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
 def submit_payment(obj, account_name, payment_uuid):
     url = urljoin(
         obj.nexus_base_url,
-        "/bank-accounts/{}/prepared-payments/{}/submit".format(account_name, payment_uuid)
+        "/bank-accounts/{}/payment-initiations/{}/submit".format(account_name, payment_uuid)
     )
     try:
         resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
