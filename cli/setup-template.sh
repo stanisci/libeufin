@@ -23,11 +23,6 @@ NEXUS_USER=u
 NEXUS_PASSWORD=p
 NEXUS_BANK_CONNECTION_NAME=b
 
-if test -z $1; then
-  echo usage: ./setup-template.sh PATH-TO-NEXUS-DB
-  exit 1
-fi
-
 # Exports needed by the CLI.
 export NEXUS_BASE_URL="http://localhost:5001/"
 export NEXUS_USERNAME=$NEXUS_USER
@@ -73,8 +68,9 @@ sleep 2
 ########## setup nexus #############
 
 # create a user
-echo "Creating a nexus user (giving time to settle)"
-libeufin-nexus superuser --db-name $1 --password $NEXUS_PASSWORD $NEXUS_USER
+NEXUS_DATABASE=$(curl -s $NEXUS_BASE_URL/service-config | jq .dbConn | tr -d \" | awk -F: '{print $2}')
+echo "Creating a nexus superuser (db: $NEXUS_DATABASE)"
+libeufin-nexus superuser --db-name $NEXUS_DATABASE --password $NEXUS_PASSWORD $NEXUS_USER
 sleep 2
 
 # create a bank connection
