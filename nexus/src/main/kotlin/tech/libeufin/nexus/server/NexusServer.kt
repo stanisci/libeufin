@@ -65,6 +65,7 @@ import tech.libeufin.util.*
 import tech.libeufin.nexus.logger
 import java.lang.IllegalArgumentException
 import java.net.URLEncoder
+import java.nio.file.Paths
 import java.util.zip.InflaterInputStream
 
 
@@ -279,13 +280,20 @@ fun serverMain(dbName: String, host: String) {
         }
         startOperationScheduler(client)
         routing {
+            get("/service-config") {
+                call.respond(
+                    object {
+                        val dbConn = "sqlite://${Paths.get(dbName).toAbsolutePath()}"
+                    }
+                )
+                return@get
+            }
+
             get("/config") {
                  call.respond(
                      object {
                          val version = "0.0.0"
                          val currency = "EUR"
-                         val databaseType = "sqlite"
-                         val databaseName = dbName
                      }
                  )
                 return@get
