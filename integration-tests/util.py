@@ -156,3 +156,4 @@ def startNexus(dbname="nexus-test.sqlite3"):
 
 def assertResponse(response, acceptedResponses=[200]):
     assert response.status_code in acceptedResponses
+    return response

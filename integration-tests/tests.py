@@ -126,10 +126,14 @@ startSandbox(SANDBOX_DB)
 prepareSandbox()
 prepareNexus()
 
-#def test_0():
-#    assertResponse(
-#        REQUEST HERE!
-#    )
+def test_empty_history():
+    resp = assertResponse(
+        get(
+            f"http://localhost:5001/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
+            auth=NEXUS_AUTH
+        )
+    )
+    assert len(resp.json().get("transactions")) == 0
 
-flushTablesNexus(NEXUS_DB)
-flushTablesSandbox(SANDBOX_DB)
+# flushTablesNexus(NEXUS_DB)
+# flushTablesSandbox(SANDBOX_DB)
