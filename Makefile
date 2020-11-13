@@ -35,3 +35,7 @@ install-cli:
 .PHONY: assemble
 assemble:
 	@./gradlew assemble
+
+.PHONY: check
+check:
+	@./gradlew check
