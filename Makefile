@@ -39,3 +39,8 @@ assemble:
 .PHONY: check
 check:
 	@./gradlew check
+
+
+.PHONY: tests
+tests:
+	@cd integration-tests; py.test tests.py; cd ..

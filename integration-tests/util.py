@@ -155,8 +155,4 @@ def startNexus(dbname="nexus-test.sqlite3"):
     return nexus
 
 def assertResponse(response, acceptedResponses=[200]):
-    if response.status_code not in acceptedResponses:
-        print("Test failed on URL: {}, status: {}".format(
-            response.url, response.status_code))
-        exit(1)
-    return response
+    assert response.status_code in acceptedResponses
