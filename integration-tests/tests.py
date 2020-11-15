@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
 from requests import post, get, auth
+from time import sleep
 from util import (
     startNexus,
     startSandbox,
     assertResponse,
     flushTablesSandbox,
-    flushTablesNexus
+    flushTablesNexus,
+    makeNexusSuperuser
 )
 
 # Databases
@@ -66,6 +68,7 @@ def prepareSandbox():
     )
 
 def prepareNexus():
+    makeNexusSuperuser(NEXUS_DB)
     # make a new nexus user.
     assertResponse(
         post(
@@ -139,3 +142,20 @@ def test_empty_history():
         )
     )
     assert len(resp.json().get("transactions")) == 0
+
+def test_backup():
+    resp = assertResponse(
+        post(
+            f"http://localhost:5001/bank-connections/{NEXUS_BANK_CONNECTION}/export-backup",
+            json=dict(passphrase="secret"),
+            auth=NEXUS_AUTH
+        )
+    )
+    sleep(3)
+    assertResponse(
+        post(
+            "http://localhost:5001/bank-connections",
+            json=dict(name="my-ebics-restored", data=resp.json(), passphrase="secret", source="backup"),
+            auth=NEXUS_AUTH
+        )
+    )

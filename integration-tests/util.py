@@ -46,10 +46,24 @@ def kill(name, s):
     s.terminate()
     s.wait()
 
+def makeNexusSuperuser(dbName):
+    db_full_path = str(Path.cwd() / dbName)
+    check_call(
+        [
+            "../gradlew",
+            "-p",
+            "..",
+            "nexus:run",
+            "--console=plain",
+            f"--args=superuser admin --password x --db-name={db_full_path}",
+        ]
+    )
+
 def flushTablesSandbox(dbName):
+    db_full_path = str(Path.cwd() / dbName)
     check_call(
         ["sqlite3",
-         dbName,
+         db_full_path,
          "DELETE FROM BankAccountReports",
          "DELETE FROM EbicsOrderSignatures",
          "DELETE FROM BankAccountStatements",
@@ -65,9 +79,10 @@ def flushTablesSandbox(dbName):
      )
 
 def flushTablesNexus(dbName):
+    db_full_path = str(Path.cwd() / dbName)
     check_call(
         ["sqlite3",
-         dbName,
+         db_full_path,
          "DELETE FROM EbicsSubscribers",
          "DELETE FROM NexusBankTransactions",
          "DELETE FROM TalerFacadeState",
@@ -84,8 +99,8 @@ def flushTablesNexus(dbName):
         ]
     )
 
-def startSandbox(dbname="sandbox-test.sqlite3"):
-    db_full_path = str(Path.cwd() / dbname)
+def startSandbox(dbName="sandbox-test.sqlite3"):
+    db_full_path = str(Path.cwd() / dbName)
     check_call(["rm", "-f", db_full_path])
     check_call(["../gradlew", "-p", "..", "sandbox:assemble"])
     checkPort(5000)
@@ -110,21 +125,11 @@ def startSandbox(dbname="sandbox-test.sqlite3"):
         break
 
 
-def startNexus(dbname="nexus-test.sqlite3"):
-    db_full_path = str(Path.cwd() / dbname)
+def startNexus(dbName="nexus-test.sqlite3"):
+    db_full_path = str(Path.cwd() / dbName)
     check_call(["rm", "-f", "--", db_full_path])
     check_call(
         ["../gradlew", "-p", "..", "nexus:assemble",]
-    )
-    check_call(
-        [
-            "../gradlew",
-            "-p",
-            "..",
-            "nexus:run",
-            "--console=plain",
-            "--args=superuser admin --password x --db-name={}".format(db_full_path),
-        ]
     )
     checkPort(5001)
     nexus = Popen(
