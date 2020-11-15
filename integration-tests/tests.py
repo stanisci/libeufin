@@ -11,6 +11,10 @@ from util import (
     makeNexusSuperuser
 )
 
+# Base URLs
+S = "http://localhost:5000"
+N = "http://localhost:5001"
+
 # Databases
 NEXUS_DB="/tmp/test-nexus.sqlite3"
 SANDBOX_DB="/tmp/test-sandbox.sqlite3"
@@ -26,7 +30,7 @@ NEXUS_AUTH = auth.HTTPBasicAuth(
 )
 
 # EBICS details
-EBICS_URL = "http://localhost:5000/ebicsweb"
+EBICS_URL = f"{S}/ebicsweb"
 EBICS_HOST = "HOST01"
 EBICS_PARTNER = "PARTNER1"
 EBICS_USER = "USER1"
@@ -42,21 +46,21 @@ def prepareSandbox():
     # make ebics host at sandbox
     assertResponse(
         post(
-            "http://localhost:5000/admin/ebics/host",
+            f"{S}/admin/ebics/host",
             json=dict(hostID=EBICS_HOST, ebicsVersion=EBICS_VERSION),
         )
     )
     # make new ebics subscriber at sandbox
     assertResponse(
         post(
-            "http://localhost:5000/admin/ebics/subscribers",
+            f"{S}/admin/ebics/subscribers",
             json=dict(hostID=EBICS_HOST, partnerID=EBICS_PARTNER, userID=EBICS_USER),
         )
     )
     # give a bank account to such subscriber, at sandbox
     assertResponse(
         post(
-            "http://localhost:5000/admin/ebics/bank-accounts",
+            f"{S}/admin/ebics/bank-accounts",
             json=dict(
                 subscriber=dict(hostID=EBICS_HOST, partnerID=EBICS_PARTNER, userID=EBICS_USER),
                 iban=BANK_IBAN,
@@ -72,7 +76,7 @@ def prepareNexus():
     # make a new nexus user.
     assertResponse(
         post(
-            "http://localhost:5001/users",
+            f"{N}/users",
             auth=auth.HTTPBasicAuth("admin", "x"),
             json=dict(username=NEXUS_USERNAME, password=NEXUS_PASSWORD),
         )
@@ -80,7 +84,7 @@ def prepareNexus():
     # make a ebics bank connection for the new user.
     assertResponse(
         post(
-            "http://localhost:5001/bank-connections",
+            f"{N}/bank-connections",
             json=dict(
                 name=NEXUS_BANK_CONNECTION,
                 source="new",
@@ -98,7 +102,7 @@ def prepareNexus():
     # synchronizing the connection
     assertResponse(
         post(
-            "http://localhost:5001/bank-connections/my-ebics/connect",
+            f"{N}/bank-connections/my-ebics/connect",
             json=dict(),
             auth=NEXUS_AUTH
         )
@@ -106,7 +110,7 @@ def prepareNexus():
     # download offered bank accounts
     assertResponse(
         post(
-            "http://localhost:5001/bank-connections/my-ebics/fetch-accounts",
+            f"{N}/bank-connections/my-ebics/fetch-accounts",
             json=dict(),
             auth=NEXUS_AUTH
         )
@@ -114,7 +118,7 @@ def prepareNexus():
     # import one bank account into the Nexus
     assertResponse(
         post(
-            "http://localhost:5001/bank-connections/my-ebics/import-account",
+            f"{N}/bank-connections/my-ebics/import-account",
             json=dict(
                 offeredAccountId=BANK_LABEL,
                 nexusBankAccountId=NEXUS_BANK_LABEL
@@ -134,10 +138,21 @@ def teardown_function():
   flushTablesNexus(NEXUS_DB)
   flushTablesSandbox(SANDBOX_DB)
 
+# Tests whether Nexus knows the imported bank account.
+def test_imported_account():
+    resp = assertResponse(
+        get(
+            f"{N}/bank-connections/my-ebics/accounts",
+            auth=NEXUS_AUTH
+        )
+    )
+    imported_account = resp.json().get("accounts").pop()
+    assert imported_account.get("nexusBankAccountId") == NEXUS_BANK_LABEL
+
 def test_empty_history():
     resp = assertResponse(
         get(
-            f"http://localhost:5001/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
             auth=NEXUS_AUTH
         )
     )
@@ -146,7 +161,7 @@ def test_empty_history():
 def test_backup():
     resp = assertResponse(
         post(
-            f"http://localhost:5001/bank-connections/{NEXUS_BANK_CONNECTION}/export-backup",
+            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/export-backup",
             json=dict(passphrase="secret"),
             auth=NEXUS_AUTH
         )
@@ -154,8 +169,44 @@ def test_backup():
     sleep(3)
     assertResponse(
         post(
-            "http://localhost:5001/bank-connections",
+            f"{N}/bank-connections",
             json=dict(name="my-ebics-restored", data=resp.json(), passphrase="secret", source="backup"),
             auth=NEXUS_AUTH
         )
     )
+
+def test_payment():
+    resp = assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations",
+            json=dict(
+                iban="FR7630006000011234567890189",
+                bic="AGRIFRPP",
+                name="Jacques La Fayette",
+                subject="integration test",
+                amount="EUR:1",
+            ),
+            auth=NEXUS_AUTH
+        )
+    )
+    PAYMENT_UUID = resp.json().get("uuid")
+    assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations/{PAYMENT_UUID}/submit",
+            json=dict(),
+            auth=NEXUS_AUTH
+        )
+    )
+    assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/fetch-transactions",
+            auth=NEXUS_AUTH
+        )
+    )
+    resp = assertResponse(
+        get(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
+            auth=NEXUS_AUTH
+        )
+    )
+    assert len(resp.json().get("transactions")) == 1

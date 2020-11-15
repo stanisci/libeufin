@@ -42,7 +42,6 @@ def checkPort(port):
         exit(77)
 
 def kill(name, s):
-    print(f"terminating {name} ...")
     s.terminate()
     s.wait()
 
