@@ -123,8 +123,13 @@ def prepareNexus():
 startNexus(NEXUS_DB)
 startSandbox(SANDBOX_DB)
 
-prepareSandbox()
-prepareNexus()
+def setup_function():
+    prepareSandbox()
+    prepareNexus()
+
+def teardown_function():
+  flushTablesNexus(NEXUS_DB)
+  flushTablesSandbox(SANDBOX_DB)
 
 def test_empty_history():
     resp = assertResponse(
@@ -134,7 +139,3 @@ def test_empty_history():
         )
     )
     assert len(resp.json().get("transactions")) == 0
-
-# FIXME: find a way to reset the database between tests.
-# flushTablesNexus(NEXUS_DB)
-# flushTablesSandbox(SANDBOX_DB)
