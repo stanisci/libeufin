@@ -175,6 +175,14 @@ def test_backup():
         )
     )
 
+def test_ebics_custom_ebics_order():
+    assertResponse(
+        post(
+            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/ebics/download/tsd",
+            auth=NEXUS_AUTH
+        )
+    )
+
 def test_payment():
     resp = assertResponse(
         post(
