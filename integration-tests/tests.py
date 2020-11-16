@@ -142,7 +142,7 @@ def teardown_function():
 def test_imported_account():
     resp = assertResponse(
         get(
-            f"{N}/bank-connections{NEXUS_BANK_CONNECTION}accounts",
+            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/accounts",
             auth=NEXUS_AUTH
         )
     )
