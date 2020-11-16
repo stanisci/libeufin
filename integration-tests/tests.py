@@ -102,7 +102,7 @@ def prepareNexus():
     # synchronizing the connection
     assertResponse(
         post(
-            f"{N}/bank-connections/my-ebics/connect",
+            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/connect",
             json=dict(),
             auth=NEXUS_AUTH
         )
@@ -110,7 +110,7 @@ def prepareNexus():
     # download offered bank accounts
     assertResponse(
         post(
-            f"{N}/bank-connections/my-ebics/fetch-accounts",
+            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/fetch-accounts",
             json=dict(),
             auth=NEXUS_AUTH
         )
@@ -118,7 +118,7 @@ def prepareNexus():
     # import one bank account into the Nexus
     assertResponse(
         post(
-            f"{N}/bank-connections/my-ebics/import-account",
+            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/import-account",
             json=dict(
                 offeredAccountId=BANK_LABEL,
                 nexusBankAccountId=NEXUS_BANK_LABEL
@@ -142,7 +142,7 @@ def teardown_function():
 def test_imported_account():
     resp = assertResponse(
         get(
-            f"{N}/bank-connections/my-ebics/accounts",
+            f"{N}/bank-connections{NEXUS_BANK_CONNECTION}accounts",
             auth=NEXUS_AUTH
         )
     )
