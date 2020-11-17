@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from subprocess import check_call
 from requests import post, get, auth
 from time import sleep
 from util import (
@@ -271,3 +272,45 @@ def test_taler_facade():
         )
     )
     assert len(resp.json().get("outgoing_transactions")) == 1
+
+def test_payment_double_submission():
+    resp = assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations",
+            json=dict(
+                iban="FR7630006000011234567890189",
+                bic="AGRIFRPP",
+                name="Jacques La Fayette",
+                subject="integration test",
+                amount="EUR:1",
+            ),
+            auth=NEXUS_AUTH
+        )
+    )
+    PAYMENT_UUID = resp.json().get("uuid")
+    assert PAYMENT_UUID
+    assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations/{PAYMENT_UUID}/submit",
+            json=dict(),
+            auth=NEXUS_AUTH
+        )
+    )
+    check_call([
+        "sqlite3",
+        NEXUS_DB,
+        f"UPDATE PaymentInitiations SET submitted = false WHERE id = '{PAYMENT_UUID}'"
+    ]) 
+    # Submit payment the _second_ time, expecting 500 from Nexus.
+    # FIXME:
+    # Sandbox does return a EBICS_PROCESSING_ERROR code, but Nexus
+    # (currently) is not able to extract any meaning from it.  Ideally,
+    # Nexus should print both the error token _and_ a hint message.
+    assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations/{PAYMENT_UUID}/submit",
+            json=dict(),
+            auth=NEXUS_AUTH
+        ),
+        [500]
+    )
