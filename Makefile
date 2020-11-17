@@ -43,4 +43,4 @@ check:
 
 .PHONY: tests
 tests:
-	@cd integration-tests; py.test tests.py; cd ..
+	@cd integration-tests; py.test tests.py
