@@ -42,6 +42,9 @@ BANK_BIC = "BUKBGB22"
 BANK_NAME = "Oliver Smith"
 BANK_LABEL = "savings"
 
+# Facade details
+TALER_FACADE="my-taler-facade"
+
 def prepareSandbox():
     # make ebics host at sandbox
     assertResponse(
@@ -149,6 +152,8 @@ def test_imported_account():
     imported_account = resp.json().get("accounts").pop()
     assert imported_account.get("nexusBankAccountId") == NEXUS_BANK_LABEL
 
+# Expecting a empty history for an account that
+# never made or receivd a payment.
 def test_empty_history():
     resp = assertResponse(
         get(
@@ -158,6 +163,9 @@ def test_empty_history():
     )
     assert len(resp.json().get("transactions")) == 0
 
+# This test checks the bank connection backup export+import 
+# However the restored connection is never sent through the
+# "/connect" step.
 def test_backup():
     resp = assertResponse(
         post(
@@ -183,6 +191,8 @@ def test_ebics_custom_ebics_order():
         )
     )
 
+# This test makes a payment and expects to see it
+# in the account history.
 def test_payment():
     resp = assertResponse(
         post(
@@ -218,3 +228,46 @@ def test_payment():
         )
     )
     assert len(resp.json().get("transactions")) == 1
+
+# This test makes one payment via the Taler facade,
+# and expects too see it in the outgoing history.
+def test_taler_facade():
+    assertResponse(
+        post(
+            f"{N}/facades",
+            json=dict(
+                name=TALER_FACADE,
+                type="taler-wire-gateway",
+                creator=NEXUS_USERNAME,
+                config=dict(
+                    bankAccount=NEXUS_BANK_LABEL,
+                    bankConnection=NEXUS_BANK_CONNECTION,
+                    reserveTransferLevel="UNUSED",
+                    intervalIncremental="UNUSED"
+                )
+            ),
+            auth=NEXUS_AUTH
+        )
+    )
+    assertResponse(
+        post(
+            f"{N}/facades/{TALER_FACADE}/taler/transfer",
+            json=dict(
+                request_uid="0",
+                amount="EUR:1",
+                exchange_base_url="http//url",
+                wtid="nice",
+                credit_account="payto://iban/THEBIC/THEIBAN?receiver-name=theName"
+            ),
+            auth=NEXUS_AUTH
+        )
+    
+    )
+    sleep(5) # Let automatic tasks ingest the history.
+    resp = assertResponse(
+        get(
+            f"{N}/facades/{TALER_FACADE}/taler/history/outgoing?delta=5",
+            auth=NEXUS_AUTH
+        )
+    )
+    assert len(resp.json().get("outgoing_transactions")) == 1
