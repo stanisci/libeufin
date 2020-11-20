@@ -314,3 +314,23 @@ def test_payment_double_submission():
         ),
         [500]
     )
+
+def test_double_connection_name():
+    assertResponse(
+        post(
+            f"{N}/bank-connections",
+            json=dict(
+                name=NEXUS_BANK_CONNECTION,
+                source="new",
+                type="ebics",
+                data=dict(
+                    ebicsURL=EBICS_URL,
+                    hostID=EBICS_HOST,
+                    partnerID=EBICS_PARTNER,
+                    userID=EBICS_USER
+                ),
+            ),
+            auth=NEXUS_AUTH
+        ),
+        [406] # expecting "406 Not acceptable"
+    )
