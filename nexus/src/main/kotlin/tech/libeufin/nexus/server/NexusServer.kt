@@ -644,6 +644,9 @@ fun serverMain(dbName: String, host: String) {
                 val body = call.receive<CreateBankConnectionRequestJson>()
                 transaction {
                     val user = authenticateRequest(call.request)
+                    if (NexusBankAccountEntity.findById(body.name) != null) {
+                        throw NexusError(HttpStatusCode.NotAcceptable, "connection '${body.name}' exists already")
+                    }
                     when (body) {
                         is CreateBankConnectionFromBackupRequestJson -> {
                             val type = body.data.get("type")
