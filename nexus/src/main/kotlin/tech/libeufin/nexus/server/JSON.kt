@@ -381,7 +381,7 @@ class CurrencyAmountSerializer(jc: Class<CurrencyAmount> = CurrencyAmount::class
 @JsonSerialize(using = CurrencyAmountSerializer::class)
 data class CurrencyAmount(
     val currency: String,
-    val value: BigDecimal
+    val value: BigDecimal // allows calculations
 )
 
 /**

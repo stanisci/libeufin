@@ -24,7 +24,10 @@ package tech.libeufin.nexus.iso20022
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonValue
+import io.ktor.http.*
 import org.w3c.dom.Document
+import tech.libeufin.nexus.NexusAssert
+import tech.libeufin.nexus.NexusError
 import tech.libeufin.nexus.server.CurrencyAmount
 import tech.libeufin.util.*
 import java.math.BigDecimal
@@ -261,13 +264,14 @@ data class ReturnInfo(
 )
 
 data class BatchTransaction(
-    val amount: CurrencyAmount,
+    // We tolerate the lack of amount in case
+    // this batch is a singleton and can inherit by
+    // parent node.
+    val amount: CurrencyAmount?,
 
-    /**
-     * Is this entry debiting or crediting the account
-     * it is reported for?
-     */
-    val creditDebitIndicator: CreditDebitIndicator,
+    // We tolerate the lack of direction, in case all
+    // the sub-transactions can inherit from the parent node.
+    val creditDebitIndicator: CreditDebitIndicator?,
 
     val details: TransactionDetails
 )
@@ -655,16 +659,40 @@ private fun XmlElementDestructor.extractMaybeCurrencyExchange(): CurrencyExchang
     }
 }
 
+/*
+ * 1, see if TxDtls add to a sum.
+ * 2, if not, see if Btch provides a sum.
+ * 3, if not, see if NtryDtls provides a sum.
+ * 4, if not, keep the batch without a sum (it's not required to have one,
+ *    only the very outer Ntry must have one.  In fact, what goes in the DB
+ *    is only the outer Ntry's amount).
+ *
+ * note: condition 4 should be rare, therefore a check on the batched
+ * amount could be done towards the end, and complain if none is found.
+ *
+ * Right now, the code assumes that one Ntry has only one NtryDtls with only
+ * one TxDtls; this assumption is too strong, and ideally should be removed.
+ * */
+
+// FIXME: move to util module.
+private fun currencyAmountSum(amount1: CurrencyAmount?, amount2: CurrencyAmount?): CurrencyAmount? {
+    if (amount1 == null) return amount2
+    if (amount2 == null) return amount1
+
+    if (amount1.currency != amount2.currency) throw NexusError(
+        HttpStatusCode.InternalServerError,
+        "Trying to sum two amount with different currencies"
+    )
+    return CurrencyAmount(currency = amount1.currency, value = amount1.value + amount2.value)
+}
+
+// this function runs with a Ntry as its context.
 private fun XmlElementDestructor.extractBatches(
-    outerAmount: CurrencyAmount,
+    inheritableAmount: CurrencyAmount?,
     outerCreditDebitIndicator: CreditDebitIndicator
 ): List<Batch> {
     return mapEachChildNamed("NtryDtls") {
-        val numDtls = mapEachChildNamed("TxDtls") { Unit }.count()
-        var amount = maybeExtractCurrencyAmount()
-        var creditDebitIndicator = maybeExtractCreditDebitIndicator()
-
-        val ttlAmt = maybeUniqueChildNamed("Btch") {
+        var batchAmount = maybeUniqueChildNamed("Btch") {
             maybeUniqueChildNamed("TtlAmt") {
                 CurrencyAmount(
                     value =  BigDecimal(focusElement.textContent),
@@ -672,27 +700,81 @@ private fun XmlElementDestructor.extractBatches(
                 )
             }
         }
+        if (inheritableAmount != null && batchAmount != null) {
+            NexusAssert(
+                inheritableAmount.value == batchAmount.value,
+                "Inconsistent amount from parent."
+            )
+        }
+        batchAmount = batchAmount ?: inheritableAmount
+        val numTxs: Int = mapEachChildNamed("TxDtls") {  }.count()
+        val inheritableBatchAmount = if (numTxs <= 1) batchAmount ?: inheritableAmount else null
 
-        val ttlCreditDebitIndicator = maybeUniqueChildNamed("Btch") {
+        val batchDirection = maybeUniqueChildNamed("Btch") {
             maybeExtractCreditDebitIndicator()
         }
-
-        if (amount == null && ttlAmt != null && ttlCreditDebitIndicator != null) {
-            amount = ttlAmt
-            creditDebitIndicator = ttlCreditDebitIndicator
-        } else if (amount == null && numDtls == 1) {
-            amount = outerAmount
-            creditDebitIndicator = outerCreditDebitIndicator
+        if (batchDirection != null) {
+            NexusAssert(
+                batchDirection == outerCreditDebitIndicator,
+                "Divergent credit-debit indicator (1)"
+            )
         }
-
-        if (amount == null || creditDebitIndicator == null) {
-            throw Error("no amount for inner transaction")
-        }
+        var amountChecksum: CurrencyAmount? = null
         val txs = mapEachChildNamed("TxDtls") {
-            val details = extractTransactionDetails(outerAmount, outerCreditDebitIndicator, false)
-            BatchTransaction(amount, creditDebitIndicator, details)
+            val details = extractTransactionDetails(outerCreditDebitIndicator)
+            val txCreditDebitIndicator = maybeExtractCreditDebitIndicator()
+            if (txCreditDebitIndicator != null) {
+                NexusAssert(
+                    txCreditDebitIndicator == outerCreditDebitIndicator,
+                    "Divergent credit-debit indicator (2) $txCreditDebitIndicator vs $outerCreditDebitIndicator"
+                )
+            }
+            var txAmount = maybeExtractCurrencyAmount()
+            if (txAmount == null) {
+                NexusAssert(
+                    inheritableBatchAmount != null,
+                    "Missing or inconsistent information about singleton sub-transaction(s) amount(s)"
+                )
+                txAmount = inheritableBatchAmount
+            }
+            amountChecksum = currencyAmountSum(amountChecksum, txAmount)
+            BatchTransaction(
+                txAmount,
+                outerCreditDebitIndicator,
+                details
+            )
         }
-        Batch(null, null, txs)
+        if (amountChecksum == null) {
+            NexusAssert(
+                numTxs == 0 && txs.isEmpty() && inheritableBatchAmount != null,
+                "Internal amount-check failed (0)"
+            )
+            txs = mutableListOf(
+                BatchTransaction(
+                    inheritableBatchAmount,
+                    outerCreditDebitIndicator,
+                    /**
+                     * FIXME: the current "details extractor" assumes that
+                     * only TxDtls can have details, and so it ignores the
+                     * case where ZERO TxDtls are given but such information
+                     * is scattered somewhere between the Ntry and the NtryDtls
+                     * (including the Btch.)
+                     *
+                     */
+                )
+            )
+        }
+        NexusAssert(
+            amountChecksum != null,
+            "Internal amount-check failed (1): $amountChecksum"
+        )
+        if (batchAmount != null) {
+            NexusAssert(
+                amountChecksum?.value == batchAmount.value,
+                "Internal amount-check failed (2)"
+            )
+        }
+        Batch(messageId = null, paymentInformationId = null, batchTransactions = txs)
     }
 }
 
@@ -703,16 +785,13 @@ private fun XmlElementDestructor.maybeExtractCreditDebitIndicator(): CreditDebit
 }
 
 private fun XmlElementDestructor.extractTransactionDetails(
-    outerAmount: CurrencyAmount,
-    outerCreditDebitIndicator: CreditDebitIndicator,
-    batch: Boolean
+    outerCreditDebitIndicator: CreditDebitIndicator
 ): TransactionDetails {
     val instructedAmount = maybeUniqueChildNamed("AmtDtls") {
         maybeUniqueChildNamed("InstdAmt") { extractCurrencyAmount() }
     }
 
     val creditDebitIndicator = maybeExtractCreditDebitIndicator() ?: outerCreditDebitIndicator
-
     val currencyExchange = maybeUniqueChildNamed("AmtDtls") {
         val cxCntrVal = maybeUniqueChildNamed("CntrValAmt") { extractMaybeCurrencyExchange() }
         val cxTx = maybeUniqueChildNamed("TxAmt") { extractMaybeCurrencyExchange() }
@@ -780,7 +859,7 @@ private fun XmlElementDestructor.extractSingleDetails(
 ): TransactionDetails {
     return requireUniqueChildNamed("NtryDtls") {
         requireUniqueChildNamed("TxDtls") {
-            extractTransactionDetails(outerAmount, outerCreditDebitIndicator, false)
+            extractTransactionDetails(outerCreditDebitIndicator)
         }
     }
 }
@@ -819,7 +898,6 @@ private fun XmlElementDestructor.extractInnerBkTxCd(creditDebitIndicator: Credit
     // FIXME: log/raise this somewhere?
     return "XTND-NTAV-NTAV"
 }
-
 
 private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
     val account = requireUniqueChildNamed("Acct") { extractAccount() }
@@ -905,7 +983,10 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
                 extractSingleDetails(amount, creditDebitIndicator)
             },
             batches = if (isBatch) {
-                extractBatches(amount, creditDebitIndicator)
+                extractBatches(
+                    if (mapEachChildNamed("NtryDtls") {}.count() == 1) amount else null,
+                    creditDebitIndicator
+                )
             } else {
                 null
             },

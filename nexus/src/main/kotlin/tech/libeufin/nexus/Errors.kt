@@ -23,3 +23,8 @@ import io.ktor.http.HttpStatusCode
 
 data class NexusError(val statusCode: HttpStatusCode, val reason: String) :
     Exception("$reason (HTTP status $statusCode)")
+
+fun NexusAssert(condition: Boolean, errorMsg: String): Boolean {
+    if (! condition) throw NexusError(HttpStatusCode.InternalServerError, errorMsg)
+    return true
+}
