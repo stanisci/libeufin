@@ -232,6 +232,7 @@ def test_payment():
 
 # This test makes one payment via the Taler facade,
 # and expects too see it in the outgoing history.
+@pytest.skip("Need more attention")
 def test_taler_facade():
     assertResponse(
         post(
