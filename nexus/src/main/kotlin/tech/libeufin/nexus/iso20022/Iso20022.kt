@@ -264,16 +264,9 @@ data class ReturnInfo(
 )
 
 data class BatchTransaction(
-    // We tolerate the lack of amount in case
-    // this batch is a singleton and can inherit by
-    // parent node.
     val amount: CurrencyAmount?,
-
-    // We tolerate the lack of direction, in case all
-    // the sub-transactions can inherit from the parent node.
     val creditDebitIndicator: CreditDebitIndicator?,
-
-    val details: TransactionDetails
+    val details: TransactionDetails?
 )
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -720,7 +713,7 @@ private fun XmlElementDestructor.extractBatches(
             )
         }
         var amountChecksum: CurrencyAmount? = null
-        val txs = mapEachChildNamed("TxDtls") {
+        var txs = mapEachChildNamed("TxDtls") {
             val details = extractTransactionDetails(outerCreditDebitIndicator)
             val txCreditDebitIndicator = maybeExtractCreditDebitIndicator()
             if (txCreditDebitIndicator != null) {
@@ -733,7 +726,7 @@ private fun XmlElementDestructor.extractBatches(
             if (txAmount == null) {
                 NexusAssert(
                     inheritableBatchAmount != null,
-                    "Missing or inconsistent information about singleton sub-transaction(s) amount(s)"
+                    "Missing or inconsistent information about singleton sub-transaction(s) amount(s) (0)"
                 )
                 txAmount = inheritableBatchAmount
             }
@@ -746,22 +739,17 @@ private fun XmlElementDestructor.extractBatches(
         }
         if (amountChecksum == null) {
             NexusAssert(
-                numTxs == 0 && txs.isEmpty() && inheritableBatchAmount != null,
-                "Internal amount-check failed (0)"
+                txs.isEmpty(),
+                "Missing or inconsistent information about singleton sub-transaction(s) amount(s) (1)"
             )
+            // Without ANY sub-transaction defined, the batch MUST have it mentioned ALREADY somewhere "before".
+            NexusAssert(
+                inheritableBatchAmount != null,
+                "Missing or inconsistent information about singleton sub-transaction(s) amount(s) (2)"
+            )
+            amountChecksum = batchAmount
             txs = mutableListOf(
-                BatchTransaction(
-                    inheritableBatchAmount,
-                    outerCreditDebitIndicator,
-                    /**
-                     * FIXME: the current "details extractor" assumes that
-                     * only TxDtls can have details, and so it ignores the
-                     * case where ZERO TxDtls are given but such information
-                     * is scattered somewhere between the Ntry and the NtryDtls
-                     * (including the Btch.)
-                     *
-                     */
-                )
+                BatchTransaction(batchAmount, outerCreditDebitIndicator, null)
             )
         }
         NexusAssert(
