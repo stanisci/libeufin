@@ -47,4 +47,5 @@ tests:
 
 .PHONY: parse
 parse:
+	@cd parsing-tests; git pull
 	@cd parsing-tests; py.test checks.py
