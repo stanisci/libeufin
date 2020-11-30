@@ -326,7 +326,7 @@ data class CamtBankAccountEntry(
     /**
      * Details of the underlying transaction for type=Simple.
      */
-    val details: TransactionDetails?,
+    val details: TransactionDetails? = null,
     val batches: List<Batch>?
 )
 
@@ -930,16 +930,6 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
         val acctSvcrRef = maybeUniqueChildNamed("AcctSvcrRef") { focusElement.textContent }
         val entryRef = maybeUniqueChildNamed("NtryRef") { focusElement.textContent }
 
-        val numInnerTxs = mapEachChildNamed("NtryDtls") {
-            mapEachChildNamed("TxDtls") { Unit }
-        }.flatten().count()
-
-        val numBatches = mapEachChildNamed("NtryDtls") {
-            mapEachChildNamed("Btch") { Unit }
-        }.flatten().count()
-
-        val isBatch = numBatches > 0 || numInnerTxs > 1
-
         val currencyExchange = maybeUniqueChildNamed("AmtDtls") {
             val cxCntrVal = maybeUniqueChildNamed("CntrValAmt") { extractMaybeCurrencyExchange() }
             val cxTx = maybeUniqueChildNamed("TxAmt") { extractMaybeCurrencyExchange() }
@@ -965,19 +955,10 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
             instructedAmount = instructedAmount,
             creditDebitIndicator = creditDebitIndicator,
             bankTransactionCode = btc,
-            details = if (isBatch) {
-                null
-            } else {
-                extractSingleDetails(amount, creditDebitIndicator)
-            },
-            batches = if (isBatch) {
-                extractBatches(
-                    if (mapEachChildNamed("NtryDtls") {}.count() == 1) amount else null,
-                    creditDebitIndicator
-                )
-            } else {
-                null
-            },
+            batches = extractBatches(
+                if (mapEachChildNamed("NtryDtls") {}.count() == 1) amount else null,
+                creditDebitIndicator
+            ),
             bookingDate = maybeUniqueChildNamed("BookgDt") { extractDateOrDateTime() },
             valueDate = maybeUniqueChildNamed("ValDt") { extractDateOrDateTime() },
             accountServicerRef = acctSvcrRef,
