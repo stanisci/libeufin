@@ -680,86 +680,25 @@ private fun XmlElementDestructor.extractBatches(
     inheritableAmount: CurrencyAmount?,
     outerCreditDebitIndicator: CreditDebitIndicator
 ): List<Batch> {
-    return mapEachChildNamed("NtryDtls") {
-        var batchAmount = maybeUniqueChildNamed("Btch") {
-            maybeUniqueChildNamed("TtlAmt") {
-                CurrencyAmount(
-                    value =  BigDecimal(focusElement.textContent),
-                    currency = focusElement.getAttribute("Ccy")
-                )
-            }
+    if (mapEachChildNamed("NtryDtls") {}.size != 1) return mutableListOf()
+    var txs = requireUniqueChildNamed("NtryDtls") {
+        if (mapEachChildNamed("TxDtls") {}.size != 1) {
+            return@requireUniqueChildNamed mutableListOf<BatchTransaction>()
         }
-        if (inheritableAmount != null && batchAmount != null) {
-            NexusAssert(
-                inheritableAmount.value == batchAmount.value,
-                "Inconsistent amount from parent."
-            )
-        }
-        batchAmount = batchAmount ?: inheritableAmount
-        val numTxs: Int = mapEachChildNamed("TxDtls") {  }.count()
-        val inheritableBatchAmount = if (numTxs <= 1) batchAmount ?: inheritableAmount else null
-
-        val batchDirection = maybeUniqueChildNamed("Btch") {
-            maybeExtractCreditDebitIndicator()
-        }
-        if (batchDirection != null) {
-            NexusAssert(
-                batchDirection == outerCreditDebitIndicator,
-                "Divergent credit-debit indicator (1)"
-            )
-        }
-        var amountChecksum: CurrencyAmount? = null
-        var txs = mapEachChildNamed("TxDtls") {
+         requireUniqueChildNamed("TxDtls") {
             val details = extractTransactionDetails(outerCreditDebitIndicator)
-            val txCreditDebitIndicator = maybeExtractCreditDebitIndicator()
-            if (txCreditDebitIndicator != null) {
-                NexusAssert(
-                    txCreditDebitIndicator == outerCreditDebitIndicator,
-                    "Divergent credit-debit indicator (2) $txCreditDebitIndicator vs $outerCreditDebitIndicator"
+            mutableListOf(
+                BatchTransaction(
+                    inheritableAmount,
+                    outerCreditDebitIndicator,
+                    details
                 )
-            }
-            var txAmount = maybeExtractCurrencyAmount() ?: maybeExtractTxCurrencyAmount()
-            if (txAmount == null) {
-                NexusAssert(
-                    inheritableBatchAmount != null,
-                    "Singleton transaction has no amount and can't inherit it from its container."
-                )
-                txAmount = inheritableBatchAmount
-            }
-            amountChecksum = currencyAmountSum(amountChecksum, txAmount)
-            BatchTransaction(
-                txAmount,
-                outerCreditDebitIndicator,
-                details
             )
         }
-        if (amountChecksum == null) {
-            NexusAssert(
-                txs.isEmpty(),
-                "Missing or inconsistent information about singleton sub-transaction(s) amount(s) (1)"
-            )
-            // Without ANY sub-transaction defined, the batch MUST have it mentioned ALREADY somewhere "before".
-            NexusAssert(
-                inheritableBatchAmount != null,
-                "Missing or inconsistent information about singleton sub-transaction(s) amount(s) (2)"
-            )
-            amountChecksum = batchAmount
-            txs = mutableListOf(
-                BatchTransaction(batchAmount, outerCreditDebitIndicator, null)
-            )
-        }
-        NexusAssert(
-            amountChecksum != null,
-            "Internal amount-check failed (1): $amountChecksum"
-        )
-        if (batchAmount != null) {
-            NexusAssert(
-                amountChecksum?.value == batchAmount.value,
-                "Internal amount-check failed (2)"
-            )
-        }
-        Batch(messageId = null, paymentInformationId = null, batchTransactions = txs)
     }
+    return mutableListOf(
+        Batch(messageId = null, paymentInformationId = null, batchTransactions = txs)
+    )
 }
 
 private fun XmlElementDestructor.maybeExtractCreditDebitIndicator(): CreditDebitIndicator? {
@@ -951,10 +890,7 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
             instructedAmount = instructedAmount,
             creditDebitIndicator = creditDebitIndicator,
             bankTransactionCode = btc,
-            batches = extractBatches(
-                if (mapEachChildNamed("NtryDtls") {}.count() == 1) amount else null,
-                creditDebitIndicator
-            ),
+            batches = extractBatches(amount, creditDebitIndicator),
             bookingDate = maybeUniqueChildNamed("BookgDt") { extractDateOrDateTime() },
             valueDate = maybeUniqueChildNamed("ValDt") { extractDateOrDateTime() },
             accountServicerRef = acctSvcrRef,
