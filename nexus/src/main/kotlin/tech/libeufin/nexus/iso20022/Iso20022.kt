@@ -630,6 +630,18 @@ private fun XmlElementDestructor.extractCurrencyAmount(): CurrencyAmount {
     )
 }
 
+private fun XmlElementDestructor.maybeExtractTxCurrencyAmount(): CurrencyAmount? {
+    NexusAssert(
+        this.focusElement.tagName == "TxDtls",
+        "Wrong place to fetch a detailed amount"
+    )
+    return maybeUniqueChildNamed("AmtDtls") {
+        requireUniqueChildNamed("TxAmt") {
+            maybeExtractCurrencyAmount()
+        }
+    }
+}
+
 private fun XmlElementDestructor.maybeExtractCurrencyAmount(): CurrencyAmount? {
     return maybeUniqueChildNamed("Amt") {
         CurrencyAmount(
@@ -652,21 +664,6 @@ private fun XmlElementDestructor.extractMaybeCurrencyExchange(): CurrencyExchang
     }
 }
 
-/*
- * 1, see if TxDtls add to a sum.
- * 2, if not, see if Btch provides a sum.
- * 3, if not, see if NtryDtls provides a sum.
- * 4, if not, keep the batch without a sum (it's not required to have one,
- *    only the very outer Ntry must have one.  In fact, what goes in the DB
- *    is only the outer Ntry's amount).
- *
- * note: condition 4 should be rare, therefore a check on the batched
- * amount could be done towards the end, and complain if none is found.
- *
- * Right now, the code assumes that one Ntry has only one NtryDtls with only
- * one TxDtls; this assumption is too strong, and ideally should be removed.
- * */
-
 // FIXME: move to util module.
 private fun currencyAmountSum(amount1: CurrencyAmount?, amount2: CurrencyAmount?): CurrencyAmount? {
     if (amount1 == null) return amount2
@@ -679,7 +676,6 @@ private fun currencyAmountSum(amount1: CurrencyAmount?, amount2: CurrencyAmount?
     return CurrencyAmount(currency = amount1.currency, value = amount1.value + amount2.value)
 }
 
-// this function runs with a Ntry as its context.
 private fun XmlElementDestructor.extractBatches(
     inheritableAmount: CurrencyAmount?,
     outerCreditDebitIndicator: CreditDebitIndicator
@@ -722,11 +718,11 @@ private fun XmlElementDestructor.extractBatches(
                     "Divergent credit-debit indicator (2) $txCreditDebitIndicator vs $outerCreditDebitIndicator"
                 )
             }
-            var txAmount = maybeExtractCurrencyAmount()
+            var txAmount = maybeExtractCurrencyAmount() ?: maybeExtractTxCurrencyAmount()
             if (txAmount == null) {
                 NexusAssert(
                     inheritableBatchAmount != null,
-                    "Missing or inconsistent information about singleton sub-transaction(s) amount(s) (0)"
+                    "Singleton transaction has no amount and can't inherit it from its container."
                 )
                 txAmount = inheritableBatchAmount
             }
