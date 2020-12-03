@@ -355,3 +355,5 @@ def test_ingestion_camt53():
             auth=NEXUS_AUTH
         )
     )
+
+    assert(len(resp.json()["transactions"]) == 4)
