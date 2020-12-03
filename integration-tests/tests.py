@@ -2,6 +2,7 @@
 
 import pytest
 import json
+from deepdiff import DeepDiff as dd
 from subprocess import check_call
 from requests import post, get, auth
 from time import sleep
@@ -354,4 +355,6 @@ def test_ingestion_camt53():
             auth=NEXUS_AUTH
         )
     )
-    assert(len(resp.json()["transactions"]) == 4)
+    with open("camt53-gls-style-0.json") as f:
+        expected_txs = f.read()
+    assert not dd(resp.json(), json.loads(expected_txs), ignore_order=True)

@@ -1,0 +1,119 @@
+{
+  "transactions" : [ {
+    "amount" : "EUR:2.35",
+    "creditDebitIndicator" : "DBIT",
+    "status" : "BOOK",
+    "bankTransactionCode" : "PMNT-RRCT-ESCT",
+    "valueDate" : "2020-05-29",
+    "bookingDate" : "2020-05-29",
+    "accountServicerRef" : "2020052912023838000",
+    "batches" : [ {
+      "batchTransactions" : [ {
+        "amount" : "EUR:2.35",
+        "creditDebitIndicator" : "DBIT",
+        "details" : {
+          "debtor" : {
+            "name" : "TALER WALLET USER"
+          },
+          "debtorAccount" : {
+            "iban" : "GB33BUKB20201555555555"
+          },
+          "debtorAgent" : {
+            "bic" : "BYLADEM1WOR"
+          },
+          "creditor" : {
+            "name" : "Taler Exchange"
+          },
+          "creditorAccount" : {
+            "iban" : "DE00000000000000000000"
+          },
+          "endToEndId" : "NOTPROVIDED",
+          "unstructuredRemittanceInformation" : "Überweisung Test Nr. 1  Referenz-Nummer 0FMRBH8FZYYMSQ2RHTYYGK2BV33JVSW6MTYCV7Y833GVNXFDYK10"
+        }
+      } ]
+    } ]
+  }, {
+    "amount" : "EUR:3.15",
+    "creditDebitIndicator" : "CRDT",
+    "status" : "BOOK",
+    "bankTransactionCode" : "PMNT-RRCT-ESCT",
+    "valueDate" : "2020-05-29",
+    "bookingDate" : "2020-05-29",
+    "accountServicerRef" : "2020052913163282000",
+    "batches" : [ {
+      "batchTransactions" : [ {
+        "amount" : "EUR:3.15",
+        "creditDebitIndicator" : "CRDT",
+        "details" : {
+          "debtor" : {
+            "name" : "TALER WALLET USER"
+          },
+          "debtorAccount" : {
+            "iban" : "DE00000000000000000000"
+          },
+          "debtorAgent" : {
+            "bic" : "BYLADEM1WOR"
+          },
+          "creditor" : {
+            "name" : "Taler Exchange"
+          },
+          "creditorAccount" : {
+            "iban" : "DE00000000000000000000"
+          },
+          "endToEndId" : "NOTPROVIDED",
+          "unstructuredRemittanceInformation" : "Überweisung Mai, Test Nr. 2"
+        }
+      } ]
+    } ]
+  }, {
+    "amount" : "EUR:1.79",
+    "creditDebitIndicator" : "CRDT",
+    "status" : "BOOK",
+    "bankTransactionCode" : "PMNT-RRCT-ESCT",
+    "valueDate" : "2020-05-29",
+    "bookingDate" : "2020-05-29",
+    "accountServicerRef" : "2020052913183564000",
+    "batches" : [ {
+      "batchTransactions" : [ {
+        "amount" : "EUR:1.79",
+        "creditDebitIndicator" : "CRDT",
+        "details" : {
+          "debtor" : {
+            "name" : "TALER EXCHANGE"
+          },
+          "debtorAccount" : {
+            "iban" : "DE00000000000000000000"
+          },
+          "debtorAgent" : {
+            "bic" : "BYLADEM1WOR"
+          },
+          "creditor" : {
+            "name" : "Taler Merchant"
+          },
+          "creditorAccount" : {
+            "iban" : "DE00000000000000000000"
+          },
+          "endToEndId" : "NOTPROVIDED",
+          "unstructuredRemittanceInformation" : "Überweisung Mai, Test Nr. 3"
+        }
+      } ]
+    } ]
+  }, {
+    "amount" : "EUR:9.96",
+    "creditDebitIndicator" : "DBIT",
+    "status" : "BOOK",
+    "bankTransactionCode" : "ACMT-OPCL-ACCC",
+    "valueDate" : "2020-05-31",
+    "bookingDate" : "2020-05-29",
+    "accountServicerRef" : "2020052921190458000",
+    "batches" : [ {
+      "batchTransactions" : [ {
+        "amount" : "EUR:9.96",
+        "creditDebitIndicator" : "DBIT",
+        "details" : {
+          "unstructuredRemittanceInformation" : "ABSCHLUSS PER 31.05.2020"
+        }
+      } ]
+    } ]
+  } ]
+}
