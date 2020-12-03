@@ -377,6 +377,15 @@ fun serverMain(dbName: String, host: String) {
                 call.respond(bankAccounts)
                 return@get
             }
+            post("/bank-accounts/{accountId}/test-camt-ingestion/{type}") {
+                processCamtMessage(
+                    ensureNonNull(call.parameters["accountId"]),
+                    XMLUtil.parseStringIntoDom(call.receiveText()),
+                    ensureNonNull(call.parameters["type"])
+                )
+                call.respond({ })
+                return@post
+            }
             get("/bank-accounts/{accountid}/schedule") {
                 val resp = jacksonObjectMapper().createObjectNode()
                 val ops = jacksonObjectMapper().createObjectNode()

@@ -20,7 +20,6 @@ import java.io.ByteArrayOutputStream
 
 class EncodingException : Exception("Invalid encoding")
 
-
 object Base32Crockford {
 
     private fun ByteArray.getIntAt(index: Int): Int {

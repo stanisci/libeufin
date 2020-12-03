@@ -163,6 +163,28 @@ suspend fun fetchEbicsBySpec(
     }
 }
 
+fun storeCamt(bankConnectionId: String, camt: String, historyType: String) {
+    val camt53doc = XMLUtil.parseStringIntoDom(camt)
+    val msgId = camt53doc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
+    logger.info("msg id $msgId")
+    transaction {
+        val conn = NexusBankConnectionEntity.findById(bankConnectionId)
+        if (conn == null) {
+            throw NexusError(HttpStatusCode.InternalServerError, "bank connection missing")
+        }
+        val oldMsg = NexusBankMessageEntity.find { NexusBankMessagesTable.messageId eq msgId }.firstOrNull()
+        if (oldMsg == null) {
+            NexusBankMessageEntity.new {
+                this.bankConnection = conn
+                this.code = historyType
+                this.messageId = msgId
+                this.message = ExposedBlob(camt.toByteArray(Charsets.UTF_8))
+            }
+        }
+    }
+
+}
+
 /**
  * Fetch EBICS C5x and store it locally, but do not update bank accounts.
  */
@@ -192,24 +214,7 @@ private suspend fun fetchEbicsC5x(
         is EbicsDownloadSuccessResult -> {
             response.orderData.unzipWithLambda {
                 logger.debug("Camt entry: ${it.second}")
-                val camt53doc = XMLUtil.parseStringIntoDom(it.second)
-                val msgId = camt53doc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
-                logger.info("msg id $msgId")
-                transaction {
-                    val conn = NexusBankConnectionEntity.findById(bankConnectionId)
-                    if (conn == null) {
-                        throw NexusError(HttpStatusCode.InternalServerError, "bank connection missing")
-                    }
-                    val oldMsg = NexusBankMessageEntity.find { NexusBankMessagesTable.messageId eq msgId }.firstOrNull()
-                    if (oldMsg == null) {
-                        NexusBankMessageEntity.new {
-                            this.bankConnection = conn
-                            this.code = historyType
-                            this.messageId = msgId
-                            this.message = ExposedBlob(it.second.toByteArray(Charsets.UTF_8))
-                        }
-                    }
-                }
+                storeCamt(bankConnectionId, it.second, historyType)
             }
         }
         is EbicsDownloadBankErrorResult -> {
