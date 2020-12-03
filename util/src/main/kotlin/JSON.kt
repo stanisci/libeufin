@@ -26,17 +26,15 @@ package tech.libeufin.util
  */
 data class RawPayment(
     val creditorIban: String,
-    val creditorBic: String? = null,
+    val creditorBic: String,
     val creditorName: String,
     val debitorIban: String,
-    val debitorBic: String? = null,
+    val debitorBic: String,
     val debitorName: String,
     val amount: String,
     val currency: String,
     val subject: String,
     val date: String? = null,
-    // this (uid) field is null when RawPayment is a _requested_ payment
-    // over the admin API, and it's not null when RawPayment represent
-    // a database row of a settled payment.
-    val uid: String? = null
+    val uid: String? = null,
+    val direction: String
 )

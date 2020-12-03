@@ -42,7 +42,7 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.date
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorBic
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorIban
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorName
-import tech.libeufin.sandbox.BankAccountTransactionsTable.msgId
+import tech.libeufin.sandbox.BankAccountTransactionsTable.direction
 import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
 import tech.libeufin.sandbox.BankAccountTransactionsTable.subject
 import tech.libeufin.util.*
@@ -54,7 +54,6 @@ import tech.libeufin.util.ebics_s001.SignatureTypes
 import tech.libeufin.util.ebics_s001.UserSignatureData
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
-import java.sql.SQLException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.util.*
@@ -165,6 +164,37 @@ fun <T> expectNonNull(x: T?): T {
         throw EbicsProtocolError(HttpStatusCode.BadRequest, "expected non-null value")
     }
     return x;
+}
+
+private fun getRelatedParty(branch: XmlElementBuilder, payment: RawPayment) {
+    val otherParty = object {
+        var ibanPath = "CdtrAcct/Id/IBAN"
+        var namePath = "Cdtr/Nm"
+        var iban = payment.creditorIban
+        var name = payment.creditorName
+        var bicPath = "CdtrAgt"
+        var bic = payment.creditorBic
+    }
+    if (payment.direction == "CRDT") {
+        otherParty.iban = payment.debitorIban
+        otherParty.ibanPath = "DbtrAcct/Id/IBAN"
+        otherParty.namePath = "Dbtr/Nm"
+        otherParty.name = payment.debitorName
+        otherParty.bic = payment.debitorBic
+    }
+    branch.element("RltdPties") {
+        element(otherParty.ibanPath) {
+            text(otherParty.iban)
+        }
+        element(otherParty.namePath) {
+            text(otherParty.name)
+        }
+    }
+    branch.element("RltdAgts") {
+        element(otherParty.bicPath) {
+            text(otherParty.bic)
+        }
+    }
 }
 
 /**
@@ -397,37 +427,7 @@ fun buildCamtString(type: Int, subscriberIban: String, history: MutableList<RawP
                                             }
                                         }
                                     }
-                                    element("RltdPties") {
-                                        element("Dbtr/Nm") {
-                                            text(it.debitorName)
-                                        }
-                                        element("DbtrAcct/Id/IBAN") {
-                                            text(it.debitorIban)
-                                        }
-                                        element("Cdtr/Nm") {
-                                            text(it.creditorName)
-                                        }
-                                        element("CdtrAcct/Id/IBAN") {
-                                            text(it.creditorIban)
-                                        }
-                                    }
-//                                    element("RltdAgts") {
-//                                        element("CdtrAgt/FinInstnId/BIC") {
-//                                            // FIXME: explain this!
-//                                            text(
-//                                                if (subscriberIban.equals(it.creditorIban))
-//                                                    it.debitorBic else it.creditorBic
-//                                            )
-//                                        }
-//                                        element("DbtrAgt/FinInstnId/BIC") {
-//                                            // FIXME: explain this!
-//                                            text(
-//                                                if (subscriberIban.equals(it.creditorIban))
-//                                                    it.creditorBic else it.debitorBic
-//                                            )
-//                                        }
-//
-//                                    }
+                                    getRelatedParty(this, it)
                                     element("RmtInf/Ustrd") {
                                         text(it.subject)
                                     }
@@ -487,7 +487,8 @@ private fun constructCamtResponse(
                     // The line below produces a value too long (>35 chars),
                     // and it makes the document invalid!
                     // uid = "${it[pmtInfId]}-${it[msgId]}"
-                    uid = "${it[pmtInfId]}"
+                    uid = "${it[pmtInfId]}",
+                    direction = it[direction]
                 )
             )
         }
@@ -585,6 +586,7 @@ private fun handleCct(paymentRequest: String, initiatorName: String, ctx: Reques
                 it[date] = Instant.now().toEpochMilli()
                 it[pmtInfId] = parseResult.pmtInfId
                 it[msgId] = parseResult.msgId
+                it[direction] = "DBIT"
             }
         } catch (e: ExposedSQLException) {
             logger.warn("Could not insert new payment into the database: ${e}")

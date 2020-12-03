@@ -19,7 +19,8 @@ class CamtTest {
             currency = "EUR",
             subject = "reimbursement",
             date = "1000-02-02",
-            uid = "0"
+            uid = "0",
+            direction = "DBIT"
         )
         val xml = buildCamtString(
             53,

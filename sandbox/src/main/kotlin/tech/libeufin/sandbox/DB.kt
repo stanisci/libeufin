@@ -248,10 +248,10 @@ class EbicsUploadTransactionChunkEntity(id: EntityID<String>) : Entity<String>(i
  */
 object BankAccountTransactionsTable : Table() {
     val creditorIban = text("creditorIban")
-    val creditorBic = text("creditorBic").nullable()
+    val creditorBic = text("creditorBic")
     val creditorName = text("creditorName")
     val debitorIban = text("debitorIban")
-    val debitorBic = text("debitorBic").nullable()
+    val debitorBic = text("debitorBic")
     val debitorName = text("debitorName")
     val subject = text("subject")
     val amount = text("amount")
@@ -259,30 +259,11 @@ object BankAccountTransactionsTable : Table() {
     val date = long("date")
     val pmtInfId = text("pmtInfId")
     val msgId = text("msgId")
+    val direction = text("direction")
     val account = reference("account", BankAccountsTable)
 
     override val primaryKey = PrimaryKey(pmtInfId, msgId)
 }
-
-/*
-class BankAccountTransactionsEntity(id: EntityID<Int>) : IntEntity(id) {
-    companion object : IntEntityClass<BankAccountTransactionsEntity>(BankAccountTransactionsTable)
-
-    var creditorIban by BankAccountTransactionsTable.creditorIban
-    var creditorBic by BankAccountTransactionsTable.creditorBic
-    var creditorName by BankAccountTransactionsTable.creditorName
-    var debitorIban by BankAccountTransactionsTable.debitorIban
-    var debitorBic by BankAccountTransactionsTable.debitorBic
-    var debitorName by BankAccountTransactionsTable.debitorName
-    var subject by BankAccountTransactionsTable.subject
-    var amount by BankAccountTransactionsTable.amount
-    var currency by BankAccountTransactionsTable.currency
-    var date by BankAccountTransactionsTable.date
-    var pmtInfId by BankAccountTransactionsTable.pmtInfId
-    var msgId by BankAccountTransactionsTable.msgId
-    var account by BankAccountEntity referencedOn BankAccountTransactionsTable.account
-}
-*/
 
 /**
  * Table that keeps information about which bank accounts (iban+bic+name)
@@ -313,29 +294,11 @@ object BankAccountStatementsTable : IntIdTable() {
     val bankAccount = reference("bankAccount", BankAccountsTable)
 }
 
-class BankAccountStatementsEntity(id: EntityID<Int>) : IntEntity(id) {
-    companion object : IntEntityClass<BankAccountStatementsEntity>(BankAccountStatementsTable)
-
-    var statementId by BankAccountStatementsTable.statementId
-    var xmlMessage by BankAccountStatementsTable.xmlMessage
-    var creationTime by BankAccountStatementsTable.creationTime
-    var bankAccount by BankAccountEntity referencedOn BankAccountStatementsTable.bankAccount
-}
-
 object BankAccountReportsTable : IntIdTable() {
     val reportId = text("reportId")
     val creationTime = long("creationTime")
     val xmlMessage = text("xmlMessage")
     val bankAccount = reference("bankAccount", BankAccountsTable)
-}
-
-class BankAccountReportsTableEntity(id: EntityID<Int>) : IntEntity(id) {
-    companion object : IntEntityClass<BankAccountReportsTableEntity>(BankAccountReportsTable)
-
-    var reportId by BankAccountReportsTable.reportId
-    var xmlMessage by BankAccountReportsTable.xmlMessage
-    var creationTime by BankAccountReportsTable.creationTime
-    var bankAccount by BankAccountEntity referencedOn BankAccountReportsTable.bankAccount
 }
 
 fun dbCreateTables(dbName: String) {
