@@ -54,11 +54,17 @@ class Iso20022Test {
         assertEquals(null, r.reports[0].entries[0].entryRef)
         assertEquals("acctsvcrref-001", r.reports[0].entries[0].accountServicerRef)
         assertEquals("PMNT-RCDT-ESCT", r.reports[0].entries[0].bankTransactionCode)
-        assertNotNull(r.reports[0].entries[0].details)
-        assertEquals("unstructured info one", r.reports[0].entries[0].details?.unstructuredRemittanceInformation)
+        assertNotNull(r.reports[0].entries[0].batches?.get(0))
+        assertEquals(
+            "unstructured info one",
+            r.reports[0].entries[0].batches?.get(0)?.batchTransactions?.get(0)?.details?.unstructuredRemittanceInformation
+        )
 
         // Second Entry
-        assertEquals("unstructured info across lines", r.reports[0].entries[1].details?.unstructuredRemittanceInformation)
+        assertEquals(
+            "unstructured info across lines",
+            r.reports[0].entries[1].batches?.get(0)?.batchTransactions?.get(0)?.details?.unstructuredRemittanceInformation
+        )
 
         // Third Entry
 

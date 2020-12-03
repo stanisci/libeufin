@@ -323,10 +323,10 @@ data class CamtBankAccountEntry(
      */
     val instructedAmount: CurrencyAmount?,
 
-    /**
-     * Details of the underlying transaction for type=Simple.
-     */
+    // This field got recently obsoleted.
     val details: TransactionDetails? = null,
+
+    // list of sub-transactions participating in this money movement.
     val batches: List<Batch>?
 )
 
