@@ -50,6 +50,7 @@ def makeNexusSuperuser(dbName):
     check_call(
         [
             "../gradlew",
+            "-q",
             "-p",
             "..",
             "nexus:run",
@@ -101,10 +102,10 @@ def flushTablesNexus(dbName):
 def startSandbox(dbName="sandbox-test.sqlite3"):
     db_full_path = str(Path.cwd() / dbName)
     check_call(["rm", "-f", db_full_path])
-    check_call(["../gradlew", "-p", "..", "sandbox:assemble"])
+    check_call(["../gradlew", "-q", "-p", "..", "sandbox:assemble"])
     checkPort(5000)
     sandbox = Popen(
-        ["../gradlew", "-p", "..", "sandbox:run", "--console=plain", "--args=serve --db-name={}".format(db_full_path)],
+        ["../gradlew", "-q", "-p", "..", "sandbox:run", "--console=plain", "--args=serve --db-name={}".format(db_full_path)],
         stdin=DEVNULL,
         stdout=open("sandbox-stdout.log", "w"),
         stderr=open("sandbox-stderr.log", "w"),
@@ -128,12 +129,13 @@ def startNexus(dbName="nexus-test.sqlite3"):
     db_full_path = str(Path.cwd() / dbName)
     check_call(["rm", "-f", "--", db_full_path])
     check_call(
-        ["../gradlew", "-p", "..", "nexus:assemble",]
+        ["../gradlew", "-q", "-p", "..", "nexus:assemble",]
     )
     checkPort(5001)
     nexus = Popen(
         [
             "../gradlew",
+            "-q",
             "-p",
             "..",
             "nexus:run",

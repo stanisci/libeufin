@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import pytest
+import json
 from subprocess import check_call
 from requests import post, get, auth
 from time import sleep
@@ -232,7 +234,7 @@ def test_payment():
 
 # This test makes one payment via the Taler facade,
 # and expects too see it in the outgoing history.
-@pytest.skip("Need more attention")
+@pytest.mark.skip("Needs more attention")
 def test_taler_facade():
     assertResponse(
         post(
@@ -334,4 +336,22 @@ def test_double_connection_name():
             auth=NEXUS_AUTH
         ),
         [406] # expecting "406 Not acceptable"
+    )
+
+def test_ingestion_camt53():
+    with open("camt53-gls-style.xml") as f:
+        camt = f.read()
+    assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/test-camt-ingestion/C53",
+            auth=NEXUS_AUTH,
+            data=camt
+        )
+    )
+
+    resp = assertResponse(
+        get(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
+            auth=NEXUS_AUTH
+        )
     )
