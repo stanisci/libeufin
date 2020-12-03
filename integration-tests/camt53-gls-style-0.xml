@@ -15,7 +15,7 @@
       <CreDtTm>2020-05-29T23:41:21.0+02:00</CreDtTm>
       <Acct>
         <Id>
-          <IBAN>DE00000000000000000000</IBAN>
+          <IBAN>GB33BUKB20201555555555</IBAN>
         </Id>
         <Ccy>EUR</Ccy>
         <Ownr>
@@ -58,7 +58,7 @@
       </Bal>
       <Ntry>
         <Amt Ccy="EUR">2.35</Amt>
-        <CdtDbtInd>CRDT</CdtDbtInd>
+        <CdtDbtInd>DBIT</CdtDbtInd>
         <Sts>BOOK</Sts>
         <BookgDt>
           <Dt>2020-05-29</Dt>
@@ -109,7 +109,7 @@
               </Dbtr>
               <DbtrAcct>
                 <Id>
-                  <IBAN>DE00000000000000000000</IBAN>
+                  <IBAN>GB33BUKB20201555555555</IBAN>
                 </Id>
               </DbtrAcct>
               <Cdtr>

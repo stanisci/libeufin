@@ -348,6 +348,10 @@ def test_ingestion_camt53():
             data=camt
         )
     )
+    resp = assertResponse(
+        get(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
+            auth=NEXUS_AUTH
+        )
+    )
     assert(len(resp.json()["transactions"]) == 4)
-    for t in resp.json()["transactions"]:
-        print(t["amount"])
