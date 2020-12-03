@@ -340,29 +340,14 @@ def test_double_connection_name():
 
 def test_ingestion_camt53():
     with open("camt53-gls-style-0.xml") as f:
-        camt_0 = f.read()
+        camt = f.read()
     assertResponse(
         post(
             f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/test-camt-ingestion/C53",
             auth=NEXUS_AUTH,
-            data=camt_0
+            data=camt
         )
     )
-    with open("camt53-gls-style-1.xml") as f:
-        camt_1 = f.read()
-    assertResponse(
-        post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/test-camt-ingestion/C53",
-            auth=NEXUS_AUTH,
-            data=camt_1
-        )
-    )
-
-    resp = assertResponse(
-        get(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
-            auth=NEXUS_AUTH
-        )
-    )
-
-    assert(len(resp.json()["transactions"]) == 5)
+    assert(len(resp.json()["transactions"]) == 4)
+    for t in resp.json()["transactions"]:
+        print(t["amount"])
