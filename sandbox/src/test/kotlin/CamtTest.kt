@@ -28,7 +28,7 @@ class CamtTest {
             mutableListOf(payment)
         )
         assertTrue {
-            XMLUtil.validateFromString(xml.get(0))
+            XMLUtil.validateFromString(xml)
         }
     }
 }
