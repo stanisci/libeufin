@@ -263,7 +263,11 @@ fun serverMain(dbName: String) {
                         )
                     }
                 }
-                call.respond(ret)
+                call.respond(
+                    object {
+                        val payments = ret
+                    }
+                )
                 return@get
             }
 
