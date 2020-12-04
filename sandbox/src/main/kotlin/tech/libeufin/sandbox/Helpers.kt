@@ -24,6 +24,10 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 
+fun SandboxAssert(condition: Boolean, reason: String) {
+    if (!condition) throw SandboxError(HttpStatusCode.InternalServerError, reason)
+}
+
 fun getOrderTypeFromTransactionId(transactionID: String): String {
     val uploadTransaction = transaction {
         EbicsUploadTransactionEntity.findById(transactionID)

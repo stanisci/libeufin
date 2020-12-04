@@ -233,9 +233,13 @@ fun serverMain(dbName: String) {
             get("/") {
                 call.respondText("Hello, this is Sandbox\n", ContentType.Text.Plain)
             }
-            // only reason for a post is to hide the iban to some degree.
-            post("/admin/payments/camt53") {
+            // only reason for a post is to hide the iban (to some degree.)
+            post("/admin/payments/camt/53") {
                 val iban = call.receiveText()
+                val history = historyForAccount(iban)
+                val camt53 = buildCamtString(53, iban, history)
+                call.respondText(camt53, ContentType.Text.Xml, HttpStatusCode.OK)
+                return@post
             }
             get("/admin/payments") {
                 val ret = PaymentsResponse()
