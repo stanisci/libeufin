@@ -245,7 +245,7 @@ data class BankProtocolsResponse(
 /** Request type of "POST /prepared-payments" */
 data class CreatePaymentInitiationRequest(
     val iban: String,
-    val bic: String?,
+    val bic: String,
     val name: String,
     val amount: String,
     val subject: String
@@ -332,7 +332,7 @@ data class TalerWireGatewayFacadeConfig(
 
 data class Pain001Data(
     val creditorIban: String,
-    val creditorBic: String?,
+    val creditorBic: String,
     val creditorName: String,
     val sum: Amount,
     val currency: String,

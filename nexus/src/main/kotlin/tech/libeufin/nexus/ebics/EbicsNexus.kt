@@ -758,6 +758,7 @@ suspend fun submitEbicsPaymentInitiation(httpClient: HttpClient, paymentInitiati
                 amount = paymentInitiation.sum.toString(),
                 creditorIban = paymentInitiation.creditorIban,
                 creditorName = paymentInitiation.creditorName,
+                creditorBic = paymentInitiation.creditorBic,
                 messageId = paymentInitiation.messageId,
                 paymentInformationId = paymentInitiation.paymentInformationId,
                 preparationTimestamp = paymentInitiation.preparationDate,

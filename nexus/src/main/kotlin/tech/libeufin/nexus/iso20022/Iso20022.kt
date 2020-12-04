@@ -349,6 +349,7 @@ data class NexusPaymentInitiationData(
     val preparationTimestamp: Long,
     val creditorName: String,
     val creditorIban: String,
+    val creditorBic: String,
     val instructionId: String?
 )
 
