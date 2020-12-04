@@ -203,7 +203,7 @@ private fun getRelatedParty(branch: XmlElementBuilder, payment: RawPayment) {
  * words, the camt constructor does create always only one "Ntry"
  * node.
  */
-fun buildCamtString(type: Int, subscriberIban: String, history: MutableList<RawPayment>): MutableList<String> {
+fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>): MutableList<String> {
     /**
      * ID types required:
      *
@@ -462,39 +462,7 @@ private fun constructCamtResponse(
     } else Pair(parseDashedDate("1970-01-01"), LocalDateTime.now())
     val history = mutableListOf<RawPayment>()
     val bankAccount = getBankAccountFromSubscriber(subscriber)
-    transaction {
-        logger.debug("Querying transactions involving: ${bankAccount.iban}")
-        BankAccountTransactionsTable.select {
-            BankAccountTransactionsTable.creditorIban eq bankAccount.iban or
-                    (BankAccountTransactionsTable.debitorIban eq bankAccount.iban)
-            /**
-            FIXME: add the following condition too:
-            and (BankAccountTransactionsTable.date.between(start.millis, end.millis))
-             */
-        }.forEach {
-            history.add(
-                RawPayment(
-                    subject = it[subject],
-                    creditorIban = it[creditorIban],
-                    creditorBic = it[creditorBic],
-                    creditorName = it[creditorName],
-                    debitorIban = it[debitorIban],
-                    debitorBic = it[debitorBic],
-                    debitorName = it[debitorName],
-                    date = importDateFromMillis(it[date]).toDashedDate(),
-                    amount = it[amount],
-                    currency = it[currency],
-                    // The line below produces a value too long (>35 chars),
-                    // and it makes the document invalid!
-                    // uid = "${it[pmtInfId]}-${it[msgId]}"
-                    uid = "${it[pmtInfId]}",
-                    direction = it[direction]
-                )
-            )
-        }
-        history
-    }
-    return buildCamtString(type, bankAccount.iban, history)
+    return buildCamtString(type, bankAccount.iban, historyForAccount(bankAccount.iban))
 }
 
 /**

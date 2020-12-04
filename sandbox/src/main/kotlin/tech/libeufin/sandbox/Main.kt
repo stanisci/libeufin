@@ -28,8 +28,6 @@ import io.ktor.features.ContentNegotiation
 import io.ktor.features.StatusPages
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.request.receive
-import io.ktor.request.uri
 import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.routing.get
@@ -61,6 +59,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
+import io.ktor.request.*
 import io.ktor.util.AttributeKey
 import tech.libeufin.sandbox.BankAccountTransactionsTable
 import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
@@ -233,6 +232,10 @@ fun serverMain(dbName: String) {
         routing {
             get("/") {
                 call.respondText("Hello, this is Sandbox\n", ContentType.Text.Plain)
+            }
+            // only reason for a post is to hide the iban to some degree.
+            post("/admin/payments/camt53") {
+                val iban = call.receiveText()
             }
             get("/admin/payments") {
                 val ret = PaymentsResponse()
