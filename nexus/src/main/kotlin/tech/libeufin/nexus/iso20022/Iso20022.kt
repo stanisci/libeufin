@@ -338,7 +338,7 @@ class CamtParsingError(msg: String) : Exception(msg)
  */
 data class NexusPaymentInitiationData(
     val debtorIban: String,
-    val debtorBic: String?,
+    val debtorBic: String,
     val debtorName: String,
     val messageId: String,
     val paymentInformationId: String,
@@ -429,9 +429,8 @@ fun createPain001document(paymentData: NexusPaymentInitiationData): String {
                     element("DbtrAcct/Id/IBAN") {
                         text(paymentData.debtorIban)
                     }
-                    when (val b = paymentData.debtorBic) {
-                        null -> element("DbtrAgt/FinInstnId/Othr/Id") { text("NOTPROVIDED") }
-                        else -> element("DbtrAgt/FinInstnId/BIC") { text(b) }
+                    element("DbtrAgt/FinInstnId/BIC") {
+                        text(paymentData.debtorBic)
                     }
                     element("ChrgBr") {
                         text("SLEV")
@@ -449,6 +448,9 @@ fun createPain001document(paymentData: NexusPaymentInitiationData): String {
                         element("Amt/InstdAmt") {
                             attribute("Ccy", paymentData.currency)
                             text(paymentData.amount)
+                        }
+                        element("CdtrAgt/FinInstnId/BIC") {
+                            text(paymentData.creditorBic)
                         }
                         element("Cdtr/Nm") {
                             text(paymentData.creditorName)

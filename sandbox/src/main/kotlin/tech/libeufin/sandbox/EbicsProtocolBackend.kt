@@ -490,7 +490,7 @@ private fun parsePain001(paymentRequest: String, initiatorName: String): PainPar
                         }
                     }
                     val debtorIban = requireUniqueChildNamed("DbtrAcct"){
-                        requireUniqueChildNamed("Type") {
+                        requireUniqueChildNamed("Id") {
                             requireUniqueChildNamed("IBAN") {
                                 focusElement.textContent
                             }
@@ -498,7 +498,7 @@ private fun parsePain001(paymentRequest: String, initiatorName: String): PainPar
                     }
                     val debtorBic = requireUniqueChildNamed("DbtrAgt"){
                         requireUniqueChildNamed("FinInstnId") {
-                            requireUniqueChildNamed("BICFI") {
+                            requireUniqueChildNamed("BIC") {
                                 focusElement.textContent
                             }
                         }
@@ -517,8 +517,8 @@ private fun parsePain001(paymentRequest: String, initiatorName: String): PainPar
                                 }
                             }
                             val creditorBic = requireUniqueChildNamed("CdtrAgt") {
-                                requireUniqueChildNamed("InstnId") {
-                                    requireUniqueChildNamed("BICFI") {
+                                requireUniqueChildNamed("FinInstnId") {
+                                    requireUniqueChildNamed("BIC") {
                                         focusElement.textContent
                                     }
                                 }
