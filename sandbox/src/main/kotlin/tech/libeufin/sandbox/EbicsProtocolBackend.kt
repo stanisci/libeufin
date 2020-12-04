@@ -65,8 +65,10 @@ val EbicsHostIdAttribute = AttributeKey<String>("RequestedEbicsHostID")
 data class PainParseResult(
     val creditorIban: String,
     val creditorName: String,
+    val creditorBic: String,
     val debitorIban: String,
     val debitorName: String,
+    val debitorBic: String,
     val subject: String,
     val amount: Amount,
     val currency: String,
@@ -482,41 +484,65 @@ private fun parsePain001(paymentRequest: String, initiatorName: String): PainPar
                     requireUniqueChildNamed("MsgId") { focusElement.textContent }
                 }
                 requireUniqueChildNamed("PmtInf") {
+                    val debtorName = requireUniqueChildNamed("Dbtr"){
+                        requireUniqueChildNamed("Nm") {
+                            focusElement.textContent
+                        }
+                    }
+                    val debtorIban = requireUniqueChildNamed("DbtrAcct"){
+                        requireUniqueChildNamed("Type") {
+                            requireUniqueChildNamed("IBAN") {
+                                focusElement.textContent
+                            }
+                        }
+                    }
+                    val debtorBic = requireUniqueChildNamed("DbtrAgt"){
+                        requireUniqueChildNamed("FinInstnId") {
+                            requireUniqueChildNamed("BICFI") {
+                                focusElement.textContent
+                            }
+                        }
+                    }
                     val pmtInfId = requireUniqueChildNamed("PmtInfId") { focusElement.textContent }
-                    val creditorIban = requireUniqueChildNamed("CdtTrfTxInf") {
-                        requireUniqueChildNamed("CdtrAcct") {
-                            requireUniqueChildNamed("Id") {
-                                requireUniqueChildNamed("IBAN") { focusElement.textContent }
+                    val txDetails = requireUniqueChildNamed("CdtTrfTxInf") {
+                        object {
+                            val creditorIban = requireUniqueChildNamed("CdtrAcct") {
+                                requireUniqueChildNamed("Id") {
+                                    requireUniqueChildNamed("IBAN") { focusElement.textContent }
+                                }
                             }
-                        }
-                    }
-                    val txInf = requireUniqueChildNamed("CdtTrfTxInf") {
-                        val amt = requireUniqueChildNamed("Amt") {
-                            requireOnlyChild {
-                                focusElement
+                            val creditorName = requireUniqueChildNamed("Cdtr") {
+                                requireUniqueChildNamed("Nm") {
+                                    focusElement.textContent
+                                }
                             }
-                        }
-                        val creditorName = requireUniqueChildNamed("Cdtr") {
-                            requireUniqueChildNamed("Nm") { focusElement.textContent }
-                        }
-                        val subject = requireUniqueChildNamed("RmtInf") {
-                            requireUniqueChildNamed("Ustrd") { focusElement.textContent }
-                        }
-                        object {val amt = amt; val subject = subject; val creditorName = creditorName}
-                    }
-                    val debitorIban = requireUniqueChildNamed("DbtrAcct") {
-                        requireOnlyChild {
-                            requireOnlyChild { focusElement.textContent }
+                            val creditorBic = requireUniqueChildNamed("CdtrAgt") {
+                                requireUniqueChildNamed("InstnId") {
+                                    requireUniqueChildNamed("BICFI") {
+                                        focusElement.textContent
+                                    }
+                                }
+
+                            }
+                            val amt = requireUniqueChildNamed("Amt") {
+                                requireOnlyChild { focusElement }
+                            }
+                            val subject = requireUniqueChildNamed("RmtInf") {
+                                requireUniqueChildNamed("Ustrd") { focusElement.textContent }
+                            }
+
                         }
                     }
                     PainParseResult(
-                        currency = txInf.amt.getAttribute("Ccy"),
-                        amount = Amount(txInf.amt.textContent),
-                        subject = txInf.subject,
-                        debitorIban = debitorIban,
-                        debitorName = initiatorName,
-                        creditorName = txInf.creditorName,
-                        creditorIban = creditorIban,
+                        currency = txDetails.amt.getAttribute("Ccy"),
+                        amount = Amount(txDetails.amt.textContent),
+                        subject = txDetails.subject,
+                        debitorIban = debtorIban,
+                        debitorName = debtorName,
+                        debitorBic = debtorBic,
+                        creditorName = txDetails.creditorName,
+                        creditorIban = txDetails.creditorIban,
+                        creditorBic = txDetails.creditorBic,
                         pmtInfId = pmtInfId,
                         msgId = msgId
                     )
@@ -537,8 +563,10 @@ private fun handleCct(paymentRequest: String, initiatorName: String, ctx: Reques
                 it[account] = getBankAccountFromIban(parseResult.debitorIban).id
                 it[creditorIban] = parseResult.creditorIban
                 it[creditorName] = parseResult.creditorName
+                it[creditorBic] = parseResult.creditorBic
                 it[debitorIban] = parseResult.debitorIban
                 it[debitorName] = parseResult.debitorName
+                it[debitorBic] = parseResult.debitorBic
                 it[subject] = parseResult.subject
                 it[amount] = parseResult.amount.toString()
                 it[currency] = parseResult.currency

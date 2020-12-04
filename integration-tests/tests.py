@@ -361,7 +361,6 @@ def test_ingestion_camt53():
 
 def test_sandbox_camt():
     payment_instruction = dict(
-        # NOTE: this format is very outdated in the docs repo.
         creditorIban="GB33BUKB20201555555555",
         creditorBic="BUKBGB22",
         creditorName="Oliver Smith",
