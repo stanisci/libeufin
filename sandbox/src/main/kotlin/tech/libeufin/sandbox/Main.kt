@@ -273,7 +273,7 @@ fun serverMain(dbName: String) {
                 val body = call.receive<RawPayment>()
                 val random = Random.nextLong()
                 transaction {
-                    val debitorBankAccount = getBankAccountFromIban(body.debitorIban).id
+                    val localIban = if (body.direction == "DBIT") body.debitorIban else body.creditorIban
                     BankAccountTransactionsTable.insert {
                         it[creditorIban] = body.creditorIban
                         it[creditorBic] = body.creditorBic
@@ -287,7 +287,8 @@ fun serverMain(dbName: String) {
                         it[date] = Instant.now().toEpochMilli()
                         it[pmtInfId] = random.toString()
                         it[msgId] = random.toString()
-                        it[account] = debitorBankAccount
+                        it[account] = getBankAccountFromIban(localIban).id
+                        it[direction] = body.direction
                     }
                 }
                 call.respondText("Payment created")

@@ -358,3 +358,22 @@ def test_ingestion_camt53():
     with open("camt53-gls-style-0.json") as f:
         expected_txs = f.read()
     assert not dd(resp.json(), json.loads(expected_txs), ignore_order=True)
+
+def test_sandbox_camt():
+    assertResponse(
+        post(
+            f"{S}/admin/payments/",
+            json=dict(
+                creditorIban="GB33BUKB20201555555555",
+                creditorBic="ABCXYZ",
+                creditorName="Oliver Smith",
+                debitorIban="FR00000000000000000000",
+                debitorBic="ABCXYZ",
+                debitorName="Max Mustermann",
+                amount=5,
+                currency="EUR",
+                subject="Reimbursement",
+                direction="CRDT"
+            )
+        )
+    )
