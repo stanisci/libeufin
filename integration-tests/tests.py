@@ -379,10 +379,10 @@ def test_sandbox_camt():
             json=payment_instruction
         )
     )
-    resp = assertResponse(
+
+    assertResponse(
         post(
-            f"{S}/admin/payments/camt/53",
-            data="GB33BUKB20201555555555"
+            f"{S}/admin/payments/camt",
+            json=dict(iban="GB33BUKB20201555555555", type=53)
         )
     )
-    print(resp.text)

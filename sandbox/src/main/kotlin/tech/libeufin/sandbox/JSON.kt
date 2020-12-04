@@ -77,6 +77,11 @@ data class DateRange(
     val endDate: Long
 )
 
+data class CamtParams(
+    val iban: String,
+    val type: Int
+)
+
 data class BankAccountStatements(
     var bankAccountStatements: MutableList<BankAccountStatement> = mutableListOf()
 )
