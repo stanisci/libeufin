@@ -22,7 +22,8 @@ class PainTest {
                 preparationTimestamp = 0,
                 subject = "subject",
                 instructionId = "instruction id",
-                endToEndId = "end to end id"
+                endToEndId = "end to end id",
+                creditorBic = "BUKBGB33"
             )
         )
         assertTrue {
