@@ -360,20 +360,29 @@ def test_ingestion_camt53():
     assert not dd(resp.json(), json.loads(expected_txs), ignore_order=True)
 
 def test_sandbox_camt():
+    payment_instruction = dict(
+        # NOTE: this format is very outdated in the docs repo.
+        creditorIban="GB33BUKB20201555555555",
+        creditorBic="BUKBGB22",
+        creditorName="Oliver Smith",
+        debitorIban="FR00000000000000000000",
+        debitorBic="BUKBGB22",
+        debitorName="Max Mustermann",
+        amount=5,
+        currency="EUR",
+        subject="Reimbursement",
+        direction="CRDT"
+    )
     assertResponse(
         post(
             f"{S}/admin/payments/",
-            json=dict(
-                creditorIban="GB33BUKB20201555555555",
-                creditorBic="ABCXYZ",
-                creditorName="Oliver Smith",
-                debitorIban="FR00000000000000000000",
-                debitorBic="ABCXYZ",
-                debitorName="Max Mustermann",
-                amount=5,
-                currency="EUR",
-                subject="Reimbursement",
-                direction="CRDT"
-            )
+            json=payment_instruction
         )
     )
+    resp = assertResponse(
+        post(
+            f"{S}/admin/payments/camt/53",
+            data="GB33BUKB20201555555555"
+        )
+    )
+    print(resp.text)

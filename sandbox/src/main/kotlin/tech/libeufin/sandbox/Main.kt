@@ -71,6 +71,7 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.date
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorBic
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorIban
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorName
+import tech.libeufin.sandbox.BankAccountTransactionsTable.direction
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
@@ -257,7 +258,7 @@ fun serverMain(dbName: String) {
                                 debitorBic = it[debitorBic],
                                 debitorName = it[debitorName],
                                 currency = it[currency],
-                                direction = "FIXME"
+                                direction = it[direction]
                             )
                         )
                     }
