@@ -78,7 +78,14 @@ fun ensureNonNull(param: String?): String {
 fun ensureLong(param: String?): Long {
     val asString = ensureNonNull(param)
     return asString.toLongOrNull() ?: throw NexusError(
-        HttpStatusCode.BadRequest, "Parameter is not a number: ${param}"
+        HttpStatusCode.BadRequest, "Parameter is not Long: ${param}"
+    )
+}
+
+fun ensureInt(param: String?): Int {
+    val asString = ensureNonNull(param)
+    return asString.toIntOrNull() ?: throw NexusError(
+        HttpStatusCode.BadRequest, "Parameter is not Int: ${param}"
     )
 }
 
@@ -412,6 +419,29 @@ fun serverMain(dbName: String, host: String) {
                 call.respond(resp)
             }
 
+            // Get all the scheduled jobs to the requester.
+            get("/bank-accounts/{accountid}/schedule") {
+                val ret = mutableListOf<AccountTask>()
+                transaction {
+                    NexusScheduledTaskEntity.all().forEach {
+                        ret.add(
+                            AccountTask(
+                                resourceType = it.resourceType,
+                                resourceId = it.resourceId,
+                                taskName = it.taskName,
+                                taskType = it.taskType,
+                                taskCronspec = it.taskCronspec,
+                                taskParams = it.taskParams,
+                                nextScheduledExecutionSec = it.nextScheduledExecutionSec,
+                                prevScheduledExecutionSec = it.prevScheduledExecutionSec
+                            )
+                        )
+                    }
+                }
+                call.respond(ret)
+                return@get
+            }
+
             post("/bank-accounts/{accountid}/schedule") {
                 val schedSpec = call.receive<CreateAccountTaskRequest>()
                 val accountId = ensureNonNull(call.parameters["accountid"])
@@ -459,7 +489,26 @@ fun serverMain(dbName: String, host: String) {
             }
 
             get("/bank-accounts/{accountId}/schedule/{taskId}") {
-                call.respond(object { })
+                val task = transaction {
+                    NexusScheduledTaskEntity.findById(ensureInt(call.parameters["taskId"]))
+                }
+                call.respond(
+                    if (task != null) {
+                        AccountTask(
+                            resourceId = task.resourceId,
+                            resourceType = task.resourceType,
+                            taskName = task.taskName,
+                            taskCronspec = task.taskCronspec,
+                            taskType = task.taskType,
+                            taskParams = task.taskParams,
+                            nextScheduledExecutionSec = task.nextScheduledExecutionSec,
+                            prevScheduledExecutionSec = task.prevScheduledExecutionSec
+                        )
+                    } else {
+                        object {}
+                    }
+                )
+                return@get
             }
 
             delete("/bank-accounts/{accountId}/schedule/{taskId}") {

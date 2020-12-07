@@ -32,6 +32,8 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
+import tech.libeufin.nexus.NexusScheduledTasksTable
+import tech.libeufin.nexus.NexusScheduledTasksTable.nullable
 import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.nexus.iso20022.CreditDebitIndicator
 import tech.libeufin.nexus.iso20022.EntryStatus
@@ -338,6 +340,18 @@ data class Pain001Data(
     val currency: String,
     val subject: String
 )
+
+data class AccountTask(
+    val resourceType: String,
+    val resourceId: String,
+    val taskName: String,
+    val taskType: String,
+    val taskCronspec: String,
+    val taskParams: String,
+    val nextScheduledExecutionSec: Long?, // human-readable time (= Epoch when this value doesn't exist in DB)
+    val prevScheduledExecutionSec: Long? // human-readable time (= Epoch when this value doesn't exist in DB)
+)
+
 
 data class CreateAccountTaskRequest(
     val name: String,
