@@ -633,18 +633,6 @@ private fun XmlElementDestructor.extractCurrencyAmount(): CurrencyAmount {
     )
 }
 
-private fun XmlElementDestructor.maybeExtractTxCurrencyAmount(): CurrencyAmount? {
-    NexusAssert(
-        this.focusElement.tagName == "TxDtls",
-        "Wrong place to fetch a detailed amount"
-    )
-    return maybeUniqueChildNamed("AmtDtls") {
-        requireUniqueChildNamed("TxAmt") {
-            maybeExtractCurrencyAmount()
-        }
-    }
-}
-
 private fun XmlElementDestructor.maybeExtractCurrencyAmount(): CurrencyAmount? {
     return maybeUniqueChildNamed("Amt") {
         CurrencyAmount(
@@ -667,26 +655,14 @@ private fun XmlElementDestructor.extractMaybeCurrencyExchange(): CurrencyExchang
     }
 }
 
-// FIXME: move to util module.
-private fun currencyAmountSum(amount1: CurrencyAmount?, amount2: CurrencyAmount?): CurrencyAmount? {
-    if (amount1 == null) return amount2
-    if (amount2 == null) return amount1
-
-    if (amount1.currency != amount2.currency) throw NexusError(
-        HttpStatusCode.InternalServerError,
-        "Trying to sum two amount with different currencies"
-    )
-    return CurrencyAmount(currency = amount1.currency, value = amount1.value + amount2.value)
-}
-
 private fun XmlElementDestructor.extractBatches(
     inheritableAmount: CurrencyAmount?,
     outerCreditDebitIndicator: CreditDebitIndicator
 ): List<Batch> {
-    if (mapEachChildNamed("NtryDtls") {}.size != 1) return mutableListOf()
+    if (mapEachChildNamed("NtryDtls") {}.size != 1) throw CamtParsingError("This money movement is not a singleton #0")
     var txs = requireUniqueChildNamed("NtryDtls") {
         if (mapEachChildNamed("TxDtls") {}.size != 1) {
-            return@requireUniqueChildNamed mutableListOf<BatchTransaction>()
+            throw CamtParsingError("This money movement is not a singleton #1")
         }
          requireUniqueChildNamed("TxDtls") {
             val details = extractTransactionDetails(outerCreditDebitIndicator)
@@ -779,17 +755,6 @@ private fun XmlElementDestructor.extractTransactionDetails(
     )
 }
 
-private fun XmlElementDestructor.extractSingleDetails(
-    outerAmount: CurrencyAmount,
-    outerCreditDebitIndicator: CreditDebitIndicator
-): TransactionDetails {
-    return requireUniqueChildNamed("NtryDtls") {
-        requireUniqueChildNamed("TxDtls") {
-            extractTransactionDetails(outerCreditDebitIndicator)
-        }
-    }
-}
-
 private fun XmlElementDestructor.extractInnerBkTxCd(creditDebitIndicator: CreditDebitIndicator): String {
 
     val domain = maybeUniqueChildNamed("Domn") { maybeUniqueChildNamed("Cd") { focusElement.textContent } }
@@ -853,7 +818,8 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
             amount = extractCurrencyAmount()
         )
     }
-
+    // Note: multiple Ntry's *are* allowed.  What is not allowed is
+    // multiple money transactions *within* one Ntry element.
     val entries = mapEachChildNamed("Ntry") {
         val amount = extractCurrencyAmount()
         val status = requireUniqueChildNamed("Sts") { focusElement.textContent }.let {
@@ -882,8 +848,6 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
         val instructedAmount = maybeUniqueChildNamed("AmtDtls") {
             maybeUniqueChildNamed("InstdAmt") { extractCurrencyAmount() }
         }
-
-        // For now, only support account servicer reference as id
 
         CamtBankAccountEntry(
             amount = amount,
@@ -916,7 +880,8 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
 }
 
 /**
- * Extract a list of transactions from an ISO20022 camt.052 / camt.053 message.
+ * Extract a list of transactions from
+ * an ISO20022 camt.052 / camt.053 message.
  */
 fun parseCamtMessage(doc: Document): CamtParseResult {
     return destructXml(doc) {
@@ -939,7 +904,6 @@ fun parseCamtMessage(doc: Document): CamtParseResult {
                     }
                 }
             }
-
             val messageId = requireOnlyChild {
                 requireUniqueChildNamed("GrpHdr") {
                     requireUniqueChildNamed("MsgId") { focusElement.textContent }

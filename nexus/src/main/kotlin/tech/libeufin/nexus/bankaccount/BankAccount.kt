@@ -106,7 +106,6 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
     }
 }
 
-
 /**
  * Check if the transaction is already found in the database.
  */
@@ -130,7 +129,7 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
         val res = try {
             parseCamtMessage(camtDoc)
         } catch (e: CamtParsingError) {
-            logger.warn("Invalid CAMT received from bank")
+            logger.warn("Invalid CAMT received from bank: $e")
             return@transaction false
         }
         val stamp = ZonedDateTime.parse(res.creationDateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant().toEpochMilli()
@@ -148,7 +147,6 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
                 }
             }
         }
-
         val entries = res.reports.map { it.entries }.flatten()
         logger.info("found ${entries.size} transactions")
         txloop@ for (tx in entries) {
@@ -164,7 +162,6 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
                 // https://bugs.gnunet.org/view.php?id=6381
                 break
             }
-
             val rawEntity = NexusBankTransactionEntity.new {
                 bankAccount = acct
                 accountTransactionId = "AcctSvcrRef:$acctSvcrRef"
@@ -190,7 +187,8 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
                         paymentInitiation.confirmationTransaction = rawEntity
                     }
                 }
-                // FIXME: find matching PaymentInitiation by PaymentInformationID, message ID or whatever is present
+                // FIXME: find matching PaymentInitiation
+                //  by PaymentInformationID, message ID or whatever is present
             }
         }
         return@transaction true

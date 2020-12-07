@@ -688,7 +688,9 @@ fun serverMain(dbName: String, host: String) {
                 transaction {
                     authenticateRequest(call.request).id.value
                     NexusBankTransactionEntity.all().map {
-                        val tx = jacksonObjectMapper().readValue(it.transactionJson, CamtBankAccountEntry::class.java)
+                        val tx = jacksonObjectMapper().readValue(
+                            it.transactionJson, CamtBankAccountEntry::class.java
+                        )
                         ret.transactions.add(tx)
                     }
                 }
