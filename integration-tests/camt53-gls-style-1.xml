@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02 camt.053.001.02.xsd">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>053D2020-05-29T23:41:27.0N200000011</MsgId>
+      <CreDtTm>2020-05-29T23:41:21.0+02:00</CreDtTm>
+      <MsgPgntn>
+          <PgNb>001</PgNb>
+        <LastPgInd>true</LastPgInd>
+      </MsgPgntn>
+    </GrpHdr>
+    <Stmt>
+      <Id>4967C532020052923412775014049078800</Id>
+      <ElctrncSeqNb>200000011</ElctrncSeqNb>
+      <LglSeqNb>005</LglSeqNb>
+      <CreDtTm>2020-05-29T23:41:21.0+02:00</CreDtTm>
+      <Acct>
+        <Id>
+          <IBAN>GB33BUKB20201555555555</IBAN>
+        </Id>
+        <Ccy>EUR</Ccy>
+        <Ownr>
+          <Nm>Taler Exchange</Nm>
+        </Ownr>
+        <Svcr>
+          <FinInstnId>
+            <BIC>GENODEM1GLS</BIC>
+            <Nm>GLS Gemeinschaftsbank eG</Nm>
+            <Othr>
+              <Id>DE 124090847</Id>
+              <Issr>UmsStId</Issr>
+            </Othr>
+          </FinInstnId>
+        </Svcr>
+      </Acct>
+      <Bal>
+        <Tp>
+          <CdOrPrtry>
+            <Cd>PRCD</Cd>
+          </CdOrPrtry>
+        </Tp>
+        <Amt Ccy="EUR">202.01</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt>
+          <Dt>2020-05-29</Dt>
+        </Dt>
+      </Bal>
+      <Bal>
+        <Tp>
+          <CdOrPrtry>
+            <Cd>CLBD</Cd>
+          </CdOrPrtry>
+        </Tp>
+        <Amt Ccy="EUR">199.34</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt>
+          <Dt>2020-05-29</Dt>
+        </Dt>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="EUR">9.96</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt>
+          <Dt>2020-05-29</Dt>
+        </BookgDt>
+        <ValDt>
+          <Dt>2020-05-31</Dt>
+        </ValDt>
+        <AcctSvcrRef>2020052921190458000</AcctSvcrRef>
+            <BkTxCd>
+              <Prtry>
+                <Cd>NMSC+805+00905</Cd>
+                 <Issr>DK</Issr>
+              </Prtry>
+            </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <AmtDtls>
+              <TxAmt>
+                <Amt Ccy="EUR">9.96</Amt>
+              </TxAmt>
+            </AmtDtls>
+            <BkTxCd>
+              <Prtry>
+                <Cd>NMSC+805+00905</Cd>
+                 <Issr>DK</Issr>
+              </Prtry>
+            </BkTxCd>
+            <RmtInf>
+              <Ustrd>Makes the report unacceptable</Ustrd>
+            </RmtInf>
+          </TxDtls>
+          <TxDtls>
+            <AmtDtls>
+              <TxAmt>
+                <Amt Ccy="EUR">9.96</Amt>
+              </TxAmt>
+            </AmtDtls>
+            <BkTxCd>
+              <Prtry>
+                <Cd>NMSC+805+00905</Cd>
+                 <Issr>DK</Issr>
+              </Prtry>
+            </BkTxCd>
+            <RmtInf>
+              <Ustrd>ABSCHLUSS PER 31.05.2020</Ustrd>
+            </RmtInf>
+          </TxDtls>
+        </NtryDtls>
+         <AddtlNtryInf>Abschluss</AddtlNtryInf>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

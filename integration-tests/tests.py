@@ -352,6 +352,27 @@ def test_double_connection_name():
         [406] # expecting "406 Not acceptable"
     )
 
+def test_ingestion_camt53_non_singleton():
+    with open("camt53-gls-style-1.xml") as f:
+        camt = f.read()
+    assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/test-camt-ingestion/C53",
+            auth=NEXUS_AUTH,
+            data=camt
+        )
+    )
+    resp = assertResponse(
+        get(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
+            auth=NEXUS_AUTH
+        )
+    )
+    with open("camt53-gls-style-1.json") as f:
+        expected_txs = f.read()
+    assert not dd(resp.json(), json.loads(expected_txs), ignore_order=True)
+
+
 def test_ingestion_camt53():
     with open("camt53-gls-style-0.xml") as f:
         camt = f.read()
