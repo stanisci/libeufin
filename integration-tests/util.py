@@ -7,6 +7,7 @@ from time import sleep
 import atexit
 from pathlib import Path
 import sys
+import os
 
 class CheckJsonField:
     def __init__(self, name, nested=None, optional=False):
@@ -47,7 +48,8 @@ def kill(name, s):
 
 def removeStaleDatabase(dbName):
     db_full_path = str(Path.cwd() / dbName)
-    os.remove(db_full_path)
+    if os.path.exists(db_full_path):
+        os.remove(db_full_path)
 
 def makeNexusSuperuser(dbName):
     db_full_path = str(Path.cwd() / dbName)
