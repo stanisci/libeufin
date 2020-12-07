@@ -120,13 +120,9 @@ private fun findDuplicate(bankAccountId: String, acctSvcrRef: String): NexusBank
     }
 }
 
-fun processCamtMessage(
-    bankAccountId: String,
-    camtDoc: Document,
-    code: String
-) {
+fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): Boolean {
     logger.info("processing CAMT message")
-    transaction {
+    val success = transaction {
         val acct = NexusBankAccountEntity.findById(bankAccountId)
         if (acct == null) {
             throw NexusError(HttpStatusCode.NotFound, "user not found")
@@ -134,10 +130,8 @@ fun processCamtMessage(
         val res = try {
             parseCamtMessage(camtDoc)
         } catch (e: CamtParsingError) {
-            throw NexusError(
-                HttpStatusCode.BadGateway,
-                "Invalid CAMT received from bank"
-            )
+            logger.warn("Invalid CAMT received from bank")
+            return@transaction false
         }
         val stamp = ZonedDateTime.parse(res.creationDateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant().toEpochMilli()
         when (code) {
@@ -199,17 +193,16 @@ fun processCamtMessage(
                 // FIXME: find matching PaymentInitiation by PaymentInformationID, message ID or whatever is present
             }
         }
+        return@transaction true
     }
+    return success
 }
 
 /**
  * Create new transactions for an account based on bank messages it
  * did not see before.
  */
-fun ingestBankMessagesIntoAccount(
-    bankConnectionId: String,
-    bankAccountId: String
-) {
+fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: String) {
     transaction {
         val conn = NexusBankConnectionEntity.findById(bankConnectionId)
         if (conn == null) {
@@ -224,9 +217,11 @@ fun ingestBankMessagesIntoAccount(
             (NexusBankMessagesTable.bankConnection eq conn.id) and
                     (NexusBankMessagesTable.id greater acct.highestSeenBankMessageId)
         }.orderBy(Pair(NexusBankMessagesTable.id, SortOrder.ASC)).forEach {
-            // FIXME: check if it's CAMT first!
             val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
-            processCamtMessage(bankAccountId, doc, it.code)
+            if (!processCamtMessage(bankAccountId, doc, it.code)) {
+                it.errors = true
+                return@forEach
+            }
             lastId = it.id.value
         }
         acct.highestSeenBankMessageId = lastId

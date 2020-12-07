@@ -88,6 +88,7 @@ object NexusBankMessagesTable : IntIdTable() {
     val messageId = text("messageId")
     val code = text("code")
     val message = blob("message")
+    val errors = bool("errors").default(false) // true when the parser could not ingest one message.
 }
 
 class NexusBankMessageEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -97,6 +98,7 @@ class NexusBankMessageEntity(id: EntityID<Int>) : IntEntity(id) {
     var messageId by NexusBankMessagesTable.messageId
     var code by NexusBankMessagesTable.code
     var message by NexusBankMessagesTable.message
+    var errors by NexusBankMessagesTable.errors
 }
 
 /**
