@@ -149,6 +149,15 @@ def teardown_function():
   flushTablesNexus(NEXUS_DB)
   flushTablesSandbox(SANDBOX_DB)
 
+
+def test_env():
+    print("Nexus and Sandbox are up and running!")
+    try:
+        input("press enter to stop LibEuFin test environment ...")
+    except:
+        pass
+    print("exiting!")
+
 # Tests whether Nexus knows the imported bank account.
 def test_imported_account():
     resp = assertResponse(

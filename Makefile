@@ -43,7 +43,7 @@ check:
 
 .PHONY: tests
 tests:
-	@cd integration-tests; py.test tests.py
+	@cd integration-tests; py.test -k "not test_env" tests.py
 
 .PHONY: parse
 parse:
