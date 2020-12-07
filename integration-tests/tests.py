@@ -12,7 +12,8 @@ from util import (
     assertResponse,
     flushTablesSandbox,
     flushTablesNexus,
-    makeNexusSuperuser
+    makeNexusSuperuser,
+    removeStaleDatabase
 )
 
 # Base URLs
