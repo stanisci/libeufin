@@ -45,6 +45,10 @@ def kill(name, s):
     s.terminate()
     s.wait()
 
+def removeStaleDatabase(dbName):
+    db_full_path = str(Path.cwd() / dbName)
+    os.remove(db_full_path)
+
 def makeNexusSuperuser(dbName):
     db_full_path = str(Path.cwd() / dbName)
     check_call(

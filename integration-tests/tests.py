@@ -134,7 +134,10 @@ def prepareNexus():
         )
     )
 
+removeStaleDatabase(NEXUS_DB)
 startNexus(NEXUS_DB)
+
+removeStaleDatabase(SANDBOX_DB)
 startSandbox(SANDBOX_DB)
 
 def setup_function():
