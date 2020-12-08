@@ -1,3 +1,6 @@
 [submodule "build-system/taler-build-scripts"]
 	path = build-system/taler-build-scripts
 	url = git://git.taler.net/build-common
+[submodule "parsing-tests/samples"]
+	path = parsing-tests/samples
+	url = git://git.taler.net/libeufin-tests
