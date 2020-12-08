@@ -30,6 +30,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.iso20022.EntryStatus
 import tech.libeufin.util.EbicsInitState
 import tech.libeufin.util.amount
+import java.net.URLEncoder
 import java.sql.Connection
 
 /**
@@ -93,7 +94,6 @@ object NexusBankMessagesTable : IntIdTable() {
 
 class NexusBankMessageEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<NexusBankMessageEntity>(NexusBankMessagesTable)
-
     var bankConnection by NexusBankConnectionEntity referencedOn NexusBankMessagesTable.bankConnection
     var messageId by NexusBankMessagesTable.messageId
     var code by NexusBankMessagesTable.code
@@ -385,7 +385,11 @@ class NexusScheduledTaskEntity(id: EntityID<Int>) : IntEntity(id) {
 }
 
 fun dbCreateTables(dbName: String) {
-    Database.connect("jdbc:postgresql:${dbName}", "org.postgresql.Driver", user = "libeufin")
+    Database.connect(
+        "jdbc:postgresql://127.0.0.1:5433/${dbName}",
+        "org.postgresql.Driver",
+        user = "libeufin"
+    )
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         addLogger(StdOutSqlLogger)

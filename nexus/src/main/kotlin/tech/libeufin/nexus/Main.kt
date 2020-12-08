@@ -51,7 +51,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-    private val dbName by option().default("libeufin-nexus.sqlite3")
+    private val dbName by option().default("libeufindb")
     private val host by option().default("127.0.0.1")
     private val logLevel by option()
     override fun run() {
@@ -72,7 +72,7 @@ class ParseCamt : CliktCommand("Parse a camt file") {
 }
 
 class Superuser : CliktCommand("Add superuser or change pw") {
-    private val dbName by option().default("libeufin-nexus.sqlite3")
+    private val dbName by option().default("libeufindb")
     private val username by argument()
     private val password by option().prompt(requireConfirmation = true, hideInput = true)
     override fun run() {

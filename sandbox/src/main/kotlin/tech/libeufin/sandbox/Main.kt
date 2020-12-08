@@ -93,7 +93,7 @@ class SandboxCommand : CliktCommand() {
 }
 
 class Serve : CliktCommand("Run sandbox HTTP server") {
-    private val dbName by option().default("libeufin-sandbox.sqlite3")
+    private val dbName by option().default("libeufindb")
     private val logLevel by option()
     override fun run() {
         LOGGER = LoggerFactory.getLogger("tech.libeufin.sandbox")
@@ -378,7 +378,6 @@ fun serverMain(dbName: String) {
                         this.authenticationPrivateKey = ExposedBlob(pairA.private.encoded)
                         this.encryptionPrivateKey = ExposedBlob(pairB.private.encoded)
                         this.signaturePrivateKey = ExposedBlob(pairC.private.encoded)
-
                     }
                 }
                 call.respondText(
