@@ -150,7 +150,7 @@ def teardown_function():
 def test_env():
     print("Nexus and Sandbox are up and running!")
     try:
-        input("press enter to stop LibEuFin test environment ...")
+        input("\npress enter to stop LibEuFin test environment ...")
     except:
         pass
     print("exiting!")
@@ -311,7 +311,7 @@ def test_payment_double_submission():
         )
     )
     check_call([
-        "psql", "-d", DB,
+        "psql", "-d", DB, "-h 127.0.0.1", "-U", "libeufin",
         f"UPDATE PaymentInitiations SET submitted = false WHERE id = '{PAYMENT_UUID}'"
     ]) 
     # Submit payment the _second_ time, expecting 500 from Nexus.

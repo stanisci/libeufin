@@ -30,7 +30,6 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.iso20022.EntryStatus
 import tech.libeufin.util.EbicsInitState
 import tech.libeufin.util.amount
-import java.net.URLEncoder
 import java.sql.Connection
 
 /**
@@ -261,7 +260,7 @@ class NexusBankAccountEntity(id: EntityID<String>) : Entity<String>(id) {
     var lastNotificationCreationTimestamp by NexusBankAccountsTable.lastNotificationCreationTimestamp
 }
 
-object EbicsSubscribersTable : IntIdTable() {
+object NexusEbicsSubscribersTable : IntIdTable() {
     val ebicsURL = text("ebicsURL")
     val hostID = text("hostID")
     val partnerID = text("partnerID")
@@ -278,21 +277,21 @@ object EbicsSubscribersTable : IntIdTable() {
 }
 
 class EbicsSubscriberEntity(id: EntityID<Int>) : IntEntity(id) {
-    companion object : IntEntityClass<EbicsSubscriberEntity>(EbicsSubscribersTable)
+    companion object : IntEntityClass<EbicsSubscriberEntity>(NexusEbicsSubscribersTable)
 
-    var ebicsURL by EbicsSubscribersTable.ebicsURL
-    var hostID by EbicsSubscribersTable.hostID
-    var partnerID by EbicsSubscribersTable.partnerID
-    var userID by EbicsSubscribersTable.userID
-    var systemID by EbicsSubscribersTable.systemID
-    var signaturePrivateKey by EbicsSubscribersTable.signaturePrivateKey
-    var encryptionPrivateKey by EbicsSubscribersTable.encryptionPrivateKey
-    var authenticationPrivateKey by EbicsSubscribersTable.authenticationPrivateKey
-    var bankEncryptionPublicKey by EbicsSubscribersTable.bankEncryptionPublicKey
-    var bankAuthenticationPublicKey by EbicsSubscribersTable.bankAuthenticationPublicKey
-    var nexusBankConnection by NexusBankConnectionEntity referencedOn EbicsSubscribersTable.nexusBankConnection
-    var ebicsIniState by EbicsSubscribersTable.ebicsIniState
-    var ebicsHiaState by EbicsSubscribersTable.ebicsHiaState
+    var ebicsURL by NexusEbicsSubscribersTable.ebicsURL
+    var hostID by NexusEbicsSubscribersTable.hostID
+    var partnerID by NexusEbicsSubscribersTable.partnerID
+    var userID by NexusEbicsSubscribersTable.userID
+    var systemID by NexusEbicsSubscribersTable.systemID
+    var signaturePrivateKey by NexusEbicsSubscribersTable.signaturePrivateKey
+    var encryptionPrivateKey by NexusEbicsSubscribersTable.encryptionPrivateKey
+    var authenticationPrivateKey by NexusEbicsSubscribersTable.authenticationPrivateKey
+    var bankEncryptionPublicKey by NexusEbicsSubscribersTable.bankEncryptionPublicKey
+    var bankAuthenticationPublicKey by NexusEbicsSubscribersTable.bankAuthenticationPublicKey
+    var nexusBankConnection by NexusBankConnectionEntity referencedOn NexusEbicsSubscribersTable.nexusBankConnection
+    var ebicsIniState by NexusEbicsSubscribersTable.ebicsIniState
+    var ebicsHiaState by NexusEbicsSubscribersTable.ebicsHiaState
 }
 
 object NexusUsersTable : IdTable<String>() {
@@ -396,7 +395,7 @@ fun dbCreateTables(dbName: String) {
         SchemaUtils.create(
             NexusUsersTable,
             PaymentInitiationsTable,
-            EbicsSubscribersTable,
+            NexusEbicsSubscribersTable,
             NexusBankAccountsTable,
             NexusBankTransactionsTable,
             TalerIncomingPayments,

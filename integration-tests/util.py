@@ -51,23 +51,22 @@ def removeStaleTables(dbName):
     flushTablesSandbox(dbName)
 
 def makeNexusSuperuser(dbName):
-    db_full_path = str(Path.cwd() / dbName)
-    check_call(
-        [
-            "../gradlew",
-            "-q",
-            "-p",
-            "..",
-            "nexus:run",
-            "--console=plain",
-            f"--args=superuser admin --password x --db-name={db_full_path}",
-        ]
-    )
+    check_call([
+        "../gradlew",
+        "-q", "--console=plain",
+        "-p", "..",
+        "nexus:run",
+        f"--args=superuser admin --password x --db-name={dbName}",
+    ])
 
 def drop_public_schema(dbName):
-    check_call(
-        ["psql", "-d", dbName, "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"]
-     )
+    check_call([
+        "psql",
+        "-d", dbName, "-q",
+        "-h", "127.0.0.1", "-p", "5433",
+        "-U", "libeufin",
+        "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+    ])
 def flushTablesSandbox(dbName):
     drop_public_schema(dbName)
 
@@ -75,10 +74,16 @@ def flushTablesNexus(dbName):
     drop_public_schema(dbName)
 
 def startSandbox(dbName):
-    check_call(["../gradlew", "-q", "-p", "..", "sandbox:assemble"])
+    check_call(["../gradlew", "-q", "--console=plain", "-p", "..", "sandbox:assemble"])
     checkPort(5000)
-    sandbox = Popen(
-        ["../gradlew", "-q", "-p", "..", "sandbox:run", "--console=plain", "--args=serve --db-name={}".format(db_full_path)],
+    sandbox = Popen([
+        "../gradlew",
+        "-q",
+        "-p",
+        "..",
+        "sandbox:run",
+        "--console=plain",
+        "--args=serve --db-name={}".format(dbName)],
         stdin=DEVNULL,
         stdout=open("sandbox-stdout.log", "w"),
         stderr=open("sandbox-stderr.log", "w"),
@@ -100,7 +105,7 @@ def startSandbox(dbName):
 
 def startNexus(dbName):
     check_call(
-        ["../gradlew", "-q", "-p", "..", "nexus:assemble",]
+        ["../gradlew", "-q", "--console=plain", "-p", "..", "nexus:assemble",]
     )
     checkPort(5001)
     nexus = Popen(

@@ -325,7 +325,7 @@ private fun getEbicsSubscriberDetails(bankConnectionId: String): EbicsClientSubs
         throw NexusError(HttpStatusCode.NotFound, "transport not found")
     }
     val subscriber = EbicsSubscriberEntity.find {
-        EbicsSubscribersTable.nexusBankConnection eq transport.id
+        NexusEbicsSubscribersTable.nexusBankConnection eq transport.id
     }.first()
     // transport exists and belongs to caller.
     return getEbicsSubscriberDetailsInternal(subscriber)
@@ -433,7 +433,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
         transaction {
             val conn = requireBankConnection(call, "connid")
             val subscriber =
-                EbicsSubscriberEntity.find { EbicsSubscribersTable.nexusBankConnection eq conn.id }.first()
+                EbicsSubscriberEntity.find { NexusEbicsSubscribersTable.nexusBankConnection eq conn.id }.first()
             subscriber.bankAuthenticationPublicKey = ExposedBlob((hpbData.authenticationPubKey.encoded))
             subscriber.bankEncryptionPublicKey = ExposedBlob((hpbData.encryptionPubKey.encoded))
         }
@@ -602,7 +602,7 @@ private suspend fun tentativeHpb(client: HttpClient, connId: String): Boolean {
             throw NexusError(HttpStatusCode.NotFound, "bank connection '$connId' not found")
         }
         val subscriberEntity =
-            EbicsSubscriberEntity.find { EbicsSubscribersTable.nexusBankConnection eq conn.id }.first()
+            EbicsSubscriberEntity.find { NexusEbicsSubscribersTable.nexusBankConnection eq conn.id }.first()
         subscriberEntity.ebicsIniState = EbicsInitState.SENT
         subscriberEntity.ebicsHiaState = EbicsInitState.SENT
         subscriberEntity.bankAuthenticationPublicKey =
@@ -648,7 +648,7 @@ suspend fun connectEbics(client: HttpClient, connId: String) {
             throw NexusError(HttpStatusCode.NotFound, "bank connection '$connId' not found")
         }
         val subscriberEntity =
-            EbicsSubscriberEntity.find { EbicsSubscribersTable.nexusBankConnection eq conn.id }.first()
+            EbicsSubscriberEntity.find { NexusEbicsSubscribersTable.nexusBankConnection eq conn.id }.first()
         if (iniDone) {
             subscriberEntity.ebicsIniState = EbicsInitState.SENT
         }
