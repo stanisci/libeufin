@@ -302,7 +302,7 @@ object BankAccountReportsTable : IntIdTable() {
 }
 
 fun dbCreateTables(dbName: String) {
-    Database.connect("jdbc:sqlite:${dbName}", "org.sqlite.JDBC")
+    Database.connect("jdbc:postgresql:${dbName}", "org.postgresql.Driver")
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         addLogger(StdOutSqlLogger)

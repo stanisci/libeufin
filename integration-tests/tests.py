@@ -13,16 +13,15 @@ from util import (
     flushTablesSandbox,
     flushTablesNexus,
     makeNexusSuperuser,
-    removeStaleDatabase
+    removeStaleTables
 )
 
 # Base URLs
 S = "http://localhost:5000"
 N = "http://localhost:5001"
 
-# Databases
-NEXUS_DB="/tmp/test-nexus.sqlite3"
-SANDBOX_DB="/tmp/test-sandbox.sqlite3"
+# Database
+DB = "libeufintestdb"
 
 # Nexus user details
 NEXUS_USERNAME = "person"
@@ -80,7 +79,7 @@ def prepareSandbox():
     )
 
 def prepareNexus():
-    makeNexusSuperuser(NEXUS_DB)
+    makeNexusSuperuser(DB)
     # make a new nexus user.
     assertResponse(
         post(
@@ -135,19 +134,17 @@ def prepareNexus():
         )
     )
 
-removeStaleDatabase(NEXUS_DB)
-startNexus(NEXUS_DB)
-
-removeStaleDatabase(SANDBOX_DB)
-startSandbox(SANDBOX_DB)
+removeStaleTables(DB)
+startNexus(DB)
+startSandbox(DB)
 
 def setup_function():
     prepareSandbox()
     prepareNexus()
 
 def teardown_function():
-  flushTablesNexus(NEXUS_DB)
-  flushTablesSandbox(SANDBOX_DB)
+  flushTablesNexus(DB)
+  flushTablesSandbox(DB)
 
 
 def test_env():
@@ -314,8 +311,7 @@ def test_payment_double_submission():
         )
     )
     check_call([
-        "sqlite3",
-        NEXUS_DB,
+        "psql", "-d", DB,
         f"UPDATE PaymentInitiations SET submitted = false WHERE id = '{PAYMENT_UUID}'"
     ]) 
     # Submit payment the _second_ time, expecting 500 from Nexus.

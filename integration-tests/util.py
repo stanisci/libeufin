@@ -46,10 +46,9 @@ def kill(name, s):
     s.terminate()
     s.wait()
 
-def removeStaleDatabase(dbName):
-    db_full_path = str(Path.cwd() / dbName)
-    if os.path.exists(db_full_path):
-        os.remove(db_full_path)
+def removeStaleTables(dbName):
+    flushTablesNexus(dbName)
+    flushTablesSandbox(dbName)
 
 def makeNexusSuperuser(dbName):
     db_full_path = str(Path.cwd() / dbName)
@@ -66,48 +65,42 @@ def makeNexusSuperuser(dbName):
     )
 
 def flushTablesSandbox(dbName):
-    db_full_path = str(Path.cwd() / dbName)
     check_call(
-        ["sqlite3",
-         db_full_path,
-         "DELETE FROM BankAccountReports",
-         "DELETE FROM EbicsOrderSignatures",
-         "DELETE FROM BankAccountStatements",
-         "DELETE FROM EbicsSubscriberPublicKeys",
-         "DELETE FROM BankAccountTransactions",
-         "DELETE FROM EbicsSubscribers",
-         "DELETE FROM BankAccounts",
-         "DELETE FROM EbicsUploadTransactionChunks",
-         "DELETE FROM EbicsDownloadTransactions",
-         "DELETE FROM EbicsUploadTransactions",
-         "DELETE FROM EbicsHosts"
+        ["psql", "-d", dbName,
+         "-c", "DELETE FROM BankAccountReports",
+         "-c", "DELETE FROM EbicsOrderSignatures",
+         "-c", "DELETE FROM BankAccountStatements",
+         "-c", "DELETE FROM EbicsSubscriberPublicKeys",
+         "-c", "DELETE FROM BankAccountTransactions",
+         "-c", "DELETE FROM EbicsSubscribers",
+         "-c", "DELETE FROM BankAccounts",
+         "-c", "DELETE FROM EbicsUploadTransactionChunks",
+         "-c", "DELETE FROM EbicsDownloadTransactions",
+         "-c", "DELETE FROM EbicsUploadTransactions",
+         "-c", "DELETE FROM EbicsHosts"
         ]
      )
 
 def flushTablesNexus(dbName):
-    db_full_path = str(Path.cwd() / dbName)
     check_call(
-        ["sqlite3",
-         db_full_path,
-         "DELETE FROM EbicsSubscribers",
-         "DELETE FROM NexusBankTransactions",
-         "DELETE FROM TalerFacadeState",
-         "DELETE FROM Facades",
-         "DELETE FROM NexusScheduledTasks",
-         "DELETE FROM TalerIncomingPayments",
-         "DELETE FROM NexusBankAccounts",
-         "DELETE FROM NexusUsers",
-         "DELETE FROM TalerRequestedPayments",
-         "DELETE FROM NexusBankConnections",
-         "DELETE FROM OfferedBankAccounts",
-         "DELETE FROM NexusBankMessages",
-         "DELETE FROM PaymentInitiations"
+        ["psql", "-d", dbName,
+         "-c", "DELETE FROM EbicsSubscribers",
+         "-c", "DELETE FROM NexusBankTransactions",
+         "-c", "DELETE FROM TalerFacadeState",
+         "-c", "DELETE FROM Facades",
+         "-c", "DELETE FROM NexusScheduledTasks",
+         "-c", "DELETE FROM TalerIncomingPayments",
+         "-c", "DELETE FROM NexusBankAccounts",
+         "-c", "DELETE FROM NexusUsers",
+         "-c", "DELETE FROM TalerRequestedPayments",
+         "-c", "DELETE FROM NexusBankConnections",
+         "-c", "DELETE FROM OfferedBankAccounts",
+         "-c", "DELETE FROM NexusBankMessages",
+         "-c", "DELETE FROM PaymentInitiations"
         ]
     )
 
-def startSandbox(dbName="sandbox-test.sqlite3"):
-    db_full_path = str(Path.cwd() / dbName)
-    check_call(["rm", "-f", db_full_path])
+def startSandbox(dbName):
     check_call(["../gradlew", "-q", "-p", "..", "sandbox:assemble"])
     checkPort(5000)
     sandbox = Popen(
@@ -131,9 +124,7 @@ def startSandbox(dbName="sandbox-test.sqlite3"):
         break
 
 
-def startNexus(dbName="nexus-test.sqlite3"):
-    db_full_path = str(Path.cwd() / dbName)
-    check_call(["rm", "-f", "--", db_full_path])
+def startNexus(dbName):
     check_call(
         ["../gradlew", "-q", "-p", "..", "nexus:assemble",]
     )
