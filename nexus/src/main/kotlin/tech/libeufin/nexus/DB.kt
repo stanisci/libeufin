@@ -385,7 +385,7 @@ class NexusScheduledTaskEntity(id: EntityID<Int>) : IntEntity(id) {
 }
 
 fun dbCreateTables(dbName: String) {
-    Database.connect("jdbc:postgresql:${dbName}", "org.postgresql.Driver")
+    Database.connect("jdbc:postgresql:${dbName}", "org.postgresql.Driver", user = "libeufin")
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         addLogger(StdOutSqlLogger)

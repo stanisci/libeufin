@@ -64,41 +64,15 @@ def makeNexusSuperuser(dbName):
         ]
     )
 
-def flushTablesSandbox(dbName):
+def drop_public_schema(dbName):
     check_call(
-        ["psql", "-d", dbName,
-         "-c", "DELETE FROM BankAccountReports",
-         "-c", "DELETE FROM EbicsOrderSignatures",
-         "-c", "DELETE FROM BankAccountStatements",
-         "-c", "DELETE FROM EbicsSubscriberPublicKeys",
-         "-c", "DELETE FROM BankAccountTransactions",
-         "-c", "DELETE FROM EbicsSubscribers",
-         "-c", "DELETE FROM BankAccounts",
-         "-c", "DELETE FROM EbicsUploadTransactionChunks",
-         "-c", "DELETE FROM EbicsDownloadTransactions",
-         "-c", "DELETE FROM EbicsUploadTransactions",
-         "-c", "DELETE FROM EbicsHosts"
-        ]
+        ["psql", "-d", dbName, "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"]
      )
+def flushTablesSandbox(dbName):
+    drop_public_schema(dbName)
 
 def flushTablesNexus(dbName):
-    check_call(
-        ["psql", "-d", dbName,
-         "-c", "DELETE FROM EbicsSubscribers",
-         "-c", "DELETE FROM NexusBankTransactions",
-         "-c", "DELETE FROM TalerFacadeState",
-         "-c", "DELETE FROM Facades",
-         "-c", "DELETE FROM NexusScheduledTasks",
-         "-c", "DELETE FROM TalerIncomingPayments",
-         "-c", "DELETE FROM NexusBankAccounts",
-         "-c", "DELETE FROM NexusUsers",
-         "-c", "DELETE FROM TalerRequestedPayments",
-         "-c", "DELETE FROM NexusBankConnections",
-         "-c", "DELETE FROM OfferedBankAccounts",
-         "-c", "DELETE FROM NexusBankMessages",
-         "-c", "DELETE FROM PaymentInitiations"
-        ]
-    )
+    drop_public_schema(dbName)
 
 def startSandbox(dbName):
     check_call(["../gradlew", "-q", "-p", "..", "sandbox:assemble"])
@@ -137,7 +111,7 @@ def startNexus(dbName):
             "..",
             "nexus:run",
             "--console=plain",
-            "--args=serve --db-name={}".format(db_full_path),
+            "--args=serve --db-name={}".format(dbName),
         ],
         stdin=DEVNULL,
         stdout=open("nexus-stdout.log", "w"),
