@@ -230,7 +230,7 @@ object OfferedBankAccountsTable : Table() {
  * FIXME(dold):  Allow other account and bank identifications than IBAN and BIC
  */
 object NexusBankAccountsTable : IdTable<String>() {
-    override val id = text("id").entityId()
+    override val id = text("id").entityId().uniqueIndex()
     val accountHolder = text("accountHolder")
     val iban = text("iban")
     val bankCode = text("bankCode")
@@ -296,7 +296,7 @@ class EbicsSubscriberEntity(id: EntityID<Int>) : IntEntity(id) {
 }
 
 object NexusUsersTable : IdTable<String>() {
-    override val id = text("id").entityId()
+    override val id = text("id").entityId().uniqueIndex()
     val passwordHash = text("password")
     val superuser = bool("superuser")
 }
@@ -309,7 +309,7 @@ class NexusUserEntity(id: EntityID<String>) : Entity<String>(id) {
 }
 
 object NexusBankConnectionsTable : IdTable<String>() {
-    override val id = NexusBankConnectionsTable.text("id").entityId()
+    override val id = NexusBankConnectionsTable.text("id").entityId().uniqueIndex()
     val type = text("type")
     val owner = reference("user", NexusUsersTable)
 }
@@ -322,7 +322,7 @@ class NexusBankConnectionEntity(id: EntityID<String>) : Entity<String>(id) {
 }
 
 object FacadesTable : IdTable<String>() {
-    override val id = FacadesTable.text("id").entityId()
+    override val id = FacadesTable.text("id").entityId().uniqueIndex()
     val type = text("type")
     val creator = reference("creator", NexusUsersTable)
 }
