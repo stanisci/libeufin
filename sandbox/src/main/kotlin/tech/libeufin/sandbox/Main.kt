@@ -60,8 +60,6 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.request.*
-import io.ktor.util.AttributeKey
-import tech.libeufin.sandbox.BankAccountTransactionsTable
 import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
 import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorBic
 import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorIban
@@ -93,18 +91,19 @@ class SandboxCommand : CliktCommand() {
 }
 
 class DropTables : CliktCommand("Drop all the tables from the database") {
+    private val dbConnString by option().default("jdbc:sqlite://libeufindb")
     override fun run() {
-        dbDropTables()
+        dbDropTables(dbConnString)
     }
 }
 
 class Serve : CliktCommand("Run sandbox HTTP server") {
-    private val dbName by option().default("jdbc:sqlite://libeufindb")
+    private val dbConnString by option().default("jdbc:sqlite://libeufindb")
     private val logLevel by option()
     override fun run() {
         LOGGER = LoggerFactory.getLogger("tech.libeufin.sandbox")
         setLogLevel(logLevel)
-        serverMain(dbName)
+        serverMain(dbConnString)
     }
 }
 

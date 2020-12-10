@@ -301,7 +301,8 @@ object BankAccountReportsTable : IntIdTable() {
     val bankAccount = reference("bankAccount", BankAccountsTable)
 }
 
-fun dbDropTables() {
+fun dbDropTables(dbConnectionString: String) {
+    Database.connect("${dbConnectionString}")
     transaction {
         SchemaUtils.drop(
             EbicsSubscribersTable,

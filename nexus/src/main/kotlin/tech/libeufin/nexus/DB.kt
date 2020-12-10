@@ -383,7 +383,8 @@ class NexusScheduledTaskEntity(id: EntityID<Int>) : IntEntity(id) {
     var prevScheduledExecutionSec by NexusScheduledTasksTable.prevScheduledExecutionSec
 }
 
-fun dbDropTables() {
+fun dbDropTables(dbConnectionString: String) {
+    Database.connect("$dbConnectionString")
     transaction {
         SchemaUtils.drop(
             NexusUsersTable,

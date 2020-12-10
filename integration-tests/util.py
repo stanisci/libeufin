@@ -65,7 +65,7 @@ def dropSandboxTables(dbName):
         "-q", "--console=plain",
         "-p", "..",
         "sandbox:run",
-        f"--args=drop-tables --db-name={dbName}",
+        f"--args=drop-tables",
     ])
 
 
@@ -75,7 +75,7 @@ def dropNexusTables(dbName):
         "-q", "--console=plain",
         "-p", "..",
         "nexus:run",
-        f"--args=drop-tables --db-name={dbName}",
+        f"--args=drop-tables",
     ])
 
 
