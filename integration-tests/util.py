@@ -59,19 +59,25 @@ def makeNexusSuperuser(dbName):
         f"--args=superuser admin --password x --db-name={dbName}",
     ])
 
-def drop_public_schema(dbName):
+def dropSandboxTables(dbName):
     check_call([
-        "psql",
-        "-d", dbName, "-q",
-        "-h", "127.0.0.1", "-p", "5433",
-        "-U", "libeufin",
-        "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+        "../gradlew",
+        "-q", "--console=plain",
+        "-p", "..",
+        "sandbox:run",
+        f"--args=drop-tables --db-name={dbName}",
     ])
-def flushTablesSandbox(dbName):
-    drop_public_schema(dbName)
 
-def flushTablesNexus(dbName):
-    drop_public_schema(dbName)
+
+def dropNexusTables(dbName):
+    check_call([
+        "../gradlew",
+        "-q", "--console=plain",
+        "-p", "..",
+        "nexus:run",
+        f"--args=drop-tables --db-name={dbName}",
+    ])
+
 
 def startSandbox(dbName):
     check_call(["../gradlew", "-q", "--console=plain", "-p", "..", "sandbox:assemble"])

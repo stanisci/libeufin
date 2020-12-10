@@ -10,10 +10,9 @@ from util import (
     startNexus,
     startSandbox,
     assertResponse,
-    flushTablesSandbox,
-    flushTablesNexus,
     makeNexusSuperuser,
-    removeStaleTables
+    dropSandboxTables,
+    dropNexusTables
 )
 
 # Base URLs
@@ -134,17 +133,19 @@ def prepareNexus():
         )
     )
 
-removeStaleTables(DB)
-startNexus(DB)
+dropSandboxTables(DB)
 startSandbox(DB)
+dropNexusTables(DB)
+startNexus(DB)
 
 def setup_function():
     prepareSandbox()
     prepareNexus()
 
+
 def teardown_function():
-  flushTablesNexus(DB)
-  flushTablesSandbox(DB)
+  dropSandboxTables(DB)
+  dropNexusTables(DB)
 
 
 def test_env():
