@@ -17,7 +17,7 @@ fun withTestDatabase(f: () -> Unit) {
             it.delete()
         }
     }
-    Database.connect("jdbc:sqlite:$dbfile", "org.sqlite.JDBC")
+    Database.connect("jdbc:sqlite:$dbfile")
     try {
         f()
     }

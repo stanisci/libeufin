@@ -19,18 +19,13 @@
 
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.BankAccountTransactionsTable
-import tech.libeufin.sandbox.BankAccountTransactionsTable.msgId
-import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
 import tech.libeufin.sandbox.BankAccountsTable
 import tech.libeufin.util.millis
 import tech.libeufin.util.parseDashedDate
 import java.io.File
-import java.sql.Connection
-import java.time.Instant
 import java.time.LocalDateTime
 
 /**
@@ -38,13 +33,13 @@ import java.time.LocalDateTime
  * Cleans up the DB file afterwards.
  */
 fun withTestDatabase(f: () -> Unit) {
-    val dbfile = "nexus-test.sqlite3"
+    val dbfile = "jdbc:sqlite:nexus-test.sqlite3"
     File(dbfile).also {
         if (it.exists()) {
             it.delete()
         }
     }
-    Database.connect("jdbc:sqlite:$dbfile", "org.sqlite.JDBC")
+    Database.connect("$dbfile")
     try {
         f()
     }

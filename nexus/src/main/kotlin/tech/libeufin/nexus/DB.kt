@@ -383,12 +383,8 @@ class NexusScheduledTaskEntity(id: EntityID<Int>) : IntEntity(id) {
     var prevScheduledExecutionSec by NexusScheduledTasksTable.prevScheduledExecutionSec
 }
 
-fun dbCreateTables(dbName: String) {
-    Database.connect(
-        "jdbc:postgresql://127.0.0.1:5433/${dbName}",
-        "org.postgresql.Driver",
-        user = "libeufin"
-    )
+fun dbCreateTables(dbConnectionString: String) {
+    Database.connect("$dbConnectionString")
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         addLogger(StdOutSqlLogger)

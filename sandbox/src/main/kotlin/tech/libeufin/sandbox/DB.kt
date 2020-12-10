@@ -301,12 +301,8 @@ object BankAccountReportsTable : IntIdTable() {
     val bankAccount = reference("bankAccount", BankAccountsTable)
 }
 
-fun dbCreateTables(dbName: String) {
-    Database.connect(
-        "jdbc:postgresql://127.0.0.1:5433/${dbName}",
-        "org.postgresql.Driver",
-        user = "libeufin"
-    )
+fun dbCreateTables(dbConnectionString: String) {
+    Database.connect("${dbConnectionString}")
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         addLogger(StdOutSqlLogger)
