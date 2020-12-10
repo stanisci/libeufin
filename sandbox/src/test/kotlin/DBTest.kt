@@ -23,6 +23,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.BankAccountTransactionsTable
 import tech.libeufin.sandbox.BankAccountsTable
+import tech.libeufin.sandbox.dbDropTables
 import tech.libeufin.util.millis
 import tech.libeufin.util.parseDashedDate
 import java.io.File
@@ -33,13 +34,14 @@ import java.time.LocalDateTime
  * Cleans up the DB file afterwards.
  */
 fun withTestDatabase(f: () -> Unit) {
-    val dbfile = "jdbc:sqlite:nexus-test.sqlite3"
+    val dbfile = "jdbc:sqlite:/tmp/nexus-test.sqlite3"
     File(dbfile).also {
         if (it.exists()) {
             it.delete()
         }
     }
     Database.connect("$dbfile")
+    dbDropTables(dbfile)
     try {
         f()
     }

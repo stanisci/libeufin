@@ -11,13 +11,14 @@ import java.io.File
  * Cleans up the DB file afterwards.
  */
 fun withTestDatabase(f: () -> Unit) {
-    val dbfile = "nexus-test.sqlite3"
+    val dbfile = "jdbc:sqlite:/tmp/nexus-test.sqlite3"
     File(dbfile).also {
         if (it.exists()) {
             it.delete()
         }
     }
     Database.connect("jdbc:sqlite:$dbfile")
+    dbDropTables(dbfile)
     try {
         f()
     }
