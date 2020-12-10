@@ -35,6 +35,7 @@ import tech.libeufin.nexus.server.serverMain
 import tech.libeufin.util.CryptoUtil.hashpw
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import tech.libeufin.nexus.iso20022.parseCamtMessage
+import tech.libeufin.util.DEFAULT_DB_CONNECTION
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.setLogLevel
 import java.io.File
@@ -51,7 +52,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-    private val dbConnString by option().default("jdbc:sqlite://libeufindb")
+    private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     private val host by option().default("127.0.0.1")
     private val logLevel by option()
     override fun run() {
@@ -72,18 +73,18 @@ class ParseCamt : CliktCommand("Parse a camt file") {
 }
 
 class DropTables : CliktCommand("Drop all the tables from the database") {
-    private val dbConnString by option().default("jdbc:sqlite://libeufindb")
+    private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     override fun run() {
         dbDropTables(dbConnString)
     }
 }
 
 class Superuser : CliktCommand("Add superuser or change pw") {
-    private val dbName by option().default("jdbc:sqlite://libeufindb")
+    private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     private val username by argument()
     private val password by option().prompt(requireConfirmation = true, hideInput = true)
     override fun run() {
-        dbCreateTables(dbName)
+        dbCreateTables(dbConnString)
         transaction {
             val hashedPw = hashpw(password)
             val user = NexusUserEntity.findById(username)

@@ -46,40 +46,36 @@ def kill(name, s):
     s.terminate()
     s.wait()
 
-def removeStaleTables(dbName):
-    flushTablesNexus(dbName)
-    flushTablesSandbox(dbName)
-
-def makeNexusSuperuser(dbName):
+def makeNexusSuperuser(dbConnString):
     check_call([
         "../gradlew",
         "-q", "--console=plain",
         "-p", "..",
         "nexus:run",
-        f"--args=superuser admin --password x --db-name={dbName}",
+        f"--args=superuser admin --password x --db-conn-string={dbConnString}",
     ])
 
-def dropSandboxTables(dbName):
+def dropSandboxTables(dbConnString):
     check_call([
         "../gradlew",
         "-q", "--console=plain",
         "-p", "..",
         "sandbox:run",
-        f"--args=drop-tables",
+        f"--args=drop-tables --db-conn-string={dbConnString}"
     ])
 
 
-def dropNexusTables(dbName):
+def dropNexusTables(dbConnString):
     check_call([
         "../gradlew",
         "-q", "--console=plain",
         "-p", "..",
         "nexus:run",
-        f"--args=drop-tables",
+        f"--args=drop-tables --db-conn-string={dbConnString}"
     ])
 
 
-def startSandbox(dbName):
+def startSandbox(dbConnString):
     check_call(["../gradlew", "-q", "--console=plain", "-p", "..", "sandbox:assemble"])
     checkPort(5000)
     sandbox = Popen([
@@ -89,10 +85,10 @@ def startSandbox(dbName):
         "..",
         "sandbox:run",
         "--console=plain",
-        "--args=serve --db-name={}".format(dbName)],
+        "--args=serve --db-conn-string={}".format(dbConnString)],
         stdin=DEVNULL,
         stdout=open("sandbox-stdout.log", "w"),
-        stderr=open("sandbox-stderr.log", "w"),
+        stderr=open("sandbox-stderr.log", "w")
     )
     atexit.register(lambda: kill("sandbox", sandbox))
     for i in range(10):
@@ -109,24 +105,22 @@ def startSandbox(dbName):
         break
 
 
-def startNexus(dbName):
+def startNexus(dbConnString):
     check_call(
         ["../gradlew", "-q", "--console=plain", "-p", "..", "nexus:assemble",]
     )
     checkPort(5001)
-    nexus = Popen(
-        [
-            "../gradlew",
-            "-q",
-            "-p",
-            "..",
-            "nexus:run",
-            "--console=plain",
-            "--args=serve --db-name={}".format(dbName),
-        ],
+    nexus = Popen([
+        "../gradlew",
+        "-q",
+        "-p",
+        "..",
+        "nexus:run",
+        "--console=plain",
+        "--args=serve --db-conn-string={}".format(dbConnString)],
         stdin=DEVNULL,
         stdout=open("nexus-stdout.log", "w"),
-        stderr=open("nexus-stderr.log", "w"),
+        stderr=open("nexus-stderr.log", "w")
     )
     atexit.register(lambda: kill("nexus", nexus))
     for i in range(80):

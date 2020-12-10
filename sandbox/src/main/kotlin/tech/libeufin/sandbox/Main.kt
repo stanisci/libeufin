@@ -91,14 +91,14 @@ class SandboxCommand : CliktCommand() {
 }
 
 class DropTables : CliktCommand("Drop all the tables from the database") {
-    private val dbConnString by option().default("jdbc:sqlite://libeufindb")
+    private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     override fun run() {
         dbDropTables(dbConnString)
     }
 }
 
 class Serve : CliktCommand("Run sandbox HTTP server") {
-    private val dbConnString by option().default("jdbc:sqlite://libeufindb")
+    private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     private val logLevel by option()
     override fun run() {
         LOGGER = LoggerFactory.getLogger("tech.libeufin.sandbox")

@@ -20,7 +20,7 @@ S = "http://localhost:5000"
 N = "http://localhost:5001"
 
 # Database
-DB = "libeufintestdb"
+DB = "jdbc:postgresql://127.0.0.1:5433/libeufintestdb?user=libeufin"
 
 # Nexus user details
 NEXUS_USERNAME = "person"
