@@ -51,7 +51,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-    private val dbName by option().default("libeufindb")
+    private val dbName by option().default("jdbc:sqlite://libeufindb")
     private val host by option().default("127.0.0.1")
     private val logLevel by option()
     override fun run() {

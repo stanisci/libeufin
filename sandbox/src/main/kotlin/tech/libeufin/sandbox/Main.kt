@@ -99,7 +99,7 @@ class DropTables : CliktCommand("Drop all the tables from the database") {
 }
 
 class Serve : CliktCommand("Run sandbox HTTP server") {
-    private val dbName by option().default("libeufindb")
+    private val dbName by option().default("jdbc:sqlite://libeufindb")
     private val logLevel by option()
     override fun run() {
         LOGGER = LoggerFactory.getLogger("tech.libeufin.sandbox")
