@@ -90,10 +90,11 @@ class SandboxCommand : CliktCommand() {
     override fun run() = Unit
 }
 
-class DropTables : CliktCommand("Drop all the tables from the database") {
+class ResetTables : CliktCommand("Drop all the tables from the database") {
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     override fun run() {
         dbDropTables(dbConnString)
+        dbCreateTables(dbConnString)
     }
 }
 
@@ -153,7 +154,7 @@ fun BigDecimal.signToString(): String {
 
 fun main(args: Array<String>) {
     SandboxCommand()
-        .subcommands(Serve(), DropTables())
+        .subcommands(Serve(), ResetTables())
         .main(args)
 }
 

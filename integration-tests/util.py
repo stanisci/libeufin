@@ -61,7 +61,7 @@ def dropSandboxTables(dbConnString):
         "-q", "--console=plain",
         "-p", "..",
         "sandbox:run",
-        f"--args=drop-tables --db-conn-string={dbConnString}"
+        f"--args=reset-tables --db-conn-string={dbConnString}"
     ])
 
 
@@ -71,7 +71,7 @@ def dropNexusTables(dbConnString):
         "-q", "--console=plain",
         "-p", "..",
         "nexus:run",
-        f"--args=drop-tables --db-conn-string={dbConnString}"
+        f"--args=reset-tables --db-conn-string={dbConnString}"
     ])
 
 

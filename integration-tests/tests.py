@@ -20,7 +20,9 @@ S = "http://localhost:5000"
 N = "http://localhost:5001"
 
 # Database
-DB = "jdbc:postgresql://127.0.0.1:5433/libeufintestdb?user=libeufin"
+DB_POSTGRES = "jdbc:postgresql://127.0.0.1:5433/libeufintestdb?user=libeufin"
+DB_SQLITE = "jdbc:sqlite:/tmp/libeufintestdb"
+DB = DB_SQLITE
 
 # Nexus user details
 NEXUS_USERNAME = "person"
@@ -288,46 +290,6 @@ def test_taler_facade():
     )
     assert len(resp.json().get("outgoing_transactions")) == 1
 
-def test_payment_double_submission():
-    resp = assertResponse(
-        post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations",
-            json=dict(
-                iban="FR7630006000011234567890189",
-                bic="AGRIFRPP",
-                name="Jacques La Fayette",
-                subject="integration test",
-                amount="EUR:1",
-            ),
-            auth=NEXUS_AUTH
-        )
-    )
-    PAYMENT_UUID = resp.json().get("uuid")
-    assert PAYMENT_UUID
-    assertResponse(
-        post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations/{PAYMENT_UUID}/submit",
-            json=dict(),
-            auth=NEXUS_AUTH
-        )
-    )
-    check_call([
-        "psql", "-d", DB, "-h 127.0.0.1", "-U", "libeufin",
-        f"UPDATE PaymentInitiations SET submitted = false WHERE id = '{PAYMENT_UUID}'"
-    ]) 
-    # Submit payment the _second_ time, expecting 500 from Nexus.
-    # FIXME:
-    # Sandbox does return a EBICS_PROCESSING_ERROR code, but Nexus
-    # (currently) is not able to extract any meaning from it.  Ideally,
-    # Nexus should print both the error token _and_ a hint message.
-    assertResponse(
-        post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations/{PAYMENT_UUID}/submit",
-            json=dict(),
-            auth=NEXUS_AUTH
-        ),
-        [500]
-    )
 
 def test_double_connection_name():
     assertResponse(

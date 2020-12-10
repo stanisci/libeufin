@@ -72,10 +72,11 @@ class ParseCamt : CliktCommand("Parse a camt file") {
     }
 }
 
-class DropTables : CliktCommand("Drop all the tables from the database") {
+class ResetTables : CliktCommand("Drop all the tables from the database") {
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     override fun run() {
         dbDropTables(dbConnString)
+        dbCreateTables(dbConnString)
     }
 }
 
@@ -106,6 +107,6 @@ class Superuser : CliktCommand("Add superuser or change pw") {
 
 fun main(args: Array<String>) {
     NexusCommand()
-        .subcommands(Serve(), Superuser(), ParseCamt(), DropTables())
+        .subcommands(Serve(), Superuser(), ParseCamt(), ResetTables())
         .main(args)
 }
