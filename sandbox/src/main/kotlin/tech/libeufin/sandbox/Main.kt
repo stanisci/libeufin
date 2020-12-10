@@ -92,6 +92,12 @@ class SandboxCommand : CliktCommand() {
     override fun run() = Unit
 }
 
+class DropTables : CliktCommand("Drop all the tables from the database") {
+    override fun run() {
+        dbDropTables()
+    }
+}
+
 class Serve : CliktCommand("Run sandbox HTTP server") {
     private val dbName by option().default("libeufindb")
     private val logLevel by option()

@@ -71,8 +71,14 @@ class ParseCamt : CliktCommand("Parse a camt file") {
     }
 }
 
+class DropTables : CliktCommand("Drop all the tables from the database") {
+    override fun run() {
+        dbDropTables()
+    }
+}
+
 class Superuser : CliktCommand("Add superuser or change pw") {
-    private val dbName by option().default("libeufindb")
+    private val dbName by option().default("jdbc:sqlite://libeufindb")
     private val username by argument()
     private val password by option().prompt(requireConfirmation = true, hideInput = true)
     override fun run() {

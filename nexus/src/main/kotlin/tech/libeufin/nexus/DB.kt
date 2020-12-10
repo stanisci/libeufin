@@ -383,11 +383,30 @@ class NexusScheduledTaskEntity(id: EntityID<Int>) : IntEntity(id) {
     var prevScheduledExecutionSec by NexusScheduledTasksTable.prevScheduledExecutionSec
 }
 
+fun dbDropTables() {
+    transaction {
+        SchemaUtils.drop(
+            NexusUsersTable,
+            PaymentInitiationsTable,
+            NexusEbicsSubscribersTable,
+            NexusBankAccountsTable,
+            NexusBankTransactionsTable,
+            TalerIncomingPayments,
+            TalerRequestedPayments,
+            NexusBankConnectionsTable,
+            NexusBankMessagesTable,
+            FacadesTable,
+            TalerFacadeStateTable,
+            NexusScheduledTasksTable,
+            OfferedBankAccountsTable
+        )
+    }
+}
+
 fun dbCreateTables(dbConnectionString: String) {
     Database.connect("$dbConnectionString")
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
-        addLogger(StdOutSqlLogger)
         SchemaUtils.create(
             NexusUsersTable,
             PaymentInitiationsTable,

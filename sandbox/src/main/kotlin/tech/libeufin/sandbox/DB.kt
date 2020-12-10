@@ -301,6 +301,23 @@ object BankAccountReportsTable : IntIdTable() {
     val bankAccount = reference("bankAccount", BankAccountsTable)
 }
 
+fun dbDropTables() {
+    transaction {
+        SchemaUtils.drop(
+            EbicsSubscribersTable,
+            EbicsHostsTable,
+            EbicsDownloadTransactionsTable,
+            EbicsUploadTransactionsTable,
+            EbicsUploadTransactionChunksTable,
+            EbicsOrderSignaturesTable,
+            BankAccountTransactionsTable,
+            BankAccountsTable,
+            BankAccountReportsTable,
+            BankAccountStatementsTable
+        )
+    }
+}
+
 fun dbCreateTables(dbConnectionString: String) {
     Database.connect("${dbConnectionString}")
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
