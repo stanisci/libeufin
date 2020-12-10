@@ -3,6 +3,6 @@
 ARGS="$@"
 cd PROJECT
 if (( $# > 0 )); then ./gradlew -q --console=plain nexus:run --args="$ARGS"
-else ./gradlew --console=plain nexus:run
+else ./gradlew -q --console=plain nexus:run
 fi
 cd - > /dev/null
