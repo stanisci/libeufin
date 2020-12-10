@@ -154,7 +154,7 @@ fun BigDecimal.signToString(): String {
 
 fun main(args: Array<String>) {
     SandboxCommand()
-        .subcommands(Serve())
+        .subcommands(Serve(), DropTables())
         .main(args)
 }
 

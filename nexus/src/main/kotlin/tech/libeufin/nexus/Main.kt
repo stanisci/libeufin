@@ -104,6 +104,6 @@ class Superuser : CliktCommand("Add superuser or change pw") {
 
 fun main(args: Array<String>) {
     NexusCommand()
-        .subcommands(Serve(), Superuser(), ParseCamt())
+        .subcommands(Serve(), Superuser(), ParseCamt(), DropTables())
         .main(args)
 }
