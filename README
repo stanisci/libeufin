@@ -20,8 +20,6 @@ should be found under $PFX/bin as well.
 Launching LibEuFin
 ==================
 
-Try the command
+Launch Nexus:
 
-    $ libeufin-$SERVICE
-
-where SERVICE equals either 'nexus' or 'sandbox'.
+$ libeufin-nexus serve --with-db=jdbc:postgres://localhost:5433?user=foo&password=bar
