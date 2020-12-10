@@ -17,39 +17,6 @@ $ make install-sandbox
 If the previous command succeeded, libeufin-sandbox
 should be found under $PFX/bin as well.
 
-Setup PostgreSQL access
-=======================
-
-Libeufin connects to a PostgreSQL instance via TCP.  In
-order to keep the development light, the password authentication
-should be disabled on the local machine.
-
-The first step is to (1) locate the file pg_hba.conf.  In
-debian systems, this is usually located under "/etc/postgresql/$VERSION/main/".
-
-Then (2) add the following rules to it:
-
-    # allows libeufin to connect password-less.  NOTE: it might be
-    # important to keep the following two lines before the third line
-    # showed in this snippet.
-    
-    host   libeufintestdb         libeufin   127.0.0.1/32          trust
-    host   libeufindb             libeufin   127.0.0.1/32          trust
-    # IPv4 local connections:
-    host    all             all             127.0.0.1/32            md5
-
-(3) Create the databases "libeufintestdb" and "libeufindb"
-(4) Create the role "libeufin"
-(5) Restart the database
-
-If the configuration was successful, the following command should
-access the "libeufin" database without asking for a password:
-
-    $ psql -U libeufin -h 127.0.0.1 -d libeufindb
-
-If 'psql' could not find the right port to connect, consider using
-the "-p $PG_PORT" option.
-
 Launching LibEuFin
 ==================
 
