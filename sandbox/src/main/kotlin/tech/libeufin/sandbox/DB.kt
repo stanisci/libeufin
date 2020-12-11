@@ -323,7 +323,6 @@ fun dbCreateTables(dbConnectionString: String) {
     Database.connect("${dbConnectionString}")
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
-        addLogger(StdOutSqlLogger)
         SchemaUtils.create(
             EbicsSubscribersTable,
             EbicsHostsTable,

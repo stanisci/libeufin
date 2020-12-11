@@ -392,7 +392,6 @@ fun serverMain(dbName: String) {
                 val pairB = CryptoUtil.generateRsaKeyPair(2048)
                 val pairC = CryptoUtil.generateRsaKeyPair(2048)
                 transaction {
-                    addLogger(StdOutSqlLogger)
                     EbicsHostEntity.new {
                         this.ebicsVersion = req.ebicsVersion
                         this.hostId = req.hostID

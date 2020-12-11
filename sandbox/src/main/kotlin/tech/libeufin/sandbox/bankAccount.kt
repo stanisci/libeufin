@@ -41,7 +41,9 @@ fun historyForAccount(iban: String): List<RawPayment> {
                     // and it makes the document invalid!
                     // uid = "${it[pmtInfId]}-${it[msgId]}"
                     uid = "${it[BankAccountTransactionsTable.pmtInfId]}",
-                    direction = it[BankAccountTransactionsTable.direction]
+                    direction = it[BankAccountTransactionsTable.direction],
+                    pmtInfId = it[BankAccountTransactionsTable.pmtInfId],
+                    msgId = it[BankAccountTransactionsTable.msgId]
                 )
             )
         }

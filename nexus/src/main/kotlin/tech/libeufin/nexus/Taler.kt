@@ -419,15 +419,17 @@ fun ingestTalerTransactions() {
                     (NexusBankTransactionsTable.id.greater(lastId))
         }.orderBy(Pair(NexusBankTransactionsTable.id, SortOrder.ASC)).forEach {
             // Incoming payment.
-            val tx = jacksonObjectMapper().readValue(it.transactionJson, CamtBankAccountEntry::class.java)
-            val txDetails = tx.details
-            if (txDetails == null) {
-                // We don't support batch transactions at the moment!
-                logger.warn("batch transactions not supported")
-            } else {
-                when (tx.creditDebitIndicator) {
-                    CreditDebitIndicator.CRDT -> ingestIncoming(it, txDtls = txDetails)
-                }
+            logger.debug("Taler checks payment: ${it.transactionJson}")
+            val tx = jacksonObjectMapper().readValue(
+                it.transactionJson, CamtBankAccountEntry::class.java
+            )
+            val details = tx.batches?.get(0)?.batchTransactions?.get(0)?.details
+            if (details == null) {
+                logger.warn("Met a void money movement: VERY strange")
+                return@forEach
+            }
+            when (tx.creditDebitIndicator) {
+                CreditDebitIndicator.CRDT -> ingestIncoming(it, txDtls = details)
             }
             lastId = it.id.value
         }

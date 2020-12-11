@@ -264,9 +264,9 @@ data class ReturnInfo(
 )
 
 data class BatchTransaction(
-    val amount: CurrencyAmount?,
-    val creditDebitIndicator: CreditDebitIndicator?,
-    val details: TransactionDetails?
+    val amount: CurrencyAmount,
+    val creditDebitIndicator: CreditDebitIndicator,
+    val details: TransactionDetails
 )
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -322,9 +322,6 @@ data class CamtBankAccountEntry(
      * Only present if currency exchange happens at the entry level.
      */
     val instructedAmount: CurrencyAmount?,
-
-    // This field got recently obsoleted.
-    val details: TransactionDetails? = null,
 
     // list of sub-transactions participating in this money movement.
     val batches: List<Batch>?
@@ -656,7 +653,7 @@ private fun XmlElementDestructor.extractMaybeCurrencyExchange(): CurrencyExchang
 }
 
 private fun XmlElementDestructor.extractBatches(
-    inheritableAmount: CurrencyAmount?,
+    inheritableAmount: CurrencyAmount,
     outerCreditDebitIndicator: CreditDebitIndicator
 ): List<Batch> {
     if (mapEachChildNamed("NtryDtls") {}.size != 1) throw CamtParsingError("This money movement is not a singleton #0")

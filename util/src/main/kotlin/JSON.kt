@@ -35,6 +35,12 @@ data class RawPayment(
     val currency: String,
     val subject: String,
     val date: String? = null,
-    val uid: String? = null,
-    val direction: String
+    val uid: String? = null, // FIXME: explain this value.
+    val direction: String,
+    // the following two values are rather CAMT/PAIN
+    // specific, therefore do not need to be returned
+    // along every API call using this object.
+    val pmtInfId: String? = null,
+    val msgId: String? = null
+
 )

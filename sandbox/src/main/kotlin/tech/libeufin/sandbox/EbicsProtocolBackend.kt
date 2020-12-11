@@ -200,11 +200,7 @@ private fun getRelatedParty(branch: XmlElementBuilder, payment: RawPayment) {
     }
 }
 
-fun buildCamtString(
-    type: Int,
-    subscriberIban: String,
-    history: List<RawPayment>
-): String {
+fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>): String {
     /**
      * ID types required:
      *
@@ -387,10 +383,10 @@ fun buildCamtString(
                             element("NtryDtls/TxDtls") {
                                 element("Refs") {
                                     element("MsgId") {
-                                        text("0")
+                                        text(it.msgId ?: "NOTPROVIDED")
                                     }
                                     element("PmtInfId") {
-                                        text("0")
+                                        text(it.pmtInfId ?: "NOTPROVIDED")
                                     }
                                     element("EndToEndId") {
                                         text("NOTPROVIDED")
@@ -556,6 +552,8 @@ private fun parsePain001(paymentRequest: String, initiatorName: String): PainPar
  * Process a payment request in the pain.001 format.
  */
 private fun handleCct(paymentRequest: String, initiatorName: String, ctx: RequestContext) {
+    LOGGER.debug("Handling CCT")
+    LOGGER.debug("Pain.001: $paymentRequest")
     val parseResult = parsePain001(paymentRequest, initiatorName)
     transaction {
         try {
@@ -586,7 +584,7 @@ private fun handleCct(paymentRequest: String, initiatorName: String, ctx: Reques
 }
 
 private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
-    logger.debug("Handling C53 request")
+    LOGGER.debug("Handling C53 request")
     val camt = constructCamtResponse(
         53,
         requestContext.requestObject.header,
@@ -757,7 +755,6 @@ private suspend fun ApplicationCall.handleEbicsHpb(
  */
 private fun ApplicationCall.ensureEbicsHost(requestHostID: String): EbicsHostPublicInfo {
     return transaction {
-        addLogger(StdOutSqlLogger)
         val ebicsHost =
             EbicsHostEntity.find { EbicsHostsTable.hostID.upperCase() eq requestHostID.toUpperCase() }.firstOrNull()
         if (ebicsHost == null) {

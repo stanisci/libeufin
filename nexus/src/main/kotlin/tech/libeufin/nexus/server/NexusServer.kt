@@ -669,7 +669,7 @@ fun serverMain(dbName: String, host: String) {
                     call.receive<FetchSpecJson>()
                 } else {
                     FetchSpecLatestJson(
-                        FetchLevel.ALL,
+                        FetchLevel.STATEMENT,
                         null
                     )
                 }
@@ -678,7 +678,7 @@ fun serverMain(dbName: String, host: String) {
                     fetchSpec,
                     accountid
                 )
-                call.respondText("Collection performed")
+                call.respond(object {})
                 return@post
             }
 

@@ -195,6 +195,7 @@ private suspend fun fetchEbicsC5x(
     orderParams: EbicsOrderParams,
     subscriberDetails: EbicsClientSubscriberDetails
 ) {
+    logger.debug("Requesting $historyType")
     val response = doEbicsDownloadTransaction(
         client,
         subscriberDetails,

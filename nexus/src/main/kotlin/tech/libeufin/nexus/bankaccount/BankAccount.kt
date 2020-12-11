@@ -148,9 +148,14 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
             }
         }
         val entries = res.reports.map { it.entries }.flatten()
-        logger.info("found ${entries.size} transactions")
-        txloop@ for (tx in entries) {
-            val acctSvcrRef = tx.accountServicerRef
+        logger.info("found ${entries.size} money movements")
+        txloop@ for (entry in entries) {
+            val singletonBatchedTransaction = entry.batches?.get(0)?.batchTransactions?.get(0)
+                ?: throw NexusError(
+                    HttpStatusCode.InternalServerError,
+                    "Singleton money movements policy wasn't respected"
+                )
+            val acctSvcrRef = entry.accountServicerRef
             if (acctSvcrRef == null) {
                 // FIXME(dold): Report this!
                 logger.error("missing account servicer reference in transaction")
@@ -165,18 +170,18 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
             val rawEntity = NexusBankTransactionEntity.new {
                 bankAccount = acct
                 accountTransactionId = "AcctSvcrRef:$acctSvcrRef"
-                amount = tx.amount.value.toPlainString()
-                currency = tx.amount.currency
-                transactionJson = jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(tx)
-                creditDebitIndicator = tx.creditDebitIndicator.name
-                status = tx.status
+                amount = singletonBatchedTransaction.amount.value.toPlainString()
+                currency = singletonBatchedTransaction.amount.currency
+                transactionJson = jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(entry)
+                creditDebitIndicator = singletonBatchedTransaction.creditDebitIndicator.name
+                status = entry.status
             }
             rawEntity.flush()
-            if (tx.creditDebitIndicator == CreditDebitIndicator.DBIT) {
-                val t0 = tx.details
-                val msgId = t0?.messageId
-                val pmtInfId = t0?.paymentInformationId
-                if (t0 != null && msgId != null && pmtInfId != null) {
+            if (singletonBatchedTransaction.creditDebitIndicator == CreditDebitIndicator.DBIT) {
+                val t0 = singletonBatchedTransaction.details
+                val msgId = t0.messageId
+                val pmtInfId = t0.paymentInformationId
+                if (msgId != null && pmtInfId != null) {
                     val paymentInitiation = PaymentInitiationEntity.find {
                         (PaymentInitiationsTable.messageId eq msgId) and
                                 (PaymentInitiationsTable.bankAccount eq acct.id) and
@@ -184,6 +189,7 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
 
                     }.firstOrNull()
                     if (paymentInitiation != null) {
+                        logger.info("Could confirm one initiated payment: $msgId")
                         paymentInitiation.confirmationTransaction = rawEntity
                     }
                 }
@@ -314,7 +320,6 @@ suspend fun fetchBankAccountTransactions(
 
 fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexusBankAccountId: String) {
     transaction {
-        addLogger(StdOutSqlLogger)
         val conn = requireBankConnection(call, "connid")
         // first get handle of the offered bank account
         val offeredAccount = OfferedBankAccountsTable.select {

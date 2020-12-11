@@ -282,11 +282,7 @@ def test_taler_facade_config(make_taler_facade):
     )
 
 
-# This test makes one payment via the Taler facade,
-# and expects too see it in the outgoing history.
-@pytest.mark.skip("Needs more attention")
-def test_taler_facade(make_taler_facade):
-
+def test_taler_facade_history(make_taler_facade):
     assertResponse(
         post(
             f"{N}/facades/{TALER_FACADE}/taler/transfer",
@@ -295,13 +291,28 @@ def test_taler_facade(make_taler_facade):
                 amount="EUR:1",
                 exchange_base_url="http//url",
                 wtid="nice",
-                credit_account="payto://iban/THEBIC/THEIBAN?receiver-name=theName"
+                credit_account="payto://iban/AGRIFRPP/FR7630006000011234567890189?receiver-name=theName"
             ),
             auth=NEXUS_AUTH
         )
     
     )
-    sleep(5) # Let automatic tasks ingest the history.
+    # normally done by background tasks:
+    assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations/1/submit",
+            json=dict(),
+            auth=NEXUS_AUTH
+        )
+    )
+    # normally done by background tasks:
+    assertResponse(
+        post(
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/fetch-transactions", # _with_ ingestion
+            auth=NEXUS_AUTH
+        )
+    )
+
     resp = assertResponse(
         get(
             f"{N}/facades/{TALER_FACADE}/taler/history/outgoing?delta=5",
