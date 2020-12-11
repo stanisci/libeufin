@@ -901,6 +901,7 @@ fun serverMain(dbName: String, host: String) {
                         intervalIncrement = body.config.intervalIncremental
                         reserveTransferLevel = body.config.reserveTransferLevel
                         facade = newFacade
+                        currency = body.config.currency
                     }
                 }
                 call.respondText("Facade created")

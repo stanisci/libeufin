@@ -336,6 +336,7 @@ class FacadeEntity(id: EntityID<String>) : Entity<String>(id) {
 object TalerFacadeStateTable : IntIdTable() {
     val bankAccount = text("bankAccount")
     val bankConnection = text("bankConnection")
+    val currency = text("currency")
 
     /* "statement", "report", "notification" */
     val reserveTransferLevel = text("reserveTransferLevel")
@@ -351,6 +352,7 @@ class TalerFacadeStateEntity(id: EntityID<Int>) : IntEntity(id) {
 
     var bankAccount by TalerFacadeStateTable.bankAccount
     var bankConnection by TalerFacadeStateTable.bankConnection
+    var currency by TalerFacadeStateTable.currency
 
     /* "statement", "report", "notification" */
     var reserveTransferLevel by TalerFacadeStateTable.reserveTransferLevel

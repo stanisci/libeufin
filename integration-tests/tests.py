@@ -12,7 +12,8 @@ from util import (
     assertResponse,
     makeNexusSuperuser,
     dropSandboxTables,
-    dropNexusTables
+    dropNexusTables,
+    assertJsonEqual
 )
 
 # Base URLs
@@ -246,10 +247,9 @@ def test_payment():
     )
     assert len(resp.json().get("transactions")) == 1
 
-# This test makes one payment via the Taler facade,
-# and expects too see it in the outgoing history.
-@pytest.mark.skip("Needs more attention")
-def test_taler_facade():
+
+@pytest.fixture
+def make_taler_facade():
     assertResponse(
         post(
             f"{N}/facades",
@@ -258,6 +258,7 @@ def test_taler_facade():
                 type="taler-wire-gateway",
                 creator=NEXUS_USERNAME,
                 config=dict(
+                    currency="EUR",
                     bankAccount=NEXUS_BANK_LABEL,
                     bankConnection=NEXUS_BANK_CONNECTION,
                     reserveTransferLevel="UNUSED",
@@ -267,6 +268,25 @@ def test_taler_facade():
             auth=NEXUS_AUTH
         )
     )
+
+def test_taler_facade_config(make_taler_facade):
+    resp = assertResponse(
+        get(
+            f"{N}/facades/{TALER_FACADE}/taler/config",
+            auth=NEXUS_AUTH
+        )
+    )
+    assertJsonEqual(
+        resp.json(),
+        dict(currency="EUR", version="0.0.0", name=TALER_FACADE)
+    )
+
+
+# This test makes one payment via the Taler facade,
+# and expects too see it in the outgoing history.
+@pytest.mark.skip("Needs more attention")
+def test_taler_facade(make_taler_facade):
+
     assertResponse(
         post(
             f"{N}/facades/{TALER_FACADE}/taler/transfer",

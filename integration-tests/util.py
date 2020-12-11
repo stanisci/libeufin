@@ -4,6 +4,7 @@ from subprocess import check_call, Popen, PIPE, DEVNULL
 import socket
 from requests import post, get
 from time import sleep
+from deepdiff import DeepDiff
 import atexit
 from pathlib import Path
 import sys
@@ -30,6 +31,12 @@ class CheckJsonTop:
         for check in self.checks:
             check.check(json)
         return json
+
+
+def assertJsonEqual(json1, json2):
+    diff = DeepDiff(json1, json2, ignore_order=True, report_repetition=True)
+    assert len(diff.keys()) == 0
+
 
 def checkPort(port):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

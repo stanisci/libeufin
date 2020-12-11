@@ -3,7 +3,6 @@
 import os
 import sys
 import json
-from deepdiff import DeepDiff
 from subprocess import Popen, PIPE
 
 # return dict with parse-result.
@@ -28,10 +27,6 @@ def get_json_from_disk(json_file):
     json_file_abs = os.path.abspath(json_file)
     with open(json_file_abs) as j:
         return json.load(j)
-
-def assert_json_equal(json1, json2):
-    diff = DeepDiff(json1, json2, ignore_order=True, report_repetition=True)
-    assert len(diff.keys()) == 0
 
 def test_camt53_example3():
     parsed = call_parser("./samples/camt53_example3.xml")

@@ -43,10 +43,7 @@ import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.nexus.iso20022.CreditDebitIndicator
 import tech.libeufin.nexus.iso20022.EntryStatus
 import tech.libeufin.nexus.iso20022.TransactionDetails
-import tech.libeufin.nexus.server.Pain001Data
-import tech.libeufin.nexus.server.authenticateRequest
-import tech.libeufin.nexus.server.expectNonNull
-import tech.libeufin.nexus.server.expectUrlParameter
+import tech.libeufin.nexus.server.*
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.EbicsProtocolError
 import tech.libeufin.util.parseAmount
@@ -538,7 +535,28 @@ private suspend fun historyIncoming(call: ApplicationCall): Unit {
     return call.respond(TextContent(customConverter(history), ContentType.Application.Json))
 }
 
+private fun getCurrency(facadeName: String): String {
+    val res = transaction {
+        TalerFacadeStateEntity.find {
+            TalerFacadeStateTable.facade eq facadeName
+        }.firstOrNull()
+    } ?: throw NexusError(
+        HttpStatusCode.InternalServerError,
+        "Facade '$facadeName' not found"
+    )
+    return res.currency
+}
+
 fun talerFacadeRoutes(route: Route, httpClient: HttpClient) {
+    route.get("/config") {
+        val facadeName = ensureNonNull(call.parameters["fcid"])
+        call.respond(object {
+            val version = "0.0.0"
+            val name = facadeName
+            val currency = getCurrency(facadeName)
+        })
+        return@get
+    }
     route.post("/transfer") {
         talerTransfer(call)
         return@post

@@ -82,6 +82,7 @@ class DBTest {
                     reserveTransferLevel = "any"
                     intervalIncrement = "any"
                     this.facade = facade
+                    currency = "UNUSED"
                 }
             }
         }
