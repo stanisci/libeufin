@@ -384,7 +384,7 @@ class NexusScheduledTaskEntity(id: EntityID<Int>) : IntEntity(id) {
 }
 
 fun dbDropTables(dbConnectionString: String) {
-    Database.connect("$dbConnectionString")
+    Database.connect(dbConnectionString)
     transaction {
         SchemaUtils.drop(
             NexusUsersTable,

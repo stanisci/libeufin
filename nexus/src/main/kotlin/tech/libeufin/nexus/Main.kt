@@ -73,10 +73,20 @@ class ParseCamt : CliktCommand("Parse a camt file") {
 }
 
 class ResetTables : CliktCommand("Drop all the tables from the database") {
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     override fun run() {
-        dbDropTables(dbConnString)
-        dbCreateTables(dbConnString)
+        try {
+            dbDropTables(dbConnString)
+            dbCreateTables(dbConnString)
+        } catch (e: Exception) {
+            println("Database ($dbConnString) action was unsuccessful")
+            return
+        }
     }
 }
 

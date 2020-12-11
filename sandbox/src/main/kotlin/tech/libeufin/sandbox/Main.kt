@@ -56,7 +56,9 @@ import io.ktor.http.toHttpDateString
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import java.time.Instant
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.request.*
@@ -91,14 +93,29 @@ class SandboxCommand : CliktCommand() {
 }
 
 class ResetTables : CliktCommand("Drop all the tables from the database") {
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     override fun run() {
-        dbDropTables(dbConnString)
-        dbCreateTables(dbConnString)
+        try {
+            dbDropTables(dbConnString)
+            dbCreateTables(dbConnString)
+        } catch (e: Exception) {
+            println("Database ($dbConnString) action was unsuccessful")
+            return
+        }
     }
 }
 
 class Serve : CliktCommand("Run sandbox HTTP server") {
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     private val logLevel by option()
     override fun run() {
@@ -159,7 +176,12 @@ fun main(args: Array<String>) {
 }
 
 fun serverMain(dbName: String) {
-    dbCreateTables(dbName)
+    try {
+        dbCreateTables(dbName)
+    } catch (e: Exception) {
+        logger.error("Could not create tables at database: $dbName")
+        return
+    }
     val server = embeddedServer(Netty, port = 5000) {
         install(CallLogging) {
             this.level = Level.DEBUG
