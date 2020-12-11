@@ -295,9 +295,7 @@ def test_taler_facade_history(make_taler_facade):
             ),
             auth=NEXUS_AUTH
         )
-    
     )
-    # normally done by background tasks:
     assertResponse(
         post(
             f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations/1/submit",
@@ -305,10 +303,9 @@ def test_taler_facade_history(make_taler_facade):
             auth=NEXUS_AUTH
         )
     )
-    # normally done by background tasks:
     assertResponse(
         post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/fetch-transactions", # _with_ ingestion
+            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/fetch-transactions",
             auth=NEXUS_AUTH
         )
     )
@@ -320,7 +317,6 @@ def test_taler_facade_history(make_taler_facade):
         )
     )
     assert len(resp.json().get("outgoing_transactions")) == 1
-
 
 def test_double_connection_name():
     assertResponse(
