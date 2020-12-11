@@ -61,6 +61,7 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
+import execThrowableOrTerminate
 import io.ktor.request.*
 import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
 import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorBic
@@ -100,12 +101,9 @@ class ResetTables : CliktCommand("Drop all the tables from the database") {
     }
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     override fun run() {
-        try {
+        execThrowableOrTerminate {
             dbDropTables(dbConnString)
             dbCreateTables(dbConnString)
-        } catch (e: Exception) {
-            println("Database ($dbConnString) action was unsuccessful")
-            return
         }
     }
 }
@@ -176,12 +174,7 @@ fun main(args: Array<String>) {
 }
 
 fun serverMain(dbName: String) {
-    try {
-        dbCreateTables(dbName)
-    } catch (e: Exception) {
-        logger.error("Could not create tables at database: $dbName")
-        return
-    }
+    execThrowableOrTerminate { dbCreateTables(dbName) }
     val server = embeddedServer(Netty, port = 5000) {
         install(CallLogging) {
             this.level = Level.DEBUG

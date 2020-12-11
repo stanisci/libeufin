@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import execThrowableOrTerminate
 import io.ktor.application.ApplicationCall
 import io.ktor.application.ApplicationCallPipeline
 import io.ktor.application.call
@@ -209,11 +210,8 @@ fun requireBankConnection(call: ApplicationCall, parameterKey: String): NexusBan
 }
 
 fun serverMain(dbName: String, host: String) {
-    try {
+    execThrowableOrTerminate {
         dbCreateTables(dbName)
-    } catch (e: Exception) {
-        tech.libeufin.util.logger.error("Could not create tables at database: $dbName")
-        return
     }
     val client = HttpClient {
         expectSuccess = false // this way, it does not throw exceptions on != 200 responses.
