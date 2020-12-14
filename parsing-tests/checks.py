@@ -28,6 +28,12 @@ def get_json_from_disk(json_file):
     with open(json_file_abs) as j:
         return json.load(j)
 
+def test_dashed_subject():
+    parsed = call_parser("./samples/camt53_example_dashed_subject.xml")
+    entries = parsed["reports"][0]["entries"]
+    tx = entries[0]["batches"][0]["batchTransactions"][0]
+    assert tx["details"]["unstructuredRemittanceInformation"] == "subject-with-dashes"
+
 def test_camt53_example3():
     parsed = call_parser("./samples/camt53_example3.xml")
     entries = parsed["reports"][0]["entries"]
