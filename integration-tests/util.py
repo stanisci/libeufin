@@ -29,7 +29,7 @@ class EbicsDetails:
 class BankingDetails:
     def __init__(
             self,
-            base_url,
+            bank_base_url,
             iban="GB33BUKB20201555555555",
             bic="BUKBGB22",
             label="savings",
@@ -38,7 +38,7 @@ class BankingDetails:
         self.iban =  iban
         self.bic = bic
         self.label = label
-        self.bank_base_url = sandbox_base
+        self.bank_base_url = bank_base_url
         self.name = name
 
 class NexusDetails:
@@ -48,7 +48,7 @@ class NexusDetails:
         self.password = "secret"
         self.bank_connection = "my-ebics"
         self.bank_label = "local-savings" 
-        self.auth = auth.HTTPBasicAuth(NEXUS_USERNAME, NEXUS_PASSWORD)
+        self.auth = auth.HTTPBasicAuth(self.username, self.password)
         self.taler_facade_name = "my-taler-facade"
 
 class LibeufinPersona:
