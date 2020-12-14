@@ -24,6 +24,7 @@ import io.ktor.application.ApplicationCall
 import io.ktor.application.call
 import io.ktor.client.HttpClient
 import io.ktor.client.request.post
+import io.ktor.client.statement.*
 import io.ktor.content.TextContent
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -317,7 +318,7 @@ private suspend fun talerAddIncoming(call: ApplicationCall, httpClient: HttpClie
         }
     }
     /** forward the payment information to the sandbox.  */
-    httpClient.post<String>(
+    val response = httpClient.post<HttpResponse>(
         urlString = "http://localhost:5000/admin/payments",
         block = {
             /** FIXME: ideally Jackson should define such request body.  */
@@ -336,6 +337,12 @@ private suspend fun talerAddIncoming(call: ApplicationCall, httpClient: HttpClie
             contentType(ContentType.Application.Json)
         }
     )
+    if (response.status != HttpStatusCode.OK) {
+        throw NexusError(
+            HttpStatusCode.InternalServerError,
+            "Could not forward the 'add-incoming' payment to the bank (sandbox)"
+        )
+    }
     return call.respond(
         TextContent(
             customConverter(
