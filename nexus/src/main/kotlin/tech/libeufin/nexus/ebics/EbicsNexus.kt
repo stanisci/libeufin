@@ -797,7 +797,10 @@ fun createEbicsBankConnection(bankConnectionName: String, user: NexusUserEntity,
         owner = user
         type = "ebics"
     }
-    val newTransportData = jacksonObjectMapper().treeToValue(data, EbicsNewTransport::class.java)
+    val newTransportData = jacksonObjectMapper(
+    ).treeToValue(data, EbicsNewTransport::class.java) ?: throw NexusError(
+        HttpStatusCode.BadRequest, "Ebics details not found in request"
+    )
     val pairA = CryptoUtil.generateRsaKeyPair(2048)
     val pairB = CryptoUtil.generateRsaKeyPair(2048)
     val pairC = CryptoUtil.generateRsaKeyPair(2048)
