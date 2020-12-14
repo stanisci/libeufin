@@ -11,13 +11,15 @@ import sys
 import os
 
 class EbicsDetails:
-    def get_as_dict(self):
-        return dict(
-            ebicsURL=self.service_url,
+    def get_as_dict(self, with_url):
+        ret = dict(
             hostID=self.host,
             partnerID=self.partner,
             userID=self.user
         )
+        if with_url:
+            ret.update(ebicsURL=self.service_url)
+        return ret
 
     def __init__(self, service_url):
         self.service_url = service_url 
@@ -190,6 +192,7 @@ def startNexus(dbConnString):
         break
     return nexus
 
-def assertResponse(response, acceptedResponses=[200]):
-    assert response.status_code in acceptedResponses
-    return response
+def assertResponse(r, acceptedResponses=[200]):
+    assert r.status_code in acceptedResponses, \
+        f"Unexpected status code (r.status_code) from: {r.request.method} {r.url}"
+    return r

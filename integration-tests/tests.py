@@ -23,12 +23,12 @@ from util import (
 # Database
 DB = "jdbc:sqlite:/tmp/libeufintestdb"
 SANDBOX_URL = "http://localhost:5000"
-NEXUS_URL = "http://localhost:5000"
+NEXUS_URL = "http://localhost:5001"
 
 PERSONA = LibeufinPersona(
     banking_details = BankingDetails(SANDBOX_URL),
     nexus_details = NexusDetails(NEXUS_URL),
-    ebics_details = EbicsDetails(SANDBOX_URL)
+    ebics_details = EbicsDetails(SANDBOX_URL + "/ebicsweb")
 )
 
 def prepareSandbox():
@@ -36,14 +36,14 @@ def prepareSandbox():
     assertResponse(
         post(
             f"{PERSONA.banking.bank_base_url}/admin/ebics/host",
-            json=dict(hostID=PERSONA.banking.ebics.host, ebicsVersion=PERSONA.banking.ebics.version),
+            json=dict(hostID=PERSONA.ebics.host, ebicsVersion=PERSONA.ebics.version),
         )
     )
     # make new ebics subscriber at sandbox
     assertResponse(
         post(
             f"{PERSONA.banking.bank_base_url}/admin/ebics/subscribers",
-            json=PERSONA.banking.ebics.get_as_dict(),
+            json=PERSONA.ebics.get_as_dict(with_url=False),
         )
     )
     # give a bank account to such subscriber, at sandbox
@@ -52,10 +52,10 @@ def prepareSandbox():
             f"{PERSONA.banking.bank_base_url}/admin/ebics/bank-accounts",
             json=dict(
                 name=PERSONA.banking.name,
-                subscriber=PERSONA.banking.ebics.get_as_dict(),
+                subscriber=PERSONA.ebics.get_as_dict(with_url=False),
                 iban=PERSONA.banking.iban,
                 bic=PERSONA.banking.bic,
-                label=PERSONA.banking.sandbox_label
+                label=PERSONA.banking.label
             )
         )
     )
@@ -78,7 +78,7 @@ def prepareNexus():
                 name=PERSONA.nexus.bank_connection,
                 source="new",
                 type="ebics",
-                data=PERSONA.banking.ebics.get_as_dict(),
+                data=PERSONA.ebics.get_as_dict(with_url=True),
             ),
             auth=PERSONA.nexus.auth
         )
@@ -104,7 +104,7 @@ def prepareNexus():
         post(
             f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/import-account",
             json=dict(
-                offeredAccountId=PERSONA.banking.sandbox_label,
+                offeredAccountId=PERSONA.banking.label,
                 nexusBankAccountId=PERSONA.nexus.bank_label
             ),
             auth=PERSONA.nexus.auth
@@ -302,12 +302,7 @@ def test_double_connection_name():
                 name=PERSONA.nexus.bank_connection,
                 source="new",
                 type="ebics",
-                data=dict(
-                    ebicsURL=PERSONA.banking.ebics.service_url,
-                    hostID=PERSONA.banking.ebics.host,
-                    partnerID=PERSONA.banking.ebics.partner,
-                    userID=PERSONA.banking.ebics.user
-                ),
+                data=PERSONA.ebics.get_as_dict(with_url=True),
             ),
             auth=PERSONA.nexus.auth
         ),
