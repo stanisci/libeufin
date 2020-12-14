@@ -196,7 +196,7 @@ fun customConverter(body: Any): String {
  */
 fun extractReservePubFromSubject(rawSubject: String): String? {
     val re = "\\b[a-z0-9A-Z]{52}\\b".toRegex()
-    val result = re.find(rawSubject) ?: return null
+    val result = re.find(rawSubject.replace("[\n]+".toRegex(), "")) ?: return null
     return result.value.toUpperCase()
 }
 
