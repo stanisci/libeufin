@@ -193,6 +193,9 @@ def startNexus(dbConnString):
     return nexus
 
 def assertResponse(r, acceptedResponses=[200]):
-    assert r.status_code in acceptedResponses, \
-        f"Unexpected status code (r.status_code) from: {r.request.method} {r.url}"
+    def http_trace(r):
+        request = f"{r.request.method} {r.request.url}\n{r.request.body.decode('utf-8')}"
+        response = f"{r.status_code} {r.reason}\n{r.text}"
+        return f"(the following communication failed)\n\n{request}\n\n{response}"
+    assert r.status_code in acceptedResponses, http_trace(r)
     return r

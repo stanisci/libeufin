@@ -258,7 +258,18 @@ def test_taler_facade_config(make_taler_facade):
     )
 
 
-def test_taler_facade_history(make_taler_facade):
+def test_taler_facade_incoming(make_taler_facade):
+    assertResponse(post(
+        f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/admin/add-incoming",
+        json=dict(
+            amount="EUR:1",
+            reserve_pub="not ingested for now",
+            debit_account="payto://iban/THEIBAN/THEBIC?sender-name=TheName"
+        ),
+        auth=PERSONA.nexus.auth
+    ))
+
+def test_taler_facade_outgoing(make_taler_facade):
     assertResponse(
         post(
             f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/transfer",
