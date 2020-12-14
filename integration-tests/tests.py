@@ -259,15 +259,31 @@ def test_taler_facade_config(make_taler_facade):
 
 
 def test_taler_facade_incoming(make_taler_facade):
-    assertResponse(post(
+    resp = assertResponse(post(
         f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/admin/add-incoming",
         json=dict(
             amount="EUR:1",
-            reserve_pub="not ingested for now",
-            debit_account="payto://iban/THEIBAN/THEBIC?sender-name=TheName"
+            reserve_pub="1BCZ7KA333E3YJBFWT4J173M3E713YGFFGD856KPSGZN1N8ZKZR0",
+            debit_account="payto://iban/BUKBGB22/DE00000000000000000000?sender-name=TheName"
         ),
         auth=PERSONA.nexus.auth
     ))
+
+    assertResponse(post(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
+        auth=PERSONA.nexus.auth
+    ))
+
+    resp = assertResponse(get(
+        "/".join([
+            PERSONA.nexus.base_url,
+            "facades",
+            PERSONA.nexus.taler_facade_name,
+            "taler/history/incoming?delta=5"]),
+        auth=PERSONA.nexus.auth
+    ))
+    print(resp.json().get("incoming_transactions"))
+    assert len(resp.json().get("incoming_transactions")) == 1
 
 def test_taler_facade_outgoing(make_taler_facade):
     assertResponse(

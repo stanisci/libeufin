@@ -332,6 +332,7 @@ private suspend fun talerAddIncoming(call: ApplicationCall, httpClient: HttpClie
                 "debitorName": "${debtor.name}",
                 "amount": "${parsedAmount.amount}",
                 "currency": "${parsedAmount.currency}",
+                "direction": "CRDT",
                 "subject": "${addIncomingData.reserve_pub}"
             }""".trimIndent()
             contentType(ContentType.Application.Json)
