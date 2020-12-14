@@ -13,69 +13,49 @@ from util import (
     makeNexusSuperuser,
     dropSandboxTables,
     dropNexusTables,
-    assertJsonEqual
+    assertJsonEqual,
+    LibeufinPersona,
+    BankingDetails,
+    NexusDetails,
+    EbicsDetails
 )
-
-# Base URLs
-S = "http://localhost:5000"
-N = "http://localhost:5001"
 
 # Database
-DB_POSTGRES = "jdbc:postgresql://127.0.0.1:5433/libeufintestdb?user=libeufin"
-DB_SQLITE = "jdbc:sqlite:/tmp/libeufintestdb"
-DB = DB_SQLITE
+DB = "jdbc:sqlite:/tmp/libeufintestdb"
+SANDBOX_URL = "http://localhost:5000"
+NEXUS_URL = "http://localhost:5000"
 
-# Nexus user details
-NEXUS_USERNAME = "person"
-NEXUS_PASSWORD = "y"
-NEXUS_BANK_CONNECTION="my-ebics"
-NEXUS_BANK_LABEL="local-savings"
-NEXUS_AUTH = auth.HTTPBasicAuth(
-    NEXUS_USERNAME,
-    NEXUS_PASSWORD
+PERSONA = LibeufinPersona(
+    banking_details = BankingDetails(SANDBOX_URL),
+    nexus_details = NexusDetails(NEXUS_URL),
+    ebics_details = EbicsDetails(SANDBOX_URL)
 )
-
-# EBICS details
-EBICS_URL = f"{S}/ebicsweb"
-EBICS_HOST = "HOST01"
-EBICS_PARTNER = "PARTNER1"
-EBICS_USER = "USER1"
-EBICS_VERSION = "H004"
-
-# Subscriber's bank account at the Sandbox
-BANK_IBAN = "GB33BUKB20201555555555"
-BANK_BIC = "BUKBGB22"
-BANK_NAME = "Oliver Smith"
-BANK_LABEL = "savings"
-
-# Facade details
-TALER_FACADE="my-taler-facade"
 
 def prepareSandbox():
     # make ebics host at sandbox
     assertResponse(
         post(
-            f"{S}/admin/ebics/host",
-            json=dict(hostID=EBICS_HOST, ebicsVersion=EBICS_VERSION),
+            f"{PERSONA.banking.bank_base_url}/admin/ebics/host",
+            json=dict(hostID=PERSONA.banking.ebics.host, ebicsVersion=PERSONA.banking.ebics.version),
         )
     )
     # make new ebics subscriber at sandbox
     assertResponse(
         post(
-            f"{S}/admin/ebics/subscribers",
-            json=dict(hostID=EBICS_HOST, partnerID=EBICS_PARTNER, userID=EBICS_USER),
+            f"{PERSONA.banking.bank_base_url}/admin/ebics/subscribers",
+            json=PERSONA.banking.ebics.get_as_dict(),
         )
     )
     # give a bank account to such subscriber, at sandbox
     assertResponse(
         post(
-            f"{S}/admin/ebics/bank-accounts",
+            f"{PERSONA.banking.bank_base_url}/admin/ebics/bank-accounts",
             json=dict(
-                subscriber=dict(hostID=EBICS_HOST, partnerID=EBICS_PARTNER, userID=EBICS_USER),
-                iban=BANK_IBAN,
-                bic=BANK_BIC,
-                name=BANK_NAME,
-                label=BANK_LABEL
+                name=PERSONA.banking.name,
+                subscriber=PERSONA.banking.ebics.get_as_dict(),
+                iban=PERSONA.banking.iban,
+                bic=PERSONA.banking.bic,
+                label=PERSONA.banking.sandbox_label
             )
         )
     )
@@ -85,54 +65,49 @@ def prepareNexus():
     # make a new nexus user.
     assertResponse(
         post(
-            f"{N}/users",
+            f"{PERSONA.nexus.base_url}/users",
             auth=auth.HTTPBasicAuth("admin", "x"),
-            json=dict(username=NEXUS_USERNAME, password=NEXUS_PASSWORD),
+            json=dict(username=PERSONA.nexus.username, password=PERSONA.nexus.password),
         )
     )
     # make a ebics bank connection for the new user.
     assertResponse(
         post(
-            f"{N}/bank-connections",
+            f"{PERSONA.nexus.base_url}/bank-connections",
             json=dict(
-                name=NEXUS_BANK_CONNECTION,
+                name=PERSONA.nexus.bank_connection,
                 source="new",
                 type="ebics",
-                data=dict(
-                    ebicsURL=EBICS_URL,
-                    hostID=EBICS_HOST,
-                    partnerID=EBICS_PARTNER,
-                    userID=EBICS_USER
-                ),
+                data=PERSONA.banking.ebics.get_as_dict(),
             ),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
     # synchronizing the connection
     assertResponse(
         post(
-            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/connect",
+            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/connect",
             json=dict(),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
     # download offered bank accounts
     assertResponse(
         post(
-            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/fetch-accounts",
+            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/fetch-accounts",
             json=dict(),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
     # import one bank account into the Nexus
     assertResponse(
         post(
-            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/import-account",
+            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/import-account",
             json=dict(
-                offeredAccountId=BANK_LABEL,
-                nexusBankAccountId=NEXUS_BANK_LABEL
+                offeredAccountId=PERSONA.banking.sandbox_label,
+                nexusBankAccountId=PERSONA.nexus.bank_label
             ),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
 
@@ -147,8 +122,8 @@ def setup_function():
 
 
 def teardown_function():
-  dropSandboxTables(DB)
-  dropNexusTables(DB)
+    dropSandboxTables(DB)
+    dropNexusTables(DB)
 
 
 def test_env():
@@ -163,20 +138,20 @@ def test_env():
 def test_imported_account():
     resp = assertResponse(
         get(
-            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/accounts",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/accounts",
+            auth=PERSONA.nexus.auth
         )
     )
     imported_account = resp.json().get("accounts").pop()
-    assert imported_account.get("nexusBankAccountId") == NEXUS_BANK_LABEL
+    assert imported_account.get("nexusBankAccountId") == PERSONA.nexus.bank_label
 
 # Expecting a empty history for an account that
 # never made or receivd a payment.
 def test_empty_history():
     resp = assertResponse(
         get(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
+            auth=PERSONA.nexus.auth
         )
     )
     assert len(resp.json().get("transactions")) == 0
@@ -187,25 +162,25 @@ def test_empty_history():
 def test_backup():
     resp = assertResponse(
         post(
-            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/export-backup",
+            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/export-backup",
             json=dict(passphrase="secret"),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
     sleep(3)
     assertResponse(
         post(
-            f"{N}/bank-connections",
+            f"{PERSONA.nexus.base_url}/bank-connections",
             json=dict(name="my-ebics-restored", data=resp.json(), passphrase="secret", source="backup"),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
 
 def test_ebics_custom_ebics_order():
     assertResponse(
         post(
-            f"{N}/bank-connections/{NEXUS_BANK_CONNECTION}/ebics/download/tsd",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/ebics/download/tsd",
+            auth=PERSONA.nexus.auth
         )
     )
 
@@ -214,7 +189,7 @@ def test_ebics_custom_ebics_order():
 def test_payment():
     resp = assertResponse(
         post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations",
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations",
             json=dict(
                 iban="FR7630006000011234567890189",
                 bic="AGRIFRPP",
@@ -222,27 +197,27 @@ def test_payment():
                 subject="integration test",
                 amount="EUR:1",
             ),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
     PAYMENT_UUID = resp.json().get("uuid")
     assertResponse(
         post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations/{PAYMENT_UUID}/submit",
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations/{PAYMENT_UUID}/submit",
             json=dict(),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
     assertResponse(
         post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/fetch-transactions",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
+            auth=PERSONA.nexus.auth
         )
     )
     resp = assertResponse(
         get(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
+            auth=PERSONA.nexus.auth
         )
     )
     assert len(resp.json().get("transactions")) == 1
@@ -252,40 +227,41 @@ def test_payment():
 def make_taler_facade():
     assertResponse(
         post(
-            f"{N}/facades",
+            f"{PERSONA.nexus.base_url}/facades",
             json=dict(
-                name=TALER_FACADE,
+                name=PERSONA.nexus.taler_facade_name,
                 type="taler-wire-gateway",
-                creator=NEXUS_USERNAME,
+                creator=PERSONA.nexus.username,
                 config=dict(
                     currency="EUR",
-                    bankAccount=NEXUS_BANK_LABEL,
-                    bankConnection=NEXUS_BANK_CONNECTION,
+                    bankAccount=PERSONA.nexus.bank_label,
+                    bankConnection=PERSONA.nexus.bank_connection,
                     reserveTransferLevel="UNUSED",
                     intervalIncremental="UNUSED"
                 )
             ),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
+
 
 def test_taler_facade_config(make_taler_facade):
     resp = assertResponse(
         get(
-            f"{N}/facades/{TALER_FACADE}/taler/config",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/config",
+            auth=PERSONA.nexus.auth
         )
     )
     assertJsonEqual(
         resp.json(),
-        dict(currency="EUR", version="0.0.0", name=TALER_FACADE)
+        dict(currency="EUR", version="0.0.0", name=PERSONA.nexus.taler_facade_name)
     )
 
 
 def test_taler_facade_history(make_taler_facade):
     assertResponse(
         post(
-            f"{N}/facades/{TALER_FACADE}/taler/transfer",
+            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/transfer",
             json=dict(
                 request_uid="0",
                 amount="EUR:1",
@@ -293,27 +269,27 @@ def test_taler_facade_history(make_taler_facade):
                 wtid="nice",
                 credit_account="payto://iban/AGRIFRPP/FR7630006000011234567890189?receiver-name=theName"
             ),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
     assertResponse(
         post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/payment-initiations/1/submit",
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations/1/submit",
             json=dict(),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         )
     )
     assertResponse(
         post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/fetch-transactions",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
+            auth=PERSONA.nexus.auth
         )
     )
 
     resp = assertResponse(
         get(
-            f"{N}/facades/{TALER_FACADE}/taler/history/outgoing?delta=5",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/history/outgoing?delta=5",
+            auth=PERSONA.nexus.auth
         )
     )
     assert len(resp.json().get("outgoing_transactions")) == 1
@@ -321,19 +297,19 @@ def test_taler_facade_history(make_taler_facade):
 def test_double_connection_name():
     assertResponse(
         post(
-            f"{N}/bank-connections",
+            f"{PERSONA.nexus.base_url}/bank-connections",
             json=dict(
-                name=NEXUS_BANK_CONNECTION,
+                name=PERSONA.nexus.bank_connection,
                 source="new",
                 type="ebics",
                 data=dict(
-                    ebicsURL=EBICS_URL,
-                    hostID=EBICS_HOST,
-                    partnerID=EBICS_PARTNER,
-                    userID=EBICS_USER
+                    ebicsURL=PERSONA.banking.ebics.service_url,
+                    hostID=PERSONA.banking.ebics.host,
+                    partnerID=PERSONA.banking.ebics.partner,
+                    userID=PERSONA.banking.ebics.user
                 ),
             ),
-            auth=NEXUS_AUTH
+            auth=PERSONA.nexus.auth
         ),
         [406] # expecting "406 Not acceptable"
     )
@@ -343,15 +319,15 @@ def test_ingestion_camt53_non_singleton():
         camt = f.read()
     assertResponse(
         post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/test-camt-ingestion/C53",
-            auth=NEXUS_AUTH,
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/test-camt-ingestion/C53",
+            auth=PERSONA.nexus.auth,
             data=camt
         )
     )
     resp = assertResponse(
         get(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
+            auth=PERSONA.nexus.auth
         )
     )
     with open("camt53-gls-style-1.json") as f:
@@ -364,15 +340,15 @@ def test_ingestion_camt53():
         camt = f.read()
     assertResponse(
         post(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/test-camt-ingestion/C53",
-            auth=NEXUS_AUTH,
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/test-camt-ingestion/C53",
+            auth=PERSONA.nexus.auth,
             data=camt
         )
     )
     resp = assertResponse(
         get(
-            f"{N}/bank-accounts/{NEXUS_BANK_LABEL}/transactions",
-            auth=NEXUS_AUTH
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
+            auth=PERSONA.nexus.auth
         )
     )
     with open("camt53-gls-style-0.json") as f:
@@ -394,14 +370,14 @@ def test_sandbox_camt():
     )
     assertResponse(
         post(
-            f"{S}/admin/payments/",
+            f"{PERSONA.banking.bank_base_url}/admin/payments/",
             json=payment_instruction
         )
     )
 
     assertResponse(
         post(
-            f"{S}/admin/payments/camt",
+            f"{PERSONA.banking.bank_base_url}/admin/payments/camt",
             json=dict(iban="GB33BUKB20201555555555", type=53)
         )
     )

@@ -2,13 +2,53 @@
 
 from subprocess import check_call, Popen, PIPE, DEVNULL
 import socket
-from requests import post, get
+from requests import post, get, auth
 from time import sleep
 from deepdiff import DeepDiff
 import atexit
 from pathlib import Path
 import sys
 import os
+
+class EbicsDetails:
+    def get_as_dict(self):
+        return dict(
+            ebicsURL=self.service_url,
+            hostID=self.host,
+            partnerID=self.partner,
+            userID=self.user
+        )
+
+    def __init__(self, service_url):
+        self.service_url = service_url 
+        self.host = "HOST01"
+        self.partner = "PARTNER1"
+        self.user = "USER1"
+        self.version = "H004"
+
+class BankingDetails:
+    def __init__(self, base_url):
+        self.iban = "GB33BUKB20201555555555"
+        self.bic = "BUKBGB22"
+        self.label = "savings"
+        self.bank_base_url = sandbox_base
+        self.name = "Oliver Smith"
+
+class NexusDetails:
+    def __init__(self, base_url):
+        self.base_url = base_url
+        self.username = "oliver"
+        self.password = "secret"
+        self.bank_connection = "my-ebics"
+        self.bank_label = "local-savings" 
+        self.auth = auth.HTTPBasicAuth(NEXUS_USERNAME, NEXUS_PASSWORD)
+        self.taler_facade_name = "my-taler-facade"
+
+class LibeufinPersona:
+    def __init__(self, banking_details, nexus_details, ebics_details):
+        self.banking = banking_details
+        self.nexus = nexus_details 
+        self.ebics = ebics_details 
 
 class CheckJsonField:
     def __init__(self, name, nested=None, optional=False):
