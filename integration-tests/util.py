@@ -27,12 +27,19 @@ class EbicsDetails:
         self.version = "H004"
 
 class BankingDetails:
-    def __init__(self, base_url):
-        self.iban = "GB33BUKB20201555555555"
-        self.bic = "BUKBGB22"
-        self.label = "savings"
+    def __init__(
+            self,
+            base_url,
+            iban="GB33BUKB20201555555555",
+            bic="BUKBGB22",
+            label="savings",
+            name="Oliver Smith"
+        ):
+        self.iban =  iban
+        self.bic = bic
+        self.label = label
         self.bank_base_url = sandbox_base
-        self.name = "Oliver Smith"
+        self.name = name
 
 class NexusDetails:
     def __init__(self, base_url):
