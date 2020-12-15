@@ -224,6 +224,53 @@ def test_payment():
 
 
 @pytest.fixture
+def fetch_transactions():
+    assertResponse(post(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
+        auth=PERSONA.nexus.auth
+    ))
+
+# Book a incoming payment for "persona" at the Sandbox.
+@pytest.fixture
+def make_crdt_payment():
+    payment_instruction = dict(
+        creditorIban=PERSONA.banking.iban,
+        creditorBic=PERSONA.banking.bic,
+        creditorName=PERSONA.banking.name,
+        debitorIban="FR00000000000000000000",
+        debitorBic="BUKBGB22",
+        debitorName="Max Mustermann",
+        amount=5,
+        currency="EUR",
+        subject="Reimbursement",
+        direction="CRDT"
+    )
+
+    assertResponse(post(
+        f"{PERSONA.banking.bank_base_url}/admin/payments/",
+        json=payment_instruction
+    ))
+
+
+def test_deduplication(make_crdt_payment):
+    # fetching twice the transactions and check that
+    # the payment made via the fixture shows up only once.
+    assertResponse(post(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
+        auth=PERSONA.nexus.auth
+    ))
+    assertResponse(post(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
+        auth=PERSONA.nexus.auth
+    ))
+    resp = assertResponse(get(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
+        auth=PERSONA.nexus.auth
+    ))
+    assert len(resp.json().get("transactions")) == 1
+
+
+@pytest.fixture
 def make_taler_facade():
     assertResponse(
         post(

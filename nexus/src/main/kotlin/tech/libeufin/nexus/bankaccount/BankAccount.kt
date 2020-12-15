@@ -163,6 +163,7 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
             }
             val duplicate = findDuplicate(bankAccountId, acctSvcrRef)
             if (duplicate != null) {
+                logger.info("Found a duplicate: $acctSvcrRef")
                 // FIXME(dold): See if an old transaction needs to be superseded by this one
                 // https://bugs.gnunet.org/view.php?id=6381
                 break

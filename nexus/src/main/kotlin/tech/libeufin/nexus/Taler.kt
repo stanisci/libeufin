@@ -424,7 +424,7 @@ fun ingestTalerTransactions() {
         val facadeState = getTalerFacadeState(facade.id.value)
         var lastId = facadeState.highestSeenMsgID
         NexusBankTransactionEntity.find {
-            /** Those with exchange bank account involved */
+            /** Those with "our" bank account involved */
             NexusBankTransactionsTable.bankAccount eq subscriberAccount.id.value and
                     /** Those that are booked */
                     (NexusBankTransactionsTable.status eq EntryStatus.BOOK) and
@@ -438,7 +438,7 @@ fun ingestTalerTransactions() {
             )
             val details = tx.batches?.get(0)?.batchTransactions?.get(0)?.details
             if (details == null) {
-                logger.warn("Met a void money movement: VERY strange")
+                logger.warn("A void money movement made it through the ingestion: VERY strange")
                 return@forEach
             }
             when (tx.creditDebitIndicator) {
