@@ -66,7 +66,7 @@ object TalerIncomingPayments : LongIdTable() {
     val payment = reference("payment", NexusBankTransactionsTable)
     val reservePublicKey = text("reservePublicKey")
     val timestampMs = long("timestampMs")
-    val incomingPaytoUri = text("incomingPaytoUri")
+    val debtorPaytoUri = text("incomingPaytoUri")
 }
 
 class TalerIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -75,7 +75,7 @@ class TalerIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
     var payment by NexusBankTransactionEntity referencedOn TalerIncomingPayments.payment
     var reservePublicKey by TalerIncomingPayments.reservePublicKey
     var timestampMs by TalerIncomingPayments.timestampMs
-    var incomingPaytoUri by TalerIncomingPayments.incomingPaytoUri
+    var debtorPaytoUri by TalerIncomingPayments.debtorPaytoUri
 }
 
 /**
@@ -423,7 +423,8 @@ fun dbCreateTables(dbConnectionString: String) {
             FacadesTable,
             TalerFacadeStateTable,
             NexusScheduledTasksTable,
-            OfferedBankAccountsTable
+            OfferedBankAccountsTable,
+            NexusScheduledTasksTable
         )
     }
 }

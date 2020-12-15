@@ -282,7 +282,6 @@ def test_taler_facade_incoming(make_taler_facade):
             "taler/history/incoming?delta=5"]),
         auth=PERSONA.nexus.auth
     ))
-    print(resp.json().get("incoming_transactions"))
     assert len(resp.json().get("incoming_transactions")) == 1
 
 def test_taler_facade_outgoing(make_taler_facade):

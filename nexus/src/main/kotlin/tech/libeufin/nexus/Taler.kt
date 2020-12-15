@@ -138,12 +138,11 @@ fun <T : Entity<Long>> SizedIterable<T>.orderTaler(delta: Int): List<T> {
 /**
  * Build an IBAN payto URI.
  */
-fun buildIbanPaytoUri(iban: String, bic: String?, name: String): String {
-    if (bic != null) {
-        return "payto://iban/$bic/$iban?receiver-name=$name"
-    } else {
-        return "payto://iban/$iban?receiver-name=$name"
-    }
+fun buildIbanPaytoUri(
+    iban: String, bic: String, name: String, direction: String
+): String {
+    val nameParam = if (direction == "DBIT") "sender-name" else "receiver-name"
+    return "payto://iban/$bic/$iban?$nameParam=$name"
 }
 
 /** Builds the comparison operator for history entries based on the sign of 'delta'  */
@@ -396,11 +395,17 @@ private fun ingestIncoming(payment: NexusBankTransactionEntity, txDtls: Transact
         logger.warn("invalid public key")
         return
     }
+    if (debtorAgent.bic == null) {
+        logger.warn("Not allowing transactions missing the BIC.  IBAN and name: ${debtorIban}, ${debtorName}")
+        return
+    }
     TalerIncomingPaymentEntity.new {
         this.payment = payment
         reservePublicKey = reservePub
         timestampMs = System.currentTimeMillis()
-        incomingPaytoUri = buildIbanPaytoUri(debtorIban, debtorAgent.bic, debtorName)
+        debtorPaytoUri = buildIbanPaytoUri(
+            debtorIban, debtorAgent.bic, debtorName, "DBIT"
+        )
     }
     return
 }
@@ -494,7 +499,8 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
                         debit_account = buildIbanPaytoUri(
                             subscriberBankAccount.iban,
                             subscriberBankAccount.bankCode,
-                            subscriberBankAccount.accountHolder
+                            subscriberBankAccount.accountHolder,
+                            "DBIT"
                         ),
                         exchange_base_url = "FIXME-to-request-along-subscriber-registration"
                     )
@@ -534,9 +540,10 @@ private suspend fun historyIncoming(call: ApplicationCall): Unit {
                         credit_account = buildIbanPaytoUri(
                             it.payment.bankAccount.iban,
                             it.payment.bankAccount.bankCode,
-                            it.payment.bankAccount.accountHolder
+                            it.payment.bankAccount.accountHolder,
+                            "CRDT"
                         ),
-                        debit_account = it.incomingPaytoUri
+                        debit_account = it.debtorPaytoUri
                     )
                 )
             }
