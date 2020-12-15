@@ -219,7 +219,7 @@ def test_payment():
     ))
     assert len(resp.json().get("transactions")) == 1
 
-    # assert now that the payment shows up as confirmed.
+    # assert now that the bank booked the payment.
     resp = assertResponse(get("/".join([
         PERSONA.nexus.base_url,
         "bank-accounts",
@@ -231,6 +231,7 @@ def test_payment():
     assert resp.json()["status"] == "BOOK"
 
     # Posting a second payment initiation, but not submitting it.
+    # It's expected to have a "null" status.
     resp = assertResponse(post(
         f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations",
         json=dict(
