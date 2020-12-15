@@ -459,6 +459,7 @@ fun serverMain(dbName: String, host: String) {
                     } catch (e: IllegalArgumentException) {
                         throw NexusError(HttpStatusCode.BadRequest, "bad cron spec: ${e.message}")
                     }
+                    // sanity checks.
                     when (schedSpec.type) {
                         "fetch" -> {
                             val fetchSpec = jacksonObjectMapper().treeToValue(schedSpec.params, FetchSpecJson::class.java)

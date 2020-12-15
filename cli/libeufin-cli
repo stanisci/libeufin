@@ -226,6 +226,22 @@ def list_offered_bank_accounts(obj, connection_name):
         exit(1)
     print(resp.content.decode("utf-8"))
 
+@accounts.command(help="Schedules a new task")
+def task_schedule():
+    pass
+
+@accounts.command(help="Shows the status of one task")
+def task_status():
+    pass
+
+@accounts.command(help="Deletes one task")
+def task_delete():
+    pass
+
+@accounts.command(help="Shows all the active tasks")
+def tasks_show():
+    pass
+
 @accounts.command(help="show accounts belonging to calling user")
 @click.pass_obj
 def show(obj):
