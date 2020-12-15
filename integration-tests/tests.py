@@ -185,19 +185,17 @@ def test_ebics_custom_ebics_order():
 # This test makes a payment and expects to see it
 # in the account history.
 def test_payment():
-    resp = assertResponse(
-        post(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations",
-            json=dict(
-                iban="FR7630006000011234567890189",
-                bic="AGRIFRPP",
-                name="Jacques La Fayette",
-                subject="integration test",
-                amount="EUR:1",
-            ),
-            auth=PERSONA.nexus.auth
-        )
-    )
+    resp = assertResponse(post(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations",
+        json=dict(
+            iban="FR7630006000011234567890189",
+            bic="AGRIFRPP",
+            name="Jacques La Fayette",
+            subject="integration test",
+            amount="EUR:1",
+        ),
+        auth=PERSONA.nexus.auth
+    ))
     PAYMENT_UUID = resp.json().get("uuid")
     assertResponse(post("/".join([
         PERSONA.nexus.base_url,
@@ -231,6 +229,29 @@ def test_payment():
         auth=PERSONA.nexus.auth
     ))
     assert resp.json()["status"] == "BOOK"
+
+    # Posting a second payment initiation, but not submitting it.
+    resp = assertResponse(post(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations",
+        json=dict(
+            iban="FR7630006000011234567890189",
+            bic="AGRIFRPP",
+            name="Jacques La Fayette",
+            subject="integration test",
+            amount="EUR:1",
+        ),
+        auth=PERSONA.nexus.auth
+    ))
+    PAYMENT_UUID_NON_SUBMITTED = resp.json().get("uuid")
+    resp = assertResponse(get("/".join([
+        PERSONA.nexus.base_url,
+        "bank-accounts",
+        PERSONA.nexus.bank_label,
+        "payment-initiations",
+        PAYMENT_UUID_NON_SUBMITTED]),
+        auth=PERSONA.nexus.auth
+    ))
+    assert resp.json()["status"] == None
 
 
 @pytest.fixture
