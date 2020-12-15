@@ -575,6 +575,7 @@ fun serverMain(dbName: String, host: String) {
                         val sd = it.submissionDate
                         ret.initiatedPayments.add(
                             PaymentStatus(
+                                status = it.confirmationTransaction?.status,
                                 paymentInitiationId = it.id.value.toString(),
                                 submitted = it.submitted,
                                 creditorIban = it.creditorIban,
@@ -601,6 +602,7 @@ fun serverMain(dbName: String, host: String) {
                     val paymentInitiation = getPaymentInitiation(ensureLong(call.parameters["uuid"]))
                     return@transaction object {
                         val paymentInitiation = paymentInitiation
+                        val paymentStatus = paymentInitiation.confirmationTransaction?.status
                     }
                 }
                 val sd = res.paymentInitiation.submissionDate
@@ -613,9 +615,8 @@ fun serverMain(dbName: String, host: String) {
                         creditorIban = res.paymentInitiation.creditorIban,
                         amount = "${res.paymentInitiation.currency}:${res.paymentInitiation.sum}",
                         subject = res.paymentInitiation.subject,
-                        submissionDate = if (sd != null) {
-                            importDateFromMillis(sd).toDashedDate()
-                        } else null,
+                        submissionDate = if (sd != null) { importDateFromMillis(sd).toDashedDate() } else null,
+                        status = res.paymentStatus,
                         preparationDate = importDateFromMillis(res.paymentInitiation.preparationDate).toDashedDate()
                     )
                 )

@@ -120,11 +120,9 @@ def setup_function():
     prepareSandbox()
     prepareNexus()
 
-
 def teardown_function():
     dropSandboxTables(DB)
     dropNexusTables(DB)
-
 
 def test_env():
     print("Nexus and Sandbox are up and running!")
@@ -201,26 +199,38 @@ def test_payment():
         )
     )
     PAYMENT_UUID = resp.json().get("uuid")
-    assertResponse(
-        post(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations/{PAYMENT_UUID}/submit",
-            json=dict(),
-            auth=PERSONA.nexus.auth
-        )
-    )
+    assertResponse(post("/".join([
+        PERSONA.nexus.base_url,
+        "bank-accounts",
+        PERSONA.nexus.bank_label,
+        "payment-initiations",
+        PAYMENT_UUID,
+        "submit"]),
+        json=dict(),
+        auth=PERSONA.nexus.auth
+    ))
     assertResponse(
         post(
             f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
             auth=PERSONA.nexus.auth
         )
     )
-    resp = assertResponse(
-        get(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
-            auth=PERSONA.nexus.auth
-        )
-    )
+    resp = assertResponse(get(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
+        auth=PERSONA.nexus.auth
+    ))
     assert len(resp.json().get("transactions")) == 1
+
+    # assert now that the payment shows up as confirmed.
+    resp = assertResponse(get("/".join([
+        PERSONA.nexus.base_url,
+        "bank-accounts",
+        PERSONA.nexus.bank_label,
+        "payment-initiations",
+        PAYMENT_UUID]),
+        auth=PERSONA.nexus.auth
+    ))
+    assert resp.json()["status"] == "BOOK"
 
 
 @pytest.fixture

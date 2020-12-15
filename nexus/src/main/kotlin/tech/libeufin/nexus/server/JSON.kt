@@ -233,7 +233,12 @@ data class PaymentStatus(
     val amount: String,
     val subject: String,
     val submissionDate: String?,
-    val preparationDate: String
+    val preparationDate: String,
+    // null when the payment was never acknowledged by
+    // the bank.  For example, it was submitted but never
+    // seen in any report; or only created and not even
+    // submitted.
+    val status: EntryStatus?
 )
 
 data class Transactions(
