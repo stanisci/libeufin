@@ -125,7 +125,12 @@ def teardown_function():
     dropNexusTables(DB)
 
 def test_env():
-    print("Nexus and Sandbox are up and running!")
+    print("Nexus and Sandbox are up and running!\n")
+    print(f"Nexus URL: {NEXUS_URL}")
+    print(f"Sandbox URL: {SANDBOX_URL}")
+    print(f"Username/password active at Nexus: {PERSONA.nexus.username}/{PERSONA.nexus.password}")
+    print(f"Bank connection name: {PERSONA.nexus.bank_connection}")
+    print(f"Imported bank account label: {PERSONA.nexus.bank_label}")
     try:
         input("\npress enter to stop LibEuFin test environment ...")
     except:

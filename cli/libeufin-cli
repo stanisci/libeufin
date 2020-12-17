@@ -229,21 +229,38 @@ def list_offered_bank_accounts(obj, connection_name):
 @accounts.command(help="Schedules a new task")
 @click.argument("account-name")
 @click.option("--task-name", help="Name of the task", required=True)
-@click.option("--cronspec", help="Cronspec string", required=True)
+@click.option("--task-cronspec", help="Cronspec string", required=True)
 @click.option(
     "--task-type",
     help="'fetch' (downloads transactions histories) or 'submit' (uploads payments instructions)",
     required=True
 )
 @click.option(
-    "--task-params",
-    help="valid values: 'REPORT', 'STATEMENT', 'ALL' (only applicable to the 'fetch' type)",
-    required=True
+    "--task-param-rangeType",
+    help="Only needed for 'fetch'.  (FIXME: link to documentation here!)",
+    required=False
+)
+@click.option(
+    "--task-param-level",
+    help="Only needed for 'fetch'.  (FIXME: link to documentation here!)",
+    required=False
 )
 @click.pass_obj
-def task_schedule(obj, account_name, task_name, cronspec , task_type, task_params):
+def task_schedule(
+        obj, account_name, task_name, task_cronspec,
+        task_type, task_param_rangetype, task_param_level):
+
     url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
-    body = dict(name=task_name, type=task_type, params=task_params)
+    body = dict(
+        name=task_name,
+        cronspec=task_cronspec,
+        type=task_type
+    )
+    if task_type == "fetch" and not (task_param_rangetype or task_param_level):
+        print("'fetch' type requires --task-param-rangeType and --task-param-level")
+        return
+
+    body.update(dict(params=dict(rangeType=task_param_rangetype, level=task_param_level)))
     try:
         resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:

@@ -403,9 +403,7 @@ fun serverMain(dbName: String, host: String) {
                 resp.set<JsonNode>("schedule", ops)
                 transaction {
                     val bankAccount = NexusBankAccountEntity.findById(accountId)
-                    if (bankAccount == null) {
-                        throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
-                    }
+                        ?: throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     NexusScheduledTaskEntity.find {
                         (NexusScheduledTasksTable.resourceType eq "bank-account") and
                                 (NexusScheduledTasksTable.resourceId eq accountId)
@@ -420,28 +418,6 @@ fun serverMain(dbName: String, host: String) {
                     Unit
                 }
                 call.respond(resp)
-            }
-
-            // Get all the scheduled jobs to the requester.
-            get("/bank-accounts/{accountid}/schedule") {
-                val ret = mutableListOf<AccountTask>()
-                transaction {
-                    NexusScheduledTaskEntity.all().forEach {
-                        ret.add(
-                            AccountTask(
-                                resourceType = it.resourceType,
-                                resourceId = it.resourceId,
-                                taskName = it.taskName,
-                                taskType = it.taskType,
-                                taskCronspec = it.taskCronspec,
-                                taskParams = it.taskParams,
-                                nextScheduledExecutionSec = it.nextScheduledExecutionSec,
-                                prevScheduledExecutionSec = it.prevScheduledExecutionSec
-                            )
-                        )
-                    }
-                }
-                call.respond(ret)
                 return@get
             }
 
@@ -451,9 +427,7 @@ fun serverMain(dbName: String, host: String) {
                 transaction {
                     authenticateRequest(call.request)
                     val bankAccount = NexusBankAccountEntity.findById(accountId)
-                    if (bankAccount == null) {
-                        throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
-                    }
+                        ?: throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     try {
                         NexusCron.parser.parse(schedSpec.cronspec)
                     } catch (e: IllegalArgumentException) {
@@ -463,9 +437,7 @@ fun serverMain(dbName: String, host: String) {
                     when (schedSpec.type) {
                         "fetch" -> {
                             val fetchSpec = jacksonObjectMapper().treeToValue(schedSpec.params, FetchSpecJson::class.java)
-                            if (fetchSpec == null) {
-                                throw NexusError(HttpStatusCode.BadRequest, "bad fetch spec")
-                            }
+                                ?: throw NexusError(HttpStatusCode.BadRequest, "bad fetch spec")
                         }
                         "submit" -> {}
                         else -> throw NexusError(HttpStatusCode.BadRequest, "unsupported task type")
@@ -490,11 +462,14 @@ fun serverMain(dbName: String, host: String) {
                     }
                 }
                 call.respond(object { })
+                return@post
             }
 
             get("/bank-accounts/{accountId}/schedule/{taskId}") {
                 val task = transaction {
-                    NexusScheduledTaskEntity.findById(ensureInt(call.parameters["taskId"]))
+                    NexusScheduledTaskEntity.find {
+                        NexusScheduledTasksTable.taskName eq ensureNonNull(call.parameters["taskId"])
+                    }.firstOrNull()
                 }
                 call.respond(
                     if (task != null) {
