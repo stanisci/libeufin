@@ -7,7 +7,7 @@ import json
 import hashlib
 import errno
 from datetime import datetime
-from requests import post, get, auth
+from requests import post, get, auth, delete
 from urllib.parse import urljoin
 from getpass import getpass
 
@@ -86,9 +86,9 @@ def export_backup(obj, connection_name, passphrase, output_file):
 @connections.command(help="delete bank connection")
 @click.argument("connection-name")
 @click.pass_obj
-def delete(obj, connection_name):
+def delete_connection(obj, connection_name):
 
-    url = urljoin(obj.nexus_base_url, "/bank-connections/delete-connection".format(connection_name))
+    url = urljoin(obj.nexus_base_url, "/bank-connections/delete-connection")
     try:
         resp = post(
             url,
@@ -227,20 +227,70 @@ def list_offered_bank_accounts(obj, connection_name):
     print(resp.content.decode("utf-8"))
 
 @accounts.command(help="Schedules a new task")
-def task_schedule():
-    pass
+@click.argument("account-name")
+@click.option("--task-name", help="Name of the task", required=True)
+@click.option("--cronspec", help="Cronspec string", required=True)
+@click.option(
+    "--task-type",
+    help="'fetch' (downloads transactions histories) or 'submit' (uploads payments instructions)",
+    required=True
+)
+@click.option(
+    "--task-params",
+    help="valid values: 'REPORT', 'STATEMENT', 'ALL' (only applicable to the 'fetch' type)",
+    required=True
+)
+@click.pass_obj
+def task_schedule(obj, account_name, task_name, cronspec , task_type, task_params):
+    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
+    body = dict(name=task_name, type=task_type, params=task_params)
+    try:
+        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception:
+        print("Could not reach nexus at " + url)
+        exit(1)
+    print(resp.content.decode("utf-8"))
+
 
 @accounts.command(help="Shows the status of one task")
-def task_status():
-    pass
+@click.argument("account-name")
+@click.option("--task-name", help="Name of the task", required=True)
+@click.pass_obj
+def task_status(obj, account_name, task_name):
+    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule/{}".format(account_name, task_name))
+    try:
+        resp = get(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception:
+        print("Could not reach nexus " + url)
+        exit(1)
+    print(resp.content.decode("utf-8"))
 
 @accounts.command(help="Deletes one task")
-def task_delete():
-    pass
+@click.argument("account-name")
+@click.option("--task-name", help="Name of the task", required=True)
+@click.pass_obj
+def task_delete(obj, account_name, task_name):
+    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule/{}".format(account_name, task_name))
+    try:
+        resp = delete(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception:
+        print("Could not reach nexus " + url)
+        exit(1)
+    print(resp.content.decode("utf-8"))
+
 
 @accounts.command(help="Shows all the active tasks")
-def tasks_show():
-    pass
+@click.argument("account-name")
+@click.pass_obj
+def tasks_show(obj, account_name):
+    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
+    try:
+        resp = get(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception:
+        print("Could not reach nexus " + url)
+        exit(1)
+    print(resp.content.decode("utf-8"))
+
 
 @accounts.command(help="show accounts belonging to calling user")
 @click.pass_obj
