@@ -5,6 +5,11 @@ escaped_pwd = $(shell pwd | sed 's/\//\\\//g')
 install: install-nexus install-cli
 install-dev: install-nexus-dev install-sandbox-dev install-cli
 
+.PHONY: dist
+dist:
+	@echo Creating the 'dist' Zip archive.
+	@./gradlew -q dist
+
 .PHONY: install-sandbox
 install-sandbox:
 	@echo Installing Sandbox.
