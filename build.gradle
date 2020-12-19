@@ -15,3 +15,13 @@ idea {
         excludeDirs += file("frontend")
     }
 }
+
+task dist {
+    evaluationDependsOn("nexus")
+    subprojects.each {
+        if (it.name == "nexus") {
+            Task t = it.tasks.getByName("installShadowDist")
+            dependsOn(t)
+        }
+    }
+}
