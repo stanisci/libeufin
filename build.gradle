@@ -16,7 +16,7 @@ idea {
     }
 }
 
-task dist {
+task dist(type: Copy) {
     evaluationDependsOn("nexus")
     subprojects.each {
         if (it.name == "nexus") {
@@ -24,4 +24,13 @@ task dist {
             dependsOn(t)
         }
     }
+    from("nexus/build/install/nexus-shadow") {
+        include("**/libeufin-nexus")
+        include("**/*.jar")
+    }
+    from ("cli") {
+        include("**/libeufin-cli")
+    }
+
+    into "/tmp/second/try"
 }
