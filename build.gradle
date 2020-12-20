@@ -16,7 +16,7 @@ idea {
     }
 }
 
-task dist(type: Copy) {
+task dist(type: Zip) {
     evaluationDependsOn("nexus")
     subprojects.each {
         if (it.name == "nexus") {
@@ -31,6 +31,5 @@ task dist(type: Copy) {
     from ("cli") {
         include("**/libeufin-cli")
     }
-
-    into "/tmp/second/try"
+    archiveFileName = "libeufin-0.0.zip"
 }
