@@ -31,5 +31,4 @@ task dist(type: Zip) {
     from ("cli") {
         include("**/libeufin-cli")
     }
-    archiveFileName = "libeufin-0.0.zip"
 }
