@@ -1,10 +1,22 @@
 import org.junit.Test
-import tech.libeufin.util.parseDashedDate
 import java.time.*
 import java.time.format.DateTimeFormatter
-import java.time.temporal.TemporalAccessor
+
+// https://stackoverflow.com/questions/32437550/whats-the-difference-between-instant-and-localdatetime
 
 class TimeTest {
+    @Test
+    fun mock() {
+        // Using the system clock, thus not mocking at all.
+        val systemClock = Clock.system(ZoneId.systemDefault())
+        val realNow = ZonedDateTime.now(systemClock)
+        println(realNow)
+        // Moving four hours later.
+        val offsetTime = Clock.offset(systemClock, Duration.ofHours(4))
+        val offesetNow = ZonedDateTime.now(offsetTime)
+        println(offesetNow)
+    }
+
     @Test
     fun importMillis() {
         fun fromLong(millis: Long): LocalDateTime {
