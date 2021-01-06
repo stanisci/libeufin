@@ -1,4 +1,6 @@
 import org.junit.Test
+import tech.libeufin.util.getNow
+import tech.libeufin.util.setClock
 import java.time.*
 import java.time.format.DateTimeFormatter
 
@@ -7,14 +9,9 @@ import java.time.format.DateTimeFormatter
 class TimeTest {
     @Test
     fun mock() {
-        // Using the system clock, thus not mocking at all.
-        val systemClock = Clock.system(ZoneId.systemDefault())
-        val realNow = ZonedDateTime.now(systemClock)
-        println(realNow)
-        // Moving four hours later.
-        val offsetTime = Clock.offset(systemClock, Duration.ofHours(4))
-        val offesetNow = ZonedDateTime.now(offsetTime)
-        println(offesetNow)
+        println(getNow())
+        setClock(Duration.ofHours(2))
+        println(getNow())
     }
 
     @Test

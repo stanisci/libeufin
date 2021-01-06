@@ -22,6 +22,15 @@ package tech.libeufin.util
 import java.time.*
 import java.time.format.DateTimeFormatter
 
+private var LIBEUFIN_CLOCK = Clock.system(ZoneId.systemDefault())
+
+fun setClock(rel: Duration) {
+    LIBEUFIN_CLOCK = Clock.offset(LIBEUFIN_CLOCK, rel)
+}
+fun getNow(): ZonedDateTime {
+    return ZonedDateTime.now(LIBEUFIN_CLOCK)
+}
+
 fun LocalDateTime.toZonedString(): String {
     return DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(this.atZone(ZoneId.systemDefault()))
 }
