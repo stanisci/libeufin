@@ -1,7 +1,7 @@
 nexus/libeufin-nexus-dev
 sandbox/libeufin-sandbox-dev
 configure
-build*
+build/
 .gradle
 out
 *.sqlite3
