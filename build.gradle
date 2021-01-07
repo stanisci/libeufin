@@ -3,6 +3,12 @@ plugins {
     id 'idea'
 }
 
+if (!JavaVersion.current().isJava11Compatible()){
+    throw new GradleException(
+        "This build must be run with java 11 " +
+        "or later (your version is java ${JavaVersion.current()})")
+}
+
 allprojects {
     repositories {
         mavenCentral()
