@@ -35,7 +35,7 @@ install-nexus-dev:
 .PHONY: install-cli
 install-cli:
 	@echo Installing CLI.
-	@install -D cli/libeufin-cli $(prefix)/bin
+	@install -D cli/bin/libeufin-cli $(prefix)/bin
 
 .PHONY: assemble
 assemble:
