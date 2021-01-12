@@ -223,6 +223,7 @@ fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: Strin
             (NexusBankMessagesTable.bankConnection eq conn.id) and
                     (NexusBankMessagesTable.id greater acct.highestSeenBankMessageId)
         }.orderBy(Pair(NexusBankMessagesTable.id, SortOrder.ASC)).forEach {
+            logger.debug("Unseen Camt, account: ${bankAccountId}, connection: ${conn.id}, msgId: ${it.messageId}")
             totalNew++
             val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
             if (!processCamtMessage(bankAccountId, doc, it.code)) {
@@ -279,11 +280,7 @@ fun addPaymentInitiation(paymentData: Pain001Data, debitorAccount: NexusBankAcco
     }
 }
 
-suspend fun fetchBankAccountTransactions(
-    client: HttpClient,
-    fetchSpec: FetchSpecJson,
-    accountId: String
-): Int {
+suspend fun fetchBankAccountTransactions(client: HttpClient, fetchSpec: FetchSpecJson, accountId: String): Int {
     val res = transaction {
         val acct = NexusBankAccountEntity.findById(accountId)
         if (acct == null) {

@@ -218,11 +218,11 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
     val zonedDateTime = now.toZonedString()
     return constructXml(indent = true) {
         root("Document") {
-            attribute("xmlns", "urn:iso:std:iso:20022:tech:xsd:camt.053.001.02")
+            attribute("xmlns", "urn:iso:std:iso:20022:tech:xsd:camt.0${type}.001.02")
             attribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
             attribute(
                 "xsi:schemaLocation",
-                "urn:iso:std:iso:20022:tech:xsd:camt.053.001.02 camt.053.001.02.xsd"
+                "urn:iso:std:iso:20022:tech:xsd:camt.0${type}.001.02 camt.0${type}.001.02.xsd"
             )
             element("BkToCstmrStmt") {
                 element("GrpHdr") {

@@ -124,7 +124,7 @@ def teardown_function():
     dropSandboxTables(DB)
     dropNexusTables(DB)
 
-def test_env():
+def test_env(make_crdt_payment):
     print("Nexus and Sandbox are up and running!\n")
     print(f"Nexus URL: {NEXUS_URL}")
     print(f"Sandbox URL: {SANDBOX_URL}")
