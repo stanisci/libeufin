@@ -124,7 +124,7 @@ def teardown_function():
     dropSandboxTables(DB)
     dropNexusTables(DB)
 
-def test_env(make_crdt_payment):
+def test_env(make_crdt_payment, make_taler_facade):
     print("Nexus and Sandbox are up and running!\n")
     print(f"Nexus URL: {NEXUS_URL}")
     print(f"Sandbox URL: {SANDBOX_URL}")
@@ -332,7 +332,7 @@ def make_taler_facade():
 def test_taler_facade_config(make_taler_facade):
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/config",
+            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/config",
             auth=PERSONA.nexus.auth
         )
     )
@@ -344,7 +344,7 @@ def test_taler_facade_config(make_taler_facade):
 
 def test_taler_facade_incoming(make_taler_facade):
     resp = assertResponse(post(
-        f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/admin/add-incoming",
+        f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/admin/add-incoming",
         json=dict(
             amount="EUR:1",
             reserve_pub="1BCZ7KA333E3YJBFWT4J173M3E713YGFFGD856KPSGZN1N8ZKZR0",
@@ -363,7 +363,7 @@ def test_taler_facade_incoming(make_taler_facade):
             PERSONA.nexus.base_url,
             "facades",
             PERSONA.nexus.taler_facade_name,
-            "taler/history/incoming?delta=5"]),
+            "taler-wire-gateway/history/incoming?delta=5"]),
         auth=PERSONA.nexus.auth
     ))
     assert len(resp.json().get("incoming_transactions")) == 1
@@ -371,7 +371,7 @@ def test_taler_facade_incoming(make_taler_facade):
 def test_taler_facade_outgoing(make_taler_facade):
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/transfer",
+            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/transfer",
             json=dict(
                 request_uid="0",
                 amount="EUR:1",
@@ -398,7 +398,7 @@ def test_taler_facade_outgoing(make_taler_facade):
 
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler/history/outgoing?delta=5",
+            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/history/outgoing?delta=5",
             auth=PERSONA.nexus.auth
         )
     )

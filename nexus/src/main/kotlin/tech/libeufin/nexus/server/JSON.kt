@@ -319,6 +319,12 @@ data class BankMessageInfo(
     val length: Long
 )
 
+data class FacadeShowInfo(
+    val name: String,
+    val type: String,
+    val baseUrl: String
+)
+
 data class FacadeInfo(
     val name: String,
     val type: String,

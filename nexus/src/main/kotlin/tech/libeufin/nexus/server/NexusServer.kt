@@ -854,6 +854,26 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 call.respondBytes(ret.msgContent, ContentType("application", "xml"))
             }
 
+            get("/facades") {
+                val ret = object { val facades = mutableListOf<FacadeShowInfo>() }
+                transaction {
+                    val user = authenticateRequest(call.request)
+                    FacadeEntity.find {
+                        FacadesTable.creator eq user.id
+                    }.forEach {
+                        ret.facades.add(
+                            FacadeShowInfo(
+                                name = it.id.value,
+                                type = it.type,
+                                baseUrl = "http://${host}/facades/${it.id.value}/${it.type}/"
+                            )
+                        )
+                    }
+                }
+                call.respond(ret)
+                return@get
+            }
+
             post("/facades") {
                 val body = call.receive<FacadeInfo>()
                 if (body.type != "taler-wire-gateway") throw NexusError(
@@ -928,7 +948,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     call.respond(object {})
                 }
             }
-            route("/facades/{fcid}/taler") {
+            route("/facades/{fcid}/taler-wire-gateway") {
                 talerFacadeRoutes(this, client)
             }
 
