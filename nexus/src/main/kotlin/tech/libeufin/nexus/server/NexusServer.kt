@@ -650,12 +650,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         null
                     )
                 }
-                fetchBankAccountTransactions(
-                    client,
-                    fetchSpec,
-                    accountid
-                )
-                call.respond(object {})
+                val newMessages = fetchBankAccountTransactions(client, fetchSpec, accountid)
+                call.respond(object {val newMessages = newMessages})
                 return@post
             }
 

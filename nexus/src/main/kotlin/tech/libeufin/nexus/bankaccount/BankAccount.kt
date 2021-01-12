@@ -207,7 +207,8 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
  * Create new transactions for an account based on bank messages it
  * did not see before.
  */
-fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: String) {
+fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: String): Int {
+    var totalNew = 0
     transaction {
         val conn = NexusBankConnectionEntity.findById(bankConnectionId)
         if (conn == null) {
@@ -222,6 +223,7 @@ fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: Strin
             (NexusBankMessagesTable.bankConnection eq conn.id) and
                     (NexusBankMessagesTable.id greater acct.highestSeenBankMessageId)
         }.orderBy(Pair(NexusBankMessagesTable.id, SortOrder.ASC)).forEach {
+            totalNew++
             val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
             if (!processCamtMessage(bankAccountId, doc, it.code)) {
                 it.errors = true
@@ -231,6 +233,7 @@ fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: Strin
         }
         acct.highestSeenBankMessageId = lastId
     }
+    return totalNew
 }
 
 /**
@@ -280,7 +283,7 @@ suspend fun fetchBankAccountTransactions(
     client: HttpClient,
     fetchSpec: FetchSpecJson,
     accountId: String
-) {
+): Int {
     val res = transaction {
         val acct = NexusBankAccountEntity.findById(accountId)
         if (acct == null) {
@@ -315,8 +318,9 @@ suspend fun fetchBankAccountTransactions(
             "Connection type '${res.connectionType}' not implemented"
         )
     }
-    ingestBankMessagesIntoAccount(res.connectionName, accountId)
+    val newMessages = ingestBankMessagesIntoAccount(res.connectionName, accountId)
     ingestTalerTransactions()
+    return newMessages
 }
 
 fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexusBankAccountId: String) {
