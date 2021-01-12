@@ -23,3 +23,12 @@ Launching LibEuFin
 Launch Nexus:
 
 $ libeufin-nexus serve --with-db=jdbc:postgres://localhost:5433?user=foo&password=bar
+
+Exporting a dist-file
+=====================
+
+$ ./bootstrap
+$ ./configure # prefix not relevant for dist.
+$ make dist
+
+The Zip file should be contained into the build/distributions/ folder.
