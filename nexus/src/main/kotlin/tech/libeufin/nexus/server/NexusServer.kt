@@ -209,14 +209,14 @@ fun requireBankConnection(call: ApplicationCall, parameterKey: String): NexusBan
     return requireBankConnectionInternal(name)
 }
 
-fun serverMain(dbName: String, host: String) {
+fun serverMain(dbName: String, host: String, port: Int) {
     execThrowableOrTerminate {
         dbCreateTables(dbName)
     }
     val client = HttpClient {
         expectSuccess = false // this way, it does not throw exceptions on != 200 responses.
     }
-    val server = embeddedServer(Netty, port = 5001, host = host) {
+    val server = embeddedServer(Netty, port = port, host = host) {
         install(CallLogging) {
             this.level = Level.DEBUG
             this.logger = tech.libeufin.nexus.logger

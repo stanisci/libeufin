@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.server.serverMain
 import tech.libeufin.util.CryptoUtil.hashpw
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import tech.libeufin.nexus.iso20022.parseCamtMessage
 import tech.libeufin.util.DEFAULT_DB_CONNECTION
@@ -55,10 +56,11 @@ class Serve : CliktCommand("Run nexus HTTP server") {
     }
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     private val host by option().default("127.0.0.1")
+    private val port by option().int().default(5001)
     private val logLevel by option()
     override fun run() {
         setLogLevel(logLevel)
-        serverMain(dbConnString, host)
+        serverMain(dbConnString, host, port)
     }
 }
 
