@@ -82,7 +82,6 @@ def export_backup(obj, connection_name, passphrase, output_file):
 
     print("Backup stored in {}".format(output_file))
 
-
 @connections.command(help="delete bank connection")
 @click.argument("connection-name")
 @click.pass_obj
@@ -236,7 +235,7 @@ def list_offered_bank_accounts(obj, connection_name):
     required=True
 )
 @click.option(
-    "--task-param-rangeType",
+    "--task-param-range-type",
     help="Only needed for 'fetch'.  (FIXME: link to documentation here!)",
     required=False
 )
@@ -248,7 +247,7 @@ def list_offered_bank_accounts(obj, connection_name):
 @click.pass_obj
 def task_schedule(
         obj, account_name, task_name, task_cronspec,
-        task_type, task_param_rangetype, task_param_level):
+        task_type, task_param_range_type, task_param_level):
 
     url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
     body = dict(
@@ -256,11 +255,11 @@ def task_schedule(
         cronspec=task_cronspec,
         type=task_type
     )
-    if task_type == "fetch" and not (task_param_rangetype or task_param_level):
-        print("'fetch' type requires --task-param-rangeType and --task-param-level")
+    if task_type == "fetch" and not (task_param_range_type or task_param_level):
+        print("'fetch' type requires --task-param-range-type and --task-param-level")
         return
 
-    body.update(dict(params=dict(rangeType=task_param_rangetype, level=task_param_level)))
+    body.update(dict(params=dict(rangeType=task_param_range_type, level=task_param_level)))
     try:
         resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
@@ -363,14 +362,20 @@ def submit_payment(obj, account_name, payment_uuid):
     print(resp.content.decode("utf-8"))
 
 @accounts.command(help="fetch transactions from the bank")
+@click.option("--range-type", default="all", help="Admitted values: all, latest, previous-days, since-last")
+@click.option("--level", default="all", help="Admitted values: report, statement, all")
 @click.argument("account-name")
 @click.pass_obj
-def fetch_transactions(obj, account_name):
+def fetch_transactions(obj, account_name, range_type, level):
     url = urljoin(
         obj.nexus_base_url, "/bank-accounts/{}/fetch-transactions".format(account_name)
     )
     try:
-        resp = post(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = post(
+            url,
+            json=dict(rangeType=range_type, level=level),
+            auth = auth.HTTPBasicAuth(obj.username, obj.password)
+        )
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
