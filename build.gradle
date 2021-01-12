@@ -22,10 +22,15 @@ idea {
     }
 }
 
+setVersion("0.0")
+
 task dist(type: Zip) {
     evaluationDependsOn("nexus")
+    evaluationDependsOn("sandbox")
+    def topDir = "${getRootProject().name}-${getRootProject().version}"
+    archiveFileName = "${topDir}.zip"
     subprojects.each {
-        if (it.name == "nexus") {
+        if (it.name == "nexus" || it.name == "sandbox") {
             Task t = it.tasks.getByName("installShadowDist")
             dependsOn(t)
         }
@@ -34,7 +39,12 @@ task dist(type: Zip) {
         include("**/libeufin-nexus")
         include("**/*.jar")
     }
+    from("sandbox/build/install/sandbox-shadow") {
+        include("**/libeufin-sandbox")
+        include("**/*.jar")
+    }
     from ("cli") {
         include("**/libeufin-cli")
     }
+    into(topDir)
 }
