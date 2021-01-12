@@ -61,6 +61,7 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import io.ktor.request.*
 import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
@@ -116,10 +117,11 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
     }
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     private val logLevel by option()
+    private val port by option().int().default(5000)
     override fun run() {
         LOGGER = LoggerFactory.getLogger("tech.libeufin.sandbox")
         setLogLevel(logLevel)
-        serverMain(dbConnString)
+        serverMain(dbConnString, port)
     }
 }
 
@@ -173,9 +175,9 @@ fun main(args: Array<String>) {
         .main(args)
 }
 
-fun serverMain(dbName: String) {
+fun serverMain(dbName: String, port: Int) {
     execThrowableOrTerminate { dbCreateTables(dbName) }
-    val server = embeddedServer(Netty, port = 5000) {
+    val server = embeddedServer(Netty, port = port) {
         install(CallLogging) {
             this.level = Level.DEBUG
             this.logger = LOGGER
