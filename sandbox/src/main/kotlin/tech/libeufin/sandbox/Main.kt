@@ -389,33 +389,6 @@ fun serverMain(dbName: String, port: Int) {
             }
             /**
              * Creates a new EBICS host.
-             *
-             * FIXME: This endpoint is deprecated.  /hosts should be used instead.
-             */
-            post("/admin/ebics/host") {
-                val req = call.receive<EbicsHostCreateRequest>()
-                val pairA = CryptoUtil.generateRsaKeyPair(2048)
-                val pairB = CryptoUtil.generateRsaKeyPair(2048)
-                val pairC = CryptoUtil.generateRsaKeyPair(2048)
-                transaction {
-                    EbicsHostEntity.new {
-                        this.ebicsVersion = req.ebicsVersion
-                        this.hostId = req.hostID
-                        this.authenticationPrivateKey = ExposedBlob(pairA.private.encoded)
-                        this.encryptionPrivateKey = ExposedBlob(pairB.private.encoded)
-                        this.signaturePrivateKey = ExposedBlob(pairC.private.encoded)
-                    }
-                }
-                call.respondText(
-                    "Host '${req.hostID}' created.",
-                    ContentType.Text.Plain,
-                    HttpStatusCode.OK
-                )
-                return@post
-            }
-
-            /**
-             * Creates a new EBICS host.
              */
             post("/admin/ebics/hosts") {
                 val req = call.receive<EbicsHostCreateRequest>()

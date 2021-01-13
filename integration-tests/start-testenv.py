@@ -99,25 +99,25 @@ startSandbox()
 # 0.a Create EBICS hosts
 assertResponse(
     post(
-        "http://localhost:5000/admin/ebics/host",
+        "http://localhost:5000/admin/ebics/hosts",
         json=dict(hostID=BC1_HOST_ID, ebicsVersion=EBICS_VERSION),
     )
 )
 assertResponse(
     post(
-        "http://localhost:5000/admin/ebics/host",
+        "http://localhost:5000/admin/ebics/hosts",
         json=dict(hostID=BC2_HOST_ID, ebicsVersion=EBICS_VERSION),
     )
 )
 assertResponse(
     post(
-        "http://localhost:5000/admin/ebics/host",
+        "http://localhost:5000/admin/ebics/hosts",
         json=dict(hostID=BC3_HOST_ID, ebicsVersion=EBICS_VERSION),
     )
 )
 assertResponse(
     post(
-        "http://localhost:5000/admin/ebics/host",
+        "http://localhost:5000/admin/ebics/hosts",
         json=dict(hostID=BC4_HOST_ID, ebicsVersion=EBICS_VERSION),
     )
 )

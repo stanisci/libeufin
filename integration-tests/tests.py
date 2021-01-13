@@ -35,7 +35,7 @@ def prepareSandbox():
     # make ebics host at sandbox
     assertResponse(
         post(
-            f"{PERSONA.banking.bank_base_url}/admin/ebics/host",
+            f"{PERSONA.banking.bank_base_url}/admin/ebics/hosts",
             json=dict(hostID=PERSONA.ebics.host, ebicsVersion=PERSONA.ebics.version),
         )
     )
