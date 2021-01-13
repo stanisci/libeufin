@@ -39,7 +39,7 @@ def cli():
 
 @cli.group()
 @click.pass_context
-def taler_facade(ctx):
+def facades(ctx):
     ctx.obj = NexusAccess(*fetch_env())
     pass
 
@@ -393,15 +393,20 @@ def transactions(obj, account_name):
         exit(1)
     print(resp.content.decode("utf-8"))
 
-@taler_facade.command(help="List active facades in the Nexus")
+@facades.command(help="List active facades in the Nexus")
 @click.argument("connection-name")
-@click.argument("account-name")
 @click.pass_obj
-def list_facades(obj, connection_name, account_name):
-    pass
+def list_facades(obj, connection_name):
+    url = urljoin(obj.nexus_base_url, "/facades")
+    try:
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception as e:
+        print(f"Could not reach nexus (at {obj.nexus_base_url}): {e}")
+        exit(1)
+    print(resp.content.decode("utf-8"))
 
-@taler_facade.command(help="create a new Taler facade")
-@click.option("--facade-name", help="Name of the Taler facade", required=True)
+@facades.command(help="create a new (Taler) facade")
+@click.option("--facade-name", help="Name of the facade", required=True)
 @click.argument("connection-name")
 @click.argument("account-name")
 @click.pass_obj
