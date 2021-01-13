@@ -42,6 +42,8 @@ import java.io.File
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
+const val DEFAULT_DB_CONNECTION = "jdbc:sqlite:/tmp/libeufin-nexus-db"
+
 class NexusCommand : CliktCommand() {
     init {
         // FIXME: Obtain actual version number!

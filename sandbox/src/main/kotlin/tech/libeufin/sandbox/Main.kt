@@ -79,6 +79,8 @@ import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import kotlin.random.Random
 
+const val DEFAULT_DB_CONNECTION = "jdbc:sqlite:/tmp/libeufin-sandbox-db"
+
 class CustomerNotFound(id: String?) : Exception("Customer ${id} not found")
 class BadInputData(inputData: String?) : Exception("Customer provided invalid input data: ${inputData}")
 class UnacceptableFractional(badNumber: BigDecimal) : Exception(
