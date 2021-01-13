@@ -22,7 +22,7 @@ idea {
     }
 }
 
-setVersion("0.0")
+setVersion("0.0.1-dev.1")
 
 task dist(type: Zip) {
     evaluationDependsOn("nexus")
