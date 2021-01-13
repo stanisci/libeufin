@@ -69,7 +69,8 @@ data class BankAccountRequest(
     val iban: String,
     val bic: String,
     val name: String,
-    val label: String
+    val label: String,
+    val currency: String
 )
 
 data class DateRange(

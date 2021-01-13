@@ -77,6 +77,7 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.direction
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
+import java.util.*
 import kotlin.random.Random
 
 const val DEFAULT_DB_CONNECTION = "jdbc:sqlite:/tmp/libeufin-sandbox.sqlite3"
@@ -86,6 +87,7 @@ class BadInputData(inputData: String?) : Exception("Customer provided invalid in
 class UnacceptableFractional(badNumber: BigDecimal) : Exception(
     "Unacceptable fractional part ${badNumber}"
 )
+
 lateinit var LOGGER: Logger
 
 data class SandboxError(val statusCode: HttpStatusCode, val reason: String) : Exception()
@@ -102,6 +104,7 @@ class ResetTables : CliktCommand("Drop all the tables from the database") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
+
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     override fun run() {
         execThrowableOrTerminate {
@@ -117,6 +120,7 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
+
     private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
     private val logLevel by option()
     private val port by option().int().default(5000)
@@ -160,6 +164,17 @@ data class EbicsHostPublicInfo(
     val authenticationPublicKey: RSAPublicKey
 )
 
+data class BankAccountInfo(
+    val label: String,
+    val name: String,
+    val iban: String,
+    val bic: String
+)
+
+data class BankAccountsListReponse(
+    val accounts: List<BankAccountInfo>
+)
+
 inline fun <reified T> Document.toObject(): T {
     val jc = JAXBContext.newInstance(T::class.java)
     val m = jc.createUnmarshaller()
@@ -169,6 +184,12 @@ inline fun <reified T> Document.toObject(): T {
 fun BigDecimal.signToString(): String {
     return if (this.signum() > 0) "+" else ""
     // minus sign is added by default already.
+}
+
+fun ensureNonNull(param: String?): String {
+    return param ?: throw SandboxError(
+        HttpStatusCode.BadRequest, "Bad ID given: $param"
+    )
 }
 
 fun main(args: Array<String>) {
@@ -259,6 +280,14 @@ fun serverMain(dbName: String, port: Int) {
             get("/") {
                 call.respondText("Hello, this is Sandbox\n", ContentType.Text.Plain)
             }
+            get("/config") {
+                call.respond(object {
+                    val name = "libeufin-sandbox"
+
+                    // FIXME: use actual version here!
+                    val version = "0.0.0-dev.0"
+                })
+            }
             // only reason for a post is to hide the iban (to some degree.)
             post("/admin/payments/camt") {
                 val body = call.receive<CamtParams>()
@@ -268,6 +297,7 @@ fun serverMain(dbName: String, port: Int) {
                 call.respondText(camt53, ContentType.Text.Xml, HttpStatusCode.OK)
                 return@post
             }
+            // FIXME:  This returns *all* payments for all accounts.  Is that really useful/required?
             get("/admin/payments") {
                 val ret = PaymentsResponse()
                 transaction {
@@ -342,10 +372,113 @@ fun serverMain(dbName: String, port: Int) {
                         bic = body.bic
                         name = body.name
                         label = body.label
+                        currency = body.currency.toUpperCase(Locale.ROOT)
                     }
                 }
                 call.respondText("Bank account created")
                 return@post
+            }
+            get("/admin/bank-accounts") {
+                val accounts = mutableListOf<BankAccountInfo>()
+                val accountsResp = BankAccountsListReponse(
+                    accounts = accounts
+                )
+                transaction {
+                    BankAccountEntity.all().forEach {
+                        accounts.add(
+                            BankAccountInfo(
+                                label = it.label,
+                                name = it.name,
+                                bic = it.bic,
+                                iban = it.iban
+                            )
+                        )
+                    }
+                }
+                call.respond(accounts)
+            }
+            get("/admin/bank-accounts/{label}/transactions") {
+                val ret = PaymentsResponse()
+                transaction {
+                    val accountLabel = ensureNonNull(call.parameters["label"])
+                    transaction {
+                        val account = getBankAccountFromLabel(accountLabel)
+                        BankAccountTransactionsTable.select { BankAccountTransactionsTable.account eq account.id }
+                            .forEach {
+                                ret.payments.add(
+                                    RawPayment(
+                                        creditorIban = it[creditorIban],
+                                        debitorIban = it[debitorIban],
+                                        subject = it[BankAccountTransactionsTable.subject],
+                                        date = it[date].toHttpDateString(),
+                                        amount = it[amount],
+                                        creditorBic = it[creditorBic],
+                                        creditorName = it[creditorName],
+                                        debitorBic = it[debitorBic],
+                                        debitorName = it[debitorName],
+                                        currency = it[currency],
+                                        direction = it[direction]
+                                    )
+                                )
+                            }
+                    }
+                }
+                call.respond(
+                    object {
+                        val payments = ret
+                    }
+                )
+            }
+            post("/admin/bank-accounts/{label}/generate-transactions") {
+                transaction {
+                    val accountLabel = ensureNonNull(call.parameters["label"])
+                    val account = getBankAccountFromLabel(accountLabel)
+
+                    run {
+                        val random = Random.nextLong()
+                        val amount = Random.nextLong(5, 25)
+
+                        BankAccountTransactionsTable.insert {
+                            it[creditorIban] = account.iban
+                            it[creditorBic] = account.bic
+                            it[creditorName] = account.name
+                            it[debitorIban] = "DE64500105178797276788"
+                            it[debitorBic] = "FOBADEM001"
+                            it[debitorName] = "Max Mustermann"
+                            it[subject] = "sample transaction $random"
+                            it[BankAccountTransactionsTable.amount] = amount.toString()
+                            it[currency] = account.currency
+                            it[date] = Instant.now().toEpochMilli()
+                            it[pmtInfId] = random.toString()
+                            it[msgId] = random.toString()
+                            it[BankAccountTransactionsTable.account] = account.id
+                            it[direction] = "CRDT"
+                        }
+                    }
+
+                    run {
+                        val random = Random.nextLong()
+                        val amount = Random.nextLong(5, 25)
+
+                        BankAccountTransactionsTable.insert {
+                            it[debitorIban] = account.iban
+                            it[debitorBic] = account.bic
+                            it[debitorName] = account.name
+                            it[creditorIban] = "DE64500105178797276788"
+                            it[creditorBic] = "FOBADEM001"
+                            it[creditorName] = "Max Mustermann"
+                            it[subject] = "sample transaction $random"
+                            it[BankAccountTransactionsTable.amount] = amount.toString()
+                            it[currency] = account.currency
+                            it[date] = Instant.now().toEpochMilli()
+                            it[pmtInfId] = random.toString()
+                            it[msgId] = random.toString()
+                            it[BankAccountTransactionsTable.account] = account.id
+                            it[direction] = "DBIT"
+                        }
+                    }
+                }
+                call.respond(object {})
             }
             /**
              * Creates a new Ebics subscriber.
@@ -372,7 +505,7 @@ fun serverMain(dbName: String, port: Int) {
              * Shows all the Ebics subscribers' details.
              */
             get("/admin/ebics/subscribers") {
-                var ret = AdminGetSubscribers()
+                val ret = AdminGetSubscribers()
                 transaction {
                     EbicsSubscriberEntity.all().forEach {
                         ret.subscribers.add(

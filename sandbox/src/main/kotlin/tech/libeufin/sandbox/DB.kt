@@ -273,8 +273,9 @@ object BankAccountsTable : IntIdTable() {
     val iban = text("iban")
     val bic = text("bic")
     val name = text("name")
-    val label = text("label")
+    val label = text("label").uniqueIndex("accountLabelIndex")
     val subscriber = reference("subscriber", EbicsSubscribersTable)
+    val currency = text("currency")
 }
 
 class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -285,6 +286,7 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     var name by BankAccountsTable.name
     var label by BankAccountsTable.label
     var subscriber by EbicsSubscriberEntity referencedOn BankAccountsTable.subscriber
+    var currency by BankAccountsTable.currency
 }
 
 object BankAccountStatementsTable : IntIdTable() {

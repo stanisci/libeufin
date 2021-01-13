@@ -334,9 +334,9 @@ def show(obj):
     print(resp.content.decode("utf-8"))
 
 @accounts.command(help="prepare payment debiting 'account-name'")
-@click.option("--credit-iban", help="IBAN that will receive the payment", required=True)
-@click.option("--credit-bic", help="BIC that will receive the payment", required=False)
-@click.option("--credit-name", help="Legal name that will receive the payment", required=True)
+@click.option("--creditor-iban", help="IBAN that will receive the payment", required=True)
+@click.option("--creditor-bic", help="BIC that will receive the payment", required=False)
+@click.option("--creditor-name", help="Legal name that will receive the payment", required=True)
 @click.option("--payment-amount", help="Amount to be paid (<currency>:X.Y)", required=True)
 @click.option("--payment-subject", help="Subject of this payment", required=True)
 @click.argument("account-name")
@@ -448,18 +448,30 @@ def new_facade(obj, facade_name, connection_name, account_name):
     print(resp.content.decode("utf-8"))
 
 
-
 @sandbox.group("ebicshost", help="manage EBICS hosts")
 @click.pass_context
 def sandbox_ebicshost(ctx):
     pass
+
+@sandbox.command("check", help="check sandbox status")
+@click.pass_obj
+def check_sandbox_status(obj):
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin(sandbox_base_url, "/config")
+    try:
+        resp = get(url)
+    except Exception:
+        print("Could not reach sandbox")
+        exit(1)
+    print(resp.content.decode("utf-8"))
+
 
 @sandbox_ebicshost.command("create", help="Create an EBICS host")
 @click.option("--host-id", help="EBICS host ID", required=True, prompt=True)
 @click.pass_obj
 def make_ebics_host(obj, host_id):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, "/admin/ebics/host")
+    url = urljoin(sandbox_base_url, "/admin/ebics/hosts")
     try:
         resp = post(url, json=dict(hostID=host_id, ebicsVersion="2.5"))
     except Exception:
@@ -517,6 +529,7 @@ def sandbox_ebicsbankaccount(ctx):
     pass
 
 @sandbox_ebicsbankaccount.command("create", help="Create a bank account associated to an EBICS subscriber.")
+@click.option("--currency", help="currency", prompt=True)
 @click.option("--iban", help="IBAN", required=True)
 @click.option("--bic", help="BIC", required=True)
 @click.option("--person-name", help="bank account owner name", required=True)
@@ -525,11 +538,12 @@ def sandbox_ebicsbankaccount(ctx):
 @click.option("--ebics-host-id", help="host ID of the Ebics subscriber", required=True)
 @click.option("--ebics-partner-id", help="partner ID of the Ebics subscriber", required=True)
 @click.pass_obj
-def associate_bank_account(obj, iban, bic, person_name, account_name,
+def associate_bank_account(obj, currency, iban, bic, person_name, account_name,
                            ebics_user_id, ebics_host_id, ebics_partner_id):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/ebics/bank-accounts")
     body = dict(
+        currency=currency,
         subscriber=dict(userID=ebics_user_id, partnerID=ebics_partner_id, hostID=ebics_host_id),
         iban=iban, bic=bic, name=person_name, label=account_name
     )
@@ -545,6 +559,45 @@ def associate_bank_account(obj, iban, bic, person_name, account_name,
 @click.pass_context
 def sandbox_bankaccount(ctx):
     pass
+
+@sandbox_bankaccount.command("list", help="List accounts")
+@click.pass_obj
+def bankaccount_list(obj):
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin(sandbox_base_url, f"/admin/bank-accounts")
+    try:
+        resp = get(url)
+    except Exception:
+        print("Could not reach sandbox")
+        exit(1)
+    print(resp.content.decode("utf-8"))
+
+@sandbox_bankaccount.command("transactions", help="List transactions")
+@click.argument("account-label")
+@click.pass_obj
+def bankaccount_list(obj, account_label):
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin(sandbox_base_url, f"/admin/bank-accounts/{account_label}/transactions")
+    try:
+        resp = get(url)
+    except Exception:
+        print("Could not reach sandbox")
+        exit(1)
+    print(resp.content.decode("utf-8"))
+
+@sandbox_bankaccount.command("generate-transactions", help="Generate test transactions")
+@click.argument("account-label")
+@click.pass_obj
+def bankaccount_generate_transactions(obj, account_label):
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin(sandbox_base_url, f"/admin/bank-accounts/{account_label}/generate-transactions")
+    try:
+        resp = post(url)
+    except Exception:
+        print("Could not reach sandbox")
+        exit(1)
+    print(resp.content.decode("utf-8"))
+
 
 @sandbox_bankaccount.command(help="book a payment in the sandbox")
 @click.option("--creditor-iban", help="IBAN receiving the payment", prompt=True)

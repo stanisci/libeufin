@@ -53,6 +53,17 @@ fun getBankAccountFromIban(iban: String): BankAccountEntity {
     )
 }
 
+fun getBankAccountFromLabel(label: String): BankAccountEntity {
+    return transaction {
+        BankAccountEntity.find(
+            BankAccountsTable.label eq label
+        )
+    }.firstOrNull() ?: throw SandboxError(
+        HttpStatusCode.NotFound,
+        "Did not find a bank account for label ${label}"
+    )
+}
+
 fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccountEntity {
     return transaction {
         BankAccountEntity.find(BankAccountsTable.subscriber eq subscriber.id)
