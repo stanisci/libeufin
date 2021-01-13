@@ -3,7 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/build-system/taler-build-scripts" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/parsing-tests" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/parsing-tests/samples" vcs="Git" />
   </component>
 </project>

@@ -35,14 +35,13 @@ import execThrowableOrTerminate
 import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.options.versionOption
 import tech.libeufin.nexus.iso20022.parseCamtMessage
-import tech.libeufin.util.DEFAULT_DB_CONNECTION
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.setLogLevel
 import java.io.File
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
-const val DEFAULT_DB_CONNECTION = "jdbc:sqlite:/tmp/libeufin-nexus-db"
+const val DEFAULT_DB_CONNECTION = "jdbc:sqlite:/tmp/libeufin-nexus.sqlite3"
 
 class NexusCommand : CliktCommand() {
     init {
