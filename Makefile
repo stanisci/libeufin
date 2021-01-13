@@ -2,7 +2,7 @@ include build-system/config.mk
 
 escaped_pwd = $(shell pwd | sed 's/\//\\\//g')
 
-install: install-nexus install-cli
+install: install-nexus install-sandbox install-cli
 install-dev: install-nexus-dev install-sandbox-dev install-cli
 
 .PHONY: dist
