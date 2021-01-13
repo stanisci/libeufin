@@ -19,10 +19,6 @@
 
 package tech.libeufin.nexus
 
-import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.ProgramResult
-import com.github.ajalt.clikt.core.context
-import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.default
@@ -36,6 +32,8 @@ import tech.libeufin.util.CryptoUtil.hashpw
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
+import com.github.ajalt.clikt.core.*
+import com.github.ajalt.clikt.parameters.options.versionOption
 import tech.libeufin.nexus.iso20022.parseCamtMessage
 import tech.libeufin.util.DEFAULT_DB_CONNECTION
 import tech.libeufin.util.XMLUtil
@@ -45,6 +43,10 @@ import java.io.File
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
 class NexusCommand : CliktCommand() {
+    init {
+        // FIXME: Obtain actual version number!
+        versionOption("DEVELOPMENT")
+    }
     override fun run() = Unit
 }
 
