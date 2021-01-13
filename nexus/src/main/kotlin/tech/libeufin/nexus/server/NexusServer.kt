@@ -69,6 +69,25 @@ import java.net.URLEncoder
 import java.nio.file.Paths
 import java.util.zip.InflaterInputStream
 
+// Return facade state depending on the type.
+fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
+    return transaction {
+        when (type) {
+            "taler-wire-gateway" -> {
+                val state = TalerFacadeStateEntity.find {
+                    TalerFacadeStateTable.facade eq facade.id
+                }.firstOrNull()
+                if (state == null) throw NexusError(HttpStatusCode.NotFound,"State of facade ${facade.id} not found")
+                val node = jacksonObjectMapper().createObjectNode()
+                node.put("bankConnection", state.bankConnection)
+                node.put("bankAccount", state.bankAccount)
+                node
+            }
+            else -> throw NexusError(HttpStatusCode.NotFound,"Facade type ${type} not supported")
+        }
+    }
+}
+
 
 fun ensureNonNull(param: String?): String {
     return param ?: throw NexusError(
@@ -854,6 +873,23 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 call.respondBytes(ret.msgContent, ContentType("application", "xml"))
             }
 
+            get("/facades/{fcid}") {
+                val fcid = ensureNonNull(call.parameters["fcid"])
+                val ret = transaction {
+                    val f = FacadeEntity.findById(fcid) ?: throw NexusError(
+                        HttpStatusCode.NotFound, "Facade ${fcid} does not exist"
+                    )
+                    FacadeShowInfo(
+                        name = f.id.value,
+                        type = f.type,
+                        baseUrl = "http://${host}/facades/${f.id.value}/${f.type}/",
+                        config = getFacadeState(f.type, f)
+                    )
+                }
+                call.respond(ret)
+                return@get
+            }
+
             get("/facades") {
                 val ret = object { val facades = mutableListOf<FacadeShowInfo>() }
                 transaction {
@@ -865,7 +901,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
                             FacadeShowInfo(
                                 name = it.id.value,
                                 type = it.type,
-                                baseUrl = "http://${host}/facades/${it.id.value}/${it.type}/"
+                                baseUrl = "http://${host}/facades/${it.id.value}/${it.type}/",
+                                config = getFacadeState(it.type, it)
                             )
                         )
                     }

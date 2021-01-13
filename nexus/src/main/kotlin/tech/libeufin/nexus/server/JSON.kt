@@ -322,7 +322,8 @@ data class BankMessageInfo(
 data class FacadeShowInfo(
     val name: String,
     val type: String,
-    val baseUrl: String
+    val baseUrl: String,
+    val config: JsonNode
 )
 
 data class FacadeInfo(
@@ -363,7 +364,6 @@ data class AccountTask(
     val nextScheduledExecutionSec: Long?, // human-readable time (= Epoch when this value doesn't exist in DB)
     val prevScheduledExecutionSec: Long? // human-readable time (= Epoch when this value doesn't exist in DB)
 )
-
 
 data class CreateAccountTaskRequest(
     val name: String,
