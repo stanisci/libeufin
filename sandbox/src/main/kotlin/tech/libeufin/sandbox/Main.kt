@@ -332,7 +332,7 @@ fun serverMain(dbName: String, port: Int) {
              */
             post("/admin/payments") {
                 val body = call.receive<RawPayment>()
-                val random = Random.nextLong()
+                val random = Random.nextLong(0, Long.MAX_VALUE)
                 transaction {
                     val localIban = if (body.direction == "DBIT") body.debitorIban else body.creditorIban
                     BankAccountTransactionsTable.insert {
@@ -435,7 +435,7 @@ fun serverMain(dbName: String, port: Int) {
                     val account = getBankAccountFromLabel(accountLabel)
 
                     run {
-                        val random = Random.nextLong()
+                        val random = Random.nextLong(0, Long.MAX_VALUE)
                         val amount = Random.nextLong(5, 25)
 
                         BankAccountTransactionsTable.insert {
@@ -443,7 +443,7 @@ fun serverMain(dbName: String, port: Int) {
                             it[creditorBic] = account.bic
                             it[creditorName] = account.name
                             it[debitorIban] = "DE64500105178797276788"
-                            it[debitorBic] = "FOBADEM001"
+                            it[debitorBic] = "DEUTDEBB101"
                             it[debitorName] = "Max Mustermann"
                             it[subject] = "sample transaction $random"
                             it[BankAccountTransactionsTable.amount] = amount.toString()
@@ -465,7 +465,7 @@ fun serverMain(dbName: String, port: Int) {
                             it[debitorBic] = account.bic
                             it[debitorName] = account.name
                             it[creditorIban] = "DE64500105178797276788"
-                            it[creditorBic] = "FOBADEM001"
+                            it[creditorBic] = "DEUTDEBB101"
                             it[creditorName] = "Max Mustermann"
                             it[subject] = "sample transaction $random"
                             it[BankAccountTransactionsTable.amount] = amount.toString()

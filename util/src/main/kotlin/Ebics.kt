@@ -25,6 +25,8 @@
 package tech.libeufin.util
 
 import io.ktor.http.HttpStatusCode
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.util.ebics_h004.*
 import tech.libeufin.util.ebics_hev.HEVRequest
 import tech.libeufin.util.ebics_hev.HEVResponse
@@ -38,6 +40,8 @@ import java.util.*
 import java.util.zip.DeflaterInputStream
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
 
 data class EbicsProtocolError(
     val httpStatusCode: HttpStatusCode,

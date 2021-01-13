@@ -32,6 +32,8 @@ import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
 import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
 import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorBic
@@ -61,6 +63,8 @@ import java.util.zip.DeflaterInputStream
 import java.util.zip.InflaterInputStream
 
 val EbicsHostIdAttribute = AttributeKey<String>("RequestedEbicsHostID")
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
 data class PainParseResult(
     val creditorIban: String,
@@ -442,7 +446,6 @@ private fun constructCamtResponse(
     header: EbicsRequest.Header,
     subscriber: EbicsSubscriberEntity
 ): MutableList<String> {
-
     val dateRange = (header.static.orderDetails?.orderParams as EbicsRequest.StandardOrderParams).dateRange
     val (start: LocalDateTime, end: LocalDateTime) = if (dateRange != null) {
         Pair(
@@ -451,7 +454,9 @@ private fun constructCamtResponse(
         )
     } else Pair(parseDashedDate("1970-01-01"), LocalDateTime.now())
     val bankAccount = getBankAccountFromSubscriber(subscriber)
-    return mutableListOf(buildCamtString(type, bankAccount.iban, historyForAccount(bankAccount.iban)))
+    logger.info("getting history for account with iban ${bankAccount.iban}")
+    val history = historyForAccount(bankAccount.iban)
+    return mutableListOf(buildCamtString(type, bankAccount.iban, history))
 }
 
 /**

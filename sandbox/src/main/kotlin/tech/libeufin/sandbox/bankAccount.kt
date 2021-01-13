@@ -3,10 +3,13 @@ package tech.libeufin.sandbox
 import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.util.RawPayment
 import tech.libeufin.util.importDateFromMillis
-import tech.libeufin.util.logger
 import tech.libeufin.util.toDashedDate
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
 fun historyForAccount(iban: String): List<RawPayment> {
     val history = mutableListOf<RawPayment>()

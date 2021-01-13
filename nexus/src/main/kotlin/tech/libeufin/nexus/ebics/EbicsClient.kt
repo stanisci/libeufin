@@ -25,9 +25,13 @@ package tech.libeufin.nexus.ebics
 import io.ktor.client.HttpClient
 import io.ktor.client.request.post
 import io.ktor.http.HttpStatusCode
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.NexusError
 import tech.libeufin.util.*
 import java.util.*
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
 
 private suspend inline fun HttpClient.postToBank(url: String, body: String): String {
     logger.debug("Posting: $body")

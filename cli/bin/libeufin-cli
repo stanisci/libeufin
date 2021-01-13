@@ -11,13 +11,21 @@ from requests import post, get, auth, delete
 from urllib.parse import urljoin
 from getpass import getpass
 
+
 def fetch_env():
     if "--help" in sys.argv:
         return []
     try:
-        nexus_base_url = os.environ["NEXUS_BASE_URL"]
-        nexus_username = os.environ["NEXUS_USERNAME"]
-        nexus_password = os.environ["NEXUS_PASSWORD"]
+        nexus_base_url = os.environ.get("LIBEUFIN_NEXUS_URL")
+        if not nexus_base_url:
+            # compat, should eventually be removed
+            nexus_base_url = os.environ["NEXUS_BASE_URL"]
+        nexus_username = os.environ.get("LIBEUFIN_NEXUS_USERNAME")
+        if not nexus_username:
+            nexus_username = os.environ["NEXUS_USERNAME"]
+        nexus_password = os.environ.get("LIBEUFIN_NEXUS_PASSWORD")
+        if not nexus_password:
+            nexus_password = os.environ["NEXUS_PASSWORD"]
     except KeyError:
         print(
             "Please ensure that NEXUS_BASE_URL,"
@@ -27,15 +35,18 @@ def fetch_env():
         sys.exit(1)
     return nexus_base_url, nexus_username, nexus_password
 
+
 class NexusAccess:
     def __init__(self, nexus_base_url=None, username=None, password=None):
         self.nexus_base_url = nexus_base_url
         self.username = username
         self.password = password
 
+
 @click.group(help="General utility to invoke HTTP REST services offered by Nexus.")
 def cli():
     pass
+
 
 @cli.group()
 @click.pass_context
@@ -43,11 +54,13 @@ def facades(ctx):
     ctx.obj = NexusAccess(*fetch_env())
     pass
 
+
 @cli.group()
 @click.pass_context
 def connections(ctx):
     ctx.obj = NexusAccess(*fetch_env())
     pass
+
 
 @cli.group()
 @click.pass_context
@@ -59,13 +72,17 @@ def accounts(ctx):
 class SandboxContext:
     def __init__(self):
         self.sandbox_base_url = None
+
     def require_sandbox_base_url(self):
         if self.sandbox_base_url:
             return self.sandbox_base_url
         sandbox_base_url = os.environ.get("LIBEUFIN_SANDBOX_URL")
         if not sandbox_base_url:
-            raise click.UsageError("sandbox URL must be given as an argument or in LIBEUFIN_SANDBOX_URL")
+            raise click.UsageError(
+                "sandbox URL must be given as an argument or in LIBEUFIN_SANDBOX_URL"
+            )
         return sandbox_base_url
+
 
 @cli.group()
 @click.option("--sandbox-url", help="URL for the sandbox", required=False)
@@ -74,17 +91,42 @@ def sandbox(ctx, sandbox_url):
     ctx.obj = SandboxContext()
     ctx.obj.sandbox_base_url = sandbox_url
 
+
+@connections.command(help="Get key letter (typically PDF).")
+@click.argument("connection-name")
+@click.argument("output_file")
+@click.pass_obj
+def get_key_letter(obj, connection_name, output_file):
+    url = urljoin(obj.nexus_base_url, f"/bank-connections/{connection_name}/keyletter")
+    try:
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception:
+        print("Could not reach nexus at " + url)
+        exit(1)
+
+    if resp.status_code != 200:
+        print(resp.content.decode("utf-8"))
+        sys.exit(1)
+
+    output = open(output_file, "wb")
+    output.write(resp.content)
+    output.close()
+
+
 @connections.command(help="export backup")
 @click.option("--passphrase", help="Passphrase for locking the backup", required=True)
 @click.option("--output-file", help="Where to store the backup", required=True)
 @click.argument("connection-name")
 @click.pass_obj
 def export_backup(obj, connection_name, passphrase, output_file):
-    url = urljoin(obj.nexus_base_url, "/bank-connections/{}/export-backup".format(connection_name))
+    url = urljoin(
+        obj.nexus_base_url, "/bank-connections/{}/export-backup".format(connection_name)
+    )
     try:
         resp = post(
-            url, json=dict(passphrase=passphrase),
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            url,
+            json=dict(passphrase=passphrase),
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
     except Exception:
         print("Could not reach nexus at " + url)
@@ -96,6 +138,7 @@ def export_backup(obj, connection_name, passphrase, output_file):
 
     print("Backup stored in {}".format(output_file))
 
+
 @connections.command(help="delete bank connection")
 @click.argument("connection-name")
 @click.pass_obj
@@ -106,13 +149,14 @@ def delete_connection(obj, connection_name):
         resp = post(
             url,
             json=dict(bankConnectionId=connection_name),
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
     except Exception:
         print("Could not reach nexus at " + url)
         exit(1)
 
     print(resp.content.decode("utf-8"))
+
 
 @connections.command(help="restore backup")
 @click.option("--backup-file", help="Back file", required=True)
@@ -136,10 +180,9 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
                 name=connection_name,
                 data=backup_json,
                 passphrase=passphrase,
-                source="backup"
+                source="backup",
             ),
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
-
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
     except Exception:
         print("Could not reach nexus at " + url)
@@ -155,14 +198,20 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
 @click.option("--ebics-user-id", help="Ebics user ID", required=True)
 @click.argument("connection-name")
 @click.pass_obj
-def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
-                         ebics_user_id):
+def new_ebics_connection(
+    obj, connection_name, ebics_url, host_id, partner_id, ebics_user_id
+):
     url = urljoin(obj.nexus_base_url, "/bank-connections")
     body = dict(
         name=connection_name,
         source="new",
         type="ebics",
-        data=dict(ebicsURL=ebics_url, hostID=host_id, partnerID=partner_id, userID=ebics_user_id)
+        data=dict(
+            ebicsURL=ebics_url,
+            hostID=host_id,
+            partnerID=partner_id,
+            userID=ebics_user_id,
+        ),
     )
     try:
         resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
@@ -171,73 +220,103 @@ def new_ebics_connection(obj, connection_name, ebics_url, host_id, partner_id,
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @connections.command(help="synchronize the bank connection")
 @click.argument("connection-name")
 @click.pass_obj
 def sync(obj, connection_name):
     url = urljoin(obj.nexus_base_url, f"/bank-connections/{connection_name}/connect")
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = post(
+            url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
     except Exception:
         print(f"Could not reach nexus at {url}")
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @connections.command(help="import one bank account, chosen from the downloaded ones")
-@click.option("--offered-account-id", help="Name of the account to import", required=True)
-@click.option("--nexus-bank-account-id", help="Name to give to the imported account", required=True)
+@click.option(
+    "--offered-account-id", help="Name of the account to import", required=True
+)
+@click.option(
+    "--nexus-bank-account-id",
+    help="Name to give to the imported account",
+    required=True,
+)
 @click.argument("connection-name")
 @click.pass_obj
-def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_account_id):
-    url = urljoin(obj.nexus_base_url, "/bank-connections/{}/import-account".format(connection_name))
+def import_bank_account(
+    obj, connection_name, offered_account_id, nexus_bank_account_id
+):
+    url = urljoin(
+        obj.nexus_base_url,
+        "/bank-connections/{}/import-account".format(connection_name),
+    )
     try:
         resp = post(
             url,
             json=dict(
                 offeredAccountId=offered_account_id,
-                nexusBankAccountId=nexus_bank_account_id
+                nexusBankAccountId=nexus_bank_account_id,
             ),
-            auth = auth.HTTPBasicAuth(obj.username, obj.password)
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
     except Exception as e:
         print(f"Could not reach nexus at {url}: {e}")
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @connections.command(help="download bank accounts in raw format WITHOUT importing them")
 @click.argument("connection-name")
 @click.pass_obj
 def download_bank_accounts(obj, connection_name):
-    url = urljoin(obj.nexus_base_url, "/bank-connections/{}/fetch-accounts".format(connection_name))
+    url = urljoin(
+        obj.nexus_base_url,
+        "/bank-connections/{}/fetch-accounts".format(connection_name),
+    )
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = post(
+            url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
     except Exception:
         print("Could not reach nexus at " + url)
         exit(1)
     print(resp.content.decode("utf-8"))
+
 
 @connections.command(help="list the connections")
 @click.pass_obj
 def list_connections(obj):
     url = urljoin(obj.nexus_base_url, "/bank-connections/")
     try:
-        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = get(
+            url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
     except Exception:
         print("Could not reach nexus at " + url)
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @connections.command(help="list bank accounts hosted at one connection")
 @click.argument("connection-name")
 @click.pass_obj
 def list_offered_bank_accounts(obj, connection_name):
-    url = urljoin(obj.nexus_base_url, "/bank-connections/{}/accounts".format(connection_name))
+    url = urljoin(
+        obj.nexus_base_url, "/bank-connections/{}/accounts".format(connection_name)
+    )
     try:
-        resp = get(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = get(
+            url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
     except Exception:
         print("Could not reach nexus at " + url)
         exit(1)
     print(resp.content.decode("utf-8"))
+
 
 @accounts.command(help="Schedules a new task")
 @click.argument("account-name")
@@ -246,34 +325,38 @@ def list_offered_bank_accounts(obj, connection_name):
 @click.option(
     "--task-type",
     help="'fetch' (downloads transactions histories) or 'submit' (uploads payments instructions)",
-    required=True
+    required=True,
 )
 @click.option(
     "--task-param-range-type",
     help="Only needed for 'fetch'.  (FIXME: link to documentation here!)",
-    required=False
+    required=False,
 )
 @click.option(
     "--task-param-level",
     help="Only needed for 'fetch'.  (FIXME: link to documentation here!)",
-    required=False
+    required=False,
 )
 @click.pass_obj
 def task_schedule(
-        obj, account_name, task_name, task_cronspec,
-        task_type, task_param_range_type, task_param_level):
+    obj,
+    account_name,
+    task_name,
+    task_cronspec,
+    task_type,
+    task_param_range_type,
+    task_param_level,
+):
 
     url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
-    body = dict(
-        name=task_name,
-        cronspec=task_cronspec,
-        type=task_type
-    )
+    body = dict(name=task_name, cronspec=task_cronspec, type=task_type)
     if task_type == "fetch" and not (task_param_range_type or task_param_level):
         print("'fetch' type requires --task-param-range-type and --task-param-level")
         return
 
-    body.update(dict(params=dict(rangeType=task_param_range_type, level=task_param_level)))
+    body.update(
+        dict(params=dict(rangeType=task_param_range_type, level=task_param_level))
+    )
     try:
         resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
@@ -287,22 +370,29 @@ def task_schedule(
 @click.option("--task-name", help="Name of the task", required=True)
 @click.pass_obj
 def task_status(obj, account_name, task_name):
-    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule/{}".format(account_name, task_name))
+    url = urljoin(
+        obj.nexus_base_url,
+        "/bank-accounts/{}/schedule/{}".format(account_name, task_name),
+    )
     try:
-        resp = get(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
     print(resp.content.decode("utf-8"))
+
 
 @accounts.command(help="Deletes one task")
 @click.argument("account-name")
 @click.option("--task-name", help="Name of the task", required=True)
 @click.pass_obj
 def task_delete(obj, account_name, task_name):
-    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule/{}".format(account_name, task_name))
+    url = urljoin(
+        obj.nexus_base_url,
+        "/bank-accounts/{}/schedule/{}".format(account_name, task_name),
+    )
     try:
-        resp = delete(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = delete(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
@@ -315,7 +405,7 @@ def task_delete(obj, account_name, task_name):
 def tasks_show(obj, account_name):
     url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
     try:
-        resp = get(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
@@ -333,23 +423,41 @@ def show(obj):
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @accounts.command(help="prepare payment debiting 'account-name'")
-@click.option("--creditor-iban", help="IBAN that will receive the payment", required=True)
-@click.option("--creditor-bic", help="BIC that will receive the payment", required=False)
-@click.option("--creditor-name", help="Legal name that will receive the payment", required=True)
-@click.option("--payment-amount", help="Amount to be paid (<currency>:X.Y)", required=True)
+@click.option(
+    "--creditor-iban", help="IBAN that will receive the payment", required=True
+)
+@click.option(
+    "--creditor-bic", help="BIC that will receive the payment", required=False
+)
+@click.option(
+    "--creditor-name", help="Legal name that will receive the payment", required=True
+)
+@click.option(
+    "--payment-amount", help="Amount to be paid (<currency>:X.Y)", required=True
+)
 @click.option("--payment-subject", help="Subject of this payment", required=True)
 @click.argument("account-name")
 @click.pass_obj
-def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
-                    payment_amount, payment_subject):
-    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/payment-initiations".format(account_name))
+def prepare_payment(
+    obj,
+    account_name,
+    credit_iban,
+    credit_bic,
+    credit_name,
+    payment_amount,
+    payment_subject,
+):
+    url = urljoin(
+        obj.nexus_base_url, "/bank-accounts/{}/payment-initiations".format(account_name)
+    )
     body = dict(
         iban=credit_iban,
         bic=credit_bic,
         name=credit_name,
         subject=payment_subject,
-        amount=payment_amount
+        amount=payment_amount,
     )
 
     try:
@@ -359,6 +467,7 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @accounts.command(help="submit a prepared payment")
 @click.option("--payment-uuid", help="payment unique identifier", required=True)
 @click.argument("account-name")
@@ -366,17 +475,26 @@ def prepare_payment(obj, account_name, credit_iban, credit_bic, credit_name,
 def submit_payment(obj, account_name, payment_uuid):
     url = urljoin(
         obj.nexus_base_url,
-        "/bank-accounts/{}/payment-initiations/{}/submit".format(account_name, payment_uuid)
+        "/bank-accounts/{}/payment-initiations/{}/submit".format(
+            account_name, payment_uuid
+        ),
     )
     try:
-        resp = post(url, json=dict(), auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = post(
+            url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
     except Exception:
         print("Could not reach nexus at" + url)
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @accounts.command(help="fetch transactions from the bank")
-@click.option("--range-type", default="all", help="Admitted values: all, latest, previous-days, since-last")
+@click.option(
+    "--range-type",
+    default="all",
+    help="Admitted values: all, latest, previous-days, since-last",
+)
 @click.option("--level", default="all", help="Admitted values: report, statement, all")
 @click.argument("account-name")
 @click.pass_obj
@@ -388,24 +506,28 @@ def fetch_transactions(obj, account_name, range_type, level):
         resp = post(
             url,
             json=dict(rangeType=range_type, level=level),
-            auth = auth.HTTPBasicAuth(obj.username, obj.password)
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @accounts.command(help="get transactions from the simplified nexus JSON API")
 @click.argument("account-name")
 @click.pass_obj
 def transactions(obj, account_name):
-    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/transactions".format(account_name))
+    url = urljoin(
+        obj.nexus_base_url, "/bank-accounts/{}/transactions".format(account_name)
+    )
     try:
-        resp = get(url, auth = auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
     print(resp.content.decode("utf-8"))
+
 
 @facades.command(help="List active facades in the Nexus")
 @click.argument("connection-name")
@@ -418,6 +540,7 @@ def list_facades(obj, connection_name):
         print(f"Could not reach nexus (at {obj.nexus_base_url}): {e}")
         exit(1)
     print(resp.content.decode("utf-8"))
+
 
 @facades.command(help="create a new (Taler) facade")
 @click.option("--facade-name", help="Name of the facade", required=True)
@@ -438,9 +561,9 @@ def new_facade(obj, facade_name, connection_name, account_name):
                     bankAccount=account_name,
                     bankConnection=connection_name,
                     reserveTransferLevel="UNUSED",
-                    intervalIncremental="UNUSED"
-                )
-            )
+                    intervalIncremental="UNUSED",
+                ),
+            ),
         )
     except Exception as e:
         print(f"Could not reach nexus (at {obj.nexus_base_url}): {e}")
@@ -452,6 +575,7 @@ def new_facade(obj, facade_name, connection_name, account_name):
 @click.pass_context
 def sandbox_ebicshost(ctx):
     pass
+
 
 @sandbox.command("check", help="check sandbox status")
 @click.pass_obj
@@ -479,6 +603,7 @@ def make_ebics_host(obj, host_id):
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @sandbox_ebicshost.command("list", help="List EBICS hosts.")
 @click.pass_obj
 def list_ebics_host(obj):
@@ -491,10 +616,12 @@ def list_ebics_host(obj):
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @sandbox.group("ebicssubscriber", help="manage EBICS subscribers")
 @click.pass_context
 def sandbox_ebicssubscriber(ctx):
     pass
+
 
 @sandbox_ebicssubscriber.command("create", help="Create an EBICS subscriber.")
 @click.option("--host-id", help="Ebics host ID", required=True, prompt=True)
@@ -505,11 +632,14 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/ebics/subscribers")
     try:
-        resp = post(url, json=dict(hostID=host_id, partnerID=partner_id, userID=user_id))
+        resp = post(
+            url, json=dict(hostID=host_id, partnerID=partner_id, userID=user_id)
+        )
     except Exception:
         print("Could not reach sandbox")
         exit(1)
     print(resp.content.decode("utf-8"))
+
 
 @sandbox_ebicssubscriber.command("list", help="List EBICS subscribers.")
 @click.pass_obj
@@ -523,12 +653,16 @@ def create_ebics_subscriber(obj):
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @sandbox.group("ebicsbankaccount", help="manage EBICS bank accounts")
 @click.pass_context
 def sandbox_ebicsbankaccount(ctx):
     pass
 
-@sandbox_ebicsbankaccount.command("create", help="Create a bank account associated to an EBICS subscriber.")
+
+@sandbox_ebicsbankaccount.command(
+    "create", help="Create a bank account associated to an EBICS subscriber."
+)
 @click.option("--currency", help="currency", prompt=True)
 @click.option("--iban", help="IBAN", required=True)
 @click.option("--bic", help="BIC", required=True)
@@ -536,16 +670,32 @@ def sandbox_ebicsbankaccount(ctx):
 @click.option("--account-name", help="label of this bank account", required=True)
 @click.option("--ebics-user-id", help="user ID of the Ebics subscriber", required=True)
 @click.option("--ebics-host-id", help="host ID of the Ebics subscriber", required=True)
-@click.option("--ebics-partner-id", help="partner ID of the Ebics subscriber", required=True)
+@click.option(
+    "--ebics-partner-id", help="partner ID of the Ebics subscriber", required=True
+)
 @click.pass_obj
-def associate_bank_account(obj, currency, iban, bic, person_name, account_name,
-                           ebics_user_id, ebics_host_id, ebics_partner_id):
+def associate_bank_account(
+    obj,
+    currency,
+    iban,
+    bic,
+    person_name,
+    account_name,
+    ebics_user_id,
+    ebics_host_id,
+    ebics_partner_id,
+):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/ebics/bank-accounts")
     body = dict(
         currency=currency,
-        subscriber=dict(userID=ebics_user_id, partnerID=ebics_partner_id, hostID=ebics_host_id),
-        iban=iban, bic=bic, name=person_name, label=account_name
+        subscriber=dict(
+            userID=ebics_user_id, partnerID=ebics_partner_id, hostID=ebics_host_id
+        ),
+        iban=iban,
+        bic=bic,
+        name=person_name,
+        label=account_name,
     )
 
     try:
@@ -555,10 +705,12 @@ def associate_bank_account(obj, currency, iban, bic, person_name, account_name,
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @sandbox.group("bankaccount", help="manage bank accounts")
 @click.pass_context
 def sandbox_bankaccount(ctx):
     pass
+
 
 @sandbox_bankaccount.command("list", help="List accounts")
 @click.pass_obj
@@ -572,12 +724,15 @@ def bankaccount_list(obj):
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @sandbox_bankaccount.command("transactions", help="List transactions")
 @click.argument("account-label")
 @click.pass_obj
 def bankaccount_list(obj, account_label):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, f"/admin/bank-accounts/{account_label}/transactions")
+    url = urljoin(
+        sandbox_base_url, f"/admin/bank-accounts/{account_label}/transactions"
+    )
     try:
         resp = get(url)
     except Exception:
@@ -585,12 +740,15 @@ def bankaccount_list(obj, account_label):
         exit(1)
     print(resp.content.decode("utf-8"))
 
+
 @sandbox_bankaccount.command("generate-transactions", help="Generate test transactions")
 @click.argument("account-label")
 @click.pass_obj
 def bankaccount_generate_transactions(obj, account_label):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, f"/admin/bank-accounts/{account_label}/generate-transactions")
+    url = urljoin(
+        sandbox_base_url, f"/admin/bank-accounts/{account_label}/generate-transactions"
+    )
     try:
         resp = post(url)
     except Exception:
@@ -602,16 +760,32 @@ def bankaccount_generate_transactions(obj, account_label):
 @sandbox_bankaccount.command(help="book a payment in the sandbox")
 @click.option("--creditor-iban", help="IBAN receiving the payment", prompt=True)
 @click.option("--creditor-bic", help="BIC receiving the payment", prompt=True)
-@click.option("--creditor-name", help="Name of the person who is receiving the payment", prompt=True)
+@click.option(
+    "--creditor-name",
+    help="Name of the person who is receiving the payment",
+    prompt=True,
+)
 @click.option("--debtor-iban", help="IBAN sending the payment", prompt=True)
 @click.option("--debtor-bic", help="BIC sending the payment", prompt=True)
-@click.option("--debtor-name", help="name of the person who is sending the payment", prompt=True)
+@click.option(
+    "--debtor-name", help="name of the person who is sending the payment", prompt=True
+)
 @click.option("--amount", help="amount, no currency", prompt=True)
 @click.option("--currency", help="currency", prompt=True)
 @click.option("--subject", help="payment subject", prompt=True)
 @click.pass_obj
-def book_payment(obj, creditor_iban, creditor_bic, creditor_name, debtor_iban,
-                 debtor_bic, debtor_name, amount, currency, subject):
+def book_payment(
+    obj,
+    creditor_iban,
+    creditor_bic,
+    creditor_name,
+    debtor_iban,
+    debtor_bic,
+    debtor_name,
+    amount,
+    currency,
+    subject,
+):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/payments")
     body = dict(
@@ -623,7 +797,7 @@ def book_payment(obj, creditor_iban, creditor_bic, creditor_name, debtor_iban,
         debitorName=debtor_name,
         amount=amount,
         currency=currency,
-        subject=subject
+        subject=subject,
     )
     try:
         resp = post(url, json=body)
@@ -631,5 +805,6 @@ def book_payment(obj, creditor_iban, creditor_bic, creditor_name, debtor_iban,
         print("Could not reach sandbox")
         exit(1)
     print(resp.content.decode("utf-8"))
+
 
 cli(obj={})
