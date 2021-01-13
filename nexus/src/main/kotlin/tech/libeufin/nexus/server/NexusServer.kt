@@ -863,9 +863,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         throw NexusError(HttpStatusCode.BadRequest, "missing or invalid message ID")
                     }
                     val msg = NexusBankMessageEntity.find { NexusBankMessagesTable.messageId eq msgid }.firstOrNull()
-                    if (msg == null) {
-                        throw NexusError(HttpStatusCode.NotFound, "bank message not found")
-                    }
+                        ?: throw NexusError(HttpStatusCode.NotFound, "bank message not found")
                     return@transaction object {
                         val msgContent = msg.message.bytes
                     }
