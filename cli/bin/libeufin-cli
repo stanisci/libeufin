@@ -55,10 +55,24 @@ def accounts(ctx):
     ctx.obj = NexusAccess(*fetch_env())
     pass
 
+
+class SandboxContext:
+    def __init__(self):
+        self.sandbox_base_url = None
+    def require_sandbox_base_url(self):
+        if self.sandbox_base_url:
+            return self.sandbox_base_url
+        sandbox_base_url = os.environ.get("LIBEUFIN_SANDBOX_URL")
+        if not sandbox_base_url:
+            raise click.UsageError("sandbox URL must be given as an argument or in LIBEUFIN_SANDBOX_URL")
+        return sandbox_base_url
+
 @cli.group()
+@click.option("--sandbox-url", help="URL for the sandbox", required=False)
 @click.pass_context
-def sandbox(ctx):
-    pass
+def sandbox(ctx, sandbox_url):
+    ctx.obj = SandboxContext()
+    ctx.obj.sandbox_base_url = sandbox_url
 
 @connections.command(help="export backup")
 @click.option("--passphrase", help="Passphrase for locking the backup", required=True)
@@ -433,11 +447,18 @@ def new_facade(obj, facade_name, connection_name, account_name):
         exit(1)
     print(resp.content.decode("utf-8"))
 
-@sandbox.command(help="activate a Ebics host")
-@click.option("--host-id", help="Ebics host ID", required=True)
-@click.argument("sandbox-base-url")
+
+
+@sandbox.group("ebicshost", help="manage EBICS hosts")
+@click.pass_context
+def sandbox_ebicshost(ctx):
+    pass
+
+@sandbox_ebicshost.command("create", help="Create an EBICS host")
+@click.option("--host-id", help="EBICS host ID", required=True, prompt=True)
 @click.pass_obj
-def make_ebics_host(obj, host_id, sandbox_base_url):
+def make_ebics_host(obj, host_id):
+    sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/ebics/host")
     try:
         resp = post(url, json=dict(hostID=host_id, ebicsVersion="2.5"))
@@ -446,13 +467,30 @@ def make_ebics_host(obj, host_id, sandbox_base_url):
         exit(1)
     print(resp.content.decode("utf-8"))
 
-@sandbox.command(help="activate a Ebics subscriber")
-@click.option("--host-id", help="Ebics host ID", required=True)
-@click.option("--partner-id", help="Ebics partner ID", required=True)
-@click.option("--user-id", help="Ebics user ID", required=True)
-@click.argument("sandbox-base-url")
+@sandbox_ebicshost.command("list", help="List EBICS hosts.")
 @click.pass_obj
-def activate_ebics_subscriber(obj, host_id, partner_id, user_id, sandbox_base_url):
+def list_ebics_host(obj):
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin(sandbox_base_url, "/admin/ebics/hosts")
+    try:
+        resp = get(url)
+    except Exception:
+        print("Could not reach sandbox")
+        exit(1)
+    print(resp.content.decode("utf-8"))
+
+@sandbox.group("ebicssubscriber", help="manage EBICS subscribers")
+@click.pass_context
+def sandbox_ebicssubscriber(ctx):
+    pass
+
+@sandbox_ebicssubscriber.command("create", help="Create an EBICS subscriber.")
+@click.option("--host-id", help="Ebics host ID", required=True, prompt=True)
+@click.option("--partner-id", help="Ebics partner ID", required=True, prompt=True)
+@click.option("--user-id", help="Ebics user ID", required=True, prompt=True)
+@click.pass_obj
+def create_ebics_subscriber(obj, host_id, partner_id, user_id):
+    sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/ebics/subscribers")
     try:
         resp = post(url, json=dict(hostID=host_id, partnerID=partner_id, userID=user_id))
@@ -461,7 +499,12 @@ def activate_ebics_subscriber(obj, host_id, partner_id, user_id, sandbox_base_ur
         exit(1)
     print(resp.content.decode("utf-8"))
 
-@sandbox.command(help="associate a bank account to a Ebics subscriber")
+@sandbox.group("ebicsbankaccount", help="manage EBICS bank accounts")
+@click.pass_context
+def sandbox_ebicsbankaccount(ctx):
+    pass
+
+@sandbox_ebicsbankaccount.command("create", help="associate a bank account to a Ebics subscriber")
 @click.option("--iban", help="IBAN", required=True)
 @click.option("--bic", help="BIC", required=True)
 @click.option("--person-name", help="bank account owner name", required=True)
@@ -469,10 +512,10 @@ def activate_ebics_subscriber(obj, host_id, partner_id, user_id, sandbox_base_ur
 @click.option("--ebics-user-id", help="user ID of the Ebics subscriber", required=True)
 @click.option("--ebics-host-id", help="host ID of the Ebics subscriber", required=True)
 @click.option("--ebics-partner-id", help="partner ID of the Ebics subscriber", required=True)
-@click.argument("sandbox-base-url")
 @click.pass_obj
 def associate_bank_account(obj, iban, bic, person_name, account_name,
-                           ebics_user_id, ebics_host_id, ebics_partner_id, sandbox_base_url):
+                           ebics_user_id, ebics_host_id, ebics_partner_id):
+    sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/ebics/bank-accounts")
     body = dict(
         subscriber=dict(userID=ebics_user_id, partnerID=ebics_partner_id, hostID=ebics_host_id),
@@ -486,21 +529,25 @@ def associate_bank_account(obj, iban, bic, person_name, account_name,
         exit(1)
     print(resp.content.decode("utf-8"))
 
-@sandbox.command(help="book a payment in the sandbox")
-@click.option("--creditor-iban", help="IBAN receiving the payment")
-@click.option("--creditor-bic", help="BIC receiving the payment")
-@click.option("--creditor-name", help="Name of the person who is receiving the payment")
-@click.option("--debtor-iban", help="IBAN sending the payment")
-@click.option("--debtor-bic", help="BIC sending the payment")
-@click.option("--debtor-name", help="name of the person who is sending the payment")
-@click.option("--amount", help="amount, no currency")
-@click.option("--currency", help="currency")
-@click.option("--subject", help="payment subject")
-@click.argument("sandbox-base-url")
+@sandbox.group("bankaccount", help="manage bank accounts")
+@click.pass_context
+def sandbox_bankaccount(ctx):
+    pass
+
+@sandbox_bankaccount.command(help="book a payment in the sandbox")
+@click.option("--creditor-iban", help="IBAN receiving the payment", prompt=True)
+@click.option("--creditor-bic", help="BIC receiving the payment", prompt=True)
+@click.option("--creditor-name", help="Name of the person who is receiving the payment", prompt=True)
+@click.option("--debtor-iban", help="IBAN sending the payment", prompt=True)
+@click.option("--debtor-bic", help="BIC sending the payment", prompt=True)
+@click.option("--debtor-name", help="name of the person who is sending the payment", prompt=True)
+@click.option("--amount", help="amount, no currency", prompt=True)
+@click.option("--currency", help="currency", prompt=True)
+@click.option("--subject", help="payment subject", prompt=True)
 @click.pass_obj
 def book_payment(obj, creditor_iban, creditor_bic, creditor_name, debtor_iban,
-                 debtor_bic, debtor_name, amount, currency, subject, sandbox_base_url):
-
+                 debtor_bic, debtor_name, amount, currency, subject):
+    sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/payments")
     body = dict(
         creditorIban=creditor_iban,
@@ -520,4 +567,4 @@ def book_payment(obj, creditor_iban, creditor_bic, creditor_name, debtor_iban,
         exit(1)
     print(resp.content.decode("utf-8"))
 
-cli()
+cli(obj={})
