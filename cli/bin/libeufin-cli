@@ -499,12 +499,24 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
         exit(1)
     print(resp.content.decode("utf-8"))
 
+@sandbox_ebicssubscriber.command("list", help="List EBICS subscribers.")
+@click.pass_obj
+def create_ebics_subscriber(obj):
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin(sandbox_base_url, "/admin/ebics/subscribers")
+    try:
+        resp = get(url)
+    except Exception:
+        print("Could not reach sandbox")
+        exit(1)
+    print(resp.content.decode("utf-8"))
+
 @sandbox.group("ebicsbankaccount", help="manage EBICS bank accounts")
 @click.pass_context
 def sandbox_ebicsbankaccount(ctx):
     pass
 
-@sandbox_ebicsbankaccount.command("create", help="associate a bank account to a Ebics subscriber")
+@sandbox_ebicsbankaccount.command("create", help="Create a bank account associated to an EBICS subscriber.")
 @click.option("--iban", help="IBAN", required=True)
 @click.option("--bic", help="BIC", required=True)
 @click.option("--person-name", help="bank account owner name", required=True)
