@@ -280,6 +280,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 logger.error("Uncaught exception while handling '${call.request.uri}'")
                 logger.error(cause.stackTrace.toString())
                 call.respond(
+                    HttpStatusCode.InternalServerError,
                     NexusErrorJson(
                         error = NexusErrorDetailJson(
                             type = "nexus-error",
