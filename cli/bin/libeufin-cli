@@ -11,6 +11,10 @@ from requests import post, get, auth, delete
 from urllib.parse import urljoin
 from getpass import getpass
 
+def tell_user(resp, withsuccess=False):
+    if resp.status_code == 200 and not withsuccess:
+        return
+    print(resp.content.decode("utf-8"))
 
 def fetch_env():
     if "--help" in sys.argv:
@@ -59,14 +63,12 @@ def facades(ctx):
 @click.pass_context
 def connections(ctx):
     ctx.obj = NexusAccess(*fetch_env())
-    pass
 
 
 @cli.group()
 @click.pass_context
 def accounts(ctx):
     ctx.obj = NexusAccess(*fetch_env())
-    pass
 
 
 class SandboxContext:
@@ -155,7 +157,7 @@ def delete_connection(obj, connection_name):
         print("Could not reach nexus at " + url)
         exit(1)
 
-    print(resp.content.decode("utf-8"))
+    tell_user(resp)
 
 
 @connections.command(help="restore backup")
@@ -188,7 +190,7 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
         print("Could not reach nexus at " + url)
         exit(1)
 
-    print(resp.content.decode("utf-8"))
+    tell_user(resp)
 
 
 @connections.command(help="make new Ebics bank connection")
@@ -218,7 +220,8 @@ def new_ebics_connection(
     except Exception:
         print(f"Could not reach nexus at {url}: {resp.json()}")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @connections.command(help="synchronize the bank connection")
@@ -233,7 +236,7 @@ def sync(obj, connection_name):
     except Exception:
         print(f"Could not reach nexus at {url}")
         exit(1)
-    print(resp.content.decode("utf-8"))
+    tell_user(resp)
 
 
 @connections.command(help="import one bank account, chosen from the downloaded ones")
@@ -247,9 +250,7 @@ def sync(obj, connection_name):
 )
 @click.argument("connection-name")
 @click.pass_obj
-def import_bank_account(
-    obj, connection_name, offered_account_id, nexus_bank_account_id
-):
+def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_account_id):
     url = urljoin(
         obj.nexus_base_url,
         "/bank-connections/{}/import-account".format(connection_name),
@@ -266,7 +267,8 @@ def import_bank_account(
     except Exception as e:
         print(f"Could not reach nexus at {url}: {e}")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @connections.command(help="download bank accounts in raw format WITHOUT importing them")
@@ -284,7 +286,8 @@ def download_bank_accounts(obj, connection_name):
     except Exception:
         print("Could not reach nexus at " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @connections.command(help="list the connections")
@@ -298,7 +301,8 @@ def list_connections(obj):
     except Exception:
         print("Could not reach nexus at " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @connections.command(help="list bank accounts hosted at one connection")
@@ -315,8 +319,9 @@ def list_offered_bank_accounts(obj, connection_name):
     except Exception:
         print("Could not reach nexus at " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
 
+
+    tell_user(resp)
 
 @accounts.command(help="Schedules a new task")
 @click.argument("account-name")
@@ -362,7 +367,8 @@ def task_schedule(
     except Exception:
         print("Could not reach nexus at " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @accounts.command(help="Shows the status of one task")
@@ -379,7 +385,8 @@ def task_status(obj, account_name, task_name):
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @accounts.command(help="Deletes one task")
@@ -396,7 +403,8 @@ def task_delete(obj, account_name, task_name):
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @accounts.command(help="Shows all the active tasks")
@@ -409,7 +417,8 @@ def tasks_show(obj, account_name):
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @accounts.command(help="show accounts belonging to calling user")
@@ -421,7 +430,8 @@ def show(obj):
     except Exception as e:
         print(f"Could not reach nexus at {url}, error: {e}")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @accounts.command(help="prepare payment debiting 'account-name'")
@@ -465,7 +475,8 @@ def prepare_payment(
     except Exception:
         print("Could not reach nexus at " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @accounts.command(help="submit a prepared payment")
@@ -486,8 +497,8 @@ def submit_payment(obj, account_name, payment_uuid):
     except Exception:
         print("Could not reach nexus at" + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
 
+    tell_user(resp)
 
 @accounts.command(help="fetch transactions from the bank")
 @click.option(
@@ -511,7 +522,8 @@ def fetch_transactions(obj, account_name, range_type, level):
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @accounts.command(help="get transactions from the simplified nexus JSON API")
@@ -526,7 +538,8 @@ def transactions(obj, account_name):
     except Exception:
         print("Could not reach nexus " + url)
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @facades.command(help="List active facades in the Nexus")
@@ -539,7 +552,8 @@ def list_facades(obj, connection_name):
     except Exception as e:
         print(f"Could not reach nexus (at {obj.nexus_base_url}): {e}")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @facades.command(help="create a new (Taler) facade")
@@ -568,7 +582,8 @@ def new_facade(obj, facade_name, connection_name, account_name):
     except Exception as e:
         print(f"Could not reach nexus (at {obj.nexus_base_url}): {e}")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @sandbox.group("ebicshost", help="manage EBICS hosts")
@@ -587,7 +602,8 @@ def check_sandbox_status(obj):
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @sandbox_ebicshost.command("create", help="Create an EBICS host")
@@ -601,7 +617,8 @@ def make_ebics_host(obj, host_id):
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @sandbox_ebicshost.command("list", help="List EBICS hosts.")
@@ -614,7 +631,8 @@ def list_ebics_host(obj):
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @sandbox.group("ebicssubscriber", help="manage EBICS subscribers")
@@ -638,12 +656,13 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @sandbox_ebicssubscriber.command("list", help="List EBICS subscribers.")
 @click.pass_obj
-def create_ebics_subscriber(obj):
+def list_ebics_subscriber(obj):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/ebics/subscribers")
     try:
@@ -651,7 +670,8 @@ def create_ebics_subscriber(obj):
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @sandbox.group("ebicsbankaccount", help="manage EBICS bank accounts")
@@ -660,9 +680,7 @@ def sandbox_ebicsbankaccount(ctx):
     pass
 
 
-@sandbox_ebicsbankaccount.command(
-    "create", help="Create a bank account associated to an EBICS subscriber."
-)
+@sandbox_ebicsbankaccount.command("create", help="Create a bank account for a EBICS subscriber.")
 @click.option("--currency", help="currency", prompt=True)
 @click.option("--iban", help="IBAN", required=True)
 @click.option("--bic", help="BIC", required=True)
@@ -670,9 +688,7 @@ def sandbox_ebicsbankaccount(ctx):
 @click.option("--account-name", help="label of this bank account", required=True)
 @click.option("--ebics-user-id", help="user ID of the Ebics subscriber", required=True)
 @click.option("--ebics-host-id", help="host ID of the Ebics subscriber", required=True)
-@click.option(
-    "--ebics-partner-id", help="partner ID of the Ebics subscriber", required=True
-)
+@click.option("--ebics-partner-id", help="partner ID of the Ebics subscriber", required=True)
 @click.pass_obj
 def associate_bank_account(
     obj,
@@ -703,7 +719,8 @@ def associate_bank_account(
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
 @sandbox.group("bankaccount", help="manage bank accounts")
@@ -722,13 +739,14 @@ def bankaccount_list(obj):
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @sandbox_bankaccount.command("transactions", help="List transactions")
 @click.argument("account-label")
 @click.pass_obj
-def bankaccount_list(obj, account_label):
+def transactions_list(obj, account_label):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(
         sandbox_base_url, f"/admin/bank-accounts/{account_label}/transactions"
@@ -738,7 +756,8 @@ def bankaccount_list(obj, account_label):
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp, withsuccess=True)
 
 
 @sandbox_bankaccount.command("generate-transactions", help="Generate test transactions")
@@ -754,10 +773,11 @@ def bankaccount_generate_transactions(obj, account_label):
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
+
+    tell_user(resp)
 
 
-@sandbox_bankaccount.command(help="book a payment in the sandbox")
+@sandbox_bankaccount.command(help="Book a payment in the sandbox")
 @click.option("--creditor-iban", help="IBAN receiving the payment", prompt=True)
 @click.option("--creditor-bic", help="BIC receiving the payment", prompt=True)
 @click.option(
@@ -804,7 +824,7 @@ def book_payment(
     except Exception:
         print("Could not reach sandbox")
         exit(1)
-    print(resp.content.decode("utf-8"))
 
+    tell_user(resp)
 
 cli(obj={})
