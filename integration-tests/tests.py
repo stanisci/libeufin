@@ -55,7 +55,8 @@ def prepareSandbox():
                 subscriber=PERSONA.ebics.get_as_dict(with_url=False),
                 iban=PERSONA.banking.iban,
                 bic=PERSONA.banking.bic,
-                label=PERSONA.banking.label
+                label=PERSONA.banking.label,
+                currency="EUR"
             )
         )
     )
