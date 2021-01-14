@@ -119,8 +119,7 @@ echo Download bank accounts
 
 cat << EOF
 
-Now usable via $(tput bold)libeufin-cli$(tput sgr0):
-Bank connection: $(tput bold)$NEXUS_BANK_CONNECTION_NAME$(tput sgr0)
-Bank account: $(tput bold)$ACCOUNT_NAME_AT_NEXUS$(tput sgr0)
+Connection: $(tput bold)$NEXUS_BANK_CONNECTION_NAME$(tput sgr0)
+Account (imported): $(tput bold)$ACCOUNT_NAME_AT_NEXUS$(tput sgr0)
 
 EOF
