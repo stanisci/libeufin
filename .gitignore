@@ -13,6 +13,8 @@ presentation/*.out
 presentation/*.snm
 presentation/*.toc
 .idea/misc.xml
+.idea/modules/
 __pycache__
 *.log
 .DS_Store
+*.mk
