@@ -527,9 +527,15 @@ def fetch_transactions(obj, account_name, range_type, level):
 
 
 @accounts.command(help="get transactions from the simplified nexus JSON API")
+@click.option(
+    "--compact/--no-compact",
+    help="Tells only amount/subject for each payment",
+    required=False,
+    default=False
+)
 @click.argument("account-name")
 @click.pass_obj
-def transactions(obj, account_name):
+def transactions(obj, compact, account_name):
     url = urljoin(
         obj.nexus_base_url, "/bank-accounts/{}/transactions".format(account_name)
     )
@@ -539,8 +545,17 @@ def transactions(obj, account_name):
         print("Could not reach nexus " + url)
         exit(1)
 
-    tell_user(resp, withsuccess=True)
+    if compact and resp.status_code == 200:
+        for payment in resp.json()["transactions"]:
+            for entry in payment["batches"]:
+              for expected_singleton in entry["batchTransactions"]:
+                  print("{}, {}".format(
+                      expected_singleton["details"]["unstructuredRemittanceInformation"],
+                      expected_singleton["amount"]
+                  ))
+        return
 
+    tell_user(resp, withsuccess=True)
 
 @facades.command(help="List active facades in the Nexus")
 @click.argument("connection-name")
