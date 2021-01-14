@@ -5,12 +5,13 @@
 
 set -eu
 
+SANDBOX_URL="http://localhost:5000"
+NEXUS_URL="http://localhost:5001"
 SQLITE_FILE="/tmp/libeufin-cli-env.sqlite3"
 DATABASE_CONN="jdbc:sqlite:$SQLITE_FILE"
 CURRENCY="EUR"
 
 # EBICS details.
-SANDBOX_URL="http://localhost:5000"
 EBICS_HOST_ID=ebicshost
 EBICS_PARTNER_ID=ebicspartner
 EBICS_USER_ID=ebicsuser
@@ -28,10 +29,12 @@ NEXUS_USER=u
 NEXUS_PASSWORD=p
 NEXUS_BANK_CONNECTION_NAME=b
 
-# Exports needed by the CLI.
-export NEXUS_BASE_URL="http://localhost:5001/"
-export NEXUS_USERNAME=$NEXUS_USER
-export NEXUS_PASSWORD=$NEXUS_PASSWORD
+# Needed env
+
+export NEXUS_BASE_URL=$NEXUS_URL \
+       NEXUS_USERNAME=$NEXUS_USER \
+       NEXUS_PASSWORD=$NEXUS_PASSWORD \
+       LIBEUFIN_SANDBOX_URL=$SANDBOX_URL
 
 echo Remove old database.
 rm -f $SQLITE_FILE
@@ -45,7 +48,7 @@ sandbox_pid=$!
 trap "echo Terminating services.; kill $nexus_pid; kill $sandbox_pid" EXIT
 
 curl -s --retry 5 --retry-connrefused $SANDBOX_URL > /dev/null
-curl -s --retry 5 --retry-connrefused $NEXUS_BASE_URL > /dev/null
+curl -s --retry 5 --retry-connrefused $NEXUS_URL > /dev/null
 
 ########## setup sandbox #############
 
@@ -86,7 +89,7 @@ echo "Creating a nexus superuser"
 libeufin-nexus \
   superuser \
     --db-conn-string=$DATABASE_CONN \
-    --password $NEXUS_PASSWORD $NEXUS_USER &> /dev/null
+    --password $NEXUS_PASSWORD $NEXUS_USER
 
 # create a bank connection
 echo Creating a bank connection for such user
@@ -97,29 +100,34 @@ echo Creating a bank connection for such user
       --host-id $EBICS_HOST_ID \
       --partner-id $EBICS_PARTNER_ID \
       --ebics-user-id $EBICS_USER_ID \
-      $NEXUS_BANK_CONNECTION_NAME > /dev/null
+      $NEXUS_BANK_CONNECTION_NAME
 
 # Bootstrapping such connection.
 echo Bootstrapping the bank connection
 ./bin/libeufin-cli \
-  connections sync $NEXUS_BANK_CONNECTION_NAME > /dev/null
+  connections sync $NEXUS_BANK_CONNECTION_NAME
 
 # Download bank accounts.
 echo Download bank accounts
 ./bin/libeufin-cli \
   connections download-bank-accounts \
-    $NEXUS_BANK_CONNECTION_NAME > /dev/null
+    $NEXUS_BANK_CONNECTION_NAME
 
 # Import bank account for user.
 ./bin/libeufin-cli \
   connections import-bank-account \
     --offered-account-id=$ACCOUNT_NAME \
     --nexus-bank-account-id=$ACCOUNT_NAME_AT_NEXUS \
-      $NEXUS_BANK_CONNECTION_NAME > /dev/null
+      $NEXUS_BANK_CONNECTION_NAME
 
 cat << EOF
+
+env-setter:
+    export NEXUS_BASE_URL=http://localhost:5001/ NEXUS_USERNAME=$NEXUS_USER NEXUS_PASSWORD=$NEXUS_PASSWORD LIBEUFIN_SANDBOX_URL=$SANDBOX_URL
 
 Connection: $(tput bold)$NEXUS_BANK_CONNECTION_NAME$(tput sgr0)
 Account (imported): $(tput bold)$ACCOUNT_NAME_AT_NEXUS$(tput sgr0)
 
 EOF
+
+read -p "Press Enter to terminate the services:"
