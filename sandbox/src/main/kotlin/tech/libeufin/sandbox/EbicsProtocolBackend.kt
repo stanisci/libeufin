@@ -441,11 +441,7 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
  *
  * @param type 52 or 53.
  */
-private fun constructCamtResponse(
-    type: Int,
-    header: EbicsRequest.Header,
-    subscriber: EbicsSubscriberEntity
-): MutableList<String> {
+private fun constructCamtResponse(type: Int, header: EbicsRequest.Header, subscriber: EbicsSubscriberEntity): MutableList<String> {
     val dateRange = (header.static.orderDetails?.orderParams as EbicsRequest.StandardOrderParams).dateRange
     val (start: LocalDateTime, end: LocalDateTime) = if (dateRange != null) {
         Pair(
@@ -1149,9 +1145,7 @@ private fun makeRequestContext(requestObject: EbicsRequest): RequestContext {
 
 suspend fun ApplicationCall.ebicsweb() {
     val requestDocument = receiveEbicsXml()
-
     LOGGER.info("Processing ${requestDocument.documentElement.localName}")
-
     when (requestDocument.documentElement.localName) {
         "ebicsUnsecuredRequest" -> {
             val requestObject = requestDocument.toObject<EbicsUnsecuredRequest>()

@@ -126,9 +126,7 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
         if (acct == null) {
             throw NexusError(HttpStatusCode.NotFound, "user not found")
         }
-        val res = try {
-            parseCamtMessage(camtDoc)
-        } catch (e: CamtParsingError) {
+        val res = try { parseCamtMessage(camtDoc) } catch (e: CamtParsingError) {
             logger.warn("Invalid CAMT received from bank: $e")
             return@transaction false
         }
@@ -166,7 +164,7 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
                 logger.info("Found a duplicate: $acctSvcrRef")
                 // FIXME(dold): See if an old transaction needs to be superseded by this one
                 // https://bugs.gnunet.org/view.php?id=6381
-                break
+                continue@txloop
             }
             val rawEntity = NexusBankTransactionEntity.new {
                 bankAccount = acct

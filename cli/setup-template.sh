@@ -122,12 +122,11 @@ echo Download bank accounts
 
 cat << EOF
 
-env-setter:
-    export NEXUS_BASE_URL=http://localhost:5001/ NEXUS_USERNAME=$NEXUS_USER NEXUS_PASSWORD=$NEXUS_PASSWORD LIBEUFIN_SANDBOX_URL=$SANDBOX_URL
-
-Connection: $(tput bold)$NEXUS_BANK_CONNECTION_NAME$(tput sgr0)
-Account (imported): $(tput bold)$ACCOUNT_NAME_AT_NEXUS$(tput sgr0)
+Bank connection name: $(tput bold)$NEXUS_BANK_CONNECTION_NAME$(tput sgr0)
+Bank account, imported name: $(tput bold)$ACCOUNT_NAME_AT_NEXUS$(tput sgr0)
+Bank account, native name: $(tput bold)$ACCOUNT_NAME$(tput sgr0)
+env-setter: $(tput bold)export NEXUS_BASE_URL=http://localhost:5001/ NEXUS_USERNAME=$NEXUS_USER NEXUS_PASSWORD=$NEXUS_PASSWORD LIBEUFIN_SANDBOX_URL=$SANDBOX_URL$(tput sgr0)
 
 EOF
 
-read -p "Press Enter to terminate the services:"
+read -p "Press Enter to terminate the services: "
