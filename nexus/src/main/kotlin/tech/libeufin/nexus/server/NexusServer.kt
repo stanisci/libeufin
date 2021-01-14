@@ -46,6 +46,7 @@ import io.ktor.response.respondText
 import io.ktor.routing.*
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.ktor.util.error
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import io.ktor.utils.io.jvm.javaio.toInputStream
@@ -252,7 +253,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
         }
         install(StatusPages) {
             exception<NexusError> { cause ->
-                logger.error("Exception while handling '${call.request.uri}'", cause)
+                logger.error("Caught exception while handling '${call.request.uri} (${cause.reason})")
                 call.respond(
                     status = cause.statusCode,
                     message = NexusErrorJson(
@@ -264,7 +265,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 )
             }
             exception<EbicsProtocolError> { cause ->
-                logger.error("Exception while handling '${call.request.uri}'", cause)
+                logger.error("Caught exception while handling '${call.request.uri}' (${cause.reason})")
                 call.respond(
                     cause.httpStatusCode,
                     NexusErrorJson(
@@ -276,8 +277,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 )
             }
             exception<Exception> { cause ->
-                logger.error("Uncaught exception while handling '${call.request.uri}'", cause)
-                logger.error(cause.toString())
+                logger.error("Uncaught exception while handling '${call.request.uri}'")
+                logger.error(cause.stackTrace.toString())
                 call.respond(
                     NexusErrorJson(
                         error = NexusErrorDetailJson(
