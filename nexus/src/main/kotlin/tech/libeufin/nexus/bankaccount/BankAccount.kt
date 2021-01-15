@@ -119,16 +119,18 @@ private fun findDuplicate(bankAccountId: String, acctSvcrRef: String): NexusBank
     }
 }
 
-fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): Boolean {
+fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): Int {
     logger.info("processing CAMT message")
-    val success = transaction {
+    var newTransactions = 0
+    transaction {
         val acct = NexusBankAccountEntity.findById(bankAccountId)
         if (acct == null) {
             throw NexusError(HttpStatusCode.NotFound, "user not found")
         }
         val res = try { parseCamtMessage(camtDoc) } catch (e: CamtParsingError) {
             logger.warn("Invalid CAMT received from bank: $e")
-            return@transaction false
+            newTransactions = -1
+            return@transaction
         }
         val stamp = ZonedDateTime.parse(res.creationDateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant().toEpochMilli()
         when (code) {
@@ -176,6 +178,8 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
                 status = entry.status
             }
             rawEntity.flush()
+            newTransactions++
+            // This block tries to acknowledge a former outgoing payment as booked.
             if (singletonBatchedTransaction.creditDebitIndicator == CreditDebitIndicator.DBIT) {
                 val t0 = singletonBatchedTransaction.details
                 val msgId = t0.messageId
@@ -192,13 +196,10 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
                         paymentInitiation.confirmationTransaction = rawEntity
                     }
                 }
-                // FIXME: find matching PaymentInitiation
-                //  by PaymentInformationID, message ID or whatever is present
             }
         }
-        return@transaction true
     }
-    return success
+    return newTransactions
 }
 
 /**
@@ -221,14 +222,14 @@ fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: Strin
             (NexusBankMessagesTable.bankConnection eq conn.id) and
                     (NexusBankMessagesTable.id greater acct.highestSeenBankMessageId)
         }.orderBy(Pair(NexusBankMessagesTable.id, SortOrder.ASC)).forEach {
-            logger.debug("Unseen Camt, account: ${bankAccountId}, connection: ${conn.id}, msgId: ${it.messageId}")
-            totalNew++
             val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
-            if (!processCamtMessage(bankAccountId, doc, it.code)) {
+            val newTransactions = processCamtMessage(bankAccountId, doc, it.code)
+            if (newTransactions == -1) {
                 it.errors = true
                 return@forEach
             }
             lastId = it.id.value
+            totalNew += newTransactions
         }
         acct.highestSeenBankMessageId = lastId
     }
@@ -313,9 +314,9 @@ suspend fun fetchBankAccountTransactions(client: HttpClient, fetchSpec: FetchSpe
             "Connection type '${res.connectionType}' not implemented"
         )
     }
-    val newMessages = ingestBankMessagesIntoAccount(res.connectionName, accountId)
+    val newTransactions = ingestBankMessagesIntoAccount(res.connectionName, accountId)
     ingestTalerTransactions()
-    return newMessages
+    return newTransactions
 }
 
 fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexusBankAccountId: String) {
