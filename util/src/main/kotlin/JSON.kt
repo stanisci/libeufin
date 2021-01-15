@@ -36,8 +36,9 @@ data class RawPayment(
     val subject: String,
     val date: String? = null,
     val uid: String? = null, // FIXME: explain this value.
-    val direction: String,
-    // the following two values are rather CAMT/PAIN
+    val direction: String, // FIXME: this following value should be restricted to only DBIT/CRDT.
+
+    // The following two values are rather CAMT/PAIN
     // specific, therefore do not need to be returned
     // along every API call using this object.
     val pmtInfId: String? = null,
