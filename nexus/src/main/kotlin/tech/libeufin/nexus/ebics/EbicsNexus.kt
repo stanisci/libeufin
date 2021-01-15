@@ -40,7 +40,9 @@ import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.routing.Route
 import io.ktor.routing.post
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
@@ -333,9 +335,7 @@ private fun getEbicsSubscriberDetails(bankConnectionId: String): EbicsClientSubs
 }
 
 suspend fun ebicsFetchAccounts(connId: String, client: HttpClient) {
-    val subscriberDetails = transaction {
-        getEbicsSubscriberDetails(connId)
-    }
+    val subscriberDetails = transaction { getEbicsSubscriberDetails(connId) }
     val response = doEbicsDownloadTransaction(
         client, subscriberDetails, "HTD", EbicsStandardOrderParams()
     )
@@ -352,6 +352,11 @@ suspend fun ebicsFetchAccounts(connId: String, client: HttpClient) {
             )
             transaction {
                 payload.value.partnerInfo.accountInfoList?.forEach { accountInfo ->
+                    val isDuplicate = OfferedBankAccountsTable.select {
+                        OfferedBankAccountsTable.bankConnection eq connId and (
+                                OfferedBankAccountsTable.offeredAccountId eq accountInfo.id)
+                    }.firstOrNull()
+                    if (isDuplicate != null) return@forEach
                     OfferedBankAccountsTable.insert { newRow ->
                         newRow[accountHolder] = accountInfo.accountHolder ?: "NOT GIVEN"
                         newRow[iban] = accountInfo.accountNumberList?.filterIsInstance<EbicsTypes.GeneralAccountNumber>()

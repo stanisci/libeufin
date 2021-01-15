@@ -46,7 +46,6 @@ import io.ktor.response.respondText
 import io.ktor.routing.*
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import io.ktor.util.error
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import io.ktor.utils.io.jvm.javaio.toInputStream
@@ -212,11 +211,8 @@ fun createLoopbackBankConnection(bankConnectionName: String, user: NexusUserEnti
 }
 
 fun requireBankConnectionInternal(connId: String): NexusBankConnectionEntity {
-    val conn = transaction { NexusBankConnectionEntity.findById(connId) }
-    if (conn == null) {
-        throw NexusError(HttpStatusCode.NotFound, "bank connection '$connId' not found")
-    }
-    return conn
+    return transaction { NexusBankConnectionEntity.findById(connId) }
+        ?: throw NexusError(HttpStatusCode.NotFound, "bank connection '$connId' not found")
 }
 
 fun requireBankConnection(call: ApplicationCall, parameterKey: String): NexusBankConnectionEntity {
