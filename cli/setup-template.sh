@@ -54,14 +54,14 @@ curl -s --retry 5 --retry-connrefused $NEXUS_URL > /dev/null
 
 # make ebics host at sandbox
 echo Making a ebics host at the sandbox
-./bin/libeufin-cli \
+libeufin-cli \
   sandbox --sandbox-url=$SANDBOX_URL \
     ebicshost create \
       --host-id=$EBICS_HOST_ID
 
 # activate a ebics subscriber on that host
 echo Activating the ebics subscriber at the sandbox
-./bin/libeufin-cli \
+libeufin-cli \
   sandbox --sandbox-url=$SANDBOX_URL \
     ebicssubscriber create \
       --host-id=$EBICS_HOST_ID \
@@ -70,7 +70,7 @@ echo Activating the ebics subscriber at the sandbox
 
 # give a bank account to such user
 echo Giving a bank account to such subscriber
-./bin/libeufin-cli \
+libeufin-cli \
   sandbox --sandbox-url=$SANDBOX_URL \
     ebicsbankaccount create \
       --iban=$IBAN \
@@ -93,7 +93,7 @@ libeufin-nexus \
 
 # create a bank connection
 echo Creating a bank connection for such user
-./bin/libeufin-cli \
+libeufin-cli \
   connections \
     new-ebics-connection \
       --ebics-url $EBICS_BASE_URL \
@@ -104,17 +104,17 @@ echo Creating a bank connection for such user
 
 # Bootstrapping such connection.
 echo Bootstrapping the bank connection
-./bin/libeufin-cli \
+libeufin-cli \
   connections sync $NEXUS_BANK_CONNECTION_NAME
 
 # Download bank accounts.
 echo Download bank accounts
-./bin/libeufin-cli \
+libeufin-cli \
   connections download-bank-accounts \
     $NEXUS_BANK_CONNECTION_NAME
 
 # Import bank account for user.
-./bin/libeufin-cli \
+libeufin-cli \
   connections import-bank-account \
     --offered-account-id=$ACCOUNT_NAME \
     --nexus-bank-account-id=$ACCOUNT_NAME_AT_NEXUS \
