@@ -50,9 +50,6 @@ check:
 tests:
 	@cd integration-tests; py.test -k "not test_env" tests.py
 
-.PHONY: env
-env:
-	@cd integration-tests; py.test -s -k "test_env" tests.py
 
 .PHONY: parse
 parse:

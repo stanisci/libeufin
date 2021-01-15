@@ -125,18 +125,6 @@ def teardown_function():
     dropSandboxTables(DB)
     dropNexusTables(DB)
 
-def test_env(make_crdt_payment, make_taler_facade):
-    print("Nexus and Sandbox are up and running!\n")
-    print("Env-setter for the CLI:")
-    print(f"\texport NEXUS_BASE_URL={NEXUS_URL} NEXUS_USERNAME={PERSONA.nexus.username} NEXUS_PASSWORD={PERSONA.nexus.password}")
-    print(f"\nBank connection name: {PERSONA.nexus.bank_connection}")
-    print(f"Imported bank account label: {PERSONA.nexus.bank_label}")
-    try:
-        input("\npress enter to stop LibEuFin test environment ...")
-    except:
-        pass
-    print("exiting!")
-
 # Tests whether Nexus knows the imported bank account.
 def test_imported_account():
     resp = assertResponse(
