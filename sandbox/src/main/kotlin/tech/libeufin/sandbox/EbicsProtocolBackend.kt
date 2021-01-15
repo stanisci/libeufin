@@ -441,7 +441,7 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
  *
  * @param type 52 or 53.
  */
-private fun constructCamtResponse(type: Int, header: EbicsRequest.Header, subscriber: EbicsSubscriberEntity): MutableList<String> {
+private fun constructCamtResponse(type: Int, header: EbicsRequest.Header, subscriber: EbicsSubscriberEntity): String {
     val dateRange = (header.static.orderDetails?.orderParams as EbicsRequest.StandardOrderParams).dateRange
     val (start: LocalDateTime, end: LocalDateTime) = if (dateRange != null) {
         Pair(
@@ -452,7 +452,7 @@ private fun constructCamtResponse(type: Int, header: EbicsRequest.Header, subscr
     val bankAccount = getBankAccountFromSubscriber(subscriber)
     logger.info("getting history for account with iban ${bankAccount.iban}")
     val history = historyForAccount(bankAccount.iban)
-    return mutableListOf(buildCamtString(type, bankAccount.iban, history))
+    return buildCamtString(type, bankAccount.iban, history)
 }
 
 /**
@@ -591,15 +591,11 @@ private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
         requestContext.requestObject.header,
         requestContext.subscriber
     )
-    // FIXME: this function should be replaced with one that fills only
-    // *one* CAMT document with multiple "Ntry" elements.
-    return camt.map {
-        if (!XMLUtil.validateFromString(it)) throw SandboxError(
+   if (!XMLUtil.validateFromString(camt)) throw SandboxError(
             HttpStatusCode.InternalServerError,
             "CAMT document was generated invalid"
-        )
-        it.toByteArray(Charsets.UTF_8)
-    }.zip()
+   )
+    return listOf(camt.toByteArray(Charsets.UTF_8)).zip()
 }
 
 private suspend fun ApplicationCall.handleEbicsHia(header: EbicsUnsecuredRequest.Header, orderData: ByteArray) {
