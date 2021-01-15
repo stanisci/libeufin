@@ -808,6 +808,11 @@ def bankaccount_generate_transactions(obj, account_label):
 @click.option("--amount", help="amount, no currency", prompt=True)
 @click.option("--currency", help="currency", prompt=True)
 @click.option("--subject", help="payment subject", prompt=True)
+@click.option(
+    "--direction",
+    help="direction respect to the bank account hosted at Sandbox: allows DBIT/CRDT values.",
+    prompt=True
+)
 @click.pass_obj
 def book_payment(
     obj,
@@ -820,6 +825,7 @@ def book_payment(
     amount,
     currency,
     subject,
+    direction,
 ):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/payments")
@@ -833,6 +839,7 @@ def book_payment(
         amount=amount,
         currency=currency,
         subject=subject,
+        direction=direction
     )
     try:
         resp = post(url, json=body)
