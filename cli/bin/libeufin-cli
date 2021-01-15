@@ -218,7 +218,7 @@ def new_ebics_connection(
     try:
         resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
-        print(f"Could not reach nexus at {url}: {resp.json()}")
+        print(f"Could not reach nexus at {url}")
         exit(1)
 
     tell_user(resp)
