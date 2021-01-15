@@ -452,9 +452,9 @@ def show(obj):
 def prepare_payment(
     obj,
     account_name,
-    credit_iban,
-    credit_bic,
-    credit_name,
+    creditor_iban,
+    creditor_bic,
+    creditor_name,
     payment_amount,
     payment_subject,
 ):
@@ -462,9 +462,9 @@ def prepare_payment(
         obj.nexus_base_url, "/bank-accounts/{}/payment-initiations".format(account_name)
     )
     body = dict(
-        iban=credit_iban,
-        bic=credit_bic,
-        name=credit_name,
+        iban=creditor_iban,
+        bic=creditor_bic,
+        name=creditor_name,
         subject=payment_subject,
         amount=payment_amount,
     )
@@ -475,7 +475,7 @@ def prepare_payment(
         print("Could not reach nexus at " + url)
         exit(1)
 
-    tell_user(resp)
+    tell_user(resp, withsuccess=True)
 
 
 @accounts.command(help="submit a prepared payment")
