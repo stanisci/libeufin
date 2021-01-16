@@ -329,7 +329,6 @@ data class FacadeShowInfo(
 data class FacadeInfo(
     val name: String,
     val type: String,
-    val creator: String,
     val bankAccountsRead: MutableList<String>? = mutableListOf(),
     val bankAccountsWrite: MutableList<String>? = mutableListOf(),
     val bankConnectionsRead: MutableList<String>? = mutableListOf(),
