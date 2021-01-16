@@ -564,6 +564,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     authenticateRequest(call.request)
                 }
                 submitAllPaymentInitiations(client, accountId)
+                call.respond(object { })
                 return@post
             }
 

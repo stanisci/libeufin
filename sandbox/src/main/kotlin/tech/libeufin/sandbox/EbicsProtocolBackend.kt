@@ -57,10 +57,10 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 data class PainParseResult(
     val creditorIban: String,
     val creditorName: String,
-    val creditorBic: String,
-    val debitorIban: String,
-    val debitorName: String,
-    val debitorBic: String,
+    val creditorBic: String?,
+    val debtorIban: String,
+    val debtorName: String,
+    val debtorBic: String?,
     val subject: String,
     val amount: Amount,
     val currency: String,
@@ -504,7 +504,7 @@ private fun parsePain001(paymentRequest: String, initiatorName: String): PainPar
                                     focusElement.textContent
                                 }
                             }
-                            val creditorBic = requireUniqueChildNamed("CdtrAgt") {
+                            val creditorBic = maybeUniqueChildNamed("CdtrAgt") {
                                 requireUniqueChildNamed("FinInstnId") {
                                     requireUniqueChildNamed("BIC") {
                                         focusElement.textContent
@@ -525,9 +525,9 @@ private fun parsePain001(paymentRequest: String, initiatorName: String): PainPar
                         currency = txDetails.amt.getAttribute("Ccy"),
                         amount = Amount(txDetails.amt.textContent),
                         subject = txDetails.subject,
-                        debitorIban = debtorIban,
-                        debitorName = debtorName,
-                        debitorBic = debtorBic,
+                        debtorIban = debtorIban,
+                        debtorName = debtorName,
+                        debtorBic = debtorBic,
                         creditorName = txDetails.creditorName,
                         creditorIban = txDetails.creditorIban,
                         creditorBic = txDetails.creditorBic,
@@ -550,13 +550,13 @@ private fun handleCct(paymentRequest: String, initiatorName: String, ctx: Reques
     transaction {
         try {
             BankAccountTransactionsTable.insert {
-                it[account] = getBankAccountFromIban(parseResult.debitorIban).id
+                it[account] = getBankAccountFromIban(parseResult.debtorIban).id
                 it[creditorIban] = parseResult.creditorIban
                 it[creditorName] = parseResult.creditorName
                 it[creditorBic] = parseResult.creditorBic
-                it[debtorIban] = parseResult.debitorIban
-                it[debtorName] = parseResult.debitorName
-                it[debtorBic] = parseResult.debitorBic
+                it[debtorIban] = parseResult.debtorIban
+                it[debtorName] = parseResult.debtorName
+                it[debtorBic] = parseResult.debtorBic
                 it[subject] = parseResult.subject
                 it[amount] = parseResult.amount.toString()
                 it[currency] = parseResult.currency
