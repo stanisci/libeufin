@@ -282,13 +282,17 @@ private suspend fun talerTransfer(call: ApplicationCall) {
                      * Normally should point to the next round where the background
                      * routine will send new PAIN.001 data to the bank; work in progress..
                      */
-                    timestamp = GnunetTimestamp(System.currentTimeMillis()),
+                    timestamp = roundTimestamp(GnunetTimestamp(System.currentTimeMillis())),
                     row_id = opaqueRowId
                 )
             ),
             ContentType.Application.Json
         )
     )
+}
+
+fun roundTimestamp(t: GnunetTimestamp): GnunetTimestamp {
+    return GnunetTimestamp(t.t_ms - (t.t_ms % 1000))
 }
 
 /**
