@@ -558,6 +558,17 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 return@post
             }
 
+            post("/bank-accounts/{accountid}/submit-all-payment-initiations") {
+                val uuid = ensureLong(call.parameters["uuid"])
+                val accountId = ensureNonNull(call.parameters["accountid"])
+                val res = transaction {
+                    authenticateRequest(call.request)
+                }
+                submitAllPaymentInitiations(client, accountId)
+                call.respondText("Payment ${uuid} submitted")
+                return@post
+            }
+
             get("/bank-accounts/{accountid}/payment-initiations") {
                 val ret = InitiatedPayments()
                 transaction {
