@@ -232,8 +232,9 @@ private suspend fun talerTransfer(call: ApplicationCall) {
     val transferRequest = call.receive<TalerTransferRequest>()
     val amountObj = parseAmount(transferRequest.amount)
     val creditorObj = parsePayto(transferRequest.credit_account)
-    val opaque_row_id = transaction {
-        val exchangeUser = authenticateRequest(call.request)
+    val opaqueRowId = transaction {
+        // FIXME: re-enable authentication (https://bugs.gnunet.org/view.php?id=6703)
+        // val exchangeUser = authenticateRequest(call.request)
         val creditorData = parsePayto(transferRequest.credit_account)
         /** Checking the UID has the desired characteristics */
         TalerRequestedPaymentEntity.find {
@@ -282,7 +283,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
                      * routine will send new PAIN.001 data to the bank; work in progress..
                      */
                     timestamp = GnunetTimestamp(System.currentTimeMillis()),
-                    row_id = opaque_row_id
+                    row_id = opaqueRowId
                 )
             ),
             ContentType.Application.Json
