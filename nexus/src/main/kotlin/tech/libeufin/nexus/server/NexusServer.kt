@@ -77,13 +77,13 @@ fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
                 val state = TalerFacadeStateEntity.find {
                     TalerFacadeStateTable.facade eq facade.id
                 }.firstOrNull()
-                if (state == null) throw NexusError(HttpStatusCode.NotFound,"State of facade ${facade.id} not found")
+                if (state == null) throw NexusError(HttpStatusCode.NotFound, "State of facade ${facade.id} not found")
                 val node = jacksonObjectMapper().createObjectNode()
                 node.put("bankConnection", state.bankConnection)
                 node.put("bankAccount", state.bankAccount)
                 node
             }
-            else -> throw NexusError(HttpStatusCode.NotFound,"Facade type ${type} not supported")
+            else -> throw NexusError(HttpStatusCode.NotFound, "Facade type ${type} not supported")
         }
     }
 }
@@ -218,7 +218,8 @@ fun requireBankConnectionInternal(connId: String): NexusBankConnectionEntity {
 fun requireBankConnection(call: ApplicationCall, parameterKey: String): NexusBankConnectionEntity {
     val name = call.parameters[parameterKey]
     if (name == null) {
-        throw NexusError(HttpStatusCode.NotFound,
+        throw NexusError(
+            HttpStatusCode.NotFound,
             "Parameter '${parameterKey}' wasn't found in URI"
         )
     }
@@ -317,12 +318,12 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/config") {
-                 call.respond(
-                     object {
-                         val version = "0.0.0"
-                         val currency = "EUR"
-                     }
-                 )
+                call.respond(
+                    object {
+                        val version = "0.0.0"
+                        val currency = "EUR"
+                    }
+                )
                 return@get
             }
             // Shows information about the requesting user.
@@ -453,10 +454,12 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     // sanity checks.
                     when (schedSpec.type) {
                         "fetch" -> {
-                            val fetchSpec = jacksonObjectMapper().treeToValue(schedSpec.params, FetchSpecJson::class.java)
-                                ?: throw NexusError(HttpStatusCode.BadRequest, "bad fetch spec")
+                            val fetchSpec =
+                                jacksonObjectMapper().treeToValue(schedSpec.params, FetchSpecJson::class.java)
+                                    ?: throw NexusError(HttpStatusCode.BadRequest, "bad fetch spec")
                         }
-                        "submit" -> {}
+                        "submit" -> {
+                        }
                         else -> throw NexusError(HttpStatusCode.BadRequest, "unsupported task type")
                     }
                     val oldSchedTask = NexusScheduledTaskEntity.find {
@@ -478,7 +481,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                             jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(schedSpec.params)
                     }
                 }
-                call.respond(object { })
+                call.respond(object {})
                 return@post
             }
 
@@ -526,7 +529,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         oldSchedTask.delete()
                     }
                 }
-                call.respond(object { })
+                call.respond(object {})
             }
 
             get("/bank-accounts/{accountid}") {
@@ -564,7 +567,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     authenticateRequest(call.request)
                 }
                 submitAllPaymentInitiations(client, accountId)
-                call.respond(object { })
+                call.respond(object {})
                 return@post
             }
 
@@ -618,7 +621,9 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         creditorIban = res.paymentInitiation.creditorIban,
                         amount = "${res.paymentInitiation.currency}:${res.paymentInitiation.sum}",
                         subject = res.paymentInitiation.subject,
-                        submissionDate = if (sd != null) { importDateFromMillis(sd).toDashedDate() } else null,
+                        submissionDate = if (sd != null) {
+                            importDateFromMillis(sd).toDashedDate()
+                        } else null,
                         status = res.paymentStatus,
                         preparationDate = importDateFromMillis(res.paymentInitiation.preparationDate).toDashedDate()
                     )
@@ -678,19 +683,25 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     )
                 }
                 val newTransactions = fetchBankAccountTransactions(client, fetchSpec, accountid)
-                call.respond(object {val newTransactions = newTransactions})
+                call.respond(object {
+                    val newTransactions = newTransactions
+                })
                 return@post
             }
 
             // Asks list of transactions ALREADY downloaded from the bank.
             get("/bank-accounts/{accountid}/transactions") {
-                val bankAccount = expectNonNull(call.parameters["accountid"])
+                val bankAccountId = expectNonNull(call.parameters["accountid"])
                 val start = call.request.queryParameters["start"]
                 val end = call.request.queryParameters["end"]
+                authenticateRequest(call.request)
                 val ret = Transactions()
                 transaction {
-                    authenticateRequest(call.request).id.value
-                    NexusBankTransactionEntity.all().map {
+                    val bankAccount = NexusBankAccountEntity.findById(bankAccountId)
+                    if (bankAccount == null) {
+                        throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
+                    }
+                    NexusBankTransactionEntity.find { NexusBankTransactionsTable.bankAccount eq bankAccount.id }.map {
                         val tx = jacksonObjectMapper().readValue(
                             it.transactionJson, CamtBankAccountEntry::class.java
                         )
@@ -897,7 +908,9 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/facades") {
-                val ret = object { val facades = mutableListOf<FacadeShowInfo>() }
+                val ret = object {
+                    val facades = mutableListOf<FacadeShowInfo>()
+                }
                 transaction {
                     val user = authenticateRequest(call.request)
                     FacadeEntity.find {
@@ -953,11 +966,14 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         authenticateRequest(call.request)
                         requireBankConnection(call, "connid")
                     }
-                    when(conn.type) {
+                    when (conn.type) {
                         "ebics" -> {
                             ebicsFetchAccounts(conn.id.value, client)
                         }
-                        else -> throw NexusError(HttpStatusCode.NotImplemented, "connection not supported for ${conn.type}")
+                        else -> throw NexusError(
+                            HttpStatusCode.NotImplemented,
+                            "connection not supported for ${conn.type}"
+                        )
                     }
                     call.respond(object {})
                 }
@@ -969,7 +985,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         val conn = requireBankConnection(call, "connid")
                         OfferedBankAccountsTable.select {
                             OfferedBankAccountsTable.bankConnection eq conn.id.value
-                        }.forEach {offeredAccountRow ->
+                        }.forEach { offeredAccountRow ->
                             ret.accounts.add(
                                 OfferedBankAccount(
                                     ownerName = offeredAccountRow[accountHolder],
