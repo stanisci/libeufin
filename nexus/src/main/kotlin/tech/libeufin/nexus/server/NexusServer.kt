@@ -274,7 +274,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
             exception<Exception> { cause ->
                 logger.error("Uncaught exception while handling '${call.request.uri}'")
-                logger.error(cause.stackTrace.toString())
+                cause.printStackTrace()
                 call.respond(
                     HttpStatusCode.InternalServerError,
                     NexusErrorJson(
