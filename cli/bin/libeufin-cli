@@ -572,10 +572,11 @@ def list_facades(obj, connection_name):
 
 @facades.command(help="create a new (Taler) facade")
 @click.option("--facade-name", help="Name of the facade", required=True)
+@click.option("--currency", help="Facade's currency", required=True)
 @click.argument("connection-name")
 @click.argument("account-name")
 @click.pass_obj
-def new_facade(obj, facade_name, connection_name, account_name):
+def new_facade(obj, facade_name, connection_name, account_name, currency):
     url = urljoin(obj.nexus_base_url, "/facades")
     try:
         resp = post(
@@ -586,10 +587,11 @@ def new_facade(obj, facade_name, connection_name, account_name):
                 type="taler-wire-gateway",
                 creator=obj.username,
                 config=dict(
+                    currency=currency,
                     bankAccount=account_name,
                     bankConnection=connection_name,
                     reserveTransferLevel="UNUSED",
-                    intervalIncremental="UNUSED",
+                    intervalIncremental="UNUSED"
                 ),
             ),
         )
