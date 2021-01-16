@@ -355,6 +355,31 @@ fun serverMain(dbName: String, port: Int) {
                 call.respondText("Payment created")
                 return@post
             }
+            post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
+                val body = call.receive<IncomingPaymentInfo>()
+                // FIXME: generate nicer UUID!
+                val random = Random.nextLong(0, Long.MAX_VALUE)
+                val accountLabel = ensureNonNull(call.parameters["label"])
+                transaction {
+                    val account = getBankAccountFromLabel(accountLabel)
+                    BankAccountTransactionsTable.insert {
+                        it[creditorIban] = account.iban
+                        it[creditorBic] = account.bic
+                        it[creditorName] = account.name
+                        it[debitorIban] = body.debtorIban
+                        it[debitorBic] = body.debtorBic
+                        it[debitorName] = body.debtorName
+                        it[subject] = body.subject
+                        it[amount] = body.amount
+                        it[currency] = account.currency
+                        it[date] = Instant.now().toEpochMilli()
+                        it[pmtInfId] = random.toString()
+                        it[msgId] = random.toString()
+                        it[BankAccountTransactionsTable.account] = account.id
+                        it[direction] = "CRDT"
+                    }
+                }
+            }
             /**
              * Associates a new bank account with an existing Ebics subscriber.
              */

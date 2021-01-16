@@ -45,3 +45,12 @@ data class RawPayment(
     val msgId: String? = null
 
 )
+
+data class IncomingPaymentInfo(
+    val debtorIban: String,
+    val debtorBic: String,
+    val debtorName: String,
+    val amount: String,
+    val currency: String,
+    val subject: String
+)
