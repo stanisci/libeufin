@@ -355,6 +355,7 @@ fun serverMain(dbName: String, port: Int) {
                 call.respondText("Payment created")
                 return@post
             }
+
             post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
                 val body = call.receive<IncomingPaymentInfo>()
                 // FIXME: generate nicer UUID!
@@ -379,6 +380,7 @@ fun serverMain(dbName: String, port: Int) {
                         it[direction] = "CRDT"
                     }
                 }
+                call.respond(object {})
             }
             /**
              * Associates a new bank account with an existing Ebics subscriber.
