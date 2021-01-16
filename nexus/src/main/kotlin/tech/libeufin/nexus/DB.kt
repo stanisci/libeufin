@@ -340,7 +340,6 @@ object TalerFacadeStateTable : IntIdTable() {
 
     /* "statement", "report", "notification" */
     val reserveTransferLevel = text("reserveTransferLevel")
-    val intervalIncrement = text("intervalIncrement")
     val facade = reference("facade", FacadesTable)
 
     // highest ID seen in the raw transactions table.
@@ -356,7 +355,6 @@ class TalerFacadeStateEntity(id: EntityID<Int>) : IntEntity(id) {
 
     /* "statement", "report", "notification" */
     var reserveTransferLevel by TalerFacadeStateTable.reserveTransferLevel
-    var intervalIncrement by TalerFacadeStateTable.intervalIncrement
     var facade by FacadeEntity referencedOn TalerFacadeStateTable.facade
     var highestSeenMsgID by TalerFacadeStateTable.highestSeenMsgID
 }

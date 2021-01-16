@@ -924,7 +924,6 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     TalerFacadeStateEntity.new {
                         bankAccount = body.config.bankAccount
                         bankConnection = body.config.bankConnection
-                        intervalIncrement = body.config.intervalIncremental
                         reserveTransferLevel = body.config.reserveTransferLevel
                         facade = newFacade
                         currency = body.config.currency

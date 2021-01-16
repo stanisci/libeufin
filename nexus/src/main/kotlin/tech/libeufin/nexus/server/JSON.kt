@@ -340,7 +340,6 @@ data class TalerWireGatewayFacadeConfig(
     val bankAccount: String,
     val bankConnection: String,
     val reserveTransferLevel: String,
-    val intervalIncremental: String,
     val currency: String
 )
 
