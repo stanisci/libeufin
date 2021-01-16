@@ -43,7 +43,6 @@ data class RawPayment(
     // along every API call using this object.
     val pmtInfId: String? = null,
     val msgId: String? = null
-
 )
 
 data class IncomingPaymentInfo(

@@ -80,7 +80,6 @@ class DBTest {
                     bankAccount = "b"
                     bankConnection = "b"
                     reserveTransferLevel = "any"
-                    intervalIncrement = "any"
                     this.facade = facade
                     currency = "UNUSED"
                 }
