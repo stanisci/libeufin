@@ -17,7 +17,7 @@ fun historyForAccount(iban: String): List<RawPayment> {
         logger.debug("Querying transactions involving: ${iban}")
         BankAccountTransactionsTable.select {
             BankAccountTransactionsTable.creditorIban eq iban or
-                    (BankAccountTransactionsTable.debitorIban eq iban)
+                    (BankAccountTransactionsTable.debtorIban eq iban)
             /**
             FIXME: add the following condition too:
             and (BankAccountTransactionsTable.date.between(start.millis, end.millis))
@@ -34,9 +34,9 @@ fun historyForAccount(iban: String): List<RawPayment> {
                     creditorIban = it[BankAccountTransactionsTable.creditorIban],
                     creditorBic = it[BankAccountTransactionsTable.creditorBic],
                     creditorName = it[BankAccountTransactionsTable.creditorName],
-                    debitorIban = it[BankAccountTransactionsTable.debitorIban],
-                    debitorBic = it[BankAccountTransactionsTable.debitorBic],
-                    debitorName = it[BankAccountTransactionsTable.debitorName],
+                    debitorIban = it[BankAccountTransactionsTable.debtorIban],
+                    debitorBic = it[BankAccountTransactionsTable.debtorBic],
+                    debitorName = it[BankAccountTransactionsTable.debtorName],
                     date = importDateFromMillis(it[BankAccountTransactionsTable.date]).toDashedDate(),
                     amount = it[BankAccountTransactionsTable.amount],
                     currency = it[BankAccountTransactionsTable.currency],

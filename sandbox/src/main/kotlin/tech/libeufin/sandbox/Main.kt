@@ -70,9 +70,9 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorIban
 import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorName
 import tech.libeufin.sandbox.BankAccountTransactionsTable.currency
 import tech.libeufin.sandbox.BankAccountTransactionsTable.date
-import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorBic
-import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorIban
-import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorName
+import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorBic
+import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorIban
+import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorName
 import tech.libeufin.sandbox.BankAccountTransactionsTable.direction
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
@@ -305,14 +305,14 @@ fun serverMain(dbName: String, port: Int) {
                         ret.payments.add(
                             RawPayment(
                                 creditorIban = it[creditorIban],
-                                debitorIban = it[debitorIban],
+                                debitorIban = it[debtorIban],
                                 subject = it[BankAccountTransactionsTable.subject],
                                 date = it[date].toHttpDateString(),
                                 amount = it[amount],
                                 creditorBic = it[creditorBic],
                                 creditorName = it[creditorName],
-                                debitorBic = it[debitorBic],
-                                debitorName = it[debitorName],
+                                debitorBic = it[debtorBic],
+                                debitorName = it[debtorName],
                                 currency = it[currency],
                                 direction = it[direction]
                             )
@@ -339,9 +339,9 @@ fun serverMain(dbName: String, port: Int) {
                         it[creditorIban] = body.creditorIban
                         it[creditorBic] = body.creditorBic
                         it[creditorName] = body.creditorName
-                        it[debitorIban] = body.debitorIban
-                        it[debitorBic] = body.debitorBic
-                        it[debitorName] = body.debitorName
+                        it[debtorIban] = body.debitorIban
+                        it[debtorBic] = body.debitorBic
+                        it[debtorName] = body.debitorName
                         it[subject] = body.subject
                         it[amount] = body.amount
                         it[currency] = body.currency
@@ -367,9 +367,9 @@ fun serverMain(dbName: String, port: Int) {
                         it[creditorIban] = account.iban
                         it[creditorBic] = account.bic
                         it[creditorName] = account.name
-                        it[debitorIban] = body.debtorIban
-                        it[debitorBic] = body.debtorBic
-                        it[debitorName] = body.debtorName
+                        it[debtorIban] = body.debtorIban
+                        it[debtorBic] = body.debtorBic
+                        it[debtorName] = body.debtorName
                         it[subject] = body.subject
                         it[amount] = body.amount
                         it[currency] = account.currency
@@ -435,14 +435,14 @@ fun serverMain(dbName: String, port: Int) {
                                 ret.payments.add(
                                     RawPayment(
                                         creditorIban = it[creditorIban],
-                                        debitorIban = it[debitorIban],
+                                        debitorIban = it[debtorIban],
                                         subject = it[BankAccountTransactionsTable.subject],
                                         date = it[date].toHttpDateString(),
                                         amount = it[amount],
                                         creditorBic = it[creditorBic],
                                         creditorName = it[creditorName],
-                                        debitorBic = it[debitorBic],
-                                        debitorName = it[debitorName],
+                                        debitorBic = it[debtorBic],
+                                        debitorName = it[debtorName],
                                         currency = it[currency],
                                         direction = it[direction]
                                     )
@@ -469,9 +469,9 @@ fun serverMain(dbName: String, port: Int) {
                             it[creditorIban] = account.iban
                             it[creditorBic] = account.bic
                             it[creditorName] = account.name
-                            it[debitorIban] = "DE64500105178797276788"
-                            it[debitorBic] = "DEUTDEBB101"
-                            it[debitorName] = "Max Mustermann"
+                            it[debtorIban] = "DE64500105178797276788"
+                            it[debtorBic] = "DEUTDEBB101"
+                            it[debtorName] = "Max Mustermann"
                             it[subject] = "sample transaction $random"
                             it[BankAccountTransactionsTable.amount] = amount.toString()
                             it[currency] = account.currency
@@ -488,9 +488,9 @@ fun serverMain(dbName: String, port: Int) {
                         val amount = Random.nextLong(5, 25)
 
                         BankAccountTransactionsTable.insert {
-                            it[debitorIban] = account.iban
-                            it[debitorBic] = account.bic
-                            it[debitorName] = account.name
+                            it[debtorIban] = account.iban
+                            it[debtorBic] = account.bic
+                            it[debtorName] = account.name
                             it[creditorIban] = "DE64500105178797276788"
                             it[creditorBic] = "DEUTDEBB101"
                             it[creditorName] = "Max Mustermann"

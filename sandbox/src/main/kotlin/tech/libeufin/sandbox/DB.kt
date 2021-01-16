@@ -248,11 +248,11 @@ class EbicsUploadTransactionChunkEntity(id: EntityID<String>) : Entity<String>(i
  */
 object BankAccountTransactionsTable : Table() {
     val creditorIban = text("creditorIban")
-    val creditorBic = text("creditorBic")
+    val creditorBic = text("creditorBic").nullable()
     val creditorName = text("creditorName")
-    val debitorIban = text("debitorIban")
-    val debitorBic = text("debitorBic")
-    val debitorName = text("debitorName")
+    val debtorIban = text("debtorIban")
+    val debtorBic = text("debtorBic").nullable()
+    val debtorName = text("debtorName")
     val subject = text("subject")
     val amount = text("amount")
     val currency = text("currency")

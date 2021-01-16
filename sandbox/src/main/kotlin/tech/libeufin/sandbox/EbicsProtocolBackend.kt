@@ -35,18 +35,6 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
-import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
-import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorBic
-import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorIban
-import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorName
-import tech.libeufin.sandbox.BankAccountTransactionsTable.currency
-import tech.libeufin.sandbox.BankAccountTransactionsTable.date
-import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorBic
-import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorIban
-import tech.libeufin.sandbox.BankAccountTransactionsTable.debitorName
-import tech.libeufin.sandbox.BankAccountTransactionsTable.direction
-import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
-import tech.libeufin.sandbox.BankAccountTransactionsTable.subject
 import tech.libeufin.util.*
 import tech.libeufin.util.XMLUtil.Companion.signEbicsResponse
 import tech.libeufin.util.ebics_h004.*
@@ -197,9 +185,12 @@ private fun getRelatedParty(branch: XmlElementBuilder, payment: RawPayment) {
             text(otherParty.iban)
         }
     }
-    branch.element("RltdAgts") {
-        element(otherParty.bicPath) {
-            text(otherParty.bic)
+    val otherPartyBic = otherParty.bic
+    if (otherPartyBic != null) {
+        branch.element("RltdAgts") {
+            element(otherParty.bicPath) {
+                text(otherPartyBic)
+            }
         }
     }
 }
@@ -563,9 +554,9 @@ private fun handleCct(paymentRequest: String, initiatorName: String, ctx: Reques
                 it[creditorIban] = parseResult.creditorIban
                 it[creditorName] = parseResult.creditorName
                 it[creditorBic] = parseResult.creditorBic
-                it[debitorIban] = parseResult.debitorIban
-                it[debitorName] = parseResult.debitorName
-                it[debitorBic] = parseResult.debitorBic
+                it[debtorIban] = parseResult.debitorIban
+                it[debtorName] = parseResult.debitorName
+                it[debtorBic] = parseResult.debitorBic
                 it[subject] = parseResult.subject
                 it[amount] = parseResult.amount.toString()
                 it[currency] = parseResult.currency

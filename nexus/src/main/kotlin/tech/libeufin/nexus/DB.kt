@@ -177,7 +177,7 @@ object PaymentInitiationsTable : LongIdTable() {
     val instructionId = text("instructionId")
     val subject = text("subject")
     val creditorIban = text("creditorIban")
-    val creditorBic = text("creditorBic")
+    val creditorBic = text("creditorBic").nullable()
     val creditorName = text("creditorName")
     val submitted = bool("submitted").default(false)
 

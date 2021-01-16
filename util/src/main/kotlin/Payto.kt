@@ -8,7 +8,7 @@ import java.net.URI
 data class Payto(
     val name: String,
     val iban: String,
-    val bic: String
+    val bic: String?
 )
 class InvalidPaytoError(msg: String) : Exception(msg)
 
@@ -32,7 +32,12 @@ fun parsePayto(paytoLine: String): Payto {
         throw InvalidPaytoError("'${paytoLine}' has unsupported query string")
     }
     val receiverName = splitParameter.last()
-    val split_path = javaParsedUri.path.split("/").filter { it.isNotEmpty() }
-    if (split_path.size != 2) throw InvalidPaytoError("BIC and IBAN are both mandatory ($split_path)")
-    return Payto(iban = split_path[1], bic = split_path[0], name = receiverName)
+    val splitPath = javaParsedUri.path.split("/").filter { it.isNotEmpty() }
+    if (splitPath.size > 2) {
+        throw InvalidPaytoError("too many path segments in iban payto URI")
+    }
+    if (splitPath.size < 2) {
+        return Payto(iban = splitPath[0], name = receiverName, bic = null)
+    }
+    return Payto(iban = splitPath[1], bic = splitPath[0], name = receiverName)
 }

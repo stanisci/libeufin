@@ -117,14 +117,6 @@ data class TalerAddIncomingResponse(
     val row_id: Long
 )
 
-/**
- * Helper data structures.
- */
-data class Payto(
-    val name: String = "NOTGIVEN",
-    val iban: String,
-    val bic: String = "NOTGIVEN"
-)
 
 /** Sort query results in descending order for negative deltas, and ascending otherwise.  */
 fun <T : Entity<Long>> SizedIterable<T>.orderTaler(delta: Int): List<T> {

@@ -345,7 +345,7 @@ data class TalerWireGatewayFacadeConfig(
 
 data class Pain001Data(
     val creditorIban: String,
-    val creditorBic: String,
+    val creditorBic: String?,
     val creditorName: String,
     val sum: Amount,
     val currency: String,

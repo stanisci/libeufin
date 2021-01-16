@@ -70,9 +70,9 @@ class DBTest {
                     it[creditorIban] = "earns"
                     it[creditorBic] = "BIC"
                     it[creditorName] = "Creditor Name"
-                    it[debitorIban] = "spends"
-                    it[debitorBic] = "BIC"
-                    it[debitorName] = "Debitor Name"
+                    it[debtorIban] = "spends"
+                    it[debtorBic] = "BIC"
+                    it[debtorName] = "Debitor Name"
                     it[subject] = "deal"
                     it[amount] = "EUR:1"
                     it[date] = LocalDateTime.now().millis()

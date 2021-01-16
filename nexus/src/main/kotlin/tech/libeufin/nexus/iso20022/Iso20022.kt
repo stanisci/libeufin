@@ -346,7 +346,7 @@ data class NexusPaymentInitiationData(
     val preparationTimestamp: Long,
     val creditorName: String,
     val creditorIban: String,
-    val creditorBic: String,
+    val creditorBic: String?,
     val instructionId: String?
 )
 
@@ -446,8 +446,11 @@ fun createPain001document(paymentData: NexusPaymentInitiationData): String {
                             attribute("Ccy", paymentData.currency)
                             text(paymentData.amount)
                         }
-                        element("CdtrAgt/FinInstnId/BIC") {
-                            text(paymentData.creditorBic)
+                        val creditorBic = paymentData.creditorBic
+                        if (creditorBic != null) {
+                            element("CdtrAgt/FinInstnId/BIC") {
+                                text(creditorBic)
+                            }
                         }
                         element("Cdtr/Nm") {
                             text(paymentData.creditorName)
