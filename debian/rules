@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+include /usr/share/dpkg/default.mk
+
+export JAVA_HOME = /usr/lib/jvm/default-java
+GROOVY_HOME      = /usr/share/groovy
+
+%:
+	dh $@ --buildsystem=gradle
+
+override_dh_install:
+	dh_install
+	unzip libeufin/build/distributions/libeufin-$(DEB_VERSION_UPSTREAM).zip
+	dh_install libeufin-$(DEB_VERSION_UPSTREAM)/lib/nexus-0.0.1-all.jar $(GROOVY_HOME)/lib
+	dh_install libeufin-$(DEB_VERSION_UPSTREAM)/lib/sandbox-1.0-snapshot-all.jar $(GROOVY_HOME)/lib
+	dh_link $(GROOVY_HOME)/lib/gant-$(DEB_VERSION_UPSTREAM).jar /usr/share/java/libeufin.jar
+	install -D -m755 libeufin-$(DEB_VERSION_UPSTREAM)/bin/libeufin-cli debian/gant/$(GROOVY_HOME)/bin/libeufin-cli
+	install -D -m755 libeufin-$(DEB_VERSION_UPSTREAM)/bin/libeufin-nexus debian/gant/$(GROOVY_HOME)/bin/libeufin-nexus
+	install -D -m755 libeufin-$(DEB_VERSION_UPSTREAM)/bin/libeufin-sandbox debian/gant/$(GROOVY_HOME)/bin/libeufin-sandbox
+	dh_link $(GROOVY_HOME)/bin/libeufin-cli /usr/bin/libeufin-cli
+	dh_link $(GROOVY_HOME)/bin/libeufin-nexus /usr/bin/libeufin-nexus
+	dh_link $(GROOVY_HOME)/bin/libeufin-sandbox /usr/bin/libeufin-sandbox
+
+get-orig-source:
+	uscan --force-download --rename

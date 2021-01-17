@@ -1,0 +1,19 @@
+Source: libeufin
+Section: networking
+Priority: optional
+Maintainer: Taler Systems SA <deb@taler.net>
+Uploaders: Christian Grothoff <grothoff@gnu.org>, Florian Dold <dold@taler.net>
+Build-Depends: ant,
+               gradle-debian-helper,
+               debhelper (>= 10),
+               default-jdk-headless | default-jdk
+Standards-Version: 4.1.0
+Vcs-Git: https://git.taler.net/libeufin.git
+Homepage: https://taler.net/
+
+Package: libeufin
+Architecture: all
+Depends: ant, groovy, ${misc:Depends}
+Recommends: libmaven-ant-tasks-java, maven
+Description: Software package to access FinTS/EBICS based
+ core banking systems.
