@@ -74,6 +74,7 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorBic
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorIban
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorName
 import tech.libeufin.sandbox.BankAccountTransactionsTable.direction
+import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
@@ -425,7 +426,7 @@ fun serverMain(dbName: String, port: Int) {
                 call.respond(accounts)
             }
             get("/admin/bank-accounts/{label}/transactions") {
-                val ret = PaymentsResponse()
+                val ret = AccountTransactions()
                 transaction {
                     val accountLabel = ensureNonNull(call.parameters["label"])
                     transaction {
@@ -433,28 +434,32 @@ fun serverMain(dbName: String, port: Int) {
                         BankAccountTransactionsTable.select { BankAccountTransactionsTable.account eq account.id }
                             .forEach {
                                 ret.payments.add(
-                                    RawPayment(
+                                    PaymentInfo(
+                                        accountLabel = account.label,
                                         creditorIban = it[creditorIban],
-                                        debitorIban = it[debtorIban],
+                                        // FIXME: We need to modify the transactions table to have an actual
+                                        // account servicer reference here.
+                                        accountServicerReference = it[pmtInfId],
+                                        debtorIban = it[debtorIban],
                                         subject = it[BankAccountTransactionsTable.subject],
                                         date = it[date].toHttpDateString(),
                                         amount = it[amount],
                                         creditorBic = it[creditorBic],
                                         creditorName = it[creditorName],
-                                        debitorBic = it[debtorBic],
-                                        debitorName = it[debtorName],
+                                        debtorBic = it[debtorBic],
+                                        debtorName = it[debtorName],
                                         currency = it[currency],
-                                        direction = it[direction]
+                                        creditDebitIndicator = when (it[direction]) {
+                                            "CRDT" -> "credit"
+                                            "DBIT" -> "debit"
+                                            else -> throw Error("invalid direction")
+                                        }
                                     )
                                 )
                             }
                     }
                 }
-                call.respond(
-                    object {
-                        val payments = ret
-                    }
-                )
+                call.respond(ret)
             }
             post("/admin/bank-accounts/{label}/generate-transactions") {
                 transaction {

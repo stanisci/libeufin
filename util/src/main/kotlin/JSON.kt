@@ -53,3 +53,19 @@ data class IncomingPaymentInfo(
     val currency: String,
     val subject: String
 )
+
+data class PaymentInfo(
+    val accountLabel: String,
+    val creditorIban: String,
+    val creditorBic: String?,
+    val creditorName: String,
+    val debtorIban: String,
+    val debtorBic: String?,
+    val debtorName: String,
+    val amount: String,
+    val currency: String,
+    val subject: String,
+    val date: String? = null,
+    val creditDebitIndicator: String,
+    val accountServicerReference: String
+)

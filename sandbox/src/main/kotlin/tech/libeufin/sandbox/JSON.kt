@@ -19,6 +19,7 @@
 
 package tech.libeufin.sandbox
 
+import tech.libeufin.util.PaymentInfo
 import tech.libeufin.util.RawPayment
 
 /**
@@ -48,6 +49,13 @@ data class EbicsHostCreateRequest(
  */
 data class PaymentsResponse(
     val payments: MutableList<RawPayment> = mutableListOf()
+)
+
+/**
+ * List type that show all the payments existing in the system.
+ */
+data class AccountTransactions(
+    val payments: MutableList<PaymentInfo> = mutableListOf()
 )
 
 /**
