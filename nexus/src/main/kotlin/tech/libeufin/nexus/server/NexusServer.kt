@@ -694,9 +694,9 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val bankAccountId = expectNonNull(call.parameters["accountid"])
                 val start = call.request.queryParameters["start"]
                 val end = call.request.queryParameters["end"]
-                authenticateRequest(call.request)
                 val ret = Transactions()
                 transaction {
+                    authenticateRequest(call.request)
                     val bankAccount = NexusBankAccountEntity.findById(bankAccountId)
                     if (bankAccount == null) {
                         throw NexusError(HttpStatusCode.NotFound, "unknown bank account")

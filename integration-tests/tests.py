@@ -303,13 +303,11 @@ def make_taler_facade():
             json=dict(
                 name=PERSONA.nexus.taler_facade_name,
                 type="taler-wire-gateway",
-                creator=PERSONA.nexus.username,
                 config=dict(
                     currency="EUR",
                     bankAccount=PERSONA.nexus.bank_label,
                     bankConnection=PERSONA.nexus.bank_connection,
                     reserveTransferLevel="UNUSED",
-                    intervalIncremental="UNUSED"
                 )
             ),
             auth=PERSONA.nexus.auth
