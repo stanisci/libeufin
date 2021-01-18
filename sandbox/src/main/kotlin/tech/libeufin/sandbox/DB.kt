@@ -258,11 +258,10 @@ object BankAccountTransactionsTable : Table() {
     val currency = text("currency")
     val date = long("date")
     val pmtInfId = text("pmtInfId")
-    val msgId = text("msgId")
     val direction = text("direction")
     val account = reference("account", BankAccountsTable)
 
-    override val primaryKey = PrimaryKey(pmtInfId, msgId)
+    override val primaryKey = PrimaryKey(pmtInfId)
 }
 
 /**

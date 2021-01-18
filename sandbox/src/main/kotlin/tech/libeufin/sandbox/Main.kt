@@ -348,7 +348,6 @@ fun serverMain(dbName: String, port: Int) {
                         it[currency] = body.currency
                         it[date] = Instant.now().toEpochMilli()
                         it[pmtInfId] = random.toString()
-                        it[msgId] = random.toString()
                         it[account] = getBankAccountFromIban(localIban).id
                         it[direction] = body.direction
                     }
@@ -376,7 +375,6 @@ fun serverMain(dbName: String, port: Int) {
                         it[currency] = account.currency
                         it[date] = Instant.now().toEpochMilli()
                         it[pmtInfId] = random.toString()
-                        it[msgId] = random.toString()
                         it[BankAccountTransactionsTable.account] = account.id
                         it[direction] = "CRDT"
                     }
@@ -482,7 +480,6 @@ fun serverMain(dbName: String, port: Int) {
                             it[currency] = account.currency
                             it[date] = Instant.now().toEpochMilli()
                             it[pmtInfId] = random.toString()
-                            it[msgId] = random.toString()
                             it[BankAccountTransactionsTable.account] = account.id
                             it[direction] = "CRDT"
                         }
@@ -504,7 +501,6 @@ fun serverMain(dbName: String, port: Int) {
                             it[currency] = account.currency
                             it[date] = Instant.now().toEpochMilli()
                             it[pmtInfId] = random.toString()
-                            it[msgId] = random.toString()
                             it[BankAccountTransactionsTable.account] = account.id
                             it[direction] = "DBIT"
                         }

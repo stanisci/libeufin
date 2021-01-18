@@ -562,7 +562,6 @@ private fun handleCct(paymentRequest: String, initiatorName: String, ctx: Reques
                 it[currency] = parseResult.currency
                 it[date] = Instant.now().toEpochMilli()
                 it[pmtInfId] = parseResult.pmtInfId
-                it[msgId] = parseResult.msgId
                 it[direction] = "DBIT"
             }
         } catch (e: ExposedSQLException) {
