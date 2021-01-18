@@ -78,7 +78,6 @@ class DBTest {
                     it[date] = LocalDateTime.now().millis()
                     it[currency] = "EUR"
                     it[pmtInfId] = "0"
-                    it[msgId] = "0"
                     it[direction] = "DBIT"
                 }
             }
