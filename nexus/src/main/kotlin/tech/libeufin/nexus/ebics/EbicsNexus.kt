@@ -765,12 +765,12 @@ suspend fun submitEbicsPaymentInitiation(httpClient: HttpClient, paymentInitiati
                 creditorIban = paymentInitiation.creditorIban,
                 creditorName = paymentInitiation.creditorName,
                 creditorBic = paymentInitiation.creditorBic,
-                messageId = paymentInitiation.messageId,
                 paymentInformationId = paymentInitiation.paymentInformationId,
                 preparationTimestamp = paymentInitiation.preparationDate,
                 subject = paymentInitiation.subject,
                 instructionId = paymentInitiation.instructionId,
-                endToEndId = paymentInitiation.endToEndId
+                endToEndId = paymentInitiation.endToEndId,
+                messageId = paymentInitiation.messageId
             )
         )
         if (!XMLUtil.validateFromString(painMessage)) throw NexusError(

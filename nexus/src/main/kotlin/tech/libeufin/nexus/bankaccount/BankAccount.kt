@@ -182,17 +182,15 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
             // This block tries to acknowledge a former outgoing payment as booked.
             if (singletonBatchedTransaction.creditDebitIndicator == CreditDebitIndicator.DBIT) {
                 val t0 = singletonBatchedTransaction.details
-                val msgId = t0.messageId
                 val pmtInfId = t0.paymentInformationId
-                if (msgId != null && pmtInfId != null) {
+                if (pmtInfId != null) {
                     val paymentInitiation = PaymentInitiationEntity.find {
-                        (PaymentInitiationsTable.messageId eq msgId) and
-                                (PaymentInitiationsTable.bankAccount eq acct.id) and
-                                (PaymentInitiationsTable.paymentInformationId eq pmtInfId)
+                        PaymentInitiationsTable.bankAccount eq acct.id and (
+                                PaymentInitiationsTable.paymentInformationId eq pmtInfId)
 
                     }.firstOrNull()
                     if (paymentInitiation != null) {
-                        logger.info("Could confirm one initiated payment: $msgId")
+                        logger.info("Could confirm one initiated payment: $pmtInfId")
                         paymentInitiation.confirmationTransaction = rawEntity
                     }
                 }
@@ -271,8 +269,8 @@ fun addPaymentInitiation(paymentData: Pain001Data, debitorAccount: NexusBankAcco
             creditorBic = paymentData.creditorBic
             creditorIban = paymentData.creditorIban
             preparationDate = now
-            messageId = "leuf-mp1-$nowHex-$painHex-$acctHex"
             endToEndId = "leuf-e-$nowHex-$painHex-$acctHex"
+            messageId = "leuf-mp1-$nowHex-$painHex-$acctHex"
             paymentInformationId = "leuf-p-$nowHex-$painHex-$acctHex"
             instructionId = "leuf-i-$nowHex-$painHex-$acctHex"
         }

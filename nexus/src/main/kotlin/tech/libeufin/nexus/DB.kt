@@ -172,7 +172,6 @@ object PaymentInitiationsTable : LongIdTable() {
     val sum = amount("sum")
     val currency = varchar("currency", length = 3).default("EUR")
     val endToEndId = text("endToEndId")
-    val messageId = text("messageId")
     val paymentInformationId = text("paymentInformationId")
     val instructionId = text("instructionId")
     val subject = text("subject")
@@ -180,6 +179,7 @@ object PaymentInitiationsTable : LongIdTable() {
     val creditorBic = text("creditorBic").nullable()
     val creditorName = text("creditorName")
     val submitted = bool("submitted").default(false)
+    val messageId = text("messageId")
 
     /**
      * Points at the raw transaction witnessing that this
@@ -203,8 +203,8 @@ class PaymentInitiationEntity(id: EntityID<Long>) : LongEntity(id) {
     var creditorName by PaymentInitiationsTable.creditorName
     var submitted by PaymentInitiationsTable.submitted
     var paymentInformationId by PaymentInitiationsTable.paymentInformationId
-    var messageId by PaymentInitiationsTable.messageId
     var instructionId by PaymentInitiationsTable.instructionId
+    var messageId by PaymentInitiationsTable.messageId
     var confirmationTransaction by NexusBankTransactionEntity optionalReferencedOn PaymentInitiationsTable.confirmationTransaction
 }
 

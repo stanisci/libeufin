@@ -712,9 +712,6 @@ private fun XmlElementDestructor.extractTransactionDetails(
         endToEndId = maybeUniqueChildNamed("Refs") {
             maybeUniqueChildNamed("EndToEndId") { focusElement.textContent }
         },
-        messageId = maybeUniqueChildNamed("Refs") {
-            maybeUniqueChildNamed("MsgId") { focusElement.textContent }
-        },
         paymentInformationId = maybeUniqueChildNamed("Refs") {
             maybeUniqueChildNamed("PmtInfId") { focusElement.textContent }
         },
