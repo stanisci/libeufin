@@ -234,16 +234,11 @@ object NexusBankAccountsTable : IdTable<String>() {
     val iban = text("iban")
     val bankCode = text("bankCode")
     val defaultBankConnection = reference("defaultBankConnection", NexusBankConnectionsTable).nullable()
-
     val lastStatementCreationTimestamp = long("lastStatementCreationTimestamp").nullable()
-
     val lastReportCreationTimestamp = long("lastReportCreationTimestamp").nullable()
-
     val lastNotificationCreationTimestamp = long("lastNotificationCreationTimestamp").nullable()
-
     // Highest bank message ID that this bank account is aware of.
     val highestSeenBankMessageId = integer("highestSeenBankMessageId")
-
     val pain001Counter = long("pain001counter").default(1)
 }
 
@@ -302,7 +297,6 @@ object NexusUsersTable : IdTable<String>() {
 
 class NexusUserEntity(id: EntityID<String>) : Entity<String>(id) {
     companion object : EntityClass<String, NexusUserEntity>(NexusUsersTable)
-
     var passwordHash by NexusUsersTable.passwordHash
     var superuser by NexusUsersTable.superuser
 }
