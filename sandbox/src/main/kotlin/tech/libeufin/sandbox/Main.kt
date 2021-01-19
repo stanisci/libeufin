@@ -62,6 +62,7 @@ import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import io.ktor.request.*
@@ -193,20 +194,9 @@ fun ensureNonNull(param: String?): String {
 
 class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnEmptyArgs = true) {
     init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
+        versionOption(getVersion())
     }
-    private val version by option().flag()
-    override fun run() {
-        if (version) {
-            println(getVersion())
-            exitProcess(0)
-        }
-        if (currentContext.invokedSubcommand == null) {
-            println("Caught you: no command was run")
-        }
-    }
+    override fun run() = Unit
 }
 
 
