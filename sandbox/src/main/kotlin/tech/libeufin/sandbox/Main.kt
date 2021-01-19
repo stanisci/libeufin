@@ -411,9 +411,6 @@ fun serverMain(dbName: String, port: Int) {
             }
             get("/admin/bank-accounts") {
                 val accounts = mutableListOf<BankAccountInfo>()
-                val accountsResp = BankAccountsListReponse(
-                    accounts = accounts
-                )
                 transaction {
                     BankAccountEntity.all().forEach {
                         accounts.add(

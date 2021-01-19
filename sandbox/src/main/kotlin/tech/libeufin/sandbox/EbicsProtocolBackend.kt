@@ -434,12 +434,16 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
  */
 private fun constructCamtResponse(type: Int, header: EbicsRequest.Header, subscriber: EbicsSubscriberEntity): String {
     val dateRange = (header.static.orderDetails?.orderParams as EbicsRequest.StandardOrderParams).dateRange
+    /**
+     *  Currently unused: see #6243.
+     *
     val (start: LocalDateTime, end: LocalDateTime) = if (dateRange != null) {
         Pair(
             importDateFromMillis(dateRange.start.toGregorianCalendar().timeInMillis),
             importDateFromMillis(dateRange.end.toGregorianCalendar().timeInMillis)
         )
     } else Pair(parseDashedDate("1970-01-01"), LocalDateTime.now())
+    */
     val bankAccount = getBankAccountFromSubscriber(subscriber)
     logger.info("getting history for account with iban ${bankAccount.iban}")
     val history = historyForAccount(bankAccount.iban)
@@ -455,15 +459,15 @@ private fun constructCamtResponse(type: Int, header: EbicsRequest.Header, subscr
  * In the future, additional parameters (size, chunking, inject fault for retry) might
  * be added to the order parameters.
  */
-private fun handleEbicsTSD(requestContext: RequestContext): ByteArray {
+private fun handleEbicsTSD(): ByteArray {
     return "Hello World\n".repeat(1024).toByteArray()
 }
 
-private fun handleEbicsPTK(requestContext: RequestContext): ByteArray {
+private fun handleEbicsPTK(): ByteArray {
     return "Hello I am a dummy PTK response.".toByteArray()
 }
 
-private fun parsePain001(paymentRequest: String, initiatorName: String): PainParseResult {
+private fun parsePain001(paymentRequest: String): PainParseResult {
     val painDoc = XMLUtil.parseStringIntoDom(paymentRequest)
     return destructXml(painDoc) {
         requireRootElement("Document") {
@@ -543,10 +547,10 @@ private fun parsePain001(paymentRequest: String, initiatorName: String): PainPar
 /**
  * Process a payment request in the pain.001 format.
  */
-private fun handleCct(paymentRequest: String, initiatorName: String, ctx: RequestContext) {
+private fun handleCct(paymentRequest: String, initiatorName: String) {
     LOGGER.debug("Handling CCT")
     LOGGER.debug("Pain.001: $paymentRequest")
-    val parseResult = parsePain001(paymentRequest, initiatorName)
+    val parseResult = parsePain001(paymentRequest)
     transaction {
         try {
             BankAccountTransactionsTable.insert {
@@ -919,8 +923,8 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
         /* Temporarily handling C52/C53 with same logic */
         "C53" -> handleEbicsC53(requestContext)
         "C52" -> handleEbicsC53(requestContext) // why?
-        "TSD" -> handleEbicsTSD(requestContext)
-        "PTK" -> handleEbicsPTK(requestContext)
+        "TSD" -> handleEbicsTSD()
+        "PTK" -> handleEbicsPTK()
         else -> throw EbicsInvalidXmlError()
     }
 
@@ -1056,7 +1060,7 @@ private fun handleEbicsUploadTransactionTransmission(requestContext: RequestCont
         if (getOrderTypeFromTransactionId(requestTransactionID) == "CCT") {
             logger.debug("Attempting a payment.")
             val involvedBankAccout = getBankAccountFromSubscriber(requestContext.subscriber)
-            handleCct(unzippedData.toString(Charsets.UTF_8), involvedBankAccout.name, requestContext)
+            handleCct(unzippedData.toString(Charsets.UTF_8), involvedBankAccout.name)
         }
         return EbicsResponse.createForUploadTransferPhase(
             requestTransactionID,
