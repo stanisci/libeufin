@@ -405,6 +405,28 @@ def test_double_connection_name():
         [406] # expecting "406 Not acceptable"
     )
 
+    # Checking that _another_ user can pick the same connection name.
+    assertResponse(
+        post(
+            f"{PERSONA.nexus.base_url}/users",
+            auth=auth.HTTPBasicAuth("admin", "x"),
+            json=dict(username="second-user", password="second-password"),
+        )
+    )
+
+    assertResponse(
+        post(
+            f"{PERSONA.nexus.base_url}/bank-connections",
+            json=dict(
+                name=PERSONA.nexus.bank_connection, # same name from the previous creation.
+                source="new",
+                type="ebics",
+                data=PERSONA.ebics.get_as_dict(with_url=True),
+            ),
+            auth=auth.HTTPBasicAuth("second-user", "second-password")
+        ),
+    )
+
 def test_ingestion_camt53_non_singleton():
     with open("camt53-gls-style-1.xml") as f:
         camt = f.read()

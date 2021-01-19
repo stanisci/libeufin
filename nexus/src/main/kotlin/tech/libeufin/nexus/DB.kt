@@ -302,14 +302,13 @@ class NexusUserEntity(id: EntityID<String>) : Entity<String>(id) {
 }
 
 object NexusBankConnectionsTable : IdTable<String>() {
-    override val id = NexusBankConnectionsTable.text("id").entityId().uniqueIndex()
+    override val id = NexusBankConnectionsTable.text("id").entityId()
     val type = text("type")
     val owner = reference("user", NexusUsersTable)
 }
 
 class NexusBankConnectionEntity(id: EntityID<String>) : Entity<String>(id) {
     companion object : EntityClass<String, NexusBankConnectionEntity>(NexusBankConnectionsTable)
-
     var type by NexusBankConnectionsTable.type
     var owner by NexusUserEntity referencedOn NexusBankConnectionsTable.owner
 }
