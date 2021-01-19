@@ -6,6 +6,12 @@ import ch.qos.logback.classic.util.ContextInitializer
 import ch.qos.logback.core.util.Loader
 import org.slf4j.LoggerFactory
 
+fun getVersion(): String {
+    return Loader.getResource(
+        "version.txt", ClassLoader.getSystemClassLoader()
+    ).readText()
+}
+
 /**
  * Set system properties to wanted values, and load logback configuration after.
  * While it can set any system property, it is used only to set the log file name.

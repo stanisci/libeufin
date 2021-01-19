@@ -24,7 +24,16 @@ idea {
 
 setVersion("0.0.1-dev.1")
 
+task versionFiles() {
+    new File("util/src/main/resources/version.txt").text = getRootProject().version
+}
+
+classes {
+    dependsOn versionFiles
+}
+
 task dist(type: Zip) {
+    dependsOn versionFiles
     evaluationDependsOn("nexus")
     evaluationDependsOn("sandbox")
     def topDir = "${getRootProject().name}-${getRootProject().version}"

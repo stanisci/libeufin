@@ -60,6 +60,7 @@ import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
@@ -80,6 +81,7 @@ import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import java.util.*
 import kotlin.random.Random
+import kotlin.system.exitProcess
 
 const val DEFAULT_DB_CONNECTION = "jdbc:sqlite:/tmp/libeufin-sandbox.sqlite3"
 
@@ -94,10 +96,6 @@ lateinit var LOGGER: Logger
 data class SandboxError(val statusCode: HttpStatusCode, val reason: String) : Exception()
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
-
-class SandboxCommand : CliktCommand() {
-    override fun run() = Unit
-}
 
 class ResetTables : CliktCommand("Drop all the tables from the database") {
     init {
@@ -193,10 +191,27 @@ fun ensureNonNull(param: String?): String {
     )
 }
 
+class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnEmptyArgs = true) {
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+    private val version by option().flag()
+    override fun run() {
+        if (version) {
+            println(getVersion())
+            exitProcess(0)
+        }
+        if (currentContext.invokedSubcommand == null) {
+            println("Caught you: no command was run")
+        }
+    }
+}
+
+
 fun main(args: Array<String>) {
-    SandboxCommand()
-        .subcommands(Serve(), ResetTables())
-        .main(args)
+    SandboxCommand().subcommands(Serve(), ResetTables()).main(args)
 }
 
 fun serverMain(dbName: String, port: Int) {
