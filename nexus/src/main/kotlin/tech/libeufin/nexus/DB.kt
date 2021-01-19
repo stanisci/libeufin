@@ -302,7 +302,7 @@ class NexusUserEntity(id: EntityID<String>) : Entity<String>(id) {
 }
 
 object NexusBankConnectionsTable : IdTable<String>() {
-    override val id = NexusBankConnectionsTable.text("id").entityId()
+    override val id = NexusBankConnectionsTable.text("id").entityId().uniqueIndex()
     val type = text("type")
     val owner = reference("user", NexusUsersTable)
 }

@@ -718,9 +718,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val body = call.receive<CreateBankConnectionRequestJson>()
                 transaction {
                     val user = authenticateRequest(call.request)
-                    if (NexusBankConnectionEntity.find {
-                            NexusBankConnectionsTable.id eq body.name and (NexusBankConnectionsTable.owner eq user.id)
-                        }.firstOrNull() != null) {
+                    if (NexusBankConnectionEntity.findById(body.name) != null) {
                         throw NexusError(HttpStatusCode.NotAcceptable, "connection '${body.name}' exists already")
                     }
                     when (body) {
