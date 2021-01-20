@@ -46,9 +46,13 @@ import io.ktor.response.respondText
 import io.ktor.routing.*
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import io.ktor.utils.io.ByteReadChannel
+import io.ktor.util.*
+import io.ktor.util.pipeline.*
+import io.ktor.utils.io.*
 import io.ktor.utils.io.jvm.javaio.toByteReadChannel
 import io.ktor.utils.io.jvm.javaio.toInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -66,10 +70,11 @@ import tech.libeufin.util.*
 import tech.libeufin.nexus.logger
 import java.lang.IllegalArgumentException
 import java.net.URLEncoder
-import java.nio.file.Paths
 import java.util.zip.InflaterInputStream
 
-// Return facade state depending on the type.
+/**
+ * Return facade state depending on the type.
+ */
 fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
     return transaction {
         when (type) {
@@ -83,7 +88,7 @@ fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
                 node.put("bankAccount", state.bankAccount)
                 node
             }
-            else -> throw NexusError(HttpStatusCode.NotFound, "Facade type ${type} not supported")
+            else -> throw NexusError(HttpStatusCode.NotFound, "Facade type $type not supported")
         }
     }
 }
@@ -91,21 +96,14 @@ fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
 
 fun ensureNonNull(param: String?): String {
     return param ?: throw NexusError(
-        HttpStatusCode.BadRequest, "Bad ID given: ${param}"
+        HttpStatusCode.BadRequest, "Bad ID given: $param"
     )
 }
 
 fun ensureLong(param: String?): Long {
     val asString = ensureNonNull(param)
     return asString.toLongOrNull() ?: throw NexusError(
-        HttpStatusCode.BadRequest, "Parameter is not Long: ${param}"
-    )
-}
-
-fun ensureInt(param: String?): Int {
-    val asString = ensureNonNull(param)
-    return asString.toIntOrNull() ?: throw NexusError(
-        HttpStatusCode.BadRequest, "Parameter is not Int: ${param}"
+        HttpStatusCode.BadRequest, "Parameter is not Long: $param"
     )
 }
 
@@ -116,52 +114,6 @@ fun <T> expectNonNull(param: T?): T {
     )
 }
 
-/**
- * This helper function parses a Authorization:-header line, decode the credentials
- * and returns a pair made of username and hashed (sha256) password.  The hashed value
- * will then be compared with the one kept into the database.
- */
-fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
-    logger.debug("Authenticating: $authorizationHeader")
-    val (username, password) = try {
-        val split = authorizationHeader.split(" ")
-        val plainUserAndPass = String(base64ToBytes(split[1]), Charsets.UTF_8)
-        plainUserAndPass.split(":")
-    } catch (e: java.lang.Exception) {
-        throw NexusError(
-            HttpStatusCode.BadRequest,
-            "invalid Authorization:-header received"
-        )
-    }
-    return Pair(username, password)
-}
-
-
-/**
- * Test HTTP basic auth.  Throws error if password is wrong,
- * and makes sure that the user exists in the system.
- *
- * @param authorization the Authorization:-header line.
- * @return user id
- */
-fun authenticateRequest(request: ApplicationRequest): NexusUserEntity {
-    val authorization = request.headers["Authorization"]
-    val headerLine = if (authorization == null) throw NexusError(
-        HttpStatusCode.BadRequest, "Authorization header not found"
-    ) else authorization
-    val (username, password) = extractUserAndPassword(headerLine)
-    val user = NexusUserEntity.find {
-        NexusUsersTable.id eq username
-    }.firstOrNull()
-    if (user == null) {
-        throw NexusError(HttpStatusCode.Unauthorized, "Unknown user '$username'")
-    }
-    if (!CryptoUtil.checkpw(password, user.passwordHash)) {
-        throw NexusError(HttpStatusCode.Forbidden, "Wrong password")
-    }
-    return user
-}
-
 
 fun ApplicationRequest.hasBody(): Boolean {
     if (this.isChunked()) {
@@ -169,11 +121,11 @@ fun ApplicationRequest.hasBody(): Boolean {
     }
     val contentLengthHeaderStr = this.headers["content-length"]
     if (contentLengthHeaderStr != null) {
-        try {
+        return try {
             val cl = contentLengthHeaderStr.toInt()
-            return cl != 0
+            cl != 0
         } catch (e: NumberFormatException) {
-            return false
+            false
         }
     }
     return false
@@ -287,6 +239,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 )
             }
         }
+        install(RequestBodyDecompression)
         intercept(ApplicationCallPipeline.Fallback) {
             if (this.call.response.status() == null) {
                 call.respondText("Not found (no route matched).\n", ContentType.Text.Plain, HttpStatusCode.NotFound)
@@ -294,34 +247,12 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
         }
 
-        // Allow request body compression.  Needed by Taler.
-        receivePipeline.intercept(ApplicationReceivePipeline.Before) {
-            if (this.context.request.headers["Content-Encoding"] == "deflate") {
-                logger.debug("About to inflate received data")
-                val deflated = this.subject.value as ByteReadChannel
-                val inflated = InflaterInputStream(deflated.toInputStream())
-                proceedWith(ApplicationReceiveRequest(this.subject.typeInfo, inflated.toByteReadChannel()))
-                return@intercept
-            }
-            proceed()
-            return@intercept
-        }
         startOperationScheduler(client)
         routing {
-            get("/service-config") {
-                call.respond(
-                    object {
-                        val dbConn = "sqlite://${Paths.get(dbName).toAbsolutePath()}"
-                    }
-                )
-                return@get
-            }
-
             get("/config") {
                 call.respond(
                     object {
-                        val version = "0.0.0"
-                        val currency = "EUR"
+                        val version = getVersion()
                     }
                 )
                 return@get
@@ -339,7 +270,58 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 return@get
             }
 
+            get("/permissions") {
+                val resp = object {
+                    val permissions = mutableListOf<Permission>()
+                }
+                transaction {
+                    requireSuperuser(call.request)
+                    NexusPermissionEntity.all().map {
+                        resp.permissions.add(
+                            Permission(
+                                subjectType = it.subjectType,
+                                subjectId = it.subjectId,
+                                resourceType = it.resourceType,
+                                resourceId = it.resourceId,
+                                permissionName = it.permissionName,
+                            )
+                        )
+                    }
+                }
+                call.respond(resp)
+            }
+
+            post("/permissions") {
+                val req = call.receive<ChangePermissionsRequest>()
+                transaction {
+                    requireSuperuser(call.request)
+                    val existingPerm = findPermission(req.permission)
+                    when (req.action) {
+                        PermissionChangeAction.GRANT -> {
+                            if (existingPerm == null) {
+                                NexusPermissionEntity.new() {
+                                    subjectType = req.permission.subjectType
+                                    subjectId = req.permission.subjectId
+                                    resourceType = req.permission.resourceType
+                                    resourceId = req.permission.resourceId
+                                    permissionName = req.permission.permissionName
+
+                                }
+                            }
+                        }
+                        PermissionChangeAction.REVOKE -> {
+                            existingPerm?.delete()
+                        }
+                    }
+                    null
+                }
+                call.respond(object {})
+            }
+
             get("/users") {
+                transaction {
+                    requireSuperuser(call.request)
+                }
                 val users = transaction {
                     transaction {
                         NexusUserEntity.all().map {
@@ -354,19 +336,16 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             // Add a new ordinary user in the system (requires superuser privileges)
             post("/users") {
-                val body = call.receiveJson<User>()
+                val body = call.receiveJson<CreateUserRequest>()
                 transaction {
-                    val currentUser = authenticateRequest(call.request)
-                    if (!currentUser.superuser) {
-                        throw NexusError(HttpStatusCode.Forbidden, "only superuser can do that")
-                    }
+                    requireSuperuser(call.request)
                     NexusUserEntity.new(body.username) {
                         passwordHash = CryptoUtil.hashpw(body.password)
                         superuser = false
                     }
                 }
                 call.respondText(
-                    "New NEXUS user registered. ID: ${body.username}",
+                    "New user '${body.username}' registered",
                     ContentType.Text.Plain,
                     HttpStatusCode.OK
                 )
@@ -374,6 +353,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/bank-connection-protocols") {
+                requireSuperuser(call.request)
                 call.respond(
                     HttpStatusCode.OK,
                     BankProtocolsResponse(listOf("ebics", "loopback"))
@@ -406,21 +386,23 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 return@get
             }
             post("/bank-accounts/{accountId}/test-camt-ingestion/{type}") {
+                requireSuperuser(call.request)
                 processCamtMessage(
                     ensureNonNull(call.parameters["accountId"]),
                     XMLUtil.parseStringIntoDom(call.receiveText()),
                     ensureNonNull(call.parameters["type"])
                 )
-                call.respond({ })
+                call.respond(object {})
                 return@post
             }
             get("/bank-accounts/{accountid}/schedule") {
+                requireSuperuser(call.request)
                 val resp = jacksonObjectMapper().createObjectNode()
                 val ops = jacksonObjectMapper().createObjectNode()
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 resp.set<JsonNode>("schedule", ops)
                 transaction {
-                    val bankAccount = NexusBankAccountEntity.findById(accountId)
+                    NexusBankAccountEntity.findById(accountId)
                         ?: throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     NexusScheduledTaskEntity.find {
                         (NexusScheduledTasksTable.resourceType eq "bank-account") and
@@ -440,6 +422,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             post("/bank-accounts/{accountid}/schedule") {
+                requireSuperuser(call.request)
                 val schedSpec = call.receive<CreateAccountTaskRequest>()
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 transaction {
@@ -486,6 +469,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/bank-accounts/{accountId}/schedule/{taskId}") {
+                requireSuperuser(call.request)
                 val task = transaction {
                     NexusScheduledTaskEntity.find {
                         NexusScheduledTasksTable.taskName eq ensureNonNull(call.parameters["taskId"])
@@ -511,6 +495,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             delete("/bank-accounts/{accountId}/schedule/{taskId}") {
+                requireSuperuser(call.request)
                 logger.info("schedule delete requested")
                 val accountId = ensureNonNull(call.parameters["accountId"])
                 val taskId = ensureNonNull(call.parameters["taskId"])
@@ -525,14 +510,13 @@ fun serverMain(dbName: String, host: String, port: Int) {
                                 (NexusScheduledTasksTable.resourceId eq accountId)
 
                     }.firstOrNull()
-                    if (oldSchedTask != null) {
-                        oldSchedTask.delete()
-                    }
+                    oldSchedTask?.delete()
                 }
                 call.respond(object {})
             }
 
             get("/bank-accounts/{accountid}") {
+                requireSuperuser(call.request)
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 val res = transaction {
                     val user = authenticateRequest(call.request)
@@ -551,17 +535,19 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             // Submit one particular payment to the bank.
             post("/bank-accounts/{accountid}/payment-initiations/{uuid}/submit") {
+                requireSuperuser(call.request)
                 val uuid = ensureLong(call.parameters["uuid"])
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 val res = transaction {
                     authenticateRequest(call.request)
                 }
                 submitPaymentInitiation(client, uuid)
-                call.respondText("Payment ${uuid} submitted")
+                call.respondText("Payment $uuid submitted")
                 return@post
             }
 
             post("/bank-accounts/{accountid}/submit-all-payment-initiations") {
+                requireSuperuser(call.request)
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 val res = transaction {
                     authenticateRequest(call.request)
@@ -572,6 +558,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/bank-accounts/{accountid}/payment-initiations") {
+                requireSuperuser(call.request)
                 val ret = InitiatedPayments()
                 transaction {
                     val bankAccount = requireBankAccount(call, "accountid")
@@ -603,6 +590,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             // Shows information about one particular payment initiation.
             get("/bank-accounts/{accountid}/payment-initiations/{uuid}") {
+                requireSuperuser(call.request)
                 val res = transaction {
                     val user = authenticateRequest(call.request)
                     val paymentInitiation = getPaymentInitiation(ensureLong(call.parameters["uuid"]))
@@ -633,6 +621,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             // Adds a new payment initiation.
             post("/bank-accounts/{accountid}/payment-initiations") {
+                requireSuperuser(call.request)
                 val body = call.receive<CreatePaymentInitiationRequest>()
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 val res = transaction {
@@ -666,6 +655,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             // Downloads new transactions from the bank.
             post("/bank-accounts/{accountid}/fetch-transactions") {
+                requireSuperuser(call.request)
                 val accountid = call.parameters["accountid"]
                 if (accountid == null) {
                     throw NexusError(
@@ -691,6 +681,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             // Asks list of transactions ALREADY downloaded from the bank.
             get("/bank-accounts/{accountid}/transactions") {
+                requireSuperuser(call.request)
                 val bankAccountId = expectNonNull(call.parameters["accountid"])
                 val start = call.request.queryParameters["start"]
                 val end = call.request.queryParameters["end"]
@@ -714,6 +705,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             // Adds a new bank transport.
             post("/bank-connections") {
+                requireSuperuser(call.request)
                 // user exists and is authenticated.
                 val body = call.receive<CreateBankConnectionRequestJson>()
                 transaction {
@@ -759,6 +751,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             post("/bank-connections/delete-connection") {
+                requireSuperuser(call.request)
                 val body = call.receive<BankConnectionDeletion>()
                 transaction {
                     val conn = NexusBankConnectionEntity.findById(body.bankConnectionId) ?: throw NexusError(
@@ -771,6 +764,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/bank-connections") {
+                requireSuperuser(call.request)
                 val connList = BankConnectionsList()
                 transaction {
                     NexusBankConnectionEntity.all().forEach {
@@ -785,10 +779,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 call.respond(connList)
             }
 
-            get("/bank-connections/{connid}") {
+            get("/bank-connections/{connectionId}") {
+                requireSuperuser(call.request)
                 val resp = transaction {
                     val user = authenticateRequest(call.request)
-                    val conn = requireBankConnection(call, "connid")
+                    val conn = requireBankConnection(call, "connectionId")
                     when (conn.type) {
                         "ebics" -> {
                             getEbicsConnectionDetails(conn)
@@ -805,6 +800,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             post("/bank-connections/{connid}/export-backup") {
+                requireSuperuser(call.request)
                 transaction { authenticateRequest(call.request) }
                 val body = call.receive<BackupRequestJson>()
                 val response = run {
@@ -829,6 +825,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             post("/bank-connections/{connid}/connect") {
+                requireSuperuser(call.request)
                 val conn = transaction {
                     authenticateRequest(call.request)
                     requireBankConnection(call, "connid")
@@ -842,6 +839,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/bank-connections/{connid}/keyletter") {
+                requireSuperuser(call.request)
                 val conn = transaction {
                     authenticateRequest(call.request)
                     requireBankConnection(call, "connid")
@@ -856,6 +854,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/bank-connections/{connid}/messages") {
+                requireSuperuser(call.request)
                 val ret = transaction {
                     val list = BankMessageList()
                     val conn = requireBankConnection(call, "connid")
@@ -874,6 +873,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/bank-connections/{connid}/messages/{msgid}") {
+                requireSuperuser(call.request)
                 val ret = transaction {
                     val msgid = call.parameters["msgid"]
                     if (msgid == null || msgid == "") {
@@ -889,6 +889,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/facades/{fcid}") {
+                requireSuperuser(call.request)
                 val fcid = ensureNonNull(call.parameters["fcid"])
                 val ret = transaction {
                     val f = FacadeEntity.findById(fcid) ?: throw NexusError(
@@ -906,6 +907,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             get("/facades") {
+                requireSuperuser(call.request)
                 val ret = object {
                     val facades = mutableListOf<FacadeShowInfo>()
                 }
@@ -929,6 +931,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             post("/facades") {
+                requireSuperuser(call.request)
                 val body = call.receive<FacadeInfo>()
                 if (body.type != "taler-wire-gateway") throw NexusError(
                     HttpStatusCode.NotImplemented,
@@ -955,11 +958,13 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             route("/bank-connections/{connid}") {
+
                 // only ebics specific tasks under this part.
                 route("/ebics") {
                     ebicsBankConnectionRoutes(client)
                 }
                 post("/fetch-accounts") {
+                    requireSuperuser(call.request)
                     val conn = transaction {
                         authenticateRequest(call.request)
                         requireBankConnection(call, "connid")
@@ -978,6 +983,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
                 // show all the offered accounts (both imported and non)
                 get("/accounts") {
+                    requireSuperuser(call.request)
                     val ret = OfferedBankAccounts()
                     transaction {
                         val conn = requireBankConnection(call, "connid")
@@ -997,8 +1003,10 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     }
                     call.respond(ret)
                 }
+
                 // import one account into libeufin.
                 post("/import-account") {
+                    requireSuperuser(call.request)
                     val body = call.receive<ImportBankAccount>()
                     importBankAccount(call, body.offeredAccountId, body.nexusBankAccountId)
                     call.respond(object {})

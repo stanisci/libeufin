@@ -32,13 +32,9 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
-import tech.libeufin.nexus.NexusScheduledTasksTable
-import tech.libeufin.nexus.NexusScheduledTasksTable.nullable
 import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
-import tech.libeufin.nexus.iso20022.CreditDebitIndicator
 import tech.libeufin.nexus.iso20022.EntryStatus
 import tech.libeufin.util.*
-import java.lang.UnsupportedOperationException
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.ZoneId
@@ -88,13 +84,13 @@ object EbicsDateFormat {
         .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)
         .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)
         .parseDefaulting(ChronoField.OFFSET_SECONDS, ZoneId.systemDefault().rules.getOffset(Instant.now()).totalSeconds.toLong())
-        .toFormatter()
+        .toFormatter()!!
 }
 
 @JsonTypeName("standard-date-range")
 class EbicsStandardOrderParamsDateJson(
-    val start: String,
-    val end: String
+    private val start: String,
+    private val end: String
 ) : EbicsOrderParamsJson() {
     override fun toOrderParams(): EbicsOrderParams {
         val dateRange: EbicsDateRange? =
@@ -147,6 +143,29 @@ data class EbicsKeysBackupJson(
     val authBlob: String,
     val encBlob: String,
     val sigBlob: String
+)
+
+enum class PermissionChangeAction(@get:JsonValue val jsonName: String) {
+    GRANT("grant"), REVOKE("revoke")
+}
+
+data class Permission(
+    val subjectType: String,
+    val subjectId: String,
+    val resourceType: String,
+    val resourceId: String,
+    val permissionName: String
+)
+
+data class PermissionQuery(
+    val resourceType: String,
+    val resourceId: String,
+    val permissionName: String,
+)
+
+data class ChangePermissionsRequest(
+    val action: PermissionChangeAction,
+    val permission: Permission
 )
 
 enum class FetchLevel(@get:JsonValue val jsonName: String) {
@@ -270,7 +289,7 @@ data class UserResponse(
 )
 
 /** Request type of "POST /users" */
-data class User(
+data class CreateUserRequest(
     val username: String,
     val password: String
 )
@@ -406,20 +425,6 @@ class CurrencyAmountSerializer(jc: Class<CurrencyAmount> = CurrencyAmount::class
 data class CurrencyAmount(
     val currency: String,
     val value: BigDecimal // allows calculations
-)
-
-/**
- * Account entry item as returned by the /bank-accounts/{acctId}/transactions API.
- */
-data class AccountEntryItemJson(
-    val nexusEntryId: String,
-    val nexusStatusSequenceId: Int,
-
-    val entryId: String?,
-    val accountServicerRef: String?,
-    val creditDebitIndicator: CreditDebitIndicator,
-    val entryAmount: CurrencyAmount,
-    val status: EntryStatus
 )
 
 data class InitiatedPayments(

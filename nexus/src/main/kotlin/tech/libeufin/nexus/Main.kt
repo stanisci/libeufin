@@ -46,7 +46,6 @@ const val DEFAULT_DB_CONNECTION = "jdbc:sqlite:/tmp/libeufin-nexus.sqlite3"
 
 class NexusCommand : CliktCommand() {
     init {
-        // FIXME: Obtain actual version number!
         versionOption(getVersion())
     }
     override fun run() = Unit

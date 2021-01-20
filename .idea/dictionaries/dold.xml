@@ -8,6 +8,7 @@
       <w>cronspec</w>
       <w>dbit</w>
       <w>ebics</w>
+      <w>gnunet</w>
       <w>iban</w>
       <w>infos</w>
       <w>libeufin</w>
@@ -15,6 +16,8 @@
       <w>pdng</w>
       <w>servicer</w>
       <w>sqlite</w>
+      <w>taler</w>
+      <w>wtid</w>
     </words>
   </dictionary>
 </component>

@@ -11,25 +11,21 @@ from requests import post, get, auth, delete
 from urllib.parse import urljoin
 from getpass import getpass
 
+
 def tell_user(resp, withsuccess=False):
     if resp.status_code == 200 and not withsuccess:
         return
     print(resp.content.decode("utf-8"))
 
+
+# FIXME: deprecate this in favor of NexusContext
 def fetch_env():
     if "--help" in sys.argv:
         return []
     try:
-        nexus_base_url = os.environ.get("LIBEUFIN_NEXUS_URL")
-        if not nexus_base_url:
-            # compat, should eventually be removed
-            nexus_base_url = os.environ["NEXUS_BASE_URL"]
-        nexus_username = os.environ.get("LIBEUFIN_NEXUS_USERNAME")
-        if not nexus_username:
-            nexus_username = os.environ["NEXUS_USERNAME"]
-        nexus_password = os.environ.get("LIBEUFIN_NEXUS_PASSWORD")
-        if not nexus_password:
-            nexus_password = os.environ["NEXUS_PASSWORD"]
+        nexus_base_url = os.environ["LIBEUFIN_NEXUS_URL"]
+        nexus_username = os.environ["LIBEUFIN_NEXUS_USERNAME"]
+        nexus_password = os.environ["LIBEUFIN_NEXUS_PASSWORD"]
     except KeyError:
         print(
             "Please ensure that NEXUS_BASE_URL,"
@@ -40,6 +36,7 @@ def fetch_env():
     return nexus_base_url, nexus_username, nexus_password
 
 
+# FIXME: deprecate this in favor of NexusContext
 class NexusAccess:
     def __init__(self, nexus_base_url=None, username=None, password=None):
         self.nexus_base_url = nexus_base_url
@@ -67,6 +64,132 @@ def connections(ctx):
 
 @cli.group()
 @click.pass_context
+def users(ctx):
+    ctx.obj = NexusContext()
+
+@cli.group()
+@click.pass_context
+def permissions(ctx):
+    ctx.obj = NexusContext()
+
+@users.command("list", help="List users")
+@click.pass_obj
+def list_users(obj):
+    url = urljoin(obj.nexus_base_url, f"/users")
+    try:
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
+    except Exception as e:
+        print(e)
+        print("Could not reach nexus at " + url)
+        exit(1)
+
+    print(resp.content.decode("utf-8"))
+
+
+@users.command("create", help="Create a new user")
+@click.argument("username")
+@click.option(
+    "--password",
+    help="Provide password instead of prompting interactively.",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=True,
+)
+@click.pass_obj
+def create_user(obj, username, password):
+    url = urljoin(obj.nexus_base_url, f"/users")
+    try:
+        body = dict(
+            username=username,
+            password=password,
+        )
+        resp = post(
+            url,
+            json=body,
+            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach nexus at " + url)
+        exit(1)
+
+    print(resp.content.decode("utf-8"))
+
+
+@permissions.command("list", help="Show permissions")
+@click.pass_obj
+def list_permission(obj):
+    url = urljoin(obj.nexus_base_url, f"/permissions")
+    try:
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
+    except Exception as e:
+        print(e)
+        print("Could not reach nexus at " + url)
+        exit(1)
+
+    print(resp.content.decode("utf-8"))
+
+@permissions.command("grant", help="Grant permission to a subject")
+@click.pass_obj
+@click.argument("subject-type")
+@click.argument("subject-id")
+@click.argument("resource-type")
+@click.argument("resource-id")
+@click.argument("permission-name")
+def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, permission_name):
+    url = urljoin(obj.nexus_base_url, f"/permissions")
+    try:
+        permission = dict(
+            subjectType=subject_type,
+            subjectId=subject_id,
+            resourceType=resource_type,
+            resourceId=resource_id,
+            permissionName=permission_name,
+        )
+        body = dict(
+            permission=permission,
+            action="grant",
+        )
+        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
+    except Exception as e:
+        print(e)
+        print("Could not reach nexus at " + url)
+        exit(1)
+
+    print(resp.content.decode("utf-8"))
+
+@permissions.command("revoke", help="Revoke permission from a subject")
+@click.pass_obj
+@click.argument("subject-type")
+@click.argument("subject-id")
+@click.argument("resource-type")
+@click.argument("resource-id")
+@click.argument("permission-name")
+def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, permission_name):
+    url = urljoin(obj.nexus_base_url, f"/permissions")
+    try:
+        permission = dict(
+            subjectType=subject_type,
+            subjectId=subject_id,
+            resourceType=resource_type,
+            resourceId=resource_id,
+            permissionName=permission_name,
+        )
+        body = dict(
+            permission=permission,
+            action="revoke",
+        )
+        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
+    except Exception as e:
+        print(e)
+        print("Could not reach nexus at " + url)
+        exit(1)
+
+    print(resp.content.decode("utf-8"))
+
+
+@cli.group()
+@click.pass_context
 def accounts(ctx):
     ctx.obj = NexusAccess(*fetch_env())
 
@@ -84,6 +207,49 @@ class SandboxContext:
                 "sandbox URL must be given as an argument or in LIBEUFIN_SANDBOX_URL"
             )
         return sandbox_base_url
+
+
+class NexusContext:
+    def __init__(self):
+        self._nexus_base_url = None
+        self._nexus_password = None
+        self._nexus_username = None
+
+    @property
+    def nexus_base_url(self):
+        if self._nexus_base_url:
+            return self._nexus_base_url
+        val = os.environ.get("LIBEUFIN_NEXUS_URL")
+        if not val:
+            raise click.UsageError(
+                "nexus URL must be given as an argument or in LIBEUFIN_NEXUS_URL"
+            )
+        self._nexus_base_url = val
+        return val
+
+    @property
+    def nexus_username(self):
+        if self._nexus_username:
+            return self._nexus_username
+        val = os.environ.get("LIBEUFIN_NEXUS_USERNAME")
+        if not val:
+            raise click.UsageError(
+                "nexus username must be given as an argument or in LIBEUFIN_NEXUS_USERNAME"
+            )
+        self._nexus_username = val
+        return val
+
+    @property
+    def nexus_password(self):
+        if self._nexus_password:
+            return self._nexus_password
+        val = os.environ.get("LIBEUFIN_NEXUS_PASSWORD")
+        if not val:
+            raise click.UsageError(
+                "nexus password must be given as an argument or in LIBEUFIN_NEXUS_PASSWORD"
+            )
+        self._nexus_password = val
+        return val
 
 
 @cli.group()
@@ -250,7 +416,9 @@ def sync(obj, connection_name):
 )
 @click.argument("connection-name")
 @click.pass_obj
-def import_bank_account(obj, connection_name, offered_account_id, nexus_bank_account_id):
+def import_bank_account(
+    obj, connection_name, offered_account_id, nexus_bank_account_id
+):
     url = urljoin(
         obj.nexus_base_url,
         "/bank-connections/{}/import-account".format(connection_name),
@@ -321,6 +489,7 @@ def list_offered_bank_accounts(obj, connection_name):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+
 
 @accounts.command(help="Schedules a new task")
 @click.argument("account-name")
@@ -499,6 +668,7 @@ def submit_payment(obj, account_name, payment_uuid):
 
     tell_user(resp)
 
+
 @accounts.command(help="fetch transactions from the bank")
 @click.option(
     "--range-type",
@@ -530,7 +700,7 @@ def fetch_transactions(obj, account_name, range_type, level):
     "--compact/--no-compact",
     help="Tells only amount/subject for each payment",
     required=False,
-    default=False
+    default=False,
 )
 @click.argument("account-name")
 @click.pass_obj
@@ -547,14 +717,19 @@ def transactions(obj, compact, account_name):
     if compact and resp.status_code == 200:
         for payment in resp.json()["transactions"]:
             for entry in payment["batches"]:
-              for expected_singleton in entry["batchTransactions"]:
-                  print("{}, {}".format(
-                      expected_singleton["details"]["unstructuredRemittanceInformation"],
-                      expected_singleton["amount"]
-                  ))
+                for expected_singleton in entry["batchTransactions"]:
+                    print(
+                        "{}, {}".format(
+                            expected_singleton["details"][
+                                "unstructuredRemittanceInformation"
+                            ],
+                            expected_singleton["amount"],
+                        )
+                    )
         return
 
     tell_user(resp, withsuccess=True)
+
 
 @facades.command(help="List active facades in the Nexus")
 @click.argument("connection-name")
@@ -590,7 +765,7 @@ def new_facade(obj, facade_name, connection_name, account_name, currency):
                     bankAccount=account_name,
                     bankConnection=connection_name,
                     reserveTransferLevel="UNUSED",
-                    intervalIncremental="UNUSED"
+                    intervalIncremental="UNUSED",
                 ),
             ),
         )
@@ -695,7 +870,9 @@ def sandbox_ebicsbankaccount(ctx):
     pass
 
 
-@sandbox_ebicsbankaccount.command("create", help="Create a bank account for a EBICS subscriber.")
+@sandbox_ebicsbankaccount.command(
+    "create", help="Create a bank account for a EBICS subscriber."
+)
 @click.option("--currency", help="currency", prompt=True)
 @click.option("--iban", help="IBAN", required=True)
 @click.option("--bic", help="BIC", required=True)
@@ -703,7 +880,9 @@ def sandbox_ebicsbankaccount(ctx):
 @click.option("--account-name", help="label of this bank account", required=True)
 @click.option("--ebics-user-id", help="user ID of the Ebics subscriber", required=True)
 @click.option("--ebics-host-id", help="host ID of the Ebics subscriber", required=True)
-@click.option("--ebics-partner-id", help="partner ID of the Ebics subscriber", required=True)
+@click.option(
+    "--ebics-partner-id", help="partner ID of the Ebics subscriber", required=True
+)
 @click.pass_obj
 def associate_bank_account(
     obj,
@@ -811,7 +990,7 @@ def bankaccount_generate_transactions(obj, account_label):
 @click.option(
     "--direction",
     help="direction respect to the bank account hosted at Sandbox: allows DBIT/CRDT values.",
-    prompt=True
+    prompt=True,
 )
 @click.pass_obj
 def book_payment(
@@ -839,7 +1018,7 @@ def book_payment(
         amount=amount,
         currency=currency,
         subject=subject,
-        direction=direction
+        direction=direction,
     )
     try:
         resp = post(url, json=body)
@@ -848,5 +1027,6 @@ def book_payment(
         exit(1)
 
     tell_user(resp)
+
 
 cli(obj={})

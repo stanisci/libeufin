@@ -32,7 +32,7 @@ fun execThrowableOrTerminate(func: () -> Unit) {
     try {
         func()
     } catch (e: Exception) {
-        println(e.message)
+        e.printStackTrace()
         exitProcess(1)
     }
 }

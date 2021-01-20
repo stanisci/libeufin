@@ -38,7 +38,8 @@ import java.sql.Connection
  * whether a pain.001 document was sent or not to the bank is indicated
  * in the PAIN-table.
  */
-object TalerRequestedPayments : LongIdTable() {
+object TalerRequestedPaymentsTable : LongIdTable() {
+    val facade = reference("facade", FacadesTable)
     val preparedPayment = reference("payment", PaymentInitiationsTable)
     val requestUId = text("request_uid")
     val amount = text("amount")
@@ -48,21 +49,22 @@ object TalerRequestedPayments : LongIdTable() {
 }
 
 class TalerRequestedPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
-    companion object : LongEntityClass<TalerRequestedPaymentEntity>(TalerRequestedPayments)
+    companion object : LongEntityClass<TalerRequestedPaymentEntity>(TalerRequestedPaymentsTable)
 
-    var preparedPayment by PaymentInitiationEntity referencedOn TalerRequestedPayments.preparedPayment
-    var requestUId by TalerRequestedPayments.requestUId
-    var amount by TalerRequestedPayments.amount
-    var exchangeBaseUrl by TalerRequestedPayments.exchangeBaseUrl
-    var wtid by TalerRequestedPayments.wtid
-    var creditAccount by TalerRequestedPayments.creditAccount
+    var facade by FacadeEntity referencedOn TalerRequestedPaymentsTable.facade
+    var preparedPayment by PaymentInitiationEntity referencedOn TalerRequestedPaymentsTable.preparedPayment
+    var requestUId by TalerRequestedPaymentsTable.requestUId
+    var amount by TalerRequestedPaymentsTable.amount
+    var exchangeBaseUrl by TalerRequestedPaymentsTable.exchangeBaseUrl
+    var wtid by TalerRequestedPaymentsTable.wtid
+    var creditAccount by TalerRequestedPaymentsTable.creditAccount
 }
 
 /**
  * This is the table of the incoming payments.  Entries are merely "pointers" to the
- * entries from the raw payments table.  Fixme: name should end with "-table".
+ * entries from the raw payments table.
  */
-object TalerIncomingPayments : LongIdTable() {
+object TalerIncomingPaymentsTable : LongIdTable() {
     val payment = reference("payment", NexusBankTransactionsTable)
     val reservePublicKey = text("reservePublicKey")
     val timestampMs = long("timestampMs")
@@ -70,12 +72,12 @@ object TalerIncomingPayments : LongIdTable() {
 }
 
 class TalerIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
-    companion object : LongEntityClass<TalerIncomingPaymentEntity>(TalerIncomingPayments)
+    companion object : LongEntityClass<TalerIncomingPaymentEntity>(TalerIncomingPaymentsTable)
 
-    var payment by NexusBankTransactionEntity referencedOn TalerIncomingPayments.payment
-    var reservePublicKey by TalerIncomingPayments.reservePublicKey
-    var timestampMs by TalerIncomingPayments.timestampMs
-    var debtorPaytoUri by TalerIncomingPayments.debtorPaytoUri
+    var payment by NexusBankTransactionEntity referencedOn TalerIncomingPaymentsTable.payment
+    var reservePublicKey by TalerIncomingPaymentsTable.reservePublicKey
+    var timestampMs by TalerIncomingPaymentsTable.timestampMs
+    var debtorPaytoUri by TalerIncomingPaymentsTable.debtorPaytoUri
 }
 
 /**
@@ -93,6 +95,7 @@ object NexusBankMessagesTable : IntIdTable() {
 
 class NexusBankMessageEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<NexusBankMessageEntity>(NexusBankMessagesTable)
+
     var bankConnection by NexusBankConnectionEntity referencedOn NexusBankMessagesTable.bankConnection
     var messageId by NexusBankMessagesTable.messageId
     var code by NexusBankMessagesTable.code
@@ -218,6 +221,7 @@ object OfferedBankAccountsTable : Table() {
     val iban = text("iban")
     val bankCode = text("bankCode")
     val accountHolder = text("holderName")
+
     // column below gets defined only WHEN the user imports the bank account.
     val imported = reference("imported", NexusBankAccountsTable).nullable()
 
@@ -237,6 +241,7 @@ object NexusBankAccountsTable : IdTable<String>() {
     val lastStatementCreationTimestamp = long("lastStatementCreationTimestamp").nullable()
     val lastReportCreationTimestamp = long("lastReportCreationTimestamp").nullable()
     val lastNotificationCreationTimestamp = long("lastNotificationCreationTimestamp").nullable()
+
     // Highest bank message ID that this bank account is aware of.
     val highestSeenBankMessageId = integer("highestSeenBankMessageId")
     val pain001Counter = long("pain001counter").default(1)
@@ -244,6 +249,7 @@ object NexusBankAccountsTable : IdTable<String>() {
 
 class NexusBankAccountEntity(id: EntityID<String>) : Entity<String>(id) {
     companion object : EntityClass<String, NexusBankAccountEntity>(NexusBankAccountsTable)
+
     var accountHolder by NexusBankAccountsTable.accountHolder
     var iban by NexusBankAccountsTable.iban
     var bankCode by NexusBankAccountsTable.bankCode
@@ -297,6 +303,7 @@ object NexusUsersTable : IdTable<String>() {
 
 class NexusUserEntity(id: EntityID<String>) : Entity<String>(id) {
     companion object : EntityClass<String, NexusUserEntity>(NexusUsersTable)
+
     var passwordHash by NexusUsersTable.passwordHash
     var superuser by NexusUsersTable.superuser
 }
@@ -309,6 +316,7 @@ object NexusBankConnectionsTable : IdTable<String>() {
 
 class NexusBankConnectionEntity(id: EntityID<String>) : Entity<String>(id) {
     companion object : EntityClass<String, NexusBankConnectionEntity>(NexusBankConnectionsTable)
+
     var type by NexusBankConnectionsTable.type
     var owner by NexusUserEntity referencedOn NexusBankConnectionsTable.owner
 }
@@ -376,6 +384,34 @@ class NexusScheduledTaskEntity(id: EntityID<Int>) : IntEntity(id) {
     var prevScheduledExecutionSec by NexusScheduledTasksTable.prevScheduledExecutionSec
 }
 
+/**
+ * Generic permissions table that determines access of a subject
+ * identified by (subjectType, subjectName) to a resource (resourceType, resourceId).
+ *
+ * Subjects are typically of type "user", but this may change in the future.
+ */
+object NexusPermissionsTable : IntIdTable() {
+    val resourceType = text("resourceType")
+    val resourceId = text("resourceId")
+    val subjectType = text("subjectType")
+    val subjectId = text("subjectName")
+    val permissionName = text("permissionName")
+
+    init {
+        uniqueIndex(resourceType, resourceId, subjectType, subjectId, permissionName)
+    }
+}
+
+class NexusPermissionEntity(id: EntityID<Int>) : IntEntity(id) {
+    companion object : IntEntityClass<NexusPermissionEntity>(NexusPermissionsTable)
+
+    var resourceType by NexusPermissionsTable.resourceType
+    var resourceId by NexusPermissionsTable.resourceId
+    var subjectType by NexusPermissionsTable.subjectType
+    var subjectId by NexusPermissionsTable.subjectId
+    var permissionName by NexusPermissionsTable.permissionName
+}
+
 fun dbDropTables(dbConnectionString: String) {
     Database.connect(dbConnectionString)
     transaction {
@@ -385,20 +421,21 @@ fun dbDropTables(dbConnectionString: String) {
             NexusEbicsSubscribersTable,
             NexusBankAccountsTable,
             NexusBankTransactionsTable,
-            TalerIncomingPayments,
-            TalerRequestedPayments,
+            TalerIncomingPaymentsTable,
+            TalerRequestedPaymentsTable,
             NexusBankConnectionsTable,
             NexusBankMessagesTable,
             FacadesTable,
             TalerFacadeStateTable,
             NexusScheduledTasksTable,
-            OfferedBankAccountsTable
+            OfferedBankAccountsTable,
+            NexusPermissionsTable,
         )
     }
 }
 
 fun dbCreateTables(dbConnectionString: String) {
-    Database.connect("$dbConnectionString")
+    Database.connect(dbConnectionString)
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         SchemaUtils.create(
@@ -407,15 +444,16 @@ fun dbCreateTables(dbConnectionString: String) {
             NexusEbicsSubscribersTable,
             NexusBankAccountsTable,
             NexusBankTransactionsTable,
-            TalerIncomingPayments,
-            TalerRequestedPayments,
+            TalerIncomingPaymentsTable,
+            TalerRequestedPaymentsTable,
             NexusBankConnectionsTable,
             NexusBankMessagesTable,
             FacadesTable,
             TalerFacadeStateTable,
             NexusScheduledTasksTable,
             OfferedBankAccountsTable,
-            NexusScheduledTasksTable
+            NexusScheduledTasksTable,
+            NexusPermissionsTable,
         )
     }
 }

@@ -197,32 +197,20 @@ private fun getTalerFacadeState(fcid: String): TalerFacadeStateEntity {
         HttpStatusCode.NotFound,
         "Could not find facade '${fcid}'"
     )
-    val facadeState = TalerFacadeStateEntity.find {
+    return TalerFacadeStateEntity.find {
         TalerFacadeStateTable.facade eq facade.id.value
     }.firstOrNull() ?: throw NexusError(
         HttpStatusCode.NotFound,
-        "Could not find any state for facade: ${fcid}"
+        "Could not find any state for facade: $fcid"
     )
-    return facadeState
 }
 
 private fun getTalerFacadeBankAccount(fcid: String): NexusBankAccountEntity {
-    val facade = FacadeEntity.find { FacadesTable.id eq fcid }.firstOrNull() ?: throw NexusError(
-        HttpStatusCode.NotFound,
-        "Could not find facade '${fcid}'"
-    )
-    val facadeState = TalerFacadeStateEntity.find {
-        TalerFacadeStateTable.facade eq facade.id.value
-    }.firstOrNull() ?: throw NexusError(
-        HttpStatusCode.NotFound,
-        "Could not find any state for facade: ${fcid}"
-    )
-    val bankAccount = NexusBankAccountEntity.findById(facadeState.bankAccount) ?: throw NexusError(
+    val facadeState = getTalerFacadeState(fcid)
+    return NexusBankAccountEntity.findById(facadeState.bankAccount) ?: throw NexusError(
         HttpStatusCode.NotFound,
         "Could not find any bank account named ${facadeState.bankAccount}"
     )
-
-    return bankAccount
 }
 
 /**
@@ -232,13 +220,19 @@ private suspend fun talerTransfer(call: ApplicationCall) {
     val transferRequest = call.receive<TalerTransferRequest>()
     val amountObj = parseAmount(transferRequest.amount)
     val creditorObj = parsePayto(transferRequest.credit_account)
+    val facadeId = expectNonNull(call.parameters["fcid"])
     val opaqueRowId = transaction {
         // FIXME: re-enable authentication (https://bugs.gnunet.org/view.php?id=6703)
         // val exchangeUser = authenticateRequest(call.request)
+        call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.transfer"))
+        val facade = FacadeEntity.find { FacadesTable.id eq facadeId }.firstOrNull() ?: throw NexusError(
+            HttpStatusCode.NotFound,
+            "Could not find facade '${facadeId}'"
+        )
         val creditorData = parsePayto(transferRequest.credit_account)
         /** Checking the UID has the desired characteristics */
         TalerRequestedPaymentEntity.find {
-            TalerRequestedPayments.requestUId eq transferRequest.request_uid
+            TalerRequestedPaymentsTable.requestUId eq transferRequest.request_uid
         }.forEach {
             if (
                 (it.amount != transferRequest.amount) or
@@ -251,7 +245,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
                 )
             }
         }
-        val exchangeBankAccount = getTalerFacadeBankAccount(expectNonNull(call.parameters["fcid"]))
+        val exchangeBankAccount = getTalerFacadeBankAccount(facadeId)
         val pain001 = addPaymentInitiation(
             Pain001Data(
                 creditorIban = creditorData.iban,
@@ -265,6 +259,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
         )
         logger.debug("Taler requests payment: ${transferRequest.wtid}")
         val row = TalerRequestedPaymentEntity.new {
+            this.facade = facade
             preparedPayment = pain001 // not really used/needed, just here to silence warnings
             exchangeBaseUrl = transferRequest.exchange_base_url
             requestUId = transferRequest.request_uid
@@ -299,11 +294,11 @@ fun roundTimestamp(t: GnunetTimestamp): GnunetTimestamp {
  * Serve a /taler/admin/add-incoming
  */
 private suspend fun talerAddIncoming(call: ApplicationCall, httpClient: HttpClient): Unit {
+    val facadeID = expectNonNull(call.parameters["fcid"])
+    call.request.requirePermission(PermissionQuery("facade", facadeID, "facade.talerWireGateway.addIncoming"))
     val addIncomingData = call.receive<TalerAdminAddIncoming>()
     val debtor = parsePayto(addIncomingData.debit_account)
     val res = transaction {
-        val user = authenticateRequest(call.request)
-        val facadeID = expectNonNull(call.parameters["fcid"])
         val facadeState = getTalerFacadeState(facadeID)
         val facadeBankAccount = getTalerFacadeBankAccount(facadeID)
         return@transaction object {
@@ -313,6 +308,7 @@ private suspend fun talerAddIncoming(call: ApplicationCall, httpClient: HttpClie
             val facadeHolderName = facadeBankAccount.accountHolder
         }
     }
+
     /** forward the payment information to the sandbox.  */
     val response = httpClient.post<HttpResponse>(
         urlString = "http://localhost:5000/admin/payments",
@@ -366,19 +362,19 @@ private fun ingestIncoming(payment: NexusBankTransactionEntity, txDtls: Transact
     val debtorAcct = txDtls.debtorAccount
     if (debtorAcct == null) {
         // FIXME: Report payment, we can't even send it back
-        logger.warn("empty debitor account")
+        logger.warn("empty debtor account")
         return
     }
     val debtorIban = debtorAcct.iban
     if (debtorIban == null) {
         // FIXME: Report payment, we can't even send it back
-        logger.warn("non-iban debitor account")
+        logger.warn("non-iban debtor account")
         return
     }
     val debtorAgent = txDtls.debtorAgent
     if (debtorAgent == null) {
         // FIXME: Report payment, we can't even send it back
-        logger.warn("missing debitor agent")
+        logger.warn("missing debtor agent")
         return
     }
     val reservePub = extractReservePubFromSubject(subject)
@@ -440,6 +436,7 @@ fun ingestTalerTransactions() {
             }
             when (tx.creditDebitIndicator) {
                 CreditDebitIndicator.CRDT -> ingestIncoming(it, txDtls = details)
+                else -> Unit
             }
             lastId = it.id.value
         }
@@ -460,6 +457,8 @@ fun ingestTalerTransactions() {
  * Handle a /taler/history/outgoing request.
  */
 private suspend fun historyOutgoing(call: ApplicationCall) {
+    val facadeId = expectNonNull(call.parameters["fcid"])
+    call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.history"))
     val param = call.expectUrlParameter("delta")
     val delta: Int = try {
         param.toInt()
@@ -467,14 +466,12 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
         throw EbicsProtocolError(HttpStatusCode.BadRequest, "'${param}' is not Int")
     }
     val start: Long = handleStartArgument(call.request.queryParameters["start"], delta)
-    val startCmpOp = getComparisonOperator(delta, start, TalerRequestedPayments)
+    val startCmpOp = getComparisonOperator(delta, start, TalerRequestedPaymentsTable)
     /* retrieve database elements */
     val history = TalerOutgoingHistory()
     transaction {
-        val user = authenticateRequest(call.request)
-
         /** Retrieve all the outgoing payments from the _clean Taler outgoing table_ */
-        val subscriberBankAccount = getTalerFacadeBankAccount(expectNonNull(call.parameters["fcid"]))
+        val subscriberBankAccount = getTalerFacadeBankAccount(facadeId)
         val reqPayments = mutableListOf<TalerRequestedPaymentEntity>()
         val reqPaymentsWithUnconfirmed = TalerRequestedPaymentEntity.find {
             startCmpOp
@@ -509,9 +506,11 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
 }
 
 /**
- * Handle a /taler/history/incoming request.
+ * Handle a /taler-wire-gateway/history/incoming request.
  */
 private suspend fun historyIncoming(call: ApplicationCall): Unit {
+    val facadeId = expectNonNull(call.parameters["fcid"])
+    call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.history"))
     val param = call.expectUrlParameter("delta")
     val delta: Int = try {
         param.toInt()
@@ -520,7 +519,7 @@ private suspend fun historyIncoming(call: ApplicationCall): Unit {
     }
     val start: Long = handleStartArgument(call.request.queryParameters["start"], delta)
     val history = TalerIncomingHistory()
-    val startCmpOp = getComparisonOperator(delta, start, TalerIncomingPayments)
+    val startCmpOp = getComparisonOperator(delta, start, TalerIncomingPaymentsTable)
     transaction {
         val orderedPayments = TalerIncomingPaymentEntity.find {
             startCmpOp
@@ -562,12 +561,14 @@ private fun getCurrency(facadeName: String): String {
 }
 
 fun talerFacadeRoutes(route: Route, httpClient: HttpClient) {
+
     route.get("/config") {
-        val facadeName = ensureNonNull(call.parameters["fcid"])
+        val facadeId = ensureNonNull(call.parameters["fcid"])
+        call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.addIncoming"))
         call.respond(object {
             val version = "0.0.0"
-            val name = facadeName
-            val currency = getCurrency(facadeName)
+            val name = "taler-wire-gateway"
+            val currency = getCurrency(facadeId)
         })
         return@get
     }
