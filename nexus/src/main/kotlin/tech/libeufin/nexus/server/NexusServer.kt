@@ -28,31 +28,19 @@ import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import execThrowableOrTerminate
-import io.ktor.application.ApplicationCall
-import io.ktor.application.ApplicationCallPipeline
-import io.ktor.application.call
-import io.ktor.application.install
-import io.ktor.client.HttpClient
-import io.ktor.features.CallLogging
-import io.ktor.features.ContentNegotiation
-import io.ktor.features.StatusPages
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.jackson.jackson
+import io.ktor.application.*
+import io.ktor.client.*
+import io.ktor.features.*
+import io.ktor.http.*
+import io.ktor.jackson.*
 import io.ktor.request.*
-import io.ktor.response.respond
-import io.ktor.response.respondBytes
-import io.ktor.response.respondText
+import io.ktor.response.*
 import io.ktor.routing.*
-import io.ktor.server.engine.embeddedServer
-import io.ktor.server.netty.Netty
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
 import io.ktor.util.*
 import io.ktor.util.pipeline.*
 import io.ktor.utils.io.*
-import io.ktor.utils.io.jvm.javaio.toByteReadChannel
-import io.ktor.utils.io.jvm.javaio.toInputStream
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -67,10 +55,7 @@ import tech.libeufin.nexus.bankaccount.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.util.*
-import tech.libeufin.nexus.logger
-import java.lang.IllegalArgumentException
 import java.net.URLEncoder
-import java.util.zip.InflaterInputStream
 
 /**
  * Return facade state depending on the type.
@@ -148,22 +133,26 @@ suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
 
 
 fun createLoopbackBankConnection(bankConnectionName: String, user: NexusUserEntity, data: JsonNode) {
-    val bankConn = NexusBankConnectionEntity.new(bankConnectionName) {
+    val bankConn = NexusBankConnectionEntity.new {
+        this.connectionId = bankConnectionName
         owner = user
         type = "loopback"
     }
     val bankAccount = jacksonObjectMapper().treeToValue(data, BankAccount::class.java)
-    NexusBankAccountEntity.new(bankAccount.nexusBankAccountId) {
+    NexusBankAccountEntity.new {
+        bankAccountName = bankAccount.nexusBankAccountId
         iban = bankAccount.iban
         bankCode = bankAccount.bic
         accountHolder = bankAccount.ownerName
         defaultBankConnection = bankConn
-        highestSeenBankMessageId = 0
+        highestSeenBankMessageSerialId = 0
     }
 }
 
 fun requireBankConnectionInternal(connId: String): NexusBankConnectionEntity {
-    return transaction { NexusBankConnectionEntity.findById(connId) }
+    return transaction {
+        NexusBankConnectionEntity.find { NexusBankConnectionsTable.connectionId eq connId }.firstOrNull()
+    }
         ?: throw NexusError(HttpStatusCode.NotFound, "bank connection '$connId' not found")
 }
 
@@ -262,7 +251,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val ret = transaction {
                     val currentUser = authenticateRequest(call.request)
                     UserResponse(
-                        username = currentUser.id.value,
+                        username = currentUser.username,
                         superuser = currentUser.superuser
                     )
                 }
@@ -325,7 +314,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val users = transaction {
                     transaction {
                         NexusUserEntity.all().map {
-                            UserInfo(it.id.value, it.superuser)
+                            UserInfo(it.username, it.superuser)
                         }
                     }
                 }
@@ -339,7 +328,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val body = call.receiveJson<CreateUserRequest>()
                 transaction {
                     requireSuperuser(call.request)
-                    NexusUserEntity.new(body.username) {
+                    NexusUserEntity.new {
+                        username = body.username
                         passwordHash = CryptoUtil.hashpw(body.password)
                         superuser = false
                     }
@@ -377,7 +367,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                                 ownerName = it.accountHolder,
                                 iban = it.iban,
                                 bic = it.bankCode,
-                                nexusBankAccountId = it.id.value
+                                nexusBankAccountId = it.bankAccountName
                             )
                         )
                     }
@@ -402,7 +392,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 resp.set<JsonNode>("schedule", ops)
                 transaction {
-                    NexusBankAccountEntity.findById(accountId)
+                    NexusBankAccountEntity.findByName(accountId)
                         ?: throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     NexusScheduledTaskEntity.find {
                         (NexusScheduledTasksTable.resourceType eq "bank-account") and
@@ -427,7 +417,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 transaction {
                     authenticateRequest(call.request)
-                    val bankAccount = NexusBankAccountEntity.findById(accountId)
+                    val bankAccount = NexusBankAccountEntity.findByName(accountId)
                         ?: throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     try {
                         NexusCron.parser.parse(schedSpec.cronspec)
@@ -500,7 +490,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val accountId = ensureNonNull(call.parameters["accountId"])
                 val taskId = ensureNonNull(call.parameters["taskId"])
                 transaction {
-                    val bankAccount = NexusBankAccountEntity.findById(accountId)
+                    val bankAccount = NexusBankAccountEntity.findByName(accountId)
                     if (bankAccount == null) {
                         throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     }
@@ -520,7 +510,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 val res = transaction {
                     val user = authenticateRequest(call.request)
-                    val bankAccount = NexusBankAccountEntity.findById(accountId)
+                    val bankAccount = NexusBankAccountEntity.findByName(accountId)
                     if (bankAccount == null) {
                         throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     }
@@ -626,7 +616,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 val res = transaction {
                     authenticateRequest(call.request)
-                    val bankAccount = NexusBankAccountEntity.findById(accountId)
+                    val bankAccount = NexusBankAccountEntity.findByName(accountId)
                     if (bankAccount == null) {
                         throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     }
@@ -688,7 +678,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val ret = Transactions()
                 transaction {
                     authenticateRequest(call.request)
-                    val bankAccount = NexusBankAccountEntity.findById(bankAccountId)
+                    val bankAccount = NexusBankAccountEntity.findByName(bankAccountId)
                     if (bankAccount == null) {
                         throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     }
@@ -710,7 +700,10 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val body = call.receive<CreateBankConnectionRequestJson>()
                 transaction {
                     val user = authenticateRequest(call.request)
-                    if (NexusBankConnectionEntity.findById(body.name) != null) {
+                    val existingConn =
+                        NexusBankConnectionEntity.find { NexusBankConnectionsTable.connectionId eq body.name }
+                            .firstOrNull()
+                    if (existingConn != null) {
                         throw NexusError(HttpStatusCode.NotAcceptable, "connection '${body.name}' exists already")
                     }
                     when (body) {
@@ -754,10 +747,12 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 requireSuperuser(call.request)
                 val body = call.receive<BankConnectionDeletion>()
                 transaction {
-                    val conn = NexusBankConnectionEntity.findById(body.bankConnectionId) ?: throw NexusError(
-                        HttpStatusCode.NotFound,
-                        "Bank connection ${body.bankConnectionId}"
-                    )
+                    val conn =
+                        NexusBankConnectionEntity.find { NexusBankConnectionsTable.connectionId eq body.bankConnectionId }
+                            .firstOrNull() ?: throw NexusError(
+                            HttpStatusCode.NotFound,
+                            "Bank connection ${body.bankConnectionId}"
+                        )
                     conn.delete() // temporary, and instead just _mark_ it as deleted?
                 }
                 call.respond(object {})
@@ -770,7 +765,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     NexusBankConnectionEntity.all().forEach {
                         connList.bankConnections.add(
                             BankConnectionInfo(
-                                name = it.id.value,
+                                name = it.connectionId,
                                 type = it.type
                             )
                         )
@@ -807,7 +802,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     val conn = requireBankConnection(call, "connid")
                     when (conn.type) {
                         "ebics" -> {
-                            exportEbicsKeyBackup(conn.id.value, body.passphrase)
+                            exportEbicsKeyBackup(conn.connectionId, body.passphrase)
                         }
                         else -> {
                             throw NexusError(
@@ -832,7 +827,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 }
                 when (conn.type) {
                     "ebics" -> {
-                        connectEbics(client, conn.id.value)
+                        connectEbics(client, conn.connectionId)
                     }
                 }
                 call.respond(object {})
@@ -892,11 +887,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 requireSuperuser(call.request)
                 val fcid = ensureNonNull(call.parameters["fcid"])
                 val ret = transaction {
-                    val f = FacadeEntity.findById(fcid) ?: throw NexusError(
+                    val f = FacadeEntity.findByName(fcid) ?: throw NexusError(
                         HttpStatusCode.NotFound, "Facade ${fcid} does not exist"
                     )
                     FacadeShowInfo(
-                        name = f.id.value,
+                        name = f.facadeName,
                         type = f.type,
                         baseUrl = "http://${host}/facades/${f.id.value}/${f.type}/",
                         config = getFacadeState(f.type, f)
@@ -918,7 +913,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     }.forEach {
                         ret.facades.add(
                             FacadeShowInfo(
-                                name = it.id.value,
+                                name = it.facadeName,
                                 type = it.type,
                                 baseUrl = "http://${host}/facades/${it.id.value}/${it.type}/",
                                 config = getFacadeState(it.type, it)
@@ -939,7 +934,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 )
                 val newFacade = transaction {
                     val user = authenticateRequest(call.request)
-                    FacadeEntity.new(body.name) {
+                    FacadeEntity.new {
+                        facadeName = body.name
                         type = body.type
                         creator = user
                     }
@@ -971,7 +967,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     }
                     when (conn.type) {
                         "ebics" -> {
-                            ebicsFetchAccounts(conn.id.value, client)
+                            ebicsFetchAccounts(conn.connectionId, client)
                         }
                         else -> throw NexusError(
                             HttpStatusCode.NotImplemented,
@@ -987,16 +983,22 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     val ret = OfferedBankAccounts()
                     transaction {
                         val conn = requireBankConnection(call, "connid")
-                        OfferedBankAccountsTable.select {
+                        OfferedBankAccountEntity.find {
                             OfferedBankAccountsTable.bankConnection eq conn.id.value
-                        }.forEach { offeredAccountRow ->
+                        }.forEach { offeredAccount ->
+                            val importedId = offeredAccount.imported?.id
+                            val imported = if (importedId != null) {
+                                NexusBankAccountEntity.findById(importedId)
+                            } else {
+                                null
+                            }
                             ret.accounts.add(
                                 OfferedBankAccount(
-                                    ownerName = offeredAccountRow[accountHolder],
-                                    iban = offeredAccountRow[iban],
-                                    bic = offeredAccountRow[bankCode],
-                                    offeredAccountId = offeredAccountRow[offeredAccountId],
-                                    nexusBankAccountId = offeredAccountRow[imported]?.value
+                                    ownerName = offeredAccount.accountHolder,
+                                    iban = offeredAccount.iban,
+                                    bic = offeredAccount.bankCode,
+                                    offeredAccountId = offeredAccount.offeredAccountId,
+                                    nexusBankAccountId = imported?.bankAccountName
                                 )
                             )
                         }

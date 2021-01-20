@@ -103,9 +103,10 @@ class Superuser : CliktCommand("Add superuser or change pw") {
         }
         transaction {
             val hashedPw = hashpw(password)
-            val user = NexusUserEntity.findById(username)
+            val user = NexusUserEntity.find { NexusUsersTable.username eq username }.firstOrNull()
             if (user == null) {
-                NexusUserEntity.new(username) {
+                NexusUserEntity.new {
+                    this.username = this@Superuser.username
                     this.passwordHash = hashedPw
                     this.superuser = true
                 }

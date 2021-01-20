@@ -47,7 +47,7 @@ fun authenticateRequest(request: ApplicationRequest): NexusUserEntity {
         ) else authorization
         val (username, password) = extractUserAndPassword(headerLine)
         val user = NexusUserEntity.find {
-            NexusUsersTable.id eq username
+            NexusUsersTable.username eq username
         }.firstOrNull()
         if (user == null) {
             throw NexusError(HttpStatusCode.Unauthorized, "Unknown user '$username'")
@@ -97,7 +97,7 @@ fun ApplicationRequest.requirePermission(vararg perms: PermissionQuery) {
         }
         var foundPermission = false
         for (pr in perms) {
-            val p = Permission("user", user.id.value, pr.resourceType, pr.resourceId, pr.permissionName)
+            val p = Permission("user", user.username, pr.resourceType, pr.resourceId, pr.permissionName)
             val existingPerm = findPermission(p)
             if (existingPerm != null) {
                 foundPermission = true

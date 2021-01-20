@@ -78,7 +78,7 @@ suspend fun fetchEbicsBySpec(
 ) {
     val subscriberDetails = transaction { getEbicsSubscriberDetails(bankConnectionId) }
     val lastTimes = transaction {
-        val acct = NexusBankAccountEntity.findById(accountId)
+        val acct = NexusBankAccountEntity.findByName(accountId)
         if (acct == null) {
             throw NexusError(
                 HttpStatusCode.NotFound,
@@ -170,7 +170,7 @@ fun storeCamt(bankConnectionId: String, camt: String, historyType: String) {
     val msgId = camt53doc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
     logger.info("msg id $msgId")
     transaction {
-        val conn = NexusBankConnectionEntity.findById(bankConnectionId)
+        val conn = NexusBankConnectionEntity.findByName(bankConnectionId)
         if (conn == null) {
             throw NexusError(HttpStatusCode.InternalServerError, "bank connection missing")
         }
@@ -239,7 +239,8 @@ fun createEbicsBankConnectionFromBackup(
     if (passphrase === null) {
         throw NexusError(HttpStatusCode.BadRequest, "EBICS backup needs passphrase")
     }
-    val bankConn = NexusBankConnectionEntity.new(bankConnectionName) {
+    val bankConn = NexusBankConnectionEntity.new {
+        connectionId = bankConnectionName
         owner = user
         type = "ebics"
     }
@@ -323,7 +324,7 @@ private fun getEbicsSubscriberDetailsInternal(subscriber: EbicsSubscriberEntity)
  * Retrieve Ebics subscriber details given a bank connection.
  */
 private fun getEbicsSubscriberDetails(bankConnectionId: String): EbicsClientSubscriberDetails {
-    val transport = NexusBankConnectionEntity.findById(bankConnectionId)
+    val transport = NexusBankConnectionEntity.findByName(bankConnectionId)
     if (transport == null) {
         throw NexusError(HttpStatusCode.NotFound, "transport not found")
     }
@@ -352,16 +353,22 @@ suspend fun ebicsFetchAccounts(connId: String, client: HttpClient) {
             )
             transaction {
                 payload.value.partnerInfo.accountInfoList?.forEach { accountInfo ->
+                    val conn = NexusBankConnectionEntity.findByName(connId) ?: throw NexusError(
+                        HttpStatusCode.NotFound,
+                        "bank connection not found"
+                    )
+
                     val isDuplicate = OfferedBankAccountsTable.select {
-                        OfferedBankAccountsTable.bankConnection eq connId and (
+                        OfferedBankAccountsTable.bankConnection eq conn.id and (
                                 OfferedBankAccountsTable.offeredAccountId eq accountInfo.id)
                     }.firstOrNull()
                     if (isDuplicate != null) return@forEach
                     OfferedBankAccountsTable.insert { newRow ->
                         newRow[accountHolder] = accountInfo.accountHolder ?: "NOT GIVEN"
-                        newRow[iban] = accountInfo.accountNumberList?.filterIsInstance<EbicsTypes.GeneralAccountNumber>()
-                            ?.find { it.international }?.value
-                            ?: throw NexusError(HttpStatusCode.NotFound, reason = "bank gave no IBAN")
+                        newRow[iban] =
+                            accountInfo.accountNumberList?.filterIsInstance<EbicsTypes.GeneralAccountNumber>()
+                                ?.find { it.international }?.value
+                                ?: throw NexusError(HttpStatusCode.NotFound, reason = "bank gave no IBAN")
                         newRow[bankCode] = accountInfo.bankCodeList?.filterIsInstance<EbicsTypes.GeneralBankCode>()
                             ?.find { it.international }?.value
                             ?: throw NexusError(
@@ -397,7 +404,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
                     "bank connection is not of type 'ebics' (but '${conn.type}')"
                 )
             }
-            getEbicsSubscriberDetails(conn.id.value)
+            getEbicsSubscriberDetails(conn.connectionId)
         }
         val resp = doEbicsIniRequest(client, subscriber)
         call.respond(resp)
@@ -409,7 +416,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
             if (conn.type != "ebics") {
                 throw NexusError(HttpStatusCode.BadRequest, "bank connection is not of type 'ebics'")
             }
-            getEbicsSubscriberDetails(conn.id.value)
+            getEbicsSubscriberDetails(conn.connectionId)
         }
         val resp = doEbicsHiaRequest(client, subscriber)
         call.respond(resp)
@@ -421,7 +428,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
             if (conn.type != "ebics") {
                 throw NexusError(HttpStatusCode.BadRequest, "bank connection is not of type 'ebics'")
             }
-            getEbicsSubscriberDetails(conn.id.value)
+            getEbicsSubscriberDetails(conn.connectionId)
         }
         val resp = doEbicsHostVersionQuery(client, subscriber.ebicsUrl, subscriber.hostId)
         call.respond(resp)
@@ -433,7 +440,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
             if (conn.type != "ebics") {
                 throw NexusError(HttpStatusCode.BadRequest, "bank connection is not of type 'ebics'")
             }
-            getEbicsSubscriberDetails(conn.id.value)
+            getEbicsSubscriberDetails(conn.connectionId)
         }
         val hpbData = doEbicsHpbRequest(client, subscriberDetails)
         transaction {
@@ -456,7 +463,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
             if (conn.type != "ebics") {
                 throw NexusError(HttpStatusCode.BadRequest, "bank connection is not of type 'ebics'")
             }
-            getEbicsSubscriberDetails(conn.id.value)
+            getEbicsSubscriberDetails(conn.connectionId)
         }
         val response = doEbicsDownloadTransaction(
             client, subscriberDetails, "HTD", EbicsStandardOrderParams()
@@ -475,7 +482,8 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
                 transaction {
                     val conn = requireBankConnection(call, "connid")
                     payload.value.partnerInfo.accountInfoList?.forEach {
-                        NexusBankAccountEntity.new(id = it.id) {
+                        NexusBankAccountEntity.new {
+                            bankAccountName = it.id
                             accountHolder = it.accountHolder ?: "NOT-GIVEN"
                             iban = it.accountNumberList?.filterIsInstance<EbicsTypes.GeneralAccountNumber>()
                                 ?.find { it.international }?.value
@@ -487,7 +495,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
                                     reason = "bank gave no BIC"
                                 )
                             defaultBankConnection = conn
-                            highestSeenBankMessageId = 0
+                            highestSeenBankMessageSerialId = 0
                         }
                     }
                 }
@@ -513,7 +521,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
             if (conn.type != "ebics") {
                 throw NexusError(HttpStatusCode.BadRequest, "bank connection is not of type 'ebics'")
             }
-            getEbicsSubscriberDetails(conn.id.value)
+            getEbicsSubscriberDetails(conn.connectionId)
         }
         val response = doEbicsDownloadTransaction(
             client,
@@ -575,7 +583,7 @@ fun exportEbicsKeyBackup(bankConnectionId: String, passphrase: String): Any {
 
 
 fun getEbicsConnectionDetails(conn: NexusBankConnectionEntity): Any {
-    val ebicsSubscriber = transaction { getEbicsSubscriberDetails(conn.id.value) }
+    val ebicsSubscriber = transaction { getEbicsSubscriberDetails(conn.connectionId) }
     val mapper = ObjectMapper()
     val details = mapper.createObjectNode()
     details.put("ebicsUrl", ebicsSubscriber.ebicsUrl)
@@ -603,7 +611,7 @@ private suspend fun tentativeHpb(client: HttpClient, connId: String): Boolean {
         return false
     }
     transaction {
-        val conn = NexusBankConnectionEntity.findById(connId)
+        val conn = NexusBankConnectionEntity.findByName(connId)
         if (conn == null) {
             throw NexusError(HttpStatusCode.NotFound, "bank connection '$connId' not found")
         }
@@ -649,7 +657,7 @@ suspend fun connectEbics(client: HttpClient, connId: String) {
         null
     }
     transaction {
-        val conn = NexusBankConnectionEntity.findById(connId)
+        val conn = NexusBankConnectionEntity.findByName(connId)
         if (conn == null) {
             throw NexusError(HttpStatusCode.NotFound, "bank connection '$connId' not found")
         }
@@ -683,7 +691,7 @@ fun formatHex(ba: ByteArray): String {
 }
 
 fun getEbicsKeyLetterPdf(conn: NexusBankConnectionEntity): ByteArray {
-    val ebicsSubscriber = transaction { getEbicsSubscriberDetails(conn.id.value) }
+    val ebicsSubscriber = transaction { getEbicsSubscriberDetails(conn.connectionId) }
 
     val po = ByteArrayOutputStream()
     val pdfWriter = PdfWriter(po)
@@ -752,9 +760,9 @@ suspend fun submitEbicsPaymentInitiation(httpClient: HttpClient, paymentInitiati
     val r = transaction {
         val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
             ?: throw NexusError(HttpStatusCode.NotFound, "payment initiation not found")
-        val connId = paymentInitiation.bankAccount.defaultBankConnection?.id
+        val conn = paymentInitiation.bankAccount.defaultBankConnection
             ?: throw NexusError(HttpStatusCode.NotFound, "no default bank connection available for submission")
-        val subscriberDetails = getEbicsSubscriberDetails(connId.value)
+        val subscriberDetails = getEbicsSubscriberDetails(conn.connectionId)
         val painMessage = createPain001document(
             NexusPaymentInitiationData(
                 debtorIban = paymentInitiation.bankAccount.iban,
@@ -798,7 +806,8 @@ suspend fun submitEbicsPaymentInitiation(httpClient: HttpClient, paymentInitiati
 
 
 fun createEbicsBankConnection(bankConnectionName: String, user: NexusUserEntity, data: JsonNode) {
-    val bankConn = NexusBankConnectionEntity.new(bankConnectionName) {
+    val bankConn = NexusBankConnectionEntity.new {
+        this.connectionId = bankConnectionName
         owner = user
         type = "ebics"
     }

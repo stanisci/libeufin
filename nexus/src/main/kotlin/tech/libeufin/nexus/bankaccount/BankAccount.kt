@@ -45,7 +45,7 @@ fun requireBankAccount(call: ApplicationCall, parameterKey: String): NexusBankAc
     if (name == null) {
         throw NexusError(HttpStatusCode.InternalServerError, "no parameter for bank account")
     }
-    val account = transaction { NexusBankAccountEntity.findById(name) }
+    val account = transaction { NexusBankAccountEntity.findByName(name) }
     if (account == null) {
         throw NexusError(HttpStatusCode.NotFound, "bank connection '$name' not found")
     }
@@ -83,6 +83,7 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
     logger.debug("auto-submitter started")
     val workQueue = mutableListOf<Submission>()
     transaction {
+        val account = NexusBankAccountEntity.findByName(accountid)
         PaymentInitiationEntity.find {
             PaymentInitiationsTable.submitted eq false
         }.forEach {
@@ -113,8 +114,9 @@ private fun findDuplicate(bankAccountId: String, acctSvcrRef: String): NexusBank
     // FIXME: make this generic depending on transaction identification scheme
     val ati = "AcctSvcrRef:$acctSvcrRef"
     return transaction {
+        val account = NexusBankAccountEntity.findByName((bankAccountId)) ?: return@transaction null
         NexusBankTransactionEntity.find {
-            (NexusBankTransactionsTable.accountTransactionId eq ati) and (NexusBankTransactionsTable.bankAccount eq bankAccountId)
+            (NexusBankTransactionsTable.accountTransactionId eq ati) and (NexusBankTransactionsTable.bankAccount eq account.id)
         }.firstOrNull()
     }
 }
@@ -123,16 +125,19 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
     logger.info("processing CAMT message")
     var newTransactions = 0
     transaction {
-        val acct = NexusBankAccountEntity.findById(bankAccountId)
+        val acct = NexusBankAccountEntity.findByName(bankAccountId)
         if (acct == null) {
             throw NexusError(HttpStatusCode.NotFound, "user not found")
         }
-        val res = try { parseCamtMessage(camtDoc) } catch (e: CamtParsingError) {
+        val res = try {
+            parseCamtMessage(camtDoc)
+        } catch (e: CamtParsingError) {
             logger.warn("Invalid CAMT received from bank: $e")
             newTransactions = -1
             return@transaction
         }
-        val stamp = ZonedDateTime.parse(res.creationDateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant().toEpochMilli()
+        val stamp =
+            ZonedDateTime.parse(res.creationDateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant().toEpochMilli()
         when (code) {
             "C52" -> {
                 val s = acct.lastReportCreationTimestamp
@@ -207,18 +212,19 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
 fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: String): Int {
     var totalNew = 0
     transaction {
-        val conn = NexusBankConnectionEntity.findById(bankConnectionId)
+        val conn =
+            NexusBankConnectionEntity.find { NexusBankConnectionsTable.connectionId eq bankConnectionId }.firstOrNull()
         if (conn == null) {
             throw NexusError(HttpStatusCode.InternalServerError, "connection not found")
         }
-        val acct = NexusBankAccountEntity.findById(bankAccountId)
+        val acct = NexusBankAccountEntity.findByName(bankAccountId)
         if (acct == null) {
             throw NexusError(HttpStatusCode.InternalServerError, "account not found")
         }
-        var lastId = acct.highestSeenBankMessageId
+        var lastId = acct.highestSeenBankMessageSerialId
         NexusBankMessageEntity.find {
             (NexusBankMessagesTable.bankConnection eq conn.id) and
-                    (NexusBankMessagesTable.id greater acct.highestSeenBankMessageId)
+                    (NexusBankMessagesTable.id greater acct.highestSeenBankMessageSerialId)
         }.orderBy(Pair(NexusBankMessagesTable.id, SortOrder.ASC)).forEach {
             val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
             val newTransactions = processCamtMessage(bankAccountId, doc, it.code)
@@ -229,7 +235,7 @@ fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: Strin
             lastId = it.id.value
             totalNew += newTransactions
         }
-        acct.highestSeenBankMessageId = lastId
+        acct.highestSeenBankMessageSerialId = lastId
     }
     return totalNew
 }
@@ -249,20 +255,20 @@ fun getPaymentInitiation(uuid: Long): PaymentInitiationEntity {
 
 /**
  * Insert one row in the database, and leaves it marked as non-submitted.
- * @param debtorAccountId the mnemonic id assigned by the bank to one bank
+ * @param debtorAccount the mnemonic id assigned by the bank to one bank
  * account of the subscriber that is creating the pain entity.  In this case,
  * it will be the account whose money will pay the wire transfer being defined
  * by this pain document.
  */
-fun addPaymentInitiation(paymentData: Pain001Data, debitorAccount: NexusBankAccountEntity): PaymentInitiationEntity {
+fun addPaymentInitiation(paymentData: Pain001Data, debtorAccount: NexusBankAccountEntity): PaymentInitiationEntity {
     return transaction {
         val now = Instant.now().toEpochMilli()
         val nowHex = now.toString(16)
-        val painCounter = debitorAccount.pain001Counter++
+        val painCounter = debtorAccount.pain001Counter++
         val painHex = painCounter.toString(16)
-        val acctHex = debitorAccount.id.hashCode().toLong().toString(16).substring(0, 4)
+        val acctHex = debtorAccount.id.value.toString(16)
         PaymentInitiationEntity.new {
-            bankAccount = debitorAccount
+            bankAccount = debtorAccount
             subject = paymentData.subject
             sum = paymentData.sum
             creditorName = paymentData.creditorName
@@ -279,7 +285,7 @@ fun addPaymentInitiation(paymentData: Pain001Data, debitorAccount: NexusBankAcco
 
 suspend fun fetchBankAccountTransactions(client: HttpClient, fetchSpec: FetchSpecJson, accountId: String): Int {
     val res = transaction {
-        val acct = NexusBankAccountEntity.findById(accountId)
+        val acct = NexusBankAccountEntity.findByName(accountId)
         if (acct == null) {
             throw NexusError(
                 HttpStatusCode.NotFound,
@@ -295,7 +301,7 @@ suspend fun fetchBankAccountTransactions(client: HttpClient, fetchSpec: FetchSpe
         }
         return@transaction object {
             val connectionType = conn.type
-            val connectionName = conn.id.value
+            val connectionName = conn.connectionId
         }
     }
     when (res.connectionType) {
@@ -328,24 +334,25 @@ fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexus
             HttpStatusCode.NotFound, "Could not find offered bank account '${offeredBankAccountId}'"
         )
         // detect name collisions first.
-        NexusBankAccountEntity.findById(nexusBankAccountId).run {
-            val importedAccount = when(this) {
+        NexusBankAccountEntity.findByName(nexusBankAccountId).run {
+            val importedAccount = when (this) {
                 is NexusBankAccountEntity -> {
                     if (this.iban != offeredAccount[OfferedBankAccountsTable.iban]) {
                         throw NexusError(
                             HttpStatusCode.Conflict,
                             // different accounts == different IBANs
-                            "Cannot import two different accounts under one label: ${nexusBankAccountId}"
+                            "Cannot import two different accounts under one label: $nexusBankAccountId"
                         )
                     }
                     this
                 }
                 else -> {
-                    val newImportedAccount = NexusBankAccountEntity.new(nexusBankAccountId) {
+                    val newImportedAccount = NexusBankAccountEntity.new {
+                        bankAccountName = nexusBankAccountId
                         iban = offeredAccount[OfferedBankAccountsTable.iban]
                         bankCode = offeredAccount[OfferedBankAccountsTable.bankCode]
                         defaultBankConnection = conn
-                        highestSeenBankMessageId = 0
+                        highestSeenBankMessageSerialId = 0
                         accountHolder = offeredAccount[OfferedBankAccountsTable.accountHolder]
                     }
                     logger.info("Account ${newImportedAccount.id} gets imported")
@@ -353,8 +360,10 @@ fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexus
                 }
             }
             OfferedBankAccountsTable.update(
-                {OfferedBankAccountsTable.offeredAccountId eq offeredBankAccountId and
-                        (OfferedBankAccountsTable.bankConnection eq conn.id.value) }
+                {
+                    OfferedBankAccountsTable.offeredAccountId eq offeredBankAccountId and
+                            (OfferedBankAccountsTable.bankConnection eq conn.id.value)
+                }
             ) {
                 it[imported] = importedAccount.id
             }

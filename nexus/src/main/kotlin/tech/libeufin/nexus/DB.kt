@@ -21,8 +21,6 @@ package tech.libeufin.nexus
 
 import org.jetbrains.exposed.dao.*
 import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.dao.id.IdTable
-import org.jetbrains.exposed.dao.id.IntIdTable
 import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
@@ -41,11 +39,11 @@ import java.sql.Connection
 object TalerRequestedPaymentsTable : LongIdTable() {
     val facade = reference("facade", FacadesTable)
     val preparedPayment = reference("payment", PaymentInitiationsTable)
-    val requestUId = text("request_uid")
+    val requestUid = text("requestUid")
     val amount = text("amount")
-    val exchangeBaseUrl = text("exchange_base_url")
+    val exchangeBaseUrl = text("exchangeBaseUrl")
     val wtid = text("wtid")
-    val creditAccount = text("credit_account")
+    val creditAccount = text("creditAccount")
 }
 
 class TalerRequestedPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -53,7 +51,7 @@ class TalerRequestedPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
 
     var facade by FacadeEntity referencedOn TalerRequestedPaymentsTable.facade
     var preparedPayment by PaymentInitiationEntity referencedOn TalerRequestedPaymentsTable.preparedPayment
-    var requestUId by TalerRequestedPaymentsTable.requestUId
+    var requestUid by TalerRequestedPaymentsTable.requestUid
     var amount by TalerRequestedPaymentsTable.amount
     var exchangeBaseUrl by TalerRequestedPaymentsTable.exchangeBaseUrl
     var wtid by TalerRequestedPaymentsTable.wtid
@@ -71,6 +69,7 @@ object TalerIncomingPaymentsTable : LongIdTable() {
     val debtorPaytoUri = text("incomingPaytoUri")
 }
 
+
 class TalerIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<TalerIncomingPaymentEntity>(TalerIncomingPaymentsTable)
 
@@ -83,18 +82,20 @@ class TalerIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
 /**
  * Table that stores all messages we receive from the bank.
  */
-object NexusBankMessagesTable : IntIdTable() {
+object NexusBankMessagesTable : LongIdTable() {
     val bankConnection = reference("bankConnection", NexusBankConnectionsTable)
 
-    // Unique identifier for the message within the bank connection
+    /**
+     * Unique identifier for the message within the bank connection
+     */
     val messageId = text("messageId")
     val code = text("code")
     val message = blob("message")
     val errors = bool("errors").default(false) // true when the parser could not ingest one message.
 }
 
-class NexusBankMessageEntity(id: EntityID<Int>) : IntEntity(id) {
-    companion object : IntEntityClass<NexusBankMessageEntity>(NexusBankMessagesTable)
+class NexusBankMessageEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<NexusBankMessageEntity>(NexusBankMessagesTable)
 
     var bankConnection by NexusBankConnectionEntity referencedOn NexusBankMessagesTable.bankConnection
     var messageId by NexusBankMessagesTable.messageId
@@ -215,7 +216,7 @@ class PaymentInitiationEntity(id: EntityID<Long>) : LongEntity(id) {
  * This table contains the bank accounts that are offered by the bank.
  * The bank account label (as assigned by the bank) is the primary key.
  */
-object OfferedBankAccountsTable : Table() {
+object OfferedBankAccountsTable : LongIdTable() {
     val offeredAccountId = text("offeredAccountId")
     val bankConnection = reference("bankConnection", NexusBankConnectionsTable)
     val iban = text("iban")
@@ -225,15 +226,28 @@ object OfferedBankAccountsTable : Table() {
     // column below gets defined only WHEN the user imports the bank account.
     val imported = reference("imported", NexusBankAccountsTable).nullable()
 
-    override val primaryKey = PrimaryKey(offeredAccountId, bankConnection)
+    init {
+        uniqueIndex(offeredAccountId, bankConnection)
+    }
+}
+
+class OfferedBankAccountEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<OfferedBankAccountEntity>(OfferedBankAccountsTable)
+
+    var offeredAccountId by OfferedBankAccountsTable.offeredAccountId
+    var bankConnection by NexusBankConnectionEntity referencedOn OfferedBankAccountsTable.bankConnection
+    var accountHolder by OfferedBankAccountsTable.accountHolder
+    var iban by OfferedBankAccountsTable.iban
+    var bankCode by OfferedBankAccountsTable.bankCode
+    var imported by NexusBankAccountEntity optionalReferencedOn  OfferedBankAccountsTable.imported
 }
 
 /**
  * This table holds triples of <iban, bic, holder name>.
  * FIXME(dold):  Allow other account and bank identifications than IBAN and BIC
  */
-object NexusBankAccountsTable : IdTable<String>() {
-    override val id = text("id").entityId().uniqueIndex()
+object NexusBankAccountsTable : LongIdTable() {
+    val bankAccountName = text("bankAccountId").uniqueIndex()
     val accountHolder = text("accountHolder")
     val iban = text("iban")
     val bankCode = text("bankCode")
@@ -243,25 +257,30 @@ object NexusBankAccountsTable : IdTable<String>() {
     val lastNotificationCreationTimestamp = long("lastNotificationCreationTimestamp").nullable()
 
     // Highest bank message ID that this bank account is aware of.
-    val highestSeenBankMessageId = integer("highestSeenBankMessageId")
+    val highestSeenBankMessageSerialId = long("highestSeenBankMessageSerialId")
     val pain001Counter = long("pain001counter").default(1)
 }
 
-class NexusBankAccountEntity(id: EntityID<String>) : Entity<String>(id) {
-    companion object : EntityClass<String, NexusBankAccountEntity>(NexusBankAccountsTable)
+class NexusBankAccountEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<NexusBankAccountEntity>(NexusBankAccountsTable) {
+        fun findByName(name: String): NexusBankAccountEntity? {
+            return find { NexusBankAccountsTable.bankAccountName eq name }.firstOrNull()
+        }
+    }
 
+    var bankAccountName by NexusBankAccountsTable.bankAccountName
     var accountHolder by NexusBankAccountsTable.accountHolder
     var iban by NexusBankAccountsTable.iban
     var bankCode by NexusBankAccountsTable.bankCode
     var defaultBankConnection by NexusBankConnectionEntity optionalReferencedOn NexusBankAccountsTable.defaultBankConnection
-    var highestSeenBankMessageId by NexusBankAccountsTable.highestSeenBankMessageId
+    var highestSeenBankMessageSerialId by NexusBankAccountsTable.highestSeenBankMessageSerialId
     var pain001Counter by NexusBankAccountsTable.pain001Counter
     var lastStatementCreationTimestamp by NexusBankAccountsTable.lastStatementCreationTimestamp
     var lastReportCreationTimestamp by NexusBankAccountsTable.lastReportCreationTimestamp
     var lastNotificationCreationTimestamp by NexusBankAccountsTable.lastNotificationCreationTimestamp
 }
 
-object NexusEbicsSubscribersTable : IntIdTable() {
+object NexusEbicsSubscribersTable : LongIdTable() {
     val ebicsURL = text("ebicsURL")
     val hostID = text("hostID")
     val partnerID = text("partnerID")
@@ -277,8 +296,8 @@ object NexusEbicsSubscribersTable : IntIdTable() {
     val ebicsHiaState = enumerationByName("ebicsHiaState", 16, EbicsInitState::class)
 }
 
-class EbicsSubscriberEntity(id: EntityID<Int>) : IntEntity(id) {
-    companion object : IntEntityClass<EbicsSubscriberEntity>(NexusEbicsSubscribersTable)
+class EbicsSubscriberEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<EbicsSubscriberEntity>(NexusEbicsSubscribersTable)
 
     var ebicsURL by NexusEbicsSubscribersTable.ebicsURL
     var hostID by NexusEbicsSubscribersTable.hostID
@@ -295,72 +314,90 @@ class EbicsSubscriberEntity(id: EntityID<Int>) : IntEntity(id) {
     var ebicsHiaState by NexusEbicsSubscribersTable.ebicsHiaState
 }
 
-object NexusUsersTable : IdTable<String>() {
-    override val id = text("id").entityId().uniqueIndex()
+object NexusUsersTable : LongIdTable() {
+
+    val username = text("username")
     val passwordHash = text("password")
     val superuser = bool("superuser")
 }
 
-class NexusUserEntity(id: EntityID<String>) : Entity<String>(id) {
-    companion object : EntityClass<String, NexusUserEntity>(NexusUsersTable)
+class NexusUserEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<NexusUserEntity>(NexusUsersTable)
 
+    var username by NexusUsersTable.username
     var passwordHash by NexusUsersTable.passwordHash
     var superuser by NexusUsersTable.superuser
 }
 
-object NexusBankConnectionsTable : IdTable<String>() {
-    override val id = NexusBankConnectionsTable.text("id").entityId().uniqueIndex()
+object NexusBankConnectionsTable : LongIdTable() {
+    val connectionId = text("connectionId")
     val type = text("type")
     val owner = reference("user", NexusUsersTable)
 }
 
-class NexusBankConnectionEntity(id: EntityID<String>) : Entity<String>(id) {
-    companion object : EntityClass<String, NexusBankConnectionEntity>(NexusBankConnectionsTable)
+class NexusBankConnectionEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<NexusBankConnectionEntity>(NexusBankConnectionsTable) {
+        fun findByName(name: String): NexusBankConnectionEntity? {
+            return find { NexusBankConnectionsTable.connectionId eq name }.firstOrNull()
+        }
+    }
 
+    var connectionId by NexusBankConnectionsTable.connectionId
     var type by NexusBankConnectionsTable.type
     var owner by NexusUserEntity referencedOn NexusBankConnectionsTable.owner
 }
 
-object FacadesTable : IdTable<String>() {
-    override val id = FacadesTable.text("id").entityId().uniqueIndex()
+object FacadesTable : LongIdTable() {
+    val facadeName = text("facadeName")
     val type = text("type")
     val creator = reference("creator", NexusUsersTable)
 }
 
-class FacadeEntity(id: EntityID<String>) : Entity<String>(id) {
-    companion object : EntityClass<String, FacadeEntity>(FacadesTable)
+class FacadeEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<FacadeEntity>(FacadesTable) {
+        fun findByName(name: String): FacadeEntity? {
+            return find { FacadesTable.facadeName eq name}.firstOrNull()
+        }
+    }
 
+    var facadeName by FacadesTable.facadeName
     var type by FacadesTable.type
     var creator by NexusUserEntity referencedOn FacadesTable.creator
 }
 
-object TalerFacadeStateTable : IntIdTable() {
+object TalerFacadeStateTable : LongIdTable() {
     val bankAccount = text("bankAccount")
     val bankConnection = text("bankConnection")
     val currency = text("currency")
 
-    /* "statement", "report", "notification" */
+    /**
+     *  "statement", "report", "notification"
+     **/
     val reserveTransferLevel = text("reserveTransferLevel")
     val facade = reference("facade", FacadesTable)
 
-    // highest ID seen in the raw transactions table.
-    val highestSeenMsgID = long("highestSeenMsgID").default(0)
+    /**
+     * Highest ID seen in the raw transactions table.
+     */
+    val highestSeenMsgSerialId = long("highestSeenMessageSerialId").default(0)
 }
 
-class TalerFacadeStateEntity(id: EntityID<Int>) : IntEntity(id) {
-    companion object : IntEntityClass<TalerFacadeStateEntity>(TalerFacadeStateTable)
+class TalerFacadeStateEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<TalerFacadeStateEntity>(TalerFacadeStateTable)
 
     var bankAccount by TalerFacadeStateTable.bankAccount
     var bankConnection by TalerFacadeStateTable.bankConnection
     var currency by TalerFacadeStateTable.currency
 
-    /* "statement", "report", "notification" */
+    /**
+     *  "statement", "report", "notification"
+     */
     var reserveTransferLevel by TalerFacadeStateTable.reserveTransferLevel
     var facade by FacadeEntity referencedOn TalerFacadeStateTable.facade
-    var highestSeenMsgID by TalerFacadeStateTable.highestSeenMsgID
+    var highestSeenMessageSerialId by TalerFacadeStateTable.highestSeenMsgSerialId
 }
 
-object NexusScheduledTasksTable : IntIdTable() {
+object NexusScheduledTasksTable : LongIdTable() {
     val resourceType = text("resourceType")
     val resourceId = text("resourceId")
     val taskName = text("taskName")
@@ -371,8 +408,8 @@ object NexusScheduledTasksTable : IntIdTable() {
     val prevScheduledExecutionSec = long("lastScheduledExecutionSec").nullable()
 }
 
-class NexusScheduledTaskEntity(id: EntityID<Int>) : IntEntity(id) {
-    companion object : IntEntityClass<NexusScheduledTaskEntity>(NexusScheduledTasksTable)
+class NexusScheduledTaskEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<NexusScheduledTaskEntity>(NexusScheduledTasksTable)
 
     var resourceType by NexusScheduledTasksTable.resourceType
     var resourceId by NexusScheduledTasksTable.resourceId
@@ -390,7 +427,7 @@ class NexusScheduledTaskEntity(id: EntityID<Int>) : IntEntity(id) {
  *
  * Subjects are typically of type "user", but this may change in the future.
  */
-object NexusPermissionsTable : IntIdTable() {
+object NexusPermissionsTable : LongIdTable() {
     val resourceType = text("resourceType")
     val resourceId = text("resourceId")
     val subjectType = text("subjectType")
@@ -402,8 +439,8 @@ object NexusPermissionsTable : IntIdTable() {
     }
 }
 
-class NexusPermissionEntity(id: EntityID<Int>) : IntEntity(id) {
-    companion object : IntEntityClass<NexusPermissionEntity>(NexusPermissionsTable)
+class NexusPermissionEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<NexusPermissionEntity>(NexusPermissionsTable)
 
     var resourceType by NexusPermissionsTable.resourceType
     var resourceId by NexusPermissionsTable.resourceId

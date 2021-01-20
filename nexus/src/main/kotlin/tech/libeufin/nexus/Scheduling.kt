@@ -37,7 +37,7 @@ import java.time.Instant
 import java.time.ZonedDateTime
 
 private data class TaskSchedule(
-    val taskId: Int,
+    val taskId: Long,
     val name: String,
     val type: String,
     val resourceType: String,
