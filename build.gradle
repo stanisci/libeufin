@@ -32,7 +32,8 @@ task versionFile() {
 
 task replaceVersionCli(type: Copy) {
     from file("cli/bin/libeufin-cli.template")
-    into file("cli/bin/libeufin-cli")
+    into file("cli/bin/")
+    rename("libeufin-cli.template", "libeufin-cli")
     filter(ReplaceTokens, tokens: [version: getRootProject().version])
 }
 
