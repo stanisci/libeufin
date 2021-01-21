@@ -22,6 +22,7 @@ install-nexus:
 .PHONY: install-cli
 install-cli:
 	@echo Installing CLI.
+	@./gradlew -q replaceVersionCli
 	@install -D cli/bin/libeufin-cli $(prefix)/bin
 
 .PHONY: assemble
