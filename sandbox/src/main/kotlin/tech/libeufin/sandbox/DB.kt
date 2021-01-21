@@ -257,7 +257,17 @@ object BankAccountTransactionsTable : Table() {
     val amount = text("amount")
     val currency = text("currency")
     val date = long("date")
-    val pmtInfId = text("pmtInfId")
+
+    /**
+     * Unique ID for this payment within the bank account.
+     */
+    val accountServicerReference = text("accountServicerReference")
+
+    /**
+     * Payment information ID, which is a reference to the payment initiation
+     * that triggered this transaction.  Typically only available with outgoing transactions.
+     */
+    val pmtInfId = text("pmtInfId").nullable()
     val direction = text("direction")
     val account = reference("account", BankAccountsTable)
 

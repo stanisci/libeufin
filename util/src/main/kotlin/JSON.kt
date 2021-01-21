@@ -67,5 +67,6 @@ data class PaymentInfo(
     val subject: String,
     val date: String? = null,
     val creditDebitIndicator: String,
-    val accountServicerReference: String
+    val accountServicerReference: String,
+    val paymentInformationId: String?,
 )

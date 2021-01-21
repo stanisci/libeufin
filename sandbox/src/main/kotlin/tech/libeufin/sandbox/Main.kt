@@ -66,6 +66,7 @@ import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import io.ktor.request.*
+import tech.libeufin.sandbox.BankAccountTransactionsTable.accountServicerReference
 import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
 import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorBic
 import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorIban
@@ -303,42 +304,13 @@ fun serverMain(dbName: String, port: Int) {
                 call.respondText(camt53, ContentType.Text.Xml, HttpStatusCode.OK)
                 return@post
             }
-            // FIXME:  This returns *all* payments for all accounts.  Is that really useful/required?
-            get("/admin/payments") {
-                val ret = PaymentsResponse()
-                transaction {
-                    BankAccountTransactionsTable.selectAll().forEach {
-                        ret.payments.add(
-                            RawPayment(
-                                creditorIban = it[creditorIban],
-                                debitorIban = it[debtorIban],
-                                subject = it[BankAccountTransactionsTable.subject],
-                                date = it[date].toHttpDateString(),
-                                amount = it[amount],
-                                creditorBic = it[creditorBic],
-                                creditorName = it[creditorName],
-                                debitorBic = it[debtorBic],
-                                debitorName = it[debtorName],
-                                currency = it[currency],
-                                direction = it[direction]
-                            )
-                        )
-                    }
-                }
-                call.respond(
-                    object {
-                        val payments = ret
-                    }
-                )
-                return@get
-            }
 
             /**
              * Adds a new payment to the book.
              */
             post("/admin/payments") {
                 val body = call.receive<RawPayment>()
-                val random = Random.nextLong(0, Long.MAX_VALUE)
+                val randId = getRandomString(16)
                 transaction {
                     val localIban = if (body.direction == "DBIT") body.debitorIban else body.creditorIban
                     BankAccountTransactionsTable.insert {
@@ -352,7 +324,7 @@ fun serverMain(dbName: String, port: Int) {
                         it[amount] = body.amount
                         it[currency] = body.currency
                         it[date] = Instant.now().toEpochMilli()
-                        it[pmtInfId] = random.toString()
+                        it[accountServicerReference] = "sandbox-$randId"
                         it[account] = getBankAccountFromIban(localIban).id
                         it[direction] = body.direction
                     }
@@ -368,6 +340,7 @@ fun serverMain(dbName: String, port: Int) {
                 val accountLabel = ensureNonNull(call.parameters["label"])
                 transaction {
                     val account = getBankAccountFromLabel(accountLabel)
+                    val randId = getRandomString(16)
                     BankAccountTransactionsTable.insert {
                         it[creditorIban] = account.iban
                         it[creditorBic] = account.bic
@@ -379,7 +352,7 @@ fun serverMain(dbName: String, port: Int) {
                         it[amount] = body.amount
                         it[currency] = account.currency
                         it[date] = Instant.now().toEpochMilli()
-                        it[pmtInfId] = random.toString()
+                        it[accountServicerReference] = "sandbox-$randId"
                         it[BankAccountTransactionsTable.account] = account.id
                         it[direction] = "CRDT"
                     }
@@ -439,7 +412,8 @@ fun serverMain(dbName: String, port: Int) {
                                         creditorIban = it[creditorIban],
                                         // FIXME: We need to modify the transactions table to have an actual
                                         // account servicer reference here.
-                                        accountServicerReference = it[pmtInfId],
+                                        accountServicerReference = it[accountServicerReference],
+                                        paymentInformationId = it[pmtInfId],
                                         debtorIban = it[debtorIban],
                                         subject = it[BankAccountTransactionsTable.subject],
                                         date = it[date].toHttpDateString(),

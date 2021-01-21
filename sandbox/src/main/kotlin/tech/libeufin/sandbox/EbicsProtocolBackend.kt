@@ -566,6 +566,7 @@ private fun handleCct(paymentRequest: String, initiatorName: String) {
                 it[currency] = parseResult.currency
                 it[date] = Instant.now().toEpochMilli()
                 it[pmtInfId] = parseResult.pmtInfId
+                it[accountServicerReference] = "sandboxref-getRandomString(16)"
                 it[direction] = "DBIT"
             }
         } catch (e: ExposedSQLException) {
