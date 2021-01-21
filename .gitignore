@@ -19,3 +19,4 @@ __pycache__
 .DS_Store
 *.mk
 util/src/main/resources/version.txt
+cli/bin/libeufin-cli
