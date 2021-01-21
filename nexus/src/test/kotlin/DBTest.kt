@@ -68,11 +68,13 @@ class DBTest {
                     TalerFacadeStateTable,
                     NexusUsersTable
                 )
-                val user = NexusUserEntity.new("u") {
+                val user = NexusUserEntity.new {
+                    username = "testuser"
                     passwordHash = "x"
                     superuser = true
                 }
-                val facade = FacadeEntity.new("my-id") {
+                val facade = FacadeEntity.new {
+                    facadeName = "testfacade"
                     type = "any"
                     creator = user
                 }

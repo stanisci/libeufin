@@ -79,6 +79,7 @@ class DBTest {
                     it[currency] = "EUR"
                     it[pmtInfId] = "0"
                     it[direction] = "DBIT"
+                    it[accountServicerReference] = "test-account-servicer-reference"
                 }
             }
             val result = transaction {
