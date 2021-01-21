@@ -24,13 +24,5 @@ install:
 	dh_link $(GROOVY_HOME)/bin/libeufin-nexus /usr/bin/libeufin-nexus
 	dh_link $(GROOVY_HOME)/bin/libeufin-sandbox /usr/bin/libeufin-sandbox
 
-# Untested:
-binary:
-	dh $@ --buildsystem=gradle
-binary-arch:
-	dh $@ --buildsystem=gradle
-binary-indep:
-	dh $@ --buildsystem=gradle
-
 get-orig-source:
 	uscan --force-download --rename
