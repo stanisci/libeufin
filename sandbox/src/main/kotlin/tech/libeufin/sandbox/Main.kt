@@ -564,6 +564,6 @@ fun serverMain(dbName: String, port: Int) {
             }
         }
     }
-    logger.info("LibEuFin Nexus running on port $port")
+    logger.info("LibEuFin Sandbox running on port $port")
     server.start(wait = true)
 }
