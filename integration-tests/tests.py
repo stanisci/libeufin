@@ -67,7 +67,7 @@ def prepareNexus():
     assertResponse(
         post(
             f"{PERSONA.nexus.base_url}/users",
-            auth=auth.HTTPBasicAuth("adminx", "x"),
+            auth=auth.HTTPBasicAuth("admin", "x"),
             json=dict(username=PERSONA.nexus.username, password=PERSONA.nexus.password),
         )
     )
