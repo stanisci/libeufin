@@ -1,8 +1,0 @@
-#!/bin/bash
-
-ARGS="$@"
-cd PROJECT
-if (( $# > 0 )); then ./gradlew -q --console=plain sandbox:run --args="$ARGS"
-else ./gradlew -q --console=plain sandbox:run
-fi
-cd - > /dev/null
