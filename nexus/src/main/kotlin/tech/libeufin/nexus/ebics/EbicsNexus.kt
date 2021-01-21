@@ -592,7 +592,7 @@ fun getEbicsConnectionDetails(conn: NexusBankConnectionEntity): Any {
     details.put("userId", ebicsSubscriber.userId)
     val node = mapper.createObjectNode()
     node.put("type", conn.type)
-    node.put("owner", conn.owner.id.value)
+    node.put("owner", conn.owner.username)
     node.set<JsonNode>("details", details)
     return node
 }

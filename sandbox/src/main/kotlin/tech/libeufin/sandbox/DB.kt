@@ -313,7 +313,7 @@ object BankAccountReportsTable : IntIdTable() {
 }
 
 fun dbDropTables(dbConnectionString: String) {
-    Database.connect("${dbConnectionString}")
+    Database.connect(dbConnectionString)
     transaction {
         SchemaUtils.drop(
             EbicsSubscribersTable,
@@ -331,7 +331,7 @@ fun dbDropTables(dbConnectionString: String) {
 }
 
 fun dbCreateTables(dbConnectionString: String) {
-    Database.connect("${dbConnectionString}")
+    Database.connect(dbConnectionString)
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         SchemaUtils.create(

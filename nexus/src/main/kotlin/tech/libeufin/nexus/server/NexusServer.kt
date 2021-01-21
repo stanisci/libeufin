@@ -121,6 +121,22 @@ fun ApplicationCall.expectUrlParameter(name: String): String {
         ?: throw NexusError(HttpStatusCode.BadRequest, "Parameter '$name' not provided in URI")
 }
 
+fun isValidResourceName(name: String): Boolean {
+    return name.matches(Regex("[a-z]([-a-z0-9]*[a-z0-9])?"))
+}
+
+fun requireValidResourceName(name: String): String {
+    if (!isValidResourceName(name)) {
+        throw NexusError(
+            HttpStatusCode.BadRequest,
+            "Invalid resource name. The first character must be a lowercase letter, " +
+                    "and all following characters (except for the last character) must be a dash, " +
+                    "lowercase letter, or digit. The last character must be a lowercase letter or digit."
+        )
+    }
+    return name
+}
+
 suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
     try {
         return this.receive<T>()
@@ -326,10 +342,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
             // Add a new ordinary user in the system (requires superuser privileges)
             post("/users") {
                 val body = call.receiveJson<CreateUserRequest>()
+                val requestedUsername = requireValidResourceName(body.username)
                 transaction {
                     requireSuperuser(call.request)
                     NexusUserEntity.new {
-                        username = body.username
+                        username = requestedUsername
                         passwordHash = CryptoUtil.hashpw(body.password)
                         superuser = false
                     }
@@ -448,7 +465,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         resourceType = "bank-account"
                         resourceId = accountId
                         this.taskCronspec = schedSpec.cronspec
-                        this.taskName = schedSpec.name
+                        this.taskName = requireValidResourceName(schedSpec.name)
                         this.taskType = schedSpec.type
                         this.taskParams =
                             jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(schedSpec.params)
@@ -527,8 +544,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             post("/bank-accounts/{accountid}/payment-initiations/{uuid}/submit") {
                 requireSuperuser(call.request)
                 val uuid = ensureLong(call.parameters["uuid"])
-                val accountId = ensureNonNull(call.parameters["accountid"])
-                val res = transaction {
+                transaction {
                     authenticateRequest(call.request)
                 }
                 submitPaymentInitiation(client, uuid)
@@ -539,7 +555,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             post("/bank-accounts/{accountid}/submit-all-payment-initiations") {
                 requireSuperuser(call.request)
                 val accountId = ensureNonNull(call.parameters["accountid"])
-                val res = transaction {
+                transaction {
                     authenticateRequest(call.request)
                 }
                 submitAllPaymentInitiations(client, accountId)
@@ -698,6 +714,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 requireSuperuser(call.request)
                 // user exists and is authenticated.
                 val body = call.receive<CreateBankConnectionRequestJson>()
+                requireValidResourceName(body.name)
                 transaction {
                     val user = authenticateRequest(call.request)
                     val existingConn =
@@ -774,11 +791,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 call.respond(connList)
             }
 
-            get("/bank-connections/{connectionId}") {
+            get("/bank-connections/{connectionName}") {
                 requireSuperuser(call.request)
                 val resp = transaction {
                     val user = authenticateRequest(call.request)
-                    val conn = requireBankConnection(call, "connectionId")
+                    val conn = requireBankConnection(call, "connectionName")
                     when (conn.type) {
                         "ebics" -> {
                             getEbicsConnectionDetails(conn)
@@ -794,12 +811,12 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 call.respond(resp)
             }
 
-            post("/bank-connections/{connid}/export-backup") {
+            post("/bank-connections/{connectionName}/export-backup") {
                 requireSuperuser(call.request)
                 transaction { authenticateRequest(call.request) }
                 val body = call.receive<BackupRequestJson>()
                 val response = run {
-                    val conn = requireBankConnection(call, "connid")
+                    val conn = requireBankConnection(call, "connectionName")
                     when (conn.type) {
                         "ebics" -> {
                             exportEbicsKeyBackup(conn.connectionId, body.passphrase)
@@ -819,11 +836,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 )
             }
 
-            post("/bank-connections/{connid}/connect") {
+            post("/bank-connections/{connectionName}/connect") {
                 requireSuperuser(call.request)
                 val conn = transaction {
                     authenticateRequest(call.request)
-                    requireBankConnection(call, "connid")
+                    requireBankConnection(call, "connectionName")
                 }
                 when (conn.type) {
                     "ebics" -> {
@@ -833,11 +850,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 call.respond(object {})
             }
 
-            get("/bank-connections/{connid}/keyletter") {
+            get("/bank-connections/{connectionName}/keyletter") {
                 requireSuperuser(call.request)
                 val conn = transaction {
                     authenticateRequest(call.request)
-                    requireBankConnection(call, "connid")
+                    requireBankConnection(call, "connectionName")
                 }
                 when (conn.type) {
                     "ebics" -> {
@@ -848,11 +865,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 }
             }
 
-            get("/bank-connections/{connid}/messages") {
+            get("/bank-connections/{connectionName}/messages") {
                 requireSuperuser(call.request)
                 val ret = transaction {
                     val list = BankMessageList()
-                    val conn = requireBankConnection(call, "connid")
+                    val conn = requireBankConnection(call, "connectionName")
                     NexusBankMessageEntity.find { NexusBankMessagesTable.bankConnection eq conn.id }.map {
                         list.bankMessages.add(
                             BankMessageInfo(
@@ -928,6 +945,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
             post("/facades") {
                 requireSuperuser(call.request)
                 val body = call.receive<FacadeInfo>()
+                requireValidResourceName(body.name)
                 if (body.type != "taler-wire-gateway") throw NexusError(
                     HttpStatusCode.NotImplemented,
                     "Facade type '${body.type}' is not implemented"
@@ -1025,6 +1043,6 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
         }
     }
-    logger.info("Up and running")
+    logger.info("LibEuFin Nexus running on port $port")
     server.start(wait = true)
 }

@@ -14,7 +14,7 @@ import java.util.*
 import javax.xml.transform.stream.StreamSource
 import tech.libeufin.util.XMLUtil.Companion.signEbicsResponse
 
-val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.XmlUnitTest")
 
 
 class XmlUtilTest {

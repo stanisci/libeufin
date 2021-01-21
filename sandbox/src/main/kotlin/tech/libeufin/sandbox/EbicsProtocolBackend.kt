@@ -145,7 +145,7 @@ private suspend fun ApplicationCall.respondEbicsKeyManagement(
         }
     }
     val text = XMLUtil.convertJaxbToString(responseXml)
-    LOGGER.info("responding with:\n${text}")
+    logger.info("responding with:\n${text}")
     if (!XMLUtil.validateFromString(text)) throw SandboxError(
         HttpStatusCode.InternalServerError,
         "Outgoint EBICS key management response is invalid"
@@ -548,8 +548,8 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
  * Process a payment request in the pain.001 format.
  */
 private fun handleCct(paymentRequest: String, initiatorName: String) {
-    LOGGER.debug("Handling CCT")
-    LOGGER.debug("Pain.001: $paymentRequest")
+    logger.debug("Handling CCT")
+    logger.debug("Pain.001: $paymentRequest")
     val parseResult = parsePain001(paymentRequest)
     transaction {
         try {
@@ -580,7 +580,7 @@ private fun handleCct(paymentRequest: String, initiatorName: String) {
 }
 
 private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
-    LOGGER.debug("Handling C53 request")
+    logger.debug("Handling C53 request")
     val camt = constructCamtResponse(
         53,
         requestContext.requestObject.header,
@@ -608,7 +608,7 @@ private suspend fun ApplicationCall.handleEbicsHia(header: EbicsUnsecuredRequest
     val ok = transaction {
         val ebicsSubscriber = findEbicsSubscriber(header.static.partnerID, header.static.userID, header.static.systemID)
         if (ebicsSubscriber == null) {
-            LOGGER.warn("ebics subscriber not found")
+            logger.warn("ebics subscriber not found")
             throw EbicsInvalidRequestError()
         }
         when (ebicsSubscriber.state) {
@@ -655,7 +655,7 @@ private suspend fun ApplicationCall.handleEbicsIni(header: EbicsUnsecuredRequest
         val ebicsSubscriber =
             findEbicsSubscriber(header.static.partnerID, header.static.userID, header.static.systemID)
         if (ebicsSubscriber == null) {
-            LOGGER.warn("ebics subscriber ('${header.static.partnerID}' / '${header.static.userID}' / '${header.static.systemID}') not found")
+            logger.warn("ebics subscriber ('${header.static.partnerID}' / '${header.static.userID}' / '${header.static.systemID}') not found")
             throw EbicsInvalidRequestError()
         }
         when (ebicsSubscriber.state) {
@@ -676,7 +676,7 @@ private suspend fun ApplicationCall.handleEbicsIni(header: EbicsUnsecuredRequest
         }
         return@transaction true
     }
-    LOGGER.info("Signature key inserted in database _and_ subscriber state changed accordingly")
+    logger.info("Signature key inserted in database _and_ subscriber state changed accordingly")
     if (ok) {
         respondEbicsKeyManagement("[EBICS_OK]", "000000", "000000")
     } else {
@@ -709,7 +709,7 @@ private suspend fun ApplicationCall.handleEbicsHpb(
     }
     val validationResult =
         XMLUtil.verifyEbicsDocument(requestDocument, subscriberKeys.authenticationPublicKey)
-    LOGGER.info("validationResult: $validationResult")
+    logger.info("validationResult: $validationResult")
     if (!validationResult) {
         throw EbicsKeyManagementError("invalid signature", "90000")
     }
@@ -750,7 +750,7 @@ private fun ApplicationCall.ensureEbicsHost(requestHostID: String): EbicsHostPub
         val ebicsHost =
             EbicsHostEntity.find { EbicsHostsTable.hostID.upperCase() eq requestHostID.toUpperCase() }.firstOrNull()
         if (ebicsHost == null) {
-            LOGGER.warn("client requested unknown HostID ${requestHostID}")
+            logger.warn("client requested unknown HostID ${requestHostID}")
             throw EbicsKeyManagementError("[EBICS_INVALID_HOST_ID]", "091011")
         }
         val encryptionPrivateKey = CryptoUtil.loadRsaPrivateKey(ebicsHost.encryptionPrivateKey.bytes)
@@ -765,7 +765,7 @@ private fun ApplicationCall.ensureEbicsHost(requestHostID: String): EbicsHostPub
 
 private suspend fun ApplicationCall.receiveEbicsXml(): Document {
     val body: String = receiveText()
-    LOGGER.debug("Data received: $body")
+    logger.debug("Data received: $body")
     val requestDocument: Document? = XMLUtil.parseStringIntoDom(body)
     if (requestDocument == null || (!XMLUtil.validateFromDom(requestDocument))) {
         println("Problematic document was: $requestDocument")
@@ -1136,11 +1136,11 @@ private fun makeRequestContext(requestObject: EbicsRequest): RequestContext {
 
 suspend fun ApplicationCall.ebicsweb() {
     val requestDocument = receiveEbicsXml()
-    LOGGER.info("Processing ${requestDocument.documentElement.localName}")
+    logger.info("Processing ${requestDocument.documentElement.localName}")
     when (requestDocument.documentElement.localName) {
         "ebicsUnsecuredRequest" -> {
             val requestObject = requestDocument.toObject<EbicsUnsecuredRequest>()
-            LOGGER.info("Serving a ${requestObject.header.static.orderDetails.orderType} request")
+            logger.info("Serving a ${requestObject.header.static.orderDetails.orderType} request")
 
             val orderData = requestObject.body.dataTransfer.orderData.value
             val header = requestObject.header
@@ -1161,7 +1161,7 @@ suspend fun ApplicationCall.ebicsweb() {
             }
 
             val strResp = XMLUtil.convertJaxbToString(hevResponse)
-            LOGGER.debug("HEV response: $strResp")
+            logger.debug("HEV response: $strResp")
             if (!XMLUtil.validateFromString(strResp)) throw SandboxError(
                 HttpStatusCode.InternalServerError,
                 "Outgoing HEV response is invalid"
@@ -1225,7 +1225,7 @@ suspend fun ApplicationCall.ebicsweb() {
         }
         else -> {
             /* Log to console and return "unknown type" */
-            LOGGER.info("Unknown message, just logging it!")
+            logger.info("Unknown message, just logging it!")
             respond(
                 HttpStatusCode.NotImplemented,
                 SandboxError(

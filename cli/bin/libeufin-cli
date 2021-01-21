@@ -359,7 +359,7 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
     tell_user(resp)
 
 
-@connections.command(help="make new Ebics bank connection")
+@connections.command(help="make new EBICS bank connection")
 @click.option("--ebics-url", help="EBICS URL", required=True)
 @click.option("--host-id", help="Host ID", required=True)
 @click.option("--partner-id", help="Partner ID", required=True)
@@ -390,10 +390,10 @@ def new_ebics_connection(
     tell_user(resp)
 
 
-@connections.command(help="synchronize the bank connection")
+@connections.command(help="Initialize the bank connection.")
 @click.argument("connection-name")
 @click.pass_obj
-def sync(obj, connection_name):
+def connect(obj, connection_name):
     url = urljoin(obj.nexus_base_url, f"/bank-connections/{connection_name}/connect")
     try:
         resp = post(
@@ -405,7 +405,7 @@ def sync(obj, connection_name):
     tell_user(resp)
 
 
-@connections.command(help="import one bank account, chosen from the downloaded ones")
+@connections.command(help="Import one bank account, chosen from the downloaded ones.")
 @click.option(
     "--offered-account-id", help="Name of the account to import", required=True
 )
@@ -439,7 +439,7 @@ def import_bank_account(
     tell_user(resp)
 
 
-@connections.command(help="download bank accounts in raw format WITHOUT importing them")
+@connections.command(help="Update list of bank accounts available through this connection.")
 @click.argument("connection-name")
 @click.pass_obj
 def download_bank_accounts(obj, connection_name):
@@ -458,10 +458,26 @@ def download_bank_accounts(obj, connection_name):
     tell_user(resp)
 
 
-@connections.command(help="list the connections")
+@connections.command(help="List the connections.")
 @click.pass_obj
 def list_connections(obj):
-    url = urljoin(obj.nexus_base_url, "/bank-connections/")
+    url = urljoin(obj.nexus_base_url, "/bank-connections")
+    try:
+        resp = get(
+            url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception:
+        print("Could not reach nexus at " + url)
+        exit(1)
+
+    tell_user(resp, withsuccess=True)
+
+
+@connections.command(help="Show the status of a bank connection.")
+@click.argument("connection-name")
+@click.pass_obj
+def show_connection(obj, connection_name):
+    url = urljoin(obj.nexus_base_url, f"/bank-connections/{connection_name}")
     try:
         resp = get(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)

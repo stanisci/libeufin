@@ -60,7 +60,6 @@ import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.default
-import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.int
@@ -83,7 +82,6 @@ import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import java.util.*
 import kotlin.random.Random
-import kotlin.system.exitProcess
 
 const val DEFAULT_DB_CONNECTION = "jdbc:sqlite:/tmp/libeufin-sandbox.sqlite3"
 
@@ -93,7 +91,7 @@ class UnacceptableFractional(badNumber: BigDecimal) : Exception(
     "Unacceptable fractional part ${badNumber}"
 )
 
-lateinit var LOGGER: Logger
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
 data class SandboxError(val statusCode: HttpStatusCode, val reason: String) : Exception()
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
@@ -126,7 +124,6 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
     private val logLevel by option()
     private val port by option().int().default(5000)
     override fun run() {
-        LOGGER = LoggerFactory.getLogger("tech.libeufin.sandbox")
         setLogLevel(logLevel)
         serverMain(dbConnString, port)
     }
@@ -207,10 +204,11 @@ fun main(args: Array<String>) {
 
 fun serverMain(dbName: String, port: Int) {
     execThrowableOrTerminate { dbCreateTables(dbName) }
+    val myLogger = logger
     val server = embeddedServer(Netty, port = port) {
         install(CallLogging) {
             this.level = Level.DEBUG
-            this.logger = LOGGER
+            this.logger = myLogger
         }
         install(ContentNegotiation) {
             jackson {
@@ -225,7 +223,7 @@ fun serverMain(dbName: String, port: Int) {
         }
         install(StatusPages) {
             exception<ArithmeticException> { cause ->
-                LOGGER.error("Exception while handling '${call.request.uri}'", cause)
+                logger.error("Exception while handling '${call.request.uri}'", cause)
                 call.respondText(
                     "Invalid arithmetic attempted.",
                     ContentType.Text.Plain,
@@ -261,7 +259,7 @@ fun serverMain(dbName: String, port: Int) {
                 )
             }
             exception<SandboxError> { cause ->
-                LOGGER.error("Exception while handling '${call.request.uri}'", cause)
+                logger.error("Exception while handling '${call.request.uri}'", cause)
                 call.respond(
                     cause.statusCode,
                     SandboxErrorJson(
@@ -273,7 +271,7 @@ fun serverMain(dbName: String, port: Int) {
                 )
             }
             exception<Throwable> { cause ->
-                LOGGER.error("Exception while handling '${call.request.uri}'", cause)
+                logger.error("Exception while handling '${call.request.uri}'", cause)
                 call.respondText("Internal server error.", ContentType.Text.Plain, HttpStatusCode.InternalServerError)
             }
         }
@@ -566,6 +564,6 @@ fun serverMain(dbName: String, port: Int) {
             }
         }
     }
-    LOGGER.info("Up and running")
+    logger.info("LibEuFin Nexus running on port $port")
     server.start(wait = true)
 }
