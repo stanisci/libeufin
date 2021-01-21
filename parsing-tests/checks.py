@@ -4,6 +4,7 @@ import os
 import sys
 import json
 from subprocess import Popen, PIPE
+from deepdiff import DeepDiff
 
 # return dict with parse-result.
 def call_parser(xml_file):
@@ -30,16 +31,10 @@ def get_json_from_disk(json_file):
 
 def test_dashed_subject():
     parsed = call_parser("./samples/camt53_example_dashed_subject.xml")
-    entries = parsed["reports"][0]["entries"]
-    tx = entries[0]["batches"][0]["batchTransactions"][0]
-    assert tx["details"]["unstructuredRemittanceInformation"] == "subject-with-dashes"
+    expected = get_json_from_disk("./samples/camt53_example_dashed_subject.json")
+    assert not DeepDiff(parsed, expected)
 
 def test_camt53_example3():
     parsed = call_parser("./samples/camt53_example3.xml")
-    entries = parsed["reports"][0]["entries"]
-    # The following checks ensure that each money movement is a singleton.
-    assert(len(entries) == 4)
-    assert(len(entries[0]["batches"][0]["batchTransactions"]) == 1)
-    assert(len(entries[1]["batches"][0]["batchTransactions"]) == 1)
-    assert(len(entries[2]["batches"][0]["batchTransactions"]) == 1)
-    assert(len(entries[3]["batches"][0]["batchTransactions"]) == 1)
+    expected = get_json_from_disk("./samples/camt53_example3.json")
+    assert not DeepDiff(parsed, expected)
