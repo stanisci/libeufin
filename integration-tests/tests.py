@@ -67,7 +67,7 @@ def prepareNexus():
     assertResponse(
         post(
             f"{PERSONA.nexus.base_url}/users",
-            auth=auth.HTTPBasicAuth("admin", "x"),
+            auth=auth.HTTPBasicAuth("adminx", "x"),
             json=dict(username=PERSONA.nexus.username, password=PERSONA.nexus.password),
         )
     )
@@ -118,8 +118,12 @@ dropNexusTables(DB)
 startNexus(DB)
 
 def setup_function():
-    prepareSandbox()
-    prepareNexus()
+    try:
+        prepareSandbox()
+        prepareNexus()
+    except Exception:
+        teardown_function()
+        pytest.xfail("Failed to setup this test")
 
 def teardown_function():
     dropSandboxTables(DB)
