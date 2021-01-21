@@ -276,7 +276,7 @@ def make_crdt_payment():
     )
 
     assertResponse(post(
-        f"{PERSONA.banking.bank_base_url}/admin/payments/",
+        f"{PERSONA.banking.bank_base_url}/admin/payments",
         json=payment_instruction
     ))
 
@@ -465,7 +465,7 @@ def test_sandbox_camt():
     )
     assertResponse(
         post(
-            f"{PERSONA.banking.bank_base_url}/admin/payments/",
+            f"{PERSONA.banking.bank_base_url}/admin/payments",
             json=payment_instruction
         )
     )
