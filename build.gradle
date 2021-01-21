@@ -1,3 +1,5 @@
+import org.apache.tools.ant.filters.ReplaceTokens
+
 plugins {
     id 'org.jetbrains.kotlin.jvm' version '1.4.30-RC'
     id 'idea'
@@ -28,12 +30,20 @@ task versionFile() {
     new File("${projectDir}/util/src/main/resources", "version.txt").text = getRootProject().version
 }
 
+task replaceVersionCli(type: Copy) {
+    from file("cli/bin/libeufin-cli.template")
+    into file("cli/bin/libeufin-cli")
+    filter(ReplaceTokens, tokens: [version: getRootProject().version])
+}
+
 classes {
     dependsOn versionFile
+    dependsOn replaceVersionCli
 }
 
 task dist(type: Zip) {
     dependsOn versionFile
+    dependsOn replaceVersionCli
     evaluationDependsOn("nexus")
     evaluationDependsOn("sandbox")
     def topDir = "${getRootProject().name}-${getRootProject().version}"
