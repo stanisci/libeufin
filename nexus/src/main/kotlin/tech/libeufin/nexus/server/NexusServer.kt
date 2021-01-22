@@ -42,15 +42,9 @@ import io.ktor.util.*
 import io.ktor.util.pipeline.*
 import io.ktor.utils.io.*
 import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.event.Level
 import tech.libeufin.nexus.*
-import tech.libeufin.nexus.OfferedBankAccountsTable.accountHolder
-import tech.libeufin.nexus.OfferedBankAccountsTable.bankCode
-import tech.libeufin.nexus.OfferedBankAccountsTable.iban
-import tech.libeufin.nexus.OfferedBankAccountsTable.imported
-import tech.libeufin.nexus.OfferedBankAccountsTable.offeredAccountId
 import tech.libeufin.nexus.bankaccount.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
@@ -139,7 +133,7 @@ fun requireValidResourceName(name: String): String {
 
 suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
     try {
-        return this.receive<T>()
+        return this.receive()
     } catch (e: MissingKotlinParameterException) {
         throw NexusError(HttpStatusCode.BadRequest, "Missing value for ${e.pathReference}")
     } catch (e: MismatchedInputException) {
@@ -256,8 +250,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
         routing {
             get("/config") {
                 call.respond(
-                    object {
-                        val version = getVersion()
+                    makeJsonObject {
+                        prop("version", getVersion())
                     }
                 )
                 return@get
@@ -304,7 +298,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     when (req.action) {
                         PermissionChangeAction.GRANT -> {
                             if (existingPerm == null) {
-                                NexusPermissionEntity.new() {
+                                NexusPermissionEntity.new {
                                     subjectType = req.permission.subjectType
                                     subjectId = req.permission.subjectId
                                     resourceType = req.permission.resourceType
@@ -422,7 +416,6 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         t.put("type", it.taskType)
                         t.set<JsonNode>("params", jacksonObjectMapper().readTree(it.taskParams))
                     }
-                    Unit
                 }
                 call.respond(resp)
                 return@get
@@ -434,7 +427,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 transaction {
                     authenticateRequest(call.request)
-                    val bankAccount = NexusBankAccountEntity.findByName(accountId)
+                    NexusBankAccountEntity.findByName(accountId)
                         ?: throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     try {
                         NexusCron.parser.parse(schedSpec.cronspec)
@@ -444,9 +437,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     // sanity checks.
                     when (schedSpec.type) {
                         "fetch" -> {
-                            val fetchSpec =
-                                jacksonObjectMapper().treeToValue(schedSpec.params, FetchSpecJson::class.java)
-                                    ?: throw NexusError(HttpStatusCode.BadRequest, "bad fetch spec")
+                            jacksonObjectMapper().treeToValue(schedSpec.params, FetchSpecJson::class.java)
+                                ?: throw NexusError(HttpStatusCode.BadRequest, "bad fetch spec")
                         }
                         "submit" -> {
                         }
@@ -526,15 +518,14 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 requireSuperuser(call.request)
                 val accountId = ensureNonNull(call.parameters["accountid"])
                 val res = transaction {
-                    val user = authenticateRequest(call.request)
                     val bankAccount = NexusBankAccountEntity.findByName(accountId)
                     if (bankAccount == null) {
                         throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     }
                     val holderEnc = URLEncoder.encode(bankAccount.accountHolder, "UTF-8")
-                    return@transaction object {
-                        val defaultBankConnection = bankAccount.defaultBankConnection?.id?.value
-                        val accountPaytoUri = "payto://iban/${bankAccount.iban}?receiver-name=$holderEnc"
+                    return@transaction makeJsonObject {
+                        prop("defaultBankConnection", bankAccount.defaultBankConnection?.id?.value)
+                        prop("accountPaytoUri", "payto://iban/${bankAccount.iban}?receiver-name=$holderEnc")
                     }
                 }
                 call.respond(res)
@@ -598,7 +589,6 @@ fun serverMain(dbName: String, host: String, port: Int) {
             get("/bank-accounts/{accountid}/payment-initiations/{uuid}") {
                 requireSuperuser(call.request)
                 val res = transaction {
-                    val user = authenticateRequest(call.request)
                     val paymentInitiation = getPaymentInitiation(ensureLong(call.parameters["uuid"]))
                     return@transaction object {
                         val paymentInitiation = paymentInitiation
@@ -669,7 +659,6 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         "Account id missing"
                     )
                 }
-                val user = transaction { authenticateRequest(call.request) }
                 val fetchSpec = if (call.request.hasBody()) {
                     call.receive<FetchSpecJson>()
                 } else {
@@ -679,8 +668,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     )
                 }
                 val newTransactions = fetchBankAccountTransactions(client, fetchSpec, accountid)
-                call.respond(object {
-                    val newTransactions = newTransactions
+                call.respond(makeJsonObject {
+                    prop("newTransactions", newTransactions)
                 })
                 return@post
             }
@@ -689,8 +678,6 @@ fun serverMain(dbName: String, host: String, port: Int) {
             get("/bank-accounts/{accountid}/transactions") {
                 requireSuperuser(call.request)
                 val bankAccountId = expectNonNull(call.parameters["accountid"])
-                val start = call.request.queryParameters["start"]
-                val end = call.request.queryParameters["end"]
                 val ret = Transactions()
                 transaction {
                     authenticateRequest(call.request)
@@ -794,7 +781,6 @@ fun serverMain(dbName: String, host: String, port: Int) {
             get("/bank-connections/{connectionName}") {
                 requireSuperuser(call.request)
                 val resp = transaction {
-                    val user = authenticateRequest(call.request)
                     val conn = requireBankConnection(call, "connectionName")
                     when (conn.type) {
                         "ebics" -> {
@@ -905,7 +891,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val fcid = ensureNonNull(call.parameters["fcid"])
                 val ret = transaction {
                     val f = FacadeEntity.findByName(fcid) ?: throw NexusError(
-                        HttpStatusCode.NotFound, "Facade ${fcid} does not exist"
+                        HttpStatusCode.NotFound, "Facade $fcid does not exist"
                     )
                     FacadeShowInfo(
                         name = f.facadeName,

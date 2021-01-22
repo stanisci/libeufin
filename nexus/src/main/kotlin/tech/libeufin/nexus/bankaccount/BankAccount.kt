@@ -83,9 +83,13 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
     logger.debug("auto-submitter started")
     val workQueue = mutableListOf<Submission>()
     transaction {
-        val account = NexusBankAccountEntity.findByName(accountid)
+        val account = NexusBankAccountEntity.findByName(accountid) ?: throw NexusError(
+            HttpStatusCode.NotFound,
+            "account not found"
+        )
         PaymentInitiationEntity.find {
-            PaymentInitiationsTable.submitted eq false
+            (PaymentInitiationsTable.submitted eq false) and (
+                    PaymentInitiationsTable.bankAccount eq account.id)
         }.forEach {
             val defaultBankConnectionId = it.bankAccount.defaultBankConnection?.id ?: throw NexusError(
                 HttpStatusCode.BadRequest,

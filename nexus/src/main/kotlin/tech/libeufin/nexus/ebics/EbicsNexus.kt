@@ -97,7 +97,7 @@ suspend fun fetchEbicsBySpec(
     val specs = mutableListOf<EbicsFetchSpec>()
 
     fun addForLevel(l: FetchLevel, p: EbicsOrderParams) {
-        when (fetchSpec.level) {
+        when (l) {
             FetchLevel.ALL -> {
                 specs.add(EbicsFetchSpec("C52", p))
                 specs.add(EbicsFetchSpec("C53", p))
