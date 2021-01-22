@@ -26,8 +26,6 @@ import io.ktor.application.install
 import io.ktor.features.CallLogging
 import io.ktor.features.ContentNegotiation
 import io.ktor.features.StatusPages
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
 import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.routing.get
@@ -52,7 +50,6 @@ import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import io.ktor.http.toHttpDateString
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import java.time.Instant
 import com.github.ajalt.clikt.core.CliktCommand
@@ -64,7 +61,9 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
+import io.ktor.http.*
 import io.ktor.request.*
+import io.ktor.util.date.*
 import tech.libeufin.sandbox.BankAccountTransactionsTable.accountServicerReference
 import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
 import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorBic
@@ -413,7 +412,7 @@ fun serverMain(dbName: String, port: Int) {
                                         paymentInformationId = it[pmtInfId],
                                         debtorIban = it[debtorIban],
                                         subject = it[BankAccountTransactionsTable.subject],
-                                        date = it[date].toHttpDateString(),
+                                        date = GMTDate(it[date]).toHttpDate(),
                                         amount = it[amount],
                                         creditorBic = it[creditorBic],
                                         creditorName = it[creditorName],
