@@ -334,7 +334,6 @@ fun serverMain(dbName: String, port: Int) {
             post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
                 val body = call.receive<IncomingPaymentInfo>()
                 // FIXME: generate nicer UUID!
-                val random = Random.nextLong(0, Long.MAX_VALUE)
                 val accountLabel = ensureNonNull(call.parameters["label"])
                 transaction {
                     val account = getBankAccountFromLabel(accountLabel)

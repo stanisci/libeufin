@@ -432,17 +432,20 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
  *
  * @param type 52 or 53.
  */
-private fun constructCamtResponse(type: Int, header: EbicsRequest.Header, subscriber: EbicsSubscriberEntity): String {
-    val dateRange = (header.static.orderDetails?.orderParams as EbicsRequest.StandardOrderParams).dateRange
+private fun constructCamtResponse(type: Int, subscriber: EbicsSubscriberEntity): String {
+
     /**
      *  Currently unused: see #6243.
      *
+
+    val dateRange = (header.static.orderDetails?.orderParams as EbicsRequest.StandardOrderParams).dateRange
     val (start: LocalDateTime, end: LocalDateTime) = if (dateRange != null) {
         Pair(
             importDateFromMillis(dateRange.start.toGregorianCalendar().timeInMillis),
             importDateFromMillis(dateRange.end.toGregorianCalendar().timeInMillis)
         )
     } else Pair(parseDashedDate("1970-01-01"), LocalDateTime.now())
+
     */
     val bankAccount = getBankAccountFromSubscriber(subscriber)
     logger.info("getting history for account with iban ${bankAccount.iban}")
@@ -547,7 +550,7 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
 /**
  * Process a payment request in the pain.001 format.
  */
-private fun handleCct(paymentRequest: String, initiatorName: String) {
+private fun handleCct(paymentRequest: String) {
     logger.debug("Handling CCT")
     logger.debug("Pain.001: $paymentRequest")
     val parseResult = parsePain001(paymentRequest)
@@ -583,7 +586,6 @@ private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
     logger.debug("Handling C53 request")
     val camt = constructCamtResponse(
         53,
-        requestContext.requestObject.header,
         requestContext.subscriber
     )
    if (!XMLUtil.validateFromString(camt)) throw SandboxError(
@@ -1060,8 +1062,7 @@ private fun handleEbicsUploadTransactionTransmission(requestContext: RequestCont
         }
         if (getOrderTypeFromTransactionId(requestTransactionID) == "CCT") {
             logger.debug("Attempting a payment.")
-            val involvedBankAccout = getBankAccountFromSubscriber(requestContext.subscriber)
-            handleCct(unzippedData.toString(Charsets.UTF_8), involvedBankAccout.name)
+            handleCct(unzippedData.toString(Charsets.UTF_8))
         }
         return EbicsResponse.createForUploadTransferPhase(
             requestTransactionID,
