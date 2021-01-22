@@ -7,7 +7,8 @@ plugins {
 
 sourceCompatibility = "11"
 targetCompatibility = "11"
-version '1.0-snapshot'
+
+version = rootProject.version
 
 compileKotlin {
 

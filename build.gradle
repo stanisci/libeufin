@@ -24,7 +24,7 @@ idea {
     }
 }
 
-setVersion("0.0.1-dev.1")
+setVersion("0.0.1-dev.2")
 
 task versionFile() {
     new File("${projectDir}/util/src/main/resources", "version.txt").text = getRootProject().version
