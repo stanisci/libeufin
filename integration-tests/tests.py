@@ -410,7 +410,7 @@ def test_double_connection_name():
     )
 
 def test_ingestion_camt53_non_singleton():
-    with open("camt53-gls-style-1.xml") as f:
+    with open("../parsing-tests/samples/camt53-gls-style-1.xml") as f:
         camt = f.read()
     assertResponse(
         post(
@@ -425,13 +425,13 @@ def test_ingestion_camt53_non_singleton():
             auth=PERSONA.nexus.auth
         )
     )
-    with open("camt53-gls-style-1.json") as f:
+    with open("../parsing-tests/samples/camt53-gls-style-1.json") as f:
         expected_txs = f.read()
     assert not dd(resp.json(), json.loads(expected_txs), ignore_order=True)
 
 
 def test_ingestion_camt53():
-    with open("camt53-gls-style-0.xml") as f:
+    with open("../parsing-tests/samples/camt53-gls-style-0.xml") as f:
         camt = f.read()
     assertResponse(
         post(
@@ -446,7 +446,7 @@ def test_ingestion_camt53():
             auth=PERSONA.nexus.auth
         )
     )
-    with open("camt53-gls-style-0.json") as f:
+    with open("../parsing-tests/samples/camt53-gls-style-0.json") as f:
         expected_txs = f.read()
     assert not dd(resp.json(), json.loads(expected_txs), ignore_order=True)
 
