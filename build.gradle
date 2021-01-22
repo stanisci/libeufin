@@ -31,9 +31,8 @@ task versionFile() {
 }
 
 task replaceVersionCli(type: Copy) {
-    from file("cli/bin/libeufin-cli.template")
-    into file("cli/bin/")
-    rename("libeufin-cli.template", "libeufin-cli")
+    from file("cli/bin/libeufin-cli")
+    into file("$project.buildDir/generated/python")
     filter(ReplaceTokens, tokens: [version: getRootProject().version])
 }
 
@@ -63,8 +62,9 @@ task dist(type: Zip) {
         include("**/libeufin-sandbox")
         include("**/*.jar")
     }
-    from ("cli") {
-        include("**/libeufin-cli")
+    from("$project.buildDir/generated/python") {
+      include("libeufin-cli")
+      rename { "bin/libeufin-cli" }
     }
     into(topDir)
 }
