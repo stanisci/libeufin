@@ -13,9 +13,8 @@ build-arch:
 	true
 build-indep:
 	true
-install:
-	unzip -f build/distributions/libeufin-$(FULLVER).zip
 override_dh_auto_install:
+	unzip build/distributions/libeufin-$(FULLVER).zip
 	dh_install libeufin-$(FULLVER)/lib/nexus-$(FULLVER)-all.jar $(LIBEUFIN_HOME)/lib
 	dh_install libeufin-$(FULLVER)/lib/sandbox-$(FULLVER)-all.jar $(LIBEUFIN_HOME)/lib
 	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-cli debian/libeufin/$(LIBEUFIN_HOME)/bin/libeufin-cli
