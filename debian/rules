@@ -3,7 +3,7 @@ include /usr/share/dpkg/default.mk
 
 export JAVA_HOME = /usr/lib/jvm/default-java
 GROOVY_HOME      = /usr/share/groovy
-DEV = -dev.1
+DEV = -dev.2
 
 clean:
 	rm -rf libeufin-$(DEB_VERSION_UPSTREAM)$(DEV)
