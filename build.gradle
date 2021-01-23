@@ -32,7 +32,7 @@ task versionFile() {
 
 task replaceVersionCli(type: Copy) {
     from file("cli/bin/libeufin-cli")
-    into file("$project.buildDir/generated/python")
+    into file("${project.buildDir}/generated/python")
     filter(ReplaceTokens, tokens: [version: getRootProject().version])
 }
 
@@ -62,7 +62,7 @@ task dist(type: Zip) {
         include("**/libeufin-sandbox")
         include("**/*.jar")
     }
-    from("$project.buildDir/generated/python") {
+    from("${project.buildDir}/generated/python") {
       include("libeufin-cli")
       rename { "bin/libeufin-cli" }
     }
