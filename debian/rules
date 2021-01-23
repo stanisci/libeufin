@@ -31,5 +31,9 @@ binary-arch:
 binary-indep:
 	dh $@
 
+override_dh_auto_install:
+	true
+
+
 get-orig-source:
 	uscan --force-download --rename
