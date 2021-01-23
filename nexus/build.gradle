@@ -37,6 +37,7 @@ apply plugin: 'kotlin-kapt'
 
 sourceCompatibility = '11'
 targetCompatibility = '11'
+version = rootProject.version
 
 compileKotlin {
     kotlinOptions {

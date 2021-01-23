@@ -6,7 +6,7 @@ GROOVY_HOME      = /usr/share/groovy
 DEV = -dev.1
 
 clean:
-	rm -rf libeufin-$(DEB_VERSION_UPSTREAM)-dev.1
+	rm -rf libeufin-$(DEB_VERSION_UPSTREAM)$(DEV)
 build: build-arch build-indep
 build-arch:
 	true
@@ -23,6 +23,13 @@ install:
 	dh_link $(GROOVY_HOME)/bin/libeufin-cli /usr/bin/libeufin-cli
 	dh_link $(GROOVY_HOME)/bin/libeufin-nexus /usr/bin/libeufin-nexus
 	dh_link $(GROOVY_HOME)/bin/libeufin-sandbox /usr/bin/libeufin-sandbox
+
+binary:
+	dh $@
+binary-arch:
+	dh $@
+binary-indep:
+	dh $@
 
 get-orig-source:
 	uscan --force-download --rename
