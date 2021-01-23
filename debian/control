@@ -4,14 +4,19 @@ Priority: optional
 Maintainer: Taler Systems SA <deb@taler.net>
 Uploaders: Christian Grothoff <grothoff@gnu.org>, Florian Dold <dold@taler.net>
 Build-Depends: debhelper (>= 10),
-               default-jdk-headless | default-jdk
+               unzip,
+               openjdk-11-jdk-headless | openjdk-11-jdk,
 Standards-Version: 4.1.0
 Vcs-Git: https://git.taler.net/libeufin.git
 Homepage: https://taler.net/
 
 Package: libeufin
 Architecture: all
-Depends: default-jdk-headless | default-jdk, ${misc:Depends}
+Depends: openjdk-11-jdk-headless | openjdk-11-jdk,
+         python3 (<= 3.7),
+         python3-click,
+         python3-requests
+         ${misc:Depends}
 Recommends:
 Description: Software package to access FinTS/EBICS based
  core banking systems.
