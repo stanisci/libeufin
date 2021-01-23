@@ -2,7 +2,7 @@
 include /usr/share/dpkg/default.mk
 
 export JAVA_HOME = /usr/lib/jvm/default-java
-GROOVY_HOME      = /usr/share/groovy
+LIBEUFIN_HOME = /usr/share/libeufin
 DEV = -dev.2
 FULLVER = $(DEB_VERSION_UPSTREAM)$(DEV)
 
@@ -13,16 +13,16 @@ build-arch:
 	true
 build-indep:
 	true
-install:
-	unzip build/distributions/libeufin-$(FULLVER).zip
-	dh_install libeufin-$(FULLVER)/lib/nexus-$(FULLVER)-all.jar $(GROOVY_HOME)/lib
-	dh_install libeufin-$(FULLVER)/lib/sandbox-$(FULLVER)-all.jar $(GROOVY_HOME)/lib
-	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-cli debian/libeufin/$(GROOVY_HOME)/bin/libeufin-cli
-	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-nexus debian/libeufin/$(GROOVY_HOME)/bin/libeufin-nexus
-	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-sandbox debian/libeufin/$(GROOVY_HOME)/bin/libeufin-sandbox
-	dh_link $(GROOVY_HOME)/bin/libeufin-cli /usr/bin/libeufin-cli
-	dh_link $(GROOVY_HOME)/bin/libeufin-nexus /usr/bin/libeufin-nexus
-	dh_link $(GROOVY_HOME)/bin/libeufin-sandbox /usr/bin/libeufin-sandbox
+override_dh_auto_install:
+	unzip -f build/distributions/libeufin-$(FULLVER).zip
+	dh_install libeufin-$(FULLVER)/lib/nexus-$(FULLVER)-all.jar $(LIBEUFIN_HOME)/lib
+	dh_install libeufin-$(FULLVER)/lib/sandbox-$(FULLVER)-all.jar $(LIBEUFIN_HOME)/lib
+	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-cli debian/libeufin/$(LIBEUFIN_HOME)/bin/libeufin-cli
+	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-nexus debian/libeufin/$(LIBEUFIN_HOME)/bin/libeufin-nexus
+	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-sandbox debian/libeufin/$(LIBEUFIN_HOME)/bin/libeufin-sandbox
+	dh_link $(LIBEUFIN_HOME)/bin/libeufin-cli /usr/bin/libeufin-cli
+	dh_link $(LIBEUFIN_HOME)/bin/libeufin-nexus /usr/bin/libeufin-nexus
+	dh_link $(LIBEUFIN_HOME)/bin/libeufin-sandbox /usr/bin/libeufin-sandbox
 
 binary:
 	dh $@
@@ -31,9 +31,10 @@ binary-arch:
 binary-indep:
 	dh $@
 
-override_dh_auto_install:
+# Override this step because it's very slow and likely
+# unnecessary for us.
+override_dh_strip_nondeterminism:
 	true
-
 
 get-orig-source:
 	uscan --force-download --rename
