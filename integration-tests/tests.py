@@ -141,6 +141,31 @@ def test_change_password():
         )
     )
 
+def test_connection_deletion():
+    resp = assertResponse(
+        get(
+            f"{PERSONA.nexus.base_url}/bank-connections",
+            auth=PERSONA.nexus.auth
+        )
+    )
+    connection = resp.json().get("bankConnections").pop()
+    assert PERSONA.nexus.bank_connection == connection.get("name")
+
+    assertResponse(
+        post(
+            f"{PERSONA.nexus.base_url}/bank-connections/delete-connection",
+            json=dict(bankConnectionId=PERSONA.nexus.bank_connection),
+            auth=PERSONA.nexus.auth
+        )
+    )
+    resp = assertResponse(
+        get(
+            f"{PERSONA.nexus.base_url}/bank-connections",
+            auth=PERSONA.nexus.auth
+        )
+    )
+    assert len(resp.json().get("bankConnections")) == 0
+
 # Tests whether Nexus knows the imported bank account.
 def test_imported_account():
     resp = assertResponse(
