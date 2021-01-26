@@ -86,6 +86,33 @@ def list_users(obj):
     print(resp.content.decode("utf-8"))
 
 
+@users.command(help="Change user's password")
+@click.argument("username")
+@click.option(
+    "--new-password",
+    help="New password",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=True,
+)
+@click.pass_obj
+def change_password(obj, username, new_password):
+    url = urljoin(obj.nexus_base_url, f"/users/password")
+    try:
+        body = dict(newPassword=new_password)
+        resp = post(
+            url,
+            json=body,
+            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach nexus at " + url)
+        exit(1)
+
+    tell_user(resp)
+
+
 @users.command("create", help="Create a new user")
 @click.argument("username")
 @click.option(
