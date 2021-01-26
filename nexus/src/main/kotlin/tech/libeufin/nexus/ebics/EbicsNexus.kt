@@ -160,7 +160,7 @@ suspend fun fetchEbicsBySpec(
         try {
             fetchEbicsC5x(spec.orderType, client, bankConnectionId, spec.orderParams, subscriberDetails)
         } catch (e: Exception) {
-            logger.warn("Ingestion failed for $spec", e)
+            logger.warn("Ingestion failed for $spec")
         }
     }
 }
