@@ -105,7 +105,7 @@ libeufin-cli \
 # Bootstrapping such connection.
 echo Bootstrapping the bank connection
 libeufin-cli \
-  connections sync $NEXUS_BANK_CONNECTION_NAME
+  connections connect $NEXUS_BANK_CONNECTION_NAME
 
 # Download bank accounts.
 echo Download bank accounts
@@ -125,7 +125,7 @@ cat << EOF
 Bank connection name: $(tput bold)$NEXUS_BANK_CONNECTION_NAME$(tput sgr0)
 Bank account, imported name: $(tput bold)$ACCOUNT_NAME_AT_NEXUS$(tput sgr0)
 Bank account, native name: $(tput bold)$ACCOUNT_NAME$(tput sgr0)
-env-setter: $(tput bold)export NEXUS_BASE_URL=http://localhost:5001/ NEXUS_USERNAME=$NEXUS_USER NEXUS_PASSWORD=$NEXUS_PASSWORD LIBEUFIN_SANDBOX_URL=$SANDBOX_URL$(tput sgr0)
+env-setter: $(tput bold)export LIBEUFIN_NEXUS_URL=http://localhost:5001/ LIBEUFIN_NEXUS_USERNAME=$NEXUS_USER LIBEUFIN_NEXUS_PASSWORD=$NEXUS_PASSWORD LIBEUFIN_SANDBOX_URL=$SANDBOX_URL$(tput sgr0)
 
 EOF
 

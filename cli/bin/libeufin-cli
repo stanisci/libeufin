@@ -87,7 +87,6 @@ def list_users(obj):
 
 
 @users.command(help="Change user's password")
-@click.argument("username")
 @click.option(
     "--new-password",
     help="New password",
@@ -96,7 +95,7 @@ def list_users(obj):
     confirmation_prompt=True,
 )
 @click.pass_obj
-def change_password(obj, username, new_password):
+def change_password(obj, new_password):
     url = urljoin(obj.nexus_base_url, f"/users/password")
     try:
         body = dict(newPassword=new_password)
