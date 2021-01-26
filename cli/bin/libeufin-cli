@@ -13,10 +13,11 @@ from getpass import getpass
 
 
 def tell_user(resp, withsuccess=False):
-    if resp.status_code == 200 and not withsuccess:
+    if resp.status_code != 200:
+        print(resp.content.decode("utf-8"))
         return
-    print(resp.content.decode("utf-8"))
-
+    if withsuccess:
+        print(resp.content.decode("utf-8"))
 
 # FIXME: deprecate this in favor of NexusContext
 def fetch_env():
@@ -83,8 +84,7 @@ def list_users(obj):
         print("Could not reach nexus at " + url)
         exit(1)
 
-    print(resp.content.decode("utf-8"))
-
+    tell_user(resp, withsuccess=True)
 
 @users.command(help="Change user's password")
 @click.option(
@@ -109,7 +109,7 @@ def change_password(obj, new_password):
         print("Could not reach nexus at " + url)
         exit(1)
 
-    tell_user(resp)
+    tell_user(resp, withsuccess=True)
 
 
 @users.command("create", help="Create a new user")
