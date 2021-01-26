@@ -109,6 +109,9 @@ data class NexusErrorDetailJson(
 data class NexusErrorJson(
     val error: NexusErrorDetailJson
 )
+data class NexusMessage(
+    val message: String
+)
 
 data class BankConnectionInfo(
     val name: String,
@@ -292,6 +295,11 @@ data class UserResponse(
 data class CreateUserRequest(
     val username: String,
     val password: String
+)
+
+data class ChangeUserPassword(
+    val username: String,
+    val newPassword: String
 )
 
 data class UserInfo(
