@@ -842,7 +842,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         connectEbics(client, conn.connectionId)
                     }
                 }
-                call.respond(object {})
+                call.respond(NexusMessage(message = "Connection successful"))
             }
 
             get("/bank-connections/{connectionName}/keyletter") {

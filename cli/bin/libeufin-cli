@@ -428,7 +428,7 @@ def connect(obj, connection_name):
     except Exception:
         print(f"Could not reach nexus at {url}")
         exit(1)
-    tell_user(resp)
+    tell_user(resp, withsuccess=True)
 
 
 @connections.command(help="Import one bank account, chosen from the downloaded ones.")
