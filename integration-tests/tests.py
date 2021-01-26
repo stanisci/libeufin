@@ -129,6 +129,14 @@ def teardown_function():
     dropSandboxTables(DB)
     dropNexusTables(DB)
 
+def test_change_password():
+    assertResponse(
+        post(f"{PERSONA.nexus.base_url}/users/password",
+             auth=PERSONA.nexus.auth,
+             json=dict(newPassword="changed")
+        )
+    )
+
 # Tests whether Nexus knows the imported bank account.
 def test_imported_account():
     resp = assertResponse(
