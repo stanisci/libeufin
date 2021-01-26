@@ -480,26 +480,24 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             get("/bank-accounts/{accountId}/schedule/{taskId}") {
                 requireSuperuser(call.request)
+                val taskId = ensureNonNull(call.parameters["taskId"])
                 val task = transaction {
                     NexusScheduledTaskEntity.find {
-                        NexusScheduledTasksTable.taskName eq ensureNonNull(call.parameters["taskId"])
+                        NexusScheduledTasksTable.taskName eq taskId
                     }.firstOrNull()
                 }
+                if (task == null) throw NexusError(HttpStatusCode.NotFound, "Task ${taskId} wasn't found")
                 call.respond(
-                    if (task != null) {
-                        AccountTask(
-                            resourceId = task.resourceId,
-                            resourceType = task.resourceType,
-                            taskName = task.taskName,
-                            taskCronspec = task.taskCronspec,
-                            taskType = task.taskType,
-                            taskParams = task.taskParams,
-                            nextScheduledExecutionSec = task.nextScheduledExecutionSec,
-                            prevScheduledExecutionSec = task.prevScheduledExecutionSec
-                        )
-                    } else {
-                        object {}
-                    }
+                    AccountTask(
+                        resourceId = task.resourceId,
+                        resourceType = task.resourceType,
+                        taskName = task.taskName,
+                        taskCronspec = task.taskCronspec,
+                        taskType = task.taskType,
+                        taskParams = task.taskParams,
+                        nextScheduledExecutionSec = task.nextScheduledExecutionSec,
+                        prevScheduledExecutionSec = task.prevScheduledExecutionSec
+                    )
                 )
                 return@get
             }
