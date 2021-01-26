@@ -43,7 +43,7 @@ import java.io.File
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
 val LIBEUFIN_NEXUS_DB_CONNECTION = System.getenv(
-    "LIBEUFIN_NEXUS_DB_CONNECTIONS") ?: "jdbc:sqlite:/tmp/libeufin-nexus.sqlite3"
+    "LIBEUFIN_NEXUS_DB_CONNECTION") ?: "jdbc:sqlite:/tmp/libeufin-nexus.sqlite3"
 
 class NexusCommand : CliktCommand() {
     init {
