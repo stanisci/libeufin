@@ -127,7 +127,7 @@ def setup_function():
         prepareNexus()
     except Exception:
         teardown_function()
-        pytest.xfail("Failed to setup this test")
+        assert False, "Setup function failed"
 
 def teardown_function():
     dropSandboxTables()
