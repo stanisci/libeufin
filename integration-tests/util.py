@@ -173,7 +173,7 @@ def startNexus():
         "..",
         "nexus:run",
         "--console=plain",
-        "--args=serve"]),
+        "--args=serve"],
         stdin=DEVNULL,
         stdout=open("nexus-stdout.log", "w"),
         stderr=open("nexus-stderr.log", "w")

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import pytest
 import json
 from deepdiff import DeepDiff as dd
@@ -115,10 +116,10 @@ def prepareNexus():
         )
     )
 
-dropSandboxTables(DB)
-startSandbox(DB)
-dropNexusTables(DB)
-startNexus(DB)
+dropSandboxTables()
+startSandbox()
+dropNexusTables()
+startNexus()
 
 def setup_function():
     try:
@@ -129,8 +130,8 @@ def setup_function():
         pytest.xfail("Failed to setup this test")
 
 def teardown_function():
-    dropSandboxTables(DB)
-    dropNexusTables(DB)
+    dropSandboxTables()
+    dropNexusTables()
 
 def test_change_password():
     assertResponse(
