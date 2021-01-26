@@ -42,7 +42,8 @@ import java.io.File
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
-const val DEFAULT_DB_CONNECTION = "jdbc:sqlite:/tmp/libeufin-nexus.sqlite3"
+val LIBEUFIN_NEXUS_DB_CONNECTION = System.getenv(
+    "LIBEUFIN_NEXUS_DB_CONNECTIONS") ?: "jdbc:sqlite:/tmp/libeufin-nexus.sqlite3"
 
 class NexusCommand : CliktCommand() {
     init {
@@ -57,7 +58,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-    private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
+    private val dbConnString by option().default(LIBEUFIN_NEXUS_DB_CONNECTION)
     private val host by option().default("127.0.0.1")
     private val port by option().int().default(5001)
     private val logLevel by option()
@@ -84,7 +85,7 @@ class ResetTables : CliktCommand("Drop all the tables from the database") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-    private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
+    private val dbConnString by option().default(LIBEUFIN_NEXUS_DB_CONNECTION)
     override fun run() {
         execThrowableOrTerminate {
             dbDropTables(dbConnString)
@@ -94,7 +95,7 @@ class ResetTables : CliktCommand("Drop all the tables from the database") {
 }
 
 class Superuser : CliktCommand("Add superuser or change pw") {
-    private val dbConnString by option().default(DEFAULT_DB_CONNECTION)
+    private val dbConnString by option().default(LIBEUFIN_NEXUS_DB_CONNECTION)
     private val username by argument()
     private val password by option().prompt(requireConfirmation = true, hideInput = true)
     override fun run() {
