@@ -66,7 +66,7 @@ def prepareSandbox():
     )
 
 def prepareNexus():
-    makeNexusSuperuser(DB)
+    makeNexusSuperuser()
     # make a new nexus user.
     assertResponse(
         post(
