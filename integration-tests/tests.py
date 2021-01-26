@@ -31,6 +31,9 @@ PERSONA = LibeufinPersona(
     ebics_details = EbicsDetails(SANDBOX_URL + "/ebicsweb")
 )
 
+os.environ["LIBEUFIN_NEXUS_DB_CONNECTION"] = DB
+os.environ["LIBEUFIN_SANDBOX_DB_CONNECTION"] = DB
+
 def prepareSandbox():
     # make ebics host at sandbox
     assertResponse(

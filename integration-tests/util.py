@@ -102,36 +102,36 @@ def kill(name, s):
     s.terminate()
     s.wait()
 
-def makeNexusSuperuser(dbConnString):
+def makeNexusSuperuser():
     check_call([
         "../gradlew",
         "-q", "--console=plain",
         "-p", "..",
         "nexus:run",
-        f"--args=superuser admin --password x --db-conn-string={dbConnString}",
+        f"--args=superuser admin --password x",
     ])
 
-def dropSandboxTables(dbConnString):
+def dropSandboxTables():
     check_call([
         "../gradlew",
         "-q", "--console=plain",
         "-p", "..",
         "sandbox:run",
-        f"--args=reset-tables --db-conn-string={dbConnString}"
+        f"--args=reset-tables"
     ])
 
 
-def dropNexusTables(dbConnString):
+def dropNexusTables():
     check_call([
         "../gradlew",
         "-q", "--console=plain",
         "-p", "..",
         "nexus:run",
-        f"--args=reset-tables --db-conn-string={dbConnString}"
+        f"--args=reset-tables"
     ])
 
 
-def startSandbox(dbConnString):
+def startSandbox():
     check_call(["../gradlew", "-q", "--console=plain", "-p", "..", "sandbox:assemble"])
     checkPort(5000)
     sandbox = Popen([
@@ -141,7 +141,7 @@ def startSandbox(dbConnString):
         "..",
         "sandbox:run",
         "--console=plain",
-        "--args=serve --db-conn-string={}".format(dbConnString)],
+        "--args=serve"],
         stdin=DEVNULL,
         stdout=open("sandbox-stdout.log", "w"),
         stderr=open("sandbox-stderr.log", "w")
@@ -161,7 +161,7 @@ def startSandbox(dbConnString):
         break
 
 
-def startNexus(dbConnString):
+def startNexus():
     check_call(
         ["../gradlew", "-q", "--console=plain", "-p", "..", "nexus:assemble",]
     )
@@ -173,7 +173,7 @@ def startNexus(dbConnString):
         "..",
         "nexus:run",
         "--console=plain",
-        "--args=serve --db-conn-string={}".format(dbConnString)],
+        "--args=serve")],
         stdin=DEVNULL,
         stdout=open("nexus-stdout.log", "w"),
         stderr=open("nexus-stderr.log", "w")
