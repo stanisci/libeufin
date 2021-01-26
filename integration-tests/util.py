@@ -121,6 +121,14 @@ def dropSandboxTables():
     ])
 
 
+def compileLibeufin():
+    check_call([
+        "../gradlew",
+        "-q", "--console=plain",
+        "-p", "..",
+        "assemble"
+    ])
+
 def dropNexusTables():
     check_call([
         "../gradlew",
@@ -130,9 +138,7 @@ def dropNexusTables():
         f"--args=reset-tables"
     ])
 
-
 def startSandbox():
-    check_call(["../gradlew", "-q", "--console=plain", "-p", "..", "sandbox:assemble"])
     checkPort(5000)
     sandbox = Popen([
         "../gradlew",
@@ -162,9 +168,6 @@ def startSandbox():
 
 
 def startNexus():
-    check_call(
-        ["../gradlew", "-q", "--console=plain", "-p", "..", "nexus:assemble",]
-    )
     checkPort(5001)
     nexus = Popen([
         "../gradlew",
@@ -194,7 +197,9 @@ def startNexus():
 
 def assertResponse(r, acceptedResponses=[200]):
     def http_trace(r):
-        request = f"{r.request.method} {r.request.url}\n{r.request.body.decode('utf-8')}"
+        request = f"{r.request.method} {r.request.url}"
+        if r.request.body:
+            request += f"\n{r.request.body.decode('utf-8')}"
         response = f"{r.status_code} {r.reason}\n{r.text}"
         return f"(the following communication failed)\n\n{request}\n\n{response}"
     assert r.status_code in acceptedResponses, http_trace(r)

@@ -5,7 +5,7 @@ import pytest
 import json
 from deepdiff import DeepDiff as dd
 from subprocess import check_call
-from requests import post, get, auth
+from requests import post, get, auth, delete
 from time import sleep
 from util import (
     startNexus,
@@ -18,7 +18,8 @@ from util import (
     LibeufinPersona,
     BankingDetails,
     NexusDetails,
-    EbicsDetails
+    EbicsDetails,
+    compileLibeufin
 )
 
 # Database
@@ -116,6 +117,7 @@ def prepareNexus():
         )
     )
 
+compileLibeufin()
 dropSandboxTables()
 startSandbox()
 dropNexusTables()
@@ -512,4 +514,55 @@ def test_sandbox_camt():
             f"{PERSONA.banking.bank_base_url}/admin/payments/camt",
             json=dict(iban="GB33BUKB20201555555555", type=53)
         )
+    )
+
+def test_schedule_deletion():
+    assertResponse(
+        post("/".join([
+            PERSONA.nexus.base_url,
+            "bank-accounts",
+            PERSONA.nexus.bank_label,
+            "schedule"]),
+            json=dict(
+                name="test-task",
+                cronspec="* * *",
+                type="fetch",
+                params=dict(rangeType="all", level="all")),
+            auth=auth.HTTPBasicAuth("admin", "x")
+        )
+    )
+
+    resp = assertResponse(
+        get("/".join([
+            PERSONA.nexus.base_url,
+            "bank-accounts",
+            PERSONA.nexus.bank_label,
+            "schedule",
+            "test-task"]),
+            auth=auth.HTTPBasicAuth("admin", "x")
+        )
+    )
+    assert resp.json().get("taskName") == "test-task"
+
+    assertResponse(
+        delete("/".join([
+            PERSONA.nexus.base_url,
+            "bank-accounts",
+            PERSONA.nexus.bank_label,
+            "schedule",
+            "test-task"]),
+            auth=auth.HTTPBasicAuth("admin", "x")
+        )
+    )
+
+    resp = assertResponse(
+        get("/".join([
+            PERSONA.nexus.base_url,
+            "bank-accounts",
+            PERSONA.nexus.bank_label,
+            "schedule",
+            "test-task"]),
+            auth=auth.HTTPBasicAuth("admin", "x")
+        ),
+        acceptedResponses=[404]
     )
