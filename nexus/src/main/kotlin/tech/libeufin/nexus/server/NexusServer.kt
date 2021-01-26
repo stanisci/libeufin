@@ -356,11 +356,9 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         superuser = false
                     }
                 }
-                call.respondText(
-                    "New user '${body.username}' registered",
-                    ContentType.Text.Plain,
-                    HttpStatusCode.OK
-                )
+                call.respond(NexusMessage(
+                    message = "New user '${body.username}' registered"
+                ))
                 return@post
             }
 
