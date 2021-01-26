@@ -298,7 +298,6 @@ data class CreateUserRequest(
 )
 
 data class ChangeUserPassword(
-    val username: String,
     val newPassword: String
 )
 

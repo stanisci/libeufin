@@ -336,13 +336,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
             // change a user's password
             post("/users/password") {
                 val body = call.receiveJson<ChangeUserPassword>()
-                val requestedUsername = requireValidResourceName(body.username)
                 transaction {
                     val user = authenticateRequest(call.request)
-                    if (requestedUsername != user.username) throw NexusError(
-                        HttpStatusCode.Unauthorized,
-                        "Insufficient rights to change password for '${requestedUsername}'"
-                    )
                     user.passwordHash = CryptoUtil.hashpw(body.newPassword)
                 }
                 call.respond(NexusMessage(message = "Password successfully changed"))
