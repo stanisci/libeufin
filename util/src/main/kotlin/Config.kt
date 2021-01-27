@@ -5,6 +5,7 @@ import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.util.ContextInitializer
 import ch.qos.logback.core.util.Loader
 import org.slf4j.LoggerFactory
+import kotlin.system.exitProcess
 
 fun getVersion(): String {
     return Loader.getResource(
@@ -46,4 +47,13 @@ fun setLogLevel(logLevel: String?) {
             }
         }
     }
+}
+
+fun getDbConnFromEnv(varName: String): String {
+    val dbConnStr = System.getenv(varName)
+    if (dbConnStr.isNullOrBlank() or dbConnStr.isNullOrEmpty()) {
+        println("DB connection string not found/valid in the env variable $varName.")
+        exitProcess(1)
+    }
+    return dbConnStr
 }

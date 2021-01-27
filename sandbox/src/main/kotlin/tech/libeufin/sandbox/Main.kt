@@ -82,15 +82,7 @@ import tech.libeufin.util.ebics_h004.EbicsTypes
 import java.util.*
 import kotlin.random.Random
 
-val LIBEUFIN_SANDBOX_DB_CONNECTION = System.getenv(
-    "LIBEUFIN_SANDBOX_DB_CONNECTION") ?: "jdbc:sqlite:/tmp/libeufin-sandbox.sqlite3"
-
-class CustomerNotFound(id: String?) : Exception("Customer ${id} not found")
-class BadInputData(inputData: String?) : Exception("Customer provided invalid input data: ${inputData}")
-class UnacceptableFractional(badNumber: BigDecimal) : Exception(
-    "Unacceptable fractional part ${badNumber}"
-)
-
+val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
 data class SandboxError(val statusCode: HttpStatusCode, val reason: String) : Exception()
@@ -103,9 +95,8 @@ class ResetTables : CliktCommand("Drop all the tables from the database") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-
-    private val dbConnString by option().default(LIBEUFIN_SANDBOX_DB_CONNECTION)
     override fun run() {
+        val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         execThrowableOrTerminate {
             dbDropTables(dbConnString)
             dbCreateTables(dbConnString)
@@ -120,12 +111,11 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         }
     }
 
-    private val dbConnString by option().default(LIBEUFIN_SANDBOX_DB_CONNECTION)
     private val logLevel by option()
     private val port by option().int().default(5000)
     override fun run() {
         setLogLevel(logLevel)
-        serverMain(dbConnString, port)
+        serverMain(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME), port)
     }
 }
 
