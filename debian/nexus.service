@@ -1,0 +1,7 @@
+[Unit]
+Description=LibEuFin Nexus service.
+
+[Service]
+ExecStart=/usr/bin/libeufin-nexus serve
+Restart=on-failure
+Environment="LIBEUFIN_NEXUS_DB_CONNECTION=jdbc:sqlite:/tmp/libeufinnexusdb"
