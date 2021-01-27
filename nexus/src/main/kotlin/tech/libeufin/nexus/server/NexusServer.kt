@@ -22,6 +22,7 @@ package tech.libeufin.nexus.server
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.KotlinModule
@@ -137,7 +138,10 @@ suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
     } catch (e: MissingKotlinParameterException) {
         throw NexusError(HttpStatusCode.BadRequest, "Missing value for ${e.pathReference}")
     } catch (e: MismatchedInputException) {
-        throw NexusError(HttpStatusCode.BadRequest, "Invalid value for ${e.pathReference}")
+        // Note: POSTing "[]" gets here but e.pathReference is blank.
+        throw NexusError(HttpStatusCode.BadRequest, "Invalid value for '${e.pathReference}'")
+    } catch (e: JsonParseException) {
+        throw NexusError(HttpStatusCode.BadRequest, "Invalid JSON")
     }
 }
 
