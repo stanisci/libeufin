@@ -511,7 +511,7 @@ def test_sandbox_camt():
 
     assertResponse(
         post(
-            f"{persona.Banking.bank_base_url}/admin/payments/camt",
+            f"{PERSONA.Banking.bank_base_url}/admin/payments/camt",
             json=dict(iban="GB33BUKB20201555555555", type=53)
         )
     )
