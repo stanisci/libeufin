@@ -20,6 +20,7 @@
 
 package tech.libeufin.sandbox
 
+import com.fasterxml.jackson.core.JsonParseException
 import io.ktor.application.ApplicationCallPipeline
 import io.ktor.application.call
 import io.ktor.application.install
@@ -49,7 +50,9 @@ import javax.xml.bind.JAXBContext
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import java.time.Instant
 import com.github.ajalt.clikt.core.CliktCommand
@@ -61,6 +64,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
+import io.ktor.application.ApplicationCall
 import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.util.date.*
@@ -187,9 +191,21 @@ class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnE
     override fun run() = Unit
 }
 
-
 fun main(args: Array<String>) {
     SandboxCommand().subcommands(Serve(), ResetTables()).main(args)
+}
+
+suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
+    try {
+        return this.receive()
+    } catch (e: MissingKotlinParameterException) {
+        throw SandboxError(HttpStatusCode.BadRequest, "Missing value for ${e.pathReference}")
+    } catch (e: MismatchedInputException) {
+        // Note: POSTing "[]" gets here but e.pathReference is blank.
+        throw SandboxError(HttpStatusCode.BadRequest, "Invalid value for '${e.pathReference}'")
+    } catch (e: JsonParseException) {
+        throw SandboxError(HttpStatusCode.BadRequest, "Invalid JSON")
+    }
 }
 
 fun serverMain(dbName: String, port: Int) {
@@ -285,7 +301,7 @@ fun serverMain(dbName: String, port: Int) {
             }
             // only reason for a post is to hide the iban (to some degree.)
             post("/admin/payments/camt") {
-                val body = call.receive<CamtParams>()
+                val body = call.receiveJson<CamtParams>()
                 val history = historyForAccount(body.iban)
                 SandboxAssert(body.type == 53, "Only Camt.053 is implemented")
                 val camt53 = buildCamtString(body.type, body.iban, history)
@@ -297,7 +313,7 @@ fun serverMain(dbName: String, port: Int) {
              * Adds a new payment to the book.
              */
             post("/admin/payments") {
-                val body = call.receive<RawPayment>()
+                val body = call.receiveJson<RawPayment>()
                 val randId = getRandomString(16)
                 transaction {
                     val localIban = if (body.direction == "DBIT") body.debitorIban else body.creditorIban
@@ -322,7 +338,7 @@ fun serverMain(dbName: String, port: Int) {
             }
 
             post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
-                val body = call.receive<IncomingPaymentInfo>()
+                val body = call.receiveJson<IncomingPaymentInfo>()
                 // FIXME: generate nicer UUID!
                 val accountLabel = ensureNonNull(call.parameters["label"])
                 transaction {
@@ -350,7 +366,7 @@ fun serverMain(dbName: String, port: Int) {
              * Associates a new bank account with an existing Ebics subscriber.
              */
             post("/admin/ebics/bank-accounts") {
-                val body = call.receive<BankAccountRequest>()
+                val body = call.receiveJson<BankAccountRequest>()
                 transaction {
                     val subscriber = getEbicsSubscriberFromDetails(
                         body.subscriber.userID,
@@ -475,7 +491,7 @@ fun serverMain(dbName: String, port: Int) {
              * Creates a new Ebics subscriber.
              */
             post("/admin/ebics/subscribers") {
-                val body = call.receive<EbicsSubscriberElement>()
+                val body = call.receiveJson<EbicsSubscriberElement>()
                 transaction {
                     EbicsSubscriberEntity.new {
                         partnerId = body.partnerID
@@ -515,7 +531,7 @@ fun serverMain(dbName: String, port: Int) {
              * Creates a new EBICS host.
              */
             post("/admin/ebics/hosts") {
-                val req = call.receive<EbicsHostCreateRequest>()
+                val req = call.receiveJson<EbicsHostCreateRequest>()
                 val pairA = CryptoUtil.generateRsaKeyPair(2048)
                 val pairB = CryptoUtil.generateRsaKeyPair(2048)
                 val pairC = CryptoUtil.generateRsaKeyPair(2048)
