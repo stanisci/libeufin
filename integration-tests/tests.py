@@ -511,7 +511,7 @@ def test_sandbox_camt():
 
     assertResponse(
         post(
-            f"{PERSONA.banking.bank_base_url}/admin/payments/camt",
+            f"{persona.Banking.bank_base_url}/admin/payments/camt",
             json=dict(iban="GB33BUKB20201555555555", type=53)
         )
     )
@@ -565,4 +565,22 @@ def test_schedule_deletion():
             auth=auth.HTTPBasicAuth("admin", "x")
         ),
         acceptedResponses=[404]
+    )
+
+def test_invalid_json():
+    assertResponse(
+        post(
+            f"{PERSONA.nexus.base_url}/users",
+            data="malformed",
+            headers={"Content-Type": "application/json"},
+            auth=auth.HTTPBasicAuth("admin", "x")),
+        acceptedResponses=[400]
+    )
+    assertResponse(
+        post(
+            f"{PERSONA.banking.bank_base_url}/admin/ebics/hosts",
+            data="malformed",
+            headers={"Content-Type": "application/json"},
+            auth=auth.HTTPBasicAuth("admin", "x")),
+        acceptedResponses=[400]
     )

@@ -138,7 +138,6 @@ suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
     } catch (e: MissingKotlinParameterException) {
         throw NexusError(HttpStatusCode.BadRequest, "Missing value for ${e.pathReference}")
     } catch (e: MismatchedInputException) {
-        // Note: POSTing "[]" gets here but e.pathReference is blank.
         throw NexusError(HttpStatusCode.BadRequest, "Invalid value for '${e.pathReference}'")
     } catch (e: JsonParseException) {
         throw NexusError(HttpStatusCode.BadRequest, "Invalid JSON")
