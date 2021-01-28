@@ -3,7 +3,6 @@ Description=LibEuFin Nexus service.
 
 [Service]
 User=libeufin
-Group=libeufin
 ExecStart=/usr/bin/libeufin-nexus serve --port=$LIBEUFIN_NEXUS_PORT
 Restart=on-failure
 EnvironmentFile=/etc/libeufin/libeufinenv.conf
