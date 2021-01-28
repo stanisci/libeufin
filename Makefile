@@ -8,22 +8,23 @@ install: install-nexus install-sandbox install-cli
 
 .PHONY: dist
 dist:
-	@echo Creating the 'dist' Zip archive.
 	@./gradlew -q dist
+
+.PHONY: deb
+deb: dist
+	@dpkg-buildpackage -rfakeroot -b -uc -us
+
 
 .PHONY: install-sandbox
 install-sandbox:
-	@echo Installing Sandbox.
 	@./gradlew -q -Pprefix=$(prefix) sandbox:installToPrefix; cd ..
 
 .PHONY: install-nexus
 install-nexus:
-	@echo Installing Nexus.
 	@./gradlew -q -Pprefix=$(prefix) nexus:installToPrefix; cd ..
 
 .PHONY: install-cli
 install-cli:
-	@echo Installing CLI.
 	@./gradlew -q replaceVersionCli
 	@install -D cli/bin/libeufin-cli $(prefix)/bin
 
