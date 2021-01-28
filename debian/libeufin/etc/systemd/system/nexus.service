@@ -1,10 +1,10 @@
 [Unit]
-Description=LibEuFin Sandbox service.
+Description=LibEuFin Nexus service.
 
 [Service]
 EnvironmentFile=/etc/libeufin/libeufinenv.conf
 User=libeufin
-ExecStart=/usr/bin/libeufin-sandbox serve --port=${LIBEUFIN_SANDBOX_PORT}
+ExecStart=/usr/bin/libeufin-nexus serve --port=$LIBEUFIN_NEXUS_PORT
 Restart=on-failure
 
 [Install]
