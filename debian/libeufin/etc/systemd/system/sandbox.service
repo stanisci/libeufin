@@ -1,7 +1,0 @@
-[Unit]
-Description=LibEuFin Sandbox service.
-
-[Service]
-ExecStart=/usr/bin/libeufin-sandbox serve --port=$LIBEUFIN_SANDBOX_PORT
-Restart=on-failure
-EnvironmentFile=%h/.config/libeufinsandboxenv
