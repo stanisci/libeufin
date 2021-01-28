@@ -2,6 +2,8 @@
 Description=LibEuFin Sandbox service.
 
 [Service]
+User=libeufin
+Group=libeufin
 ExecStart=/usr/bin/libeufin-sandbox serve --port=$LIBEUFIN_SANDBOX_PORT
 Restart=on-failure
 EnvironmentFile=%h/.config/libeufinsandboxenv
