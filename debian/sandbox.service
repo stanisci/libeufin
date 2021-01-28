@@ -6,6 +6,7 @@ EnvironmentFile=/etc/libeufin/libeufinenv.conf
 User=libeufin
 ExecStart=/usr/bin/libeufin-sandbox serve --port=${LIBEUFIN_SANDBOX_PORT}
 Restart=on-failure
+SuccessExitStatus=143
 
 [Install]
 WantedBy=multi-user.target

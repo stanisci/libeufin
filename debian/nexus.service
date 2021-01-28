@@ -6,6 +6,7 @@ User=libeufin
 ExecStart=/usr/bin/libeufin-nexus serve --port=${LIBEUFIN_NEXUS_PORT}
 Restart=on-failure
 EnvironmentFile=/etc/libeufin/libeufinenv.conf
+SuccessExitStatus=143
 
 [Install]
 WantedBy=multi-user.target
