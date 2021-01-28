@@ -34,15 +34,17 @@ NEXUS_BANK_CONNECTION_NAME=b
 export LIBEUFIN_NEXUS_URL=$NEXUS_URL \
        LIBEUFIN_NEXUS_USERNAME=$NEXUS_USER \
        LIBEUFIN_NEXUS_PASSWORD=$NEXUS_PASSWORD \
-       LIBEUFIN_SANDBOX_URL=$SANDBOX_URL
+       LIBEUFIN_SANDBOX_URL=$SANDBOX_URL \
+       LIBEUFIN_NEXUS_DB_CONNECTION=$DATABASE_CONN \
+       LIBEUFIN_SANDBOX_DB_CONNECTION=$DATABASE_CONN
 
 echo Remove old database.
 rm -f $SQLITE_FILE
 
 echo Start services.
-libeufin-nexus serve --db-conn-string=$DATABASE_CONN &> nexus.log &
+libeufin-nexus serve &> nexus.log &
 nexus_pid=$!
-libeufin-sandbox serve --db-conn-string=$DATABASE_CONN &> sandbox.log &
+libeufin-sandbox serve &> sandbox.log &
 sandbox_pid=$!
 
 trap "echo Terminating services.; kill $nexus_pid; kill $sandbox_pid" EXIT
@@ -88,7 +90,6 @@ libeufin-cli \
 echo "Creating a nexus superuser"
 libeufin-nexus \
   superuser \
-    --db-conn-string=$DATABASE_CONN \
     --password $NEXUS_PASSWORD $NEXUS_USER
 
 # create a bank connection
