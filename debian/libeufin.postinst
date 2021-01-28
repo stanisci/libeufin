@@ -4,7 +4,7 @@ set -e
 
 case "${1}" in
   configure)
-    useradd --no-create-home --system libeufin
+    if ! id libeufin &> /dev/null; then useradd --no-create-home --system libeufin; fi
     ;;
 
   abort-upgrade|abort-remove|abort-deconfigure)
