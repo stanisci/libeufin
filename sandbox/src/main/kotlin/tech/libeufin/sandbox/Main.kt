@@ -83,8 +83,10 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
+import java.net.BindException
 import java.util.*
 import kotlin.random.Random
+import kotlin.system.exitProcess
 
 val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
@@ -238,7 +240,6 @@ fun serverMain(dbName: String, port: Int) {
                     HttpStatusCode.InternalServerError
                 )
             }
-
             exception<EbicsRequestError> { cause ->
                 val resp = EbicsResponse.createForUploadWithError(
                     cause.errorText,
@@ -570,5 +571,10 @@ fun serverMain(dbName: String, port: Int) {
         }
     }
     logger.info("LibEuFin Sandbox running on port $port")
-    server.start(wait = true)
+    try {
+        server.start(wait = true)
+    } catch (e: BindException) {
+        logger.error(e.message)
+        exitProcess(1)
+    }
 }

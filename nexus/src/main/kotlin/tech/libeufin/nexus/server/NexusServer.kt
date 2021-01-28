@@ -50,7 +50,9 @@ import tech.libeufin.nexus.bankaccount.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.util.*
+import java.net.BindException
 import java.net.URLEncoder
+import kotlin.system.exitProcess
 
 /**
  * Return facade state depending on the type.
@@ -1040,5 +1042,10 @@ fun serverMain(dbName: String, host: String, port: Int) {
         }
     }
     logger.info("LibEuFin Nexus running on port $port")
-    server.start(wait = true)
+    try {
+        server.start(wait = true)
+    } catch (e: BindException) {
+        logger.error(e.message)
+        exitProcess(1)
+    }
 }
