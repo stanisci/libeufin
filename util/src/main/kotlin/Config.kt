@@ -53,6 +53,9 @@ fun getDbConnFromEnv(varName: String): String {
     val dbConnStr = System.getenv(varName)
     if (dbConnStr.isNullOrBlank() or dbConnStr.isNullOrEmpty()) {
         println("DB connection string not found/valid in the env variable $varName.")
+        println("The following two examples are valid connection strings:")
+        println("jdbc:sqlite:/tmp/libeufindb.sqlite3")
+        println("jdbc:postgresql://localhost:5432/libeufindb?user=Foo&password=secret")
         exitProcess(1)
     }
     return dbConnStr
