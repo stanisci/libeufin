@@ -135,13 +135,38 @@ def teardown_function():
     dropSandboxTables()
     dropNexusTables()
 
-def test_change_password():
+# def test_double_username():
+
+
+def test_change_nonadmin_password():
+    assertResponse(
+        post(f"{PERSONA.nexus.base_url}/users",
+             auth=PERSONA.nexus.auth,
+             json=dict(username="nonadmin", password="secret")
+        )
+    )
+
+    resp = assertResponse(
+        get(
+            f"{PERSONA.nexus.base_url}/bank-accounts",
+            auth=auth.HTTPBasicAuth("nonadmin", "secret")
+        )
+    )
+
     assertResponse(
         post(f"{PERSONA.nexus.base_url}/users/password",
-             auth=PERSONA.nexus.auth,
+             auth=auth.HTTPBasicAuth("nonadmin", "secret"),
              json=dict(newPassword="changed")
         )
     )
+
+    resp = assertResponse(
+        get(
+            f"{PERSONA.nexus.base_url}/bank-accounts",
+            auth=auth.HTTPBasicAuth("nonadmin", "changed")
+        )
+    )
+
 
 def test_connection_deletion():
     resp = assertResponse(
