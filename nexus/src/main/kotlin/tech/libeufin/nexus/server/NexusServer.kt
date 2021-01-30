@@ -355,6 +355,14 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val requestedUsername = requireValidResourceName(body.username)
                 transaction {
                     requireSuperuser(call.request)
+                    // check if username is available
+                    val checkUsername = NexusUserEntity.find {
+                        NexusUsersTable.username eq requestedUsername
+                    }.firstOrNull()
+                    if (checkUsername != null) throw NexusError(
+                        HttpStatusCode.Conflict,
+                        "Username $requestedUsername unavailable"
+                    )
                     NexusUserEntity.new {
                         username = requestedUsername
                         passwordHash = CryptoUtil.hashpw(body.password)
@@ -720,7 +728,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         NexusBankConnectionEntity.find { NexusBankConnectionsTable.connectionId eq body.name }
                             .firstOrNull()
                     if (existingConn != null) {
-                        throw NexusError(HttpStatusCode.NotAcceptable, "connection '${body.name}' exists already")
+                        throw NexusError(HttpStatusCode.Conflict, "connection '${body.name}' exists already")
                     }
                     when (body) {
                         is CreateBankConnectionFromBackupRequestJson -> {

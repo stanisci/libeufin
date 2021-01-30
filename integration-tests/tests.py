@@ -66,17 +66,9 @@ def prepareSandbox():
         )
     )
 
+# most of the operations are run by the superuser.
 def prepareNexus():
     makeNexusSuperuser()
-    # make a new nexus user.
-    assertResponse(
-        post(
-            f"{PERSONA.nexus.base_url}/users",
-            auth=auth.HTTPBasicAuth("admin", "x"),
-            json=dict(username=PERSONA.nexus.username, password=PERSONA.nexus.password),
-        )
-    )
-    # make a ebics bank connection for the new user.
     assertResponse(
         post(
             f"{PERSONA.nexus.base_url}/bank-connections",
@@ -135,8 +127,14 @@ def teardown_function():
     dropSandboxTables()
     dropNexusTables()
 
-# def test_double_username():
-
+def test_double_username():
+    assertResponse(
+        post(f"{PERSONA.nexus.base_url}/users",
+             auth=PERSONA.nexus.auth,
+             json=dict(username="admin", password="secret")
+        ),
+        acceptedResponses=[409]
+    )
 
 def test_change_nonadmin_password():
     assertResponse(
@@ -160,7 +158,7 @@ def test_change_nonadmin_password():
         )
     )
 
-    resp = assertResponse(
+    assertResponse(
         get(
             f"{PERSONA.nexus.base_url}/bank-accounts",
             auth=auth.HTTPBasicAuth("nonadmin", "changed")
@@ -470,7 +468,7 @@ def test_double_connection_name():
             ),
             auth=PERSONA.nexus.auth
         ),
-        [406] # expecting "406 Not acceptable"
+        [409] # Conflict
     )
 
 def test_ingestion_camt53_non_singleton():
