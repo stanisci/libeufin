@@ -443,7 +443,7 @@ fun serverMain(dbName: String, port: Int) {
                 transaction {
                     val accountLabel = ensureNonNull(call.parameters["label"])
                     val account = getBankAccountFromLabel(accountLabel)
-
+                    val transactionReference = getRandomString(8)
                     run {
                         val random = Random.nextLong(0, Long.MAX_VALUE)
                         val amount = Random.nextLong(5, 25)
@@ -455,11 +455,11 @@ fun serverMain(dbName: String, port: Int) {
                             it[debtorIban] = "DE64500105178797276788"
                             it[debtorBic] = "DEUTDEBB101"
                             it[debtorName] = "Max Mustermann"
-                            it[subject] = "sample transaction $random"
+                            it[subject] = "sample transaction $transactionReference"
                             it[BankAccountTransactionsTable.amount] = amount.toString()
                             it[currency] = account.currency
                             it[date] = Instant.now().toEpochMilli()
-                            it[pmtInfId] = random.toString()
+                            it[accountServicerReference] = transactionReference
                             it[BankAccountTransactionsTable.account] = account.id
                             it[direction] = "CRDT"
                         }
