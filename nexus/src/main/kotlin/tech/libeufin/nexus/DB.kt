@@ -134,36 +134,13 @@ object NexusBankTransactionsTable : LongIdTable() {
      * transaction can show up multiple times with a different status.
      */
     val accountTransactionId = text("accountTransactionId")
-
-    /**
-     * Bank account that this transaction happened on.
-     */
     val bankAccount = reference("bankAccount", NexusBankAccountsTable)
-
-    /**
-     * Direction of the amount.
-     */
     val creditDebitIndicator = text("creditDebitIndicator")
-
-    /**
-     * Currency of the amount.
-     */
     val currency = text("currency")
     val amount = text("amount")
-
-    /**
-     * Booked / pending / informational.
-     */
     val status = enumerationByName("status", 16, EntryStatus::class)
-
-    /**
-     * Another, later transaction that updates the status of the current transaction.
-     */
+    // Another, later transaction that updates the status of the current transaction.
     val updatedBy = optReference("updatedBy", NexusBankTransactionsTable)
-
-    /**
-     * Full details of the transaction in JSON format.
-     */
     val transactionJson = text("transactionJson")
 }
 

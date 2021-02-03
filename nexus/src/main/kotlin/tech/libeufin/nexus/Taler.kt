@@ -40,10 +40,7 @@ import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
-import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
-import tech.libeufin.nexus.iso20022.CreditDebitIndicator
-import tech.libeufin.nexus.iso20022.EntryStatus
-import tech.libeufin.nexus.iso20022.TransactionDetails
+import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.EbicsProtocolError
@@ -422,7 +419,62 @@ private fun ingestIncoming(payment: NexusBankTransactionEntity, txDtls: Transact
             debtorIban, debtorAgent.bic, debtorName, "DBIT"
         )
     }
+    refundInvalidPayments()
     return
+}
+
+fun refundInvalidPayments() {
+    logger.debug("Finding new invalid payments to refund")
+    transaction {
+        TalerInvalidIncomingPaymentEntity.find {
+            TalerInvalidIncomingPaymentsTable.refunded eq false
+        }.forEach {
+            val paymentData = jacksonObjectMapper().readValue(
+                it.payment.transactionJson,
+                CamtBankAccountEntry::class.java
+            )
+            if (paymentData.batches == null) {
+                logger.error("A singleton batched payment was expected to be refunded," +
+                        " but none was found (in transaction (AcctSvcrRef): ${paymentData.accountServicerRef})")
+                throw NexusError(HttpStatusCode.InternalServerError, "Unexpected void payment, cannot refund")
+            }
+            val debtorAccount = paymentData.batches[0].batchTransactions[0].details.debtorAccount
+            if (debtorAccount == null || debtorAccount.iban == null) {
+                logger.error("Could not find a IBAN to refund in transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
+                throw NexusError(HttpStatusCode.InternalServerError, "IBAN to refund not found")
+            }
+            val debtorAgent = paymentData.batches[0].batchTransactions[0].details.debtorAgent
+            if (debtorAgent?.bic == null) {
+                logger.error("Could not find the BIC of refundable IBAN at transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
+                throw NexusError(HttpStatusCode.InternalServerError, "BIC to refund not found")
+            }
+            val debtorPerson = paymentData.batches[0].batchTransactions[0].details.debtor
+            if (debtorPerson?.name == null) {
+                logger.error("Could not find the owner's name of refundable IBAN at transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
+                throw NexusError(HttpStatusCode.InternalServerError, "Name to refund not found")
+            }
+            // FIXME: investigate this amount!
+            val amount = paymentData.batches[0].batchTransactions[0].details.instructedAmount
+            if (amount == null) {
+                logger.error("Could not find the amount to refund for transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
+                throw NexusError(HttpStatusCode.InternalServerError, "Amount to refund not found")
+            }
+            // FIXME: the amount to refund should be reduced, according to the refund fees.
+
+            addPaymentInitiation(
+                Pain001Data(
+                    creditorIban = debtorAccount.iban,
+                    creditorBic = debtorAgent.bic,
+                    creditorName = debtorPerson.name,
+                    subject = "Taler refund of: ${paymentData.batches[0].batchTransactions[0].details.unstructuredRemittanceInformation}",
+                    sum = amount.value,
+                    currency = amount.currency
+                ),
+                it.payment.bankAccount // the Exchange bank account.
+            )
+            it.refunded = true
+        }
+    }
 }
 
 /**
