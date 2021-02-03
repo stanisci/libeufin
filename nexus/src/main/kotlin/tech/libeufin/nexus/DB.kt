@@ -58,6 +58,23 @@ class TalerRequestedPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
     var creditAccount by TalerRequestedPaymentsTable.creditAccount
 }
 
+object TalerInvalidIncomingPaymentsTable : LongIdTable() {
+    val payment = reference("payment", NexusBankTransactionsTable)
+    val timestampMs = long("timestampMs")
+    val debtorPaytoUri = text("incomingPaytoUri")
+    val refunded = bool("refunded").default(true)
+}
+
+class TalerInvalidIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<TalerInvalidIncomingPaymentEntity>(TalerInvalidIncomingPaymentsTable)
+
+    var payment by NexusBankTransactionEntity referencedOn TalerInvalidIncomingPaymentsTable.payment
+    var timestampMs by TalerInvalidIncomingPaymentsTable.timestampMs
+    var debtorPaytoUri by TalerInvalidIncomingPaymentsTable.debtorPaytoUri
+    var refunded by TalerInvalidIncomingPaymentsTable.refunded
+}
+
+
 /**
  * This is the table of the incoming payments.  Entries are merely "pointers" to the
  * entries from the raw payments table.

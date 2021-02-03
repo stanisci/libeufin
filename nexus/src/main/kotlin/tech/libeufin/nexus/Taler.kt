@@ -382,19 +382,36 @@ private fun ingestIncoming(payment: NexusBankTransactionEntity, txDtls: Transact
         logger.warn("missing debtor agent")
         return
     }
-    val reservePub = extractReservePubFromSubject(subject)
-    if (reservePub == null) {
-        // FIXME: send back!
-        logger.warn("could not find reserve pub in remittance information")
+    if (debtorAgent.bic == null) {
+        logger.warn("Not allowing transactions missing the BIC.  IBAN and name: ${debtorIban}, $debtorName")
         return
     }
+    val reservePub = extractReservePubFromSubject(subject)
+    if (reservePub == null){
+        logger.warn("could not find reserve pub in remittance information")
+        TalerInvalidIncomingPaymentEntity.new {
+            this.payment = payment
+            timestampMs = System.currentTimeMillis()
+            debtorPaytoUri = buildIbanPaytoUri(
+                debtorIban, debtorAgent.bic, debtorName, "DBIT"
+            )
+        }
+        // FIXME: send back!
+        return
+    }
+
     if (!CryptoUtil.checkValidEddsaPublicKey(reservePub)) {
         // FIXME: send back!
         logger.warn("invalid public key")
-        return
-    }
-    if (debtorAgent.bic == null) {
-        logger.warn("Not allowing transactions missing the BIC.  IBAN and name: ${debtorIban}, $debtorName")
+        TalerInvalidIncomingPaymentEntity.new {
+            this.payment = payment
+            timestampMs = System.currentTimeMillis()
+            debtorPaytoUri = buildIbanPaytoUri(
+                debtorIban, debtorAgent.bic, debtorName, "DBIT"
+            )
+        }
+        logger.warn("Invalid public key found")
+        // FIXME: send back!
         return
     }
     TalerIncomingPaymentEntity.new {
