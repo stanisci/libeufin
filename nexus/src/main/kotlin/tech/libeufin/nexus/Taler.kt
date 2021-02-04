@@ -389,9 +389,6 @@ private fun ingestIncoming(payment: NexusBankTransactionEntity, txDtls: Transact
         TalerInvalidIncomingPaymentEntity.new {
             this.payment = payment
             timestampMs = System.currentTimeMillis()
-            debtorPaytoUri = buildIbanPaytoUri(
-                debtorIban, debtorAgent.bic, debtorName, "DBIT"
-            )
         }
         // FIXME: send back!
         return
@@ -403,9 +400,6 @@ private fun ingestIncoming(payment: NexusBankTransactionEntity, txDtls: Transact
         TalerInvalidIncomingPaymentEntity.new {
             this.payment = payment
             timestampMs = System.currentTimeMillis()
-            debtorPaytoUri = buildIbanPaytoUri(
-                debtorIban, debtorAgent.bic, debtorName, "DBIT"
-            )
         }
         logger.warn("Invalid public key found")
         // FIXME: send back!
@@ -419,11 +413,10 @@ private fun ingestIncoming(payment: NexusBankTransactionEntity, txDtls: Transact
             debtorIban, debtorAgent.bic, debtorName, "DBIT"
         )
     }
-    refundInvalidPayments()
     return
 }
 
-fun refundInvalidPayments() {
+fun prepareRefunds() {
     logger.debug("Finding new invalid payments to refund")
     transaction {
         TalerInvalidIncomingPaymentEntity.find {
@@ -454,13 +447,12 @@ fun refundInvalidPayments() {
                 throw NexusError(HttpStatusCode.InternalServerError, "Name to refund not found")
             }
             // FIXME: investigate this amount!
-            val amount = paymentData.batches[0].batchTransactions[0].details.instructedAmount
+            val amount = paymentData.batches[0].batchTransactions[0].amount
             if (amount == null) {
                 logger.error("Could not find the amount to refund for transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
                 throw NexusError(HttpStatusCode.InternalServerError, "Amount to refund not found")
             }
             // FIXME: the amount to refund should be reduced, according to the refund fees.
-
             addPaymentInitiation(
                 Pain001Data(
                     creditorIban = debtorAccount.iban,
@@ -472,6 +464,7 @@ fun refundInvalidPayments() {
                 ),
                 it.payment.bankAccount // the Exchange bank account.
             )
+            logger.debug("Refund of transaction (AcctSvcrRef): ${paymentData.accountServicerRef} got prepared")
             it.refunded = true
         }
     }
@@ -509,7 +502,10 @@ fun ingestTalerTransactions() {
                 return@forEach
             }
             when (tx.creditDebitIndicator) {
-                CreditDebitIndicator.CRDT -> ingestIncoming(it, txDtls = details)
+                CreditDebitIndicator.CRDT -> {
+                    ingestIncoming(it, txDtls = details)
+                    prepareRefunds()
+                }
                 else -> Unit
             }
             lastId = it.id.value

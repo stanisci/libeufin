@@ -61,8 +61,7 @@ class TalerRequestedPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
 object TalerInvalidIncomingPaymentsTable : LongIdTable() {
     val payment = reference("payment", NexusBankTransactionsTable)
     val timestampMs = long("timestampMs")
-    val debtorPaytoUri = text("incomingPaytoUri")
-    val refunded = bool("refunded").default(true)
+    val refunded = bool("refunded").default(false)
 }
 
 class TalerInvalidIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -70,7 +69,6 @@ class TalerInvalidIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
 
     var payment by NexusBankTransactionEntity referencedOn TalerInvalidIncomingPaymentsTable.payment
     var timestampMs by TalerInvalidIncomingPaymentsTable.timestampMs
-    var debtorPaytoUri by TalerInvalidIncomingPaymentsTable.debtorPaytoUri
     var refunded by TalerInvalidIncomingPaymentsTable.refunded
 }
 
@@ -101,10 +99,6 @@ class TalerIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
  */
 object NexusBankMessagesTable : LongIdTable() {
     val bankConnection = reference("bankConnection", NexusBankConnectionsTable)
-
-    /**
-     * Unique identifier for the message within the bank connection
-     */
     val messageId = text("messageId")
     val code = text("code")
     val message = blob("message")
@@ -454,6 +448,7 @@ fun dbDropTables(dbConnectionString: String) {
             NexusBankTransactionsTable,
             TalerIncomingPaymentsTable,
             TalerRequestedPaymentsTable,
+            TalerInvalidIncomingPaymentsTable,
             NexusBankConnectionsTable,
             NexusBankMessagesTable,
             FacadesTable,
@@ -470,6 +465,7 @@ fun dbCreateTables(dbConnectionString: String) {
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         SchemaUtils.create(
+            NexusScheduledTasksTable,
             NexusUsersTable,
             PaymentInitiationsTable,
             NexusEbicsSubscribersTable,
@@ -482,9 +478,7 @@ fun dbCreateTables(dbConnectionString: String) {
             NexusBankConnectionsTable,
             NexusBankMessagesTable,
             FacadesTable,
-            NexusScheduledTasksTable,
             OfferedBankAccountsTable,
-            NexusScheduledTasksTable,
             NexusPermissionsTable,
         )
     }

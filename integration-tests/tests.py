@@ -420,6 +420,53 @@ def test_taler_facade_incoming(make_taler_facade):
     ))
     assert len(resp.json().get("incoming_transactions")) == 1
 
+
+def test_taler_facade_refund(make_taler_facade):
+    resp = assertResponse(post(
+        f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/admin/add-incoming",
+        json=dict(
+            amount="EUR:1",
+            reserve_pub="invalid reserve public key",
+            debit_account="payto://iban/BUKBGB22/DE00000000000000000000?sender-name=TheName"
+        ),
+        auth=PERSONA.nexus.auth
+    ))
+
+    assertResponse(post(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
+        auth=PERSONA.nexus.auth
+    ))
+
+    assertResponse(post(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/submit-all-payment-initiations",
+        auth=PERSONA.nexus.auth
+    ))
+
+    # Fetch again the history, so as to find the freshly made refund.
+    assertResponse(post(
+        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
+        auth=PERSONA.nexus.auth
+    ))
+
+    resp = assertResponse(
+        get(
+            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
+            auth=PERSONA.nexus.auth
+        )
+    )
+
+    # Find the refund now!
+    print(json.dumps(resp.json(), indent=2))
+    transactionsList = resp.json().get("transactions") 
+    assert len(transactionsList) == 2
+    for transaction in transactionsList:
+        movement = transaction.get("batches")[0].get("batchTransactions")[0]
+        subject = movement.get("details").get("unstructuredRemittanceInformation")
+        if subject.find("Taler refund") == 0 and movement.get("amount") == "EUR:1":
+            return
+    assert False, "Refund transaction not found"
+
+
 def test_taler_facade_outgoing(make_taler_facade):
     assertResponse(
         post(
