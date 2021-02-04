@@ -448,10 +448,10 @@ fun prepareRefunds() {
             }
             // FIXME: investigate this amount!
             val amount = paymentData.batches[0].batchTransactions[0].amount
-            if (amount == null) {
-                logger.error("Could not find the amount to refund for transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
-                throw NexusError(HttpStatusCode.InternalServerError, "Amount to refund not found")
-            }
+            NexusAssert(
+                it.payment.creditDebitIndicator == "CRDT",
+                "Cannot refund a _outgoing_ payment!"
+            )
             // FIXME: the amount to refund should be reduced, according to the refund fees.
             addPaymentInitiation(
                 Pain001Data(
