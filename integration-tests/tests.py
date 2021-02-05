@@ -335,6 +335,7 @@ def make_crdt_payment():
         debitorBic="BUKBGB22",
         debitorName="Max Mustermann",
         amount=5,
+        uid="AcctSvcrRef-56789"
         currency="EUR",
         subject="Reimbursement",
         direction="CRDT"
