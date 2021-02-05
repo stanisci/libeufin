@@ -342,13 +342,7 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
                                 text(dashedDate)
                             } // date of assets' actual (un)availability
                             element("AcctSvcrRef") {
-                                val uid = if (it.uid != null) it.uid.toString() else {
-                                    throw EbicsRequestError(
-                                        errorCode = "091116",
-                                        errorText = "EBICS_PROCESSING_ERROR"
-                                    )
-                                }
-                                text(uid)
+                                text(it.uid)
                             }
                             element("BkTxCd") {
                                 /*  "Set of elements used to fully identify the type of underlying

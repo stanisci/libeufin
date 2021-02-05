@@ -43,7 +43,7 @@ fun historyForAccount(iban: String): List<RawPayment> {
                     // The line below produces a value too long (>35 chars),
                     // and it makes the document invalid!
                     // uid = "${it[pmtInfId]}-${it[msgId]}"
-                    uid = "${it[BankAccountTransactionsTable.pmtInfId]}",
+                    uid = it[BankAccountTransactionsTable.accountServicerReference],
                     direction = it[BankAccountTransactionsTable.direction],
                     pmtInfId = it[BankAccountTransactionsTable.pmtInfId]
                 )
