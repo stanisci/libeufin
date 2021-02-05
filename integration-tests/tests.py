@@ -571,7 +571,8 @@ def test_sandbox_camt():
         amount=5,
         currency="EUR",
         subject="Reimbursement",
-        direction="CRDT"
+        direction="CRDT",
+        uid="AcctSvcrRef-01234"
     )
     assertResponse(
         post(
