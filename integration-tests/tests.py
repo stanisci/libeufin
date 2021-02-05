@@ -27,7 +27,7 @@ DB = "jdbc:sqlite:/tmp/libeufintestdb"
 SANDBOX_URL = "http://localhost:5000"
 NEXUS_URL = "http://localhost:5001"
 
-PERSONA = LibeufinPersona(
+user0 = LibeufinPersona(
     banking_details = BankingDetails(SANDBOX_URL),
     nexus_details = NexusDetails(NEXUS_URL),
     ebics_details = EbicsDetails(SANDBOX_URL + "/ebicsweb")
@@ -40,27 +40,30 @@ def prepareSandbox():
     # make ebics host at sandbox
     assertResponse(
         post(
-            f"{PERSONA.banking.bank_base_url}/admin/ebics/hosts",
-            json=dict(hostID=PERSONA.ebics.host, ebicsVersion=PERSONA.ebics.version),
+            f"{user0.banking.bank_base_url}/admin/ebics/hosts",
+            json=dict(
+                hostID=user0.ebics.host,
+                ebicsVersion=user0.ebics.version
+            ),
         )
     )
     # make new ebics subscriber at sandbox
     assertResponse(
         post(
-            f"{PERSONA.banking.bank_base_url}/admin/ebics/subscribers",
-            json=PERSONA.ebics.get_as_dict(with_url=False),
+            f"{user0.banking.bank_base_url}/admin/ebics/subscribers",
+            json=user0.ebics.get_as_dict(with_url=False),
         )
     )
     # give a bank account to such subscriber, at sandbox
     assertResponse(
         post(
-            f"{PERSONA.banking.bank_base_url}/admin/ebics/bank-accounts",
+            f"{user0.banking.bank_base_url}/admin/ebics/bank-accounts",
             json=dict(
-                name=PERSONA.banking.name,
-                subscriber=PERSONA.ebics.get_as_dict(with_url=False),
-                iban=PERSONA.banking.iban,
-                bic=PERSONA.banking.bic,
-                label=PERSONA.banking.label,
+                name=user0.banking.name,
+                subscriber=user0.ebics.get_as_dict(with_url=False),
+                iban=user0.banking.iban,
+                bic=user0.banking.bic,
+                label=user0.banking.label,
                 currency="EUR"
             )
         )
@@ -71,41 +74,41 @@ def prepareNexus():
     makeNexusSuperuser()
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-connections",
+            f"{user0.nexus.base_url}/bank-connections",
             json=dict(
-                name=PERSONA.nexus.bank_connection,
+                name=user0.nexus.bank_connection,
                 source="new",
                 type="ebics",
-                data=PERSONA.ebics.get_as_dict(with_url=True),
+                data=user0.ebics.get_as_dict(with_url=True),
             ),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         )
     )
     # synchronizing the connection
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/connect",
+            f"{user0.nexus.base_url}/bank-connections/{user0.nexus.bank_connection}/connect",
             json=dict(),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         )
     )
     # download offered bank accounts
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/fetch-accounts",
+            f"{user0.nexus.base_url}/bank-connections/{user0.nexus.bank_connection}/fetch-accounts",
             json=dict(),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         )
     )
     # import one bank account into the Nexus
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/import-account",
+            f"{user0.nexus.base_url}/bank-connections/{user0.nexus.bank_connection}/import-account",
             json=dict(
-                offeredAccountId=PERSONA.banking.label,
-                nexusBankAccountId=PERSONA.nexus.bank_label
+                offeredAccountId=user0.banking.label,
+                nexusBankAccountId=user0.nexus.bank_label
             ),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         )
     )
 
@@ -129,8 +132,8 @@ def teardown_function():
 
 def test_double_username():
     assertResponse(
-        post(f"{PERSONA.nexus.base_url}/users",
-             auth=PERSONA.nexus.auth,
+        post(f"{user0.nexus.base_url}/users",
+             auth=user0.nexus.auth,
              json=dict(username="admin", password="secret")
         ),
         acceptedResponses=[409]
@@ -138,21 +141,21 @@ def test_double_username():
 
 def test_change_nonadmin_password():
     assertResponse(
-        post(f"{PERSONA.nexus.base_url}/users",
-             auth=PERSONA.nexus.auth,
+        post(f"{user0.nexus.base_url}/users",
+             auth=user0.nexus.auth,
              json=dict(username="nonadmin", password="secret")
         )
     )
 
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/bank-accounts",
+            f"{user0.nexus.base_url}/bank-accounts",
             auth=auth.HTTPBasicAuth("nonadmin", "secret")
         )
     )
 
     assertResponse(
-        post(f"{PERSONA.nexus.base_url}/users/password",
+        post(f"{user0.nexus.base_url}/users/password",
              auth=auth.HTTPBasicAuth("nonadmin", "secret"),
              json=dict(newPassword="changed")
         )
@@ -160,7 +163,7 @@ def test_change_nonadmin_password():
 
     assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/bank-accounts",
+            f"{user0.nexus.base_url}/bank-accounts",
             auth=auth.HTTPBasicAuth("nonadmin", "changed")
         )
     )
@@ -169,24 +172,24 @@ def test_change_nonadmin_password():
 def test_connection_deletion():
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/bank-connections",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-connections",
+            auth=user0.nexus.auth
         )
     )
     connection = resp.json().get("bankConnections").pop()
-    assert PERSONA.nexus.bank_connection == connection.get("name")
+    assert user0.nexus.bank_connection == connection.get("name")
 
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-connections/delete-connection",
-            json=dict(bankConnectionId=PERSONA.nexus.bank_connection),
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-connections/delete-connection",
+            json=dict(bankConnectionId=user0.nexus.bank_connection),
+            auth=user0.nexus.auth
         )
     )
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/bank-connections",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-connections",
+            auth=user0.nexus.auth
         )
     )
     assert len(resp.json().get("bankConnections")) == 0
@@ -195,20 +198,20 @@ def test_connection_deletion():
 def test_imported_account():
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/accounts",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-connections/{user0.nexus.bank_connection}/accounts",
+            auth=user0.nexus.auth
         )
     )
     imported_account = resp.json().get("accounts").pop()
-    assert imported_account.get("nexusBankAccountId") == PERSONA.nexus.bank_label
+    assert imported_account.get("nexusBankAccountId") == user0.nexus.bank_label
 
 # Expecting a empty history for an account that
 # never made or receivd a payment.
 def test_empty_history():
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/transactions",
+            auth=user0.nexus.auth
         )
     )
     assert len(resp.json().get("transactions")) == 0
@@ -219,25 +222,25 @@ def test_empty_history():
 def test_backup():
     resp = assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/export-backup",
+            f"{user0.nexus.base_url}/bank-connections/{user0.nexus.bank_connection}/export-backup",
             json=dict(passphrase="secret"),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         )
     )
     sleep(3)
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-connections",
+            f"{user0.nexus.base_url}/bank-connections",
             json=dict(name="my-ebics-restored", data=resp.json(), passphrase="secret", source="backup"),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         )
     )
 
 def test_ebics_custom_ebics_order():
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-connections/{PERSONA.nexus.bank_connection}/ebics/download/tsd",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-connections/{user0.nexus.bank_connection}/ebics/download/tsd",
+            auth=user0.nexus.auth
         )
     )
 
@@ -245,7 +248,7 @@ def test_ebics_custom_ebics_order():
 # in the account history.
 def test_payment():
     resp = assertResponse(post(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations",
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/payment-initiations",
         json=dict(
             iban="FR7630006000011234567890189",
             bic="AGRIFRPP",
@@ -253,46 +256,46 @@ def test_payment():
             subject="integration test",
             amount="EUR:1",
         ),
-        auth=PERSONA.nexus.auth
+        auth=user0.nexus.auth
     ))
     PAYMENT_UUID = resp.json().get("uuid")
     assertResponse(post("/".join([
-        PERSONA.nexus.base_url,
+        user0.nexus.base_url,
         "bank-accounts",
-        PERSONA.nexus.bank_label,
+        user0.nexus.bank_label,
         "payment-initiations",
         PAYMENT_UUID,
         "submit"]),
         json=dict(),
-        auth=PERSONA.nexus.auth
+        auth=user0.nexus.auth
     ))
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/fetch-transactions",
+            auth=user0.nexus.auth
         )
     )
     resp = assertResponse(get(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
-        auth=PERSONA.nexus.auth
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/transactions",
+        auth=user0.nexus.auth
     ))
     assert len(resp.json().get("transactions")) == 1
 
     # assert now that the bank booked the payment.
     resp = assertResponse(get("/".join([
-        PERSONA.nexus.base_url,
+        user0.nexus.base_url,
         "bank-accounts",
-        PERSONA.nexus.bank_label,
+        user0.nexus.bank_label,
         "payment-initiations",
         PAYMENT_UUID]),
-        auth=PERSONA.nexus.auth
+        auth=user0.nexus.auth
     ))
     assert resp.json()["status"] == "BOOK"
 
     # Posting a second payment initiation, but not submitting it.
     # It's expected to have a "null" status.
     resp = assertResponse(post(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations",
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/payment-initiations",
         json=dict(
             iban="FR7630006000011234567890189",
             bic="AGRIFRPP",
@@ -300,16 +303,16 @@ def test_payment():
             subject="integration test",
             amount="EUR:1",
         ),
-        auth=PERSONA.nexus.auth
+        auth=user0.nexus.auth
     ))
     PAYMENT_UUID_NON_SUBMITTED = resp.json().get("uuid")
     resp = assertResponse(get("/".join([
-        PERSONA.nexus.base_url,
+        user0.nexus.base_url,
         "bank-accounts",
-        PERSONA.nexus.bank_label,
+        user0.nexus.bank_label,
         "payment-initiations",
         PAYMENT_UUID_NON_SUBMITTED]),
-        auth=PERSONA.nexus.auth
+        auth=user0.nexus.auth
     ))
     assert resp.json()["status"] == None
 
@@ -317,17 +320,17 @@ def test_payment():
 @pytest.fixture
 def fetch_transactions():
     assertResponse(post(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
-        auth=PERSONA.nexus.auth
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/fetch-transactions",
+        auth=user0.nexus.auth
     ))
 
 # Book a incoming payment for "persona" at the Sandbox.
 @pytest.fixture
 def make_crdt_payment():
     payment_instruction = dict(
-        creditorIban=PERSONA.banking.iban,
-        creditorBic=PERSONA.banking.bic,
-        creditorName=PERSONA.banking.name,
+        creditorIban=user0.banking.iban,
+        creditorBic=user0.banking.bic,
+        creditorName=user0.banking.name,
         debitorIban="FR00000000000000000000",
         debitorBic="BUKBGB22",
         debitorName="Max Mustermann",
@@ -338,7 +341,7 @@ def make_crdt_payment():
     )
 
     assertResponse(post(
-        f"{PERSONA.banking.bank_base_url}/admin/payments",
+        f"{user0.banking.bank_base_url}/admin/payments",
         json=payment_instruction
     ))
 
@@ -347,16 +350,16 @@ def test_deduplication(make_crdt_payment):
     # fetching twice the transactions and check that
     # the payment made via the fixture shows up only once.
     assertResponse(post(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
-        auth=PERSONA.nexus.auth
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/fetch-transactions",
+        auth=user0.nexus.auth
     ))
     assertResponse(post(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
-        auth=PERSONA.nexus.auth
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/fetch-transactions",
+        auth=user0.nexus.auth
     ))
     resp = assertResponse(get(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
-        auth=PERSONA.nexus.auth
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/transactions",
+        auth=user0.nexus.auth
     ))
     assert len(resp.json().get("transactions")) == 1
 
@@ -365,18 +368,18 @@ def test_deduplication(make_crdt_payment):
 def make_taler_facade():
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/facades",
+            f"{user0.nexus.base_url}/facades",
             json=dict(
-                name=PERSONA.nexus.taler_facade_name,
+                name=user0.nexus.taler_facade_name,
                 type="taler-wire-gateway",
                 config=dict(
                     currency="EUR",
-                    bankAccount=PERSONA.nexus.bank_label,
-                    bankConnection=PERSONA.nexus.bank_connection,
+                    bankAccount=user0.nexus.bank_label,
+                    bankConnection=user0.nexus.bank_connection,
                     reserveTransferLevel="UNUSED",
                 )
             ),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         )
     )
 
@@ -384,79 +387,77 @@ def make_taler_facade():
 def test_taler_facade_config(make_taler_facade):
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/config",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/facades/{user0.nexus.taler_facade_name}/taler-wire-gateway/config",
+            auth=user0.nexus.auth
         )
     )
     assertJsonEqual(
         resp.json(),
-        dict(currency="EUR", version="0.0.0", name=PERSONA.nexus.taler_facade_name)
+        dict(currency="EUR", version="0.0.0", name=user0.nexus.taler_facade_name)
     )
 
 
 def test_taler_facade_incoming(make_taler_facade):
     resp = assertResponse(post(
-        f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/admin/add-incoming",
+        f"{user0.nexus.base_url}/facades/{user0.nexus.taler_facade_name}/taler-wire-gateway/admin/add-incoming",
         json=dict(
             amount="EUR:1",
             reserve_pub="1BCZ7KA333E3YJBFWT4J173M3E713YGFFGD856KPSGZN1N8ZKZR0",
             debit_account="payto://iban/BUKBGB22/DE00000000000000000000?sender-name=TheName"
         ),
-        auth=PERSONA.nexus.auth
+        auth=user0.nexus.auth
     ))
 
     assertResponse(post(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
-        auth=PERSONA.nexus.auth
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/fetch-transactions",
+        auth=user0.nexus.auth
     ))
 
     resp = assertResponse(get(
         "/".join([
-            PERSONA.nexus.base_url,
+            user0.nexus.base_url,
             "facades",
-            PERSONA.nexus.taler_facade_name,
+            user0.nexus.taler_facade_name,
             "taler-wire-gateway/history/incoming?delta=5"]),
-        auth=PERSONA.nexus.auth
+        auth=user0.nexus.auth
     ))
     assert len(resp.json().get("incoming_transactions")) == 1
 
 
 def test_taler_facade_refund(make_taler_facade):
     resp = assertResponse(post(
-        f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/admin/add-incoming",
+        f"{user0.nexus.base_url}/facades/{user0.nexus.taler_facade_name}/taler-wire-gateway/admin/add-incoming",
         json=dict(
             amount="EUR:1",
             reserve_pub="invalid reserve public key",
             debit_account="payto://iban/BUKBGB22/DE00000000000000000000?sender-name=TheName"
         ),
-        auth=PERSONA.nexus.auth
+        auth=user0.nexus.auth
     ))
 
     assertResponse(post(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
-        auth=PERSONA.nexus.auth
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/fetch-transactions",
+        auth=user0.nexus.auth
     ))
 
     assertResponse(post(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/submit-all-payment-initiations",
-        auth=PERSONA.nexus.auth
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/submit-all-payment-initiations",
+        auth=user0.nexus.auth
     ))
 
     # Fetch again the history, so as to find the freshly made refund.
     assertResponse(post(
-        f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
-        auth=PERSONA.nexus.auth
+        f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/fetch-transactions",
+        auth=user0.nexus.auth
     ))
 
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/transactions",
+            auth=user0.nexus.auth
         )
     )
 
-    # Find the refund now!
-    print(json.dumps(resp.json(), indent=2))
     transactionsList = resp.json().get("transactions") 
     assert len(transactionsList) == 2
     for transaction in transactionsList:
@@ -470,7 +471,7 @@ def test_taler_facade_refund(make_taler_facade):
 def test_taler_facade_outgoing(make_taler_facade):
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/transfer",
+            f"{user0.nexus.base_url}/facades/{user0.nexus.taler_facade_name}/taler-wire-gateway/transfer",
             json=dict(
                 request_uid="0",
                 amount="EUR:1",
@@ -478,27 +479,27 @@ def test_taler_facade_outgoing(make_taler_facade):
                 wtid="nice",
                 credit_account="payto://iban/AGRIFRPP/FR7630006000011234567890189?receiver-name=theName"
             ),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         )
     )
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/payment-initiations/1/submit",
+            f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/payment-initiations/1/submit",
             json=dict(),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         )
     )
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/fetch-transactions",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/fetch-transactions",
+            auth=user0.nexus.auth
         )
     )
 
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/facades/{PERSONA.nexus.taler_facade_name}/taler-wire-gateway/history/outgoing?delta=5",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/facades/{user0.nexus.taler_facade_name}/taler-wire-gateway/history/outgoing?delta=5",
+            auth=user0.nexus.auth
         )
     )
     assert len(resp.json().get("outgoing_transactions")) == 1
@@ -506,14 +507,14 @@ def test_taler_facade_outgoing(make_taler_facade):
 def test_double_connection_name():
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-connections",
+            f"{user0.nexus.base_url}/bank-connections",
             json=dict(
-                name=PERSONA.nexus.bank_connection,
+                name=user0.nexus.bank_connection,
                 source="new",
                 type="ebics",
-                data=PERSONA.ebics.get_as_dict(with_url=True),
+                data=user0.ebics.get_as_dict(with_url=True),
             ),
-            auth=PERSONA.nexus.auth
+            auth=user0.nexus.auth
         ),
         [409] # Conflict
     )
@@ -523,15 +524,15 @@ def test_ingestion_camt53_non_singleton():
         camt = f.read()
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/test-camt-ingestion/C53",
-            auth=PERSONA.nexus.auth,
+            f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/test-camt-ingestion/C53",
+            auth=user0.nexus.auth,
             data=camt
         )
     )
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/transactions",
+            auth=user0.nexus.auth
         )
     )
     with open("../parsing-tests/samples/camt53-gls-style-1.json") as f:
@@ -544,15 +545,15 @@ def test_ingestion_camt53():
         camt = f.read()
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/test-camt-ingestion/C53",
-            auth=PERSONA.nexus.auth,
+            f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/test-camt-ingestion/C53",
+            auth=user0.nexus.auth,
             data=camt
         )
     )
     resp = assertResponse(
         get(
-            f"{PERSONA.nexus.base_url}/bank-accounts/{PERSONA.nexus.bank_label}/transactions",
-            auth=PERSONA.nexus.auth
+            f"{user0.nexus.base_url}/bank-accounts/{user0.nexus.bank_label}/transactions",
+            auth=user0.nexus.auth
         )
     )
     with open("../parsing-tests/samples/camt53-gls-style-0.json") as f:
@@ -574,14 +575,14 @@ def test_sandbox_camt():
     )
     assertResponse(
         post(
-            f"{PERSONA.banking.bank_base_url}/admin/payments",
+            f"{user0.banking.bank_base_url}/admin/payments",
             json=payment_instruction
         )
     )
 
     assertResponse(
         post(
-            f"{PERSONA.banking.bank_base_url}/admin/payments/camt",
+            f"{user0.banking.bank_base_url}/admin/payments/camt",
             json=dict(iban="GB33BUKB20201555555555", type=53)
         )
     )
@@ -589,9 +590,9 @@ def test_sandbox_camt():
 def test_schedule_deletion():
     assertResponse(
         post("/".join([
-            PERSONA.nexus.base_url,
+            user0.nexus.base_url,
             "bank-accounts",
-            PERSONA.nexus.bank_label,
+            user0.nexus.bank_label,
             "schedule"]),
             json=dict(
                 name="test-task",
@@ -604,9 +605,9 @@ def test_schedule_deletion():
 
     resp = assertResponse(
         get("/".join([
-            PERSONA.nexus.base_url,
+            user0.nexus.base_url,
             "bank-accounts",
-            PERSONA.nexus.bank_label,
+            user0.nexus.bank_label,
             "schedule",
             "test-task"]),
             auth=auth.HTTPBasicAuth("admin", "x")
@@ -616,9 +617,9 @@ def test_schedule_deletion():
 
     assertResponse(
         delete("/".join([
-            PERSONA.nexus.base_url,
+            user0.nexus.base_url,
             "bank-accounts",
-            PERSONA.nexus.bank_label,
+            user0.nexus.bank_label,
             "schedule",
             "test-task"]),
             auth=auth.HTTPBasicAuth("admin", "x")
@@ -627,9 +628,9 @@ def test_schedule_deletion():
 
     resp = assertResponse(
         get("/".join([
-            PERSONA.nexus.base_url,
+            user0.nexus.base_url,
             "bank-accounts",
-            PERSONA.nexus.bank_label,
+            user0.nexus.bank_label,
             "schedule",
             "test-task"]),
             auth=auth.HTTPBasicAuth("admin", "x")
@@ -640,7 +641,7 @@ def test_schedule_deletion():
 def test_invalid_json():
     assertResponse(
         post(
-            f"{PERSONA.nexus.base_url}/users",
+            f"{user0.nexus.base_url}/users",
             data="malformed",
             headers={"Content-Type": "application/json"},
             auth=auth.HTTPBasicAuth("admin", "x")),
@@ -648,7 +649,7 @@ def test_invalid_json():
     )
     assertResponse(
         post(
-            f"{PERSONA.banking.bank_base_url}/admin/ebics/hosts",
+            f"{user0.banking.bank_base_url}/admin/ebics/hosts",
             data="malformed",
             headers={"Content-Type": "application/json"},
             auth=auth.HTTPBasicAuth("admin", "x")),

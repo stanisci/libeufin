@@ -44,12 +44,17 @@ class BankingDetails:
         self.name = name
 
 class NexusDetails:
-    def __init__(self, base_url):
+    def __init__(
+            self, base_url,
+            username = "admin",
+            password = "x",
+            bank_connection_name = "my-ebics",
+            bank_local_name = "local-savings"):
         self.base_url = base_url
-        self.username = "admin"
-        self.password = "x"
-        self.bank_connection = "my-ebics"
-        self.bank_label = "local-savings" 
+        self.username = username
+        self.password = password
+        self.bank_connection = bank_connection_name
+        self.bank_label = bank_local_name
         self.auth = auth.HTTPBasicAuth(self.username, self.password)
         self.taler_facade_name = "taler-wire-gateway"
 
