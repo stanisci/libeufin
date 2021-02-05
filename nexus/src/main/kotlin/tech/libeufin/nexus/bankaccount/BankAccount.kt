@@ -323,7 +323,7 @@ suspend fun fetchBankAccountTransactions(client: HttpClient, fetchSpec: FetchSpe
         )
     }
     val newTransactions = ingestBankMessagesIntoAccount(res.connectionName, accountId)
-    ingestTalerTransactions()
+    ingestTalerTransactions(accountId)
     return newTransactions
 }
 

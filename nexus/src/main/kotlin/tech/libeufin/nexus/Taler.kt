@@ -210,7 +210,7 @@ private fun getTalerFacadeBankAccount(fcid: String): NexusBankAccountEntity {
     val facadeState = getTalerFacadeState(fcid)
     return NexusBankAccountEntity.findByName(facadeState.bankAccount) ?: throw NexusError(
         HttpStatusCode.NotFound,
-        "Could not find any bank account named ${facadeState.bankAccount}"
+        "The facade: ${fcid} doesn't manage bank account: ${facadeState.bankAccount}"
     )
 }
 
@@ -354,7 +354,7 @@ private suspend fun talerAddIncoming(call: ApplicationCall, httpClient: HttpClie
 }
 
 
-private fun ingestIncoming(payment: NexusBankTransactionEntity, txDtls: TransactionDetails) {
+private fun ingestOneIncomingTransaction(payment: NexusBankTransactionEntity, txDtls: TransactionDetails) {
     val subject = txDtls.unstructuredRemittanceInformation
     val debtorName = txDtls.debtor?.name
     if (debtorName == null) {
@@ -416,14 +416,19 @@ private fun ingestIncoming(payment: NexusBankTransactionEntity, txDtls: Transact
     return
 }
 
-fun prepareRefunds() {
-    logger.debug("Finding new invalid payments to refund")
+fun checkAndPrepareRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
+    logger.debug("Searching refundable payments of account: ${bankAccount}," +
+            " after last seen transaction id: ${lastSeenId}")
     transaction {
-        TalerInvalidIncomingPaymentEntity.find {
-            TalerInvalidIncomingPaymentsTable.refunded eq false
+        TalerInvalidIncomingPaymentsTable.innerJoin(NexusBankTransactionsTable,
+            { NexusBankTransactionsTable.id }, { TalerInvalidIncomingPaymentsTable.payment }).select {
+            TalerInvalidIncomingPaymentsTable.refunded eq false and
+                    (NexusBankTransactionsTable.bankAccount eq bankAccount.id.value) and
+                    (NexusBankTransactionsTable.id greater lastSeenId)
+
         }.forEach {
             val paymentData = jacksonObjectMapper().readValue(
-                it.payment.transactionJson,
+                it[NexusBankTransactionsTable.transactionJson],
                 CamtBankAccountEntry::class.java
             )
             if (paymentData.batches == null) {
@@ -449,7 +454,8 @@ fun prepareRefunds() {
             // FIXME: investigate this amount!
             val amount = paymentData.batches[0].batchTransactions[0].amount
             NexusAssert(
-                it.payment.creditDebitIndicator == "CRDT",
+                it[NexusBankTransactionsTable.creditDebitIndicator] == "CRDT" &&
+                        it[NexusBankTransactionsTable.bankAccount] == bankAccount.id,
                 "Cannot refund a _outgoing_ payment!"
             )
             // FIXME: the amount to refund should be reduced, according to the refund fees.
@@ -462,10 +468,10 @@ fun prepareRefunds() {
                     sum = amount.value,
                     currency = amount.currency
                 ),
-                it.payment.bankAccount // the Exchange bank account.
+                bankAccount // the Exchange bank account.
             )
             logger.debug("Refund of transaction (AcctSvcrRef): ${paymentData.accountServicerRef} got prepared")
-            it.refunded = true
+            it[TalerInvalidIncomingPaymentsTable.refunded] = true
         }
     }
 }
@@ -478,14 +484,19 @@ fun prepareRefunds() {
  * payments got booked as outgoing payments (and mark them accordingly
  * in the local table).
  */
-fun ingestTalerTransactions() {
-    fun ingest(subscriberAccount: NexusBankAccountEntity, facade: FacadeEntity) {
-        logger.debug("Ingesting transactions for Taler facade ${facade.id.value}")
+
+/**
+ *
+ */
+fun ingestTalerTransactions(bankAccountId: String) {
+    fun ingest(bankAccount: NexusBankAccountEntity, facade: FacadeEntity) {
+        logger.debug("Ingesting transactions for Taler facade ${facade.id.value}," +
+                " and bank account: ${bankAccount.bankAccountName}")
         val facadeState = getTalerFacadeState(facade.facadeName)
         var lastId = facadeState.highestSeenMessageSerialId
         NexusBankTransactionEntity.find {
             /** Those with "our" bank account involved */
-            NexusBankTransactionsTable.bankAccount eq subscriberAccount.id.value and
+            NexusBankTransactionsTable.bankAccount eq bankAccount.id.value and
                     /** Those that are booked */
                     (NexusBankTransactionsTable.status eq EntryStatus.BOOK) and
                     /** Those that came later than the latest processed payment */
@@ -503,22 +514,22 @@ fun ingestTalerTransactions() {
             }
             when (tx.creditDebitIndicator) {
                 CreditDebitIndicator.CRDT -> {
-                    ingestIncoming(it, txDtls = details)
-                    prepareRefunds()
+                    ingestOneIncomingTransaction(it, txDtls = details)
                 }
                 else -> Unit
             }
             lastId = it.id.value
         }
+        checkAndPrepareRefunds(bankAccount, facadeState.highestSeenMessageSerialId)
         facadeState.highestSeenMessageSerialId = lastId
+
     }
     // invoke ingestion for all the facades
     transaction {
-        FacadeEntity.find {
-            FacadesTable.type eq "taler-wire-gateway"
-        }.forEach {
-            val subscriberAccount = getTalerFacadeBankAccount(it.facadeName)
-            ingest(subscriberAccount, it)
+        FacadeEntity.find { FacadesTable.type eq "taler-wire-gateway" }.forEach {
+            val facadeBankAccount = getTalerFacadeBankAccount(it.facadeName)
+            if (facadeBankAccount.bankAccountName == bankAccountId)
+                ingest(facadeBankAccount, it)
         }
     }
 }
