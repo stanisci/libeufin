@@ -42,10 +42,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
-import tech.libeufin.util.CryptoUtil
-import tech.libeufin.util.EbicsProtocolError
-import tech.libeufin.util.parseAmount
-import tech.libeufin.util.parsePayto
+import tech.libeufin.util.*
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -327,7 +324,8 @@ private suspend fun talerAddIncoming(call: ApplicationCall, httpClient: HttpClie
                 "amount": "${parsedAmount.amount}",
                 "currency": "${parsedAmount.currency}",
                 "direction": "CRDT",
-                "subject": "${addIncomingData.reserve_pub}"
+                "subject": "${addIncomingData.reserve_pub}",
+                "uid": ${getRandomString(8)}
             }""".trimIndent()
             contentType(ContentType.Application.Json)
         }

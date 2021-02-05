@@ -102,3 +102,10 @@ fun parseAmount(amount: String): AmountWithCurrency {
     val (currency, number) = match.destructured
     return AmountWithCurrency(currency, Amount(number))
 }
+
+fun getRandomString(length: Int) : String {
+    val allowedChars = ('A'..'Z') + ('0'..'9')
+    return (1..length)
+        .map { allowedChars.random() }
+        .joinToString("")
+}

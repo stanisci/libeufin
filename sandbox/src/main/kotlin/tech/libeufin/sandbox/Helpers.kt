@@ -83,12 +83,3 @@ fun getEbicsSubscriberFromDetails(userID: String, partnerID: String, hostID: Str
         )
     }
 }
-
-fun getRandomString(length: Int) : String {
-    val allowedChars = ('A'..'Z') + ('0'..'9')
-    val ret = (1..length)
-        .map { allowedChars.random() }
-        .joinToString("")
-    SandboxAssert(ret.length == length, "Unexpected random string")
-    return ret
-}
