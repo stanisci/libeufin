@@ -443,11 +443,11 @@ fun serverMain(dbName: String, port: Int) {
                 transaction {
                     val accountLabel = ensureNonNull(call.parameters["label"])
                     val account = getBankAccountFromLabel(accountLabel)
-                    val transactionReference = getRandomString(8)
-                    run {
-                        val random = Random.nextLong(0, Long.MAX_VALUE)
-                        val amount = Random.nextLong(5, 25)
+                    val transactionReferenceCrdt = getRandomString(8)
+                    val transactionReferenceDbit = getRandomString(8)
 
+                    run {
+                        val amount = Random.nextLong(5, 25)
                         BankAccountTransactionsTable.insert {
                             it[creditorIban] = account.iban
                             it[creditorBic] = account.bic
@@ -455,7 +455,7 @@ fun serverMain(dbName: String, port: Int) {
                             it[debtorIban] = "DE64500105178797276788"
                             it[debtorBic] = "DEUTDEBB101"
                             it[debtorName] = "Max Mustermann"
-                            it[subject] = "sample transaction $transactionReference"
+                            it[subject] = "sample transaction $transactionReferenceCrdt"
                             it[BankAccountTransactionsTable.amount] = amount.toString()
                             it[currency] = account.currency
                             it[date] = Instant.now().toEpochMilli()
@@ -466,7 +466,6 @@ fun serverMain(dbName: String, port: Int) {
                     }
 
                     run {
-                        val random = Random.nextLong()
                         val amount = Random.nextLong(5, 25)
 
                         BankAccountTransactionsTable.insert {
@@ -476,11 +475,11 @@ fun serverMain(dbName: String, port: Int) {
                             it[creditorIban] = "DE64500105178797276788"
                             it[creditorBic] = "DEUTDEBB101"
                             it[creditorName] = "Max Mustermann"
-                            it[subject] = "sample transaction $random"
+                            it[subject] = "sample transaction $transactionReferenceDbit"
                             it[BankAccountTransactionsTable.amount] = amount.toString()
                             it[currency] = account.currency
                             it[date] = Instant.now().toEpochMilli()
-                            it[pmtInfId] = random.toString()
+                            it[accountServicerReference] = transactionReferenceDbit
                             it[BankAccountTransactionsTable.account] = account.id
                             it[direction] = "DBIT"
                         }
