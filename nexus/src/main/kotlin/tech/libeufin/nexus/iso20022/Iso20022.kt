@@ -657,12 +657,15 @@ private fun XmlElementDestructor.extractMaybeCurrencyExchange(): CurrencyExchang
 
 private fun XmlElementDestructor.extractBatches(
     inheritableAmount: CurrencyAmount,
-    outerCreditDebitIndicator: CreditDebitIndicator
+    outerCreditDebitIndicator: CreditDebitIndicator,
+    acctSvcrRef: String
 ): List<Batch> {
-    if (mapEachChildNamed("NtryDtls") {}.size != 1) throw CamtParsingError("This money movement is not a singleton #0")
+    if (mapEachChildNamed("NtryDtls") {}.size != 1) throw CamtParsingError(
+        "This money movement (AcctSvcrRef: $acctSvcrRef) is not a singleton #0"
+    )
     var txs = requireUniqueChildNamed("NtryDtls") {
         if (mapEachChildNamed("TxDtls") {}.size != 1) {
-            throw CamtParsingError("This money movement is not a singleton #1")
+            throw CamtParsingError("This money movement (AcctSvcrRef: $acctSvcrRef) is not a singleton #1")
         }
          requireUniqueChildNamed("TxDtls") {
             val details = extractTransactionDetails(outerCreditDebitIndicator)
@@ -854,7 +857,7 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
             instructedAmount = instructedAmount,
             creditDebitIndicator = creditDebitIndicator,
             bankTransactionCode = btc,
-            batches = extractBatches(amount, creditDebitIndicator),
+            batches = extractBatches(amount, creditDebitIndicator, acctSvcrRef ?: "AcctSvcrRef not given/found"),
             bookingDate = maybeUniqueChildNamed("BookgDt") { extractDateOrDateTime() },
             valueDate = maybeUniqueChildNamed("ValDt") { extractDateOrDateTime() },
             accountServicerRef = acctSvcrRef,

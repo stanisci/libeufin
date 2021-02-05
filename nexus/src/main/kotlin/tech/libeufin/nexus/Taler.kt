@@ -325,7 +325,7 @@ private suspend fun talerAddIncoming(call: ApplicationCall, httpClient: HttpClie
                 "currency": "${parsedAmount.currency}",
                 "direction": "CRDT",
                 "subject": "${addIncomingData.reserve_pub}",
-                "uid": ${getRandomString(8)}
+                "uid": "${getRandomString(8)}"
             }""".trimIndent()
             contentType(ContentType.Application.Json)
         }
