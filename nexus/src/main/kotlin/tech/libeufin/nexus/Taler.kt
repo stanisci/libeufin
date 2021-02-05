@@ -416,7 +416,7 @@ private fun ingestOneIncomingTransaction(payment: NexusBankTransactionEntity, tx
     return
 }
 
-fun checkAndPrepareRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
+fun maybePrepareRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
     logger.debug("Searching refundable payments of account: ${bankAccount}," +
             " after last seen transaction id: ${lastSeenId}")
     transaction {
@@ -520,7 +520,7 @@ fun ingestTalerTransactions(bankAccountId: String) {
             }
             lastId = it.id.value
         }
-        checkAndPrepareRefunds(bankAccount, facadeState.highestSeenMessageSerialId)
+        maybePrepareRefunds(bankAccount, facadeState.highestSeenMessageSerialId)
         facadeState.highestSeenMessageSerialId = lastId
 
     }
