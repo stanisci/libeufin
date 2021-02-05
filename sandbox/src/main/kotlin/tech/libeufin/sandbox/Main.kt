@@ -459,7 +459,7 @@ fun serverMain(dbName: String, port: Int) {
                             it[BankAccountTransactionsTable.amount] = amount.toString()
                             it[currency] = account.currency
                             it[date] = Instant.now().toEpochMilli()
-                            it[accountServicerReference] = transactionReference
+                            it[accountServicerReference] = transactionReferenceCrdt
                             it[BankAccountTransactionsTable.account] = account.id
                             it[direction] = "CRDT"
                         }
