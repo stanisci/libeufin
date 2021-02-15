@@ -249,7 +249,9 @@ private suspend fun talerTransfer(call: ApplicationCall) {
             Pain001Data(
                 creditorIban = creditorData.iban,
                 creditorBic = creditorData.bic,
-                creditorName = creditorData.name,
+                creditorName = creditorData.name ?: throw NexusError(
+                    HttpStatusCode.BadRequest, "Payto did not mention account owner"
+                ),
                 subject = transferRequest.wtid,
                 sum = amountObj.amount,
                 currency = amountObj.currency
@@ -288,69 +290,6 @@ private suspend fun talerTransfer(call: ApplicationCall) {
 fun roundTimestamp(t: GnunetTimestamp): GnunetTimestamp {
     return GnunetTimestamp(t.t_ms - (t.t_ms % 1000))
 }
-
-/**
- * Serve a /taler/admin/add-incoming
- */
-private suspend fun talerAddIncoming(call: ApplicationCall, httpClient: HttpClient) {
-    val facadeID = expectNonNull(call.parameters["fcid"])
-    call.request.requirePermission(PermissionQuery("facade", facadeID, "facade.talerWireGateway.addIncoming"))
-    val addIncomingData = call.receive<TalerAdminAddIncoming>()
-    val debtor = parsePayto(addIncomingData.debit_account)
-    val res = transaction {
-        val facadeState = getTalerFacadeState(facadeID)
-        val facadeBankAccount = getTalerFacadeBankAccount(facadeID)
-        return@transaction object {
-            val facadeLastSeen = facadeState.highestSeenMessageSerialId
-            val facadeIban = facadeBankAccount.iban
-            val facadeBic = facadeBankAccount.bankCode
-            val facadeHolderName = facadeBankAccount.accountHolder
-        }
-    }
-
-    /** forward the payment information to the sandbox.  */
-    val response = httpClient.post<HttpResponse>(
-        urlString = "http://localhost:5000/admin/payments",
-        block = {
-            /** FIXME: ideally Jackson should define such request body.  */
-            val parsedAmount = parseAmount(addIncomingData.amount)
-            this.body = """{
-                "creditorIban": "${res.facadeIban}",
-                "creditorBic": "${res.facadeBic}",
-                "creditorName": "${res.facadeHolderName}",
-                "debitorIban": "${debtor.iban}",
-                "debitorBic": "${debtor.bic}",
-                "debitorName": "${debtor.name}",
-                "amount": "${parsedAmount.amount}",
-                "currency": "${parsedAmount.currency}",
-                "direction": "CRDT",
-                "subject": "${addIncomingData.reserve_pub}",
-                "uid": "${getRandomString(8)}"
-            }""".trimIndent()
-            contentType(ContentType.Application.Json)
-        }
-    )
-    if (response.status != HttpStatusCode.OK) {
-        throw NexusError(
-            HttpStatusCode.InternalServerError,
-            "Could not forward the 'add-incoming' payment to the bank (sandbox)"
-        )
-    }
-    return call.respond(
-        TextContent(
-            customConverter(
-                TalerAddIncomingResponse(
-                    timestamp = GnunetTimestamp(
-                        System.currentTimeMillis()
-                    ),
-                    row_id = res.facadeLastSeen
-                )
-            ),
-            ContentType.Application.Json
-        )
-    )
-}
-
 
 private fun ingestOneIncomingTransaction(payment: NexusBankTransactionEntity, txDtls: TransactionDetails) {
     val subject = txDtls.unstructuredRemittanceInformation
@@ -637,7 +576,7 @@ fun talerFacadeRoutes(route: Route, httpClient: HttpClient) {
 
     route.get("/config") {
         val facadeId = ensureNonNull(call.parameters["fcid"])
-        call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.addIncoming"))
+        call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.config"))
         call.respond(object {
             val version = "0.0.0"
             val name = "taler-wire-gateway"
@@ -647,10 +586,6 @@ fun talerFacadeRoutes(route: Route, httpClient: HttpClient) {
     }
     route.post("/transfer") {
         talerTransfer(call)
-        return@post
-    }
-    route.post("/admin/add-incoming") {
-        talerAddIncoming(call, httpClient)
         return@post
     }
     route.get("/history/outgoing") {

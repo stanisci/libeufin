@@ -8,6 +8,12 @@ class PaytoTest {
     @Test
     fun wrongCases() {
         try {
+            parsePayto("payto://iban/IBAN/BIC")
+        } catch (e: InvalidPaytoError) {
+            println(e)
+            println("must give IBAN _and_ BIC")
+        }
+        try {
             parsePayto("http://iban/BIC123/IBAN123?receiver-name=The%20Name")
         } catch (e: InvalidPaytoError) {
             println(e)
