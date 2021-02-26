@@ -42,6 +42,7 @@ import io.ktor.server.netty.*
 import io.ktor.util.*
 import io.ktor.util.pipeline.*
 import io.ktor.utils.io.*
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.event.Level
@@ -956,13 +957,21 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     HttpStatusCode.NotImplemented,
                     "Facade type '${body.type}' is not implemented"
                 )
-                val newFacade = transaction {
-                    val user = authenticateRequest(call.request)
-                    FacadeEntity.new {
-                        facadeName = body.name
-                        type = body.type
-                        creator = user
+                val newFacade = try {
+                    transaction {
+                        val user = authenticateRequest(call.request)
+                        FacadeEntity.new {
+                            facadeName = body.name
+                            type = body.type
+                            creator = user
+                        }
                     }
+                } catch (e: ExposedSQLException) {
+                        logger.error("Could not persist facade name/type/creator: $e")
+                        throw NexusError(
+                            HttpStatusCode.BadRequest,
+                            "Server could not persist data, possibly due to unavailable facade name"
+                        )
                 }
                 transaction {
                     TalerFacadeStateEntity.new {

@@ -384,6 +384,40 @@ def make_taler_facade():
         )
     )
 
+def test_facade_name_collision():
+    assertResponse(
+        post(
+            f"{user0.nexus.base_url}/facades",
+            json=dict(
+                name=user0.nexus.taler_facade_name,
+                type="taler-wire-gateway",
+                config=dict(
+                    currency="EUR",
+                    bankAccount=user0.nexus.bank_label,
+                    bankConnection=user0.nexus.bank_connection,
+                    reserveTransferLevel="UNUSED",
+                )
+            ),
+            auth=user0.nexus.auth
+        )
+    )
+    assertResponse(
+        post(
+            f"{user0.nexus.base_url}/facades",
+            json=dict(
+                name=user0.nexus.taler_facade_name,
+                type="taler-wire-gateway",
+                config=dict(
+                    currency="EUR",
+                    bankAccount=user0.nexus.bank_label,
+                    bankConnection=user0.nexus.bank_connection,
+                    reserveTransferLevel="UNUSED",
+                )
+            ),
+            auth=user0.nexus.auth
+        ),
+        acceptedResponses=[400]
+    )
 
 def test_taler_facade_config(make_taler_facade):
     resp = assertResponse(
