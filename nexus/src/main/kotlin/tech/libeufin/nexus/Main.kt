@@ -34,7 +34,9 @@ import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.options.versionOption
+import io.ktor.client.*
 import tech.libeufin.nexus.iso20022.parseCamtMessage
+import tech.libeufin.nexus.server.client
 import tech.libeufin.util.*
 import java.io.File
 
@@ -60,6 +62,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
     override fun run() {
         setLogLevel(logLevel)
         serverMain(getDbConnFromEnv(NEXUS_DB_ENV_VAR_NAME), host, port)
+        startOperationScheduler(client)
     }
 }
 

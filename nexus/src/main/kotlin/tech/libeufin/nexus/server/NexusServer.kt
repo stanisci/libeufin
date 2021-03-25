@@ -183,12 +183,13 @@ fun requireBankConnection(call: ApplicationCall, parameterKey: String): NexusBan
     return requireBankConnectionInternal(name)
 }
 
+val client = HttpClient {
+    expectSuccess = false // this way, it does not throw exceptions on != 200 responses.
+}
+
 fun serverMain(dbName: String, host: String, port: Int) {
     execThrowableOrTerminate {
         dbCreateTables(dbName)
-    }
-    val client = HttpClient {
-        expectSuccess = false // this way, it does not throw exceptions on != 200 responses.
     }
     val server = embeddedServer(Netty, port = port, host = host) {
         install(CallLogging) {
@@ -251,8 +252,6 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 return@intercept finish()
             }
         }
-
-        startOperationScheduler(client)
         routing {
             get("/config") {
                 call.respond(
