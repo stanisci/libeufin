@@ -271,7 +271,9 @@ object BankAccountTransactionsTable : Table() {
     val direction = text("direction")
     val account = reference("account", BankAccountsTable)
 
-    override val primaryKey = PrimaryKey(pmtInfId)
+    // It can't be unique (anymore), because one table might contain
+    // the same payment twice: once as DBIT and once as CRDT.
+    // override val primaryKey = PrimaryKey(pmtInfId)
 }
 
 /**

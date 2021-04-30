@@ -30,6 +30,7 @@ import io.ktor.util.AttributeKey
 import org.apache.xml.security.binding.xmldsig.RSAKeyValueType
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
@@ -563,8 +564,29 @@ private fun handleCct(paymentRequest: String) {
                 it[currency] = parseResult.currency
                 it[date] = Instant.now().toEpochMilli()
                 it[pmtInfId] = parseResult.pmtInfId
-                it[accountServicerReference] = "sandboxref-getRandomString(16)"
+                it[accountServicerReference] = "sandboxref-${getRandomString(16)}"
                 it[direction] = "DBIT"
+            }
+            val maybeLocalCreditor = BankAccountEntity.find(
+                BankAccountsTable.iban eq parseResult.creditorIban
+            ).firstOrNull()
+            if (maybeLocalCreditor != null) {
+                BankAccountTransactionsTable.insert {
+                    it[account] = maybeLocalCreditor.id
+                    it[creditorIban] = parseResult.creditorIban
+                    it[creditorName] = parseResult.creditorName
+                    it[creditorBic] = parseResult.creditorBic
+                    it[debtorIban] = parseResult.debtorIban
+                    it[debtorName] = parseResult.debtorName
+                    it[debtorBic] = parseResult.debtorBic
+                    it[subject] = parseResult.subject
+                    it[amount] = parseResult.amount.toString()
+                    it[currency] = parseResult.currency
+                    it[date] = Instant.now().toEpochMilli()
+                    it[pmtInfId] = parseResult.pmtInfId
+                    it[accountServicerReference] = "sandboxref-${getRandomString(16)}"
+                    it[direction] = "CRDT"
+                }
             }
         } catch (e: ExposedSQLException) {
             logger.warn("Could not insert new payment into the database: ${e}")
