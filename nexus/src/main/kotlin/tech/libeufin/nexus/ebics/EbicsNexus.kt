@@ -70,101 +70,7 @@ private data class EbicsFetchSpec(
     val orderParams: EbicsOrderParams
 )
 
-suspend fun fetchEbicsBySpec(
-    fetchSpec: FetchSpecJson,
-    client: HttpClient,
-    bankConnectionId: String,
-    accountId: String
-) {
-    val subscriberDetails = transaction { getEbicsSubscriberDetails(bankConnectionId) }
-    val lastTimes = transaction {
-        val acct = NexusBankAccountEntity.findByName(accountId)
-        if (acct == null) {
-            throw NexusError(
-                HttpStatusCode.NotFound,
-                "Account not found"
-            )
-        }
-        object {
-            val lastStatement = acct.lastStatementCreationTimestamp?.let {
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
-            }
-            val lastReport = acct.lastReportCreationTimestamp?.let {
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
-            }
-        }
-    }
-    val specs = mutableListOf<EbicsFetchSpec>()
-
-    fun addForLevel(l: FetchLevel, p: EbicsOrderParams) {
-        when (l) {
-            FetchLevel.ALL -> {
-                specs.add(EbicsFetchSpec("C52", p))
-                specs.add(EbicsFetchSpec("C53", p))
-            }
-            FetchLevel.REPORT -> {
-                specs.add(EbicsFetchSpec("C52", p))
-            }
-            FetchLevel.STATEMENT -> {
-                specs.add(EbicsFetchSpec("C53", p))
-            }
-        }
-    }
-
-    when (fetchSpec) {
-        is FetchSpecLatestJson -> {
-            val p = EbicsStandardOrderParams()
-            addForLevel(fetchSpec.level, p)
-        }
-        is FetchSpecAllJson -> {
-            val p = EbicsStandardOrderParams(
-                EbicsDateRange(
-                    ZonedDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
-                    ZonedDateTime.now(ZoneOffset.UTC)
-                )
-            )
-            addForLevel(fetchSpec.level, p)
-        }
-        is FetchSpecSinceLastJson -> {
-            val pRep = EbicsStandardOrderParams(
-                EbicsDateRange(
-                    lastTimes.lastReport ?: ZonedDateTime.ofInstant(
-                        Instant.EPOCH,
-                        ZoneOffset.UTC
-                    ), ZonedDateTime.now(ZoneOffset.UTC)
-                )
-            )
-            val pStmt = EbicsStandardOrderParams(
-                EbicsDateRange(
-                    lastTimes.lastStatement ?: ZonedDateTime.ofInstant(
-                        Instant.EPOCH,
-                        ZoneOffset.UTC
-                    ), ZonedDateTime.now(ZoneOffset.UTC)
-                )
-            )
-            when (fetchSpec.level) {
-                FetchLevel.ALL -> {
-                    specs.add(EbicsFetchSpec("C52", pRep))
-                    specs.add(EbicsFetchSpec("C53", pStmt))
-                }
-                FetchLevel.REPORT -> {
-                    specs.add(EbicsFetchSpec("C52", pRep))
-                }
-                FetchLevel.STATEMENT -> {
-                    specs.add(EbicsFetchSpec("C53", pStmt))
-                }
-            }
-        }
-    }
-    for (spec in specs) {
-        try {
-            fetchEbicsC5x(spec.orderType, client, bankConnectionId, spec.orderParams, subscriberDetails)
-        } catch (e: Exception) {
-            logger.warn("Ingestion failed for $spec")
-        }
-    }
-}
-
+// Moved eventually in a tucked "camt" file.
 fun storeCamt(bankConnectionId: String, camt: String, historyType: String) {
     val camt53doc = XMLUtil.parseStringIntoDom(camt)
     val msgId = camt53doc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
@@ -229,67 +135,6 @@ private suspend fun fetchEbicsC5x(
     }
 }
 
-
-fun createEbicsBankConnectionFromBackup(
-    bankConnectionName: String,
-    user: NexusUserEntity,
-    passphrase: String?,
-    backup: JsonNode
-) {
-    if (passphrase === null) {
-        throw NexusError(HttpStatusCode.BadRequest, "EBICS backup needs passphrase")
-    }
-    val bankConn = NexusBankConnectionEntity.new {
-        connectionId = bankConnectionName
-        owner = user
-        type = "ebics"
-    }
-    val ebicsBackup = jacksonObjectMapper().treeToValue(backup, EbicsKeysBackupJson::class.java)
-    val (authKey, encKey, sigKey) = try {
-        Triple(
-            CryptoUtil.decryptKey(
-                EncryptedPrivateKeyInfo(base64ToBytes(ebicsBackup.authBlob)),
-                passphrase
-            ),
-            CryptoUtil.decryptKey(
-                EncryptedPrivateKeyInfo(base64ToBytes(ebicsBackup.encBlob)),
-                passphrase
-            ),
-            CryptoUtil.decryptKey(
-                EncryptedPrivateKeyInfo(base64ToBytes(ebicsBackup.sigBlob)),
-                passphrase
-            )
-        )
-    } catch (e: Exception) {
-        e.printStackTrace()
-        logger.info("Restoring keys failed, probably due to wrong passphrase")
-        throw NexusError(
-            HttpStatusCode.BadRequest,
-            "Bad backup given"
-        )
-    }
-    try {
-        EbicsSubscriberEntity.new {
-            ebicsURL = ebicsBackup.ebicsURL
-            hostID = ebicsBackup.hostID
-            partnerID = ebicsBackup.partnerID
-            userID = ebicsBackup.userID
-            signaturePrivateKey = ExposedBlob(sigKey.encoded)
-            encryptionPrivateKey = ExposedBlob((encKey.encoded))
-            authenticationPrivateKey = ExposedBlob((authKey.encoded))
-            nexusBankConnection = bankConn
-            ebicsIniState = EbicsInitState.UNKNOWN
-            ebicsHiaState = EbicsInitState.UNKNOWN
-        }
-    } catch (e: Exception) {
-        throw NexusError(
-            HttpStatusCode.BadRequest,
-            "exception: $e"
-        )
-    }
-    return
-}
-
 private fun getEbicsSubscriberDetailsInternal(subscriber: EbicsSubscriberEntity): EbicsClientSubscriberDetails {
     var bankAuthPubValue: RSAPublicKey? = null
     if (subscriber.bankAuthenticationPublicKey != null) {
@@ -333,55 +178,6 @@ private fun getEbicsSubscriberDetails(bankConnectionId: String): EbicsClientSubs
     }.first()
     // transport exists and belongs to caller.
     return getEbicsSubscriberDetailsInternal(subscriber)
-}
-
-suspend fun ebicsFetchAccounts(connId: String, client: HttpClient) {
-    val subscriberDetails = transaction { getEbicsSubscriberDetails(connId) }
-    val response = doEbicsDownloadTransaction(
-        client, subscriberDetails, "HTD", EbicsStandardOrderParams()
-    )
-    when (response) {
-        is EbicsDownloadBankErrorResult -> {
-            throw NexusError(
-                HttpStatusCode.BadGateway,
-                response.returnCode.errorCode
-            )
-        }
-        is EbicsDownloadSuccessResult -> {
-            val payload = XMLUtil.convertStringToJaxb<HTDResponseOrderData>(
-                response.orderData.toString(Charsets.UTF_8)
-            )
-            transaction {
-                payload.value.partnerInfo.accountInfoList?.forEach { accountInfo ->
-                    val conn = NexusBankConnectionEntity.findByName(connId) ?: throw NexusError(
-                        HttpStatusCode.NotFound,
-                        "bank connection not found"
-                    )
-
-                    val isDuplicate = OfferedBankAccountsTable.select {
-                        OfferedBankAccountsTable.bankConnection eq conn.id and (
-                                OfferedBankAccountsTable.offeredAccountId eq accountInfo.id)
-                    }.firstOrNull()
-                    if (isDuplicate != null) return@forEach
-                    OfferedBankAccountsTable.insert { newRow ->
-                        newRow[accountHolder] = accountInfo.accountHolder ?: "NOT GIVEN"
-                        newRow[iban] =
-                            accountInfo.accountNumberList?.filterIsInstance<EbicsTypes.GeneralAccountNumber>()
-                                ?.find { it.international }?.value
-                                ?: throw NexusError(HttpStatusCode.NotFound, reason = "bank gave no IBAN")
-                        newRow[bankCode] = accountInfo.bankCodeList?.filterIsInstance<EbicsTypes.GeneralBankCode>()
-                            ?.find { it.international }?.value
-                            ?: throw NexusError(
-                                HttpStatusCode.NotFound,
-                                reason = "bank gave no BIC"
-                            )
-                        newRow[bankConnection] = requireBankConnectionInternal(connId).id
-                        newRow[offeredAccountId] = accountInfo.id
-                    }
-                }
-            }
-        }
-    }
 }
 
 fun Route.ebicsBankProtocolRoutes(client: HttpClient) {
@@ -552,52 +348,6 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
     }
 }
 
-fun exportEbicsKeyBackup(bankConnectionId: String, passphrase: String): Any {
-    val subscriber = transaction { getEbicsSubscriberDetails(bankConnectionId) }
-    return EbicsKeysBackupJson(
-        type = "ebics",
-        userID = subscriber.userId,
-        hostID = subscriber.hostId,
-        partnerID = subscriber.partnerId,
-        ebicsURL = subscriber.ebicsUrl,
-        authBlob = bytesToBase64(
-            CryptoUtil.encryptKey(
-                subscriber.customerAuthPriv.encoded,
-                passphrase
-            )
-        ),
-        encBlob = bytesToBase64(
-            CryptoUtil.encryptKey(
-                subscriber.customerEncPriv.encoded,
-                passphrase
-            )
-        ),
-        sigBlob = bytesToBase64(
-            CryptoUtil.encryptKey(
-                subscriber.customerSignPriv.encoded,
-                passphrase
-            )
-        )
-    )
-}
-
-
-fun getEbicsConnectionDetails(conn: NexusBankConnectionEntity): Any {
-    val ebicsSubscriber = transaction { getEbicsSubscriberDetails(conn.connectionId) }
-    val mapper = ObjectMapper()
-    val details = mapper.createObjectNode()
-    details.put("ebicsUrl", ebicsSubscriber.ebicsUrl)
-    details.put("ebicsHostId", ebicsSubscriber.hostId)
-    details.put("partnerId", ebicsSubscriber.partnerId)
-    details.put("userId", ebicsSubscriber.userId)
-    val node = mapper.createObjectNode()
-    node.put("type", conn.type)
-    node.put("owner", conn.owner.username)
-    node.put("ready", true) // test with #6715 needed.
-    node.set<JsonNode>("details", details)
-    return node
-}
-
 /**
  * Do the Hpb request when we don't know whether our keys have been submitted or not.
  *
@@ -640,19 +390,163 @@ fun formatHex(ba: ByteArray): String {
     return out
 }
 
-fun getEbicsKeyLetterPdf(conn: NexusBankConnectionEntity): ByteArray {
-    val ebicsSubscriber = transaction { getEbicsSubscriberDetails(conn.connectionId) }
+class EbicsBankConnectionProtocol: BankConnectionProtocol {
 
-    val po = ByteArrayOutputStream()
-    val pdfWriter = PdfWriter(po)
-    val pdfDoc = PdfDocument(pdfWriter)
-    val date = LocalDateTime.now()
-    val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+    override suspend fun fetchTransactions(
+        fetchSpec: FetchSpecJson,
+        client: HttpClient,
+        bankConnectionId: String,
+        accountId: String
+    ) {
+        val subscriberDetails = transaction { getEbicsSubscriberDetails(bankConnectionId) }
+        val lastTimes = transaction {
+            val acct = NexusBankAccountEntity.findByName(accountId)
+            if (acct == null) {
+                throw NexusError(
+                    HttpStatusCode.NotFound,
+                    "Account not found"
+                )
+            }
+            object {
+                val lastStatement = acct.lastStatementCreationTimestamp?.let {
+                    ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
+                }
+                val lastReport = acct.lastReportCreationTimestamp?.let {
+                    ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
+                }
+            }
+        }
+        val specs = mutableListOf<EbicsFetchSpec>()
 
-    fun writeCommon(doc: Document) {
-        doc.add(
-            Paragraph(
-                """
+        fun addForLevel(l: FetchLevel, p: EbicsOrderParams) {
+            when (l) {
+                FetchLevel.ALL -> {
+                    specs.add(EbicsFetchSpec("C52", p))
+                    specs.add(EbicsFetchSpec("C53", p))
+                }
+                FetchLevel.REPORT -> {
+                    specs.add(EbicsFetchSpec("C52", p))
+                }
+                FetchLevel.STATEMENT -> {
+                    specs.add(EbicsFetchSpec("C53", p))
+                }
+            }
+        }
+
+        when (fetchSpec) {
+            is FetchSpecLatestJson -> {
+                val p = EbicsStandardOrderParams()
+                addForLevel(fetchSpec.level, p)
+            }
+            is FetchSpecAllJson -> {
+                val p = EbicsStandardOrderParams(
+                    EbicsDateRange(
+                        ZonedDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
+                        ZonedDateTime.now(ZoneOffset.UTC)
+                    )
+                )
+                addForLevel(fetchSpec.level, p)
+            }
+            is FetchSpecSinceLastJson -> {
+                val pRep = EbicsStandardOrderParams(
+                    EbicsDateRange(
+                        lastTimes.lastReport ?: ZonedDateTime.ofInstant(
+                            Instant.EPOCH,
+                            ZoneOffset.UTC
+                        ), ZonedDateTime.now(ZoneOffset.UTC)
+                    )
+                )
+                val pStmt = EbicsStandardOrderParams(
+                    EbicsDateRange(
+                        lastTimes.lastStatement ?: ZonedDateTime.ofInstant(
+                            Instant.EPOCH,
+                            ZoneOffset.UTC
+                        ), ZonedDateTime.now(ZoneOffset.UTC)
+                    )
+                )
+                when (fetchSpec.level) {
+                    FetchLevel.ALL -> {
+                        specs.add(EbicsFetchSpec("C52", pRep))
+                        specs.add(EbicsFetchSpec("C53", pStmt))
+                    }
+                    FetchLevel.REPORT -> {
+                        specs.add(EbicsFetchSpec("C52", pRep))
+                    }
+                    FetchLevel.STATEMENT -> {
+                        specs.add(EbicsFetchSpec("C53", pStmt))
+                    }
+                }
+            }
+        }
+        for (spec in specs) {
+            try {
+                fetchEbicsC5x(spec.orderType, client, bankConnectionId, spec.orderParams, subscriberDetails)
+            } catch (e: Exception) {
+                logger.warn("Ingestion failed for $spec")
+            }
+        }
+    }
+
+    override suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
+        val r = transaction {
+            val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
+                ?: throw NexusError(HttpStatusCode.NotFound, "payment initiation not found")
+            val conn = paymentInitiation.bankAccount.defaultBankConnection
+                ?: throw NexusError(HttpStatusCode.NotFound, "no default bank connection available for submission")
+            val subscriberDetails = getEbicsSubscriberDetails(conn.connectionId)
+            val painMessage = createPain001document(
+                NexusPaymentInitiationData(
+                    debtorIban = paymentInitiation.bankAccount.iban,
+                    debtorBic = paymentInitiation.bankAccount.bankCode,
+                    debtorName = paymentInitiation.bankAccount.accountHolder,
+                    currency = paymentInitiation.currency,
+                    amount = paymentInitiation.sum.toString(),
+                    creditorIban = paymentInitiation.creditorIban,
+                    creditorName = paymentInitiation.creditorName,
+                    creditorBic = paymentInitiation.creditorBic,
+                    paymentInformationId = paymentInitiation.paymentInformationId,
+                    preparationTimestamp = paymentInitiation.preparationDate,
+                    subject = paymentInitiation.subject,
+                    instructionId = paymentInitiation.instructionId,
+                    endToEndId = paymentInitiation.endToEndId,
+                    messageId = paymentInitiation.messageId
+                )
+            )
+            if (!XMLUtil.validateFromString(painMessage)) throw NexusError(
+                HttpStatusCode.InternalServerError, "Pain.001 message is invalid."
+            )
+            object {
+                val subscriberDetails = subscriberDetails
+                val painMessage = painMessage
+            }
+        }
+        doEbicsUploadTransaction(
+            httpClient,
+            r.subscriberDetails,
+            "CCT",
+            r.painMessage.toByteArray(Charsets.UTF_8),
+            EbicsStandardOrderParams()
+        )
+        transaction {
+            val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
+                ?: throw NexusError(HttpStatusCode.NotFound, "payment initiation not found")
+            paymentInitiation.submitted = true
+            paymentInitiation.submissionDate = LocalDateTime.now().millis()
+        }
+    }
+
+    override fun exportAnalogDetails(conn: NexusBankConnectionEntity): ByteArray {
+        val ebicsSubscriber = transaction { getEbicsSubscriberDetails(conn.connectionId) }
+        val po = ByteArrayOutputStream()
+        val pdfWriter = PdfWriter(po)
+        val pdfDoc = PdfDocument(pdfWriter)
+        val date = LocalDateTime.now()
+        val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+
+        fun writeCommon(doc: Document) {
+            doc.add(
+                Paragraph(
+                    """
             Datum: $dateStr
             Teilnehmer: ${conn.id.value}
             Host-ID: ${ebicsSubscriber.hostId}
@@ -660,130 +554,235 @@ fun getEbicsKeyLetterPdf(conn: NexusBankConnectionEntity): ByteArray {
             Partner-ID: ${ebicsSubscriber.partnerId}
             ES version: A006
         """.trimIndent()
+                )
+            )
+        }
+
+        fun writeKey(doc: Document, priv: RSAPrivateCrtKey) {
+            val pub = CryptoUtil.getRsaPublicFromPrivate(priv)
+            val hash = CryptoUtil.getEbicsPublicKeyHash(pub)
+            doc.add(Paragraph("Exponent:\n${formatHex(pub.publicExponent.toByteArray())}"))
+            doc.add(Paragraph("Modulus:\n${formatHex(pub.modulus.toByteArray())}"))
+            doc.add(Paragraph("SHA-256 hash:\n${formatHex(hash)}"))
+        }
+
+        fun writeSigLine(doc: Document) {
+            doc.add(Paragraph("Ort / Datum: ________________"))
+            doc.add(Paragraph("Firma / Name: ________________"))
+            doc.add(Paragraph("Unterschrift: ________________"))
+        }
+
+        Document(pdfDoc).use {
+            it.add(Paragraph("Signaturschlüssel").setFontSize(24f))
+            writeCommon(it)
+            it.add(Paragraph("Öffentlicher Schlüssel (Public key for the electronic signature)"))
+            writeKey(it, ebicsSubscriber.customerSignPriv)
+            it.add(Paragraph("\n"))
+            writeSigLine(it)
+            it.add(AreaBreak())
+
+            it.add(Paragraph("Authentifikationsschlüssel").setFontSize(24f))
+            writeCommon(it)
+            it.add(Paragraph("Öffentlicher Schlüssel (Public key for the identification and authentication signature)"))
+            writeKey(it, ebicsSubscriber.customerAuthPriv)
+            it.add(Paragraph("\n"))
+            writeSigLine(it)
+            it.add(AreaBreak())
+
+            it.add(Paragraph("Verschlüsselungsschlüssel").setFontSize(24f))
+            writeCommon(it)
+            it.add(Paragraph("Öffentlicher Schlüssel (Public encryption key)"))
+            writeKey(it, ebicsSubscriber.customerSignPriv)
+            it.add(Paragraph("\n"))
+            writeSigLine(it)
+        }
+        pdfWriter.flush()
+        return po.toByteArray()
+    }
+    override fun exportBackup(bankConnectionId: String, passphrase: String): JsonNode {
+        val subscriber = transaction { getEbicsSubscriberDetails(bankConnectionId) }
+        val ret = EbicsKeysBackupJson(
+            type = "ebics",
+            userID = subscriber.userId,
+            hostID = subscriber.hostId,
+            partnerID = subscriber.partnerId,
+            ebicsURL = subscriber.ebicsUrl,
+            authBlob = bytesToBase64(
+                CryptoUtil.encryptKey(
+                    subscriber.customerAuthPriv.encoded,
+                    passphrase
+                )
+            ),
+            encBlob = bytesToBase64(
+                CryptoUtil.encryptKey(
+                    subscriber.customerEncPriv.encoded,
+                    passphrase
+                )
+            ),
+            sigBlob = bytesToBase64(
+                CryptoUtil.encryptKey(
+                    subscriber.customerSignPriv.encoded,
+                    passphrase
+                )
             )
         )
+        val mapper = ObjectMapper()
+        return mapper.valueToTree(ret)
     }
 
-    fun writeKey(doc: Document, priv: RSAPrivateCrtKey) {
-        val pub = CryptoUtil.getRsaPublicFromPrivate(priv)
-        val hash = CryptoUtil.getEbicsPublicKeyHash(pub)
-        doc.add(Paragraph("Exponent:\n${formatHex(pub.publicExponent.toByteArray())}"))
-        doc.add(Paragraph("Modulus:\n${formatHex(pub.modulus.toByteArray())}"))
-        doc.add(Paragraph("SHA-256 hash:\n${formatHex(hash)}"))
+    override fun getConnectionDetails(conn: NexusBankConnectionEntity): JsonNode {
+        val ebicsSubscriber = transaction { getEbicsSubscriberDetails(conn.connectionId) }
+        val mapper = ObjectMapper()
+        val details = mapper.createObjectNode()
+        details.put("ebicsUrl", ebicsSubscriber.ebicsUrl)
+        details.put("ebicsHostId", ebicsSubscriber.hostId)
+        details.put("partnerId", ebicsSubscriber.partnerId)
+        details.put("userId", ebicsSubscriber.userId)
+        val node = mapper.createObjectNode()
+        node.put("type", conn.type)
+        node.put("owner", conn.owner.username)
+        node.put("ready", true) // test with #6715 needed.
+        node.set<JsonNode>("details", details)
+        return node
     }
 
-    fun writeSigLine(doc: Document) {
-        doc.add(Paragraph("Ort / Datum: ________________"))
-        doc.add(Paragraph("Firma / Name: ________________"))
-        doc.add(Paragraph("Unterschrift: ________________"))
-    }
-
-    Document(pdfDoc).use {
-        it.add(Paragraph("Signaturschlüssel").setFontSize(24f))
-        writeCommon(it)
-        it.add(Paragraph("Öffentlicher Schlüssel (Public key for the electronic signature)"))
-        writeKey(it, ebicsSubscriber.customerSignPriv)
-        it.add(Paragraph("\n"))
-        writeSigLine(it)
-        it.add(AreaBreak())
-
-        it.add(Paragraph("Authentifikationsschlüssel").setFontSize(24f))
-        writeCommon(it)
-        it.add(Paragraph("Öffentlicher Schlüssel (Public key for the identification and authentication signature)"))
-        writeKey(it, ebicsSubscriber.customerAuthPriv)
-        it.add(Paragraph("\n"))
-        writeSigLine(it)
-        it.add(AreaBreak())
-
-        it.add(Paragraph("Verschlüsselungsschlüssel").setFontSize(24f))
-        writeCommon(it)
-        it.add(Paragraph("Öffentlicher Schlüssel (Public encryption key)"))
-        writeKey(it, ebicsSubscriber.customerSignPriv)
-        it.add(Paragraph("\n"))
-        writeSigLine(it)
-    }
-    pdfWriter.flush()
-    return po.toByteArray()
-}
-
-suspend fun submitEbicsPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
-    val r = transaction {
-        val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
-            ?: throw NexusError(HttpStatusCode.NotFound, "payment initiation not found")
-        val conn = paymentInitiation.bankAccount.defaultBankConnection
-            ?: throw NexusError(HttpStatusCode.NotFound, "no default bank connection available for submission")
-        val subscriberDetails = getEbicsSubscriberDetails(conn.connectionId)
-        val painMessage = createPain001document(
-            NexusPaymentInitiationData(
-                debtorIban = paymentInitiation.bankAccount.iban,
-                debtorBic = paymentInitiation.bankAccount.bankCode,
-                debtorName = paymentInitiation.bankAccount.accountHolder,
-                currency = paymentInitiation.currency,
-                amount = paymentInitiation.sum.toString(),
-                creditorIban = paymentInitiation.creditorIban,
-                creditorName = paymentInitiation.creditorName,
-                creditorBic = paymentInitiation.creditorBic,
-                paymentInformationId = paymentInitiation.paymentInformationId,
-                preparationTimestamp = paymentInitiation.preparationDate,
-                subject = paymentInitiation.subject,
-                instructionId = paymentInitiation.instructionId,
-                endToEndId = paymentInitiation.endToEndId,
-                messageId = paymentInitiation.messageId
-            )
+    override fun createConnection(connId: String, user: NexusUserEntity, data: JsonNode) {
+        val bankConn = NexusBankConnectionEntity.new {
+            this.connectionId = connId
+            owner = user
+            type = "ebics"
+        }
+        val newTransportData = jacksonObjectMapper(
+        ).treeToValue(data, EbicsNewTransport::class.java) ?: throw NexusError(
+            HttpStatusCode.BadRequest, "Ebics details not found in request"
         )
-        if (!XMLUtil.validateFromString(painMessage)) throw NexusError(
-            HttpStatusCode.InternalServerError, "Pain.001 message is invalid."
-        )
-        object {
-            val subscriberDetails = subscriberDetails
-            val painMessage = painMessage
+        val pairA = CryptoUtil.generateRsaKeyPair(2048)
+        val pairB = CryptoUtil.generateRsaKeyPair(2048)
+        val pairC = CryptoUtil.generateRsaKeyPair(2048)
+        EbicsSubscriberEntity.new {
+            ebicsURL = newTransportData.ebicsURL
+            hostID = newTransportData.hostID
+            partnerID = newTransportData.partnerID
+            userID = newTransportData.userID
+            systemID = newTransportData.systemID
+            signaturePrivateKey = ExposedBlob((pairA.private.encoded))
+            encryptionPrivateKey = ExposedBlob((pairB.private.encoded))
+            authenticationPrivateKey = ExposedBlob((pairC.private.encoded))
+            nexusBankConnection = bankConn
+            ebicsIniState = EbicsInitState.NOT_SENT
+            ebicsHiaState = EbicsInitState.NOT_SENT
         }
     }
-    doEbicsUploadTransaction(
-        httpClient,
-        r.subscriberDetails,
-        "CCT",
-        r.painMessage.toByteArray(Charsets.UTF_8),
-        EbicsStandardOrderParams()
-    )
-    transaction {
-        val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
-            ?: throw NexusError(HttpStatusCode.NotFound, "payment initiation not found")
-        paymentInitiation.submitted = true
-        paymentInitiation.submissionDate = LocalDateTime.now().millis()
-    }
-}
 
-
-fun createEbicsBankConnection(bankConnectionName: String, user: NexusUserEntity, data: JsonNode) {
-    val bankConn = NexusBankConnectionEntity.new {
-        this.connectionId = bankConnectionName
-        owner = user
-        type = "ebics"
+    override fun createConnectionFromBackup(
+        connId: String,
+        user: NexusUserEntity,
+        passphrase: String?,
+        backup: JsonNode
+    ) {
+        if (passphrase === null) {
+            throw NexusError(HttpStatusCode.BadRequest, "EBICS backup needs passphrase")
+        }
+        val bankConn = NexusBankConnectionEntity.new {
+            connectionId = connId
+            owner = user
+            type = "ebics"
+        }
+        val ebicsBackup = jacksonObjectMapper().treeToValue(backup, EbicsKeysBackupJson::class.java)
+        val (authKey, encKey, sigKey) = try {
+            Triple(
+                CryptoUtil.decryptKey(
+                    EncryptedPrivateKeyInfo(base64ToBytes(ebicsBackup.authBlob)),
+                    passphrase
+                ),
+                CryptoUtil.decryptKey(
+                    EncryptedPrivateKeyInfo(base64ToBytes(ebicsBackup.encBlob)),
+                    passphrase
+                ),
+                CryptoUtil.decryptKey(
+                    EncryptedPrivateKeyInfo(base64ToBytes(ebicsBackup.sigBlob)),
+                    passphrase
+                )
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            logger.info("Restoring keys failed, probably due to wrong passphrase")
+            throw NexusError(
+                HttpStatusCode.BadRequest,
+                "Bad backup given"
+            )
+        }
+        try {
+            EbicsSubscriberEntity.new {
+                ebicsURL = ebicsBackup.ebicsURL
+                hostID = ebicsBackup.hostID
+                partnerID = ebicsBackup.partnerID
+                userID = ebicsBackup.userID
+                signaturePrivateKey = ExposedBlob(sigKey.encoded)
+                encryptionPrivateKey = ExposedBlob((encKey.encoded))
+                authenticationPrivateKey = ExposedBlob((authKey.encoded))
+                nexusBankConnection = bankConn
+                ebicsIniState = EbicsInitState.UNKNOWN
+                ebicsHiaState = EbicsInitState.UNKNOWN
+            }
+        } catch (e: Exception) {
+            throw NexusError(
+                HttpStatusCode.BadRequest,
+                "exception: $e"
+            )
+        }
+        return
     }
-    val newTransportData = jacksonObjectMapper(
-    ).treeToValue(data, EbicsNewTransport::class.java) ?: throw NexusError(
-        HttpStatusCode.BadRequest, "Ebics details not found in request"
-    )
-    val pairA = CryptoUtil.generateRsaKeyPair(2048)
-    val pairB = CryptoUtil.generateRsaKeyPair(2048)
-    val pairC = CryptoUtil.generateRsaKeyPair(2048)
-    EbicsSubscriberEntity.new {
-        ebicsURL = newTransportData.ebicsURL
-        hostID = newTransportData.hostID
-        partnerID = newTransportData.partnerID
-        userID = newTransportData.userID
-        systemID = newTransportData.systemID
-        signaturePrivateKey = ExposedBlob((pairA.private.encoded))
-        encryptionPrivateKey = ExposedBlob((pairB.private.encoded))
-        authenticationPrivateKey = ExposedBlob((pairC.private.encoded))
-        nexusBankConnection = bankConn
-        ebicsIniState = EbicsInitState.NOT_SENT
-        ebicsHiaState = EbicsInitState.NOT_SENT
-    }
-}
 
-class EbicsBankConnectionProtocol: BankConnectionProtocol {
+    override suspend fun fetchAccounts(client: HttpClient, connId: String) {
+        val subscriberDetails = transaction { getEbicsSubscriberDetails(connId) }
+        val response = doEbicsDownloadTransaction(
+            client, subscriberDetails, "HTD", EbicsStandardOrderParams()
+        )
+        when (response) {
+            is EbicsDownloadBankErrorResult -> {
+                throw NexusError(
+                    HttpStatusCode.BadGateway,
+                    response.returnCode.errorCode
+                )
+            }
+            is EbicsDownloadSuccessResult -> {
+                val payload = XMLUtil.convertStringToJaxb<HTDResponseOrderData>(
+                    response.orderData.toString(Charsets.UTF_8)
+                )
+                transaction {
+                    payload.value.partnerInfo.accountInfoList?.forEach { accountInfo ->
+                        val conn = NexusBankConnectionEntity.findByName(connId) ?: throw NexusError(
+                            HttpStatusCode.NotFound,
+                            "bank connection not found"
+                        )
+
+                        val isDuplicate = OfferedBankAccountsTable.select {
+                            OfferedBankAccountsTable.bankConnection eq conn.id and (
+                                    OfferedBankAccountsTable.offeredAccountId eq accountInfo.id)
+                        }.firstOrNull()
+                        if (isDuplicate != null) return@forEach
+                        OfferedBankAccountsTable.insert { newRow ->
+                            newRow[accountHolder] = accountInfo.accountHolder ?: "NOT GIVEN"
+                            newRow[iban] =
+                                accountInfo.accountNumberList?.filterIsInstance<EbicsTypes.GeneralAccountNumber>()
+                                    ?.find { it.international }?.value
+                                    ?: throw NexusError(HttpStatusCode.NotFound, reason = "bank gave no IBAN")
+                            newRow[bankCode] = accountInfo.bankCodeList?.filterIsInstance<EbicsTypes.GeneralBankCode>()
+                                ?.find { it.international }?.value
+                                ?: throw NexusError(
+                                    HttpStatusCode.NotFound,
+                                    reason = "bank gave no BIC"
+                                )
+                            newRow[bankConnection] = requireBankConnectionInternal(connId).id
+                            newRow[offeredAccountId] = accountInfo.id
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     override suspend fun connect(client: HttpClient, connId: String) {
         val subscriber = transaction { getEbicsSubscriberDetails(connId) }
         if (subscriber.bankAuthPub != null && subscriber.bankEncPub != null) {

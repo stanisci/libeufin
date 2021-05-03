@@ -27,8 +27,6 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.w3c.dom.Document
 import tech.libeufin.nexus.*
-import tech.libeufin.nexus.ebics.fetchEbicsBySpec
-import tech.libeufin.nexus.ebics.submitEbicsPaymentInitiation
 import tech.libeufin.nexus.iso20022.CamtParsingError
 import tech.libeufin.nexus.iso20022.CreditDebitIndicator
 import tech.libeufin.nexus.iso20022.parseCamtMessage
@@ -52,7 +50,7 @@ fun requireBankAccount(call: ApplicationCall, parameterKey: String): NexusBankAc
     return account
 }
 
-
+// called twice: once from the background task, once from the ad-hoc endpoint.
 suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
     val r = transaction {
         val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
@@ -67,10 +65,10 @@ suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId:
     if (r.submitted) {
         return
     }
-    when (r.type) {
-        null -> throw NexusError(HttpStatusCode.NotFound, "no default bank connection")
-        "ebics" -> submitEbicsPaymentInitiation(httpClient, paymentInitiationId)
-    }
+    if (r.type == null)
+        throw NexusError(HttpStatusCode.NotFound, "no default bank connection")
+
+    getConnectionPlugin(r.type).submitPaymentInitiation(httpClient, paymentInitiationId)
 }
 
 /**
@@ -308,20 +306,14 @@ suspend fun fetchBankAccountTransactions(client: HttpClient, fetchSpec: FetchSpe
             val connectionName = conn.connectionId
         }
     }
-    when (res.connectionType) {
-        "ebics" -> {
-            fetchEbicsBySpec(
-                fetchSpec,
-                client,
-                res.connectionName,
-                accountId
-            )
-        }
-        else -> throw NexusError(
-            HttpStatusCode.BadRequest,
-            "Connection type '${res.connectionType}' not implemented"
-        )
-    }
+
+    getConnectionPlugin(res.connectionType).fetchTransactions(
+        fetchSpec,
+        client,
+        res.connectionName,
+        accountId
+    )
+
     val newTransactions = ingestBankMessagesIntoAccount(res.connectionName, accountId)
     ingestTalerTransactions(accountId)
     return newTransactions

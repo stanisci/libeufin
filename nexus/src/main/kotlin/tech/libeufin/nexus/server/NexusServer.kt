@@ -736,31 +736,12 @@ fun serverMain(dbName: String, host: String, port: Int) {
                             if (type == null || !type.isTextual) {
                                 throw NexusError(HttpStatusCode.BadRequest, "backup needs type")
                             }
-                            when (type.textValue()) {
-                                "ebics" -> {
-                                    createEbicsBankConnectionFromBackup(body.name, user, body.passphrase, body.data)
-                                }
-                                else -> {
-                                    throw NexusError(HttpStatusCode.BadRequest, "backup type not supported")
-                                }
-                            }
+                            val plugin = getConnectionPlugin(type.textValue())
+                            plugin.createConnectionFromBackup(body.name, user, body.passphrase, body.data)
                         }
                         is CreateBankConnectionFromNewRequestJson -> {
-                            when (body.type) {
-                                "ebics" -> {
-                                    createEbicsBankConnection(body.name, user, body.data)
-                                }
-                                "loopback" -> {
-                                    createLoopbackBankConnection(body.name, user, body.data)
-
-                                }
-                                else -> {
-                                    throw NexusError(
-                                        HttpStatusCode.BadRequest,
-                                        "connection type ${body.type} not supported"
-                                    )
-                                }
-                            }
+                            val plugin = getConnectionPlugin(body.type)
+                            plugin.createConnection(body.name, user, body.data)
                         }
                     }
                 }
@@ -802,17 +783,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 requireSuperuser(call.request)
                 val resp = transaction {
                     val conn = requireBankConnection(call, "connectionName")
-                    when (conn.type) {
-                        "ebics" -> {
-                            getEbicsConnectionDetails(conn)
-                        }
-                        else -> {
-                            throw NexusError(
-                                HttpStatusCode.BadRequest,
-                                "bank connection is not of type 'ebics' (but '${conn.type}')"
-                            )
-                        }
-                    }
+                    getConnectionPlugin(conn.type).getConnectionDetails(conn)
                 }
                 call.respond(resp)
             }
@@ -823,17 +794,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 val body = call.receive<BackupRequestJson>()
                 val response = run {
                     val conn = requireBankConnection(call, "connectionName")
-                    when (conn.type) {
-                        "ebics" -> {
-                            exportEbicsKeyBackup(conn.connectionId, body.passphrase)
-                        }
-                        else -> {
-                            throw NexusError(
-                                HttpStatusCode.BadRequest,
-                                "bank connection is not of type 'ebics' (but '${conn.type}')"
-                            )
-                        }
-                    }
+                    getConnectionPlugin(conn.type).exportBackup(conn.connectionId, body.passphrase)
                 }
                 call.response.headers.append("Content-Disposition", "attachment")
                 call.respond(
@@ -859,13 +820,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     authenticateRequest(call.request)
                     requireBankConnection(call, "connectionName")
                 }
-                when (conn.type) {
-                    "ebics" -> {
-                        val pdfBytes = getEbicsKeyLetterPdf(conn)
-                        call.respondBytes(pdfBytes, ContentType("application", "pdf"))
-                    }
-                    else -> throw NexusError(HttpStatusCode.NotImplemented, "keyletter not supported for ${conn.type}")
-                }
+                val pdfBytes = getConnectionPlugin(conn.type).exportAnalogDetails(conn)
+                call.respondBytes(pdfBytes, ContentType("application", "pdf"))
             }
 
             get("/bank-connections/{connectionName}/messages") {
@@ -994,15 +950,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         authenticateRequest(call.request)
                         requireBankConnection(call, "connid")
                     }
-                    when (conn.type) {
-                        "ebics" -> {
-                            ebicsFetchAccounts(conn.connectionId, client)
-                        }
-                        else -> throw NexusError(
-                            HttpStatusCode.NotImplemented,
-                            "connection not supported for ${conn.type}"
-                        )
-                    }
+                    getConnectionPlugin(conn.type).fetchAccounts(client, conn.connectionId)
                     call.respond(object {})
                 }
 
