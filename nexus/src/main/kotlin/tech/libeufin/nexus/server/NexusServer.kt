@@ -848,11 +848,8 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     authenticateRequest(call.request)
                     requireBankConnection(call, "connectionName")
                 }
-                when (conn.type) {
-                    "ebics" -> {
-                        connectEbics(client, conn.connectionId)
-                    }
-                }
+                val plugin = getConnectionPlugin(conn.type)
+                plugin.connect(client, conn.connectionId)
                 call.respond(NexusMessage(message = "Connection successful"))
             }
 

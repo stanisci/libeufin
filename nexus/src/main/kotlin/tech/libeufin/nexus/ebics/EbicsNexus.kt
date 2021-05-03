@@ -627,57 +627,6 @@ private suspend fun tentativeHpb(client: HttpClient, connId: String): Boolean {
     return true
 }
 
-suspend fun connectEbics(client: HttpClient, connId: String) {
-    val subscriber = transaction { getEbicsSubscriberDetails(connId) }
-    if (subscriber.bankAuthPub != null && subscriber.bankEncPub != null) {
-        return
-    }
-    if (subscriber.ebicsIniState == EbicsInitState.UNKNOWN || subscriber.ebicsHiaState == EbicsInitState.UNKNOWN) {
-        if (tentativeHpb(client, connId)) {
-            return
-        }
-    }
-    val iniDone = when (subscriber.ebicsIniState) {
-        EbicsInitState.NOT_SENT, EbicsInitState.UNKNOWN -> {
-            val iniResp = doEbicsIniRequest(client, subscriber)
-            iniResp.bankReturnCode == EbicsReturnCode.EBICS_OK && iniResp.technicalReturnCode == EbicsReturnCode.EBICS_OK
-        }
-        EbicsInitState.SENT -> true
-    }
-    val hiaDone = when (subscriber.ebicsHiaState) {
-        EbicsInitState.NOT_SENT, EbicsInitState.UNKNOWN -> {
-            val hiaResp = doEbicsHiaRequest(client, subscriber)
-            hiaResp.bankReturnCode == EbicsReturnCode.EBICS_OK && hiaResp.technicalReturnCode == EbicsReturnCode.EBICS_OK
-        }
-        EbicsInitState.SENT -> true
-    }
-    val hpbData = try {
-        doEbicsHpbRequest(client, subscriber)
-    } catch (e: EbicsProtocolError) {
-        logger.warn("failed hpb request", e)
-        null
-    }
-    transaction {
-        val conn = NexusBankConnectionEntity.findByName(connId)
-        if (conn == null) {
-            throw NexusError(HttpStatusCode.NotFound, "bank connection '$connId' not found")
-        }
-        val subscriberEntity =
-            EbicsSubscriberEntity.find { NexusEbicsSubscribersTable.nexusBankConnection eq conn.id }.first()
-        if (iniDone) {
-            subscriberEntity.ebicsIniState = EbicsInitState.SENT
-        }
-        if (hiaDone) {
-            subscriberEntity.ebicsHiaState = EbicsInitState.SENT
-        }
-        if (hpbData != null) {
-            subscriberEntity.bankAuthenticationPublicKey =
-                ExposedBlob((hpbData.authenticationPubKey.encoded))
-            subscriberEntity.bankEncryptionPublicKey = ExposedBlob((hpbData.encryptionPubKey.encoded))
-        }
-    }
-}
-
 fun formatHex(ba: ByteArray): String {
     var out = ""
     for (i in ba.indices) {
@@ -831,5 +780,58 @@ fun createEbicsBankConnection(bankConnectionName: String, user: NexusUserEntity,
         nexusBankConnection = bankConn
         ebicsIniState = EbicsInitState.NOT_SENT
         ebicsHiaState = EbicsInitState.NOT_SENT
+    }
+}
+
+class EbicsBankConnectionProtocol: BankConnectionProtocol {
+    override suspend fun connect(client: HttpClient, connId: String) {
+        val subscriber = transaction { getEbicsSubscriberDetails(connId) }
+        if (subscriber.bankAuthPub != null && subscriber.bankEncPub != null) {
+            return
+        }
+        if (subscriber.ebicsIniState == EbicsInitState.UNKNOWN || subscriber.ebicsHiaState == EbicsInitState.UNKNOWN) {
+            if (tentativeHpb(client, connId)) {
+                return
+            }
+        }
+        val iniDone = when (subscriber.ebicsIniState) {
+            EbicsInitState.NOT_SENT, EbicsInitState.UNKNOWN -> {
+                val iniResp = doEbicsIniRequest(client, subscriber)
+                iniResp.bankReturnCode == EbicsReturnCode.EBICS_OK && iniResp.technicalReturnCode == EbicsReturnCode.EBICS_OK
+            }
+            EbicsInitState.SENT -> true
+        }
+        val hiaDone = when (subscriber.ebicsHiaState) {
+            EbicsInitState.NOT_SENT, EbicsInitState.UNKNOWN -> {
+                val hiaResp = doEbicsHiaRequest(client, subscriber)
+                hiaResp.bankReturnCode == EbicsReturnCode.EBICS_OK && hiaResp.technicalReturnCode == EbicsReturnCode.EBICS_OK
+            }
+            EbicsInitState.SENT -> true
+        }
+        val hpbData = try {
+            doEbicsHpbRequest(client, subscriber)
+        } catch (e: EbicsProtocolError) {
+            logger.warn("failed hpb request", e)
+            null
+        }
+        transaction {
+            val conn = NexusBankConnectionEntity.findByName(connId)
+            if (conn == null) {
+                throw NexusError(HttpStatusCode.NotFound, "bank connection '$connId' not found")
+            }
+            val subscriberEntity =
+                EbicsSubscriberEntity.find { NexusEbicsSubscribersTable.nexusBankConnection eq conn.id }.first()
+            if (iniDone) {
+                subscriberEntity.ebicsIniState = EbicsInitState.SENT
+            }
+            if (hiaDone) {
+                subscriberEntity.ebicsHiaState = EbicsInitState.SENT
+            }
+            if (hpbData != null) {
+                subscriberEntity.bankAuthenticationPublicKey =
+                    ExposedBlob((hpbData.authenticationPubKey.encoded))
+                subscriberEntity.bankEncryptionPublicKey = ExposedBlob((hpbData.encryptionPubKey.encoded))
+            }
+        }
     }
 }

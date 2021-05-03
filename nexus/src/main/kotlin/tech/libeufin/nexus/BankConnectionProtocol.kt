@@ -19,5 +19,22 @@
 
 package tech.libeufin.nexus
 
-// TODO: define common interface for all bank connection protocols here!
-interface BankConnectionProtocol
+import io.ktor.client.HttpClient
+import io.ktor.http.HttpStatusCode
+import tech.libeufin.nexus.ebics.*
+
+// 'const' allows only primitive types.
+val bankConnectionRegistry: Map<String, BankConnectionProtocol> = mapOf(
+    "ebics" to EbicsBankConnectionProtocol()
+)
+
+interface BankConnectionProtocol {
+    suspend fun connect(client: HttpClient, connId: String)
+}
+
+fun getConnectionPlugin(connId: String): BankConnectionProtocol {
+    return bankConnectionRegistry.get(connId) ?: throw NexusError(
+        HttpStatusCode.NotFound,
+        "Connection type '${connId}' not available"
+    )
+}
