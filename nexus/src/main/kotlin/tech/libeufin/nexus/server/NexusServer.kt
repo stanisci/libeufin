@@ -901,6 +901,19 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 return@get
             }
 
+            delete("/facades/{fcid}") {
+                requireSuperuser(call.request)
+                val fcid = ensureNonNull(call.parameters["fcid"])
+                transaction {
+                    val f = FacadeEntity.findByName(fcid) ?: throw NexusError(
+                        HttpStatusCode.NotFound, "Facade $fcid does not exist"
+                    )
+                    f.delete()
+                }
+                call.respond({})
+                return@delete
+            }
+
             post("/facades") {
                 requireSuperuser(call.request)
                 val body = call.receive<FacadeInfo>()
