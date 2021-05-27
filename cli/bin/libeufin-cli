@@ -14,11 +14,9 @@ from getpass import getpass
 
 # Exit the program according to the HTTP status code that
 # was received.
-def managed_exit(received_status_code, expected_status_code=200):
-    if received_status_code != expected_status_code:
+def check_response_status(resp, expected_status_code=200):
+    if resp.status_code != expected_status_code:
         sys.exit(1)
-    sys.exit(0)
-
 
 def tell_user(resp, expected_status_code=200, withsuccess=False):
     if resp.status_code != expected_status_code:
@@ -93,6 +91,7 @@ def list_users(obj):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp.status_code)
 
 @users.command(help="Change user's password")
 @click.option(
@@ -118,6 +117,7 @@ def change_password(obj, new_password):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp.status_code)
 
 
 @users.command("create", help="Create a new user")
@@ -148,6 +148,7 @@ def create_user(obj, username, password):
         exit(1)
 
     print(resp.content.decode("utf-8"))
+    check_response_status(resp.status_code)
 
 
 @permissions.command("list", help="Show permissions")
@@ -162,6 +163,7 @@ def list_permission(obj):
         exit(1)
 
     print(resp.content.decode("utf-8"))
+    check_response_status(resp.status_code)
 
 @permissions.command("grant", help="Grant permission to a subject")
 @click.pass_obj
@@ -191,6 +193,7 @@ def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, 
         exit(1)
 
     print(resp.content.decode("utf-8"))
+    check_response_status(resp.status_code)
 
 @permissions.command("revoke", help="Revoke permission from a subject")
 @click.pass_obj
@@ -199,7 +202,7 @@ def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, 
 @click.argument("resource-type")
 @click.argument("resource-id")
 @click.argument("permission-name")
-def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, permission_name):
+def revoke_permission(obj, subject_type, subject_id, resource_type, resource_id, permission_name):
     url = urljoin(obj.nexus_base_url, f"/permissions")
     try:
         permission = dict(
@@ -220,6 +223,7 @@ def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, 
         exit(1)
 
     print(resp.content.decode("utf-8"))
+    check_response_status(resp.status_code)
 
 
 @cli.group()
@@ -306,9 +310,8 @@ def get_key_letter(obj, connection_name, output_file):
         print("Could not reach nexus at " + url)
         exit(1)
 
-    if resp.status_code != 200:
-        print(resp.content.decode("utf-8"))
-        sys.exit(1)
+    tell_user(resp)
+    check_response_status(resp)
 
     output = open(output_file, "wb")
     output.write(resp.content)
@@ -334,6 +337,9 @@ def export_backup(obj, connection_name, passphrase, output_file):
         print("Could not reach nexus at " + url)
         exit(1)
 
+    # Will exit upon errors.
+    check_response_status(resp)
+
     output = open(output_file, "w+")
     output.write(resp.content.decode("utf-8"))
     output.close()
@@ -358,6 +364,7 @@ def delete_connection(obj, connection_name):
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @connections.command(help="restore backup")
@@ -391,6 +398,7 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @connections.command(help="make new EBICS bank connection")
@@ -422,6 +430,7 @@ def new_ebics_connection(
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @connections.command(help="Initialize the bank connection.")
@@ -437,6 +446,7 @@ def connect(obj, connection_name):
         print(f"Could not reach nexus at {url}")
         exit(1)
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @connections.command(help="Import one bank account, chosen from the downloaded ones.")
@@ -471,6 +481,7 @@ def import_bank_account(
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @connections.command(help="Update list of bank accounts available through this connection.")
@@ -490,6 +501,7 @@ def download_bank_accounts(obj, connection_name):
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @connections.command(help="List the connections.")
@@ -505,6 +517,7 @@ def list_connections(obj):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @connections.command(help="Show the status of a bank connection.")
@@ -521,6 +534,7 @@ def show_connection(obj, connection_name):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @connections.command(help="list bank accounts hosted at one connection")
@@ -539,6 +553,7 @@ def list_offered_bank_accounts(obj, connection_name):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @accounts.command(help="Schedules a new task")
@@ -587,6 +602,7 @@ def task_schedule(
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @accounts.command(help="Shows the status of one task")
@@ -605,6 +621,7 @@ def task_status(obj, account_name, task_name):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @accounts.command(help="Deletes one task")
@@ -623,6 +640,7 @@ def task_delete(obj, account_name, task_name):
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @accounts.command(help="Shows all the active tasks")
@@ -637,6 +655,7 @@ def tasks_show(obj, account_name):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @accounts.command(help="show accounts belonging to calling user")
@@ -650,6 +669,7 @@ def show(obj):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @accounts.command(help="prepare payment debiting 'account-name'")
@@ -695,6 +715,7 @@ def prepare_payment(
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @accounts.command(help="submit a prepared payment")
@@ -717,6 +738,7 @@ def submit_payment(obj, account_name, payment_uuid):
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @accounts.command(help="fetch transactions from the bank")
@@ -743,6 +765,7 @@ def fetch_transactions(obj, account_name, range_type, level):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @accounts.command(help="get transactions from the simplified nexus JSON API")
@@ -776,10 +799,9 @@ def transactions(obj, compact, account_name):
                             expected_singleton["amount"],
                         )
                     )
-        return
-
-    tell_user(resp, withsuccess=True)
-
+    else:
+        tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 @facades.command(help="List active facades in the Nexus")
 @click.argument("connection-name")
@@ -793,6 +815,7 @@ def list_facades(obj, connection_name):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @facades.command(help="create a new (Taler) facade")
@@ -824,6 +847,7 @@ def new_facade(obj, facade_name, connection_name, account_name, currency):
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @sandbox.group("ebicshost", help="manage EBICS hosts")
@@ -844,6 +868,7 @@ def check_sandbox_status(obj):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @sandbox_ebicshost.command("create", help="Create an EBICS host")
@@ -859,6 +884,7 @@ def make_ebics_host(obj, host_id):
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @sandbox_ebicshost.command("list", help="List EBICS hosts.")
@@ -873,6 +899,7 @@ def list_ebics_host(obj):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @sandbox.group("ebicssubscriber", help="manage EBICS subscribers")
@@ -898,6 +925,7 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @sandbox_ebicssubscriber.command("list", help="List EBICS subscribers.")
@@ -912,6 +940,7 @@ def list_ebics_subscriber(obj):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @sandbox.group("ebicsbankaccount", help="manage EBICS bank accounts")
@@ -965,6 +994,7 @@ def associate_bank_account(
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @sandbox.group("bankaccount", help="manage bank accounts")
@@ -985,6 +1015,7 @@ def bankaccount_list(obj):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @sandbox_bankaccount.command("transactions", help="List transactions")
@@ -1002,6 +1033,7 @@ def transactions_list(obj, account_label):
         exit(1)
 
     tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 
 @sandbox_bankaccount.command("generate-transactions", help="Generate test transactions")
@@ -1019,6 +1051,7 @@ def bankaccount_generate_transactions(obj, account_label):
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
 @sandbox_bankaccount.command(help="Book a payment in the sandbox")
@@ -1077,6 +1110,7 @@ def book_payment(
         exit(1)
 
     tell_user(resp)
+    check_response_status(resp)
 
 
-cli(obj={})
+cli()
