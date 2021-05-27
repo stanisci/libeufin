@@ -307,7 +307,7 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
                         }
                         element("Amt") {
                             attribute("Ccy", "EUR")
-                            text(Amount(0).toPlainString())
+                            text(balanceForAccount(subscriberIban).toString())
                         }
                         element("CdtDbtInd") {
                             // a temporary value to get the camt to validate.

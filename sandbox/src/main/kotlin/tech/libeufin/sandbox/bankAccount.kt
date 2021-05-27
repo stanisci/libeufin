@@ -5,16 +5,38 @@ import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
 import tech.libeufin.util.RawPayment
 import tech.libeufin.util.importDateFromMillis
 import tech.libeufin.util.toDashedDate
+import java.math.BigInteger
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
+fun balanceForAccount(iban: String): BigInteger {
+    logger.debug("Calculating balance for account: ${iban}")
+    var balance = BigInteger.ZERO
+    transaction {
+        BankAccountTransactionsTable.select {
+            BankAccountTransactionsTable.creditorIban eq iban
+        }.forEach {
+            val amount = BigInteger(it[amount])
+            balance += amount
+        }
+        BankAccountTransactionsTable.select {
+            BankAccountTransactionsTable.debtorIban eq iban
+        }.forEach {
+            val amount = BigInteger(it[amount])
+            balance -= amount
+        }
+    }
+    return balance
+}
+
 fun historyForAccount(iban: String): List<RawPayment> {
     val history = mutableListOf<RawPayment>()
+    logger.debug("Querying transactions involving: ${iban}")
     transaction {
-        logger.debug("Querying transactions involving: ${iban}")
         BankAccountTransactionsTable.select {
             BankAccountTransactionsTable.creditorIban eq iban or
                     (BankAccountTransactionsTable.debtorIban eq iban)
