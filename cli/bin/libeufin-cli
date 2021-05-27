@@ -12,8 +12,16 @@ from urllib.parse import urljoin
 from getpass import getpass
 
 
-def tell_user(resp, withsuccess=False):
-    if resp.status_code != 200:
+# Exit the program according to the HTTP status code that
+# was received.
+def managed_exit(received_status_code, expected_status_code=200):
+    if received_status_code != expected_status_code:
+        sys.exit(1)
+    sys.exit(0)
+
+
+def tell_user(resp, expected_status_code=200, withsuccess=False):
+    if resp.status_code != expected_status_code:
         print(resp.content.decode("utf-8"))
         return
     if withsuccess:
