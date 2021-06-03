@@ -37,11 +37,6 @@ check:
 	@./gradlew check
 
 
-.PHONY: tests
-tests:
-	@cd integration-tests; py.test -k "not test_env" tests.py
-
-
 .PHONY: parse
 parse:
 	@cd parsing-tests; py.test -s checks.py
