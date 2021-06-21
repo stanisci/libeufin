@@ -3,7 +3,7 @@ include /usr/share/dpkg/default.mk
 
 export JAVA_HOME = /usr/lib/jvm/default-java
 LIBEUFIN_HOME = /usr/share/libeufin
-DEV = -dev.2
+DEV = -dev.3
 FULLVER = $(DEB_VERSION_UPSTREAM)$(DEV)
 
 clean:
