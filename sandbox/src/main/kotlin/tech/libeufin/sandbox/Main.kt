@@ -69,6 +69,7 @@ import com.google.common.collect.Maps
 import com.google.common.io.Resources
 import execThrowableOrTerminate
 import io.ktor.application.ApplicationCall
+import io.ktor.auth.*
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.request.*
@@ -223,6 +224,12 @@ fun serverMain(dbName: String, port: Int) {
         install(CallLogging) {
             this.level = Level.DEBUG
             this.logger = myLogger
+        }
+        install(Authentication) {
+            // Web-based authentication for Bank customers.
+            form {
+
+            }
         }
         install(ContentNegotiation) {
             jackson {
