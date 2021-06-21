@@ -66,6 +66,7 @@ import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import io.ktor.application.ApplicationCall
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.request.*
 import io.ktor.util.date.*
 import tech.libeufin.sandbox.BankAccountTransactionsTable.accountServicerReference
@@ -289,6 +290,10 @@ fun serverMain(dbName: String, port: Int) {
             }
         }
         routing {
+            static("/static") {
+                resources("static")
+            }
+
             get("/") {
                 call.respondText("Hello, this is Sandbox\n", ContentType.Text.Plain)
             }
