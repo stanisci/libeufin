@@ -44,6 +44,7 @@ def ktor_version = "1.5.0"
 def exposed_version = "0.25.1"
 
 dependencies {
+    implementation "com.hubspot.jinjava:jinjava:2.5.9"
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     implementation "ch.qos.logback:logback-classic:1.2.3"
     implementation group: 'javax.xml.bind', name: 'jaxb-api', version: '2.3.1'

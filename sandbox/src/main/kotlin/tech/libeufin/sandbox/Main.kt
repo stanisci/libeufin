@@ -20,6 +20,8 @@
 
 package tech.libeufin.sandbox
 
+import com.hubspot.jinjava.Jinjava
+import com.hubspot.jinjava.JinjavaConfig
 import com.fasterxml.jackson.core.JsonParseException
 import io.ktor.application.ApplicationCallPipeline
 import io.ktor.application.call
@@ -63,6 +65,8 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.int
+import com.google.common.collect.Maps
+import com.google.common.io.Resources
 import execThrowableOrTerminate
 import io.ktor.application.ApplicationCall
 import io.ktor.http.*
@@ -87,6 +91,7 @@ import tech.libeufin.util.ebics_h004.EbicsTypes
 import java.net.BindException
 import java.util.*
 import kotlin.random.Random
+import kotlin.reflect.jvm.internal.impl.load.kotlin.JvmType
 import kotlin.system.exitProcess
 
 val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
@@ -290,7 +295,21 @@ fun serverMain(dbName: String, port: Int) {
             }
         }
         routing {
+            get("/jinja-test") {
+                val template = Resources.toString(
+                    Resources.getResource("templates/hello.html"),
+                    Charsets.UTF_8
+                )
+                val context = mapOf("token" to "dynamic")
+                val page = Jinjava().render(template, context)
+                call.respond(page)
+                return@get
+            }
+
             static("/static") {
+                /**
+                 * Here Sandbox will serve the CSS files.
+                 */
                 resources("static")
             }
 
