@@ -19,6 +19,9 @@
 
 package tech.libeufin.sandbox
 
+import com.google.common.io.Resources
+import com.hubspot.jinjava.Jinjava
+import com.hubspot.jinjava.lib.fn.ELFunctionDefinition
 import io.ktor.http.HttpStatusCode
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
@@ -66,11 +69,11 @@ fun getBankAccountFromLabel(label: String): BankAccountEntity {
 
 fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccountEntity {
     return transaction {
-        BankAccountEntity.find(BankAccountsTable.subscriber eq subscriber.id)
-    }.firstOrNull() ?: throw SandboxError(
-        HttpStatusCode.NotFound,
-        "Subscriber doesn't have any bank account"
-    )
+        subscriber.bankAccount ?: throw SandboxError(
+            HttpStatusCode.NotFound,
+            "Subscriber doesn't have any bank account"
+        )
+    }
 }
 fun getEbicsSubscriberFromDetails(userID: String, partnerID: String, hostID: String): EbicsSubscriberEntity {
     return transaction {
@@ -83,3 +86,61 @@ fun getEbicsSubscriberFromDetails(userID: String, partnerID: String, hostID: Str
         )
     }
 }
+
+/**
+ * FIXME: commenting out until a solution for i18n is found.
+ *
+private fun initJinjava(): Jinjava {
+    class JinjaFunctions {
+        // Used by templates to retrieve configuration values.
+        fun settings_value(name: String): String {
+            return "foo"
+        }
+        fun gettext(translatable: String): String {
+            // temporary, just to make the compiler happy.
+            return translatable
+        }
+        fun url(name: String): String {
+            val map = mapOf<String, String>(
+                "login" to "todo",
+                "profile" to "todo",
+                "register" to "todo",
+                "public-accounts" to "todo"
+            )
+            return map[name] ?: throw SandboxError(HttpStatusCode.InternalServerError, "URL name unknown")
+        }
+    }
+    val jinjava = Jinjava()
+    val settingsValueFunc = ELFunctionDefinition(
+        "tech.libeufin.sandbox", "settings_value",
+        JinjaFunctions::class.java, "settings_value", String::class.java
+    )
+    val gettextFuncAlias = ELFunctionDefinition(
+        "tech.libeufin.sandbox", "_",
+        JinjaFunctions::class.java, "gettext", String::class.java
+    )
+    val gettextFunc = ELFunctionDefinition(
+        "", "gettext",
+        JinjaFunctions::class.java, "gettext", String::class.java
+    )
+    val urlFunc = ELFunctionDefinition(
+        "tech.libeufin.sandbox", "url",
+        JinjaFunctions::class.java, "url", String::class.java
+    )
+
+    jinjava.globalContext.registerFunction(settingsValueFunc)
+    jinjava.globalContext.registerFunction(gettextFunc)
+    jinjava.globalContext.registerFunction(gettextFuncAlias)
+    jinjava.globalContext.registerFunction(urlFunc)
+
+    return jinjava
+}
+
+val jinjava = initJinjava()
+
+fun renderTemplate(templateName: String, context: Map<String, String>): String {
+    val template = Resources.toString(Resources.getResource(
+        "templates/$templateName"), Charsets.UTF_8
+    )
+    return jinjava.render(template, context)
+} **/
