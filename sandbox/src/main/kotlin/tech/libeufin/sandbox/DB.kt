@@ -133,6 +133,9 @@ object EbicsSubscribersTable : IntIdTable() {
     val authenticationKey = reference("authorizationKey", EbicsSubscriberPublicKeysTable).nullable()
     val nextOrderID = integer("nextOrderID")
     val state = enumeration("state", SubscriberState::class)
+    // setting as nullable to integrate this change more seamlessly into the current
+    // implementation.  Can be removed eventually.
+    val bankAccount = reference("bankAccount", BankAccountsTable).nullable()
 }
 
 class EbicsSubscriberEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -147,6 +150,7 @@ class EbicsSubscriberEntity(id: EntityID<Int>) : IntEntity(id) {
     var authenticationKey by EbicsSubscriberPublicKeyEntity optionalReferencedOn EbicsSubscribersTable.authenticationKey
     var nextOrderID by EbicsSubscribersTable.nextOrderID
     var state by EbicsSubscribersTable.state
+    var bankAccount by BankAccountEntity optionalReferencedOn EbicsSubscribersTable.bankAccount
 }
 
 /**
@@ -285,7 +289,6 @@ object BankAccountsTable : IntIdTable() {
     val bic = text("bic")
     val name = text("name")
     val label = text("label").uniqueIndex("accountLabelIndex")
-    val subscriber = reference("subscriber", EbicsSubscribersTable)
     val currency = text("currency")
 }
 
@@ -296,7 +299,6 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     var bic by BankAccountsTable.bic
     var name by BankAccountsTable.name
     var label by BankAccountsTable.label
-    var subscriber by EbicsSubscriberEntity referencedOn BankAccountsTable.subscriber
     var currency by BankAccountsTable.currency
 }
 
