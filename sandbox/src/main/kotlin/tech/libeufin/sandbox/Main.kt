@@ -325,7 +325,37 @@ fun serverMain(dbName: String, port: Int) {
 
             post("/register") {
                 // how to read form-POSTed values?
+                val username = "fixme"
+                val password = "fixme"
+                val superuser = false
 
+                transaction {
+                    // check if username is taken.
+                    val maybeUser = SandboxUserEntity.find(
+                        SandboxUserTable.username eq username
+                    ).firstOrNull()
+                    // Will be converted to a HTML response.
+                    if (maybeUser != null) throw SandboxError(
+                        HttpStatusCode.Conflict, "Username not available"
+                    )
+
+                    // username is valid.  Register the user + new bank account.
+                    SandboxUserEntity.new {
+                        username = username
+                        passwordHash = CryptoUtil.hashpw(password)
+                        superuser = false
+                        bankAccount = BankAccountEntity.new {
+                            iban = "fixme"
+                            bic = "fixme"
+                            name = "fixme"
+                            label = "fixme"
+                            currency = "fixme"
+                        }
+                    }
+                }
+
+                call.respondText("User $username created")
+                return@post
             }
 
             get("/jinja-test") {

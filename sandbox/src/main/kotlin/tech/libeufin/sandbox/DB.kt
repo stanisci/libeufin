@@ -84,6 +84,20 @@ enum class KeyState {
     RELEASED
 }
 
+object SandboxUsersTable : LongIdTable() {
+    val username = text("username")
+    val passwordHash = text("password")
+    val superuser = bool("superuser") // admin
+}
+
+class SandboxUserEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<SandboxUserEntity>(SandboxUsersTable)
+    var username by SandboxUsersTable.username
+    var passwordHash by SandboxUsersTable.passwordHash
+    var superuser by SandboxUsersTable.superuser
+}
+
+
 /**
  * This table stores RSA public keys of subscribers.
  */
