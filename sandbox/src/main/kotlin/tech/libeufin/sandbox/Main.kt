@@ -227,8 +227,16 @@ fun serverMain(dbName: String, port: Int) {
         }
         install(Authentication) {
             // Web-based authentication for Bank customers.
-            form {
-
+            form("auth-form") {
+                userParamName = "username"
+                passwordParamName = "password"
+                validate { credentials ->
+                    if (credentials.name == "test") {
+                        UserIdPrincipal(credentials.name)
+                    } else {
+                        null
+                    }
+                }
             }
         }
         install(ContentNegotiation) {
@@ -302,6 +310,24 @@ fun serverMain(dbName: String, port: Int) {
             }
         }
         routing {
+            /*
+
+              FIXME: commenting out until a solution for i18n is found.
+
+            get("/bank") {
+                val ret = renderTemplate(
+                    "login.html",
+                    mapOf("csrf_token" to "todo", )
+                )
+                call.respondText(ret)
+                return@get
+            } */
+
+            post("/register") {
+                // how to read form-POSTed values?
+
+            }
+
             get("/jinja-test") {
                 val template = Resources.toString(
                     Resources.getResource("templates/hello.html"),
@@ -311,6 +337,15 @@ fun serverMain(dbName: String, port: Int) {
                 val page = Jinjava().render(template, context)
                 call.respond(page)
                 return@get
+            }
+
+            authenticate("auth-form") {
+                get("/profile") {
+                    val userSession = call.principal<UserIdPrincipal>()
+                    println("Welcoming ${userSession?.name}")
+                    call.respond(object {})
+                    return@get
+                }
             }
 
             static("/static") {
@@ -400,13 +435,12 @@ fun serverMain(dbName: String, port: Int) {
             post("/admin/ebics/bank-accounts") {
                 val body = call.receiveJson<BankAccountRequest>()
                 transaction {
-                    val subscriber = getEbicsSubscriberFromDetails(
+                    var subscriber = getEbicsSubscriberFromDetails(
                         body.subscriber.userID,
                         body.subscriber.partnerID,
                         body.subscriber.hostID
                     )
-                    BankAccountEntity.new {
-                        this.subscriber = subscriber
+                    subscriber.bankAccount = BankAccountEntity.new {
                         iban = body.iban
                         bic = body.bic
                         name = body.name
