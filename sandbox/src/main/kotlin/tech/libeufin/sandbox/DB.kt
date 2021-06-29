@@ -22,10 +22,13 @@ package tech.libeufin.sandbox
 import org.jetbrains.exposed.dao.Entity
 import org.jetbrains.exposed.dao.EntityClass
 import org.jetbrains.exposed.dao.IntEntity
+import org.jetbrains.exposed.dao.LongEntity
 import org.jetbrains.exposed.dao.IntEntityClass
+import org.jetbrains.exposed.dao.LongEntityClass
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.dao.id.IntIdTable
+import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -84,10 +87,26 @@ enum class KeyState {
     RELEASED
 }
 
+object SandboxConfigsTable : LongIdTable() {
+    val currency = text("currency")
+    val allowRegistrations = bool("allowRegistrations")
+    val bankDebtLimit = integer("bankDebtLimit")
+    val usersDebtLimit = integer("usersDebtLimit")
+}
+
+class SandboxConfigEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<SandboxConfigEntity>(SandboxConfigsTable)
+    var currency by SandboxConfigsTable.currency
+    var allowRegistrations by SandboxConfigsTable.allowRegistrations
+    var bankDebtLimit by SandboxConfigsTable.bankDebtLimit
+    var usersDebtLimit by SandboxConfigsTable.usersDebtLimit
+}
+
 object SandboxUsersTable : LongIdTable() {
     val username = text("username")
     val passwordHash = text("password")
     val superuser = bool("superuser") // admin
+    val bankAccount = reference("bankAccout", BankAccountsTable)
 }
 
 class SandboxUserEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -95,6 +114,7 @@ class SandboxUserEntity(id: EntityID<Long>) : LongEntity(id) {
     var username by SandboxUsersTable.username
     var passwordHash by SandboxUsersTable.passwordHash
     var superuser by SandboxUsersTable.superuser
+    var bankAccount by BankAccountEntity referencedOn SandboxUsersTable.bankAccount
 }
 
 
@@ -108,7 +128,6 @@ object EbicsSubscriberPublicKeysTable : IntIdTable() {
 
 class EbicsSubscriberPublicKeyEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<EbicsSubscriberPublicKeyEntity>(EbicsSubscriberPublicKeysTable)
-
     var rsaPublicKey by EbicsSubscriberPublicKeysTable.rsaPublicKey
     var state by EbicsSubscriberPublicKeysTable.state
 }

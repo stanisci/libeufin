@@ -331,9 +331,9 @@ fun serverMain(dbName: String, port: Int) {
 
                 transaction {
                     // check if username is taken.
-                    val maybeUser = SandboxUserEntity.find(
-                        SandboxUserTable.username eq username
-                    ).firstOrNull()
+                    var maybeUser = SandboxUserEntity.find {
+                        SandboxUsersTable.username eq username
+                    }.firstOrNull()
                     // Will be converted to a HTML response.
                     if (maybeUser != null) throw SandboxError(
                         HttpStatusCode.Conflict, "Username not available"
@@ -341,9 +341,9 @@ fun serverMain(dbName: String, port: Int) {
 
                     // username is valid.  Register the user + new bank account.
                     SandboxUserEntity.new {
-                        username = username
+                        this.username = username
                         passwordHash = CryptoUtil.hashpw(password)
-                        superuser = false
+                        this.superuser = superuser
                         bankAccount = BankAccountEntity.new {
                             iban = "fixme"
                             bic = "fixme"
