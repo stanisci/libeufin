@@ -92,6 +92,7 @@ object SandboxConfigsTable : LongIdTable() {
     val allowRegistrations = bool("allowRegistrations")
     val bankDebtLimit = integer("bankDebtLimit")
     val usersDebtLimit = integer("usersDebtLimit")
+    val hostname = text("hostname")
 }
 
 class SandboxConfigEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -100,6 +101,7 @@ class SandboxConfigEntity(id: EntityID<Long>) : LongEntity(id) {
     var allowRegistrations by SandboxConfigsTable.allowRegistrations
     var bankDebtLimit by SandboxConfigsTable.bankDebtLimit
     var usersDebtLimit by SandboxConfigsTable.usersDebtLimit
+    var name by SandboxConfigsTable.hostname
 }
 
 object SandboxUsersTable : LongIdTable() {
