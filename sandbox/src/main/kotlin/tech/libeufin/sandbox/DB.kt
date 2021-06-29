@@ -362,7 +362,9 @@ fun dbDropTables(dbConnectionString: String) {
             BankAccountTransactionsTable,
             BankAccountsTable,
             BankAccountReportsTable,
-            BankAccountStatementsTable
+            BankAccountStatementsTable,
+            SandboxConfigsTable,
+            SandboxUsersTable
         )
     }
 }
@@ -372,6 +374,8 @@ fun dbCreateTables(dbConnectionString: String) {
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         SchemaUtils.create(
+            SandboxConfigsTable,
+            SandboxUsersTable,
             EbicsSubscribersTable,
             EbicsHostsTable,
             EbicsDownloadTransactionsTable,

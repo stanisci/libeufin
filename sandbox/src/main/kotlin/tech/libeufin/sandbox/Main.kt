@@ -62,6 +62,7 @@ import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.int
@@ -86,6 +87,7 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorIban
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorName
 import tech.libeufin.sandbox.BankAccountTransactionsTable.direction
 import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
+import tech.libeufin.sandbox.SandboxConfigEntity
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
@@ -101,6 +103,34 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 data class SandboxError(val statusCode: HttpStatusCode, val reason: String) : Exception()
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
+
+class Config : CliktCommand("Insert one configuration into the database") {
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+
+    private val currencyOption by option().default("EUR")
+    private val bankDebtLimitOption by option().int().default(1000000)
+    private val usersDebtLimitOption by option().int().default(1000)
+    private val allowRegistrationsOption by option().flag(default = true)
+
+    override fun run() {
+        val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
+        execThrowableOrTerminate {
+            dbCreateTables(dbConnString)
+            transaction {
+                SandboxConfigEntity.new {
+                    currency = currencyOption
+                    bankDebtLimit = bankDebtLimitOption
+                    usersDebtLimit = usersDebtLimitOption
+                    allowRegistrations = allowRegistrationsOption
+                }
+            }
+        }
+    }
+}
 
 class ResetTables : CliktCommand("Drop all the tables from the database") {
     init {
@@ -201,7 +231,7 @@ class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnE
 }
 
 fun main(args: Array<String>) {
-    SandboxCommand().subcommands(Serve(), ResetTables()).main(args)
+    SandboxCommand().subcommands(Serve(), ResetTables(), Config()).main(args)
 }
 
 suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
@@ -663,6 +693,17 @@ fun serverMain(dbName: String, port: Int) {
                 call.ebicsweb()
             }
         }
+    }
+    val configs = transaction {
+        SandboxConfigEntity.all().firstOrNull()
+    }
+    if (configs == null) {
+        logger.error("""
+            Sandbox cannot run without at least one configuration.
+            See "libeufin-sandbox config --help"
+        """.trimIndent()
+        )
+        exitProcess(1)
     }
     logger.info("LibEuFin Sandbox running on port $port")
     try {
