@@ -652,6 +652,31 @@ fun serverMain(dbName: String, port: Int) {
                 call.respond(ret)
                 return@get
             }
+            post("/admin/ebics/hosts/{hostID}/rotate-keys") {
+                val hostID: String = call.parameters["hostID"] ?: throw SandboxError(
+                    HttpStatusCode.BadRequest, "host ID missing in URL"
+                )
+                transaction {
+                    val host = EbicsHostEntity.find {
+                        EbicsHostsTable.hostID eq hostID
+                    }.firstOrNull() ?: throw SandboxError(
+                        HttpStatusCode.NotFound, "Host $hostID not found"
+                    )
+                    val pairA = CryptoUtil.generateRsaKeyPair(2048)
+                    val pairB = CryptoUtil.generateRsaKeyPair(2048)
+                    val pairC = CryptoUtil.generateRsaKeyPair(2048)
+                    host.authenticationPrivateKey = ExposedBlob(pairA.private.encoded)
+                    host.encryptionPrivateKey = ExposedBlob(pairB.private.encoded)
+                    host.signaturePrivateKey = ExposedBlob(pairC.private.encoded)
+                }
+                call.respondText(
+                    "Keys of '${hostID}' rotated.",
+                    ContentType.Text.Plain,
+                    HttpStatusCode.OK
+                )
+                return@post
+            }
+
             /**
              * Creates a new EBICS host.
              */
