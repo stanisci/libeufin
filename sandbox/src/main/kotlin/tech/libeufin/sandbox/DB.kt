@@ -101,7 +101,7 @@ class SandboxConfigEntity(id: EntityID<Long>) : LongEntity(id) {
     var allowRegistrations by SandboxConfigsTable.allowRegistrations
     var bankDebtLimit by SandboxConfigsTable.bankDebtLimit
     var usersDebtLimit by SandboxConfigsTable.usersDebtLimit
-    var name by SandboxConfigsTable.hostname
+    var hostname by SandboxConfigsTable.hostname
 }
 
 object SandboxUsersTable : LongIdTable() {

@@ -59,6 +59,7 @@ import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import java.time.Instant
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
+import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.default
@@ -110,11 +111,16 @@ class Config : CliktCommand("Insert one configuration into the database") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-
-    private val currencyOption by option().default("EUR")
-    private val bankDebtLimitOption by option().int().default(1000000)
-    private val usersDebtLimitOption by option().int().default(1000)
-    private val allowRegistrationsOption by option().flag(default = true)
+    private val hostnameOption by argument(
+        "HOSTNAME", help="hostname that serves this configuration"
+    )
+    private val currencyOption by option("--currency").default("EUR")
+    private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
+    private val usersDebtLimitOption by option("--users-debt-limit").int().default(1000)
+    private val allowRegistrationsOption by option(
+        "--allow-registrations",
+        help="(default: true)" /* mentioning here as help message did not.  */
+    ).flag(default = true)
 
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
@@ -126,6 +132,7 @@ class Config : CliktCommand("Insert one configuration into the database") {
                     bankDebtLimit = bankDebtLimitOption
                     usersDebtLimit = usersDebtLimitOption
                     allowRegistrations = allowRegistrationsOption
+                    hostname = hostnameOption
                 }
             }
         }
