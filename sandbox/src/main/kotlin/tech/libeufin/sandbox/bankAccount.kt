@@ -13,20 +13,20 @@ import java.math.BigInteger
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
-fun balanceForAccount(iban: String): BigInteger {
+fun balanceForAccount(iban: String): java.math.BigDecimal {
     logger.debug("Calculating balance for account: ${iban}")
-    var balance = BigInteger.ZERO
+    var balance = java.math.BigDecimal.ZERO
     transaction {
         BankAccountTransactionsTable.select {
             BankAccountTransactionsTable.creditorIban eq iban
         }.forEach {
-            val amount = BigInteger(it[amount])
+            val amount = java.math.BigDecimal(it[amount])
             balance += amount
         }
         BankAccountTransactionsTable.select {
             BankAccountTransactionsTable.debtorIban eq iban
         }.forEach {
-            val amount = BigInteger(it[amount])
+            val amount = java.math.BigDecimal(it[amount])
             balance -= amount
         }
     }
