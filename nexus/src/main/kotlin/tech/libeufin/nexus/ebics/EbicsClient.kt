@@ -81,7 +81,6 @@ suspend fun doEbicsDownloadTransaction(
     val initDownloadRequestStr = createEbicsRequestForDownloadInitialization(subscriberDetails, orderType, orderParams)
     val payloadChunks = LinkedList<String>()
     val initResponseStr = client.postToBank(subscriberDetails.ebicsUrl, initDownloadRequestStr)
-
     val initResponse = parseAndValidateEbicsResponse(subscriberDetails, initResponseStr)
 
     when (initResponse.technicalReturnCode) {

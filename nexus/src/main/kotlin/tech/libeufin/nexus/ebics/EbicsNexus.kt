@@ -391,7 +391,6 @@ fun formatHex(ba: ByteArray): String {
 }
 
 class EbicsBankConnectionProtocol: BankConnectionProtocol {
-
     override suspend fun fetchTransactions(
         fetchSpec: FetchSpecJson,
         client: HttpClient,
@@ -478,13 +477,18 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 }
             }
         }
-        for (spec in specs) {
-            try {
-                fetchEbicsC5x(spec.orderType, client, bankConnectionId, spec.orderParams, subscriberDetails)
-            } catch (e: Exception) {
-                logger.warn("Ingestion failed for $spec")
-            }
-        }
+        /* Not handling errors here because
+          sub-calls should throw and get caught by
+          global handlers.
+         */
+        for (spec in specs)
+            fetchEbicsC5x(
+                spec.orderType,
+                client,
+                bankConnectionId,
+                spec.orderParams,
+                subscriberDetails
+            )
     }
 
     override suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {

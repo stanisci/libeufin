@@ -440,19 +440,21 @@ fun parseAndValidateEbicsResponse(
     } catch (e: Exception) {
         throw EbicsProtocolError(
             HttpStatusCode.InternalServerError,
-            "Invalid XML (as EbicsResponse) received from bank: $responseStr"
+            "Invalid XML (as EbicsResponse) received from bank"
         )
     }
-
     if (!XMLUtil.verifyEbicsDocument(
             responseDocument,
             subscriberDetails.bankAuthPub ?: throw EbicsProtocolError(
-                HttpStatusCode.BadRequest,
-                "Invalid subscriber state: bankAuthPub missing, please send HPB first"
+                HttpStatusCode.InternalServerError,
+                "Bank's signature verification failed"
             )
         )
     ) {
-        throw EbicsProtocolError(HttpStatusCode.InternalServerError, "Bank's signature validation failed")
+        throw EbicsProtocolError(
+            HttpStatusCode.InternalServerError,
+            "Bank's signature verification failed"
+        )
     }
     val resp = try {
         XMLUtil.convertStringToJaxb<EbicsResponse>(responseStr)
