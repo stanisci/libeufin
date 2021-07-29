@@ -16,6 +16,7 @@ from getpass import getpass
 # was received.
 def check_response_status(resp, expected_status_code=200):
     if resp.status_code != expected_status_code:
+        print("Unexpected response status: {}".format(resp.status_code))
         sys.exit(1)
 
 def tell_user(resp, expected_status_code=200, withsuccess=False):
