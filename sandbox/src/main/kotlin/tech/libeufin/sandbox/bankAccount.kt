@@ -30,6 +30,12 @@ fun balanceForAccount(iban: String): java.math.BigDecimal {
             balance -= amount
         }
     }
+    /**
+     * FIXME: for negative accounts, temporarily return 0, so as to make
+     * the current CAMT generator happy.  Negative amounts need to have their
+     * onw sub-tree in the report, see bug: #6962
+     */
+    if (balance < java.math.BigDecimal.ZERO) return java.math.BigDecimal.ZERO
     return balance
 }
 
