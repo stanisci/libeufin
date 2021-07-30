@@ -39,5 +39,14 @@ binary-indep:
 override_dh_strip_nondeterminism:
 	true
 
+
+override_dh_installsystemd:
+	# Need to specify units manually, since we have multiple
+	# and dh_installsystemd by default only looks for "<package>.service".
+	dh_installsystemd -plibeufin --name=libeufin-nexus --no-start --no-enable
+	dh_installsystemd -plibeufin --name=libeufin-sandbox --no-start --no-enable
+	# final invocation to generate daemon reload
+	dh_installsystemd
+
 get-orig-source:
 	uscan --force-download --rename

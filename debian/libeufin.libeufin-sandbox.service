@@ -2,8 +2,8 @@
 Description=LibEuFin Sandbox service.
 
 [Service]
-EnvironmentFile=/etc/libeufin/libeufinenv.conf
-User=libeufin
+EnvironmentFile=/etc/libeufin/sandbox.env
+User=libeufin-sandbox
 ExecStart=/usr/bin/libeufin-sandbox serve --port=${LIBEUFIN_SANDBOX_PORT}
 Restart=on-failure
 SuccessExitStatus=143

@@ -1,5 +1,5 @@
 Source: libeufin
-Section: networking
+Section: net
 Priority: optional
 Maintainer: Taler Systems SA <deb@taler.net>
 Uploaders: Christian Grothoff <grothoff@gnu.org>, Florian Dold <dold@taler.net>

@@ -2,9 +2,33 @@
 
 set -e
 
+nexus_user=libeufin-nexus
+sandbox_user=libeufin-sandbox
+nexus_group=libeufin-nexus
+sandbox_group=libeufin-sandbox
+libeufin_home=/var/lib/libeufin
+
 case "${1}" in
   configure)
-    if ! id libeufin &> /dev/null; then useradd --no-create-home --system libeufin; fi
+
+    if ! getent group $nexus_group >/dev/null; then
+      addgroup --quiet --system $nexus_group
+    fi
+
+    if ! getent group $sandbox_group >/dev/null; then
+      addgroup --quiet --system $sandbox_group
+    fi
+
+    # Create users if needed
+    if ! getent passwd $nexus_user >/dev/null; then
+      adduser --quiet --system --no-create-home --ingroup $nexus_group --home $libeufin_home $nexus_user
+    fi
+
+    # Create users if needed
+    if ! getent passwd $nexus_user >/dev/null; then
+      adduser --quiet --system --no-create-home --ingroup $sandbox_group --home $libeufin_home $sandbox_user
+    fi
+
     ;;
 
   abort-upgrade|abort-remove|abort-deconfigure)
