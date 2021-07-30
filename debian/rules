@@ -18,14 +18,11 @@ clean:
 	rm -rf libeufin-$(FULLVER)
 
 
-build: build-arch build-indep
-
-
-build-arch:
+# Override the build step, because we current need to do it manually
+# outside the regular Debian package build.
+override_dh_auto_build:
 	true
-
-
-build-indep:
+override_dh_auto_test:
 	true
 
 
