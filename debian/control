@@ -7,7 +7,6 @@ Build-Depends:
  debhelper-compat (= 13),
  unzip,
  openjdk-11-jdk-headless | openjdk-11-jdk
-
 Standards-Version: 4.1.0
 Vcs-Git: https://git.taler.net/libeufin.git
 Homepage: https://taler.net/
