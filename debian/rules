@@ -23,9 +23,6 @@ override_dh_auto_install:
 	dh_link $(LIBEUFIN_HOME)/bin/libeufin-cli /usr/bin/libeufin-cli
 	dh_link $(LIBEUFIN_HOME)/bin/libeufin-nexus /usr/bin/libeufin-nexus
 	dh_link $(LIBEUFIN_HOME)/bin/libeufin-sandbox /usr/bin/libeufin-sandbox
-	dh_install debian/libeufinenv.conf /etc/libeufin
-	dh_install debian/sandbox.service /etc/systemd/system
-	dh_install debian/nexus.service /etc/systemd/system
 
 binary:
 	dh $@
