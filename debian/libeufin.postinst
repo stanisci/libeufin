@@ -25,7 +25,7 @@ case "${1}" in
     fi
 
     # Create users if needed
-    if ! getent passwd $nexus_user >/dev/null; then
+    if ! getent passwd $sandbox_user >/dev/null; then
       adduser --quiet --system --no-create-home --ingroup $sandbox_group --home $libeufin_home $sandbox_user
     fi
 
