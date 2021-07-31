@@ -65,7 +65,7 @@ class BalanceTest {
                     it[direction] = "DBIT"
                     it[accountServicerReference] = "test-account-servicer-reference"
                 }
-                assert(BigInteger.ONE == balanceForAccount("earns"))
+                assert(java.math.BigDecimal.ONE == balanceForAccount("earns"))
             }
         }
     }
