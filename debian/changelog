@@ -2,6 +2,8 @@ libeufin (0.0.1-1) unstable; urgency=medium
 
   * Packaging fixes.
 
+ -- Florian Dold <florian@dold.me>  Sat, 31 Jul 2021 16:34:40 +0200
+
 libeufin (0.0.1) unstable; urgency=low
 
   * Initial Release.
