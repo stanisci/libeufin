@@ -1,9 +1,9 @@
+libeufin (0.0.1-1) unstable; urgency=medium
+
+  * Packaging fixes.
+
 libeufin (0.0.1) unstable; urgency=low
 
   * Initial Release.
 
  -- Christian Grothoff <grothoff@gnu.org>  Sun, 17 Jan 2021 07:03:45 +0100
-
-Local variables:
-mode: debian-changelog
-End:
