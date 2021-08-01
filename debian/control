@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Taler Systems SA <deb@taler.net>
 Uploaders: Christian Grothoff <grothoff@gnu.org>, Florian Dold <dold@taler.net>
 Build-Depends:
- debhelper-compat (= 13),
+ debhelper-compat (= 12),
  unzip,
  openjdk-11-jdk-headless | openjdk-11-jdk
 Standards-Version: 4.1.0
