@@ -34,7 +34,6 @@ dependencies {
     implementation 'ch.qos.logback:logback-classic:1.2.5'
 
     // XML Stuff
-    implementation group: 'javax.xml.bind', name: 'jaxb-api', version: '2.3.1'
     implementation "javax.xml.bind:jaxb-api:2.3.0"
     implementation "org.glassfish.jaxb:jaxb-runtime:2.3.1"
     implementation 'org.apache.santuario:xmlsec:2.2.2'
