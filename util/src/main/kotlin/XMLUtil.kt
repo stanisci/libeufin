@@ -19,8 +19,8 @@
 
 package tech.libeufin.util
 
+import com.sun.xml.bind.marshaller.NamespacePrefixMapper
 import io.ktor.http.*
-import org.glassfish.jaxb.runtime.marshaller.NamespacePrefixMapper
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
