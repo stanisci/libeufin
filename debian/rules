@@ -44,6 +44,12 @@ override_dh_strip_nondeterminism:
 	true
 
 
+override_dh_install:
+	dh_install
+# Needs to be called manually for debhelper-compat < 13
+	dh_installtmpfiles
+
+
 override_dh_installsystemd:
 	# Need to specify units manually, since we have multiple
 	# and dh_installsystemd by default only looks for "<package>.service".
