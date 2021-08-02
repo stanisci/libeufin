@@ -1,3 +1,10 @@
+libeufin (0.0.1-3) unstable; urgency=medium
+
+  * Sandbox bugfixes.
+  * Packaging: Install tmpfiles properly.
+
+ -- Florian Dold <florian@dold.me>  Mon, 02 Aug 2021 19:53:44 +0200
+
 libeufin (0.0.1-2) unstable; urgency=medium
 
   * Support debhelper-compat level 12.

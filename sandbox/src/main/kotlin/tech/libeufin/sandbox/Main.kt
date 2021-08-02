@@ -21,7 +21,6 @@
 package tech.libeufin.sandbox
 
 import com.hubspot.jinjava.Jinjava
-import com.hubspot.jinjava.JinjavaConfig
 import com.fasterxml.jackson.core.JsonParseException
 import io.ktor.application.ApplicationCallPipeline
 import io.ktor.application.call
@@ -98,7 +97,7 @@ import kotlin.random.Random
 import kotlin.reflect.jvm.internal.impl.load.kotlin.JvmType
 import kotlin.system.exitProcess
 
-val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
+const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
 data class SandboxError(val statusCode: HttpStatusCode, val reason: String) : Exception()
@@ -182,13 +181,6 @@ fun findEbicsSubscriber(partnerID: String, userID: String, systemID: String?): E
         }
     }.firstOrNull()
 }
-
-data class Subscriber(
-    val partnerID: String,
-    val userID: String,
-    val systemID: String?,
-    val keys: SubscriberKeys
-)
 
 data class SubscriberKeys(
     val authenticationPublicKey: RSAPublicKey,
@@ -725,17 +717,6 @@ fun serverMain(dbName: String, port: Int) {
                 call.ebicsweb()
             }
         }
-    }
-    val configs = transaction {
-        SandboxConfigEntity.all().firstOrNull()
-    }
-    if (configs == null) {
-        logger.error("""
-            Sandbox cannot run without at least one configuration.
-            See "libeufin-sandbox config --help"
-        """.trimIndent()
-        )
-        exitProcess(1)
     }
     logger.info("LibEuFin Sandbox running on port $port")
     try {

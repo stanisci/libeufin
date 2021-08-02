@@ -19,9 +19,8 @@
 
 package tech.libeufin.util
 
-import com.sun.org.apache.xerces.internal.dom.DOMInputImpl
-import com.sun.xml.bind.marshaller.NamespacePrefixMapper
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
+import org.glassfish.jaxb.runtime.marshaller.NamespacePrefixMapper
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
@@ -73,6 +72,82 @@ class DefaultNamespaces : NamespacePrefixMapper() {
 }
 
 
+class DOMInputImpl : LSInput {
+    var fPublicId: String? = null
+    var fSystemId: String? = null
+    var fBaseSystemId: String? = null
+    var fByteStream: InputStream? = null
+    var fCharStream: Reader? = null
+    var fData: String? = null
+    var fEncoding: String? = null
+    var fCertifiedText = false
+
+    override fun getByteStream(): InputStream? {
+        return fByteStream
+    }
+
+    override fun setByteStream(byteStream: InputStream) {
+        fByteStream = byteStream
+    }
+
+    override fun getCharacterStream(): Reader? {
+        return fCharStream
+    }
+
+    override fun setCharacterStream(characterStream: Reader) {
+        fCharStream = characterStream
+    }
+
+    override fun getStringData(): String? {
+        return fData
+    }
+
+    override fun setStringData(stringData: String) {
+        fData = stringData
+    }
+
+    override fun getEncoding(): String? {
+        return fEncoding
+    }
+
+    override fun setEncoding(encoding: String) {
+        fEncoding = encoding
+    }
+
+    override fun getPublicId(): String? {
+        return fPublicId
+    }
+
+    override fun setPublicId(publicId: String) {
+        fPublicId = publicId
+    }
+
+    override fun getSystemId(): String? {
+        return fSystemId
+    }
+
+    override fun setSystemId(systemId: String) {
+        fSystemId = systemId
+    }
+
+    override fun getBaseURI(): String? {
+        return fBaseSystemId
+    }
+
+    override fun setBaseURI(baseURI: String) {
+        fBaseSystemId = baseURI
+    }
+
+    override fun getCertifiedText(): Boolean {
+        return fCertifiedText
+    }
+
+    override fun setCertifiedText(certifiedText: Boolean) {
+        fCertifiedText = certifiedText
+    }
+}
+
+
 /**
  * Helpers for dealing with XML in EBICS.
  */
@@ -104,15 +179,6 @@ class XMLUtil private constructor() {
             }
             return NodeSetData { nodeList.iterator() }
         }
-    }
-
-    /**
-     * Validator for EBICS messages.
-     */
-    private val validator = try {
-    } catch (e: SAXException) {
-        e.printStackTrace()
-        throw e
     }
 
     companion object {
@@ -151,7 +217,13 @@ class XMLUtil private constructor() {
                         return null
                     }
                     val res = classLoader.getResourceAsStream("xsd/$systemId") ?: return null
-                    return DOMInputImpl(publicId, systemId, baseUri, res, "UTF-8")
+                    return DOMInputImpl().apply {
+                        fPublicId = publicId
+                        fSystemId = systemId
+                        fBaseSystemId = baseUri
+                        fByteStream = res
+                        fEncoding = "UTF-8"
+                    }
                 }
             }
             val schemaInputs: Array<Source> = listOf(
@@ -181,6 +253,7 @@ class XMLUtil private constructor() {
             try {
                 getEbicsValidator().validate(xmlDoc)
             } catch (e: Exception) {
+                e.printStackTrace()
                 logger.warn("Validation failed: ${e}")
                 return false
             }

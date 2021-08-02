@@ -40,24 +40,23 @@ sourceSets {
     main.java.srcDirs = ['src/main/java', 'src/main/kotlin']
 }
 
-def ktor_version = "1.5.0"
-def exposed_version = "0.25.1"
+def ktor_version = '1.6.1'
+def exposed_version = '0.32.1'
 
 dependencies {
     implementation "com.hubspot.jinjava:jinjava:2.5.9"
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation "ch.qos.logback:logback-classic:1.2.3"
-    implementation group: 'javax.xml.bind', name: 'jaxb-api', version: '2.3.1'
-    implementation "javax.xml.bind:jaxb-api:2.3.0"
-    implementation group: 'xerces', name: 'xercesImpl', version: '2.6.2-jaxb-1.0.6'
-    implementation "javax.activation:activation:1.1"
-    implementation "org.glassfish.jaxb:jaxb-runtime:2.3.1"
-    implementation 'org.apache.santuario:xmlsec:2.1.4'
-    implementation group: 'org.bouncycastle', name: 'bcprov-jdk16', version: '1.45'
-    implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.28.0'
-    implementation "org.postgresql:postgresql:42.2.18"
-    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.20'
-    implementation("com.github.ajalt:clikt:2.7.0")
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.5.21'
+    implementation 'ch.qos.logback:logback-classic:1.2.5'
+    implementation group: 'javax.xml.bind', name: 'jaxb-api', version: '2.4.0-b180830.0359'
+    implementation 'javax.xml.bind:jaxb-api:2.4.0-b180830.0359'
+    implementation 'javax.activation:activation:1.1.1'
+    implementation 'org.glassfish.jaxb:jaxb-runtime:3.0.1'
+    implementation 'org.apache.santuario:xmlsec:2.2.2'
+    implementation group: 'org.bouncycastle', name: 'bcprov-jdk16', version: '1.46'
+    implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.36.0.1'
+    implementation 'org.postgresql:postgresql:42.2.23.jre7'
+    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.21'
+    implementation('com.github.ajalt:clikt:2.8.0')
     implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
     implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
     implementation "org.jetbrains.exposed:exposed-jdbc:$exposed_version"
@@ -68,9 +67,9 @@ dependencies {
     implementation "io.ktor:ktor-jackson:$ktor_version"
     implementation "io.ktor:ktor-auth:$ktor_version"
 
-    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.4.30-RC'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test:1.4.30-RC'
-    testImplementation group: "junit", name: "junit", version: "4.12"
+    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
+    testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'
+    testImplementation group: "junit", name: "junit", version: '4.13.2'
 
     implementation project(":util")
 }

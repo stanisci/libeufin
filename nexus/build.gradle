@@ -51,32 +51,31 @@ compileTestKotlin {
     }
 }
 
-def ktor_version = "1.5.0"
-def exposed_version = "0.25.1"
+def ktor_version = '1.6.1'
+def exposed_version = '0.32.1'
 
 dependencies {
     // Core language libraries
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2'
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.5.21'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1-native-mt'
 
     // LibEuFin util library
     implementation project(":util")
 
     // Logging
-    implementation "ch.qos.logback:logback-classic:1.2.3"
+    implementation 'ch.qos.logback:logback-classic:1.2.5'
 
     // XML parsing/binding and encryption
-    implementation group: 'javax.xml.bind', name: 'jaxb-api', version: '2.3.1'
-    implementation "javax.xml.bind:jaxb-api:2.3.0"
-    implementation group: 'xerces', name: 'xercesImpl', version: '2.6.2-jaxb-1.0.6'
-    implementation "org.glassfish.jaxb:jaxb-runtime:2.3.1"
-    implementation 'org.apache.santuario:xmlsec:2.1.4'
+    implementation group: 'javax.xml.bind', name: 'jaxb-api', version: '2.4.0-b180830.0359'
+    implementation 'javax.xml.bind:jaxb-api:2.4.0-b180830.0359'
+    implementation 'org.glassfish.jaxb:jaxb-runtime:3.0.1'
+    implementation 'org.apache.santuario:xmlsec:2.2.2'
 
     // Compression
-    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.20'
+    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.21'
 
     // Command line parsing
-    implementation("com.github.ajalt:clikt:2.7.0")
+    implementation('com.github.ajalt:clikt:2.8.0')
 
     // Exposed, an SQL library
     implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
@@ -84,8 +83,8 @@ dependencies {
     implementation "org.jetbrains.exposed:exposed-jdbc:$exposed_version"
 
     // Database connection driver
-    implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.28.0'
-    implementation "org.postgresql:postgresql:42.2.18"
+    implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.36.0.1'
+    implementation 'org.postgresql:postgresql:42.2.23.jre7'
 
     // Ktor, an HTTP client and server library
     implementation "io.ktor:ktor-server-core:$ktor_version"
@@ -95,15 +94,15 @@ dependencies {
     implementation "io.ktor:ktor-jackson:$ktor_version"
 
     // PDF generation
-    implementation 'com.itextpdf:itext7-core:7.1.11'
+    implementation 'com.itextpdf:itext7-core:7.1.16'
 
     // Cron syntax
-    implementation "com.cronutils:cron-utils:9.0.2"
+    implementation 'com.cronutils:cron-utils:9.1.5'
 
     // Unit testing
-    testImplementation 'junit:junit:4.12'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test:1.4.30-RC'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.4.30-RC'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'
+    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
 }
 
 application {

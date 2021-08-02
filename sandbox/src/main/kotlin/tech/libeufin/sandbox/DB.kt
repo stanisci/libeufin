@@ -108,7 +108,7 @@ object SandboxUsersTable : LongIdTable() {
     val username = text("username")
     val passwordHash = text("password")
     val superuser = bool("superuser") // admin
-    val bankAccount = reference("bankAccout", BankAccountsTable)
+    val bankAccount = reference("bankAccount", BankAccountsTable)
 }
 
 class SandboxUserEntity(id: EntityID<Long>) : LongEntity(id) {
