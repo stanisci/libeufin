@@ -36,8 +36,8 @@ def fetch_env():
         nexus_password = os.environ["LIBEUFIN_NEXUS_PASSWORD"]
     except KeyError:
         print(
-            "Please ensure that NEXUS_BASE_URL,"
-            " NEXUS_USERNAME, NEXUS_PASSWORD exist"
+            "Please ensure that LIBEUFIN_NEXUS_URL,"
+            " LIBEUFIN_NEXUS_USERNAME, LIBEUFIN_NEXUS_PASSWORD exist"
             " in the environment"
         )
         sys.exit(1)
