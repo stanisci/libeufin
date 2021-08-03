@@ -1,3 +1,9 @@
+libeufin (0.0.1-4) unstable; urgency=medium
+
+  * Bugfixes in libeufin-cli and libeufin-nexus.
+
+ -- Florian Dold <florian@dold.me>  Tue, 03 Aug 2021 13:59:52 +0200
+
 libeufin (0.0.1-3) unstable; urgency=medium
 
   * Sandbox bugfixes.
