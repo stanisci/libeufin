@@ -23,12 +23,9 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.application.ApplicationCall
 import io.ktor.application.call
 import io.ktor.client.HttpClient
-import io.ktor.client.request.post
-import io.ktor.client.statement.*
 import io.ktor.content.TextContent
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.contentType
 import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.response.respondText
@@ -93,28 +90,9 @@ data class TalerOutgoingHistory(
     var outgoing_transactions: MutableList<TalerOutgoingBankTransaction> = mutableListOf()
 )
 
-/** Test APIs' data structures. */
-data class TalerAdminAddIncoming(
-    val amount: String,
-    val reserve_pub: String,
-    /**
-     * This account is the one giving money to the exchange.  It doesn't
-     * have to be 'created' as it might (and normally is) simply be a payto://
-     * address pointing to a bank account hosted in a different financial
-     * institution.
-     */
-    val debit_account: String
-)
-
 data class GnunetTimestamp(
     val t_ms: Long
 )
-
-data class TalerAddIncomingResponse(
-    val timestamp: GnunetTimestamp,
-    val row_id: Long
-)
-
 
 /** Sort query results in descending order for negative deltas, and ascending otherwise.  */
 fun <T : Entity<Long>> SizedIterable<T>.orderTaler(delta: Int): List<T> {

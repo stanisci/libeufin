@@ -804,10 +804,9 @@ def transactions(obj, compact, account_name):
         tell_user(resp, withsuccess=True)
     check_response_status(resp)
 
-@facades.command(help="List active facades in the Nexus")
-@click.argument("connection-name")
+@facades.command("list", help="List active facades in the Nexus")
 @click.pass_obj
-def list_facades(obj, connection_name):
+def list_facades(obj):
     url = urljoin(obj.nexus_base_url, "/facades")
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
@@ -819,7 +818,7 @@ def list_facades(obj, connection_name):
     check_response_status(resp)
 
 
-@facades.command(help="create a new (Taler) facade")
+@facades.command("new-taler-wire-gateway-facade", help="create a new Taler Wire Gateway facade")
 @click.option("--facade-name", help="Name of the facade", required=True)
 @click.option("--currency", help="Facade's currency", required=True)
 @click.argument("connection-name")
