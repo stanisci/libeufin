@@ -890,7 +890,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                             FacadeShowInfo(
                                 name = it.facadeName,
                                 type = it.type,
-                                baseUrl = "http://${host}/facades/${it.id.value}/${it.type}/",
+                                twgBaseUrl = "http://${host}/facades/${it.facadeName}/${it.type}/",
                                 config = getFacadeState(it.type, it)
                             )
                         )

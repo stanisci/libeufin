@@ -348,7 +348,9 @@ data class BankMessageInfo(
 data class FacadeShowInfo(
     val name: String,
     val type: String,
-    val baseUrl: String,
+    // Taler wire gateway API base URL.
+    // Different from the base URL of the facade.
+    val twgBaseUrl: String,
     val config: JsonNode
 )
 

@@ -299,7 +299,7 @@ private fun ingestOneIncomingTransaction(payment: NexusBankTransactionEntity, tx
         return
     }
     val reservePub = extractReservePubFromSubject(subject)
-    if (reservePub == null){
+    if (reservePub == null) {
         logger.warn("could not find reserve pub in remittance information")
         TalerInvalidIncomingPaymentEntity.new {
             this.payment = payment
@@ -332,8 +332,10 @@ private fun ingestOneIncomingTransaction(payment: NexusBankTransactionEntity, tx
 }
 
 fun maybePrepareRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
-    logger.debug("Searching refundable payments of account: ${bankAccount}," +
-            " after last seen transaction id: ${lastSeenId}")
+    logger.debug(
+        "Searching refundable payments of account: ${bankAccount}," +
+                " after last seen transaction id: ${lastSeenId}"
+    )
     transaction {
         TalerInvalidIncomingPaymentsTable.innerJoin(NexusBankTransactionsTable,
             { NexusBankTransactionsTable.id }, { TalerInvalidIncomingPaymentsTable.payment }).select {
@@ -347,8 +349,10 @@ fun maybePrepareRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
                 CamtBankAccountEntry::class.java
             )
             if (paymentData.batches == null) {
-                logger.error("A singleton batched payment was expected to be refunded," +
-                        " but none was found (in transaction (AcctSvcrRef): ${paymentData.accountServicerRef})")
+                logger.error(
+                    "A singleton batched payment was expected to be refunded," +
+                            " but none was found (in transaction (AcctSvcrRef): ${paymentData.accountServicerRef})"
+                )
                 throw NexusError(HttpStatusCode.InternalServerError, "Unexpected void payment, cannot refund")
             }
             val debtorAccount = paymentData.batches[0].batchTransactions[0].details.debtorAccount
@@ -405,8 +409,10 @@ fun maybePrepareRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
  */
 fun ingestTalerTransactions(bankAccountId: String) {
     fun ingest(bankAccount: NexusBankAccountEntity, facade: FacadeEntity) {
-        logger.debug("Ingesting transactions for Taler facade ${facade.id.value}," +
-                " and bank account: ${bankAccount.bankAccountName}")
+        logger.debug(
+            "Ingesting transactions for Taler facade ${facade.id.value}," +
+                    " and bank account: ${bankAccount.bankAccountName}"
+        )
         val facadeState = getTalerFacadeState(facade.facadeName)
         var lastId = facadeState.highestSeenMessageSerialId
         NexusBankTransactionEntity.find {
@@ -554,7 +560,10 @@ fun talerFacadeRoutes(route: Route, httpClient: HttpClient) {
 
     route.get("/config") {
         val facadeId = ensureNonNull(call.parameters["fcid"])
-        call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.config"))
+        call.request.requirePermission(
+            PermissionQuery("facade", facadeId, "facade.talerWireGateway.transfer"),
+            PermissionQuery("facade", facadeId, "facade.talerWireGateway.history")
+        )
         call.respond(object {
             val version = "0.0.0"
             val name = "taler-wire-gateway"
@@ -575,7 +584,7 @@ fun talerFacadeRoutes(route: Route, httpClient: HttpClient) {
         return@get
     }
     route.get("") {
-        call.respondText("Hello, this is Taler Facade")
+        call.respondText("Hello, this is a Taler Facade")
         return@get
     }
 }
