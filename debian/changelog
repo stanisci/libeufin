@@ -1,3 +1,9 @@
+libeufin (0.0.1-5) unstable; urgency=medium
+
+  * Fix facade URL.
+
+ -- Florian Dold <florian@dold.me>  Tue, 03 Aug 2021 14:43:33 +0200
+
 libeufin (0.0.1-4) unstable; urgency=medium
 
   * Bugfixes in libeufin-cli and libeufin-nexus.

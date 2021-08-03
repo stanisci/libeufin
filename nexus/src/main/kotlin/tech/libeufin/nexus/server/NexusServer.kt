@@ -40,6 +40,7 @@ import io.ktor.response.*
 import io.ktor.routing.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.ktor.util.*
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -142,24 +143,6 @@ suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
         throw NexusError(HttpStatusCode.BadRequest, "Invalid value for '${e.pathReference}'")
     } catch (e: JsonParseException) {
         throw NexusError(HttpStatusCode.BadRequest, "Invalid JSON")
-    }
-}
-
-
-fun createLoopbackBankConnection(bankConnectionName: String, user: NexusUserEntity, data: JsonNode) {
-    val bankConn = NexusBankConnectionEntity.new {
-        this.connectionId = bankConnectionName
-        owner = user
-        type = "loopback"
-    }
-    val bankAccount = jacksonObjectMapper().treeToValue(data, BankAccount::class.java)
-    NexusBankAccountEntity.new {
-        bankAccountName = bankAccount.nexusBankAccountId
-        iban = bankAccount.iban
-        bankCode = bankAccount.bic
-        accountHolder = bankAccount.ownerName
-        defaultBankConnection = bankConn
-        highestSeenBankMessageSerialId = 0
     }
 }
 
@@ -865,10 +848,15 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     val f = FacadeEntity.findByName(fcid) ?: throw NexusError(
                         HttpStatusCode.NotFound, "Facade $fcid does not exist"
                     )
+                    // FIXME: this only works for TWG urls.
                     FacadeShowInfo(
                         name = f.facadeName,
                         type = f.type,
-                        baseUrl = "http://${host}/facades/${f.id.value}/${f.type}/",
+                        twgBaseUrl = call.url {
+                            parameters.clear()
+                            encodedPath = ""
+                            pathComponents("facades", f.facadeName, f.type)
+                        },
                         config = getFacadeState(f.type, f)
                     )
                 }
@@ -890,7 +878,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                             FacadeShowInfo(
                                 name = it.facadeName,
                                 type = it.type,
-                                twgBaseUrl = "http://${host}/facades/${it.facadeName}/${it.type}/",
+                                twgBaseUrl = call.url {
+                                    parameters.clear()
+                                    encodedPath = ""
+                                    pathComponents("facades", it.facadeName, it.type)
+                                },
                                 config = getFacadeState(it.type, it)
                             )
                         )
