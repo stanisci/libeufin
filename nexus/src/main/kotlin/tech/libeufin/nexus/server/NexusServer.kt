@@ -856,6 +856,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                             parameters.clear()
                             encodedPath = ""
                             pathComponents("facades", f.facadeName, f.type)
+                            encodedPath += "/"
                         },
                         config = getFacadeState(f.type, f)
                     )
@@ -882,6 +883,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                                     parameters.clear()
                                     encodedPath = ""
                                     pathComponents("facades", it.facadeName, it.type)
+                                    encodedPath += "/"
                                 },
                                 config = getFacadeState(it.type, it)
                             )
