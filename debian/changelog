@@ -1,3 +1,9 @@
+libeufin (0.0.1-6) unstable; urgency=medium
+
+  * Fix trailing slash in facade URL.
+
+ -- Florian Dold <florian@dold.me>  Tue, 03 Aug 2021 14:43:33 +0200
+
 libeufin (0.0.1-5) unstable; urgency=medium
 
   * Fix facade URL.
