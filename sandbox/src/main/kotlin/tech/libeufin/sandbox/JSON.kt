@@ -30,25 +30,9 @@ data class EbicsHostsResponse(
     val ebicsHosts: List<String>
 )
 
-/**
- * Used to show information about ONE particular
- * Ebics host that is active in the system.
- */
-data class EbicsHostResponse(
-    val hostID: String,
-    val ebicsVersion: String
-)
-
 data class EbicsHostCreateRequest(
     val hostID: String,
     val ebicsVersion: String
-)
-
-/**
- * List type that show all the payments existing in the system.
- */
-data class PaymentsResponse(
-    val payments: MutableList<RawPayment> = mutableListOf()
 )
 
 /**
@@ -81,32 +65,7 @@ data class BankAccountRequest(
     val currency: String
 )
 
-data class DateRange(
-    val startDate: Long,
-    val endDate: Long
-)
-
 data class CamtParams(
     val iban: String,
     val type: Int
-)
-
-data class BankAccountStatements(
-    var bankAccountStatements: MutableList<BankAccountStatement> = mutableListOf()
-)
-
-data class BankAccountReports(
-    var bankAccountReports: MutableList<BankAccountReport> = mutableListOf()
-)
-
-data class BankAccountStatement(
-    var statementId: String,
-    var creationTime: Long,
-    var message: MutableList<String> = mutableListOf()
-)
-
-data class BankAccountReport(
-    var reportId: String,
-    var creationTime: Long,
-    val message: String
 )

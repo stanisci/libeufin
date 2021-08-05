@@ -1054,54 +1054,33 @@ def bankaccount_generate_transactions(obj, account_label):
     check_response_status(resp)
 
 
-@sandbox_bankaccount.command(help="Book a payment in the sandbox")
-@click.option("--creditor-iban", help="IBAN receiving the payment", prompt=True)
-@click.option("--creditor-bic", help="BIC receiving the payment", prompt=True)
-@click.option(
-    "--creditor-name",
-    help="Name of the person who is receiving the payment",
-    prompt=True,
-)
+@sandbox_bankaccount.command(help="Book an incoming payment in the sandbox")
+@click.argument("account-name")
 @click.option("--debtor-iban", help="IBAN sending the payment", prompt=True)
 @click.option("--debtor-bic", help="BIC sending the payment", prompt=True)
 @click.option(
     "--debtor-name", help="name of the person who is sending the payment", prompt=True
 )
 @click.option("--amount", help="amount, no currency", prompt=True)
-@click.option("--currency", help="currency", prompt=True)
 @click.option("--subject", help="payment subject", prompt=True)
-@click.option(
-    "--direction",
-    help="direction respect to the bank account hosted at Sandbox: allows DBIT/CRDT values.",
-    prompt=True,
-)
 @click.pass_obj
-def book_payment(
+def simulate_incoming_transaction(
     obj,
-    creditor_iban,
-    creditor_bic,
-    creditor_name,
+    account_name,
     debtor_iban,
     debtor_bic,
     debtor_name,
     amount,
-    currency,
     subject,
-    direction,
 ):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, "/admin/payments")
+    url = urljoin(sandbox_base_url, f"/admin/bank-accounts/{account_name}/simulate-incoming-transaction")
     body = dict(
-        creditorIban=creditor_iban,
-        creditorBic=creditor_bic,
-        creditorName=creditor_name,
-        debitorIban=debtor_iban,
-        debitorBic=debtor_bic,
-        debitorName=debtor_name,
+        debtorIban=debtor_iban,
+        debtorBic=debtor_bic,
+        debtorName=debtor_name,
         amount=amount,
-        currency=currency,
         subject=subject,
-        direction=direction,
     )
     try:
         resp = post(url, json=body)

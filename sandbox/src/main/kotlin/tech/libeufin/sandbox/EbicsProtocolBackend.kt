@@ -171,11 +171,11 @@ private fun getRelatedParty(branch: XmlElementBuilder, payment: RawPayment) {
         var bic = payment.creditorBic
     }
     if (payment.direction == "CRDT") {
-        otherParty.iban = payment.debitorIban
+        otherParty.iban = payment.debtorIban
         otherParty.ibanPath = "DbtrAcct/Id/IBAN"
         otherParty.namePath = "Dbtr/Nm"
-        otherParty.name = payment.debitorName
-        otherParty.bic = payment.debitorBic
+        otherParty.name = payment.debtorName
+        otherParty.bic = payment.debtorBic
         otherParty.bicPath = "DbtrAgt/FinInstnId/BIC"
     }
     branch.element("RltdPties") {

@@ -28,9 +28,9 @@ data class RawPayment(
     val creditorIban: String,
     val creditorBic: String?,
     val creditorName: String,
-    val debitorIban: String,
-    val debitorBic: String?,
-    val debitorName: String,
+    val debtorIban: String,
+    val debtorBic: String?,
+    val debtorName: String,
     val amount: String,
     val currency: String,
     val subject: String,
@@ -50,7 +50,6 @@ data class IncomingPaymentInfo(
     val debtorBic: String?,
     val debtorName: String,
     val amount: String,
-    val currency: String,
     val subject: String
 )
 

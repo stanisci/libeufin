@@ -9,7 +9,6 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
 import tech.libeufin.util.RawPayment
 import tech.libeufin.util.importDateFromMillis
 import tech.libeufin.util.toDashedDate
-import java.math.BigInteger
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
@@ -54,7 +53,6 @@ fun historyForAccount(iban: String): List<RawPayment> {
             FIXME: add the following condition too:
             and (BankAccountTransactionsTable.date.between(start.millis, end.millis))
              */
-
         }.forEach {
             history.add(
                 RawPayment(
@@ -62,9 +60,9 @@ fun historyForAccount(iban: String): List<RawPayment> {
                     creditorIban = it[BankAccountTransactionsTable.creditorIban],
                     creditorBic = it[BankAccountTransactionsTable.creditorBic],
                     creditorName = it[BankAccountTransactionsTable.creditorName],
-                    debitorIban = it[BankAccountTransactionsTable.debtorIban],
-                    debitorBic = it[BankAccountTransactionsTable.debtorBic],
-                    debitorName = it[BankAccountTransactionsTable.debtorName],
+                    debtorIban = it[BankAccountTransactionsTable.debtorIban],
+                    debtorBic = it[BankAccountTransactionsTable.debtorBic],
+                    debtorName = it[BankAccountTransactionsTable.debtorName],
                     date = importDateFromMillis(it[BankAccountTransactionsTable.date]).toDashedDate(),
                     amount = it[BankAccountTransactionsTable.amount],
                     currency = it[BankAccountTransactionsTable.currency],
@@ -77,7 +75,6 @@ fun historyForAccount(iban: String): List<RawPayment> {
                 )
             )
         }
-
     }
     return history
 }

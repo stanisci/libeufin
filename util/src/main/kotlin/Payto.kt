@@ -13,7 +13,8 @@ data class Payto(
 class InvalidPaytoError(msg: String) : Exception(msg)
 
 fun parsePayto(paytoLine: String): Payto {
-    if (!"^payto://".toRegex().containsMatchIn(paytoLine)) throw InvalidPaytoError("Invalid payto line: $paytoLine")
+    if (!paytoLine.startsWith("payto://"))
+        throw InvalidPaytoError("Invalid payto URI: $paytoLine")
     val javaParsedUri = try {
         URI(paytoLine)
     } catch (e: java.lang.Exception) {

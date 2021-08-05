@@ -66,7 +66,6 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.int
-import com.google.common.collect.Maps
 import com.google.common.io.Resources
 import execThrowableOrTerminate
 import io.ktor.application.ApplicationCall
@@ -87,14 +86,12 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorIban
 import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorName
 import tech.libeufin.sandbox.BankAccountTransactionsTable.direction
 import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
-import tech.libeufin.sandbox.SandboxConfigEntity
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import java.net.BindException
 import java.util.*
 import kotlin.random.Random
-import kotlin.reflect.jvm.internal.impl.load.kotlin.JvmType
 import kotlin.system.exitProcess
 
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
@@ -435,34 +432,6 @@ fun serverMain(dbName: String, port: Int) {
                 return@post
             }
 
-            /**
-             * Adds a new payment to the book.
-             */
-            post("/admin/payments") {
-                val body = call.receiveJson<RawPayment>()
-                val randId = getRandomString(16)
-                transaction {
-                    val localIban = if (body.direction == "DBIT") body.debitorIban else body.creditorIban
-                    BankAccountTransactionsTable.insert {
-                        it[creditorIban] = body.creditorIban
-                        it[creditorBic] = body.creditorBic
-                        it[creditorName] = body.creditorName
-                        it[debtorIban] = body.debitorIban
-                        it[debtorBic] = body.debitorBic
-                        it[debtorName] = body.debitorName
-                        it[subject] = body.subject
-                        it[amount] = body.amount
-                        it[currency] = body.currency
-                        it[date] = Instant.now().toEpochMilli()
-                        it[accountServicerReference] = "sandbox-$randId"
-                        it[account] = getBankAccountFromIban(localIban).id
-                        it[direction] = body.direction
-                    }
-                }
-                call.respondText("Payment created")
-                return@post
-            }
-
             post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
                 val body = call.receiveJson<IncomingPaymentInfo>()
                 // FIXME: generate nicer UUID!
@@ -494,7 +463,7 @@ fun serverMain(dbName: String, port: Int) {
             post("/admin/ebics/bank-accounts") {
                 val body = call.receiveJson<BankAccountRequest>()
                 transaction {
-                    var subscriber = getEbicsSubscriberFromDetails(
+                    val subscriber = getEbicsSubscriberFromDetails(
                         body.subscriber.userID,
                         body.subscriber.partnerID,
                         body.subscriber.hostID
@@ -504,7 +473,7 @@ fun serverMain(dbName: String, port: Int) {
                         bic = body.bic
                         name = body.name
                         label = body.label
-                        currency = body.currency.toUpperCase(Locale.ROOT)
+                        currency = body.currency.uppercase(Locale.ROOT)
                     }
                 }
                 call.respondText("Bank account created")
