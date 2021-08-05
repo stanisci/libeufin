@@ -1,3 +1,9 @@
+libeufin (0.0.1-7) unstable; urgency=medium
+
+  * New sandbox simulate-incoming-transaction command.
+
+ -- Florian Dold <florian@dold.me>  Fri, 06 Aug 2021 00:08:52 +0200
+
 libeufin (0.0.1-6) unstable; urgency=medium
 
   * Fix trailing slash in facade URL.
