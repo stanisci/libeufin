@@ -7,6 +7,9 @@ import json
 import hashlib
 import errno
 from datetime import datetime
+import requests
+
+# FIXME: always use qualified name
 from requests import post, get, auth, delete
 from urllib.parse import urljoin
 from getpass import getpass
@@ -19,12 +22,14 @@ def check_response_status(resp, expected_status_code=200):
         print("Unexpected response status: {}".format(resp.status_code))
         sys.exit(1)
 
+
 def tell_user(resp, expected_status_code=200, withsuccess=False):
     if resp.status_code != expected_status_code:
         print(resp.content.decode("utf-8"))
         return
     if withsuccess:
         print(resp.content.decode("utf-8"))
+
 
 # FIXME: deprecate this in favor of NexusContext
 def fetch_env():
@@ -75,10 +80,12 @@ def connections(ctx):
 def users(ctx):
     ctx.obj = NexusContext()
 
+
 @cli.group()
 @click.pass_context
 def permissions(ctx):
     ctx.obj = NexusContext()
+
 
 @users.command("list", help="List users")
 @click.pass_obj
@@ -93,6 +100,7 @@ def list_users(obj):
 
     tell_user(resp, withsuccess=True)
     check_response_status(resp)
+
 
 @users.command(help="Change user's password (as superuser)")
 @click.argument("username")
@@ -167,6 +175,7 @@ def list_permission(obj):
     print(resp.content.decode("utf-8"))
     check_response_status(resp)
 
+
 @permissions.command("grant", help="Grant permission to a subject")
 @click.pass_obj
 @click.argument("subject-type")
@@ -174,7 +183,9 @@ def list_permission(obj):
 @click.argument("resource-type")
 @click.argument("resource-id")
 @click.argument("permission-name")
-def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, permission_name):
+def grant_permission(
+    obj, subject_type, subject_id, resource_type, resource_id, permission_name
+):
     url = urljoin(obj.nexus_base_url, f"/permissions")
     try:
         permission = dict(
@@ -188,7 +199,11 @@ def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, 
             permission=permission,
             action="grant",
         )
-        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
+        resp = post(
+            url,
+            json=body,
+            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
+        )
     except Exception as e:
         print(e)
         print("Could not reach nexus at " + url)
@@ -197,6 +212,7 @@ def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, 
     print(resp.content.decode("utf-8"))
     check_response_status(resp)
 
+
 @permissions.command("revoke", help="Revoke permission from a subject")
 @click.pass_obj
 @click.argument("subject-type")
@@ -204,7 +220,9 @@ def grant_permission(obj, subject_type, subject_id, resource_type, resource_id, 
 @click.argument("resource-type")
 @click.argument("resource-id")
 @click.argument("permission-name")
-def revoke_permission(obj, subject_type, subject_id, resource_type, resource_id, permission_name):
+def revoke_permission(
+    obj, subject_type, subject_id, resource_type, resource_id, permission_name
+):
     url = urljoin(obj.nexus_base_url, f"/permissions")
     try:
         permission = dict(
@@ -218,7 +236,11 @@ def revoke_permission(obj, subject_type, subject_id, resource_type, resource_id,
             permission=permission,
             action="revoke",
         )
-        resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
+        resp = post(
+            url,
+            json=body,
+            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
+        )
     except Exception as e:
         print(e)
         print("Could not reach nexus at " + url)
@@ -486,7 +508,9 @@ def import_bank_account(
     check_response_status(resp)
 
 
-@connections.command(help="Update list of bank accounts available through this connection.")
+@connections.command(
+    help="Update list of bank accounts available through this connection."
+)
 @click.argument("connection-name")
 @click.pass_obj
 def download_bank_accounts(obj, connection_name):
@@ -716,11 +740,11 @@ def prepare_payment(
         print("Could not reach nexus at " + url)
         exit(1)
 
-    tell_user(resp, withsuccess=True)
+    tell_user(resp)
     check_response_status(resp)
 
 
-@accounts.command(help="submit a prepared payment")
+@accounts.command(help="Submit a payment initiation")
 @click.option("--payment-uuid", help="payment unique identifier", required=True)
 @click.argument("account-name")
 @click.pass_obj
@@ -743,7 +767,64 @@ def submit_payment(obj, account_name, payment_uuid):
     check_response_status(resp)
 
 
-@accounts.command(help="fetch transactions from the bank")
+@accounts.command(help="Show status of a payment initiation")
+@click.option("--payment-uuid", help="payment unique identifier", required=True)
+@click.argument("account-name")
+@click.pass_obj
+def show_payment(obj, account_name, payment_uuid):
+    url = urljoin(
+        obj.nexus_base_url,
+        f"/bank-accounts/{account_name}/payment-initiations/{payment_uuid}",
+    )
+    try:
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception:
+        print("Could not reach nexus at" + url)
+        exit(1)
+
+    tell_user(resp, withsuccess=True)
+    check_response_status(resp)
+
+
+@accounts.command(help="List payment initiations")
+@click.argument("account-name")
+@click.pass_obj
+def show_payment(obj, account_name):
+    url = urljoin(
+        obj.nexus_base_url, f"/bank-accounts/{account_name}/payment-initiations"
+    )
+    try:
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception:
+        print("Could not reach nexus at" + url)
+        exit(1)
+
+    tell_user(
+        resp,
+    )
+    check_response_status(resp)
+
+
+@accounts.command(help="Delete a payment initiation")
+@click.argument("account-name")
+@click.option("--payment-uuid", help="payment unique identifier", required=True)
+@click.pass_obj
+def show_payment(obj, account_name, payment_uuid):
+    url = urljoin(
+        obj.nexus_base_url,
+        f"/bank-accounts/{account_name}/payment-initiations/{payment_uuid}",
+    )
+    try:
+        resp = delete(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
+    except Exception:
+        print("Could not reach nexus at" + url)
+        exit(1)
+
+    tell_user(resp)
+    check_response_status(resp)
+
+
+@accounts.command(help="Fetch transactions from the bank")
 @click.option(
     "--range-type",
     default="all",
@@ -757,7 +838,7 @@ def fetch_transactions(obj, account_name, range_type, level):
         obj.nexus_base_url, "/bank-accounts/{}/fetch-transactions".format(account_name)
     )
     try:
-        resp = post(
+        resp = requests.post(
             url,
             json=dict(rangeType=range_type, level=level),
             auth=auth.HTTPBasicAuth(obj.username, obj.password),
@@ -805,6 +886,7 @@ def transactions(obj, compact, account_name):
         tell_user(resp, withsuccess=True)
     check_response_status(resp)
 
+
 @facades.command("list", help="List active facades in the Nexus")
 @click.pass_obj
 def list_facades(obj):
@@ -819,7 +901,9 @@ def list_facades(obj):
     check_response_status(resp)
 
 
-@facades.command("new-taler-wire-gateway-facade", help="create a new Taler Wire Gateway facade")
+@facades.command(
+    "new-taler-wire-gateway-facade", help="create a new Taler Wire Gateway facade"
+)
 @click.option("--facade-name", help="Name of the facade", required=True)
 @click.option("--currency", help="Facade's currency", required=True)
 @click.argument("connection-name")
@@ -1075,7 +1159,10 @@ def simulate_incoming_transaction(
     subject,
 ):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, f"/admin/bank-accounts/{account_name}/simulate-incoming-transaction")
+    url = urljoin(
+        sandbox_base_url,
+        f"/admin/bank-accounts/{account_name}/simulate-incoming-transaction",
+    )
     body = dict(
         debtorIban=debtor_iban,
         debtorBic=debtor_bic,

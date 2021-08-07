@@ -30,7 +30,7 @@ const val NUMBER_MAX_DIGITS = 20
 class BadAmount(badValue: Any?) : Exception("Value '${badValue}' is not a valid amount")
 
 /**
- * Any number can become a Amount IF it does NOT need to be rounded to comply to the scale == 2.
+ * Any number can become an Amount IF it does NOT need to be rounded to comply to the scale == 2.
  */
 typealias Amount = BigDecimal
 
@@ -42,7 +42,7 @@ class AmountColumnType : ColumnType() {
                 return when (valueFromDB) {
                     is BigDecimal -> valueFromDB.setScale(SCALE_TWO, RoundingMode.UNNECESSARY)
                     is Double -> BigDecimal.valueOf(valueFromDB).setScale(SCALE_TWO, RoundingMode.UNNECESSARY)
-                    is Float -> BigDecimal(java.lang.Float.toString(valueFromDB)).setScale(
+                    is Float -> BigDecimal(valueFromDB.toString()).setScale(
                         SCALE_TWO,
                         RoundingMode.UNNECESSARY
                     )

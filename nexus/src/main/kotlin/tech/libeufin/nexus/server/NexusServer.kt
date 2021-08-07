@@ -418,11 +418,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 call.respond(object {})
                 return@post
             }
-            get("/bank-accounts/{accountid}/schedule") {
+            get("/bank-accounts/{accountId}/schedule") {
                 requireSuperuser(call.request)
                 val resp = jacksonObjectMapper().createObjectNode()
                 val ops = jacksonObjectMapper().createObjectNode()
-                val accountId = ensureNonNull(call.parameters["accountid"])
+                val accountId = ensureNonNull(call.parameters["accountId"])
                 resp.set<JsonNode>("schedule", ops)
                 transaction {
                     NexusBankAccountEntity.findByName(accountId)
@@ -443,10 +443,10 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 return@get
             }
 
-            post("/bank-accounts/{accountid}/schedule") {
+            post("/bank-accounts/{accountId}/schedule") {
                 requireSuperuser(call.request)
                 val schedSpec = call.receive<CreateAccountTaskRequest>()
-                val accountId = ensureNonNull(call.parameters["accountid"])
+                val accountId = ensureNonNull(call.parameters["accountId"])
                 transaction {
                     authenticateRequest(call.request)
                     NexusBankAccountEntity.findByName(accountId)
@@ -635,6 +635,16 @@ fun serverMain(dbName: String, host: String, port: Int) {
                 return@get
             }
 
+            delete("/bank-accounts/{accountId}/payment-initiations/{uuid}") {
+                requireSuperuser(call.request)
+                val uuid = ensureLong(call.parameters["uuid"])
+                transaction {
+                    val paymentInitiation = getPaymentInitiation(uuid)
+                    paymentInitiation.delete()
+                }
+                call.respond(NexusMessage(message = "Payment initiation $uuid deleted"))
+            }
+
             // Adds a new payment initiation.
             post("/bank-accounts/{accountid}/payment-initiations") {
                 requireSuperuser(call.request)
@@ -644,7 +654,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                     authenticateRequest(call.request)
                     val bankAccount = NexusBankAccountEntity.findByName(accountId)
                     if (bankAccount == null) {
-                        throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
+                        throw NexusError(HttpStatusCode.NotFound, "unknown bank account ($accountId)")
                     }
                     val amount = parseAmount(body.amount)
                     val paymentEntity = addPaymentInitiation(
