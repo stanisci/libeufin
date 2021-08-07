@@ -21,8 +21,6 @@ package tech.libeufin.util
 
 import net.taler.wallet.crypto.Base32Crockford
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.math.BigInteger
 import java.security.*
@@ -131,7 +129,7 @@ object CryptoUtil {
     fun getEbicsPublicKeyHash(publicKey: RSAPublicKey): ByteArray {
         val keyBytes = ByteArrayOutputStream()
         keyBytes.writeBytes(publicKey.publicExponent.toUnsignedHexString().lowercase().trimStart('0').toByteArray())
-        keyBytes.write(' '.toInt())
+        keyBytes.write(' '.code)
         keyBytes.writeBytes(publicKey.modulus.toUnsignedHexString().lowercase().trimStart('0').toByteArray())
         println("buffer before hashing: '${keyBytes.toString(Charsets.UTF_8)}'")
         val digest = MessageDigest.getInstance("SHA-256")
@@ -235,7 +233,7 @@ object CryptoUtil {
         val digest = MessageDigest.getInstance("SHA-256")
         for (b in orderData) {
             when (b) {
-                '\r'.toByte(), '\n'.toByte(), (26).toByte() -> Unit
+                '\r'.code.toByte(), '\n'.code.toByte(), (26).toByte() -> Unit
                 else -> digest.update(b)
             }
         }
@@ -303,21 +301,34 @@ object CryptoUtil {
     }
 
     fun hashpw(pw: String): String {
-        val pwh = bytesToBase64(CryptoUtil.hashStringSHA256(pw))
-        return "sha256\$$pwh"
+        val saltBytes = ByteArray(8)
+        SecureRandom().nextBytes(saltBytes)
+        val salt = bytesToBase64(saltBytes)
+        val pwh = bytesToBase64(CryptoUtil.hashStringSHA256("$salt|$pw"))
+        return "sha256-salted\$$salt\$$pwh"
     }
 
     fun checkpw(pw: String, storedPwHash: String): Boolean {
-        val idx = storedPwHash.indexOf("\$")
-        if (idx <= 0) {
+        val components = storedPwHash.split('$')
+        if (components.size < 2) {
             throw Exception("bad password hash")
         }
-        val algo = storedPwHash.substring(0, idx)
-        if (algo != "sha256") {
-            throw Exception("unsupported hash algo")
+        val algo = components[0]
+        // Support legacy unsalted passwords
+        if (algo == "sha256") {
+            val hash = components[1]
+            val pwh = bytesToBase64(CryptoUtil.hashStringSHA256(pw))
+            return pwh == hash
         }
-        val rest = storedPwHash.substring(idx + 1)
-        val pwh = bytesToBase64(CryptoUtil.hashStringSHA256(pw))
-        return pwh == rest
+        if (algo == "sha256-salted") {
+            if (components.size != 3) {
+                throw Exception("bad password hash")
+            }
+            val salt = components[1]
+            val hash = components[2]
+            val pwh = bytesToBase64(CryptoUtil.hashStringSHA256("$salt|$pw"))
+            return pwh == hash
+        }
+        throw Exception("unsupported hash algo: '$algo'")
     }
 }
