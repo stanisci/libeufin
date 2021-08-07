@@ -802,7 +802,7 @@ def show_payment(obj, account_name, payment_uuid):
 @accounts.command(help="List payment initiations")
 @click.argument("account-name")
 @click.pass_obj
-def show_payment(obj, account_name):
+def list_payments(obj, account_name):
     url = urljoin(
         obj.nexus_base_url, f"/bank-accounts/{account_name}/payment-initiations"
     )
@@ -813,7 +813,7 @@ def show_payment(obj, account_name):
         exit(1)
 
     tell_user(
-        resp,
+        resp, withsuccess=True,
     )
     check_response_status(resp)
 
@@ -822,7 +822,7 @@ def show_payment(obj, account_name):
 @click.argument("account-name")
 @click.option("--payment-uuid", help="payment unique identifier", required=True)
 @click.pass_obj
-def show_payment(obj, account_name, payment_uuid):
+def delete_payment(obj, account_name, payment_uuid):
     url = urljoin(
         obj.nexus_base_url,
         f"/bank-accounts/{account_name}/payment-initiations/{payment_uuid}",
@@ -864,7 +864,7 @@ def fetch_transactions(obj, account_name, range_type, level):
     check_response_status(resp)
 
 
-@accounts.command(help="get transactions from the simplified nexus JSON API")
+@accounts.command(help="Get transactions from the simplified nexus JSON API")
 @click.option(
     "--compact/--no-compact",
     help="Tells only amount/subject for each payment",

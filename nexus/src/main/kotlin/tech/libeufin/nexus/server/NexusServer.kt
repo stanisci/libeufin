@@ -168,10 +168,7 @@ val client = HttpClient {
     expectSuccess = false // this way, it does not throw exceptions on != 200 responses.
 }
 
-fun serverMain(dbName: String, host: String, port: Int) {
-    execThrowableOrTerminate {
-        dbCreateTables(dbName)
-    }
+fun serverMain(host: String, port: Int) {
     val server = embeddedServer(Netty, port = port, host = host) {
         install(CallLogging) {
             this.level = Level.DEBUG
