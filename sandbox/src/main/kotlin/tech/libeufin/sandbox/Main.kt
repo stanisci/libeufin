@@ -558,7 +558,7 @@ fun serverMain(dbName: String, port: Int) {
             post("/admin/ebics/bank-accounts") {
                 val body = call.receiveJson<BankAccountRequest>()
                 if (!validateBic(body.bic)) {
-                    throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC")
+                    throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
                 }
                 transaction {
                     val subscriber = getEbicsSubscriberFromDetails(

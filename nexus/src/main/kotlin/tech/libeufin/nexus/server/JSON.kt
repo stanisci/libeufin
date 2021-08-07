@@ -113,6 +113,12 @@ data class NexusMessage(
     val message: String
 )
 
+data class ErrorResponse(
+    val code: Int,
+    val hint: String,
+    val detail: String,
+)
+
 data class BankConnectionInfo(
     val name: String,
     val type: String

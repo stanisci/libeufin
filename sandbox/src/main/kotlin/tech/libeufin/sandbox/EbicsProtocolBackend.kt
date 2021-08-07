@@ -514,7 +514,6 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
                                         focusElement.textContent
                                     }
                                 }
-
                             }
                             val amt = requireUniqueChildNamed("Amt") {
                                 requireOnlyChild { focusElement }

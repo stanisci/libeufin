@@ -189,11 +189,10 @@ fun serverMain(host: String, port: Int) {
                 logger.error("Caught exception while handling '${call.request.uri} (${cause.reason})")
                 call.respond(
                     status = cause.statusCode,
-                    message = NexusErrorJson(
-                        error = NexusErrorDetailJson(
-                            description = cause.reason,
-                            type = "nexus-error"
-                        )
+                    message = ErrorResponse(
+                        code = TalerErrorCode.TALER_EC_LIBEUFIN_NEXUS_GENERIC_ERROR.code,
+                        hint = "nexus error, see detail",
+                        detail = cause.reason,
                     )
                 )
             }
@@ -201,11 +200,10 @@ fun serverMain(host: String, port: Int) {
                 logger.error("Caught exception while handling '${call.request.uri}' (${cause.reason})")
                 call.respond(
                     cause.httpStatusCode,
-                    NexusErrorJson(
-                        error = NexusErrorDetailJson(
-                            type = "ebics-protocol-error",
-                            description = cause.reason
-                        )
+                    message = ErrorResponse(
+                        code = TalerErrorCode.TALER_EC_LIBEUFIN_NEXUS_GENERIC_ERROR.code,
+                        hint = "EBICS protocol error",
+                        detail = cause.reason,
                     )
                 )
             }
@@ -214,11 +212,10 @@ fun serverMain(host: String, port: Int) {
                 cause.printStackTrace()
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    NexusErrorJson(
-                        error = NexusErrorDetailJson(
-                            type = "nexus-error",
-                            description = "Internal server error"
-                        )
+                    ErrorResponse(
+                        code = TalerErrorCode.TALER_EC_LIBEUFIN_NEXUS_UNCAUGHT_EXCEPTION.code,
+                        hint = "unexpected exception",
+                        detail = "exception message: ${cause.message}",
                     )
                 )
             }

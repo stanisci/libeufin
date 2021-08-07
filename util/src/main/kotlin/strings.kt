@@ -125,13 +125,15 @@ fun getRandomString(length: Int): String {
         .joinToString("")
 }
 
+// Taken from the ISO20022 XSD schema
 private val bicRegex = Regex("^[A-Z]{6}[A-Z2-9][A-NP-Z0-9]([A-Z0-9]{3})?$")
 
 fun validateBic(bic: String): Boolean {
     return bicRegex.matches(bic)
 }
 
-private val ibanRegex = Regex("^[A-Z]{2}[A-Za-z0-9]{6,32}$")
+// Taken from the ISO20022 XSD schema
+private val ibanRegex = Regex("^[A-Z]{2}[0-9]{2}[a-zA-Z0-9]{1,30}$")
 
 fun validateIban(iban: String): Boolean {
     return ibanRegex.matches(iban)
