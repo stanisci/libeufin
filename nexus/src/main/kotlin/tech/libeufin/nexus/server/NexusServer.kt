@@ -279,6 +279,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             post("/permissions") {
                 val req = call.receive<ChangePermissionsRequest>()
+                val knownPermissions = listOf()
                 transaction {
                     requireSuperuser(call.request)
                     val existingPerm = findPermission(req.permission)
@@ -321,11 +322,19 @@ fun serverMain(dbName: String, host: String, port: Int) {
             }
 
             // change a user's password
-            post("/users/password") {
+            post("/users/{username}/password") {
                 val body = call.receiveJson<ChangeUserPassword>()
+                val targetUsername = ensureNonNull(call.parameters["username"])
                 transaction {
-                    val user = authenticateRequest(call.request)
-                    user.passwordHash = CryptoUtil.hashpw(body.newPassword)
+                    requireSuperuser(call.request)
+                    val targetUser = NexusUserEntity.find {
+                        NexusUsersTable.username eq targetUsername
+                    }.firstOrNull()
+                    if (targetUser == null) throw NexusError(
+                        HttpStatusCode.NotFound,
+                        "Username $targetUsername not found"
+                    )
+                    targetUser.passwordHash = CryptoUtil.hashpw(body.newPassword)
                 }
                 call.respond(NexusMessage(message = "Password successfully changed"))
                 return@post

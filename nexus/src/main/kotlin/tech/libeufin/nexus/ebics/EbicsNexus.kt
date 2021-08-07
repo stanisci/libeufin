@@ -603,6 +603,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         pdfWriter.flush()
         return po.toByteArray()
     }
+
     override fun exportBackup(bankConnectionId: String, passphrase: String): JsonNode {
         val subscriber = transaction { getEbicsSubscriberDetails(bankConnectionId) }
         val ret = EbicsKeysBackupJson(
