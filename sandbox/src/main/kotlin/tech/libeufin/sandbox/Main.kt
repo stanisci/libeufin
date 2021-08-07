@@ -198,7 +198,8 @@ data class BankAccountInfo(
     val label: String,
     val name: String,
     val iban: String,
-    val bic: String
+    val bic: String,
+    val currency: String?
 )
 
 data class BankAccountsListReponse(
@@ -449,6 +450,38 @@ fun serverMain(dbName: String, port: Int) {
                 return@post
             }
 
+            post("/admin/bank-accounts/{label}") {
+                val body = call.receiveJson<BankAccountInfo>()
+                transaction {
+                    BankAccountEntity.new {
+                        iban = body.iban
+                        bic = body.bic
+                        name = body.name
+                        label = body.label
+                        currency = body.currency ?: "EUR"
+                    }
+                }
+                call.respond(object {})
+                return@post
+            }
+
+            get("/admin/bank-accounts/{label}") {
+                val label = ensureNonNull(call.parameters["label"])
+                val ret = transaction {
+                    val account = getAccountFromLabel(label)
+                    val balance = balanceForAccount(account.iban)
+                    object {
+                        val balance = "${account.currency}:${balance}"
+                        val iban = account.iban
+                        val bic = account.bic
+                        val name = account.name
+                        val label = account.label
+                    }
+                }
+                call.respond(ret)
+                return@get
+            }
+
             post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
                 val body = call.receiveJson<IncomingPaymentInfo>()
                 // FIXME: generate nicer UUID!
@@ -543,7 +576,8 @@ fun serverMain(dbName: String, port: Int) {
                                 label = it.label,
                                 name = it.name,
                                 bic = it.bic,
-                                iban = it.iban
+                                iban = it.iban,
+                                currency = it.currency
                             )
                         )
                     }

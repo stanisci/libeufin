@@ -1,5 +1,6 @@
 package tech.libeufin.sandbox
 
+import io.ktor.http.*
 import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -10,12 +11,25 @@ import tech.libeufin.util.RawPayment
 import tech.libeufin.util.importDateFromMillis
 import tech.libeufin.util.parseDecimal
 import tech.libeufin.util.toDashedDate
+import java.math.BigDecimal
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
-fun balanceForAccount(iban: String): java.math.BigDecimal {
+fun getAccountFromLabel(accountLabel: String): BankAccountEntity {
+    return transaction {
+        val account = BankAccountEntity.find {
+            BankAccountsTable.label eq accountLabel
+        }.firstOrNull()
+        if (account == null) throw SandboxError(
+            HttpStatusCode.NotFound, "Account '$accountLabel' not found"
+        )
+        account
+    }
+}
+
+fun balanceForAccount(iban: String): BigDecimal {
     logger.debug("Calculating balance for account: ${iban}")
-    var balance = java.math.BigDecimal.ZERO
+    var balance = BigDecimal.ZERO
     transaction {
         BankAccountTransactionsTable.select {
             BankAccountTransactionsTable.creditorIban eq iban
@@ -35,7 +49,7 @@ fun balanceForAccount(iban: String): java.math.BigDecimal {
      * the current CAMT generator happy.  Negative amounts need to have their
      * onw sub-tree in the report, see bug: #6962
      */
-    if (balance < java.math.BigDecimal.ZERO) return java.math.BigDecimal.ZERO
+    if (balance < BigDecimal.ZERO) return BigDecimal.ZERO
     return balance
 }
 
