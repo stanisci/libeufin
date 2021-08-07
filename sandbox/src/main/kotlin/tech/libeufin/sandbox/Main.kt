@@ -492,6 +492,13 @@ fun serverMain(dbName: String, port: Int) {
                         "invalid amount (should be plain amount without currency)"
                     )
                 }
+                val reqDebtorBic = body.debtorBic
+                if (reqDebtorBic != null && !validateBic(reqDebtorBic)) {
+                    throw SandboxError(
+                        HttpStatusCode.BadRequest,
+                        "invalid BIC"
+                    )
+                }
                 transaction {
                     val account = getBankAccountFromLabel(accountLabel)
                     val randId = getRandomString(16)
@@ -500,7 +507,7 @@ fun serverMain(dbName: String, port: Int) {
                         it[creditorBic] = account.bic
                         it[creditorName] = account.name
                         it[debtorIban] = body.debtorIban
-                        it[debtorBic] = body.debtorBic
+                        it[debtorBic] = reqDebtorBic
                         it[debtorName] = body.debtorName
                         it[subject] = body.subject
                         it[amount] = body.amount
@@ -550,6 +557,9 @@ fun serverMain(dbName: String, port: Int) {
              */
             post("/admin/ebics/bank-accounts") {
                 val body = call.receiveJson<BankAccountRequest>()
+                if (!validateBic(body.bic)) {
+                    throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC")
+                }
                 transaction {
                     val subscriber = getEbicsSubscriberFromDetails(
                         body.subscriber.userID,

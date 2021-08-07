@@ -1,3 +1,9 @@
+libeufin (0.0.1-10) unstable; urgency=medium
+
+  * Add BIC validation to nexus and sandbox.
+
+ -- Florian Dold <florian@dold.me>  Sat, 07 Aug 2021 21:40:28 +0200
+
 libeufin (0.0.1-9) unstable; urgency=medium
 
   * Various bugfixes.

@@ -25,7 +25,7 @@ import java.math.BigInteger
 import java.math.BigDecimal
 import java.util.*
 
-fun ByteArray.toHexString() : String {
+fun ByteArray.toHexString(): String {
     return this.joinToString("") {
         java.lang.String.format("%02X", it)
     }
@@ -67,7 +67,11 @@ fun base64ToBytes(encoding: String): ByteArray {
 fun BigInteger.toUnsignedHexString(): String {
     val signedValue = this.toByteArray()
     require(this.signum() > 0) { "number must be positive" }
-    val start = if (signedValue[0] == 0.toByte()) { 1 } else { 0 }
+    val start = if (signedValue[0] == 0.toByte()) {
+        1
+    } else {
+        0
+    }
     val bytes = Arrays.copyOfRange(signedValue, start, signedValue.size)
     return bytes.toHexString()
 }
@@ -114,9 +118,21 @@ fun parseAmount(amount: String): AmountWithCurrency {
     return AmountWithCurrency(currency, Amount(number))
 }
 
-fun getRandomString(length: Int) : String {
-    val allowedChars = ('A'..'Z') + ('0'..'9')
-    return (1..length)
+fun getRandomString(length: Int): String {
+    val allowedChars = ('A' .. 'Z') + ('0' .. '9')
+    return (1 .. length)
         .map { allowedChars.random() }
         .joinToString("")
+}
+
+private val bicRegex = Regex("^[A-Z]{6}[A-Z2-9][A-NP-Z0-9]([A-Z0-9]{3})?$")
+
+fun validateBic(bic: String): Boolean {
+    return bicRegex.matches(bic)
+}
+
+private val ibanRegex = Regex("^[A-Z]{2}[A-Za-z0-9]{6,32}$")
+
+fun validateIban(iban: String): Boolean {
+    return ibanRegex.matches(iban)
 }

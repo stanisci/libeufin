@@ -646,6 +646,9 @@ fun serverMain(host: String, port: Int) {
                 requireSuperuser(call.request)
                 val body = call.receive<CreatePaymentInitiationRequest>()
                 val accountId = ensureNonNull(call.parameters["accountid"])
+                if (!validateBic(body.bic)) {
+                    throw NexusError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
+                }
                 val res = transaction {
                     authenticateRequest(call.request)
                     val bankAccount = NexusBankAccountEntity.findByName(accountId)
