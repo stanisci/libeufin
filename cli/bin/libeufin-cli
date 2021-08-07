@@ -644,7 +644,7 @@ def task_schedule(
     check_response_status(resp)
 
 
-@accounts.command(help="Shows the status of one task")
+@accounts.command(help="Show the status of a task")
 @click.argument("account-name")
 @click.option("--task-name", help="Name of the task", required=True)
 @click.pass_obj
@@ -663,7 +663,7 @@ def task_status(obj, account_name, task_name):
     check_response_status(resp)
 
 
-@accounts.command(help="Deletes one task")
+@accounts.command(help="Delete a task")
 @click.argument("account-name")
 @click.option("--task-name", help="Name of the task", required=True)
 @click.pass_obj
@@ -682,7 +682,7 @@ def task_delete(obj, account_name, task_name):
     check_response_status(resp)
 
 
-@accounts.command(help="Shows all the active tasks")
+@accounts.command("list-tasks", help="List all the configured tasks")
 @click.argument("account-name")
 @click.pass_obj
 def tasks_show(obj, account_name):
@@ -697,7 +697,7 @@ def tasks_show(obj, account_name):
     check_response_status(resp)
 
 
-@accounts.command(help="show accounts belonging to calling user")
+@accounts.command(help="Show accounts belonging to calling user")
 @click.pass_obj
 def show(obj):
     url = urljoin(obj.nexus_base_url, "/bank-accounts")
@@ -711,7 +711,7 @@ def show(obj):
     check_response_status(resp)
 
 
-@accounts.command(help="prepare payment debiting 'account-name'")
+@accounts.command(help="Prepare payment initiation debiting the account.")
 @click.option(
     "--creditor-iban", help="IBAN that will receive the payment", required=True
 )
