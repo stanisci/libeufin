@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory
 import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
 import tech.libeufin.util.RawPayment
 import tech.libeufin.util.importDateFromMillis
+import tech.libeufin.util.parseDecimal
 import tech.libeufin.util.toDashedDate
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
@@ -19,13 +20,13 @@ fun balanceForAccount(iban: String): java.math.BigDecimal {
         BankAccountTransactionsTable.select {
             BankAccountTransactionsTable.creditorIban eq iban
         }.forEach {
-            val amount = java.math.BigDecimal(it[amount])
+            val amount = parseDecimal(it[amount])
             balance += amount
         }
         BankAccountTransactionsTable.select {
             BankAccountTransactionsTable.debtorIban eq iban
         }.forEach {
-            val amount = java.math.BigDecimal(it[amount])
+            val amount = parseDecimal(it[amount])
             balance -= amount
         }
     }

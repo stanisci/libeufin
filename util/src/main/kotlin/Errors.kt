@@ -1,3 +1,4 @@
+import io.ktor.http.*
 import kotlin.system.exitProcess
 
 /*
@@ -18,6 +19,9 @@ import kotlin.system.exitProcess
  * License along with LibEuFin; see the file COPYING.  If not, see
  * <http://www.gnu.org/licenses/>
  */
+
+data class UtilError(val statusCode: HttpStatusCode, val reason: String) :
+    Exception("$reason (HTTP status $statusCode)")
 
 /**
  * Helper function that wraps throwable code and

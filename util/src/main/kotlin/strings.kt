@@ -19,8 +19,10 @@
 
 package tech.libeufin.util
 
+import UtilError
 import io.ktor.http.HttpStatusCode
 import java.math.BigInteger
+import java.math.BigDecimal
 import java.util.*
 
 fun ByteArray.toHexString() : String {
@@ -61,6 +63,7 @@ fun base64ToBytes(encoding: String): ByteArray {
     return Base64.getDecoder().decode(encoding)
 }
 
+// used mostly in RSA math, never as amount.
 fun BigInteger.toUnsignedHexString(): String {
     val signedValue = this.toByteArray()
     require(this.signum() > 0) { "number must be positive" }
@@ -95,6 +98,14 @@ data class AmountWithCurrency(
     val currency: String,
     val amount: Amount
 )
+
+fun parseDecimal(decimalStr: String): BigDecimal {
+    return try {
+        BigDecimal(decimalStr)
+    } catch (e: NumberFormatException) {
+        throw UtilError(HttpStatusCode.BadRequest, "Bad string amount given: $decimalStr")
+    }
+}
 
 fun parseAmount(amount: String): AmountWithCurrency {
     val match = Regex("([A-Z]+):([0-9]+(\\.[0-9]+)?)").find(amount) ?: throw

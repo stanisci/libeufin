@@ -65,7 +65,30 @@ class BalanceTest {
                     it[direction] = "DBIT"
                     it[accountServicerReference] = "test-account-servicer-reference"
                 }
+                BankAccountTransactionsTable.insert {
+                    it[account] = EntityID(0, BankAccountsTable)
+                    it[creditorIban] = "other"
+                    it[creditorBic] = "BIC"
+                    it[creditorName] = "Creditor Name"
+                    it[debtorIban] = "earns-bad-amount"
+                    it[debtorBic] = "BIC"
+                    it[debtorName] = "Debitor Name"
+                    it[subject] = "deal"
+                    it[amount] = "not a number"
+                    it[date] = LocalDateTime.now().millis()
+                    it[currency] = "EUR"
+                    it[pmtInfId] = "0"
+                    it[direction] = "DBIT"
+                    it[accountServicerReference] = "test-account-servicer-reference"
+                }
                 assert(java.math.BigDecimal.ONE == balanceForAccount("earns"))
+                try {
+                    balanceForAccount("earns-bad-amount")
+                } catch (e: UtilError) {
+                    return@transaction
+                }
+                // here the expected exception wasn't thrown.
+                assert(false)
             }
         }
     }

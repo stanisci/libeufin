@@ -17,9 +17,9 @@
  * <http://www.gnu.org/licenses/>
  */
 
-
 package tech.libeufin.sandbox
 
+import UtilError
 import com.hubspot.jinjava.Jinjava
 import com.fasterxml.jackson.core.JsonParseException
 import io.ktor.application.ApplicationCallPipeline
@@ -319,6 +319,18 @@ fun serverMain(dbName: String, port: Int) {
                     SandboxErrorJson(
                         error = SandboxErrorDetailJson(
                             type = "sandbox-error",
+                            description = cause.reason
+                        )
+                    )
+                )
+            }
+            exception<UtilError> { cause ->
+                logger.error("Exception while handling '${call.request.uri}'", cause)
+                call.respond(
+                    cause.statusCode,
+                    SandboxErrorJson(
+                        error = SandboxErrorDetailJson(
+                            type = "util-error",
                             description = cause.reason
                         )
                     )
