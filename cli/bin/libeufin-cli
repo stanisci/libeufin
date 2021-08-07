@@ -86,6 +86,19 @@ def users(ctx):
 def permissions(ctx):
     ctx.obj = NexusContext()
 
+@users.command("self", help="Show information about authenticated user.")
+@click.pass_obj
+def users_self(obj):
+    url = urljoin(obj.nexus_base_url, f"/user")
+    try:
+        resp = get(url, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
+    except Exception as e:
+        print(e)
+        print("Could not reach nexus at " + url)
+        exit(1)
+
+    tell_user(resp, withsuccess=True)
+    check_response_status(resp)
 
 @users.command("list", help="List users")
 @click.pass_obj

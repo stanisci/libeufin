@@ -288,7 +288,7 @@ data class PaymentInitiationResponse(
 /** Response type of "GET /user" */
 data class UserResponse(
     val username: String,
-    val superuser: Boolean
+    val superuser: Boolean,
 )
 
 /** Request type of "POST /users" */
