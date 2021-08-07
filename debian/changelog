@@ -1,3 +1,9 @@
+libeufin (0.0.1-8) unstable; urgency=medium
+
+  * Various bugfixes.
+
+ -- Florian Dold <florian@dold.me>  Sat, 07 Aug 2021 14:32:14 +0200
+
 libeufin (0.0.1-7) unstable; urgency=medium
 
   * New sandbox simulate-incoming-transaction command.
