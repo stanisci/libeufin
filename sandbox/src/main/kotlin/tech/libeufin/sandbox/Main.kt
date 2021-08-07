@@ -89,6 +89,7 @@ import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
+import validatePlainAmount
 import java.net.BindException
 import java.util.*
 import kotlin.random.Random
@@ -107,15 +108,16 @@ class Config : CliktCommand("Insert one configuration into the database") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
+
     private val hostnameOption by argument(
-        "HOSTNAME", help="hostname that serves this configuration"
+        "HOSTNAME", help = "hostname that serves this configuration"
     )
     private val currencyOption by option("--currency").default("EUR")
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
     private val usersDebtLimitOption by option("--users-debt-limit").int().default(1000)
     private val allowRegistrationsOption by option(
         "--allow-registrations",
-        help="(default: true)" /* mentioning here as help message did not.  */
+        help = "(default: true)" /* mentioning here as help message did not.  */
     ).flag(default = true)
 
     override fun run() {
@@ -141,6 +143,7 @@ class ResetTables : CliktCommand("Drop all the tables from the database") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
+
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         execThrowableOrTerminate {
@@ -223,6 +226,7 @@ class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnE
     init {
         versionOption(getVersion())
     }
+
     override fun run() = Unit
 }
 
@@ -369,7 +373,7 @@ fun serverMain(dbName: String, port: Int) {
 
                 transaction {
                     // check if username is taken.
-                    var maybeUser = SandboxUserEntity.find {
+                    val maybeUser = SandboxUserEntity.find {
                         SandboxUsersTable.username eq username
                     }.firstOrNull()
                     // Will be converted to a HTML response.
@@ -434,6 +438,7 @@ fun serverMain(dbName: String, port: Int) {
                     val version = "0.0.0-dev.0"
                 })
             }
+
             // only reason for a post is to hide the iban (to some degree.)
             post("/admin/payments/camt") {
                 val body = call.receiveJson<CamtParams>()
@@ -448,6 +453,12 @@ fun serverMain(dbName: String, port: Int) {
                 val body = call.receiveJson<IncomingPaymentInfo>()
                 // FIXME: generate nicer UUID!
                 val accountLabel = ensureNonNull(call.parameters["label"])
+                if (!validatePlainAmount(body.amount)) {
+                    throw SandboxError(
+                        HttpStatusCode.BadRequest,
+                        "invalid amount (should be plain amount without currency)"
+                    )
+                }
                 transaction {
                     val account = getBankAccountFromLabel(accountLabel)
                     val randId = getRandomString(16)

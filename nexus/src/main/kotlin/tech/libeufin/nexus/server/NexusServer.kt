@@ -29,7 +29,6 @@ import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import execThrowableOrTerminate
 import io.ktor.application.*
 import io.ktor.client.*
 import io.ktor.features.*

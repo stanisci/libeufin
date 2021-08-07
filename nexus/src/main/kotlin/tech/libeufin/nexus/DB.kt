@@ -69,6 +69,9 @@ class TalerInvalidIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
 
     var payment by NexusBankTransactionEntity referencedOn TalerInvalidIncomingPaymentsTable.payment
     var timestampMs by TalerInvalidIncomingPaymentsTable.timestampMs
+    // FIXME:  This should probably not be called refunded, and
+    // we should have a foreign key to the payment that sends the
+    // money back.
     var refunded by TalerInvalidIncomingPaymentsTable.refunded
 }
 

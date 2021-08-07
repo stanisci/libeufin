@@ -1,3 +1,9 @@
+libeufin (0.0.1-9) unstable; urgency=medium
+
+  * Various bugfixes.
+
+ -- Florian Dold <florian@dold.me>  Sat, 07 Aug 2021 16:09:59 +0200
+
 libeufin (0.0.1-8) unstable; urgency=medium
 
   * Various bugfixes.

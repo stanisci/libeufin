@@ -43,7 +43,9 @@ import tech.libeufin.util.*
 import kotlin.math.abs
 import kotlin.math.min
 
-/** Payment initiating data structures: one endpoint "$BASE_URL/transfer". */
+/**
+ * Request body for "$TWG_BASE_URL/transfer".
+ */
 data class TalerTransferRequest(
     val request_uid: String,
     val amount: String,
@@ -94,7 +96,9 @@ data class GnunetTimestamp(
     val t_ms: Long
 )
 
-/** Sort query results in descending order for negative deltas, and ascending otherwise.  */
+/**
+ * Sort query results in descending order for negative deltas, and ascending otherwise.
+ */
 fun <T : Entity<Long>> SizedIterable<T>.orderTaler(delta: Int): List<T> {
     return if (delta < 0) {
         this.sortedByDescending { it.id }
@@ -165,7 +169,7 @@ fun customConverter(body: Any): String {
 fun extractReservePubFromSubject(rawSubject: String): String? {
     val re = "\\b[a-z0-9A-Z]{52}\\b".toRegex()
     val result = re.find(rawSubject.replace("[\n]+".toRegex(), "")) ?: return null
-    return result.value.toUpperCase()
+    return result.value.uppercase()
 }
 
 private fun getTalerFacadeState(fcid: String): TalerFacadeStateEntity {
@@ -185,7 +189,7 @@ private fun getTalerFacadeBankAccount(fcid: String): NexusBankAccountEntity {
     val facadeState = getTalerFacadeState(fcid)
     return NexusBankAccountEntity.findByName(facadeState.bankAccount) ?: throw NexusError(
         HttpStatusCode.NotFound,
-        "The facade: ${fcid} doesn't manage bank account: ${facadeState.bankAccount}"
+        "The facade: $fcid doesn't manage bank account: ${facadeState.bankAccount}"
     )
 }
 
@@ -356,7 +360,7 @@ fun maybePrepareRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
                 throw NexusError(HttpStatusCode.InternalServerError, "Unexpected void payment, cannot refund")
             }
             val debtorAccount = paymentData.batches[0].batchTransactions[0].details.debtorAccount
-            if (debtorAccount == null || debtorAccount.iban == null) {
+            if (debtorAccount?.iban == null) {
                 logger.error("Could not find a IBAN to refund in transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
                 throw NexusError(HttpStatusCode.InternalServerError, "IBAN to refund not found")
             }
@@ -441,7 +445,12 @@ fun ingestTalerTransactions(bankAccountId: String) {
             }
             lastId = it.id.value
         }
-        maybePrepareRefunds(bankAccount, facadeState.highestSeenMessageSerialId)
+        try {
+            // FIXME: This currently does not do proper error handing.
+            maybePrepareRefunds(bankAccount, facadeState.highestSeenMessageSerialId)
+        } catch (e: Exception) {
+            logger.warn("sending refund payment failed", e);
+        }
         facadeState.highestSeenMessageSerialId = lastId
 
     }
@@ -561,8 +570,8 @@ fun talerFacadeRoutes(route: Route, httpClient: HttpClient) {
     route.get("/config") {
         val facadeId = ensureNonNull(call.parameters["fcid"])
         call.request.requirePermission(
-            PermissionQuery("facade", facadeId, "facade.talerWireGateway.transfer"),
-            PermissionQuery("facade", facadeId, "facade.talerWireGateway.history")
+            PermissionQuery("facade", facadeId, "facade.talerwiregateway.transfer"),
+            PermissionQuery("facade", facadeId, "facade.talerwiregateway.history")
         )
         call.respond(object {
             val version = "0.0.0"
