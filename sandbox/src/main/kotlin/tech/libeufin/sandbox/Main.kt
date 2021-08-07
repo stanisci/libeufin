@@ -457,6 +457,38 @@ fun serverMain(dbName: String, port: Int) {
                 }
                 call.respond(object {})
             }
+
+            /**
+             * Adds a new payment to the book.
+             *
+             * FIXME:  This API is deprecated, but still used
+             * in some test cases.  It should be removed entirely.
+             */
+            post("/admin/payments") {
+                val body = call.receiveJson<RawPayment>()
+                val randId = getRandomString(16)
+                transaction {
+                    val localIban = if (body.direction == "DBIT") body.debtorIban else body.creditorIban
+                    BankAccountTransactionsTable.insert {
+                        it[creditorIban] = body.creditorIban
+                        it[creditorBic] = body.creditorBic
+                        it[creditorName] = body.creditorName
+                        it[debtorIban] = body.debtorIban
+                        it[debtorBic] = body.debtorBic
+                        it[debtorName] = body.debtorName
+                        it[subject] = body.subject
+                        it[amount] = body.amount
+                        it[currency] = body.currency
+                        it[date] = Instant.now().toEpochMilli()
+                        it[accountServicerReference] = "sandbox-$randId"
+                        it[account] = getBankAccountFromIban(localIban).id
+                        it[direction] = body.direction
+                    }
+                }
+                call.respondText("Payment created")
+                return@post
+            }
+
             /**
              * Associates a new bank account with an existing Ebics subscriber.
              */

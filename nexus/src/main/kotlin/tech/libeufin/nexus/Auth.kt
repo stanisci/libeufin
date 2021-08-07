@@ -76,7 +76,7 @@ fun findPermission(p: Permission): NexusPermissionEntity? {
                     and (NexusPermissionsTable.subjectId eq p.subjectId)
                     and (NexusPermissionsTable.resourceType eq p.resourceType)
                     and (NexusPermissionsTable.resourceId eq p.resourceId)
-                    and (NexusPermissionsTable.permissionName eq p.permissionName))
+                    and (NexusPermissionsTable.permissionName eq p.permissionName.lowercase()))
 
         }.firstOrNull()
     }
@@ -97,7 +97,7 @@ fun ApplicationRequest.requirePermission(vararg perms: PermissionQuery) {
         }
         var foundPermission = false
         for (pr in perms) {
-            val p = Permission("user", user.username, pr.resourceType, pr.resourceId, pr.permissionName)
+            val p = Permission("user", user.username, pr.resourceType, pr.resourceId, pr.permissionName.lowercase())
             val existingPerm = findPermission(p)
             if (existingPerm != null) {
                 foundPermission = true

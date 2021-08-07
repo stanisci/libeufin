@@ -279,7 +279,14 @@ fun serverMain(dbName: String, host: String, port: Int) {
 
             post("/permissions") {
                 val req = call.receive<ChangePermissionsRequest>()
-                val knownPermissions = listOf()
+                val knownPermissions = listOf("facade.talerwiregateway.history", "facade.talerwiregateway.transfer")
+                val permName = req.permission.permissionName.lowercase()
+                if (!knownPermissions.contains(permName)) {
+                    throw NexusError(
+                        HttpStatusCode.BadRequest,
+                        "Permission $permName not known"
+                    )
+                }
                 transaction {
                     requireSuperuser(call.request)
                     val existingPerm = findPermission(req.permission)
@@ -291,7 +298,7 @@ fun serverMain(dbName: String, host: String, port: Int) {
                                     subjectId = req.permission.subjectId
                                     resourceType = req.permission.resourceType
                                     resourceId = req.permission.resourceId
-                                    permissionName = req.permission.permissionName
+                                    permissionName = permName
 
                                 }
                             }
@@ -360,9 +367,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         superuser = false
                     }
                 }
-                call.respond(NexusMessage(
-                    message = "New user '${body.username}' registered"
-                ))
+                call.respond(
+                    NexusMessage(
+                        message = "New user '${body.username}' registered"
+                    )
+                )
                 return@post
             }
 
@@ -934,11 +943,11 @@ fun serverMain(dbName: String, host: String, port: Int) {
                         }
                     }
                 } catch (e: ExposedSQLException) {
-                        logger.error("Could not persist facade name/type/creator: $e")
-                        throw NexusError(
-                            HttpStatusCode.BadRequest,
-                            "Server could not persist data, possibly due to unavailable facade name"
-                        )
+                    logger.error("Could not persist facade name/type/creator: $e")
+                    throw NexusError(
+                        HttpStatusCode.BadRequest,
+                        "Server could not persist data, possibly due to unavailable facade name"
+                    )
                 }
                 transaction {
                     TalerFacadeStateEntity.new {

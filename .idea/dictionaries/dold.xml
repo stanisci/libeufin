@@ -18,6 +18,7 @@
       <w>servicer</w>
       <w>sqlite</w>
       <w>taler</w>
+      <w>talerwiregateway</w>
       <w>wtid</w>
     </words>
   </dictionary>
