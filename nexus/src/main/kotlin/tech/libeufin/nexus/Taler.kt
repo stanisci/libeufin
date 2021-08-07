@@ -201,7 +201,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
     val opaqueRowId = transaction {
         // FIXME: re-enable authentication (https://bugs.gnunet.org/view.php?id=6703)
         // val exchangeUser = authenticateRequest(call.request)
-        call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.transfer"))
+        call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerwiregateway.transfer"))
         val facade = FacadeEntity.find { FacadesTable.facadeName eq facadeId }.firstOrNull() ?: throw NexusError(
             HttpStatusCode.NotFound,
             "Could not find facade '${facadeId}'"
@@ -460,7 +460,7 @@ fun ingestTalerTransactions(bankAccountId: String) {
  */
 private suspend fun historyOutgoing(call: ApplicationCall) {
     val facadeId = expectNonNull(call.parameters["fcid"])
-    call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.history"))
+    call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerwiregateway.history"))
     val param = call.expectUrlParameter("delta")
     val delta: Int = try {
         param.toInt()
@@ -512,7 +512,7 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
  */
 private suspend fun historyIncoming(call: ApplicationCall) {
     val facadeId = expectNonNull(call.parameters["fcid"])
-    call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerWireGateway.history"))
+    call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerwiregateway.history"))
     val param = call.expectUrlParameter("delta")
     val delta: Int = try {
         param.toInt()
