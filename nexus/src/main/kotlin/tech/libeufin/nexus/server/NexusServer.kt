@@ -19,6 +19,7 @@
 
 package tech.libeufin.nexus.server
 
+import UtilError
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.JsonNode
@@ -192,6 +193,17 @@ fun serverMain(host: String, port: Int) {
                     message = ErrorResponse(
                         code = TalerErrorCode.TALER_EC_LIBEUFIN_NEXUS_GENERIC_ERROR.code,
                         hint = "nexus error, see detail",
+                        detail = cause.reason,
+                    )
+                )
+            }
+            exception<UtilError> { cause ->
+                logger.error("Exception while handling '${call.request.uri}'", cause)
+                call.respond(
+                    cause.statusCode,
+                    message = ErrorResponse(
+                        code = cause.ec?.code ?: TalerErrorCode.TALER_EC_NONE.code,
+                        hint = "see detail",
                         detail = cause.reason,
                     )
                 )

@@ -1,4 +1,5 @@
 import io.ktor.http.*
+import tech.libeufin.util.TalerErrorCode
 import kotlin.system.exitProcess
 
 /*
@@ -20,7 +21,11 @@ import kotlin.system.exitProcess
  * <http://www.gnu.org/licenses/>
  */
 
-data class UtilError(val statusCode: HttpStatusCode, val reason: String) :
+data class UtilError(
+    val statusCode: HttpStatusCode,
+    val reason: String,
+    val ec: TalerErrorCode?
+) :
     Exception("$reason (HTTP status $statusCode)")
 
 /**

@@ -21,6 +21,7 @@ package tech.libeufin.util
 
 import UtilError
 import io.ktor.http.HttpStatusCode
+import validatePlainAmount
 import java.math.BigInteger
 import java.math.BigDecimal
 import java.util.*
@@ -104,10 +105,20 @@ data class AmountWithCurrency(
 )
 
 fun parseDecimal(decimalStr: String): BigDecimal {
+    if(!validatePlainAmount(decimalStr))
+        throw UtilError(
+            HttpStatusCode.BadRequest,
+            "Bad string amount given: $decimalStr",
+            TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MALFORMED
+        )
     return try {
         BigDecimal(decimalStr)
     } catch (e: NumberFormatException) {
-        throw UtilError(HttpStatusCode.BadRequest, "Bad string amount given: $decimalStr")
+        throw UtilError(
+            HttpStatusCode.BadRequest,
+            "Bad string amount given: $decimalStr",
+            TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MALFORMED
+        )
     }
 }
 
