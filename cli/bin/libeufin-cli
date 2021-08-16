@@ -915,6 +915,40 @@ def list_facades(obj):
 
 
 @facades.command(
+    "new-anastasis-facade", help="create a new Anastasis facade"
+)
+@click.option("--facade-name", help="Name of the facade", required=True)
+@click.option("--currency", help="Facade's currency", required=True)
+@click.argument("connection-name")
+@click.argument("account-name")
+@click.pass_obj
+def new_anastasis_facade(obj, facade_name, connection_name, account_name, currency):
+    url = urljoin(obj.nexus_base_url, "/facades")
+    try:
+        resp = post(
+            url,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
+            json=dict(
+                name=facade_name,
+                type="anastasis",
+                config=dict(
+                    currency=currency,
+                    bankAccount=account_name,
+                    bankConnection=connection_name,
+                    reserveTransferLevel="UNUSED",
+                    intervalIncremental="UNUSED",
+                ),
+            ),
+        )
+    except Exception as e:
+        print(f"Could not reach nexus (at {obj.nexus_base_url}): {e}")
+        exit(1)
+
+    tell_user(resp)
+    check_response_status(resp)
+
+
+@facades.command(
     "new-taler-wire-gateway-facade", help="create a new Taler Wire Gateway facade"
 )
 @click.option("--facade-name", help="Name of the facade", required=True)
@@ -922,7 +956,7 @@ def list_facades(obj):
 @click.argument("connection-name")
 @click.argument("account-name")
 @click.pass_obj
-def new_facade(obj, facade_name, connection_name, account_name, currency):
+def new_twg_facade(obj, facade_name, connection_name, account_name, currency):
     url = urljoin(obj.nexus_base_url, "/facades")
     try:
         resp = post(
