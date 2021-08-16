@@ -25,6 +25,7 @@ import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.KotlinModule
@@ -194,6 +195,17 @@ fun serverMain(host: String, port: Int) {
                         code = TalerErrorCode.TALER_EC_LIBEUFIN_NEXUS_GENERIC_ERROR.code,
                         hint = "nexus error, see detail",
                         detail = cause.reason,
+                    )
+                )
+            }
+            exception<JsonMappingException> { cause ->
+                logger.error("Exception while handling '${call.request.uri}'", cause)
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    message = ErrorResponse(
+                        code = TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID.code,
+                        hint = "POSTed data was not valid",
+                        detail = cause.message ?: "not given",
                     )
                 )
             }
