@@ -356,7 +356,7 @@ data class FacadeShowInfo(
     val type: String,
     // Taler wire gateway API base URL.
     // Different from the base URL of the facade.
-    val twgBaseUrl: String,
+    val baseUrl: String,
     val config: JsonNode
 )
 

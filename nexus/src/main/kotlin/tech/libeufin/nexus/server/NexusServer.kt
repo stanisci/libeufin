@@ -900,7 +900,7 @@ fun serverMain(host: String, port: Int) {
                     FacadeShowInfo(
                         name = f.facadeName,
                         type = f.type,
-                        twgBaseUrl = call.url {
+                        baseUrl = call.url {
                             parameters.clear()
                             encodedPath = ""
                             pathComponents("facades", f.facadeName, f.type)
@@ -927,7 +927,7 @@ fun serverMain(host: String, port: Int) {
                             FacadeShowInfo(
                                 name = it.facadeName,
                                 type = it.type,
-                                twgBaseUrl = call.url {
+                                baseUrl = call.url {
                                     parameters.clear()
                                     encodedPath = ""
                                     pathComponents("facades", it.facadeName, it.type)
