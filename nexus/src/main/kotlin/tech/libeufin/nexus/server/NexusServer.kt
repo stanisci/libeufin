@@ -61,7 +61,7 @@ import kotlin.system.exitProcess
 fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
     return transaction {
         when (type) {
-            "taler-wire-gateway" -> {
+            "taler-wire-gateway", "anastasis" -> {
                 val state = FacadeStateEntity.find {
                     FacadeStateTable.facade eq facade.id
                 }.firstOrNull()
@@ -959,7 +959,8 @@ fun serverMain(host: String, port: Int) {
                 requireSuperuser(call.request)
                 val body = call.receive<FacadeInfo>()
                 requireValidResourceName(body.name)
-                if (body.type != "taler-wire-gateway") throw NexusError(
+                if (!listOf("taler-wire-gateway", "anastasis").contains(body.type))
+                 throw NexusError(
                     HttpStatusCode.NotImplemented,
                     "Facade type '${body.type}' is not implemented"
                 )
@@ -1047,6 +1048,9 @@ fun serverMain(host: String, port: Int) {
             }
             route("/facades/{fcid}/taler-wire-gateway") {
                 talerFacadeRoutes(this, client)
+            }
+            route("/facades/{fcid}/anastasis") {
+                anastasisFacadeRoutes(this, client)
             }
 
             // Hello endpoint.
