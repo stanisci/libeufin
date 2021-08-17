@@ -62,8 +62,8 @@ fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
     return transaction {
         when (type) {
             "taler-wire-gateway" -> {
-                val state = TalerFacadeStateEntity.find {
-                    TalerFacadeStateTable.facade eq facade.id
+                val state = FacadeStateEntity.find {
+                    FacadeStateTable.facade eq facade.id
                 }.firstOrNull()
                 if (state == null) throw NexusError(HttpStatusCode.NotFound, "State of facade ${facade.id} not found")
                 val node = jacksonObjectMapper().createObjectNode()
@@ -980,7 +980,7 @@ fun serverMain(host: String, port: Int) {
                     )
                 }
                 transaction {
-                    TalerFacadeStateEntity.new {
+                    FacadeStateEntity.new {
                         bankAccount = body.config.bankAccount
                         bankConnection = body.config.bankConnection
                         reserveTransferLevel = body.config.reserveTransferLevel

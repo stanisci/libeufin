@@ -306,7 +306,7 @@ suspend fun fetchBankAccountTransactions(client: HttpClient, fetchSpec: FetchSpe
             val connectionName = conn.connectionId
         }
     }
-
+    // abstracts over the connection type: ebics or others.
     getConnectionPlugin(res.connectionType).fetchTransactions(
         fetchSpec,
         client,
@@ -315,7 +315,9 @@ suspend fun fetchBankAccountTransactions(client: HttpClient, fetchSpec: FetchSpe
     )
 
     val newTransactions = ingestBankMessagesIntoAccount(res.connectionName, accountId)
-    ingestTalerTransactions(accountId)
+    ingestFacadeTransactions(accountId, "taler-wire-gateway", ::talerFilter, ::maybeTalerRefunds)
+    ingestFacadeTransactions(accountId, "anastasis", ::anastasisFilter, null)
+
     return newTransactions
 }
 
