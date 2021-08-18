@@ -67,7 +67,7 @@ fun anastasisFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDeta
  */
 private suspend fun historyIncoming(call: ApplicationCall) {
     val facadeId = expectNonNull(call.parameters["fcid"])
-    call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerwiregateway.history"))
+    call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.anastasis.history"))
     val param = call.expectUrlParameter("delta")
     val delta: Int = try {
         param.toInt()
