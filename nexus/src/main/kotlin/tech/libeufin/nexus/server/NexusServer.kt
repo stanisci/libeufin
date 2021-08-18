@@ -296,7 +296,10 @@ fun serverMain(host: String, port: Int) {
 
             post("/permissions") {
                 val req = call.receive<ChangePermissionsRequest>()
-                val knownPermissions = listOf("facade.talerwiregateway.history", "facade.talerwiregateway.transfer")
+                val knownPermissions = listOf(
+                    "facade.talerwiregateway.history", "facade.talerwiregateway.transfer",
+                    "facade.anastasis.history"
+                )
                 val permName = req.permission.permissionName.lowercase()
                 if (!knownPermissions.contains(permName)) {
                     throw NexusError(
