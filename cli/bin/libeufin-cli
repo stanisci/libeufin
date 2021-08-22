@@ -25,7 +25,7 @@ def check_response_status(resp, expected_status_code=200):
 
 def tell_user(resp, expected_status_code=200, withsuccess=False):
     if resp.status_code != expected_status_code:
-        print(resp.content.decode("utf-8"))
+        print(resp.content.decode("utf-8"), file=sys.stderr)
         return
     if withsuccess:
         print(resp.content.decode("utf-8"))
