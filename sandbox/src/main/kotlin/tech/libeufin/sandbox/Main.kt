@@ -566,6 +566,13 @@ fun serverMain(dbName: String, port: Int) {
                         body.subscriber.partnerID,
                         body.subscriber.hostID
                     )
+                    val check = BankAccountEntity.find {
+                        BankAccountsTable.iban eq body.iban or(BankAccountsTable.label eq body.label)
+                    }.count()
+                    if (check > 0) throw SandboxError(
+                        HttpStatusCode.BadRequest,
+                        "Either IBAN or account label were already taken; please choose fresh ones"
+                    )
                     subscriber.bankAccount = BankAccountEntity.new {
                         iban = body.iban
                         bic = body.bic
