@@ -61,10 +61,7 @@ import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
-import com.github.ajalt.clikt.parameters.options.default
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.versionOption
+import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.int
 import com.google.common.io.Resources
 import execThrowableOrTerminate
@@ -135,6 +132,88 @@ class Config : CliktCommand("Insert one configuration into the database") {
             }
         }
     }
+}
+
+class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank accounts") {
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+    private val creditAccount by option(help = "Label of the bank account receiving the payment").required()
+    private val debitAccount by option(help = "Label of the bank account issuing the payment").required()
+    private val amount by argument(help = "Amount, in the \$currency:x.y format")
+    private val subject by argument(help = "Payment's subject")
+
+    override fun run() {
+        // TODO("Not yet implemented")
+        // check accounts exist
+        transaction {
+            val credit = BankAccountEntity.find {
+                BankAccountsTable.label eq creditAccount
+            }.firstOrNull() ?: run {
+                System.err.println("Credit account: $creditAccount, not found")
+                exitProcess(1)
+            }
+            val debit = BankAccountEntity.find {
+                BankAccountsTable.label eq debitAccount
+            }.firstOrNull() ?: run {
+                System.err.println("Debit account: $debitAccount, not found")
+                exitProcess(1)
+            }
+            if (credit.currency != debit.currency) {
+                System.err.println(
+                    "Sandbox has inconsistent state: " +
+                            "currency of credit (${credit.currency}) and debit (${debit.currency}) account differs.")
+                exitProcess(1)
+            }
+            val amountObj = try {
+                parseAmount(amount)
+            } catch (e: Exception) {
+                System.err.println("Amount given not valid: $amount")
+                exitProcess(1)
+            }
+            if (amountObj.currency != credit.currency || amountObj.currency != debit.currency) {
+                System.err.println("Amount's currency (${amountObj.currency}) can't be accepted")
+                exitProcess(1)
+            }
+            val randId = getRandomString(16)
+            BankAccountTransactionsTable.insert {
+                it[creditorIban] = credit.iban
+                it[creditorBic] = credit.bic
+                it[creditorName] = credit.name
+                it[debtorIban] = debit.iban
+                it[debtorBic] = debit.bic
+                it[debtorName] = debit.name
+                it[subject] = subject
+                it[amount] = amountObj.amount.toString()
+                it[currency] = amountObj.currency
+                it[date] = Instant.now().toEpochMilli()
+                it[accountServicerReference] = "sandbox-$randId"
+                it[account] = debit.id
+                it[direction] = "DBIT"
+            }
+            BankAccountTransactionsTable.insert {
+                it[creditorIban] = credit.iban
+                it[creditorBic] = credit.bic
+                it[creditorName] = credit.name
+                it[debtorIban] = debit.iban
+                it[debtorBic] = debit.bic
+                it[debtorName] = debit.name
+                it[subject] = subject
+                it[amount] = amountObj.amount.toString()
+                it[currency] = amountObj.currency
+                it[date] = Instant.now().toEpochMilli()
+                it[accountServicerReference] = "sandbox-$randId"
+                it[account] = credit.id
+                it[direction] = "CRDT"
+            }
+        }
+
+        // book payment
+
+    }
+
 }
 
 class ResetTables : CliktCommand("Drop all the tables from the database") {
