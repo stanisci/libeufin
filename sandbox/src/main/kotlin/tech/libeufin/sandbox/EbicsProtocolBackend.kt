@@ -446,7 +446,7 @@ private fun constructCamtResponse(type: Int, subscriber: EbicsSubscriberEntity):
     */
     val bankAccount = getBankAccountFromSubscriber(subscriber)
     logger.info("getting history for account with iban ${bankAccount.iban}")
-    val history = historyForAccount(bankAccount.iban)
+    val history = historyForAccount(bankAccount)
     return buildCamtString(type, bankAccount.iban, history)
 }
 

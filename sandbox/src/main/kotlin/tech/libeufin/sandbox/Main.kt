@@ -519,7 +519,8 @@ fun serverMain(dbName: String, port: Int) {
             // only reason for a post is to hide the iban (to some degree.)
             post("/admin/payments/camt") {
                 val body = call.receiveJson<CamtParams>()
-                val history = historyForAccount(body.iban)
+                val bankAccount = getBankAccountFromIban(body.iban)
+                val history = historyForAccount(bankAccount)
                 SandboxAssert(body.type == 53, "Only Camt.053 is implemented")
                 val camt53 = buildCamtString(body.type, body.iban, history)
                 call.respondText(camt53, ContentType.Text.Xml, HttpStatusCode.OK)

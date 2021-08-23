@@ -55,22 +55,19 @@ fun balanceForAccount(bankAccount: BankAccountEntity): BigDecimal {
     return balance
 }
 
-fun historyForAccount(iban: String): List<RawPayment> {
+fun historyForAccount(bankAccount: BankAccountEntity): List<RawPayment> {
     val history = mutableListOf<RawPayment>()
-    logger.debug("Querying transactions involving: ${iban}")
     transaction {
-        BankAccountTransactionsTable.select {
-            BankAccountTransactionsTable.creditorIban eq iban or
-                    (BankAccountTransactionsTable.debtorIban eq iban)
-            /**
-            FIXME: add the following condition too:
-            and (BankAccountTransactionsTable.date.between(start.millis, end.millis))
-             */
-            /**
-            FIXME: add the following condition too:
-            and (BankAccountTransactionsTable.date.between(start.millis, end.millis))
-             */
-        }.forEach {
+        /**
+        FIXME: add the following condition too:
+        and (BankAccountTransactionsTable.date.between(start.millis, end.millis))
+         */
+        /**
+        FIXME: add the following condition too:
+        and (BankAccountTransactionsTable.date.between(start.millis, end.millis))
+         */
+        BankAccountTransactionsTable.select { BankAccountTransactionsTable.account eq bankAccount.id }
+    }.forEach {
             history.add(
                 RawPayment(
                     subject = it[BankAccountTransactionsTable.subject],
@@ -92,6 +89,5 @@ fun historyForAccount(iban: String): List<RawPayment> {
                 )
             )
         }
-    }
     return history
 }
