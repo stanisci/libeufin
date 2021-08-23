@@ -1,6 +1,7 @@
 package tech.libeufin.sandbox
 
 import io.ktor.http.*
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.or
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -27,18 +28,19 @@ fun getAccountFromLabel(accountLabel: String): BankAccountEntity {
     }
 }
 
-fun balanceForAccount(iban: String): BigDecimal {
-    logger.debug("Calculating balance for account: ${iban}")
+fun balanceForAccount(bankAccount: BankAccountEntity): BigDecimal {
     var balance = BigDecimal.ZERO
     transaction {
         BankAccountTransactionsTable.select {
-            BankAccountTransactionsTable.creditorIban eq iban
+            BankAccountTransactionsTable.direction eq "CRDT" and (
+                    BankAccountTransactionsTable.account eq bankAccount.id)
         }.forEach {
             val amount = parseDecimal(it[amount])
             balance += amount
         }
         BankAccountTransactionsTable.select {
-            BankAccountTransactionsTable.debtorIban eq iban
+            BankAccountTransactionsTable.direction eq "DBIT" and (
+                    BankAccountTransactionsTable.account eq bankAccount.id)
         }.forEach {
             val amount = parseDecimal(it[amount])
             balance -= amount

@@ -143,10 +143,11 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
     private val creditAccount by option(help = "Label of the bank account receiving the payment").required()
     private val debitAccount by option(help = "Label of the bank account issuing the payment").required()
     private val amount by argument(help = "Amount, in the \$currency:x.y format")
-    private val subject by argument(help = "Payment's subject")
+    private val subjectArg by argument(name = "subject", help = "Payment's subject")
 
     override fun run() {
-        // TODO("Not yet implemented")
+        val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
+        Database.connect(dbConnString)
         // check accounts exist
         transaction {
             val credit = BankAccountEntity.find {
@@ -185,7 +186,7 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
                 it[debtorIban] = debit.iban
                 it[debtorBic] = debit.bic
                 it[debtorName] = debit.name
-                it[subject] = subject
+                it[subject] = subjectArg
                 it[amount] = amountObj.amount.toString()
                 it[currency] = amountObj.currency
                 it[date] = Instant.now().toEpochMilli()
@@ -200,7 +201,7 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
                 it[debtorIban] = debit.iban
                 it[debtorBic] = debit.bic
                 it[debtorName] = debit.name
-                it[subject] = subject
+                it[subject] = subjectArg
                 it[amount] = amountObj.amount.toString()
                 it[currency] = amountObj.currency
                 it[date] = Instant.now().toEpochMilli()
@@ -305,7 +306,7 @@ class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnE
 
     override fun run() = Unit
 }
- 
+
 fun main(args: Array<String>) {
     SandboxCommand().subcommands(Serve(), ResetTables(), Config(), MakeTransaction()).main(args)
 }
@@ -379,7 +380,7 @@ fun serverMain(dbName: String, port: Int) {
 
                 val hostAuthPriv = transaction {
                     val host = EbicsHostEntity.find {
-                        EbicsHostsTable.hostID.upperCase() eq call.attributes.get(EbicsHostIdAttribute).toUpperCase()
+                        EbicsHostsTable.hostID.upperCase() eq call.attributes.get(EbicsHostIdAttribute).uppercase()
                     }.firstOrNull() ?: throw SandboxError(
                         HttpStatusCode.InternalServerError,
                         "Requested Ebics host ID not found."
@@ -543,14 +544,19 @@ fun serverMain(dbName: String, port: Int) {
             get("/admin/bank-accounts/{label}") {
                 val label = ensureNonNull(call.parameters["label"])
                 val ret = transaction {
-                    val account = getAccountFromLabel(label)
-                    val balance = balanceForAccount(account.iban)
+                    val bankAccount = BankAccountEntity.find {
+                        BankAccountsTable.label eq label
+                    }.firstOrNull() ?: throw SandboxError(
+                        HttpStatusCode.NotFound,
+                        "Account '$label' not found"
+                    )
+                    val balance = balanceForAccount(bankAccount)
                     object {
-                        val balance = "${account.currency}:${balance}"
-                        val iban = account.iban
-                        val bic = account.bic
-                        val name = account.name
-                        val label = account.label
+                        val balance = "${bankAccount.currency}:${balance}"
+                        val iban = bankAccount.iban
+                        val bic = bankAccount.bic
+                        val name = bankAccount.name
+                        val label = bankAccount.label
                     }
                 }
                 call.respond(ret)

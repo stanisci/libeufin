@@ -5,6 +5,7 @@ import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.util.ContextInitializer
 import ch.qos.logback.core.util.Loader
 import org.slf4j.LoggerFactory
+import printLnErr
 import kotlin.system.exitProcess
 
 fun getVersion(): String {
@@ -52,10 +53,10 @@ fun setLogLevel(logLevel: String?) {
 fun getDbConnFromEnv(varName: String): String {
     val dbConnStr = System.getenv(varName)
     if (dbConnStr.isNullOrBlank() or dbConnStr.isNullOrEmpty()) {
-        println("DB connection string not found/valid in the env variable $varName.")
-        println("The following two examples are valid connection strings:")
-        println("jdbc:sqlite:/tmp/libeufindb.sqlite3")
-        println("jdbc:postgresql://localhost:5432/libeufindb?user=Foo&password=secret")
+        printLnErr("DB connection string not found/valid in the env variable $varName.")
+        printLnErr("The following two examples are valid connection strings:")
+        printLnErr("jdbc:sqlite:/tmp/libeufindb.sqlite3")
+        printLnErr("jdbc:postgresql://localhost:5432/libeufindb?user=Foo&password=secret")
         exitProcess(1)
     }
     return dbConnStr

@@ -45,3 +45,8 @@ fun execThrowableOrTerminate(func: () -> Unit) {
         exitProcess(1)
     }
 }
+
+fun printLnErr(errorMessage: String) {
+    System.err.println(errorMessage)
+
+}
