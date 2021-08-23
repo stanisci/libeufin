@@ -209,11 +209,7 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
                 it[direction] = "CRDT"
             }
         }
-
-        // book payment
-
     }
-
 }
 
 class ResetTables : CliktCommand("Drop all the tables from the database") {
@@ -309,9 +305,9 @@ class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnE
 
     override fun run() = Unit
 }
-
+ 
 fun main(args: Array<String>) {
-    SandboxCommand().subcommands(Serve(), ResetTables(), Config()).main(args)
+    SandboxCommand().subcommands(Serve(), ResetTables(), Config(), MakeTransaction()).main(args)
 }
 
 suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
