@@ -134,6 +134,14 @@ class Config : CliktCommand("Insert one configuration into the database") {
     }
 }
 
+class Camt053Tick : CliktCommand(
+    "Make a new Camt.053 time tick; all the fresh transactions" +
+            "will be inserted in a new Camt.053 report"
+) {
+    override fun run() {
+        TODO("Not yet implemented")
+    }
+}
 class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank accounts") {
     init {
         context {
@@ -308,7 +316,12 @@ class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnE
 }
 
 fun main(args: Array<String>) {
-    SandboxCommand().subcommands(Serve(), ResetTables(), Config(), MakeTransaction()).main(args)
+    SandboxCommand().subcommands(
+        Serve(),
+        ResetTables(),
+        Config(),
+        MakeTransaction(),
+        Camt053Tick()).main(args)
 }
 
 suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {

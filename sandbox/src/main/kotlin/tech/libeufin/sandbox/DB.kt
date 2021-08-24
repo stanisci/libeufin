@@ -309,6 +309,9 @@ object BankAccountTransactionsTable : Table() {
     val pmtInfId = text("pmtInfId").nullable()
     val direction = text("direction")
     val account = reference("account", BankAccountsTable)
+    
+    // indicates whether the transaction got included in a C53 statement.
+    val c53 = bool("c53").default(false)
 
     // It can't be unique (anymore), because one table might contain
     // the same payment twice: once as DBIT and once as CRDT.
