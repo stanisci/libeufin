@@ -43,6 +43,7 @@ import tech.libeufin.util.ebics_hev.HEVResponse
 import tech.libeufin.util.ebics_hev.SystemReturnCodeType
 import tech.libeufin.util.ebics_s001.SignatureTypes
 import tech.libeufin.util.ebics_s001.UserSignatureData
+import java.math.BigDecimal
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
 import java.time.Instant
@@ -212,6 +213,7 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
     val now = LocalDateTime.now()
     val dashedDate = now.toDashedDate()
     val zonedDateTime = now.toZonedString()
+    val balance = balanceForAccount(history)
     return constructXml(indent = true) {
         root("Document") {
             attribute("xmlns", "urn:iso:std:iso:20022:tech:xsd:camt.0${type}.001.02")
@@ -286,11 +288,9 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
                         }
                         element("Amt") {
                             attribute("Ccy", "EUR")
-                            text(Amount(0).toPlainString())
+                            text("0")
                         }
                         element("CdtDbtInd") {
-                            // a temporary value to get the camt to validate.
-                            // Should be fixed along #6269
                             text("CRDT")
                         }
                         element("Dt/Dt") {
@@ -309,12 +309,21 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
                             attribute("Ccy", "EUR")
                             // FIXME: the balance computation still not working properly
                             //text(balanceForAccount(subscriberIban).toString())
-                            text("0")
+                            if (balance < BigDecimal.ZERO) {
+                                text(balance.abs().toPlainString())
+                            } else {
+                                text(balance.toPlainString())
+                            }
+
                         }
                         element("CdtDbtInd") {
                             // a temporary value to get the camt to validate.
                             // Should be fixed along #6269
-                            text("DBIT")
+                            if (balance < BigDecimal.ZERO) {
+                                text("DBIT")
+                            } else {
+                                text("CRDT")
+                            }
                         }
                         element("Dt/Dt") {
                             text(dashedDate)

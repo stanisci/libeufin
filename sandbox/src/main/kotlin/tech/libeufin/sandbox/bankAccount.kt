@@ -27,6 +27,27 @@ fun getAccountFromLabel(accountLabel: String): BankAccountEntity {
         account
     }
 }
+// Mainly useful inside the CAMT generator.
+fun balanceForAccount(history: List<RawPayment>): BigDecimal {
+    var ret = BigDecimal.ZERO
+    history.forEach direction@ {
+        if (it.direction == "CRDT") {
+            val amount = parseDecimal(it.amount)
+            ret += amount
+            return@direction
+        }
+        if (it.direction == "DBIT") {
+            val amount = parseDecimal(it.amount)
+            ret -= amount
+            return@direction
+        }
+        throw SandboxError(
+            HttpStatusCode.InternalServerError,
+            "A payment direction was found neither CRDT not DBIT"
+        )
+    }
+    return ret
+}
 
 fun balanceForAccount(bankAccount: BankAccountEntity): BigDecimal {
     var balance = BigDecimal.ZERO
@@ -66,8 +87,7 @@ fun historyForAccount(bankAccount: BankAccountEntity): List<RawPayment> {
         FIXME: add the following condition too:
         and (BankAccountTransactionsTable.date.between(start.millis, end.millis))
          */
-        BankAccountTransactionsTable.select { BankAccountTransactionsTable.account eq bankAccount.id }
-    }.forEach {
+        BankAccountTransactionsTable.select { BankAccountTransactionsTable.account eq bankAccount.id }.forEach {
             history.add(
                 RawPayment(
                     subject = it[BankAccountTransactionsTable.subject],
@@ -88,6 +108,8 @@ fun historyForAccount(bankAccount: BankAccountEntity): List<RawPayment> {
                     pmtInfId = it[BankAccountTransactionsTable.pmtInfId]
                 )
             )
+
         }
+    }
     return history
 }
