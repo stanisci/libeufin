@@ -184,8 +184,6 @@ private suspend fun talerTransfer(call: ApplicationCall) {
     parsePayto(transferRequest.credit_account)
     val facadeId = expectNonNull(call.parameters["fcid"])
     val opaqueRowId = transaction {
-        // FIXME: re-enable authentication (https://bugs.gnunet.org/view.php?id=6703)
-        // val exchangeUser = authenticateRequest(call.request)
         call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.talerwiregateway.transfer"))
         val facade = FacadeEntity.find { FacadesTable.facadeName eq facadeId }.firstOrNull() ?: throw NexusError(
             HttpStatusCode.NotFound,
