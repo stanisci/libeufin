@@ -40,6 +40,7 @@ import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
 import tech.libeufin.util.*
+import java.net.URLEncoder
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -114,7 +115,8 @@ fun buildIbanPaytoUri(
     iban: String, bic: String, name: String, direction: String
 ): String {
     val nameParam = if (direction == "DBIT") "sender-name" else "receiver-name"
-    return "payto://iban/$bic/$iban?$nameParam=$name"
+    val nameUrlEnc = URLEncoder.encode(name, "utf-8")
+    return "payto://iban/$bic/$iban?$nameParam=$nameUrlEnc"
 }
 
 /** Builds the comparison operator for history entries based on the sign of 'delta'  */
