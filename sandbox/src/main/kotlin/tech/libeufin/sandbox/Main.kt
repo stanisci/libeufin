@@ -132,12 +132,15 @@ class Camt053Tick : CliktCommand(
         dbCreateTables(dbConnString)
         transaction {
             BankAccountEntity.all().forEach { accountIter->
+                /**
+                 * TBD: here the statements for each account need to be generated.
+                 */
                 val accountRet = mutableListOf<String>()
                 BankAccountFreshTransactionEntity.all().forEach { freshTx ->
                     accountRet.add(
                         "${freshTx.transactionRef.subject}: " +
                                 "${freshTx.transactionRef.amount} ${freshTx.transactionRef.currency} " +
-                                "${freshTx.transactionRef.direction}"
+                                freshTx.transactionRef.direction
                     )
                 }
                 println("Bank account ${accountIter.label} found fresh transactions:")
