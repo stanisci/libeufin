@@ -135,16 +135,56 @@ class Camt053Tick : CliktCommand(
                 /**
                  * TBD: here the statements for each account need to be generated.
                  */
-                val accountRet = mutableListOf<String>()
-                BankAccountFreshTransactionEntity.all().forEach { freshTx ->
-                    accountRet.add(
-                        "${freshTx.transactionRef.subject}: " +
-                                "${freshTx.transactionRef.amount} ${freshTx.transactionRef.currency} " +
-                                freshTx.transactionRef.direction
+
+                /**
+                 * Map of 'account name' -> fresh history
+                 */
+                val histories = mutableMapOf<
+                        String,
+                        MutableList<RawPayment>>()
+                BankAccountFreshTransactionEntity.all().forEach {
+                    val bankAccountLabel = it.transactionRef.account.label
+                    histories.putIfAbsent(bankAccountLabel, mutableListOf())
+                    val historyIter = histories[bankAccountLabel]
+                    historyIter?.add(
+                        RawPayment(
+                            subject = it.transactionRef.subject,
+                            creditorIban = it.transactionRef.creditorIban,
+                            creditorBic = it.transactionRef.creditorBic,
+                            creditorName = it.transactionRef.creditorName,
+                            debtorIban = it.transactionRef.debtorIban,
+                            debtorBic = it.transactionRef.debtorBic,
+                            debtorName = it.transactionRef.debtorName,
+                            date = importDateFromMillis(it.transactionRef.date).toDashedDate(),
+                            amount = it.transactionRef.amount,
+                            currency = it.transactionRef.currency,
+                            // The line below produces a value too long (>35 chars),
+                            // and it makes the document invalid!
+                            // uid = "${it.pmtInfId}-${it.msgId}"
+                            uid = it.transactionRef.accountServicerReference,
+                            direction = it.transactionRef.direction,
+                            pmtInfId = it.transactionRef.pmtInfId
+                        )
                     )
                 }
-                println("Bank account ${accountIter.label} found fresh transactions:")
-                accountRet.forEach { println(it) }
+                // still need lastBalance
+                val lastStatement = BankAccountStatementEntity.find {
+                    BankAccountStatementsTable.bankAccount eq accountIter.id
+                }.firstOrNull()
+                val lastBalance = if (lastStatement == null) {
+                    BigDecimal.ZERO } else { BigDecimal(lastStatement.balancePrcd) }
+                val balancePrcd = balanceForAccount(
+                    history = histories[accountIter.label] ?: mutableListOf(),
+                    baseBalance = lastBalance
+                )
+                val camt53 = buildCamtString(
+                    53,
+                    accountIter.iban,
+                    histories[accountIter.label] ?: mutableListOf(),
+                    balanceClbd = lastBalance,
+                    balancePrcd = balancePrcd
+                )
+                println(camt53)
             }
             BankAccountFreshTransactionsTable.deleteAll()
         }
@@ -542,8 +582,19 @@ fun serverMain(dbName: String, port: Int) {
                 val body = call.receiveJson<CamtParams>()
                 val bankaccount = getAccountFromLabel(body.bankaccount)
                 val history = historyForAccount(bankaccount)
-                SandboxAssert(body.type == 53, "Only Camt.053 is implemented")
-                val camt53 = buildCamtString(body.type, bankaccount.iban, history)
+                SandboxAssert(body.type == 53,
+                    "Only Camt.053 is implemented"
+                )
+                val camt53 = buildCamtString(
+                    body.type,
+                    bankaccount.iban,
+                    history,
+                    balancePrcd = BigDecimal.ZERO,
+                    balanceClbd = balanceForAccount(
+                        history,
+                        baseBalance = BigDecimal.ZERO
+                    )
+                )
                 call.respondText(camt53, ContentType.Text.Xml, HttpStatusCode.OK)
                 return@post
             }

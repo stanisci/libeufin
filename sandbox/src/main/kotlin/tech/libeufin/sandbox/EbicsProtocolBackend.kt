@@ -44,6 +44,7 @@ import tech.libeufin.util.ebics_hev.SystemReturnCodeType
 import tech.libeufin.util.ebics_s001.SignatureTypes
 import tech.libeufin.util.ebics_s001.UserSignatureData
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
 import java.time.Instant
@@ -197,7 +198,13 @@ private fun getRelatedParty(branch: XmlElementBuilder, payment: RawPayment) {
     }
 }
 
-fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>): String {
+fun buildCamtString(
+    type: Int,
+    subscriberIban: String,
+    freshHistory: MutableList<RawPayment>,
+    balancePrcd: BigDecimal, // Balance up to freshHistory (excluded).
+    balanceClbd: BigDecimal
+): String {
     /**
      * ID types required:
      *
@@ -213,7 +220,7 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
     val now = LocalDateTime.now()
     val dashedDate = now.toDashedDate()
     val zonedDateTime = now.toZonedString()
-    val balance = balanceForAccount(history)
+
     return constructXml(indent = true) {
         root("Document") {
             attribute("xmlns", "urn:iso:std:iso:20022:tech:xsd:camt.0${type}.001.02")
@@ -288,7 +295,11 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
                         }
                         element("Amt") {
                             attribute("Ccy", "EUR")
-                            text("0")
+                            if (balancePrcd < BigDecimal.ZERO) {
+                                text(balancePrcd.abs().toPlainString())
+                            } else {
+                                text(balancePrcd.toPlainString())
+                            }
                         }
                         element("CdtDbtInd") {
                             text("CRDT")
@@ -309,17 +320,16 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
                             attribute("Ccy", "EUR")
                             // FIXME: the balance computation still not working properly
                             //text(balanceForAccount(subscriberIban).toString())
-                            if (balance < BigDecimal.ZERO) {
-                                text(balance.abs().toPlainString())
+                            if (balanceClbd < BigDecimal.ZERO) {
+                                text(balanceClbd.abs().toPlainString())
                             } else {
-                                text(balance.toPlainString())
+                                text(balanceClbd.toPlainString())
                             }
-
                         }
                         element("CdtDbtInd") {
                             // a temporary value to get the camt to validate.
                             // Should be fixed along #6269
-                            if (balance < BigDecimal.ZERO) {
+                            if (balanceClbd < BigDecimal.ZERO) {
                                 text("DBIT")
                             } else {
                                 text("CRDT")
@@ -329,7 +339,7 @@ fun buildCamtString(type: Int, subscriberIban: String, history: List<RawPayment>
                             text(dashedDate)
                         }
                     }
-                    history.forEach {
+                    freshHistory.forEach {
                         this.element("Ntry") {
                             element("Amt") {
                                 attribute("Ccy", it.currency)
@@ -456,7 +466,14 @@ private fun constructCamtResponse(type: Int, subscriber: EbicsSubscriberEntity):
     val bankAccount = getBankAccountFromSubscriber(subscriber)
     logger.info("getting history for account with iban ${bankAccount.iban}")
     val history = historyForAccount(bankAccount)
-    return buildCamtString(type, bankAccount.iban, history)
+    val baseBalance = BigDecimal.ZERO
+    return buildCamtString(
+        type,
+        bankAccount.iban,
+        history,
+        balancePrcd = baseBalance,
+        balanceClbd = balanceForAccount(history, baseBalance)
+    )
 }
 
 /**

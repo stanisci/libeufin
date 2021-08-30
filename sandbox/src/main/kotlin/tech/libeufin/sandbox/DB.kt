@@ -380,6 +380,17 @@ object BankAccountStatementsTable : IntIdTable() {
     val creationTime = long("creationTime")
     val xmlMessage = text("xmlMessage")
     val bankAccount = reference("bankAccount", BankAccountsTable)
+    val balancePrcd = text("balancePrcd") // normally, a BigDecimal
+}
+
+class BankAccountStatementEntity(id: EntityID<Int>) : IntEntity(id) {
+    companion object : IntEntityClass<BankAccountStatementEntity>(BankAccountStatementsTable)
+
+    var statementId by BankAccountStatementsTable.id
+    var creationTime by BankAccountStatementsTable.creationTime
+    var xmlMessage by BankAccountStatementsTable.xmlMessage
+    var bankAccount by BankAccountEntity referencedOn BankAccountStatementsTable.bankAccount
+    var balancePrcd by BankAccountStatementsTable.balancePrcd
 }
 
 object BankAccountReportsTable : IntIdTable() {

@@ -25,8 +25,11 @@ fun getAccountFromLabel(accountLabel: String): BankAccountEntity {
     }
 }
 // Mainly useful inside the CAMT generator.
-fun balanceForAccount(history: List<RawPayment>): BigDecimal {
-    var ret = BigDecimal.ZERO
+fun balanceForAccount(
+    history: MutableList<RawPayment>,
+    baseBalance: BigDecimal
+): BigDecimal {
+    var ret = baseBalance
     history.forEach direction@ {
         if (it.direction == "CRDT") {
             val amount = parseDecimal(it.amount)
@@ -73,7 +76,8 @@ fun balanceForAccount(bankAccount: BankAccountEntity): BigDecimal {
     return balance
 }
 
-fun historyForAccount(bankAccount: BankAccountEntity): List<RawPayment> {
+// For now, returns everything.
+fun historyForAccount(bankAccount: BankAccountEntity): MutableList<RawPayment> {
     val history = mutableListOf<RawPayment>()
     transaction {
         /**
