@@ -71,18 +71,6 @@ import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.request.*
 import io.ktor.util.date.*
-import tech.libeufin.sandbox.BankAccountTransactionsTable.accountServicerReference
-import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
-import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorBic
-import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorIban
-import tech.libeufin.sandbox.BankAccountTransactionsTable.creditorName
-import tech.libeufin.sandbox.BankAccountTransactionsTable.currency
-import tech.libeufin.sandbox.BankAccountTransactionsTable.date
-import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorBic
-import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorIban
-import tech.libeufin.sandbox.BankAccountTransactionsTable.debtorName
-import tech.libeufin.sandbox.BankAccountTransactionsTable.direction
-import tech.libeufin.sandbox.BankAccountTransactionsTable.pmtInfId
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
@@ -139,7 +127,24 @@ class Camt053Tick : CliktCommand(
             "will be inserted in a new Camt.053 report"
 ) {
     override fun run() {
-        TODO("Not yet implemented")
+        val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
+        Database.connect(dbConnString)
+        dbCreateTables(dbConnString)
+        transaction {
+            BankAccountEntity.all().forEach { accountIter->
+                val accountRet = mutableListOf<String>()
+                BankAccountFreshTransactionEntity.all().forEach { freshTx ->
+                    accountRet.add(
+                        "${freshTx.transactionRef.subject}: " +
+                                "${freshTx.transactionRef.amount} ${freshTx.transactionRef.currency} " +
+                                "${freshTx.transactionRef.direction}"
+                    )
+                }
+                println("Bank account ${accountIter.label} found fresh transactions:")
+                accountRet.forEach { println(it) }
+            }
+            BankAccountFreshTransactionsTable.deleteAll()
+        }
     }
 }
 class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank accounts") {
@@ -187,35 +192,35 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
                 exitProcess(1)
             }
             val randId = getRandomString(16)
-            BankAccountTransactionsTable.insert {
-                it[creditorIban] = credit.iban
-                it[creditorBic] = credit.bic
-                it[creditorName] = credit.name
-                it[debtorIban] = debit.iban
-                it[debtorBic] = debit.bic
-                it[debtorName] = debit.name
-                it[subject] = subjectArg
-                it[amount] = amountObj.amount.toString()
-                it[currency] = amountObj.currency
-                it[date] = Instant.now().toEpochMilli()
-                it[accountServicerReference] = "sandbox-$randId"
-                it[account] = debit.id
-                it[direction] = "DBIT"
+            BankAccountTransactionEntity.new {
+                creditorIban = credit.iban
+                creditorBic = credit.bic
+                creditorName = credit.name
+                debtorIban = debit.iban
+                debtorBic = debit.bic
+                debtorName = debit.name
+                subject = subjectArg
+                amount = amountObj.amount.toString()
+                currency = amountObj.currency
+                date = Instant.now().toEpochMilli()
+                accountServicerReference = "sandbox-$randId"
+                account = debit
+                direction = "DBIT"
             }
-            BankAccountTransactionsTable.insert {
-                it[creditorIban] = credit.iban
-                it[creditorBic] = credit.bic
-                it[creditorName] = credit.name
-                it[debtorIban] = debit.iban
-                it[debtorBic] = debit.bic
-                it[debtorName] = debit.name
-                it[subject] = subjectArg
-                it[amount] = amountObj.amount.toString()
-                it[currency] = amountObj.currency
-                it[date] = Instant.now().toEpochMilli()
-                it[accountServicerReference] = "sandbox-$randId"
-                it[account] = credit.id
-                it[direction] = "CRDT"
+            BankAccountTransactionEntity.new {
+                creditorIban = credit.iban
+                creditorBic = credit.bic
+                creditorName = credit.name
+                debtorIban = debit.iban
+                debtorBic = debit.bic
+                debtorName = debit.name
+                subject = subjectArg
+                amount = amountObj.amount.toString()
+                currency = amountObj.currency
+                date = Instant.now().toEpochMilli()
+                accountServicerReference = "sandbox-$randId"
+                account = credit
+                direction = "CRDT"
             }
         }
     }
@@ -597,20 +602,20 @@ fun serverMain(dbName: String, port: Int) {
                 transaction {
                     val account = getBankAccountFromLabel(accountLabel)
                     val randId = getRandomString(16)
-                    BankAccountTransactionsTable.insert {
-                        it[creditorIban] = account.iban
-                        it[creditorBic] = account.bic
-                        it[creditorName] = account.name
-                        it[debtorIban] = body.debtorIban
-                        it[debtorBic] = reqDebtorBic
-                        it[debtorName] = body.debtorName
-                        it[subject] = body.subject
-                        it[amount] = body.amount
-                        it[currency] = account.currency
-                        it[date] = Instant.now().toEpochMilli()
-                        it[accountServicerReference] = "sandbox-$randId"
-                        it[BankAccountTransactionsTable.account] = account.id
-                        it[direction] = "CRDT"
+                    BankAccountTransactionEntity.new {
+                        creditorIban = account.iban
+                        creditorBic = account.bic
+                        creditorName = account.name
+                        debtorIban = body.debtorIban
+                        debtorBic = reqDebtorBic
+                        debtorName = body.debtorName
+                        subject = body.subject
+                        amount = body.amount
+                        currency = account.currency
+                        date = Instant.now().toEpochMilli()
+                        accountServicerReference = "sandbox-$randId"
+                        this.account = account
+                        direction = "CRDT"
                     }
                 }
                 call.respond(object {})
@@ -627,20 +632,20 @@ fun serverMain(dbName: String, port: Int) {
                 val randId = getRandomString(16)
                 transaction {
                     val localIban = if (body.direction == "DBIT") body.debtorIban else body.creditorIban
-                    BankAccountTransactionsTable.insert {
-                        it[creditorIban] = body.creditorIban
-                        it[creditorBic] = body.creditorBic
-                        it[creditorName] = body.creditorName
-                        it[debtorIban] = body.debtorIban
-                        it[debtorBic] = body.debtorBic
-                        it[debtorName] = body.debtorName
-                        it[subject] = body.subject
-                        it[amount] = body.amount
-                        it[currency] = body.currency
-                        it[date] = Instant.now().toEpochMilli()
-                        it[accountServicerReference] = "sandbox-$randId"
-                        it[account] = getBankAccountFromIban(localIban).id
-                        it[direction] = body.direction
+                    BankAccountTransactionEntity.new {
+                        creditorIban = body.creditorIban
+                        creditorBic = body.creditorBic
+                        creditorName = body.creditorName
+                        debtorIban = body.debtorIban
+                        debtorBic = body.debtorBic
+                        debtorName = body.debtorName
+                        subject = body.subject
+                        amount = body.amount
+                        currency = body.currency
+                        date = Instant.now().toEpochMilli()
+                        accountServicerReference = "sandbox-$randId"
+                        account = getBankAccountFromIban(localIban)
+                        direction = body.direction
                     }
                 }
                 call.respondText("Payment created")
@@ -702,33 +707,34 @@ fun serverMain(dbName: String, port: Int) {
                     val accountLabel = ensureNonNull(call.parameters["label"])
                     transaction {
                         val account = getBankAccountFromLabel(accountLabel)
-                        BankAccountTransactionsTable.select { BankAccountTransactionsTable.account eq account.id }
-                            .forEach {
-                                ret.payments.add(
-                                    PaymentInfo(
-                                        accountLabel = account.label,
-                                        creditorIban = it[creditorIban],
-                                        // FIXME: We need to modify the transactions table to have an actual
-                                        // account servicer reference here.
-                                        accountServicerReference = it[accountServicerReference],
-                                        paymentInformationId = it[pmtInfId],
-                                        debtorIban = it[debtorIban],
-                                        subject = it[BankAccountTransactionsTable.subject],
-                                        date = GMTDate(it[date]).toHttpDate(),
-                                        amount = it[amount],
-                                        creditorBic = it[creditorBic],
-                                        creditorName = it[creditorName],
-                                        debtorBic = it[debtorBic],
-                                        debtorName = it[debtorName],
-                                        currency = it[currency],
-                                        creditDebitIndicator = when (it[direction]) {
-                                            "CRDT" -> "credit"
-                                            "DBIT" -> "debit"
-                                            else -> throw Error("invalid direction")
-                                        }
-                                    )
+                        BankAccountTransactionEntity.find {
+                            BankAccountTransactionsTable.account eq account.id
+                        }.forEach {
+                            ret.payments.add(
+                                PaymentInfo(
+                                    accountLabel = account.label,
+                                    creditorIban = it.creditorIban,
+                                    // FIXME: We need to modify the transactions table to have an actual
+                                    // account servicer reference here.
+                                    accountServicerReference = it.accountServicerReference,
+                                    paymentInformationId = it.pmtInfId,
+                                    debtorIban = it.debtorIban,
+                                    subject = it.subject,
+                                    date = GMTDate(it.date).toHttpDate(),
+                                    amount = it.amount,
+                                    creditorBic = it.creditorBic,
+                                    creditorName = it.creditorName,
+                                    debtorBic = it.debtorBic,
+                                    debtorName = it.debtorName,
+                                    currency = it.currency,
+                                    creditDebitIndicator = when (it.direction) {
+                                        "CRDT" -> "credit"
+                                        "DBIT" -> "debit"
+                                        else -> throw Error("invalid direction")
+                                    }
                                 )
-                            }
+                            )
+                        }
                     }
                 }
                 call.respond(ret)
@@ -742,40 +748,40 @@ fun serverMain(dbName: String, port: Int) {
 
                     run {
                         val amount = Random.nextLong(5, 25)
-                        BankAccountTransactionsTable.insert {
-                            it[creditorIban] = account.iban
-                            it[creditorBic] = account.bic
-                            it[creditorName] = account.name
-                            it[debtorIban] = "DE64500105178797276788"
-                            it[debtorBic] = "DEUTDEBB101"
-                            it[debtorName] = "Max Mustermann"
-                            it[subject] = "sample transaction $transactionReferenceCrdt"
-                            it[BankAccountTransactionsTable.amount] = amount.toString()
-                            it[currency] = account.currency
-                            it[date] = Instant.now().toEpochMilli()
-                            it[accountServicerReference] = transactionReferenceCrdt
-                            it[BankAccountTransactionsTable.account] = account.id
-                            it[direction] = "CRDT"
+                        BankAccountTransactionEntity.new {
+                            creditorIban = account.iban
+                            creditorBic = account.bic
+                            creditorName = account.name
+                            debtorIban = "DE64500105178797276788"
+                            debtorBic = "DEUTDEBB101"
+                            debtorName = "Max Mustermann"
+                            subject = "sample transaction $transactionReferenceCrdt"
+                            this.amount = amount.toString()
+                            currency = account.currency
+                            date = Instant.now().toEpochMilli()
+                            accountServicerReference = transactionReferenceCrdt
+                            this.account = account
+                            direction = "CRDT"
                         }
                     }
 
                     run {
                         val amount = Random.nextLong(5, 25)
 
-                        BankAccountTransactionsTable.insert {
-                            it[debtorIban] = account.iban
-                            it[debtorBic] = account.bic
-                            it[debtorName] = account.name
-                            it[creditorIban] = "DE64500105178797276788"
-                            it[creditorBic] = "DEUTDEBB101"
-                            it[creditorName] = "Max Mustermann"
-                            it[subject] = "sample transaction $transactionReferenceDbit"
-                            it[BankAccountTransactionsTable.amount] = amount.toString()
-                            it[currency] = account.currency
-                            it[date] = Instant.now().toEpochMilli()
-                            it[accountServicerReference] = transactionReferenceDbit
-                            it[BankAccountTransactionsTable.account] = account.id
-                            it[direction] = "DBIT"
+                        BankAccountTransactionEntity.new {
+                            debtorIban = account.iban
+                            debtorBic = account.bic
+                            debtorName = account.name
+                            creditorIban = "DE64500105178797276788"
+                            creditorBic = "DEUTDEBB101"
+                            creditorName = "Max Mustermann"
+                            subject = "sample transaction $transactionReferenceDbit"
+                            this.amount = amount.toString()
+                            currency = account.currency
+                            date = Instant.now().toEpochMilli()
+                            accountServicerReference = transactionReferenceDbit
+                            this.account = account
+                            direction = "DBIT"
                         }
                     }
                 }

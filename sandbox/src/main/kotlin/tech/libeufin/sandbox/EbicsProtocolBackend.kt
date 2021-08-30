@@ -561,41 +561,41 @@ private fun handleCct(paymentRequest: String) {
     val parseResult = parsePain001(paymentRequest)
     transaction {
         try {
-            BankAccountTransactionsTable.insert {
-                it[account] = getBankAccountFromIban(parseResult.debtorIban).id
-                it[creditorIban] = parseResult.creditorIban
-                it[creditorName] = parseResult.creditorName
-                it[creditorBic] = parseResult.creditorBic
-                it[debtorIban] = parseResult.debtorIban
-                it[debtorName] = parseResult.debtorName
-                it[debtorBic] = parseResult.debtorBic
-                it[subject] = parseResult.subject
-                it[amount] = parseResult.amount.toString()
-                it[currency] = parseResult.currency
-                it[date] = Instant.now().toEpochMilli()
-                it[pmtInfId] = parseResult.pmtInfId
-                it[accountServicerReference] = "sandboxref-${getRandomString(16)}"
-                it[direction] = "DBIT"
+            BankAccountTransactionEntity.new {
+                account = getBankAccountFromIban(parseResult.debtorIban)
+                creditorIban = parseResult.creditorIban
+                creditorName = parseResult.creditorName
+                creditorBic = parseResult.creditorBic
+                debtorIban = parseResult.debtorIban
+                debtorName = parseResult.debtorName
+                debtorBic = parseResult.debtorBic
+                subject = parseResult.subject
+                amount = parseResult.amount.toString()
+                currency = parseResult.currency
+                date = Instant.now().toEpochMilli()
+                pmtInfId = parseResult.pmtInfId
+                accountServicerReference = "sandboxref-${getRandomString(16)}"
+                direction = "DBIT"
             }
             val maybeLocalCreditor = BankAccountEntity.find(
                 BankAccountsTable.iban eq parseResult.creditorIban
             ).firstOrNull()
             if (maybeLocalCreditor != null) {
-                BankAccountTransactionsTable.insert {
-                    it[account] = maybeLocalCreditor.id
-                    it[creditorIban] = parseResult.creditorIban
-                    it[creditorName] = parseResult.creditorName
-                    it[creditorBic] = parseResult.creditorBic
-                    it[debtorIban] = parseResult.debtorIban
-                    it[debtorName] = parseResult.debtorName
-                    it[debtorBic] = parseResult.debtorBic
-                    it[subject] = parseResult.subject
-                    it[amount] = parseResult.amount.toString()
-                    it[currency] = parseResult.currency
-                    it[date] = Instant.now().toEpochMilli()
-                    it[pmtInfId] = parseResult.pmtInfId
-                    it[accountServicerReference] = "sandboxref-${getRandomString(16)}"
-                    it[direction] = "CRDT"
+                BankAccountTransactionEntity.new {
+                    account = maybeLocalCreditor
+                    creditorIban = parseResult.creditorIban
+                    creditorName = parseResult.creditorName
+                    creditorBic = parseResult.creditorBic
+                    debtorIban = parseResult.debtorIban
+                    debtorName = parseResult.debtorName
+                    debtorBic = parseResult.debtorBic
+                    subject = parseResult.subject
+                    amount = parseResult.amount.toString()
+                    currency = parseResult.currency
+                    date = Instant.now().toEpochMilli()
+                    pmtInfId = parseResult.pmtInfId
+                    accountServicerReference = "sandboxref-${getRandomString(16)}"
+                    direction = "CRDT"
                 }
             }
         } catch (e: ExposedSQLException) {
@@ -776,7 +776,7 @@ private suspend fun ApplicationCall.handleEbicsHpb(
 private fun ApplicationCall.ensureEbicsHost(requestHostID: String): EbicsHostPublicInfo {
     return transaction {
         val ebicsHost =
-            EbicsHostEntity.find { EbicsHostsTable.hostID.upperCase() eq requestHostID.toUpperCase() }.firstOrNull()
+            EbicsHostEntity.find { EbicsHostsTable.hostID.upperCase() eq requestHostID.uppercase(Locale.getDefault()) }.firstOrNull()
         if (ebicsHost == null) {
             logger.warn("client requested unknown HostID ${requestHostID}")
             throw EbicsKeyManagementError("[EBICS_INVALID_HOST_ID]", "091011")
@@ -1105,14 +1105,14 @@ private fun makeRequestContext(requestObject: EbicsRequest): RequestContext {
     val staticHeader = requestObject.header.static
     val requestedHostId = staticHeader.hostID
     val ebicsHost =
-        EbicsHostEntity.find { EbicsHostsTable.hostID.upperCase() eq requestedHostId.toUpperCase() }
+        EbicsHostEntity.find { EbicsHostsTable.hostID.upperCase() eq requestedHostId.uppercase(Locale.getDefault()) }
             .firstOrNull()
     val requestTransactionID = requestObject.header.static.transactionID
     var downloadTransaction: EbicsDownloadTransactionEntity? = null
     var uploadTransaction: EbicsUploadTransactionEntity? = null
     val subscriber = if (requestTransactionID != null) {
         println("finding subscriber by transactionID $requestTransactionID")
-        downloadTransaction = EbicsDownloadTransactionEntity.findById(requestTransactionID.toUpperCase())
+        downloadTransaction = EbicsDownloadTransactionEntity.findById(requestTransactionID.uppercase(Locale.getDefault()))
         if (downloadTransaction != null) {
             downloadTransaction.subscriber
         } else {

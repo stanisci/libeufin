@@ -282,10 +282,25 @@ class EbicsUploadTransactionChunkEntity(id: EntityID<String>) : Entity<String>(i
     var chunkContent by EbicsUploadTransactionChunksTable.chunkContent
 }
 
+
+/**
+ * Holds those transactions that aren't yet reported in a Camt.053 document.
+ * After reporting those, the table gets emptied.  Rows are merely references
+ * to the main ledger.
+ */
+object BankAccountFreshTransactionsTable : LongIdTable() {
+    val transactionRef = reference("transaction", BankAccountTransactionsTable)
+}
+class BankAccountFreshTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<BankAccountFreshTransactionEntity>(BankAccountFreshTransactionsTable)
+
+    var transactionRef by BankAccountTransactionEntity referencedOn BankAccountFreshTransactionsTable.transactionRef
+}
+
 /**
  * Table that keeps all the payments initiated by PAIN.001.
  */
-object BankAccountTransactionsTable : Table() {
+object BankAccountTransactionsTable : LongIdTable() {
     val creditorIban = text("creditorIban")
     val creditorBic = text("creditorBic").nullable()
     val creditorName = text("creditorName")
@@ -293,7 +308,7 @@ object BankAccountTransactionsTable : Table() {
     val debtorBic = text("debtorBic").nullable()
     val debtorName = text("debtorName")
     val subject = text("subject")
-    val amount = text("amount")
+    val amount = text("amount") // NOT the usual $currency:x.y, but a BigInt as string
     val currency = text("currency")
     val date = long("date")
 
@@ -304,18 +319,38 @@ object BankAccountTransactionsTable : Table() {
 
     /**
      * Payment information ID, which is a reference to the payment initiation
-     * that triggered this transaction.  Typically only available with outgoing transactions.
+     * that triggered this transaction.  Typically, only available with outgoing transactions.
      */
     val pmtInfId = text("pmtInfId").nullable()
     val direction = text("direction")
     val account = reference("account", BankAccountsTable)
-    
-    // indicates whether the transaction got included in a C53 statement.
-    val c53 = bool("c53").default(false)
+}
 
-    // It can't be unique (anymore), because one table might contain
-    // the same payment twice: once as DBIT and once as CRDT.
-    // override val primaryKey = PrimaryKey(pmtInfId)
+class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<BankAccountTransactionEntity>(BankAccountTransactionsTable) {
+        override fun new(init: BankAccountTransactionEntity.() -> Unit): BankAccountTransactionEntity {
+            val freshTx = super.new(init)
+            BankAccountFreshTransactionsTable.insert {
+                it[transactionRef] = freshTx.id
+            }
+            return freshTx
+        }
+    }
+
+    var creditorIban by BankAccountTransactionsTable.creditorIban
+    var creditorBic by BankAccountTransactionsTable.creditorBic
+    var creditorName by BankAccountTransactionsTable.creditorName
+    var debtorIban by BankAccountTransactionsTable.debtorIban
+    var debtorBic by BankAccountTransactionsTable.debtorBic
+    var debtorName by BankAccountTransactionsTable.debtorName
+    var subject by BankAccountTransactionsTable.subject
+    var amount by BankAccountTransactionsTable.amount
+    var currency by BankAccountTransactionsTable.currency
+    var date by BankAccountTransactionsTable.date
+    var accountServicerReference by BankAccountTransactionsTable.accountServicerReference
+    var pmtInfId by BankAccountTransactionsTable.pmtInfId
+    var direction by BankAccountTransactionsTable.direction
+    var account by BankAccountEntity referencedOn BankAccountTransactionsTable.account
 }
 
 /**
@@ -388,6 +423,7 @@ fun dbCreateTables(dbConnectionString: String) {
             EbicsUploadTransactionChunksTable,
             EbicsOrderSignaturesTable,
             BankAccountTransactionsTable,
+            BankAccountFreshTransactionsTable,
             BankAccountsTable,
             BankAccountReportsTable,
             BankAccountStatementsTable

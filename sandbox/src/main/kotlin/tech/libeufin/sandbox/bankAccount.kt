@@ -2,12 +2,9 @@ package tech.libeufin.sandbox
 
 import io.ktor.http.*
 import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.or
-import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.sandbox.BankAccountTransactionsTable.amount
 import tech.libeufin.util.RawPayment
 import tech.libeufin.util.importDateFromMillis
 import tech.libeufin.util.parseDecimal
@@ -52,18 +49,18 @@ fun balanceForAccount(history: List<RawPayment>): BigDecimal {
 fun balanceForAccount(bankAccount: BankAccountEntity): BigDecimal {
     var balance = BigDecimal.ZERO
     transaction {
-        BankAccountTransactionsTable.select {
+        BankAccountTransactionEntity.find {
             BankAccountTransactionsTable.direction eq "CRDT" and (
                     BankAccountTransactionsTable.account eq bankAccount.id)
         }.forEach {
-            val amount = parseDecimal(it[amount])
+            val amount = parseDecimal(it.amount)
             balance += amount
         }
-        BankAccountTransactionsTable.select {
+        BankAccountTransactionEntity.find {
             BankAccountTransactionsTable.direction eq "DBIT" and (
                     BankAccountTransactionsTable.account eq bankAccount.id)
         }.forEach {
-            val amount = parseDecimal(it[amount])
+            val amount = parseDecimal(it.amount)
             balance -= amount
         }
     }
@@ -87,25 +84,27 @@ fun historyForAccount(bankAccount: BankAccountEntity): List<RawPayment> {
         FIXME: add the following condition too:
         and (BankAccountTransactionsTable.date.between(start.millis, end.millis))
          */
-        BankAccountTransactionsTable.select { BankAccountTransactionsTable.account eq bankAccount.id }.forEach {
+        BankAccountTransactionEntity.find {
+            BankAccountTransactionsTable.account eq bankAccount.id
+        }.forEach {
             history.add(
                 RawPayment(
-                    subject = it[BankAccountTransactionsTable.subject],
-                    creditorIban = it[BankAccountTransactionsTable.creditorIban],
-                    creditorBic = it[BankAccountTransactionsTable.creditorBic],
-                    creditorName = it[BankAccountTransactionsTable.creditorName],
-                    debtorIban = it[BankAccountTransactionsTable.debtorIban],
-                    debtorBic = it[BankAccountTransactionsTable.debtorBic],
-                    debtorName = it[BankAccountTransactionsTable.debtorName],
-                    date = importDateFromMillis(it[BankAccountTransactionsTable.date]).toDashedDate(),
-                    amount = it[BankAccountTransactionsTable.amount],
-                    currency = it[BankAccountTransactionsTable.currency],
+                    subject = it.subject,
+                    creditorIban = it.creditorIban,
+                    creditorBic = it.creditorBic,
+                    creditorName = it.creditorName,
+                    debtorIban = it.debtorIban,
+                    debtorBic = it.debtorBic,
+                    debtorName = it.debtorName,
+                    date = importDateFromMillis(it.date).toDashedDate(),
+                    amount = it.amount,
+                    currency = it.currency,
                     // The line below produces a value too long (>35 chars),
                     // and it makes the document invalid!
-                    // uid = "${it[pmtInfId]}-${it[msgId]}"
-                    uid = it[BankAccountTransactionsTable.accountServicerReference],
-                    direction = it[BankAccountTransactionsTable.direction],
-                    pmtInfId = it[BankAccountTransactionsTable.pmtInfId]
+                    // uid = "${it.pmtInfId}-${it.msgId}"
+                    uid = it.accountServicerReference,
+                    direction = it.direction,
+                    pmtInfId = it.pmtInfId
                 )
             )
 

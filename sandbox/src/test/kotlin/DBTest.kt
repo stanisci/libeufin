@@ -21,9 +21,7 @@ import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
-import tech.libeufin.sandbox.BankAccountTransactionsTable
-import tech.libeufin.sandbox.BankAccountsTable
-import tech.libeufin.sandbox.dbDropTables
+import tech.libeufin.sandbox.*
 import tech.libeufin.util.millis
 import tech.libeufin.util.parseDashedDate
 import java.io.File
@@ -64,31 +62,39 @@ class DBTest {
     fun betweenDates() {
         withTestDatabase {
             transaction {
-                SchemaUtils.create(BankAccountTransactionsTable)
-                BankAccountTransactionsTable.insert {
-                    it[account] = EntityID(0, BankAccountsTable)
-                    it[creditorIban] = "earns"
-                    it[creditorBic] = "BIC"
-                    it[creditorName] = "Creditor Name"
-                    it[debtorIban] = "spends"
-                    it[debtorBic] = "BIC"
-                    it[debtorName] = "Debitor Name"
-                    it[subject] = "deal"
-                    it[amount] = "EUR:1"
-                    it[date] = LocalDateTime.now().millis()
-                    it[currency] = "EUR"
-                    it[pmtInfId] = "0"
-                    it[direction] = "DBIT"
-                    it[accountServicerReference] = "test-account-servicer-reference"
+                SchemaUtils.create(
+                    BankAccountTransactionsTable,
+                    BankAccountFreshTransactionsTable
+                )
+                val bankAccount = BankAccountEntity.new {
+                    iban = "iban"
+                    bic = "bic"
+                    name = "name"
+                    label = "label"
+                    currency = "TESTKUDOS"
+                }
+                BankAccountTransactionEntity.new {
+                    account = bankAccount
+                    creditorIban = "earns"
+                    creditorBic = "BIC"
+                    creditorName = "Creditor Name"
+                    debtorIban = "spends"
+                    debtorBic = "BIC"
+                    debtorName = "Debitor Name"
+                    subject = "deal"
+                    amount = "EUR:1"
+                    date = LocalDateTime.now().millis()
+                    currency = "EUR"
+                    pmtInfId = "0"
+                    direction = "DBIT"
+                    accountServicerReference = "test-account-servicer-reference"
                 }
             }
             val result = transaction {
                 addLogger(StdOutSqlLogger)
-                BankAccountTransactionsTable.select {
+                BankAccountTransactionEntity.find {
                     BankAccountTransactionsTable.date.between(
-                        parseDashedDate(
-                            "1970-01-01"
-                        ).millis(),
+                        parseDashedDate("1970-01-01").millis(),
                         LocalDateTime.now().millis()
                     )
                 }.firstOrNull()
