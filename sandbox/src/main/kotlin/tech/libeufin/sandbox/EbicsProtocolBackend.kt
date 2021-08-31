@@ -829,11 +829,8 @@ private suspend fun ApplicationCall.handleEbicsHpb(
         }
         this.hostID = ebicsHostInfo.hostID
     }
-
     val compressedOrderData = EbicsOrderUtil.encodeOrderDataXml(hpbRespondeData)
-
     val encryptionResult = CryptoUtil.encryptEbicsE002(compressedOrderData, subscriberKeys.encryptionPublicKey)
-
     respondEbicsKeyManagement("[EBICS_OK]", "000000", "000000", encryptionResult, "OR01")
 }
 
@@ -975,7 +972,6 @@ private fun handleEbicsHkd(requestContext: RequestContext): ByteArray {
                 )
             })
     }
-
     val str = XMLUtil.convertJaxbToString(hkd)
     return str.toByteArray()
 }
@@ -1022,9 +1018,7 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
         "PTK" -> handleEbicsPTK()
         else -> throw EbicsInvalidXmlError()
     }
-
     val transactionID = EbicsOrderUtil.generateTransactionId()
-
     val compressedResponse = DeflaterInputStream(response.inputStream()).use {
         it.readAllBytes()
     }
