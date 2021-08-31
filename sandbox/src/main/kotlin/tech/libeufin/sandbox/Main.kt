@@ -148,36 +148,13 @@ class Camt053Tick : CliktCommand(
                     val bankAccountLabel = it.transactionRef.account.label
                     histories.putIfAbsent(bankAccountLabel, mutableListOf())
                     val historyIter = histories[bankAccountLabel]
-                    historyIter?.add(
-                        RawPayment(
-                            subject = it.transactionRef.subject,
-                            creditorIban = it.transactionRef.creditorIban,
-                            creditorBic = it.transactionRef.creditorBic,
-                            creditorName = it.transactionRef.creditorName,
-                            debtorIban = it.transactionRef.debtorIban,
-                            debtorBic = it.transactionRef.debtorBic,
-                            debtorName = it.transactionRef.debtorName,
-                            date = importDateFromMillis(it.transactionRef.date).toDashedDate(),
-                            amount = it.transactionRef.amount,
-                            currency = it.transactionRef.currency,
-                            // The line below produces a value too long (>35 chars),
-                            // and it makes the document invalid!
-                            // uid = "${it.pmtInfId}-${it.msgId}"
-                            uid = it.transactionRef.accountServicerReference,
-                            direction = it.transactionRef.direction,
-                            pmtInfId = it.transactionRef.pmtInfId
-                        )
-                    )
+                    historyIter?.add(getHistoryElementFromDbRow(it))
                 }
                 /**
                  * Resorting the closing (CLBD) balance of the last statement; will
                  * become the PRCD balance of the _new_ one.
                  */
-                val lastStatement = BankAccountStatementEntity.find {
-                    BankAccountStatementsTable.bankAccount eq accountIter.id
-                }.firstOrNull()
-                val lastBalance = if (lastStatement == null) {
-                    BigDecimal.ZERO } else { BigDecimal(lastStatement.balanceClbd) }
+                val lastBalance = getLastBalance(accountIter)
                 val balanceClbd = balanceForAccount(
                     history = histories[accountIter.label] ?: mutableListOf(),
                     baseBalance = lastBalance

@@ -175,7 +175,6 @@ object EbicsSubscribersTable : IntIdTable() {
 
 class EbicsSubscriberEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<EbicsSubscriberEntity>(EbicsSubscribersTable)
-
     var userId by EbicsSubscribersTable.userId
     var partnerId by EbicsSubscribersTable.partnerId
     var systemId by EbicsSubscribersTable.systemId

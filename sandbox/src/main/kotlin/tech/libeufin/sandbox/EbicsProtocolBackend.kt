@@ -457,6 +457,38 @@ fun buildCamtString(
     )
 }
 
+fun getHistoryElementFromDbRow(
+    dbRow: BankAccountFreshTransactionEntity
+): RawPayment {
+    return RawPayment(
+        subject = dbRow.transactionRef.subject,
+        creditorIban = dbRow.transactionRef.creditorIban,
+        creditorBic = dbRow.transactionRef.creditorBic,
+        creditorName = dbRow.transactionRef.creditorName,
+        debtorIban = dbRow.transactionRef.debtorIban,
+        debtorBic = dbRow.transactionRef.debtorBic,
+        debtorName = dbRow.transactionRef.debtorName,
+        date = importDateFromMillis(dbRow.transactionRef.date).toDashedDate(),
+        amount = dbRow.transactionRef.amount,
+        currency = dbRow.transactionRef.currency,
+        // The line below produces a value too long (>35 chars),
+        // and dbRow makes the document invalid!
+        // uid = "${dbRow.pmtInfId}-${it.msgId}"
+        uid = dbRow.transactionRef.accountServicerReference,
+        direction = dbRow.transactionRef.direction,
+        pmtInfId = dbRow.transactionRef.pmtInfId
+    )
+}
+
+fun getLastBalance(bankAccount: BankAccountEntity): BigDecimal {
+    val lastStatement = BankAccountStatementEntity.find {
+        BankAccountStatementsTable.bankAccount eq bankAccount.id
+    }.firstOrNull()
+    val lastBalance = if (lastStatement == null) {
+        BigDecimal.ZERO } else { BigDecimal(lastStatement.balanceClbd) }
+    return lastBalance
+}
+
 /**
  * Builds CAMT response.
  *
@@ -468,14 +500,46 @@ private fun constructCamtResponse(
     // fixes #6243
     dateRange: Pair<Long, Long>?): List<String> {
 
-    if (type != 53) throw EbicsUnsupportedOrderType()
+    if (type != 53 && type != 52) throw EbicsUnsupportedOrderType()
+    val bankAccount = getBankAccountFromSubscriber(subscriber)
+    if (type == 52) {
+        val history = mutableListOf<RawPayment>()
+
+        /**
+         * This block adds all the fresh transactions to the intermediate
+         * history list and returns the last balance that was reported in a
+         * C53 document.  This latter will be the base balance to calculate
+         * the final balance after the fresh transactions.
+         */
+        val lastBalance = transaction {
+            BankAccountFreshTransactionEntity.all().forEach {
+                if (it.transactionRef.account.label == bankAccount.label) {
+                    history.add(getHistoryElementFromDbRow(it))
+                }
+            }
+            getLastBalance(bankAccount)  // last reported balance
+        }
+        val freshBalance = balanceForAccount(
+            history = history,
+            baseBalance = lastBalance
+        )
+        return listOf(
+            buildCamtString(
+                type,
+                bankAccount.iban,
+                history,
+                balancePrcd = lastBalance,
+                balanceClbd = freshBalance
+            ).camtMessage
+        )
+    }
+
     /**
      * FIXME: when this function throws an exception, it makes a JSON response being responded.
      * That is bad, because here we're inside a Ebics handler and only XML should
      * be returned to the requester.  This problem makes the (unhelpful) "bank didn't
      * return XML" message appear in the Nexus logs.
      */
-    val bankAccount = getBankAccountFromSubscriber(subscriber)
     val ret = mutableListOf<String>()
     /**
      * Retrieve all the records whose creation date lies into the
@@ -654,6 +718,24 @@ private fun handleCct(paymentRequest: String) {
             )
         }
     }
+}
+
+/**
+ * This handler reports all the fresh transactions, belonging
+ * to the querying subscriber.
+ */
+private fun handleEbicsC52(requestContext: RequestContext): ByteArray {
+    logger.debug("Handling C52 request")
+    // Ignoring any dateRange parameter. (FIXME: clarify whether that is fine.)
+    val report = constructCamtResponse(52, requestContext.subscriber, dateRange = null)
+    SandboxAssert(
+        report.size == 1,
+        "C52 response does not contain one Camt.052 document"
+    )
+    if (!XMLUtil.validateFromString(report[0])) throw EbicsProcessingError(
+        "One statement was found invalid."
+    )
+    return report.map { it.toByteArray() }.zip()
 }
 
 private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
@@ -1016,7 +1098,7 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
         "HTD" -> handleEbicsHtd(requestContext)
         "HKD" -> handleEbicsHkd(requestContext)
         "C53" -> handleEbicsC53(requestContext)
-        "C52" -> throw EbicsUnsupportedOrderType() // TBD
+        "C52" -> handleEbicsC52(requestContext)
         "TSD" -> handleEbicsTSD()
         "PTK" -> handleEbicsPTK()
         else -> throw EbicsInvalidXmlError()
