@@ -467,17 +467,22 @@ private fun constructCamtResponse(type: Int, subscriber: EbicsSubscriberEntity):
     } else Pair(parseDashedDate("1970-01-01"), LocalDateTime.now())
 
     */
+    /**
+     * FIXME: when this function throws an exception, it makes a JSON response being responded.
+     * That is bad, because here we're inside a Ebics handler and only XML should
+     * be returned to the requester.  This problem makes the (unhelpful) "bank didn't
+     * return XML" message appear in the Nexus logs.
+     */
     val bankAccount = getBankAccountFromSubscriber(subscriber)
-    logger.info("getting history for account with iban ${bankAccount.iban}")
-    val history = historyForAccount(bankAccount)
-    val baseBalance = BigDecimal.ZERO
-    return buildCamtString(
-        type,
-        bankAccount.iban,
-        history,
-        balancePrcd = baseBalance,
-        balanceClbd = balanceForAccount(history, baseBalance)
-    ).camtMessage
+    val camtMessage = transaction {
+        BankAccountStatementEntity.find {
+            BankAccountStatementsTable.bankAccount eq bankAccount.id
+        }.lastOrNull()?.xmlMessage ?: throw EbicsRequestError(
+            "[EBICS_NO_DOWNLOAD_DATA_AVAILABE]",
+            "090005"
+        )
+    }
+    return camtMessage
 }
 
 /**
