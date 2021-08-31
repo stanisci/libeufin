@@ -467,6 +467,10 @@ private fun constructCamtResponse(type: Int, subscriber: EbicsSubscriberEntity):
     } else Pair(parseDashedDate("1970-01-01"), LocalDateTime.now())
 
     */
+    if (type != 53) throw EbicsRequestError(
+        "[EBICS_PROCESSING_ERROR] C52 not implemented",
+        "091116"
+    )
     /**
      * FIXME: when this function throws an exception, it makes a JSON response being responded.
      * That is bad, because here we're inside a Ebics handler and only XML should
