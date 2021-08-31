@@ -483,7 +483,10 @@ private fun constructCamtResponse(
      */
     if (dateRange != null) {
         BankAccountStatementEntity.find {
-            BankAccountStatementsTable.creationTime.between(dateRange.first, dateRange.second)
+            BankAccountStatementsTable.creationTime.between(
+                dateRange.first,
+                dateRange.second) and(
+                    BankAccountStatementsTable.bankAccount eq bankAccount.id)
         }.forEach { ret.add(it.xmlMessage) }
     } else {
         /**
