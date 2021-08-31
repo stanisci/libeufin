@@ -98,7 +98,7 @@ private class EbicsInvalidXmlError : EbicsKeyManagementError(
     "091010"
 )
 
-private class EbicsInvalidOrderType : EbicsRequestError(
+private class EbicsUnsupportedOrderType : EbicsRequestError(
     "[EBICS_UNSUPPORTED_ORDER_TYPE] Order type not supported",
     "091005"
 )
@@ -467,10 +467,7 @@ private fun constructCamtResponse(type: Int, subscriber: EbicsSubscriberEntity):
     } else Pair(parseDashedDate("1970-01-01"), LocalDateTime.now())
 
     */
-    if (type != 53) throw EbicsRequestError(
-        "[EBICS_PROCESSING_ERROR] C52 not implemented",
-        "091116"
-    )
+    if (type != 53) throw EbicsUnsupportedOrderType()
     /**
      * FIXME: when this function throws an exception, it makes a JSON response being responded.
      * That is bad, because here we're inside a Ebics handler and only XML should
@@ -630,10 +627,7 @@ private fun handleCct(paymentRequest: String) {
             }
         } catch (e: ExposedSQLException) {
             logger.warn("Could not insert new payment into the database: ${e}")
-            throw EbicsRequestError(
-                "[EBICS_PROCESSING_ERROR] ${e.sqlState}",
-                "091116"
-            )
+            throw EbicsUnsupportedOrderType()
         }
     }
 }
