@@ -462,21 +462,12 @@ fun buildCamtString(
  *
  * @param type 52 or 53.
  */
-private fun constructCamtResponse(type: Int, subscriber: EbicsSubscriberEntity): String {
+private fun constructCamtResponse(
+    type: Int,
+    subscriber: EbicsSubscriberEntity,
+    // fixes #6243
+    dateRange: Pair<Long, Long>?): List<String> {
 
-    /**
-     *  Currently unused: see #6243.
-     *
-
-    val dateRange = (header.static.orderDetails?.orderParams as EbicsRequest.StandardOrderParams).dateRange
-    val (start: LocalDateTime, end: LocalDateTime) = if (dateRange != null) {
-        Pair(
-            importDateFromMillis(dateRange.start.toGregorianCalendar().timeInMillis),
-            importDateFromMillis(dateRange.end.toGregorianCalendar().timeInMillis)
-        )
-    } else Pair(parseDashedDate("1970-01-01"), LocalDateTime.now())
-
-    */
     if (type != 53) throw EbicsUnsupportedOrderType()
     /**
      * FIXME: when this function throws an exception, it makes a JSON response being responded.
@@ -485,15 +476,32 @@ private fun constructCamtResponse(type: Int, subscriber: EbicsSubscriberEntity):
      * return XML" message appear in the Nexus logs.
      */
     val bankAccount = getBankAccountFromSubscriber(subscriber)
-    val camtMessage = transaction {
+    val ret = mutableListOf<String>()
+    /**
+     * Retrieve all the records whose creation date lies into the
+     * time range given as a function's parameter.
+     */
+    if (dateRange != null) {
+        BankAccountStatementEntity.find {
+            BankAccountStatementsTable.creationTime.between(dateRange.first, dateRange.second)
+        }.forEach { ret.add(it.xmlMessage) }
+    } else {
+        /**
+         * No time range was given, hence pick the latest statement.
+         */
         BankAccountStatementEntity.find {
             BankAccountStatementsTable.bankAccount eq bankAccount.id
-        }.lastOrNull()?.xmlMessage ?: throw EbicsRequestError(
-            "[EBICS_NO_DOWNLOAD_DATA_AVAILABE]",
-            "090005"
-        )
+        }.lastOrNull().apply {
+            if (this != null) {
+                ret.add(this.xmlMessage)
+            }
+        }
     }
-    return camtMessage
+    if (ret.size == 0) throw EbicsRequestError(
+        "[EBICS_NO_DOWNLOAD_DATA_AVAILABLE]",
+        "090005"
+    )
+    return ret
 }
 
 /**
@@ -648,22 +656,36 @@ private fun handleCct(paymentRequest: String) {
 private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
     logger.debug("Handling C53 request")
 
+    // Fetch date range.
+    val orderParams = requestContext.requestObject.header.static.orderDetails?.orderParams // as EbicsRequest.StandardOrderParams
+    val dateRange = if (orderParams != null) {
+        val standardOrderParams = orderParams as EbicsRequest.StandardOrderParams
+        val start = standardOrderParams.dateRange?.start?.toGregorianCalendar()?.timeInMillis
+        val end = standardOrderParams.dateRange?.end?.toGregorianCalendar()?.timeInMillis
+        if (start == null || end == null) {
+            // only accepting when both start/end are given.
+            null
+        } else {
+            Pair(start, end)
+        }
+    } else {
+        null
+    }
     /**
      * By multiple statements, this function is responsible to return
      * a list of Strings: one for each statement.
      */
-    val camt = constructCamtResponse(
+    val camtStatements = constructCamtResponse(
         53,
-        requestContext.subscriber
+        requestContext.subscriber,
+        dateRange
     )
-   if (!XMLUtil.validateFromString(camt)) throw EbicsProcessingError(
-       "Sandbox generated a invalid XML response."
-   )
-    /**
-     * Here, the list of strings will be converted to list of
-     * ByteArray and passed to the zip() method.
-     */
-    return listOf(camt.toByteArray(Charsets.UTF_8)).zip()
+    camtStatements.forEach {
+        if (!XMLUtil.validateFromString(it)) throw EbicsProcessingError(
+            "One statement was found invalid."
+        )
+    }
+    return camtStatements.map { it.toByteArray() }.zip()
 }
 
 private suspend fun ApplicationCall.handleEbicsHia(header: EbicsUnsecuredRequest.Header, orderData: ByteArray) {
