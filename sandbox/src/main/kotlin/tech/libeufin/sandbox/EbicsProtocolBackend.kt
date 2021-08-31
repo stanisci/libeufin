@@ -103,6 +103,16 @@ private class EbicsUnsupportedOrderType : EbicsRequestError(
     "091005"
 )
 
+/**
+ * Used here also for "Internal server error".  For example, when the
+ * sandbox itself generates a invalid XML response.  Strictly, this error
+ * should only be used for _business_ related problems.
+ */
+private class EbicsProcessingError(detail: String) : EbicsRequestError(
+    "[EBICS_PROCESSING_ERROR] $detail",
+    "091116"
+)
+
 private suspend fun ApplicationCall.respondEbicsKeyManagement(
     errorText: String,
     errorCode: String,
@@ -637,14 +647,22 @@ private fun handleCct(paymentRequest: String) {
 
 private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
     logger.debug("Handling C53 request")
+
+    /**
+     * By multiple statements, this function is responsible to return
+     * a list of Strings: one for each statement.
+     */
     val camt = constructCamtResponse(
         53,
         requestContext.subscriber
     )
-   if (!XMLUtil.validateFromString(camt)) throw SandboxError(
-            HttpStatusCode.InternalServerError,
-            "CAMT document was generated invalid"
+   if (!XMLUtil.validateFromString(camt)) throw EbicsProcessingError(
+       "Sandbox generated a invalid XML response."
    )
+    /**
+     * Here, the list of strings will be converted to list of
+     * ByteArray and passed to the zip() method.
+     */
     return listOf(camt.toByteArray(Charsets.UTF_8)).zip()
 }
 
@@ -977,7 +995,7 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
         "HTD" -> handleEbicsHtd(requestContext)
         "HKD" -> handleEbicsHkd(requestContext)
         "C53" -> handleEbicsC53(requestContext)
-        "C52" -> throw EbicsUnsupportedOrderType()
+        "C52" -> throw EbicsUnsupportedOrderType() // TBD
         "TSD" -> handleEbicsTSD()
         "PTK" -> handleEbicsPTK()
         else -> throw EbicsInvalidXmlError()
