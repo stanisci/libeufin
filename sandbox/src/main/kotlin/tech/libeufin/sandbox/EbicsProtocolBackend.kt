@@ -979,9 +979,11 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
     val response = when (orderType) {
         "HTD" -> handleEbicsHtd(requestContext)
         "HKD" -> handleEbicsHkd(requestContext)
-        /* Temporarily handling C52/C53 with same logic */
         "C53" -> handleEbicsC53(requestContext)
-        "C52" -> handleEbicsC53(requestContext) // why?
+        "C52" -> throw EbicsRequestError(
+            "[EBICS_PROCESSING_ERROR] C52 not implemented",
+            "091116"
+        )
         "TSD" -> handleEbicsTSD()
         "PTK" -> handleEbicsPTK()
         else -> throw EbicsInvalidXmlError()
