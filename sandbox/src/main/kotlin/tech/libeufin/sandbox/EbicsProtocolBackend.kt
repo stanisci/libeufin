@@ -238,7 +238,7 @@ fun buildCamtString(
                 "xsi:schemaLocation",
                 "urn:iso:std:iso:20022:tech:xsd:camt.0${type}.001.02 camt.0${type}.001.02.xsd"
             )
-            element("BkToCstmrStmt") {
+            element(if (type == 53) "BkToCstmrStmt" else "BkToCstmrAcctRpt") {
                 element("GrpHdr") {
                     element("MsgId") {
                         text(messageId)
