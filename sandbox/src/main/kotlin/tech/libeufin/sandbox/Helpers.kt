@@ -19,13 +19,24 @@
 
 package tech.libeufin.sandbox
 
-import com.google.common.io.Resources
-import com.hubspot.jinjava.Jinjava
-import com.hubspot.jinjava.lib.fn.ELFunctionDefinition
 import io.ktor.http.HttpStatusCode
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
+
+/**
+ * Helps to communicate Camt values without having
+ * to parse the XML each time one is needed.
+ */
+data class SandboxCamt(
+    val camtMessage: String,
+    val messageId: String,
+    /**
+     * That is the number of SECONDS since Epoch.  This
+     * value is exactly what goes into the Camt document.
+     */
+    val creationTime: Long
+)
 
 fun SandboxAssert(condition: Boolean, reason: String) {
     if (!condition) throw SandboxError(HttpStatusCode.InternalServerError, reason)

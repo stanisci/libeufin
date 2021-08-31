@@ -122,6 +122,12 @@ class Config : CliktCommand("Insert one configuration into the database") {
     }
 }
 
+/**
+ * This command generates Camt53 statements - for all the bank accounts -
+ * every time it gets run. The statements are only stored them into the database.
+ * The user should then query either via Ebics or via the JSON interface,
+ * in order to retrieve their statements.
+ */
 class Camt053Tick : CliktCommand(
     "Make a new Camt.053 time tick; all the fresh transactions" +
             "will be inserted in a new Camt.053 report"
@@ -132,10 +138,6 @@ class Camt053Tick : CliktCommand(
         dbCreateTables(dbConnString)
         transaction {
             BankAccountEntity.all().forEach { accountIter->
-                /**
-                 * TBD: here the statements for each account need to be generated.
-                 */
-
                 /**
                  * Map of 'account name' -> fresh history
                  */
@@ -167,24 +169,33 @@ class Camt053Tick : CliktCommand(
                         )
                     )
                 }
-                // still need lastBalance
+                /**
+                 * Resorting the closing (CLBD) balance of the last statement; will
+                 * become the PRCD balance of the _new_ one.
+                 */
                 val lastStatement = BankAccountStatementEntity.find {
                     BankAccountStatementsTable.bankAccount eq accountIter.id
                 }.firstOrNull()
                 val lastBalance = if (lastStatement == null) {
-                    BigDecimal.ZERO } else { BigDecimal(lastStatement.balancePrcd) }
-                val balancePrcd = balanceForAccount(
+                    BigDecimal.ZERO } else { BigDecimal(lastStatement.balanceClbd) }
+                val balanceClbd = balanceForAccount(
                     history = histories[accountIter.label] ?: mutableListOf(),
                     baseBalance = lastBalance
                 )
-                val camt53 = buildCamtString(
+                val camtData = buildCamtString(
                     53,
                     accountIter.iban,
                     histories[accountIter.label] ?: mutableListOf(),
-                    balanceClbd = lastBalance,
-                    balancePrcd = balancePrcd
+                    balanceClbd = balanceClbd,
+                    balancePrcd = lastBalance
                 )
-                println(camt53)
+                BankAccountStatementEntity.new {
+                    statementId = camtData.messageId
+                    creationTime = Instant.now().toEpochMilli()
+                    xmlMessage = camtData.camtMessage
+                    bankAccount = accountIter
+                    this.balanceClbd = balanceClbd.toPlainString()
+                }
             }
             BankAccountFreshTransactionsTable.deleteAll()
         }
@@ -585,7 +596,7 @@ fun serverMain(dbName: String, port: Int) {
                 SandboxAssert(body.type == 53,
                     "Only Camt.053 is implemented"
                 )
-                val camt53 = buildCamtString(
+                val camtData = buildCamtString(
                     body.type,
                     bankaccount.iban,
                     history,
@@ -595,7 +606,9 @@ fun serverMain(dbName: String, port: Int) {
                         baseBalance = BigDecimal.ZERO
                     )
                 )
-                call.respondText(camt53, ContentType.Text.Xml, HttpStatusCode.OK)
+                call.respondText(
+                    camtData.camtMessage, ContentType.Text.Xml, HttpStatusCode.OK
+                )
                 return@post
             }
 

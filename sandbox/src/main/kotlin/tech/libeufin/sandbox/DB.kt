@@ -380,17 +380,22 @@ object BankAccountStatementsTable : IntIdTable() {
     val creationTime = long("creationTime")
     val xmlMessage = text("xmlMessage")
     val bankAccount = reference("bankAccount", BankAccountsTable)
-    val balancePrcd = text("balancePrcd") // normally, a BigDecimal
+    /**
+     * Storing the closing balance (= the one obtained after all
+     * the transactions mentioned in the statement), a.k.a. CLBD.
+     * For statement S, this value will act as the opening balance
+     * (a.k.a. PRCD) of statement S+1.
+     */
+    val balanceClbd = text("balanceClbd") // normally, a BigDecimal
 }
 
 class BankAccountStatementEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<BankAccountStatementEntity>(BankAccountStatementsTable)
-
-    var statementId by BankAccountStatementsTable.id
+    var statementId by BankAccountStatementsTable.statementId
     var creationTime by BankAccountStatementsTable.creationTime
     var xmlMessage by BankAccountStatementsTable.xmlMessage
     var bankAccount by BankAccountEntity referencedOn BankAccountStatementsTable.bankAccount
-    var balancePrcd by BankAccountStatementsTable.balancePrcd
+    var balanceClbd by BankAccountStatementsTable.balanceClbd
 }
 
 object BankAccountReportsTable : IntIdTable() {

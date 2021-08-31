@@ -44,7 +44,6 @@ import tech.libeufin.util.ebics_hev.SystemReturnCodeType
 import tech.libeufin.util.ebics_s001.SignatureTypes
 import tech.libeufin.util.ebics_s001.UserSignatureData
 import java.math.BigDecimal
-import java.math.BigInteger
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
 import java.time.Instant
@@ -204,7 +203,7 @@ fun buildCamtString(
     freshHistory: MutableList<RawPayment>,
     balancePrcd: BigDecimal, // Balance up to freshHistory (excluded).
     balanceClbd: BigDecimal
-): String {
+): SandboxCamt {
     /**
      * ID types required:
      *
@@ -217,11 +216,11 @@ fun buildCamtString(
      * - Proprietary code of the bank transaction
      * - Id of the servicer (Issuer and Code)
      */
-    val now = LocalDateTime.now()
-    val dashedDate = now.toDashedDate()
-    val zonedDateTime = now.toZonedString()
-
-    return constructXml(indent = true) {
+    val creationTime = LocalDateTime.now()
+    val dashedDate = creationTime.toDashedDate()
+    val zonedDateTime = creationTime.toZonedString()
+    val messageId = "sandbox-${creationTime.millis()}"
+    val camtMessage = constructXml(indent = true) {
         root("Document") {
             attribute("xmlns", "urn:iso:std:iso:20022:tech:xsd:camt.0${type}.001.02")
             attribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
@@ -232,7 +231,7 @@ fun buildCamtString(
             element("BkToCstmrStmt") {
                 element("GrpHdr") {
                     element("MsgId") {
-                        text("sandbox-${now.millis()}")
+                        text(messageId)
                     }
                     element("CreDtTm") {
                         text(zonedDateTime)
@@ -441,6 +440,11 @@ fun buildCamtString(
             }
         }
     }
+    return SandboxCamt(
+        camtMessage = camtMessage,
+        messageId = messageId,
+        creationTime = creationTime.millis()
+    )
 }
 
 /**
@@ -473,7 +477,7 @@ private fun constructCamtResponse(type: Int, subscriber: EbicsSubscriberEntity):
         history,
         balancePrcd = baseBalance,
         balanceClbd = balanceForAccount(history, baseBalance)
-    )
+    ).camtMessage
 }
 
 /**
