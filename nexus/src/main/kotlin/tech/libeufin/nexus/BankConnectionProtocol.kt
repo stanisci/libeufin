@@ -58,7 +58,7 @@ interface BankConnectionProtocol {
     // Send to the bank a previously prepared payment instruction.
     suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long)
 
-    // Downlaods transactions from the bank, according to the specification
+    // Downloads transactions from the bank, according to the specification
     // given in the arguments.
     suspend fun fetchTransactions(
         fetchSpec: FetchSpecJson,
