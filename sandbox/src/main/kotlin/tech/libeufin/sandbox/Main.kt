@@ -587,27 +587,27 @@ fun serverMain(dbName: String, port: Int) {
                     val version = "0.0.0-dev.0"
                 })
             }
-
-            // only reason for a post is to hide the iban (to some degree.)
+            /**
+             * For now, only returns the last statement of the
+             * requesting account.
+             */
             post("/admin/payments/camt") {
                 val body = call.receiveJson<CamtParams>()
                 val bankaccount = getAccountFromLabel(body.bankaccount)
-                val history = historyForAccount(bankaccount)
-                SandboxAssert(body.type == 53,
-                    "Only Camt.053 is implemented"
+                if(body.type != 53) throw SandboxError(
+                    HttpStatusCode.NotFound,
+                    "Only Camt.053 documents can be generated."
                 )
-                val camtData = buildCamtString(
-                    body.type,
-                    bankaccount.iban,
-                    history,
-                    balancePrcd = BigDecimal.ZERO,
-                    balanceClbd = balanceForAccount(
-                        history,
-                        baseBalance = BigDecimal.ZERO
+                val camtMessage = transaction {
+                    BankAccountStatementEntity.find {
+                        BankAccountStatementsTable.bankAccount eq bankaccount.id
+                    }.lastOrNull()?.xmlMessage ?: throw SandboxError(
+                        HttpStatusCode.NotFound,
+                        "Could not find any statements; please wait next tick"
                     )
-                )
+                }
                 call.respondText(
-                    camtData.camtMessage, ContentType.Text.Xml, HttpStatusCode.OK
+                    camtMessage, ContentType.Text.Xml, HttpStatusCode.OK
                 )
                 return@post
             }
