@@ -627,7 +627,10 @@ private fun handleCct(paymentRequest: String) {
             }
         } catch (e: ExposedSQLException) {
             logger.warn("Could not insert new payment into the database: ${e}")
-            throw EbicsUnsupportedOrderType()
+            throw EbicsRequestError(
+                "[EBICS_PROCESSING_ERROR] ${e.sqlState}",
+                "091116"
+            )
         }
     }
 }
@@ -974,10 +977,7 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
         "HTD" -> handleEbicsHtd(requestContext)
         "HKD" -> handleEbicsHkd(requestContext)
         "C53" -> handleEbicsC53(requestContext)
-        "C52" -> throw EbicsRequestError(
-            "[EBICS_PROCESSING_ERROR] C52 not implemented",
-            "091116"
-        )
+        "C52" -> throw EbicsUnsupportedOrderType()
         "TSD" -> handleEbicsTSD()
         "PTK" -> handleEbicsPTK()
         else -> throw EbicsInvalidXmlError()
