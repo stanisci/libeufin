@@ -76,6 +76,7 @@ import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import validatePlainAmount
 import java.net.BindException
+import java.time.ZoneOffset
 import java.util.*
 import kotlin.random.Random
 import kotlin.system.exitProcess
@@ -148,7 +149,7 @@ class Camt053Tick : CliktCommand(
                     val bankAccountLabel = it.transactionRef.account.label
                     histories.putIfAbsent(bankAccountLabel, mutableListOf())
                     val historyIter = histories[bankAccountLabel]
-                    historyIter?.add(getHistoryElementFromDbRow(it))
+                    historyIter?.add(getHistoryElementFromTransactionRow(it))
                 }
                 /**
                  * Resorting the closing (CLBD) balance of the last statement; will
@@ -168,7 +169,7 @@ class Camt053Tick : CliktCommand(
                 )
                 BankAccountStatementEntity.new {
                     statementId = camtData.messageId
-                    creationTime = Instant.now().toEpochMilli()
+                    creationTime = getUTCnow().toInstant().epochSecond
                     xmlMessage = camtData.camtMessage
                     bankAccount = accountIter
                     this.balanceClbd = balanceClbd.toPlainString()

@@ -230,10 +230,12 @@ fun buildCamtString(
      * - Proprietary code of the bank transaction
      * - Id of the servicer (Issuer and Code)
      */
-    val creationTime = LocalDateTime.now()
+    val creationTime = getUTCnow()
     val dashedDate = creationTime.toDashedDate()
     val zonedDateTime = creationTime.toZonedString()
-    val messageId = "sandbox-${creationTime.millis()}"
+    val creationTimeMillis = creationTime.toInstant().toEpochMilli()
+    val messageId = "sandbox-${creationTimeMillis}"
+
     val camtMessage = constructXml(indent = true) {
         root("Document") {
             attribute("xmlns", "urn:iso:std:iso:20022:tech:xsd:camt.0${type}.001.02")
@@ -457,11 +459,11 @@ fun buildCamtString(
     return SandboxCamt(
         camtMessage = camtMessage,
         messageId = messageId,
-        creationTime = creationTime.millis()
+        creationTime = creationTimeMillis
     )
 }
 
-fun getHistoryElementFromDbRow(
+fun getHistoryElementFromTransactionRow(
     dbRow: BankAccountFreshTransactionEntity
 ): RawPayment {
     return RawPayment(
@@ -518,7 +520,7 @@ private fun constructCamtResponse(
         val lastBalance = transaction {
             BankAccountFreshTransactionEntity.all().forEach {
                 if (it.transactionRef.account.label == bankAccount.label) {
-                    history.add(getHistoryElementFromDbRow(it))
+                    history.add(getHistoryElementFromTransactionRow(it))
                 }
             }
             getLastBalance(bankAccount)  // last reported balance
@@ -537,6 +539,8 @@ private fun constructCamtResponse(
             ).camtMessage
         )
     }
+    SandboxAssert(type == 53, "Didn't catch unsupported Camt type")
+    logger.debug("Finding C$type records")
 
     /**
      * FIXME: when this function throws an exception, it makes a JSON response being responded.
@@ -550,6 +554,7 @@ private fun constructCamtResponse(
      * time range given as a function's parameter.
      */
     if (dateRange != null) {
+        logger.debug("Querying c$type with date range: $dateRange")
         BankAccountStatementEntity.find {
             BankAccountStatementsTable.creationTime.between(
                 dateRange.first,
@@ -560,6 +565,7 @@ private fun constructCamtResponse(
         /**
          * No time range was given, hence pick the latest statement.
          */
+        logger.debug("No date range was given for c$type, respond with latest document")
         BankAccountStatementEntity.find {
             BankAccountStatementsTable.bankAccount eq bankAccount.id
         }.lastOrNull().apply {
@@ -569,7 +575,7 @@ private fun constructCamtResponse(
         }
     }
     if (ret.size == 0) throw EbicsRequestError(
-        "[EBICS_NO_DOWNLOAD_DATA_AVAILABLE]",
+        "[EBICS_NO_DOWNLOAD_DATA_AVAILABLE] as Camt $type",
         "090005"
     )
     return ret
