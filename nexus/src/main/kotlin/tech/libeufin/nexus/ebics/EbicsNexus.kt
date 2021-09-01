@@ -122,7 +122,7 @@ private suspend fun fetchEbicsC5x(
     when (response) {
         is EbicsDownloadSuccessResult -> {
             response.orderData.unzipWithLambda {
-                logger.debug("Camt entry (filename (in the Zip archive) ${it.first}): ${it.second}")
+                logger.debug("Camt entry (filename (in the Zip archive): ${it.first}): ${it.second}")
                 storeCamt(bankConnectionId, it.second, historyType)
             }
         }
