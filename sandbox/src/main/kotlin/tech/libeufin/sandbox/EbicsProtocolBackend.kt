@@ -79,6 +79,10 @@ class EbicsInvalidRequestError : EbicsRequestError(
     "[EBICS_INVALID_REQUEST] Invalid request",
     "060102"
 )
+class EbicsAccountAuthorisationFailed : EbicsRequestError(
+    "[EBICS_ACCOUNT_AUTHORISATION_FAILED] Subscriber's signature didn't verify",
+    "091302"
+)
 
 /**
  * This error is thrown whenever the Subscriber's state is not suitable
@@ -1357,7 +1361,7 @@ suspend fun ApplicationCall.ebicsweb() {
                 // Step 2 of 3:  Validate the signature
                 val verifyResult = XMLUtil.verifyEbicsDocument(requestDocument, requestContext.clientAuthPub)
                 if (!verifyResult) {
-                    throw EbicsInvalidRequestError()
+                    throw EbicsAccountAuthorisationFailed()
                 }
                 // Step 3 of 3:  Generate response
                 val ebicsResponse: EbicsResponse = when (requestObject.header.mutable.transactionPhase) {
