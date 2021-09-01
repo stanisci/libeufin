@@ -84,7 +84,7 @@ suspend fun doEbicsDownloadTransaction(
     val initResponse = parseAndValidateEbicsResponse(subscriberDetails, initResponseStr)
 
     when (initResponse.technicalReturnCode) {
-        EbicsReturnCode.EBICS_OK, EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE -> {
+        EbicsReturnCode.EBICS_OK -> {
             // Success, nothing to do!
         }
         else -> {
