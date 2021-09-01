@@ -234,7 +234,7 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
                 subject = subjectArg
                 amount = amountObj.amount.toString()
                 currency = amountObj.currency
-                date = Instant.now().toEpochMilli()
+                date = getUTCnow().toInstant().toEpochMilli()
                 accountServicerReference = "sandbox-$randId"
                 account = debit
                 direction = "DBIT"
@@ -249,7 +249,7 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
                 subject = subjectArg
                 amount = amountObj.amount.toString()
                 currency = amountObj.currency
-                date = Instant.now().toEpochMilli()
+                date = getUTCnow().toInstant().toEpochMilli()
                 accountServicerReference = "sandbox-$randId"
                 account = credit
                 direction = "CRDT"
@@ -657,7 +657,7 @@ fun serverMain(dbName: String, port: Int) {
                         subject = body.subject
                         amount = body.amount
                         currency = account.currency
-                        date = Instant.now().toEpochMilli()
+                        date = getUTCnow().toInstant().toEpochMilli()
                         accountServicerReference = "sandbox-$randId"
                         this.account = account
                         direction = "CRDT"
@@ -687,7 +687,7 @@ fun serverMain(dbName: String, port: Int) {
                         subject = body.subject
                         amount = body.amount
                         currency = body.currency
-                        date = Instant.now().toEpochMilli()
+                        date = getUTCnow().toInstant().toEpochMilli()
                         accountServicerReference = "sandbox-$randId"
                         account = getBankAccountFromIban(localIban)
                         direction = body.direction
@@ -803,7 +803,7 @@ fun serverMain(dbName: String, port: Int) {
                             subject = "sample transaction $transactionReferenceCrdt"
                             this.amount = amount.toString()
                             currency = account.currency
-                            date = Instant.now().toEpochMilli()
+                            date = getUTCnow().toInstant().toEpochMilli()
                             accountServicerReference = transactionReferenceCrdt
                             this.account = account
                             direction = "CRDT"
@@ -823,7 +823,7 @@ fun serverMain(dbName: String, port: Int) {
                             subject = "sample transaction $transactionReferenceDbit"
                             this.amount = amount.toString()
                             currency = account.currency
-                            date = Instant.now().toEpochMilli()
+                            date = getUTCnow().toInstant().toEpochMilli()
                             accountServicerReference = transactionReferenceDbit
                             this.account = account
                             direction = "DBIT"

@@ -694,7 +694,7 @@ private fun handleCct(paymentRequest: String) {
                 subject = parseResult.subject
                 amount = parseResult.amount.toString()
                 currency = parseResult.currency
-                date = Instant.now().toEpochMilli()
+                date = getUTCnow().toInstant().toEpochMilli()
                 pmtInfId = parseResult.pmtInfId
                 accountServicerReference = "sandboxref-${getRandomString(16)}"
                 direction = "DBIT"
@@ -714,7 +714,7 @@ private fun handleCct(paymentRequest: String) {
                     subject = parseResult.subject
                     amount = parseResult.amount.toString()
                     currency = parseResult.currency
-                    date = Instant.now().toEpochMilli()
+                    date = getUTCnow().toInstant().toEpochMilli()
                     pmtInfId = parseResult.pmtInfId
                     accountServicerReference = "sandboxref-${getRandomString(16)}"
                     direction = "CRDT"
