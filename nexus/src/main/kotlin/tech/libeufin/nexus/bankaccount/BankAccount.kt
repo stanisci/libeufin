@@ -33,6 +33,7 @@ import tech.libeufin.nexus.iso20022.parseCamtMessage
 import tech.libeufin.nexus.server.FetchSpecJson
 import tech.libeufin.nexus.server.Pain001Data
 import tech.libeufin.nexus.server.requireBankConnection
+import tech.libeufin.nexus.server.toPlainString
 import tech.libeufin.util.XMLUtil
 import java.time.Instant
 import java.time.ZonedDateTime
@@ -127,7 +128,7 @@ private fun findDuplicate(bankAccountId: String, acctSvcrRef: String): NexusBank
  * NOTE: this type can be used BOTH for one Camt document OR
  * for a set of those.
  */
-data class CamtProcessingResult(
+data class CamtTransactionsCount(
     /**
      * Number of transactions that are new to the database.
      * Note that transaction T can be downloaded multiple times;
@@ -143,7 +144,10 @@ data class CamtProcessingResult(
      */
     val downloadedTransactions: Int
 )
-fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): CamtProcessingResult {
+
+fun processCamtMessage(
+    bankAccountId: String, camtDoc: Document, code: String
+): CamtTransactionsCount {
     logger.info("processing CAMT message")
     var newTransactions = 0
     var downloadedTransactions = 0
@@ -159,6 +163,29 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
             newTransactions = -1
             return@transaction
         }
+        res.reports.forEach {
+            NexusAssert(
+                it.account.iban == acct.iban,
+                "Neuxs hit a report or statement of a wrong IBAN!"
+            )
+            it.balances.forEach { b ->
+                var clbdCount = 0
+                if (b.type == "CLBD") {
+                    clbdCount++
+                    NexusBankBalanceEntity.new {
+                        bankAccount = acct
+                        balance = b.amount.toPlainString()
+                        creditDebitIndicator = b.creditDebitIndicator.name
+                        date = b.date
+                    }
+                }
+                if (clbdCount == 0) {
+                    logger.warn("The bank didn't return ANY CLBD balances," +
+                            " in the message: ${res.messageId}.  Please clarify!")
+                }
+            }
+        }
+
         val stamp =
             ZonedDateTime.parse(res.creationDateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant().toEpochMilli()
         when (code) {
@@ -226,7 +253,7 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
             }
         }
     }
-    return CamtProcessingResult(
+    return CamtTransactionsCount(
         newTransactions = newTransactions,
         downloadedTransactions = downloadedTransactions
     )
@@ -236,7 +263,7 @@ fun processCamtMessage(bankAccountId: String, camtDoc: Document, code: String): 
  * Create new transactions for an account based on bank messages it
  * did not see before.
  */
-fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: String): CamtProcessingResult {
+fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: String): CamtTransactionsCount {
     var totalNew = 0
     var downloadedTransactions = 0
     transaction {
@@ -267,7 +294,7 @@ fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: Strin
         acct.highestSeenBankMessageSerialId = lastId
     }
     // return totalNew
-    return CamtProcessingResult(
+    return CamtTransactionsCount(
         newTransactions = totalNew,
         downloadedTransactions = downloadedTransactions
     )
@@ -318,7 +345,7 @@ fun addPaymentInitiation(paymentData: Pain001Data, debtorAccount: NexusBankAccou
 
 suspend fun fetchBankAccountTransactions(
     client: HttpClient, fetchSpec: FetchSpecJson, accountId: String
-): CamtProcessingResult {
+): CamtTransactionsCount {
     val res = transaction {
         val acct = NexusBankAccountEntity.findByName(accountId)
         if (acct == null) {

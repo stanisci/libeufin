@@ -110,6 +110,10 @@ data class CamtParseResult(
     val messageType: CashManagementResponseType,
     val messageId: String,
     val creationDateTime: String,
+    /**
+     * One Camt document can contain multiple reports/statements
+     * for each account being owned by the requester.
+     */
     val reports: List<CamtReport>
 )
 

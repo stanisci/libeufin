@@ -70,7 +70,6 @@ private data class EbicsFetchSpec(
     val orderParams: EbicsOrderParams
 )
 
-// Moved eventually in a tucked "camt" file.
 fun storeCamt(bankConnectionId: String, camt: String, historyType: String) {
     val camt53doc = XMLUtil.parseStringIntoDom(camt)
     val msgId = camt53doc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")

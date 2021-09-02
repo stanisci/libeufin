@@ -113,7 +113,7 @@ class TalerIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
 }
 
 /**
- * This table logs all the balances as returned by the bank for one particular bank account.
+ * This table logs all the balances as returned by the bank for all the bank accounts.
  */
 object NexusBankBalancesTable : LongIdTable() {
     /**
@@ -123,19 +123,16 @@ object NexusBankBalancesTable : LongIdTable() {
      */
     val balance = text("balance") // $currency:x.y
     val creditDebitIndicator = text("creditDebitIndicator") // CRDT or DBIT.
-    /**
-     * Message downloaded from the bank.  Must be of "history" type.
-     */
-    val bankMessage = reference("bankMessage", NexusBankMessagesTable)
     val bankAccount = reference("bankAccount", NexusBankAccountsTable)
+    val date = text("date") // in the YYYY-MM-DD format
 }
 
 class NexusBankBalanceEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<NexusBankBalanceEntity>(NexusBankBalancesTable)
     var balance by NexusBankBalancesTable.balance
     var creditDebitIndicator by NexusBankBalancesTable.creditDebitIndicator
-    var bankMessage by NexusBankMessageEntity referencedOn NexusBankBalancesTable.bankMessage
     var bankAccount by NexusBankAccountEntity referencedOn NexusBankBalancesTable.bankAccount
+    var date by NexusBankBalancesTable.date
 }
 
 /**
@@ -497,11 +494,13 @@ fun dbDropTables(dbConnectionString: String) {
             TalerInvalidIncomingPaymentsTable,
             NexusBankConnectionsTable,
             NexusBankMessagesTable,
+            NexusBankBalancesTable,
             FacadesTable,
             FacadeStateTable,
             NexusScheduledTasksTable,
             OfferedBankAccountsTable,
             NexusPermissionsTable,
+            AnastasisIncomingPaymentsTable
         )
     }
 }
@@ -516,6 +515,7 @@ fun dbCreateTables(dbConnectionString: String) {
             PaymentInitiationsTable,
             NexusEbicsSubscribersTable,
             NexusBankAccountsTable,
+            NexusBankBalancesTable,
             NexusBankTransactionsTable,
             AnastasisIncomingPaymentsTable,
             TalerIncomingPaymentsTable,
@@ -526,7 +526,7 @@ fun dbCreateTables(dbConnectionString: String) {
             NexusBankMessagesTable,
             FacadesTable,
             OfferedBankAccountsTable,
-            NexusPermissionsTable,
+            NexusPermissionsTable
         )
     }
 }

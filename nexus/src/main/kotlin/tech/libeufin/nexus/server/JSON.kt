@@ -441,6 +441,9 @@ data class CurrencyAmount(
     val currency: String,
     val value: BigDecimal // allows calculations
 )
+fun CurrencyAmount.toPlainString(): String {
+    return "${this.currency}:${this.value.toPlainString()}"
+}
 
 data class InitiatedPayments(
     val initiatedPayments: MutableList<PaymentStatus> = mutableListOf()

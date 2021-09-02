@@ -563,9 +563,21 @@ fun serverMain(host: String, port: Int) {
                         throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                     }
                     val holderEnc = URLEncoder.encode(bankAccount.accountHolder, "UTF-8")
+                    val lastSeenBalance = NexusBankBalanceEntity.find {
+                        NexusBankBalancesTable.bankAccount eq bankAccount.id
+                    }.lastOrNull()
                     return@transaction makeJsonObject {
                         prop("defaultBankConnection", bankAccount.defaultBankConnection?.id?.value)
                         prop("accountPaytoUri", "payto://iban/${bankAccount.iban}?receiver-name=$holderEnc")
+                        prop(
+                            "lastSeenBalance",
+                            if (lastSeenBalance != null) {
+                                val sign = if (lastSeenBalance.creditDebitIndicator == "DBIT") "-" else ""
+                                "${sign}${lastSeenBalance.balance}"
+                            } else {
+                                "not downloaded from the bank yet"
+                            }
+                        )
                     }
                 }
                 call.respond(res)
