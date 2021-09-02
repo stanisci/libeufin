@@ -720,10 +720,8 @@ fun serverMain(host: String, port: Int) {
                         null
                     )
                 }
-                val newTransactions = fetchBankAccountTransactions(client, fetchSpec, accountid)
-                call.respond(makeJsonObject {
-                    prop("newTransactions", newTransactions)
-                })
+                val ingestionResult = fetchBankAccountTransactions(client, fetchSpec, accountid)
+                call.respond(ingestionResult)
                 return@post
             }
 

@@ -45,7 +45,14 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
 
 data class EbicsProtocolError(
     val httpStatusCode: HttpStatusCode,
-    val reason: String
+    val reason: String,
+    /**
+     * This error type is also used when Nexus finds itself
+     * in an inconsistent state, without interacting with the
+     * bank.  In this case, the EBICS code below can be left
+     * null.
+     */
+    val ebicsTechnicalCode: EbicsReturnCode? = null
 ) : Exception(reason)
 
 data class EbicsDateRange(val start: ZonedDateTime, val end: ZonedDateTime)

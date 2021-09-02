@@ -104,12 +104,25 @@ private suspend fun fetchEbicsC5x(
     subscriberDetails: EbicsClientSubscriberDetails
 ) {
     logger.debug("Requesting $historyType")
-    val response = doEbicsDownloadTransaction(
-        client,
-        subscriberDetails,
-        historyType,
-        orderParams
-    )
+    val response = try {
+        doEbicsDownloadTransaction(
+            client,
+            subscriberDetails,
+            historyType,
+            orderParams
+        )
+    } catch (e: EbicsProtocolError) {
+        /**
+         * This error type is not an actual error in this handler.
+         */
+        if (e.ebicsTechnicalCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
+            logger.info("Could not find new transactions to download")
+            return
+        }
+        // re-throw in any other error case.
+        throw e
+    }
+
     when (historyType) {
         "C52" -> {
         }

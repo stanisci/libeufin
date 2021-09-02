@@ -90,7 +90,8 @@ suspend fun doEbicsDownloadTransaction(
         else -> {
             throw EbicsProtocolError(
                 HttpStatusCode.InternalServerError,
-                "unexpected return code ${initResponse.technicalReturnCode}"
+                "unexpected return code ${initResponse.technicalReturnCode}",
+                initResponse.technicalReturnCode
             )
         }
     }
