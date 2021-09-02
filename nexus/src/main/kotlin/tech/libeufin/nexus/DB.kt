@@ -113,6 +113,32 @@ class TalerIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
 }
 
 /**
+ * This table logs all the balances as returned by the bank for one particular bank account.
+ */
+object NexusBankBalancesTable : LongIdTable() {
+    /**
+     * Balance mentioned in the bank message referenced below.  NOTE: this is the
+     * CLOSING balance (a.k.a. CLBD), namely the one obtained by adding the transactions
+     * reported in the bank message to the _previous_ CLBD.
+     */
+    val balance = text("balance") // $currency:x.y
+    val creditDebitIndicator = text("creditDebitIndicator") // CRDT or DBIT.
+    /**
+     * Message downloaded from the bank.  Must be of "history" type.
+     */
+    val bankMessage = reference("bankMessage", NexusBankMessagesTable)
+    val bankAccount = reference("bankAccount", NexusBankAccountsTable)
+}
+
+class NexusBankBalanceEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<NexusBankBalanceEntity>(NexusBankBalancesTable)
+    var balance by NexusBankBalancesTable.balance
+    var creditDebitIndicator by NexusBankBalancesTable.creditDebitIndicator
+    var bankMessage by NexusBankMessageEntity referencedOn NexusBankBalancesTable.bankMessage
+    var bankAccount by NexusBankAccountEntity referencedOn NexusBankBalancesTable.bankAccount
+}
+
+/**
  * Table that stores all messages we receive from the bank.
  */
 object NexusBankMessagesTable : LongIdTable() {
@@ -125,7 +151,6 @@ object NexusBankMessagesTable : LongIdTable() {
 
 class NexusBankMessageEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<NexusBankMessageEntity>(NexusBankMessagesTable)
-
     var bankConnection by NexusBankConnectionEntity referencedOn NexusBankMessagesTable.bankConnection
     var messageId by NexusBankMessagesTable.messageId
     var code by NexusBankMessagesTable.code
