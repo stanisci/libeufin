@@ -807,6 +807,13 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         }
         if (subscriber.ebicsIniState == EbicsInitState.UNKNOWN || subscriber.ebicsHiaState == EbicsInitState.UNKNOWN) {
             if (tentativeHpb(client, connId)) {
+                /**
+                 * NOTE/FIXME: in case the HIA/INI did succeed (state is UNKNOWN but Sandbox
+                 * has somehow the keys), here the state should be set to SENT, because later -
+                 * when the Sandbox will respond to the INI/HIA requests - we'll get a
+                 * EBICS_INVALID_USER_OR_USER_STATE.  Hence, the state will never switch to
+                 * SENT again.
+                 */
                 return
             }
         }
@@ -827,7 +834,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         val hpbData = try {
             doEbicsHpbRequest(client, subscriber)
         } catch (e: EbicsProtocolError) {
-            logger.warn("failed hpb request", e)
+            logger.warn("failed HPB request", e)
             null
         }
         transaction {
