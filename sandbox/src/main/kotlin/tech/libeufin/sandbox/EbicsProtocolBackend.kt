@@ -525,10 +525,12 @@ private fun constructCamtResponse(
             }
             getLastBalance(bankAccount)  // last reported balance
         }
+
         val freshBalance = balanceForAccount(
             history = history,
             baseBalance = lastBalance
         )
+
         return listOf(
             buildCamtString(
                 type,

@@ -5,10 +5,7 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.util.RawPayment
-import tech.libeufin.util.importDateFromMillis
-import tech.libeufin.util.parseDecimal
-import tech.libeufin.util.toDashedDate
+import tech.libeufin.util.*
 import java.math.BigDecimal
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
@@ -43,7 +40,8 @@ fun balanceForAccount(
         }
         throw SandboxError(
             HttpStatusCode.InternalServerError,
-            "A payment direction was found neither CRDT nor DBIT"
+            "A payment direction was found neither CRDT nor DBIT",
+            LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE
         )
     }
     return ret

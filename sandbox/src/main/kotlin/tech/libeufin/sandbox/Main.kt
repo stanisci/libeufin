@@ -84,7 +84,11 @@ import kotlin.system.exitProcess
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
-data class SandboxError(val statusCode: HttpStatusCode, val reason: String) : Exception()
+data class SandboxError(
+    val statusCode: HttpStatusCode,
+    val reason: String,
+    val errorCode: LibeufinErrorCode? = null) : Exception()
+
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
 
