@@ -43,7 +43,7 @@ fun balanceForAccount(
         }
         throw SandboxError(
             HttpStatusCode.InternalServerError,
-            "A payment direction was found neither CRDT not DBIT"
+            "A payment direction was found neither CRDT nor DBIT"
         )
     }
     return ret
