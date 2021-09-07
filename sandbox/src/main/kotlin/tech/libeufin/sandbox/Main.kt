@@ -908,7 +908,28 @@ fun serverMain(dbName: String, port: Int) {
              * Serves all the Ebics requests.
              */
             post("/ebicsweb") {
-                call.ebicsweb()
+                try {
+                    call.ebicsweb()
+                }
+                /**
+                 * Those errors were all detected by the bank's logic.
+                 */
+                catch (e: SandboxError) {
+                    // Should translate to EBICS error code.
+                    when(e.errorCode) {
+                        LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
+                        LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE -> throw EbicsProcessingError("Inconsistent bank state.")
+                        else -> throw EbicsProcessingError("Unknown LibEuFin error code: ${e.errorCode}.")
+                    }
+
+                }
+                /**
+                 * An error occurred, but it wasn't explicitly thrown by the bank.
+                 */
+                catch (e: Exception) {
+                    throw EbicsProcessingError("Unmanaged error: $e")
+                }
+
             }
         }
     }

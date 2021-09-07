@@ -109,10 +109,9 @@ private class EbicsUnsupportedOrderType : EbicsRequestError(
 
 /**
  * Used here also for "Internal server error".  For example, when the
- * sandbox itself generates a invalid XML response.  Strictly, this error
- * should only be used for _business_ related problems.
+ * sandbox itself generates a invalid XML response.
  */
-private class EbicsProcessingError(detail: String) : EbicsRequestError(
+class EbicsProcessingError(detail: String) : EbicsRequestError(
     "[EBICS_PROCESSING_ERROR] $detail",
     "091116"
 )
