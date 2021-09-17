@@ -272,6 +272,16 @@ def accounts(ctx):
 class SandboxContext:
     def __init__(self):
         self.sandbox_base_url = None
+        self.username, self.password = self.require_sandbox_credentials()
+
+    def require_sandbox_credentials(self):
+        sandbox_username = os.environ.get("LIBEUFIN_SANDBOX_USERNAME")
+        sandbox_password = os.environ.get("LIBEUFIN_SANDBOX_PASSWORD")
+        if not sandbox_username or not sandbox_password:
+            raise click.UsageError(
+                "Please define LIBEUFIN_SANDBOX_USERNAME and LIBEUFIN_SANDBOX_PASSWORD in the environment"
+            )
+        return sandbox_username, sandbox_password
 
     def require_sandbox_base_url(self):
         if self.sandbox_base_url:
@@ -331,7 +341,7 @@ class NexusContext:
 @click.option("--sandbox-url", help="URL for the sandbox", required=False)
 @click.pass_context
 def sandbox(ctx, sandbox_url):
-    ctx.obj = SandboxContext()
+    ctx.obj = SandboxContext() # fetches username and password from the environment.
     ctx.obj.sandbox_base_url = sandbox_url
 
 
@@ -1010,7 +1020,11 @@ def make_ebics_host(obj, host_id):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin(sandbox_base_url, "/admin/ebics/hosts")
     try:
-        resp = post(url, json=dict(hostID=host_id, ebicsVersion="2.5"))
+        resp = post(
+            url,
+            json=dict(hostID=host_id, ebicsVersion="2.5"),
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
     except Exception:
         print("Could not reach sandbox")
         exit(1)
@@ -1050,7 +1064,9 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
     url = urljoin(sandbox_base_url, "/admin/ebics/subscribers")
     try:
         resp = post(
-            url, json=dict(hostID=host_id, partnerID=partner_id, userID=user_id)
+            url,
+            json=dict(hostID=host_id, partnerID=partner_id, userID=user_id),
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
     except Exception:
         print("Could not reach sandbox")
@@ -1120,7 +1136,8 @@ def associate_bank_account(
     )
 
     try:
-        resp = post(url, json=body)
+        resp = post(url, json=body,
+                    auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
         print("Could not reach sandbox")
         exit(1)
