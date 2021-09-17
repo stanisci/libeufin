@@ -19,6 +19,8 @@
 
 package tech.libeufin.util
 
+import UtilError
+import io.ktor.http.*
 import net.taler.wallet.crypto.Base32Crockford
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.io.ByteArrayOutputStream
@@ -306,6 +308,18 @@ object CryptoUtil {
         val salt = bytesToBase64(saltBytes)
         val pwh = bytesToBase64(CryptoUtil.hashStringSHA256("$salt|$pw"))
         return "sha256-salted\$$salt\$$pwh"
+    }
+
+    /**
+     * Throws error when credentials don't match.  Only returns in case of success.
+     */
+    fun checkPwOrThrow(pw: String, storedPwHash: String): Boolean {
+        if(!this.checkpw(pw, storedPwHash)) throw UtilError(
+            HttpStatusCode.Forbidden,
+            "Credentials did not match",
+            LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
+        )
+        return true
     }
 
     fun checkpw(pw: String, storedPwHash: String): Boolean {

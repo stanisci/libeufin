@@ -61,8 +61,7 @@ import javax.xml.validation.Validator
 import javax.xml.xpath.XPath
 import javax.xml.xpath.XPathConstants
 import javax.xml.xpath.XPathFactory
-
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
+import logger
 
 class DefaultNamespaces : NamespacePrefixMapper() {
     override fun getPreferredPrefix(namespaceUri: String?, suggestion: String?, requirePrefix: Boolean): String? {

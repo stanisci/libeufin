@@ -96,7 +96,7 @@ fun chunkString(input: String): String {
         }
         ret.append(input[i])
     }
-    return ret.toString().toUpperCase()
+    return ret.toString().uppercase()
 }
 
 data class AmountWithCurrency(
@@ -109,7 +109,7 @@ fun parseDecimal(decimalStr: String): BigDecimal {
         throw UtilError(
             HttpStatusCode.BadRequest,
             "Bad string amount given: $decimalStr",
-            TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MALFORMED
+            LibeufinErrorCode.LIBEUFIN_EC_GENERIC_PARAMETER_MALFORMED
         )
     return try {
         BigDecimal(decimalStr)
@@ -117,7 +117,7 @@ fun parseDecimal(decimalStr: String): BigDecimal {
         throw UtilError(
             HttpStatusCode.BadRequest,
             "Bad string amount given: $decimalStr",
-            TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MALFORMED
+            LibeufinErrorCode.LIBEUFIN_EC_GENERIC_PARAMETER_MALFORMED
         )
     }
 }

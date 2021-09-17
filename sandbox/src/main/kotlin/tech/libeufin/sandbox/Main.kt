@@ -57,6 +57,7 @@ import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import java.time.Instant
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.core.subcommands
@@ -71,6 +72,7 @@ import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.request.*
 import io.ktor.util.date.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
@@ -91,6 +93,33 @@ data class SandboxError(
 
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
+
+class Superuser : CliktCommand("Add superuser or change pw") {
+    private val username by argument()
+    private val password by option().prompt(requireConfirmation = true, hideInput = true)
+    override fun run() {
+        execThrowableOrTerminate {
+            dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME))
+        }
+        transaction {
+            val hashedPw = CryptoUtil.hashpw(password)
+            val user = SandboxUserEntity.find { SandboxUsersTable.username eq username }.firstOrNull()
+            if (user == null) {
+                SandboxUserEntity.new {
+                    this.username = this@Superuser.username
+                    this.passwordHash = hashedPw
+                    this.superuser = true
+                }
+            } else {
+                if (!user.superuser) {
+                    println("Can only change password for superuser with this command.")
+                    throw ProgramResult(1)
+                }
+                user.passwordHash = hashedPw
+            }
+        }
+    }
+}
 
 class Config : CliktCommand("Insert one configuration into the database") {
     init {
@@ -358,6 +387,7 @@ class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnE
 
 fun main(args: Array<String>) {
     SandboxCommand().subcommands(
+        Superuser(),
         Serve(),
         ResetTables(),
         Config(),
@@ -496,6 +526,9 @@ fun serverMain(dbName: String, port: Int) {
                 return@get
             } */
 
+            /*
+              FIXME: not implemented.
+
             post("/register") {
                 // how to read form-POSTed values?
                 val username = "fixme"
@@ -531,6 +564,11 @@ fun serverMain(dbName: String, port: Int) {
                 return@post
             }
 
+             */
+
+            /*
+            FIXME: will likely be replaced by the Single Page Application
+
             get("/jinja-test") {
                 val template = Resources.toString(
                     Resources.getResource("templates/hello.html"),
@@ -542,6 +580,12 @@ fun serverMain(dbName: String, port: Int) {
                 return@get
             }
 
+             */
+
+            /*
+
+            FIXME: not used
+
             authenticate("auth-form") {
                 get("/profile") {
                     val userSession = call.principal<UserIdPrincipal>()
@@ -551,12 +595,18 @@ fun serverMain(dbName: String, port: Int) {
                 }
             }
 
+             */
+
+            /*
+            FIXME: not used
+
             static("/static") {
                 /**
                  * Here Sandbox will serve the CSS files.
                  */
                 resources("static")
             }
+             */
 
             get("/") {
                 call.respondText("Hello, this is Sandbox\n", ContentType.Text.Plain)
@@ -574,6 +624,7 @@ fun serverMain(dbName: String, port: Int) {
              * requesting account.
              */
             post("/admin/payments/camt") {
+                requireSuperuser(call.request)
                 val body = call.receiveJson<CamtParams>()
                 val bankaccount = getAccountFromLabel(body.bankaccount)
                 if(body.type != 53) throw SandboxError(
@@ -595,6 +646,7 @@ fun serverMain(dbName: String, port: Int) {
             }
 
             post("/admin/bank-accounts/{label}") {
+                requireSuperuser(call.request)
                 val body = call.receiveJson<BankAccountInfo>()
                 transaction {
                     BankAccountEntity.new {
@@ -610,6 +662,7 @@ fun serverMain(dbName: String, port: Int) {
             }
 
             get("/admin/bank-accounts/{label}") {
+                requireSuperuser(call.request)
                 val label = ensureNonNull(call.parameters["label"])
                 val ret = transaction {
                     val bankAccount = BankAccountEntity.find {
@@ -632,6 +685,7 @@ fun serverMain(dbName: String, port: Int) {
             }
 
             post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
+                requireSuperuser(call.request)
                 val body = call.receiveJson<IncomingPaymentInfo>()
                 // FIXME: generate nicer UUID!
                 val accountLabel = ensureNonNull(call.parameters["label"])
@@ -674,6 +728,7 @@ fun serverMain(dbName: String, port: Int) {
              * Associates a new bank account with an existing Ebics subscriber.
              */
             post("/admin/ebics/bank-accounts") {
+                requireSuperuser(call.request)
                 val body = call.receiveJson<BankAccountRequest>()
                 if (!validateBic(body.bic)) {
                     throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
@@ -703,6 +758,7 @@ fun serverMain(dbName: String, port: Int) {
                 return@post
             }
             get("/admin/bank-accounts") {
+                requireSuperuser(call.request)
                 val accounts = mutableListOf<BankAccountInfo>()
                 transaction {
                     BankAccountEntity.all().forEach {
@@ -720,6 +776,7 @@ fun serverMain(dbName: String, port: Int) {
                 call.respond(accounts)
             }
             get("/admin/bank-accounts/{label}/transactions") {
+                requireSuperuser(call.request)
                 val ret = AccountTransactions()
                 transaction {
                     val accountLabel = ensureNonNull(call.parameters["label"])
@@ -758,6 +815,7 @@ fun serverMain(dbName: String, port: Int) {
                 call.respond(ret)
             }
             post("/admin/bank-accounts/{label}/generate-transactions") {
+                requireSuperuser(call.request)
                 transaction {
                     val accountLabel = ensureNonNull(call.parameters["label"])
                     val account = getBankAccountFromLabel(accountLabel)
@@ -809,6 +867,7 @@ fun serverMain(dbName: String, port: Int) {
              * Creates a new Ebics subscriber.
              */
             post("/admin/ebics/subscribers") {
+                requireSuperuser(call.request)
                 val body = call.receiveJson<EbicsSubscriberElement>()
                 transaction {
                     EbicsSubscriberEntity.new {
@@ -830,6 +889,7 @@ fun serverMain(dbName: String, port: Int) {
              * Shows all the Ebics subscribers' details.
              */
             get("/admin/ebics/subscribers") {
+                requireSuperuser(call.request)
                 val ret = AdminGetSubscribers()
                 transaction {
                     EbicsSubscriberEntity.all().forEach {
@@ -846,6 +906,7 @@ fun serverMain(dbName: String, port: Int) {
                 return@get
             }
             post("/admin/ebics/hosts/{hostID}/rotate-keys") {
+                requireSuperuser(call.request)
                 val hostID: String = call.parameters["hostID"] ?: throw SandboxError(
                     HttpStatusCode.BadRequest, "host ID missing in URL"
                 )
@@ -874,6 +935,7 @@ fun serverMain(dbName: String, port: Int) {
              * Creates a new EBICS host.
              */
             post("/admin/ebics/hosts") {
+                requireSuperuser(call.request)
                 val req = call.receiveJson<EbicsHostCreateRequest>()
                 val pairA = CryptoUtil.generateRsaKeyPair(2048)
                 val pairB = CryptoUtil.generateRsaKeyPair(2048)
@@ -899,6 +961,7 @@ fun serverMain(dbName: String, port: Int) {
              * Show the names of all the Ebics hosts
              */
             get("/admin/ebics/hosts") {
+                requireSuperuser(call.request)
                 val ebicsHosts = transaction {
                     EbicsHostEntity.all().map { it.hostId }
                 }

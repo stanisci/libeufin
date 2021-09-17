@@ -1,5 +1,6 @@
 package tech.libeufin.nexus
 
+import UtilError
 import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
@@ -7,54 +8,27 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.server.Permission
 import tech.libeufin.nexus.server.PermissionQuery
-import tech.libeufin.util.CryptoUtil
-import tech.libeufin.util.base64ToBytes
-import tech.libeufin.util.constructXml
-
+import tech.libeufin.util.*
 
 /**
- * This helper function parses a Authorization:-header line, decode the credentials
- * and returns a pair made of username and hashed (sha256) password.  The hashed value
- * will then be compared with the one kept into the database.
- */
-private fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
-    logger.debug("Authenticating: $authorizationHeader")
-    val (username, password) = try {
-        val split = authorizationHeader.split(" ")
-        val plainUserAndPass = String(base64ToBytes(split[1]), Charsets.UTF_8)
-        plainUserAndPass.split(":")
-    } catch (e: java.lang.Exception) {
-        throw NexusError(
-            HttpStatusCode.BadRequest,
-            "invalid Authorization:-header received"
-        )
-    }
-    return Pair(username, password)
-}
-
-
-/**
- * Test HTTP basic auth.  Throws error if password is wrong,
+ * HTTP basic auth.  Throws error if password is wrong,
  * and makes sure that the user exists in the system.
  *
  * @return user entity
  */
 fun authenticateRequest(request: ApplicationRequest): NexusUserEntity {
     return transaction {
-        val authorization = request.headers["Authorization"]
-        val headerLine = if (authorization == null) throw NexusError(
-            HttpStatusCode.BadRequest, "Authorization header not found"
-        ) else authorization
-        val (username, password) = extractUserAndPassword(headerLine)
+        val (username, password) = getHTTPBasicAuthCredentials(request)
         val user = NexusUserEntity.find {
             NexusUsersTable.username eq username
         }.firstOrNull()
         if (user == null) {
-            throw NexusError(HttpStatusCode.Unauthorized, "Unknown user '$username'")
+            throw UtilError(HttpStatusCode.Unauthorized,
+                "Unknown user '$username'",
+                LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
+            )
         }
-        if (!CryptoUtil.checkpw(password, user.passwordHash)) {
-            throw NexusError(HttpStatusCode.Forbidden, "Wrong password")
-        }
+        CryptoUtil.checkPwOrThrow(password, username)
         user
     }
 }

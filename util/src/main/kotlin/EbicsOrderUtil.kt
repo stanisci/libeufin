@@ -55,7 +55,7 @@ object EbicsOrderUtil {
         val rng = SecureRandom()
         val res = ByteArray(16)
         rng.nextBytes(res)
-        return res.toHexString().toUpperCase()
+        return res.toHexString().uppercase()
     }
 
     /**

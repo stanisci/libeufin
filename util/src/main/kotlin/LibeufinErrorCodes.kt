@@ -48,5 +48,17 @@ enum class LibeufinErrorCode(val code: Int) {
      * A bank's invariant is not holding anymore.  For example, a customer's
      * balance doesn't match the history of their bank account.
      */
-    LIBEUFIN_EC_INCONSISTENT_STATE(3)
+    LIBEUFIN_EC_INCONSISTENT_STATE(3),
+
+    /**
+     * An access was forbidden due to wrong credentials.
+     */
+    LIBEUFIN_EC_AUTHENTICATION_FAILED(4),
+
+    /**
+     * A parameter in the request was malformed.
+     * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+     * (A value of 0 indicates that the error is generated client-side).
+     */
+    LIBEUFIN_EC_GENERIC_PARAMETER_MALFORMED(5),
 }
