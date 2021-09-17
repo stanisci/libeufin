@@ -104,6 +104,12 @@ class SandboxConfigEntity(id: EntityID<Long>) : LongEntity(id) {
     var hostname by SandboxConfigsTable.hostname
 }
 
+/**
+ * Currently, this entity is never associated with a bank account,
+ * as those get only paired with Ebics subscribers!  Eventually, a
+ * Ebics subscriber should map to a SandboxUserEntity that in turn
+ * will own bank accounts.
+ */
 object SandboxUsersTable : LongIdTable() {
     val username = text("username")
     val passwordHash = text("password")
