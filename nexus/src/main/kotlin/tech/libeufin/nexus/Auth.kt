@@ -28,7 +28,7 @@ fun authenticateRequest(request: ApplicationRequest): NexusUserEntity {
                 LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
             )
         }
-        CryptoUtil.checkPwOrThrow(password, username)
+        CryptoUtil.checkPwOrThrow(password, user.passwordHash)
         user
     }
 }
