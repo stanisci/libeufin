@@ -108,7 +108,11 @@ object SandboxUsersTable : LongIdTable() {
     val username = text("username")
     val passwordHash = text("password")
     val superuser = bool("superuser") // admin
-    val bankAccount = reference("bankAccount", BankAccountsTable)
+    /**
+     * Some users may only have an administrative role in the system,
+     * therefore do not need a bank account.
+     */
+    val bankAccount = reference("bankAccount", BankAccountsTable).nullable()
 }
 
 class SandboxUserEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -116,7 +120,7 @@ class SandboxUserEntity(id: EntityID<Long>) : LongEntity(id) {
     var username by SandboxUsersTable.username
     var passwordHash by SandboxUsersTable.passwordHash
     var superuser by SandboxUsersTable.superuser
-    var bankAccount by BankAccountEntity referencedOn SandboxUsersTable.bankAccount
+    var bankAccount by BankAccountEntity optionalReferencedOn SandboxUsersTable.bankAccount
 }
 
 
