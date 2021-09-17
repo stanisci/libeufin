@@ -29,7 +29,7 @@ fun authenticateRequest(request: ApplicationRequest): SandboxUserEntity {
                 LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
             )
         }
-        CryptoUtil.checkPwOrThrow(password, username)
+        CryptoUtil.checkPwOrThrow(password, user.passwordHash)
         user
     }
 }
