@@ -29,6 +29,7 @@ fun getAuthorizationHeader(request: ApplicationRequest): String {
 fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
     logger.debug("Authenticating: $authorizationHeader")
     val (username, password) = try {
+        // FIXME/note: line below doesn't check for "Basic" presence.
         val split = authorizationHeader.split(" ")
         val plainUserAndPass = String(base64ToBytes(split[1]), Charsets.UTF_8)
         val ret = plainUserAndPass.split(":")
