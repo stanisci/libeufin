@@ -988,7 +988,7 @@ fun serverMain(dbName: String, port: Int) {
                 call.respond(object {
                     val name = "taler-bank-integration"
                     // FIXME: use actual version here!
-                    val version = "0.0.0-dev.0"
+                    val version = "0:0:0"
                     val currency = currencyEnv
                 })
             }
