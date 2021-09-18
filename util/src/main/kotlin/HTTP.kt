@@ -31,11 +31,15 @@ fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
     val (username, password) = try {
         val split = authorizationHeader.split(" ")
         val plainUserAndPass = String(base64ToBytes(split[1]), Charsets.UTF_8)
-        plainUserAndPass.split(":")
+        val ret = plainUserAndPass.split(":")
+        if (ret.size != 2) throw java.lang.Exception(
+            "HTTP Basic auth line does not contain username and (only) password"
+        )
+        ret
     } catch (e: Exception) {
         throw UtilError(
             HttpStatusCode.BadRequest,
-            "invalid Authorization:-header received",
+            "invalid Authorization:-header received: ${e.message}",
             LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
         )
     }
