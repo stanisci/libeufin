@@ -455,7 +455,8 @@ fun dbDropTables(dbConnectionString: String) {
             BankAccountReportsTable,
             BankAccountStatementsTable,
             SandboxConfigsTable,
-            SandboxUsersTable
+            SandboxUsersTable,
+            TalerWithdrawalsTable
         )
     }
 }
@@ -477,7 +478,8 @@ fun dbCreateTables(dbConnectionString: String) {
             BankAccountFreshTransactionsTable,
             BankAccountsTable,
             BankAccountReportsTable,
-            BankAccountStatementsTable
+            BankAccountStatementsTable,
+            TalerWithdrawalsTable
         )
     }
 }
