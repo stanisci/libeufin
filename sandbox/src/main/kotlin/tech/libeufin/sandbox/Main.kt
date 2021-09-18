@@ -84,7 +84,8 @@ import kotlin.random.Random
 import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
-private val hostName: String? = getHostnameFromEnv("LIBEUFIN_SANDBOX_HOSTNAME")
+private val hostName: String? = getValueFromEnv("LIBEUFIN_SANDBOX_HOSTNAME")
+private val currency: String? = getValueFromEnv("LIBEUFIN_SANDBOX_CURRENCY")
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 
 data class SandboxError(
@@ -227,67 +228,15 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         Database.connect(dbConnString)
-        // check accounts exist
-        transaction {
-            val credit = BankAccountEntity.find {
-                BankAccountsTable.label eq creditAccount
-            }.firstOrNull() ?: run {
-                System.err.println("Credit account: $creditAccount, not found")
-                exitProcess(1)
-            }
-            val debit = BankAccountEntity.find {
-                BankAccountsTable.label eq debitAccount
-            }.firstOrNull() ?: run {
-                System.err.println("Debit account: $debitAccount, not found")
-                exitProcess(1)
-            }
-            if (credit.currency != debit.currency) {
-                System.err.println(
-                    "Sandbox has inconsistent state: " +
-                            "currency of credit (${credit.currency}) and debit (${debit.currency}) account differs.")
-                exitProcess(1)
-            }
-            val amountObj = try {
-                parseAmount(amount)
-            } catch (e: Exception) {
-                System.err.println("Amount given not valid: $amount")
-                exitProcess(1)
-            }
-            if (amountObj.currency != credit.currency || amountObj.currency != debit.currency) {
-                System.err.println("Amount's currency (${amountObj.currency}) can't be accepted")
-                exitProcess(1)
-            }
-            val randId = getRandomString(16)
-            BankAccountTransactionEntity.new {
-                creditorIban = credit.iban
-                creditorBic = credit.bic
-                creditorName = credit.name
-                debtorIban = debit.iban
-                debtorBic = debit.bic
-                debtorName = debit.name
-                subject = subjectArg
-                amount = amountObj.amount.toString()
-                currency = amountObj.currency
-                date = getUTCnow().toInstant().toEpochMilli()
-                accountServicerReference = "sandbox-$randId"
-                account = debit
-                direction = "DBIT"
-            }
-            BankAccountTransactionEntity.new {
-                creditorIban = credit.iban
-                creditorBic = credit.bic
-                creditorName = credit.name
-                debtorIban = debit.iban
-                debtorBic = debit.bic
-                debtorName = debit.name
-                subject = subjectArg
-                amount = amountObj.amount.toString()
-                currency = amountObj.currency
-                date = getUTCnow().toInstant().toEpochMilli()
-                accountServicerReference = "sandbox-$randId"
-                account = credit
-                direction = "CRDT"
-            }
+        try {
+            wireTransfer(debitAccount, creditAccount, amount, subjectArg)
+        } catch (e: SandboxError) {
+            print(e.message)
+            exitProcess(1)
+        } catch (e: Exception) {
+            // Here, Sandbox is in a highly unstable state.
+            println(e)
+            exitProcess(1)
         }
     }
 }
@@ -1005,6 +954,10 @@ fun serverMain(dbName: String, port: Int) {
                     hostName != null,
                     "Own hostname not found.  Logs should have warned"
                 )
+                SandboxAssert(
+                    currency != null,
+                    "Currency not found.  Logs should have warned"
+                )
                 // check that the three canonical accounts exist
                 val wo = transaction {
                     val exchange = BankAccountEntity.find {
@@ -1031,6 +984,59 @@ fun serverMain(dbName: String, port: Int) {
                  */
                 call.respondText("taler://withdraw/${hostName}/api/${wo.wopid}")
                 return@get
+            }
+            /**
+             * not regulating the access here, as the wopid was only granted
+             * to logged-in users before (at the /taler endpoint) and has enough
+             * entropy to prevent guesses.
+             */
+            get("/withdrawal-operation/{wopid}") {
+                val wopid: String = ensureNonNull("wopid")
+                val wo = transaction {
+
+                    TalerWithdrawalEntity.find {
+                        TalerWithdrawalsTable.wopid eq UUID.fromString(wopid)
+                    }.firstOrNull() ?: throw SandboxError(
+                        HttpStatusCode.NotFound,
+                        "Withdrawal operation: $wopid not found"
+                    )
+                }
+                val ret = TalerWithdrawalStatus(
+                    selection_done = wo.selectionDone,
+                    transfer_done = wo.transferDone,
+                    amount = "${currency}:1"
+                )
+                call.respond(ret)
+                return@get
+            }
+            /**
+             * Here Sandbox collects the reserve public key to be used
+             * as the wire transfer subject, and pays the exchange - which
+             * is as well collected in this request.
+             */
+            post("/withdrawal-operation/{wopid}") {
+                val wopid = ensureNonNull("wopid")
+                val body = call.receiveJson<TalerWithdrawalConfirmation>()
+
+                transaction {
+                    var wo = TalerWithdrawalEntity.find {
+                        TalerWithdrawalsTable.wopid eq UUID.fromString(wopid)
+                    }.firstOrNull() ?: throw SandboxError(
+                        HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
+                    )
+                    wireTransfer(
+                        "sandbox-account-customer",
+                        "sandbox-account-exchange",
+                        "$currency:1",
+                        body.reserve_pub
+                    )
+                    wo.selectionDone = true
+                    wo.transferDone = true
+                }
+                call.respond(object {
+                    val transfer_done = true
+                })
+                return@post
             }
         }
     }

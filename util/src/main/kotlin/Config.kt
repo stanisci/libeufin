@@ -50,10 +50,10 @@ fun setLogLevel(logLevel: String?) {
     }
 }
 
-fun getHostnameFromEnv(varName: String): String? {
+fun getValueFromEnv(varName: String): String? {
     val hostName = System.getenv(varName)
     if (hostName.isNullOrBlank() or hostName.isNullOrEmpty()) {
-        println("WARNING, the hostname wasn't found in env's $varName. Will stay unknown")
+        println("WARNING, $varName was not found in the environment. Will stay unknown")
         return null
     }
     return hostName

@@ -71,3 +71,17 @@ data class CamtParams(
     val type: Int,
     // need range parameter
 )
+
+data class TalerWithdrawalStatus(
+    val selection_done: Boolean,
+    val transfer_done: Boolean,
+    val amount: String,
+    val wire_types: List<String> = listOf("x-taler-bank"),
+    val suggested_exchange: String? = null,
+    val sender_wire: String? = null
+)
+
+data class TalerWithdrawalConfirmation(
+    val reserve_pub: String,
+    val exchange_wire_details: String
+)

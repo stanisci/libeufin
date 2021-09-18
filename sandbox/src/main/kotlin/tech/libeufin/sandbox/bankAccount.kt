@@ -7,6 +7,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import java.math.BigDecimal
+import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
@@ -113,4 +114,68 @@ fun historyForAccount(bankAccount: BankAccountEntity): MutableList<RawPayment> {
         }
     }
     return history
+}
+
+fun wireTransfer(
+    debitAccount: String, creditAccount: String,
+    amount: String, subjectArg: String
+) {
+    // check accounts exist
+    transaction {
+        val credit = BankAccountEntity.find {
+            BankAccountsTable.label eq creditAccount
+        }.firstOrNull() ?: run {
+            throw SandboxError(HttpStatusCode.NotFound, "Credit account: $creditAccount, not found")
+        }
+        val debit = BankAccountEntity.find {
+            BankAccountsTable.label eq debitAccount
+        }.firstOrNull() ?: run {
+            throw SandboxError(HttpStatusCode.NotFound, "Debit account: $debitAccount, not found")
+        }
+        if (credit.currency != debit.currency) {
+            throw SandboxError(HttpStatusCode.InternalServerError,
+                "Sandbox has inconsistent state: " +
+                        "currency of credit (${credit.currency}) and debit (${debit.currency}) account differs."
+            )
+        }
+        val amountObj = try {
+            parseAmount(amount)
+        } catch (e: Exception) {
+            throw SandboxError(HttpStatusCode.BadRequest, "Amount given not valid: $amount")
+        }
+        if (amountObj.currency != credit.currency || amountObj.currency != debit.currency) {
+            throw SandboxError(HttpStatusCode.BadRequest, "currency (${amountObj.currency}) can't be accepted")
+        }
+        val randId = getRandomString(16)
+        BankAccountTransactionEntity.new {
+            creditorIban = credit.iban
+            creditorBic = credit.bic
+            creditorName = credit.name
+            debtorIban = debit.iban
+            debtorBic = debit.bic
+            debtorName = debit.name
+            subject = subjectArg
+            this.amount = amountObj.amount.toString()
+            currency = amountObj.currency
+            date = getUTCnow().toInstant().toEpochMilli()
+            accountServicerReference = "sandbox-$randId"
+            account = debit
+            direction = "DBIT"
+        }
+        BankAccountTransactionEntity.new {
+            creditorIban = credit.iban
+            creditorBic = credit.bic
+            creditorName = credit.name
+            debtorIban = debit.iban
+            debtorBic = debit.bic
+            debtorName = debit.name
+            subject = subjectArg
+            this.amount = amountObj.amount.toString()
+            currency = amountObj.currency
+            date = getUTCnow().toInstant().toEpochMilli()
+            accountServicerReference = "sandbox-$randId"
+            account = credit
+            direction = "CRDT"
+        }
+    }
 }

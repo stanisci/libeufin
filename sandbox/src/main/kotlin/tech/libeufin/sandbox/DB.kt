@@ -409,10 +409,26 @@ class BankAccountStatementEntity(id: EntityID<Int>) : IntEntity(id) {
 
 object TalerWithdrawalsTable : LongIdTable() {
     val wopid = uuid("wopid").autoGenerate()
+
+    /**
+     * Turns to true after the wallet gave the reserve public key
+     * and the exchange details to the bank.
+     */
+    val selectionDone = bool("selectionDone").default(false)
+
+    /**
+     * Turns to true after the wire transfer to the exchange bank account
+     * gets completed _on the bank's side_.  This does never guarantees that
+     * the payment arrived at the exchange's bank yet.
+     */
+    val transferDone = bool("transferDone").default(false)
+
 }
 class TalerWithdrawalEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<TalerWithdrawalEntity>(TalerWithdrawalsTable)
     var wopid by TalerWithdrawalsTable.wopid
+    var selectionDone by TalerWithdrawalsTable.selectionDone
+    var transferDone by TalerWithdrawalsTable.transferDone
 }
 
 object BankAccountReportsTable : IntIdTable() {
