@@ -20,7 +20,6 @@
 package tech.libeufin.sandbox
 
 import UtilError
-import com.hubspot.jinjava.Jinjava
 import com.fasterxml.jackson.core.JsonParseException
 import io.ktor.application.ApplicationCallPipeline
 import io.ktor.application.call
@@ -55,7 +54,6 @@ import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
-import java.time.Instant
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.context
@@ -64,7 +62,6 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.int
-import com.google.common.io.Resources
 import execThrowableOrTerminate
 import io.ktor.application.ApplicationCall
 import io.ktor.auth.*
@@ -72,20 +69,18 @@ import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.request.*
 import io.ktor.util.date.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import validatePlainAmount
 import java.net.BindException
-import java.time.ZoneOffset
 import java.util.*
 import kotlin.random.Random
 import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 private val hostName: String? = getValueFromEnv("LIBEUFIN_SANDBOX_HOSTNAME")
-private val currency: String? = getValueFromEnv("LIBEUFIN_SANDBOX_CURRENCY")
+private val currencyEnv: String? = getValueFromEnv("LIBEUFIN_SANDBOX_CURRENCY")
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 
 data class SandboxError(
@@ -955,7 +950,7 @@ fun serverMain(dbName: String, port: Int) {
                     "Own hostname not found.  Logs should have warned"
                 )
                 SandboxAssert(
-                    currency != null,
+                    currencyEnv != null,
                     "Currency not found.  Logs should have warned"
                 )
                 // check that the three canonical accounts exist
@@ -985,12 +980,24 @@ fun serverMain(dbName: String, port: Int) {
                 call.respondText("taler://withdraw/${hostName}/api/${wo.wopid}")
                 return@get
             }
+            get("/api/config") {
+                SandboxAssert(
+                    currencyEnv != null,
+                    "Currency not found.  Logs should have warned"
+                )
+                call.respond(object {
+                    val name = "taler-bank-integration"
+                    // FIXME: use actual version here!
+                    val version = "0.0.0-dev.0"
+                    val currency = currencyEnv
+                })
+            }
             /**
              * not regulating the access here, as the wopid was only granted
              * to logged-in users before (at the /taler endpoint) and has enough
              * entropy to prevent guesses.
              */
-            get("/withdrawal-operation/{wopid}") {
+            get("/api/withdrawal-operation/{wopid}") {
                 val wopid: String = ensureNonNull("wopid")
                 val wo = transaction {
 
@@ -1004,7 +1011,7 @@ fun serverMain(dbName: String, port: Int) {
                 val ret = TalerWithdrawalStatus(
                     selection_done = wo.selectionDone,
                     transfer_done = wo.transferDone,
-                    amount = "${currency}:1"
+                    amount = "${currencyEnv}:1"
                 )
                 call.respond(ret)
                 return@get
@@ -1027,7 +1034,7 @@ fun serverMain(dbName: String, port: Int) {
                     wireTransfer(
                         "sandbox-account-customer",
                         "sandbox-account-exchange",
-                        "$currency:1",
+                        "$currencyEnv:1",
                         body.reserve_pub
                     )
                     wo.selectionDone = true
