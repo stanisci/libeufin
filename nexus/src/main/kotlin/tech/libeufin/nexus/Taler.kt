@@ -52,7 +52,7 @@ data class TalerTransferRequest(
     val amount: String,
     val exchange_base_url: String,
     val wtid: String,
-    val credit_account: String
+    val credit_account: String // payto://-format
 )
 
 data class TalerTransferResponse(

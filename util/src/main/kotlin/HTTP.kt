@@ -32,7 +32,7 @@ fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
         val split = authorizationHeader.split(" ")
         val plainUserAndPass = String(base64ToBytes(split[1]), Charsets.UTF_8)
         plainUserAndPass.split(":")
-    } catch (e: java.lang.Exception) {
+    } catch (e: Exception) {
         throw UtilError(
             HttpStatusCode.BadRequest,
             "invalid Authorization:-header received",
