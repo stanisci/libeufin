@@ -407,12 +407,22 @@ class BankAccountStatementEntity(id: EntityID<Int>) : IntEntity(id) {
     var balanceClbd by BankAccountStatementsTable.balanceClbd
 }
 
+object TalerWithdrawalsTable : LongIdTable() {
+    val wopid = uuid("wopid").autoGenerate()
+}
+class TalerWithdrawalEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<TalerWithdrawalEntity>(TalerWithdrawalsTable)
+    var wopid by TalerWithdrawalsTable.wopid
+}
+
 object BankAccountReportsTable : IntIdTable() {
     val reportId = text("reportId")
     val creationTime = long("creationTime")
     val xmlMessage = text("xmlMessage")
     val bankAccount = reference("bankAccount", BankAccountsTable)
 }
+
+
 
 fun dbDropTables(dbConnectionString: String) {
     Database.connect(dbConnectionString)
