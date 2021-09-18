@@ -998,7 +998,7 @@ fun serverMain(dbName: String, port: Int) {
              * entropy to prevent guesses.
              */
             get("/api/withdrawal-operation/{wopid}") {
-                val wopid: String = ensureNonNull("wopid")
+                val wopid: String = ensureNonNull(call.parameters["wopid"])
                 val wo = transaction {
 
                     TalerWithdrawalEntity.find {
@@ -1022,7 +1022,7 @@ fun serverMain(dbName: String, port: Int) {
              * is as well collected in this request.
              */
             post("/withdrawal-operation/{wopid}") {
-                val wopid = ensureNonNull("wopid")
+                val wopid: String = ensureNonNull(call.parameters["wopid"])
                 val body = call.receiveJson<TalerWithdrawalConfirmation>()
 
                 transaction {
