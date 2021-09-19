@@ -1038,6 +1038,7 @@ fun serverMain(dbName: String, port: Int) {
              */
             post("/api/withdrawal-operation/{wopid}") {
                 val wopid: String = ensureNonNull(call.parameters["wopid"])
+                logger.debug("Confirming withdraw operation: $wopid")
                 val body = call.receiveJson<TalerWithdrawalConfirmation>()
                 logger.debug("Withdrawal confirmation valid.")
                 transaction {
