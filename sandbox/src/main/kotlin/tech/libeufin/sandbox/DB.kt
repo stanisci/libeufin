@@ -451,6 +451,7 @@ fun dbDropTables(dbConnectionString: String) {
             EbicsUploadTransactionChunksTable,
             EbicsOrderSignaturesTable,
             BankAccountTransactionsTable,
+            BankAccountFreshTransactionsTable,
             BankAccountsTable,
             BankAccountReportsTable,
             BankAccountStatementsTable,
