@@ -81,6 +81,7 @@ import kotlin.system.exitProcess
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 private val hostName: String? = getValueFromEnv("LIBEUFIN_SANDBOX_HOSTNAME")
 private val currencyEnv: String? = getValueFromEnv("LIBEUFIN_SANDBOX_CURRENCY")
+private val envName: String? = getValueFromEnv("TALER_ENV_NAME")
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 
 data class SandboxError(
@@ -1008,10 +1009,15 @@ fun serverMain(dbName: String, port: Int) {
                         "Withdrawal operation: $wopid not found"
                     )
                 }
+                SandboxAssert(
+                    envName != null,
+                    "Env name not found, cannot suggest Exchange."
+                )
                 val ret = TalerWithdrawalStatus(
                     selection_done = wo.selectionDone,
                     transfer_done = wo.transferDone,
-                    amount = "${currencyEnv}:1"
+                    amount = "${currencyEnv}:1",
+                    suggested_exchange = "https://exchange.${envName}.taler.net/"
                 )
                 call.respond(ret)
                 return@get
@@ -1021,7 +1027,7 @@ fun serverMain(dbName: String, port: Int) {
              * as the wire transfer subject, and pays the exchange - which
              * is as well collected in this request.
              */
-            post("/withdrawal-operation/{wopid}") {
+            post("/api/withdrawal-operation/{wopid}") {
                 val wopid: String = ensureNonNull(call.parameters["wopid"])
                 val body = call.receiveJson<TalerWithdrawalConfirmation>()
 
