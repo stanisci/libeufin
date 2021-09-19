@@ -1039,7 +1039,7 @@ fun serverMain(dbName: String, port: Int) {
             post("/api/withdrawal-operation/{wopid}") {
                 val wopid: String = ensureNonNull(call.parameters["wopid"])
                 val body = call.receiveJson<TalerWithdrawalConfirmation>()
-
+                logger.debug("Withdrawal confirmation valid.")
                 transaction {
                     var wo = TalerWithdrawalEntity.find {
                         TalerWithdrawalsTable.wopid eq UUID.fromString(wopid)
