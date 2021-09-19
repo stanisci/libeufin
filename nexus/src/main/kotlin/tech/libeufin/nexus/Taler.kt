@@ -478,7 +478,7 @@ private fun getCurrency(facadeName: String): String {
     }
 }
 
-fun talerFacadeRoutes(route: Route, httpClient: HttpClient) {
+fun talerFacadeRoutes(route: Route) {
     route.get("/config") {
         val facadeId = ensureNonNull(call.parameters["fcid"])
         call.request.requirePermission(

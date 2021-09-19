@@ -119,22 +119,6 @@ fun ApplicationCall.expectUrlParameter(name: String): String {
         ?: throw NexusError(HttpStatusCode.BadRequest, "Parameter '$name' not provided in URI")
 }
 
-fun isValidResourceName(name: String): Boolean {
-    return name.matches(Regex("[a-z]([-a-z0-9]*[a-z0-9])?"))
-}
-
-fun requireValidResourceName(name: String): String {
-    if (!isValidResourceName(name)) {
-        throw NexusError(
-            HttpStatusCode.BadRequest,
-            "Invalid resource name. The first character must be a lowercase letter, " +
-                    "and all following characters (except for the last character) must be a dash, " +
-                    "lowercase letter, or digit. The last character must be a lowercase letter or digit."
-        )
-    }
-    return name
-}
-
 suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
     try {
         return this.receive()
@@ -1060,7 +1044,7 @@ fun serverMain(host: String, port: Int) {
                 }
             }
             route("/facades/{fcid}/taler-wire-gateway") {
-                talerFacadeRoutes(this, client)
+                talerFacadeRoutes(this)
             }
             route("/facades/{fcid}/anastasis") {
                 anastasisFacadeRoutes(this, client)

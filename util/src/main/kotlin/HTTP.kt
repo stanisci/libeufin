@@ -32,9 +32,9 @@ fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
         // FIXME/note: line below doesn't check for "Basic" presence.
         val split = authorizationHeader.split(" ")
         val plainUserAndPass = String(base64ToBytes(split[1]), Charsets.UTF_8)
-        val ret = plainUserAndPass.split(":")
-        if (ret.size != 2) throw java.lang.Exception(
-            "HTTP Basic auth line does not contain username and (only) password"
+        val ret = plainUserAndPass.split(":", limit = 2)
+        if (ret.size < 2) throw java.lang.Exception(
+            "HTTP Basic auth line does not contain username and password"
         )
         ret
     } catch (e: Exception) {

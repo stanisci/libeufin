@@ -99,9 +99,18 @@ class Superuser : CliktCommand("Add superuser or change pw") {
         execThrowableOrTerminate {
             dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME))
         }
+        try {
+            requireValidResourceName(username)
+        } catch (e: UtilError) {
+            println(e) // Gives instructions about the allowed format.
+            exitProcess(1)
+        }
         transaction {
+            val user = SandboxUserEntity.find {
+                SandboxUsersTable.username eq username
+            }.firstOrNull()
+
             val hashedPw = CryptoUtil.hashpw(password)
-            val user = SandboxUserEntity.find { SandboxUsersTable.username eq username }.firstOrNull()
             if (user == null) {
                 SandboxUserEntity.new {
                     this.username = this@Superuser.username

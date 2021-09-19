@@ -314,7 +314,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
     }
 
     post("/download/{msgtype}") {
-        val orderType = requireNotNull(call.parameters["msgtype"]).toUpperCase(Locale.ROOT)
+        val orderType = requireNotNull(call.parameters["msgtype"]).uppercase(Locale.ROOT)
         if (orderType.length != 3) {
             throw NexusError(HttpStatusCode.BadRequest, "ebics order type must be three characters")
         }
