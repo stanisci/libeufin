@@ -1060,7 +1060,7 @@ fun serverMain(dbName: String, port: Int) {
                     wireTransfer(
                         "sandbox-account-customer",
                         "sandbox-account-exchange",
-                        "$currencyEnv:1",
+                        "$currencyEnv:5",
                         body.reserve_pub
                     )
                     wo.selectionDone = true
