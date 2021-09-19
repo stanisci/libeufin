@@ -1038,16 +1038,25 @@ fun serverMain(dbName: String, port: Int) {
              * is as well collected in this request.
              */
             post("/api/withdrawal-operation/{wopid}") {
+
                 val wopid: String = ensureNonNull(call.parameters["wopid"])
-                logger.debug("Confirming withdraw operation: $wopid")
                 val body = call.receiveJson<TalerWithdrawalConfirmation>()
-                logger.debug("Withdrawal confirmation valid.")
+
                 transaction {
                     var wo = TalerWithdrawalEntity.find {
                         TalerWithdrawalsTable.wopid eq UUID.fromString(wopid)
                     }.firstOrNull() ?: throw SandboxError(
                         HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
                     )
+                    if (wo.transferDone) {
+                        throw SandboxError(
+                            HttpStatusCode.Conflict,
+                            "This withdraw operation was already funded.  Aborting"
+                        )
+                    }
+                    if (wo.selectionDone) {
+                        logger.warn("This withdraw operation was already confirmed, but not funded.  Trying again")
+                    }
                     wireTransfer(
                         "sandbox-account-customer",
                         "sandbox-account-exchange",
