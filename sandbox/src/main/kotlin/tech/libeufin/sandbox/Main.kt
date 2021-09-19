@@ -434,7 +434,7 @@ fun serverMain(dbName: String, port: Int) {
                 )
             }
             exception<SandboxError> { cause ->
-                logger.error("Exception while handling '${call.request.uri}': ${cause.reason}")
+                logger.error("Exception while handling '${call.request.uri}'", cause)
                 call.respond(
                     cause.statusCode,
                     SandboxErrorJson(
