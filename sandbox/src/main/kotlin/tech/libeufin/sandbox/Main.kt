@@ -21,6 +21,7 @@ package tech.libeufin.sandbox
 
 import UtilError
 import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.core.JsonParser
 import io.ktor.application.ApplicationCallPipeline
 import io.ktor.application.call
 import io.ktor.application.install
@@ -1039,6 +1040,8 @@ fun serverMain(dbName: String, port: Int) {
             post("/api/withdrawal-operation/{wopid}") {
                 val wopid: String = ensureNonNull(call.parameters["wopid"])
                 logger.debug("Confirming withdraw operation: $wopid")
+                val debug = call.receiveText()
+                logger.debug("Withdraw confirmation request: $debug")
                 val body = call.receiveJson<TalerWithdrawalConfirmation>()
                 logger.debug("Withdrawal confirmation valid.")
                 transaction {
