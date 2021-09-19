@@ -78,7 +78,8 @@ data class TalerWithdrawalStatus(
     val amount: String,
     val wire_types: List<String> = listOf("x-taler-bank"),
     val suggested_exchange: String? = null,
-    val sender_wire: String? = null
+    val sender_wire: String? = null,
+    val aborted: Boolean = false,
 )
 
 data class TalerWithdrawalConfirmation(
