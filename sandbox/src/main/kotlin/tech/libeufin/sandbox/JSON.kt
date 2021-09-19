@@ -84,5 +84,5 @@ data class TalerWithdrawalStatus(
 
 data class TalerWithdrawalConfirmation(
     val reserve_pub: String,
-    val exchange_wire_details: String?
+    val selected_exchange: String?
 )
