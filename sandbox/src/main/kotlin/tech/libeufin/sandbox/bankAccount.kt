@@ -1,6 +1,7 @@
 package tech.libeufin.sandbox
 
 import io.ktor.http.*
+import org.apache.http.HttpStatus
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
@@ -143,8 +144,18 @@ fun wireTransfer(
         } catch (e: Exception) {
             throw SandboxError(HttpStatusCode.BadRequest, "Amount given not valid: $amount")
         }
+        // Extra check on the currency's consistency
+        if (credit.currency != debit.currency) throw SandboxError(
+            HttpStatusCode.InternalServerError,
+            "Credit and debit account have different currency (${credit.currency} vs ${debit.currency})!",
+            LibeufinErrorCode.LIBEUFIN_EC_CURRENCY_INCONSISTENT
+        )
         if (amountObj.currency != credit.currency || amountObj.currency != debit.currency) {
-            throw SandboxError(HttpStatusCode.BadRequest, "currency (${amountObj.currency}) can't be accepted")
+            throw SandboxError(
+                HttpStatusCode.BadRequest,
+                "Currency (${amountObj.currency}) is not supported",
+                LibeufinErrorCode.LIBEUFIN_EC_BAD_CURRENCY
+            )
         }
         val randId = getRandomString(16)
         BankAccountTransactionEntity.new {

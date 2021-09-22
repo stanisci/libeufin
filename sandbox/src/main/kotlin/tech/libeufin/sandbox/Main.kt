@@ -434,7 +434,7 @@ fun serverMain(dbName: String, port: Int) {
                 )
             }
             exception<SandboxError> { cause ->
-                logger.error("Exception while handling '${call.request.uri}'", cause)
+                logger.error("Exception while handling '${call.request.uri}', ${cause.reason}")
                 call.respond(
                     cause.statusCode,
                     SandboxErrorJson(
@@ -1026,7 +1026,7 @@ fun serverMain(dbName: String, port: Int) {
                 val ret = TalerWithdrawalStatus(
                     selection_done = wo.selectionDone,
                     transfer_done = wo.transferDone,
-                    amount = "${currencyEnv}:1",
+                    amount = "${currencyEnv}:5",
                     suggested_exchange = "https://exchange.${envName}.taler.net/"
                 )
                 call.respond(ret)

@@ -61,4 +61,15 @@ enum class LibeufinErrorCode(val code: Int) {
      * (A value of 0 indicates that the error is generated client-side).
      */
     LIBEUFIN_EC_GENERIC_PARAMETER_MALFORMED(5),
+
+    /**
+     * Two different resources are NOT having the same currency.
+     */
+    LIBEUFIN_EC_CURRENCY_INCONSISTENT(6),
+
+    /**
+     * A request is using a unsupported currency.  Usually returned
+     * along 400 Bad Request
+     */
+    LIBEUFIN_EC_BAD_CURRENCY(7)
 }
