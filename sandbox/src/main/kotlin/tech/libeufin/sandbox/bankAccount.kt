@@ -1,14 +1,14 @@
 package tech.libeufin.sandbox
 
 import io.ktor.http.*
-import org.apache.http.HttpStatus
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
+import org.jetbrains.exposed.sql.transactions.experimental.suspendedTransactionAsync
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import java.math.BigDecimal
-import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
@@ -117,12 +117,16 @@ fun historyForAccount(bankAccount: BankAccountEntity): MutableList<RawPayment> {
     return history
 }
 
+/**
+ * https://github.com/JetBrains/Exposed/wiki/Transactions#working-with-coroutines
+ * https://medium.com/androiddevelopers/threading-models-in-coroutines-and-android-sqlite-api-6cab11f7eb90
+ */
 fun wireTransfer(
     debitAccount: String, creditAccount: String,
     amount: String, subjectArg: String
 ) {
-    // check accounts exist
     transaction {
+        // check accounts exist
         val credit = BankAccountEntity.find {
             BankAccountsTable.label eq creditAccount
         }.firstOrNull() ?: run {

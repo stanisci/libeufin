@@ -422,6 +422,8 @@ object TalerWithdrawalsTable : LongIdTable() {
      * the payment arrived at the exchange's bank yet.
      */
     val transferDone = bool("transferDone").default(false)
+    val reservePub = text("reservePub").nullable()
+    val selectedExchangePayto = text("selectedExchangePayto").nullable()
 
 }
 class TalerWithdrawalEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -429,6 +431,8 @@ class TalerWithdrawalEntity(id: EntityID<Long>) : LongEntity(id) {
     var wopid by TalerWithdrawalsTable.wopid
     var selectionDone by TalerWithdrawalsTable.selectionDone
     var transferDone by TalerWithdrawalsTable.transferDone
+    var reservePub by TalerWithdrawalsTable.reservePub
+    var selectedExchangePayto by TalerWithdrawalsTable.selectedExchangePayto
 }
 
 object BankAccountReportsTable : IntIdTable() {
