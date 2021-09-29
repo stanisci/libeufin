@@ -34,7 +34,6 @@ import io.ktor.routing.get
 import io.ktor.routing.post
 import io.ktor.routing.routing
 import io.ktor.server.engine.embeddedServer
-import io.ktor.server.netty.Netty
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import io.ktor.jackson.jackson
@@ -69,6 +68,7 @@ import io.ktor.auth.*
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.request.*
+import io.ktor.server.netty.*
 import io.ktor.util.date.*
 import kotlinx.coroutines.newSingleThreadContext
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
@@ -473,100 +473,6 @@ fun serverMain(dbName: String, port: Int) {
             }
         }
         routing {
-            /*
-
-              FIXME: commenting out until a solution for i18n is found.
-
-            get("/bank") {
-                val ret = renderTemplate(
-                    "login.html",
-                    mapOf("csrf_token" to "todo", )
-                )
-                call.respondText(ret)
-                return@get
-            } */
-
-            /*
-              FIXME: not implemented.
-
-            post("/register") {
-                // how to read form-POSTed values?
-                val username = "fixme"
-                val password = "fixme"
-                val superuser = false
-
-                transaction {
-                    // check if username is taken.
-                    val maybeUser = SandboxUserEntity.find {
-                        SandboxUsersTable.username eq username
-                    }.firstOrNull()
-                    // Will be converted to a HTML response.
-                    if (maybeUser != null) throw SandboxError(
-                        HttpStatusCode.Conflict, "Username not available"
-                    )
-
-                    // username is valid.  Register the user + new bank account.
-                    SandboxUserEntity.new {
-                        this.username = username
-                        passwordHash = CryptoUtil.hashpw(password)
-                        this.superuser = superuser
-                        bankAccount = BankAccountEntity.new {
-                            iban = "fixme"
-                            bic = "fixme"
-                            name = "fixme"
-                            label = "fixme"
-                            currency = "fixme"
-                        }
-                    }
-                }
-
-                call.respondText("User $username created")
-                return@post
-            }
-
-             */
-
-            /*
-            FIXME: will likely be replaced by the Single Page Application
-
-            get("/jinja-test") {
-                val template = Resources.toString(
-                    Resources.getResource("templates/hello.html"),
-                    Charsets.UTF_8
-                )
-                val context = mapOf("token" to "dynamic")
-                val page = Jinjava().render(template, context)
-                call.respond(page)
-                return@get
-            }
-
-             */
-
-            /*
-
-            FIXME: not used
-
-            authenticate("auth-form") {
-                get("/profile") {
-                    val userSession = call.principal<UserIdPrincipal>()
-                    println("Welcoming ${userSession?.name}")
-                    call.respond(object {})
-                    return@get
-                }
-            }
-
-             */
-
-            /*
-            FIXME: not used
-
-            static("/static") {
-                /**
-                 * Here Sandbox will serve the CSS files.
-                 */
-                resources("static")
-            }
-             */
 
             get("/") {
                 call.respondText("Hello, this is Sandbox\n", ContentType.Text.Plain)
