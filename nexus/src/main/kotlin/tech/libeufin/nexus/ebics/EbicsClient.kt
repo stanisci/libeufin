@@ -23,6 +23,7 @@
 package tech.libeufin.nexus.ebics
 
 import io.ktor.client.HttpClient
+import io.ktor.client.features.*
 import io.ktor.client.request.post
 import io.ktor.http.HttpStatusCode
 import org.slf4j.Logger
@@ -36,18 +37,29 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
 private suspend inline fun HttpClient.postToBank(url: String, body: String): String {
     logger.debug("Posting: $body")
     if (!XMLUtil.validateFromString(body)) throw NexusError(
-        HttpStatusCode.InternalServerError, "EBICS (outgoing) document is invalid"
+        HttpStatusCode.InternalServerError,
+        "EBICS (outgoing) document is invalid"
     )
     val response: String = try {
-        this.post<String>(
+        this.post(
             urlString = url,
             block = {
                 this.body = body
             }
         )
-    } catch (e: Exception) {
-        logger.warn("Exception during request", e)
-        throw NexusError(HttpStatusCode.InternalServerError, "Cannot reach the bank")
+    } catch (e: ClientRequestException) {
+        logger.error(e.message)
+        throw NexusError(
+            HttpStatusCode.BadGateway,
+            e.message
+        )
+    }
+    catch (e: Exception) {
+        logger.error("Exception during request", e)
+        throw NexusError(
+            HttpStatusCode.BadGateway,
+            e.message ?: "Could not reach the bank"
+        )
     }
     logger.debug("Receiving: $response")
     return response
@@ -238,8 +250,7 @@ suspend fun doEbicsUploadTransaction(
 suspend fun doEbicsHostVersionQuery(client: HttpClient, ebicsBaseUrl: String, ebicsHostId: String): EbicsHevDetails {
     val ebicsHevRequest = makeEbicsHEVRequestRaw(ebicsHostId)
     val resp = client.postToBank(ebicsBaseUrl, ebicsHevRequest)
-    val versionDetails = parseEbicsHEVResponse(resp)
-    return versionDetails
+    return parseEbicsHEVResponse(resp)
 }
 
 suspend fun doEbicsIniRequest(
@@ -251,8 +262,7 @@ suspend fun doEbicsIniRequest(
         subscriberDetails.ebicsUrl,
         request
     )
-    val resp = parseAndDecryptEbicsKeyManagementResponse(subscriberDetails, respStr)
-    return resp
+    return parseAndDecryptEbicsKeyManagementResponse(subscriberDetails, respStr)
 }
 
 suspend fun doEbicsHiaRequest(
@@ -264,8 +274,7 @@ suspend fun doEbicsHiaRequest(
         subscriberDetails.ebicsUrl,
         request
     )
-    val resp = parseAndDecryptEbicsKeyManagementResponse(subscriberDetails, respStr)
-    return resp
+    return parseAndDecryptEbicsKeyManagementResponse(subscriberDetails, respStr)
 }
 
 

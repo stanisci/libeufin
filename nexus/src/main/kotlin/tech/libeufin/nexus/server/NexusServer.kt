@@ -149,9 +149,7 @@ fun requireBankConnection(call: ApplicationCall, parameterKey: String): NexusBan
     return requireBankConnectionInternal(name)
 }
 
-val client = HttpClient {
-    expectSuccess = false // this way, it does not throw exceptions on != 200 responses.
-}
+val client = HttpClient { followRedirects = true }
 
 fun serverMain(host: String, port: Int) {
     val server = embeddedServer(Netty, port = port, host = host) {
