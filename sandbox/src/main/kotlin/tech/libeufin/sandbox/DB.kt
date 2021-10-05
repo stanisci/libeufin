@@ -87,6 +87,7 @@ enum class KeyState {
     RELEASED
 }
 
+// FIXME:  This should be DemobankConfigTable!
 object SandboxConfigsTable : LongIdTable() {
     val currency = text("currency")
     val allowRegistrations = bool("allowRegistrations")
@@ -109,6 +110,11 @@ class SandboxConfigEntity(id: EntityID<Long>) : LongEntity(id) {
  * as those get only paired with Ebics subscribers!  Eventually, a
  * Ebics subscriber should map to a SandboxUserEntity that in turn
  * will own bank accounts.
+ *
+ * FIXME:  Do we really need normal users and superusers for the sandbox?
+ * => Nope, we don't even want user management for the sandbox!
+ * => This table must be killed, instead we just read the admin token via env variable
+ *    and use a fixed "admin" user name.
  */
 object SandboxUsersTable : LongIdTable() {
     val username = text("username")
@@ -127,6 +133,19 @@ class SandboxUserEntity(id: EntityID<Long>) : LongEntity(id) {
     var passwordHash by SandboxUsersTable.passwordHash
     var superuser by SandboxUsersTable.superuser
     var bankAccount by BankAccountEntity optionalReferencedOn SandboxUsersTable.bankAccount
+}
+
+
+/**
+ * Users who are allowed to log into the demo bank.
+ * Created via the /demobanks/{demobankname}/register endpoint.
+ */
+object DemobankUsersTable : LongIdTable() {
+    // FIXME: ...
+    // var isPublic = ...
+    // var demobankConfig (=> which demobank is this user part of)
+    // ...
+    // FIXME: Must have a mandatory foreign key reference into BankAccountTransactionsTable
 }
 
 
@@ -284,6 +303,7 @@ object EbicsUploadTransactionChunksTable : IdTable<String>() {
     val chunkContent = blob("chunkContent")
 }
 
+// FIXME: Is upload chunking not implemented somewhere?!
 class EbicsUploadTransactionChunkEntity(id: EntityID<String>) : Entity<String>(id) {
     companion object : EntityClass<String, EbicsUploadTransactionChunkEntity>(EbicsUploadTransactionChunksTable)
 

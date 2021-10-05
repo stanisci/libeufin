@@ -17,11 +17,27 @@
  * <http://www.gnu.org/licenses/>
  */
 
+
+/*
+General thoughts:
+
+ - since sandbox will run on the public internet for the demobank, all endpoints except
+   explicitly public ones should use authentication (basic auth)
+ - the authentication should be *very* simple and *not* be part of the database state.
+   instead, a LIBEUFIN_SANDBOX_ADMIN_TOKEN environment variable will be used to
+   set the authentication.
+
+ - All sandbox will require the ADMIN_TOKEN, except:
+   - the /ebicsweb endpoint, because EBICS handles authentication here
+     (EBICS subscribers are checked)
+   - the /demobank(/...) endpoints (except registration and public accounts),
+     because authentication is handled by checking the demobank user credentials
+ */
+
 package tech.libeufin.sandbox
 
 import UtilError
 import com.fasterxml.jackson.core.JsonParseException
-import com.fasterxml.jackson.core.JsonParser
 import io.ktor.application.ApplicationCallPipeline
 import io.ktor.application.call
 import io.ktor.application.install
@@ -30,9 +46,6 @@ import io.ktor.features.ContentNegotiation
 import io.ktor.features.StatusPages
 import io.ktor.response.respond
 import io.ktor.response.respondText
-import io.ktor.routing.get
-import io.ktor.routing.post
-import io.ktor.routing.routing
 import io.ktor.server.engine.embeddedServer
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -66,8 +79,8 @@ import execThrowableOrTerminate
 import io.ktor.application.ApplicationCall
 import io.ktor.auth.*
 import io.ktor.http.*
-import io.ktor.http.content.*
 import io.ktor.request.*
+import io.ktor.routing.*
 import io.ktor.server.netty.*
 import io.ktor.util.date.*
 import kotlinx.coroutines.newSingleThreadContext
@@ -90,7 +103,8 @@ const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 data class SandboxError(
     val statusCode: HttpStatusCode,
     val reason: String,
-    val errorCode: LibeufinErrorCode? = null) : Exception()
+    val errorCode: LibeufinErrorCode? = null
+) : Exception()
 
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
@@ -181,7 +195,7 @@ class Camt053Tick : CliktCommand(
         Database.connect(dbConnString)
         dbCreateTables(dbConnString)
         transaction {
-            BankAccountEntity.all().forEach { accountIter->
+            BankAccountEntity.all().forEach { accountIter ->
                 /**
                  * Map of 'account name' -> fresh history
                  */
@@ -222,12 +236,14 @@ class Camt053Tick : CliktCommand(
         }
     }
 }
+
 class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank accounts") {
     init {
         context {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
+
     private val creditAccount by option(help = "Label of the bank account receiving the payment").required()
     private val debitAccount by option(help = "Label of the bank account issuing the payment").required()
     private val amount by argument(help = "Amount, in the \$currency:x.y format")
@@ -350,7 +366,8 @@ fun main(args: Array<String>) {
         ResetTables(),
         Config(),
         MakeTransaction(),
-        Camt053Tick()).main(args)
+        Camt053Tick()
+    ).main(args)
 }
 
 suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
@@ -493,7 +510,7 @@ fun serverMain(dbName: String, port: Int) {
                 requireSuperuser(call.request)
                 val body = call.receiveJson<CamtParams>()
                 val bankaccount = getAccountFromLabel(body.bankaccount)
-                if(body.type != 53) throw SandboxError(
+                if (body.type != 53) throw SandboxError(
                     HttpStatusCode.NotFound,
                     "Only Camt.053 documents can be generated."
                 )
@@ -589,7 +606,7 @@ fun serverMain(dbName: String, port: Int) {
                 }
                 call.respond(object {})
             }
-            
+
             /**
              * Associates a new bank account with an existing Ebics subscriber.
              */
@@ -606,7 +623,7 @@ fun serverMain(dbName: String, port: Int) {
                         body.subscriber.hostID
                     )
                     val check = BankAccountEntity.find {
-                        BankAccountsTable.iban eq body.iban or(BankAccountsTable.label eq body.label)
+                        BankAccountsTable.iban eq body.iban or (BankAccountsTable.label eq body.label)
                     }.count()
                     if (check > 0) throw SandboxError(
                         HttpStatusCode.BadRequest,
@@ -845,7 +862,7 @@ fun serverMain(dbName: String, port: Int) {
                  */
                 catch (e: SandboxError) {
                     // Should translate to EBICS error code.
-                    when(e.errorCode) {
+                    when (e.errorCode) {
                         LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
                         LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE -> throw EbicsProcessingError("Inconsistent bank state.")
                         else -> throw EbicsProcessingError("Unknown LibEuFin error code: ${e.errorCode}.")
@@ -909,6 +926,7 @@ fun serverMain(dbName: String, port: Int) {
                 )
                 call.respond(object {
                     val name = "taler-bank-integration"
+
                     // FIXME: use actual version here!
                     val version = "0:0:0"
                     val currency = currencyEnv
@@ -997,6 +1015,69 @@ fun serverMain(dbName: String, port: Int) {
                     val transfer_done = true
                 })
                 return@post
+            }
+
+            // Create a new demobank instance with a particular currency,
+            // debt limit and possibly other configuration
+            // (could also be a CLI command for now)
+            post("/demobanks") {
+
+            }
+
+            // List configured demobanks
+            get("/demobanks") {
+
+            }
+
+            delete("/demobank/{demobankid") {
+
+            }
+
+            get("/demobank/{demobankid") {
+
+            }
+
+            route("/demobank/{demobankid}") {
+                // Note: Unlike the old pybank, the sandbox does *not* actually expose the
+                // taler wire gateway API, because the exchange uses the nexus.
+
+                // Endpoint(s) for making arbitrary payments in the sandbox for integration tests
+                // FIXME: Do we actually need this, or can we just use the sandbox admin APIs?
+                route("/testing-api") {
+
+                }
+
+                route("/access-api") {
+                    get("/accounts/{account_name}") {
+                        // Authenticated.  Accesses basic information (balance)
+                        // about an account. (see docs)
+
+                        // FIXME: Since we now use IBANs everywhere, maybe the account should also be assigned an IBAN
+                    }
+
+                    get("/accounts/{account_name}/history") {
+                        // New endpoint, access account history to display in the SPA
+                        // (could be merged with GET /accounts/{account_name}
+                    }
+
+                    // [...]
+
+                    get("/public-accounts") {
+                        // List public accounts.  Does not require any authentication.
+                        // XXX: New!
+                    }
+
+                    get("/public-accounts/{account_name}/history") {
+                        // Get transaction history of a public account
+                    }
+
+                    post("/testing/register") {
+                        // Register a new account.
+                        // No authentication is required to register a new user.
+                        // FIXME:  Should probably not use "testing" as the prefix, since it's used "in production" in the demobank SPA
+                    }
+                }
+
             }
         }
     }
