@@ -34,10 +34,13 @@ import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.options.versionOption
+import startServer
 import tech.libeufin.nexus.iso20022.parseCamtMessage
 import tech.libeufin.nexus.server.client
+import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.util.*
 import java.io.File
+import kotlin.system.exitProcess
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 val NEXUS_DB_ENV_VAR_NAME = "LIBEUFIN_NEXUS_DB_CONNECTION"
@@ -57,14 +60,24 @@ class Serve : CliktCommand("Run nexus HTTP server") {
     }
     private val host by option().default("127.0.0.1")
     private val port by option().int().default(5001)
+    private val withUnixSocket by option(
+        help = "Bind the Sandbox to the Unix domain socket at PATH.  Overrides" +
+                "--port, when both are given", metavar = "PATH"
+    )
     private val logLevel by option()
     override fun run() {
         setLogLevel(logLevel)
-        val dbConn = getDbConnFromEnv(NEXUS_DB_ENV_VAR_NAME)
         execThrowableOrTerminate {
-            dbCreateTables(dbConn)
+            dbCreateTables(getDbConnFromEnv(NEXUS_DB_ENV_VAR_NAME))
         }
         startOperationScheduler(client)
+        if (withUnixSocket != null) {
+            startServer(
+                withUnixSocket ?: throw Exception("Could not use the Unix domain socket path value!"),
+                app = nexusApp
+            )
+            exitProcess(0)
+        }
         serverMain(host, port)
     }
 }

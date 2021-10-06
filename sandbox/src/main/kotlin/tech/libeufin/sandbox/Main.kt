@@ -294,16 +294,15 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
     )
     override fun run() {
         setLogLevel(logLevel)
-        val dbName = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
+        execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)) }
         if (withUnixSocket != null) {
-            execThrowableOrTerminate { dbCreateTables(dbName) }
             startServer(
                 withUnixSocket ?: throw Exception("Could not use the Unix domain socket path value!"),
                 app = sandboxApp
             )
             exitProcess(0)
         }
-        serverMain(dbName, port)
+        serverMain(port)
     }
 }
 
@@ -1088,8 +1087,7 @@ val sandboxApp: Application.() -> Unit = {
         }
     }
 }
-fun serverMain(dbName: String, port: Int) {
-    execThrowableOrTerminate { dbCreateTables(dbName) }
+fun serverMain(port: Int) {
     val server = embeddedServer(Netty, port = port, module = sandboxApp)
     logger.info("LibEuFin Sandbox running on port $port")
     try {
