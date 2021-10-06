@@ -38,35 +38,21 @@ package tech.libeufin.sandbox
 
 import UtilError
 import com.fasterxml.jackson.core.JsonParseException
-import io.ktor.application.ApplicationCallPipeline
-import io.ktor.application.call
-import io.ktor.application.install
-import io.ktor.features.CallLogging
-import io.ktor.features.ContentNegotiation
-import io.ktor.features.StatusPages
-import io.ktor.response.respond
-import io.ktor.response.respondText
 import io.ktor.server.engine.embeddedServer
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
-import io.ktor.jackson.jackson
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.slf4j.event.Level
 import org.w3c.dom.Document
+import io.ktor.jackson.*
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.RawPayment
 import java.lang.ArithmeticException
 import java.math.BigDecimal
 import java.security.interfaces.RSAPublicKey
 import javax.xml.bind.JAXBContext
-import com.fasterxml.jackson.core.util.DefaultIndenter
-import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
-import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
-import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
-import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.context
@@ -77,21 +63,33 @@ import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import io.ktor.application.ApplicationCall
+import io.ktor.application.ApplicationCallPipeline
+import io.ktor.application.call
+import io.ktor.application.install
+import io.ktor.features.CallLogging
+import io.ktor.features.ContentNegotiation
+import org.jetbrains.exposed.sql.statements.api.ExposedBlob
+import com.fasterxml.jackson.core.util.DefaultIndenter
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
+import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.databind.SerializationFeature
+import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
+import io.ktor.features.StatusPages
+import io.ktor.response.respond
+import io.ktor.response.respondText
 import io.ktor.auth.*
 import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.routing.*
 import io.ktor.server.netty.*
 import io.ktor.util.date.*
+import io.ktor.application.*
 import kotlinx.coroutines.newSingleThreadContext
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
+import startServer
 import tech.libeufin.util.*
-import tech.libeufin.util.ebics_h004.EbicsResponse
-import tech.libeufin.util.ebics_h004.EbicsTypes
 import validatePlainAmount
 import java.net.BindException
 import java.util.*
-import kotlin.random.Random
 import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
@@ -290,9 +288,22 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
 
     private val logLevel by option()
     private val port by option().int().default(5000)
+    private val withUnixSocket by option(
+        help = "Bind the Sandbox to the Unix domain socket at PATH.  Overrides" +
+                "--port, when both are given", metavar = "PATH"
+    )
     override fun run() {
         setLogLevel(logLevel)
-        serverMain(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME), port)
+        val dbName = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
+        if (withUnixSocket != null) {
+            execThrowableOrTerminate { dbCreateTables(dbName) }
+            startServer(
+                withUnixSocket ?: throw Exception("Could not use the Unix domain socket path value!"),
+                app = sandboxApp
+            )
+            exitProcess(0)
+        }
+        serverMain(dbName, port)
     }
 }
 
@@ -384,703 +395,702 @@ suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
 }
 
 val singleThreadContext = newSingleThreadContext("DB")
-
-fun serverMain(dbName: String, port: Int) {
-    execThrowableOrTerminate { dbCreateTables(dbName) }
-    val myLogger = logger
-    val server = embeddedServer(Netty, port = port) {
-        install(CallLogging) {
-            this.level = Level.DEBUG
-            this.logger = myLogger
-        }
-        install(Authentication) {
-            // Web-based authentication for Bank customers.
-            form("auth-form") {
-                userParamName = "username"
-                passwordParamName = "password"
-                validate { credentials ->
-                    if (credentials.name == "test") {
-                        UserIdPrincipal(credentials.name)
-                    } else {
-                        null
-                    }
+val sandboxApp: Application.() -> Unit = {
+    install(io.ktor.features.CallLogging) {
+        this.level = org.slf4j.event.Level.DEBUG
+        this.logger = logger
+    }
+    install(Authentication) {
+        // Web-based authentication for Bank customers.
+        form("auth-form") {
+            userParamName = "username"
+            passwordParamName = "password"
+            validate { credentials ->
+                if (credentials.name == "test") {
+                    UserIdPrincipal(credentials.name)
+                } else {
+                    null
                 }
             }
         }
-        install(ContentNegotiation) {
-            jackson {
-                enable(SerializationFeature.INDENT_OUTPUT)
-                setDefaultPrettyPrinter(DefaultPrettyPrinter().apply {
-                    indentArraysWith(DefaultPrettyPrinter.FixedSpaceIndenter.instance)
-                    indentObjectsWith(DefaultIndenter("  ", "\n"))
-                })
-                registerModule(KotlinModule(nullisSameAsDefault = true))
-                //registerModule(JavaTimeModule())
-            }
+    }
+    install(io.ktor.features.ContentNegotiation) {
+        jackson {
+            enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT)
+            setDefaultPrettyPrinter(DefaultPrettyPrinter().apply {
+                indentArraysWith(com.fasterxml.jackson.core.util.DefaultPrettyPrinter.FixedSpaceIndenter.instance)
+                indentObjectsWith(DefaultIndenter("  ", "\n"))
+            })
+            registerModule(KotlinModule(nullisSameAsDefault = true))
+            //registerModule(JavaTimeModule())
         }
-        install(StatusPages) {
-            exception<ArithmeticException> { cause ->
-                logger.error("Exception while handling '${call.request.uri}'", cause)
-                call.respondText(
-                    "Invalid arithmetic attempted.",
-                    ContentType.Text.Plain,
-                    // here is always the bank's fault, as it should always check
-                    // the operands.
-                    HttpStatusCode.InternalServerError
-                )
-            }
-            exception<EbicsRequestError> { cause ->
-                val resp = EbicsResponse.createForUploadWithError(
-                    cause.errorText,
-                    cause.errorCode,
-                    // assuming that the phase is always transfer,
-                    // as errors during initialization should have
-                    // already been caught by the chunking logic.
-                    EbicsTypes.TransactionPhaseType.TRANSFER
-                )
+    }
+    install(StatusPages) {
+        exception<ArithmeticException> { cause ->
+            logger.error("Exception while handling '${call.request.uri}'", cause)
+            call.respondText(
+                "Invalid arithmetic attempted.",
+                io.ktor.http.ContentType.Text.Plain,
+                // here is always the bank's fault, as it should always check
+                // the operands.
+                io.ktor.http.HttpStatusCode.InternalServerError
+            )
+        }
+        exception<EbicsRequestError> { cause ->
+            val resp = tech.libeufin.util.ebics_h004.EbicsResponse.createForUploadWithError(
+                cause.errorText,
+                cause.errorCode,
+                // assuming that the phase is always transfer,
+                // as errors during initialization should have
+                // already been caught by the chunking logic.
+                tech.libeufin.util.ebics_h004.EbicsTypes.TransactionPhaseType.TRANSFER
+            )
 
-                val hostAuthPriv = transaction {
-                    val host = EbicsHostEntity.find {
-                        EbicsHostsTable.hostID.upperCase() eq call.attributes.get(EbicsHostIdAttribute).uppercase()
-                    }.firstOrNull() ?: throw SandboxError(
-                        HttpStatusCode.InternalServerError,
-                        "Requested Ebics host ID not found."
+            val hostAuthPriv = transaction {
+                val host = tech.libeufin.sandbox.EbicsHostEntity.find {
+                    tech.libeufin.sandbox.EbicsHostsTable.hostID.upperCase() eq call.attributes.get(tech.libeufin.sandbox.EbicsHostIdAttribute).uppercase()
+                }.firstOrNull() ?: throw SandboxError(
+                    io.ktor.http.HttpStatusCode.InternalServerError,
+                    "Requested Ebics host ID not found."
+                )
+                tech.libeufin.util.CryptoUtil.loadRsaPrivateKey(host.authenticationPrivateKey.bytes)
+            }
+            call.respondText(
+                tech.libeufin.util.XMLUtil.signEbicsResponse(resp, hostAuthPriv),
+                io.ktor.http.ContentType.Application.Xml,
+                io.ktor.http.HttpStatusCode.OK
+            )
+        }
+        exception<SandboxError> { cause ->
+            logger.error("Exception while handling '${call.request.uri}', ${cause.reason}")
+            call.respond(
+                cause.statusCode,
+                SandboxErrorJson(
+                    error = SandboxErrorDetailJson(
+                        type = "sandbox-error",
+                        description = cause.reason
                     )
-                    CryptoUtil.loadRsaPrivateKey(host.authenticationPrivateKey.bytes)
-                }
-                call.respondText(
-                    XMLUtil.signEbicsResponse(resp, hostAuthPriv),
-                    ContentType.Application.Xml,
-                    HttpStatusCode.OK
+                )
+            )
+        }
+        exception<UtilError> { cause ->
+            logger.error("Exception while handling '${call.request.uri}'", cause)
+            call.respond(
+                cause.statusCode,
+                SandboxErrorJson(
+                    error = SandboxErrorDetailJson(
+                        type = "util-error",
+                        description = cause.reason
+                    )
+                )
+            )
+        }
+        exception<Throwable> { cause ->
+            logger.error("Exception while handling '${call.request.uri}'", cause)
+            call.respondText("Internal server error.", io.ktor.http.ContentType.Text.Plain, io.ktor.http.HttpStatusCode.InternalServerError)
+        }
+    }
+    intercept(io.ktor.application.ApplicationCallPipeline.Fallback) {
+        if (this.call.response.status() == null) {
+            call.respondText("Not found (no route matched).\n", io.ktor.http.ContentType.Text.Plain, io.ktor.http.HttpStatusCode.NotFound)
+            return@intercept finish()
+        }
+    }
+    routing {
+
+        get("/") {
+            call.respondText("Hello, this is Sandbox\n", io.ktor.http.ContentType.Text.Plain)
+        }
+        get("/config") {
+            call.respond(object {
+                val name = "libeufin-sandbox"
+
+                // FIXME: use actual version here!
+                val version = "0.0.0-dev.0"
+            })
+        }
+        /**
+         * For now, only returns the last statement of the
+         * requesting account.
+         */
+        post("/admin/payments/camt") {
+            requireSuperuser(call.request)
+            val body = call.receiveJson<CamtParams>()
+            val bankaccount = getAccountFromLabel(body.bankaccount)
+            if (body.type != 53) throw SandboxError(
+                io.ktor.http.HttpStatusCode.NotFound,
+                "Only Camt.053 documents can be generated."
+            )
+            val camtMessage = transaction {
+                tech.libeufin.sandbox.BankAccountStatementEntity.find {
+                    tech.libeufin.sandbox.BankAccountStatementsTable.bankAccount eq bankaccount.id
+                }.lastOrNull()?.xmlMessage ?: throw SandboxError(
+                    io.ktor.http.HttpStatusCode.NotFound,
+                    "Could not find any statements; please wait next tick"
                 )
             }
-            exception<SandboxError> { cause ->
-                logger.error("Exception while handling '${call.request.uri}', ${cause.reason}")
-                call.respond(
-                    cause.statusCode,
-                    SandboxErrorJson(
-                        error = SandboxErrorDetailJson(
-                            type = "sandbox-error",
-                            description = cause.reason
+            call.respondText(
+                camtMessage, io.ktor.http.ContentType.Text.Xml, io.ktor.http.HttpStatusCode.OK
+            )
+            return@post
+        }
+
+        post("/admin/bank-accounts/{label}") {
+            requireSuperuser(call.request)
+            val body = call.receiveJson<BankAccountInfo>()
+            transaction {
+                tech.libeufin.sandbox.BankAccountEntity.new {
+                    iban = body.iban
+                    bic = body.bic
+                    name = body.name
+                    label = body.label
+                    currency = body.currency ?: "EUR"
+                }
+            }
+            call.respond(object {})
+            return@post
+        }
+
+        get("/admin/bank-accounts/{label}") {
+            requireSuperuser(call.request)
+            val label = ensureNonNull(call.parameters["label"])
+            val ret = transaction {
+                val bankAccount = tech.libeufin.sandbox.BankAccountEntity.find {
+                    tech.libeufin.sandbox.BankAccountsTable.label eq label
+                }.firstOrNull() ?: throw SandboxError(
+                    io.ktor.http.HttpStatusCode.NotFound,
+                    "Account '$label' not found"
+                )
+                val balance = balanceForAccount(bankAccount)
+                object {
+                    val balance = "${bankAccount.currency}:${balance}"
+                    val iban = bankAccount.iban
+                    val bic = bankAccount.bic
+                    val name = bankAccount.name
+                    val label = bankAccount.label
+                }
+            }
+            call.respond(ret)
+            return@get
+        }
+
+        post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
+            requireSuperuser(call.request)
+            val body = call.receiveJson<IncomingPaymentInfo>()
+            // FIXME: generate nicer UUID!
+            val accountLabel = ensureNonNull(call.parameters["label"])
+            if (!validatePlainAmount(body.amount)) {
+                throw SandboxError(
+                    io.ktor.http.HttpStatusCode.BadRequest,
+                    "invalid amount (should be plain amount without currency)"
+                )
+            }
+            val reqDebtorBic = body.debtorBic
+            if (reqDebtorBic != null && !validateBic(reqDebtorBic)) {
+                throw SandboxError(
+                    io.ktor.http.HttpStatusCode.BadRequest,
+                    "invalid BIC"
+                )
+            }
+            transaction {
+                val account = getBankAccountFromLabel(accountLabel)
+                val randId = getRandomString(16)
+                tech.libeufin.sandbox.BankAccountTransactionEntity.new {
+                    creditorIban = account.iban
+                    creditorBic = account.bic
+                    creditorName = account.name
+                    debtorIban = body.debtorIban
+                    debtorBic = reqDebtorBic
+                    debtorName = body.debtorName
+                    subject = body.subject
+                    amount = body.amount
+                    currency = account.currency
+                    date = getUTCnow().toInstant().toEpochMilli()
+                    accountServicerReference = "sandbox-$randId"
+                    this.account = account
+                    direction = "CRDT"
+                }
+            }
+            call.respond(object {})
+        }
+
+        /**
+         * Associates a new bank account with an existing Ebics subscriber.
+         */
+        post("/admin/ebics/bank-accounts") {
+            requireSuperuser(call.request)
+            val body = call.receiveJson<BankAccountRequest>()
+            if (!validateBic(body.bic)) {
+                throw SandboxError(io.ktor.http.HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
+            }
+            transaction {
+                val subscriber = getEbicsSubscriberFromDetails(
+                    body.subscriber.userID,
+                    body.subscriber.partnerID,
+                    body.subscriber.hostID
+                )
+                val check = tech.libeufin.sandbox.BankAccountEntity.find {
+                    tech.libeufin.sandbox.BankAccountsTable.iban eq body.iban or (tech.libeufin.sandbox.BankAccountsTable.label eq body.label)
+                }.count()
+                if (check > 0) throw SandboxError(
+                    io.ktor.http.HttpStatusCode.BadRequest,
+                    "Either IBAN or account label were already taken; please choose fresh ones"
+                )
+                subscriber.bankAccount = tech.libeufin.sandbox.BankAccountEntity.new {
+                    iban = body.iban
+                    bic = body.bic
+                    name = body.name
+                    label = body.label
+                    currency = body.currency.uppercase(java.util.Locale.ROOT)
+                }
+            }
+            call.respondText("Bank account created")
+            return@post
+        }
+        get("/admin/bank-accounts") {
+            requireSuperuser(call.request)
+            val accounts = mutableListOf<BankAccountInfo>()
+            transaction {
+                tech.libeufin.sandbox.BankAccountEntity.all().forEach {
+                    accounts.add(
+                        BankAccountInfo(
+                            label = it.label,
+                            name = it.name,
+                            bic = it.bic,
+                            iban = it.iban,
+                            currency = it.currency
                         )
                     )
-                )
+                }
             }
-            exception<UtilError> { cause ->
-                logger.error("Exception while handling '${call.request.uri}'", cause)
-                call.respond(
-                    cause.statusCode,
-                    SandboxErrorJson(
-                        error = SandboxErrorDetailJson(
-                            type = "util-error",
-                            description = cause.reason
-                        )
-                    )
-                )
-            }
-            exception<Throwable> { cause ->
-                logger.error("Exception while handling '${call.request.uri}'", cause)
-                call.respondText("Internal server error.", ContentType.Text.Plain, HttpStatusCode.InternalServerError)
-            }
+            call.respond(accounts)
         }
-        intercept(ApplicationCallPipeline.Fallback) {
-            if (this.call.response.status() == null) {
-                call.respondText("Not found (no route matched).\n", ContentType.Text.Plain, HttpStatusCode.NotFound)
-                return@intercept finish()
-            }
-        }
-        routing {
-
-            get("/") {
-                call.respondText("Hello, this is Sandbox\n", ContentType.Text.Plain)
-            }
-            get("/config") {
-                call.respond(object {
-                    val name = "libeufin-sandbox"
-
-                    // FIXME: use actual version here!
-                    val version = "0.0.0-dev.0"
-                })
-            }
-            /**
-             * For now, only returns the last statement of the
-             * requesting account.
-             */
-            post("/admin/payments/camt") {
-                requireSuperuser(call.request)
-                val body = call.receiveJson<CamtParams>()
-                val bankaccount = getAccountFromLabel(body.bankaccount)
-                if (body.type != 53) throw SandboxError(
-                    HttpStatusCode.NotFound,
-                    "Only Camt.053 documents can be generated."
-                )
-                val camtMessage = transaction {
-                    BankAccountStatementEntity.find {
-                        BankAccountStatementsTable.bankAccount eq bankaccount.id
-                    }.lastOrNull()?.xmlMessage ?: throw SandboxError(
-                        HttpStatusCode.NotFound,
-                        "Could not find any statements; please wait next tick"
-                    )
-                }
-                call.respondText(
-                    camtMessage, ContentType.Text.Xml, HttpStatusCode.OK
-                )
-                return@post
-            }
-
-            post("/admin/bank-accounts/{label}") {
-                requireSuperuser(call.request)
-                val body = call.receiveJson<BankAccountInfo>()
-                transaction {
-                    BankAccountEntity.new {
-                        iban = body.iban
-                        bic = body.bic
-                        name = body.name
-                        label = body.label
-                        currency = body.currency ?: "EUR"
-                    }
-                }
-                call.respond(object {})
-                return@post
-            }
-
-            get("/admin/bank-accounts/{label}") {
-                requireSuperuser(call.request)
-                val label = ensureNonNull(call.parameters["label"])
-                val ret = transaction {
-                    val bankAccount = BankAccountEntity.find {
-                        BankAccountsTable.label eq label
-                    }.firstOrNull() ?: throw SandboxError(
-                        HttpStatusCode.NotFound,
-                        "Account '$label' not found"
-                    )
-                    val balance = balanceForAccount(bankAccount)
-                    object {
-                        val balance = "${bankAccount.currency}:${balance}"
-                        val iban = bankAccount.iban
-                        val bic = bankAccount.bic
-                        val name = bankAccount.name
-                        val label = bankAccount.label
-                    }
-                }
-                call.respond(ret)
-                return@get
-            }
-
-            post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
-                requireSuperuser(call.request)
-                val body = call.receiveJson<IncomingPaymentInfo>()
-                // FIXME: generate nicer UUID!
+        get("/admin/bank-accounts/{label}/transactions") {
+            requireSuperuser(call.request)
+            val ret = AccountTransactions()
+            transaction {
                 val accountLabel = ensureNonNull(call.parameters["label"])
-                if (!validatePlainAmount(body.amount)) {
-                    throw SandboxError(
-                        HttpStatusCode.BadRequest,
-                        "invalid amount (should be plain amount without currency)"
-                    )
-                }
-                val reqDebtorBic = body.debtorBic
-                if (reqDebtorBic != null && !validateBic(reqDebtorBic)) {
-                    throw SandboxError(
-                        HttpStatusCode.BadRequest,
-                        "invalid BIC"
-                    )
-                }
                 transaction {
                     val account = getBankAccountFromLabel(accountLabel)
-                    val randId = getRandomString(16)
-                    BankAccountTransactionEntity.new {
+                    tech.libeufin.sandbox.BankAccountTransactionEntity.find {
+                        tech.libeufin.sandbox.BankAccountTransactionsTable.account eq account.id
+                    }.forEach {
+                        ret.payments.add(
+                            PaymentInfo(
+                                accountLabel = account.label,
+                                creditorIban = it.creditorIban,
+                                // FIXME: We need to modify the transactions table to have an actual
+                                // account servicer reference here.
+                                accountServicerReference = it.accountServicerReference,
+                                paymentInformationId = it.pmtInfId,
+                                debtorIban = it.debtorIban,
+                                subject = it.subject,
+                                date = GMTDate(it.date).toHttpDate(),
+                                amount = it.amount,
+                                creditorBic = it.creditorBic,
+                                creditorName = it.creditorName,
+                                debtorBic = it.debtorBic,
+                                debtorName = it.debtorName,
+                                currency = it.currency,
+                                creditDebitIndicator = when (it.direction) {
+                                    "CRDT" -> "credit"
+                                    "DBIT" -> "debit"
+                                    else -> throw Error("invalid direction")
+                                }
+                            )
+                        )
+                    }
+                }
+            }
+            call.respond(ret)
+        }
+        post("/admin/bank-accounts/{label}/generate-transactions") {
+            requireSuperuser(call.request)
+            transaction {
+                val accountLabel = ensureNonNull(call.parameters["label"])
+                val account = getBankAccountFromLabel(accountLabel)
+                val transactionReferenceCrdt = getRandomString(8)
+                val transactionReferenceDbit = getRandomString(8)
+
+                run {
+                    val amount = kotlin.random.Random.nextLong(5, 25)
+                    tech.libeufin.sandbox.BankAccountTransactionEntity.new {
                         creditorIban = account.iban
                         creditorBic = account.bic
                         creditorName = account.name
-                        debtorIban = body.debtorIban
-                        debtorBic = reqDebtorBic
-                        debtorName = body.debtorName
-                        subject = body.subject
-                        amount = body.amount
+                        debtorIban = "DE64500105178797276788"
+                        debtorBic = "DEUTDEBB101"
+                        debtorName = "Max Mustermann"
+                        subject = "sample transaction $transactionReferenceCrdt"
+                        this.amount = amount.toString()
                         currency = account.currency
                         date = getUTCnow().toInstant().toEpochMilli()
-                        accountServicerReference = "sandbox-$randId"
+                        accountServicerReference = transactionReferenceCrdt
                         this.account = account
                         direction = "CRDT"
                     }
                 }
-                call.respond(object {})
-            }
 
-            /**
-             * Associates a new bank account with an existing Ebics subscriber.
-             */
-            post("/admin/ebics/bank-accounts") {
-                requireSuperuser(call.request)
-                val body = call.receiveJson<BankAccountRequest>()
-                if (!validateBic(body.bic)) {
-                    throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
-                }
-                transaction {
-                    val subscriber = getEbicsSubscriberFromDetails(
-                        body.subscriber.userID,
-                        body.subscriber.partnerID,
-                        body.subscriber.hostID
-                    )
-                    val check = BankAccountEntity.find {
-                        BankAccountsTable.iban eq body.iban or (BankAccountsTable.label eq body.label)
-                    }.count()
-                    if (check > 0) throw SandboxError(
-                        HttpStatusCode.BadRequest,
-                        "Either IBAN or account label were already taken; please choose fresh ones"
-                    )
-                    subscriber.bankAccount = BankAccountEntity.new {
-                        iban = body.iban
-                        bic = body.bic
-                        name = body.name
-                        label = body.label
-                        currency = body.currency.uppercase(Locale.ROOT)
+                run {
+                    val amount = kotlin.random.Random.nextLong(5, 25)
+
+                    tech.libeufin.sandbox.BankAccountTransactionEntity.new {
+                        debtorIban = account.iban
+                        debtorBic = account.bic
+                        debtorName = account.name
+                        creditorIban = "DE64500105178797276788"
+                        creditorBic = "DEUTDEBB101"
+                        creditorName = "Max Mustermann"
+                        subject = "sample transaction $transactionReferenceDbit"
+                        this.amount = amount.toString()
+                        currency = account.currency
+                        date = getUTCnow().toInstant().toEpochMilli()
+                        accountServicerReference = transactionReferenceDbit
+                        this.account = account
+                        direction = "DBIT"
                     }
                 }
-                call.respondText("Bank account created")
-                return@post
             }
-            get("/admin/bank-accounts") {
-                requireSuperuser(call.request)
-                val accounts = mutableListOf<BankAccountInfo>()
-                transaction {
-                    BankAccountEntity.all().forEach {
-                        accounts.add(
-                            BankAccountInfo(
-                                label = it.label,
-                                name = it.name,
-                                bic = it.bic,
-                                iban = it.iban,
-                                currency = it.currency
-                            )
+            call.respond(object {})
+        }
+        /**
+         * Creates a new Ebics subscriber.
+         */
+        post("/admin/ebics/subscribers") {
+            requireSuperuser(call.request)
+            val body = call.receiveJson<EbicsSubscriberElement>()
+            transaction {
+                tech.libeufin.sandbox.EbicsSubscriberEntity.new {
+                    partnerId = body.partnerID
+                    userId = body.userID
+                    systemId = null
+                    hostId = body.hostID
+                    state = tech.libeufin.sandbox.SubscriberState.NEW
+                    nextOrderID = 1
+                }
+            }
+            call.respondText(
+                "Subscriber created.",
+                io.ktor.http.ContentType.Text.Plain, io.ktor.http.HttpStatusCode.OK
+            )
+            return@post
+        }
+        /**
+         * Shows all the Ebics subscribers' details.
+         */
+        get("/admin/ebics/subscribers") {
+            requireSuperuser(call.request)
+            val ret = AdminGetSubscribers()
+            transaction {
+                tech.libeufin.sandbox.EbicsSubscriberEntity.all().forEach {
+                    ret.subscribers.add(
+                        EbicsSubscriberElement(
+                            userID = it.userId,
+                            partnerID = it.partnerId,
+                            hostID = it.hostId
                         )
-                    }
-                }
-                call.respond(accounts)
-            }
-            get("/admin/bank-accounts/{label}/transactions") {
-                requireSuperuser(call.request)
-                val ret = AccountTransactions()
-                transaction {
-                    val accountLabel = ensureNonNull(call.parameters["label"])
-                    transaction {
-                        val account = getBankAccountFromLabel(accountLabel)
-                        BankAccountTransactionEntity.find {
-                            BankAccountTransactionsTable.account eq account.id
-                        }.forEach {
-                            ret.payments.add(
-                                PaymentInfo(
-                                    accountLabel = account.label,
-                                    creditorIban = it.creditorIban,
-                                    // FIXME: We need to modify the transactions table to have an actual
-                                    // account servicer reference here.
-                                    accountServicerReference = it.accountServicerReference,
-                                    paymentInformationId = it.pmtInfId,
-                                    debtorIban = it.debtorIban,
-                                    subject = it.subject,
-                                    date = GMTDate(it.date).toHttpDate(),
-                                    amount = it.amount,
-                                    creditorBic = it.creditorBic,
-                                    creditorName = it.creditorName,
-                                    debtorBic = it.debtorBic,
-                                    debtorName = it.debtorName,
-                                    currency = it.currency,
-                                    creditDebitIndicator = when (it.direction) {
-                                        "CRDT" -> "credit"
-                                        "DBIT" -> "debit"
-                                        else -> throw Error("invalid direction")
-                                    }
-                                )
-                            )
-                        }
-                    }
-                }
-                call.respond(ret)
-            }
-            post("/admin/bank-accounts/{label}/generate-transactions") {
-                requireSuperuser(call.request)
-                transaction {
-                    val accountLabel = ensureNonNull(call.parameters["label"])
-                    val account = getBankAccountFromLabel(accountLabel)
-                    val transactionReferenceCrdt = getRandomString(8)
-                    val transactionReferenceDbit = getRandomString(8)
-
-                    run {
-                        val amount = Random.nextLong(5, 25)
-                        BankAccountTransactionEntity.new {
-                            creditorIban = account.iban
-                            creditorBic = account.bic
-                            creditorName = account.name
-                            debtorIban = "DE64500105178797276788"
-                            debtorBic = "DEUTDEBB101"
-                            debtorName = "Max Mustermann"
-                            subject = "sample transaction $transactionReferenceCrdt"
-                            this.amount = amount.toString()
-                            currency = account.currency
-                            date = getUTCnow().toInstant().toEpochMilli()
-                            accountServicerReference = transactionReferenceCrdt
-                            this.account = account
-                            direction = "CRDT"
-                        }
-                    }
-
-                    run {
-                        val amount = Random.nextLong(5, 25)
-
-                        BankAccountTransactionEntity.new {
-                            debtorIban = account.iban
-                            debtorBic = account.bic
-                            debtorName = account.name
-                            creditorIban = "DE64500105178797276788"
-                            creditorBic = "DEUTDEBB101"
-                            creditorName = "Max Mustermann"
-                            subject = "sample transaction $transactionReferenceDbit"
-                            this.amount = amount.toString()
-                            currency = account.currency
-                            date = getUTCnow().toInstant().toEpochMilli()
-                            accountServicerReference = transactionReferenceDbit
-                            this.account = account
-                            direction = "DBIT"
-                        }
-                    }
-                }
-                call.respond(object {})
-            }
-            /**
-             * Creates a new Ebics subscriber.
-             */
-            post("/admin/ebics/subscribers") {
-                requireSuperuser(call.request)
-                val body = call.receiveJson<EbicsSubscriberElement>()
-                transaction {
-                    EbicsSubscriberEntity.new {
-                        partnerId = body.partnerID
-                        userId = body.userID
-                        systemId = null
-                        hostId = body.hostID
-                        state = SubscriberState.NEW
-                        nextOrderID = 1
-                    }
-                }
-                call.respondText(
-                    "Subscriber created.",
-                    ContentType.Text.Plain, HttpStatusCode.OK
-                )
-                return@post
-            }
-            /**
-             * Shows all the Ebics subscribers' details.
-             */
-            get("/admin/ebics/subscribers") {
-                requireSuperuser(call.request)
-                val ret = AdminGetSubscribers()
-                transaction {
-                    EbicsSubscriberEntity.all().forEach {
-                        ret.subscribers.add(
-                            EbicsSubscriberElement(
-                                userID = it.userId,
-                                partnerID = it.partnerId,
-                                hostID = it.hostId
-                            )
-                        )
-                    }
-                }
-                call.respond(ret)
-                return@get
-            }
-            post("/admin/ebics/hosts/{hostID}/rotate-keys") {
-                requireSuperuser(call.request)
-                val hostID: String = call.parameters["hostID"] ?: throw SandboxError(
-                    HttpStatusCode.BadRequest, "host ID missing in URL"
-                )
-                transaction {
-                    val host = EbicsHostEntity.find {
-                        EbicsHostsTable.hostID eq hostID
-                    }.firstOrNull() ?: throw SandboxError(
-                        HttpStatusCode.NotFound, "Host $hostID not found"
-                    )
-                    val pairA = CryptoUtil.generateRsaKeyPair(2048)
-                    val pairB = CryptoUtil.generateRsaKeyPair(2048)
-                    val pairC = CryptoUtil.generateRsaKeyPair(2048)
-                    host.authenticationPrivateKey = ExposedBlob(pairA.private.encoded)
-                    host.encryptionPrivateKey = ExposedBlob(pairB.private.encoded)
-                    host.signaturePrivateKey = ExposedBlob(pairC.private.encoded)
-                }
-                call.respondText(
-                    "Keys of '${hostID}' rotated.",
-                    ContentType.Text.Plain,
-                    HttpStatusCode.OK
-                )
-                return@post
-            }
-
-            /**
-             * Creates a new EBICS host.
-             */
-            post("/admin/ebics/hosts") {
-                requireSuperuser(call.request)
-                val req = call.receiveJson<EbicsHostCreateRequest>()
-                val pairA = CryptoUtil.generateRsaKeyPair(2048)
-                val pairB = CryptoUtil.generateRsaKeyPair(2048)
-                val pairC = CryptoUtil.generateRsaKeyPair(2048)
-                transaction {
-                    EbicsHostEntity.new {
-                        this.ebicsVersion = req.ebicsVersion
-                        this.hostId = req.hostID
-                        this.authenticationPrivateKey = ExposedBlob(pairA.private.encoded)
-                        this.encryptionPrivateKey = ExposedBlob(pairB.private.encoded)
-                        this.signaturePrivateKey = ExposedBlob(pairC.private.encoded)
-                    }
-                }
-                call.respondText(
-                    "Host '${req.hostID}' created.",
-                    ContentType.Text.Plain,
-                    HttpStatusCode.OK
-                )
-                return@post
-            }
-
-            /**
-             * Show the names of all the Ebics hosts
-             */
-            get("/admin/ebics/hosts") {
-                requireSuperuser(call.request)
-                val ebicsHosts = transaction {
-                    EbicsHostEntity.all().map { it.hostId }
-                }
-                call.respond(EbicsHostsResponse(ebicsHosts))
-            }
-            /**
-             * Serves all the Ebics requests.
-             */
-            post("/ebicsweb") {
-                try {
-                    call.ebicsweb()
-                }
-                /**
-                 * Those errors were all detected by the bank's logic.
-                 */
-                catch (e: SandboxError) {
-                    // Should translate to EBICS error code.
-                    when (e.errorCode) {
-                        LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
-                        LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE -> throw EbicsProcessingError("Inconsistent bank state.")
-                        else -> throw EbicsProcessingError("Unknown LibEuFin error code: ${e.errorCode}.")
-                    }
-
-                }
-                /**
-                 * An error occurred, but it wasn't explicitly thrown by the bank.
-                 */
-                catch (e: Exception) {
-                    throw EbicsProcessingError("Unmanaged error: $e")
-                }
-
-            }
-            /**
-             * Activates a withdraw operation of 1 currency unit with
-             * the default exchange, from a designated/constant customer.
-             */
-            get("/taler") {
-                requireSuperuser(call.request)
-                SandboxAssert(
-                    hostName != null,
-                    "Own hostname not found.  Logs should have warned"
-                )
-                SandboxAssert(
-                    currencyEnv != null,
-                    "Currency not found.  Logs should have warned"
-                )
-                // check that the three canonical accounts exist
-                val wo = transaction {
-                    val exchange = BankAccountEntity.find {
-                        BankAccountsTable.label eq "sandbox-account-exchange"
-                    }.firstOrNull()
-                    val customer = BankAccountEntity.find {
-                        BankAccountsTable.label eq "sandbox-account-customer"
-                    }.firstOrNull()
-                    val merchant = BankAccountEntity.find {
-                        BankAccountsTable.label eq "sandbox-account-merchant"
-                    }.firstOrNull()
-
-                    SandboxAssert(exchange != null, "exchange has no bank account")
-                    SandboxAssert(customer != null, "customer has no bank account")
-                    SandboxAssert(merchant != null, "merchant has no bank account")
-
-                    // At this point, the three actors exist and a new withdraw operation can be created.
-                    TalerWithdrawalEntity.new {
-                        // wopid is autogenerated, and momentarily the only column
-
-                    }
-                }
-                /**
-                 * Future versions will include the QR code in this response.
-                 */
-                call.respondText("taler://withdraw/${hostName}/api/${wo.wopid}")
-                return@get
-            }
-            get("/api/config") {
-                SandboxAssert(
-                    currencyEnv != null,
-                    "Currency not found.  Logs should have warned"
-                )
-                call.respond(object {
-                    val name = "taler-bank-integration"
-
-                    // FIXME: use actual version here!
-                    val version = "0:0:0"
-                    val currency = currencyEnv
-                })
-            }
-            /**
-             * not regulating the access here, as the wopid was only granted
-             * to logged-in users before (at the /taler endpoint) and has enough
-             * entropy to prevent guesses.
-             */
-            get("/api/withdrawal-operation/{wopid}") {
-                val wopid: String = ensureNonNull(call.parameters["wopid"])
-                val wo = transaction {
-
-                    TalerWithdrawalEntity.find {
-                        TalerWithdrawalsTable.wopid eq UUID.fromString(wopid)
-                    }.firstOrNull() ?: throw SandboxError(
-                        HttpStatusCode.NotFound,
-                        "Withdrawal operation: $wopid not found"
                     )
                 }
-                SandboxAssert(
-                    envName != null,
-                    "Env name not found, cannot suggest Exchange."
+            }
+            call.respond(ret)
+            return@get
+        }
+        post("/admin/ebics/hosts/{hostID}/rotate-keys") {
+            requireSuperuser(call.request)
+            val hostID: String = call.parameters["hostID"] ?: throw SandboxError(
+                io.ktor.http.HttpStatusCode.BadRequest, "host ID missing in URL"
+            )
+            transaction {
+                val host = tech.libeufin.sandbox.EbicsHostEntity.find {
+                    tech.libeufin.sandbox.EbicsHostsTable.hostID eq hostID
+                }.firstOrNull() ?: throw SandboxError(
+                    io.ktor.http.HttpStatusCode.NotFound, "Host $hostID not found"
                 )
-                val ret = TalerWithdrawalStatus(
-                    selection_done = wo.selectionDone,
-                    transfer_done = wo.transferDone,
-                    amount = "${currencyEnv}:5",
-                    suggested_exchange = "https://exchange.${envName}.taler.net/"
-                )
-                call.respond(ret)
-                return@get
+                val pairA = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
+                val pairB = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
+                val pairC = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
+                host.authenticationPrivateKey = ExposedBlob(pairA.private.encoded)
+                host.encryptionPrivateKey = ExposedBlob(pairB.private.encoded)
+                host.signaturePrivateKey = ExposedBlob(pairC.private.encoded)
+            }
+            call.respondText(
+                "Keys of '${hostID}' rotated.",
+                io.ktor.http.ContentType.Text.Plain,
+                io.ktor.http.HttpStatusCode.OK
+            )
+            return@post
+        }
+
+        /**
+         * Creates a new EBICS host.
+         */
+        post("/admin/ebics/hosts") {
+            requireSuperuser(call.request)
+            val req = call.receiveJson<EbicsHostCreateRequest>()
+            val pairA = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
+            val pairB = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
+            val pairC = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
+            transaction {
+                tech.libeufin.sandbox.EbicsHostEntity.new {
+                    this.ebicsVersion = req.ebicsVersion
+                    this.hostId = req.hostID
+                    this.authenticationPrivateKey = ExposedBlob(pairA.private.encoded)
+                    this.encryptionPrivateKey = ExposedBlob(pairB.private.encoded)
+                    this.signaturePrivateKey = ExposedBlob(pairC.private.encoded)
+                }
+            }
+            call.respondText(
+                "Host '${req.hostID}' created.",
+                io.ktor.http.ContentType.Text.Plain,
+                io.ktor.http.HttpStatusCode.OK
+            )
+            return@post
+        }
+
+        /**
+         * Show the names of all the Ebics hosts
+         */
+        get("/admin/ebics/hosts") {
+            requireSuperuser(call.request)
+            val ebicsHosts = transaction {
+                tech.libeufin.sandbox.EbicsHostEntity.all().map { it.hostId }
+            }
+            call.respond(EbicsHostsResponse(ebicsHosts))
+        }
+        /**
+         * Serves all the Ebics requests.
+         */
+        post("/ebicsweb") {
+            try {
+                call.ebicsweb()
             }
             /**
-             * Here Sandbox collects the reserve public key to be used
-             * as the wire transfer subject, and pays the exchange - which
-             * is as well collected in this request.
+             * Those errors were all detected by the bank's logic.
              */
-            post("/api/withdrawal-operation/{wopid}") {
+            catch (e: SandboxError) {
+                // Should translate to EBICS error code.
+                when (e.errorCode) {
+                    tech.libeufin.util.LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
+                    tech.libeufin.util.LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE -> throw EbicsProcessingError("Inconsistent bank state.")
+                    else -> throw EbicsProcessingError("Unknown LibEuFin error code: ${e.errorCode}.")
+                }
 
-                val wopid: String = ensureNonNull(call.parameters["wopid"])
-                val body = call.receiveJson<TalerWithdrawalConfirmation>()
+            }
+            /**
+             * An error occurred, but it wasn't explicitly thrown by the bank.
+             */
+            catch (e: Exception) {
+                throw EbicsProcessingError("Unmanaged error: $e")
+            }
 
-                newSuspendedTransaction(context = singleThreadContext) {
-                    var wo = TalerWithdrawalEntity.find {
-                        TalerWithdrawalsTable.wopid eq UUID.fromString(wopid)
-                    }.firstOrNull() ?: throw SandboxError(
-                        HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
+        }
+        /**
+         * Activates a withdraw operation of 1 currency unit with
+         * the default exchange, from a designated/constant customer.
+         */
+        get("/taler") {
+            requireSuperuser(call.request)
+            SandboxAssert(
+                hostName != null,
+                "Own hostname not found.  Logs should have warned"
+            )
+            SandboxAssert(
+                currencyEnv != null,
+                "Currency not found.  Logs should have warned"
+            )
+            // check that the three canonical accounts exist
+            val wo = transaction {
+                val exchange = tech.libeufin.sandbox.BankAccountEntity.find {
+                    tech.libeufin.sandbox.BankAccountsTable.label eq "sandbox-account-exchange"
+                }.firstOrNull()
+                val customer = tech.libeufin.sandbox.BankAccountEntity.find {
+                    tech.libeufin.sandbox.BankAccountsTable.label eq "sandbox-account-customer"
+                }.firstOrNull()
+                val merchant = tech.libeufin.sandbox.BankAccountEntity.find {
+                    tech.libeufin.sandbox.BankAccountsTable.label eq "sandbox-account-merchant"
+                }.firstOrNull()
+
+                SandboxAssert(exchange != null, "exchange has no bank account")
+                SandboxAssert(customer != null, "customer has no bank account")
+                SandboxAssert(merchant != null, "merchant has no bank account")
+
+                // At this point, the three actors exist and a new withdraw operation can be created.
+                tech.libeufin.sandbox.TalerWithdrawalEntity.new {
+                    // wopid is autogenerated, and momentarily the only column
+
+                }
+            }
+            /**
+             * Future versions will include the QR code in this response.
+             */
+            call.respondText("taler://withdraw/${hostName}/api/${wo.wopid}")
+            return@get
+        }
+        get("/api/config") {
+            SandboxAssert(
+                currencyEnv != null,
+                "Currency not found.  Logs should have warned"
+            )
+            call.respond(object {
+                val name = "taler-bank-integration"
+
+                // FIXME: use actual version here!
+                val version = "0:0:0"
+                val currency = currencyEnv
+            })
+        }
+        /**
+         * not regulating the access here, as the wopid was only granted
+         * to logged-in users before (at the /taler endpoint) and has enough
+         * entropy to prevent guesses.
+         */
+        get("/api/withdrawal-operation/{wopid}") {
+            val wopid: String = ensureNonNull(call.parameters["wopid"])
+            val wo = transaction {
+
+                tech.libeufin.sandbox.TalerWithdrawalEntity.find {
+                    tech.libeufin.sandbox.TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
+                }.firstOrNull() ?: throw SandboxError(
+                    io.ktor.http.HttpStatusCode.NotFound,
+                    "Withdrawal operation: $wopid not found"
+                )
+            }
+            SandboxAssert(
+                envName != null,
+                "Env name not found, cannot suggest Exchange."
+            )
+            val ret = TalerWithdrawalStatus(
+                selection_done = wo.selectionDone,
+                transfer_done = wo.transferDone,
+                amount = "${currencyEnv}:5",
+                suggested_exchange = "https://exchange.${envName}.taler.net/"
+            )
+            call.respond(ret)
+            return@get
+        }
+        /**
+         * Here Sandbox collects the reserve public key to be used
+         * as the wire transfer subject, and pays the exchange - which
+         * is as well collected in this request.
+         */
+        post("/api/withdrawal-operation/{wopid}") {
+
+            val wopid: String = ensureNonNull(call.parameters["wopid"])
+            val body = call.receiveJson<TalerWithdrawalConfirmation>()
+
+            newSuspendedTransaction(context = singleThreadContext) {
+                var wo = tech.libeufin.sandbox.TalerWithdrawalEntity.find {
+                    tech.libeufin.sandbox.TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
+                }.firstOrNull() ?: throw SandboxError(
+                    io.ktor.http.HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
+                )
+                if (wo.selectionDone) {
+                    if (wo.transferDone) {
+                        logger.info("Wallet performs again this operation that was paid out earlier: idempotent")
+                        return@newSuspendedTransaction
+                    }
+                    // reservePub+exchange selected but not payed: check consistency
+                    if (body.reserve_pub != wo.reservePub) throw SandboxError(
+                        io.ktor.http.HttpStatusCode.Conflict,
+                        "Selecting a different reserve from the one already selected"
                     )
-                    if (wo.selectionDone) {
-                        if (wo.transferDone) {
-                            logger.info("Wallet performs again this operation that was paid out earlier: idempotent")
-                            return@newSuspendedTransaction
-                        }
-                        // reservePub+exchange selected but not payed: check consistency
-                        if (body.reserve_pub != wo.reservePub) throw SandboxError(
-                            HttpStatusCode.Conflict,
-                            "Selecting a different reserve from the one already selected"
-                        )
-                        if (body.selected_exchange != wo.selectedExchangePayto) throw SandboxError(
-                            HttpStatusCode.Conflict,
-                            "Selecting a different exchange from the one already selected"
-                        )
-                    }
-                    // here only if (1) no selection done or (2) _only_ selection done:
-                    // both ways no transfer must have happened.
-                    SandboxAssert(!wo.transferDone, "Sandbox allowed paid but unselected reserve")
-
-                    wireTransfer(
-                        "sandbox-account-customer",
-                        "sandbox-account-exchange",
-                        "$currencyEnv:5",
-                        body.reserve_pub
+                    if (body.selected_exchange != wo.selectedExchangePayto) throw SandboxError(
+                        io.ktor.http.HttpStatusCode.Conflict,
+                        "Selecting a different exchange from the one already selected"
                     )
-                    wo.reservePub = body.reserve_pub
-                    wo.selectedExchangePayto = body.selected_exchange
-                    wo.selectionDone = true
-                    wo.transferDone = true
                 }
-                /**
-                 * NOTE: is this always guaranteed to run AFTER the suspended
-                 * transaction block above?
-                 */
-                call.respond(object {
-                    val transfer_done = true
-                })
-                return@post
+                // here only if (1) no selection done or (2) _only_ selection done:
+                // both ways no transfer must have happened.
+                SandboxAssert(!wo.transferDone, "Sandbox allowed paid but unselected reserve")
+
+                wireTransfer(
+                    "sandbox-account-customer",
+                    "sandbox-account-exchange",
+                    "$currencyEnv:5",
+                    body.reserve_pub
+                )
+                wo.reservePub = body.reserve_pub
+                wo.selectedExchangePayto = body.selected_exchange
+                wo.selectionDone = true
+                wo.transferDone = true
+            }
+            /**
+             * NOTE: is this always guaranteed to run AFTER the suspended
+             * transaction block above?
+             */
+            call.respond(object {
+                val transfer_done = true
+            })
+            return@post
+        }
+
+        // Create a new demobank instance with a particular currency,
+        // debt limit and possibly other configuration
+        // (could also be a CLI command for now)
+        post("/demobanks") {
+
+        }
+
+        // List configured demobanks
+        get("/demobanks") {
+
+        }
+
+        delete("/demobank/{demobankid") {
+
+        }
+
+        get("/demobank/{demobankid") {
+
+        }
+
+        route("/demobank/{demobankid}") {
+            // Note: Unlike the old pybank, the sandbox does *not* actually expose the
+            // taler wire gateway API, because the exchange uses the nexus.
+
+            // Endpoint(s) for making arbitrary payments in the sandbox for integration tests
+            // FIXME: Do we actually need this, or can we just use the sandbox admin APIs?
+            route("/testing-api") {
+
             }
 
-            // Create a new demobank instance with a particular currency,
-            // debt limit and possibly other configuration
-            // (could also be a CLI command for now)
-            post("/demobanks") {
+            route("/access-api") {
+                get("/accounts/{account_name}") {
+                    // Authenticated.  Accesses basic information (balance)
+                    // about an account. (see docs)
 
-            }
-
-            // List configured demobanks
-            get("/demobanks") {
-
-            }
-
-            delete("/demobank/{demobankid") {
-
-            }
-
-            get("/demobank/{demobankid") {
-
-            }
-
-            route("/demobank/{demobankid}") {
-                // Note: Unlike the old pybank, the sandbox does *not* actually expose the
-                // taler wire gateway API, because the exchange uses the nexus.
-
-                // Endpoint(s) for making arbitrary payments in the sandbox for integration tests
-                // FIXME: Do we actually need this, or can we just use the sandbox admin APIs?
-                route("/testing-api") {
-
-                }
-
-                route("/access-api") {
-                    get("/accounts/{account_name}") {
-                        // Authenticated.  Accesses basic information (balance)
-                        // about an account. (see docs)
-
-                        // FIXME: Since we now use IBANs everywhere, maybe the account should also be assigned an IBAN
-                    }
-
-                    get("/accounts/{account_name}/history") {
-                        // New endpoint, access account history to display in the SPA
-                        // (could be merged with GET /accounts/{account_name}
-                    }
-
-                    // [...]
-
-                    get("/public-accounts") {
-                        // List public accounts.  Does not require any authentication.
-                        // XXX: New!
-                    }
-
-                    get("/public-accounts/{account_name}/history") {
-                        // Get transaction history of a public account
-                    }
-
-                    post("/testing/register") {
-                        // Register a new account.
-                        // No authentication is required to register a new user.
-                        // FIXME:  Should probably not use "testing" as the prefix, since it's used "in production" in the demobank SPA
-                    }
+                    // FIXME: Since we now use IBANs everywhere, maybe the account should also be assigned an IBAN
                 }
 
+                get("/accounts/{account_name}/history") {
+                    // New endpoint, access account history to display in the SPA
+                    // (could be merged with GET /accounts/{account_name}
+                }
+
+                // [...]
+
+                get("/public-accounts") {
+                    // List public accounts.  Does not require any authentication.
+                    // XXX: New!
+                }
+
+                get("/public-accounts/{account_name}/history") {
+                    // Get transaction history of a public account
+                }
+
+                post("/testing/register") {
+                    // Register a new account.
+                    // No authentication is required to register a new user.
+                    // FIXME:  Should probably not use "testing" as the prefix, since it's used "in production" in the demobank SPA
+                }
             }
+
         }
     }
+}
+fun serverMain(dbName: String, port: Int) {
+    execThrowableOrTerminate { dbCreateTables(dbName) }
+    val server = embeddedServer(Netty, port = port, module = sandboxApp)
     logger.info("LibEuFin Sandbox running on port $port")
     try {
         server.start(wait = true)
