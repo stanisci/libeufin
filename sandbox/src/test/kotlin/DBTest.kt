@@ -94,7 +94,7 @@ class DBTest {
                 addLogger(StdOutSqlLogger)
                 BankAccountTransactionEntity.find {
                     BankAccountTransactionsTable.date.between(
-                        parseDashedDate("1970-01-01").millis(),
+                        parseDashedDate("1970-01-01").toInstant().toEpochMilli(),
                         LocalDateTime.now().millis()
                     )
                 }.firstOrNull()
