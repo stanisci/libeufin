@@ -53,6 +53,7 @@ dependencies {
     implementation "io.netty:netty-all:$netty_version"
     implementation "io.netty:netty-transport-native-epoll:$netty_version"
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
+    implementation "io.ktor:ktor-jackson:$ktor_version"
 
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
