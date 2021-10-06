@@ -5,6 +5,8 @@ import io.ktor.http.HttpMethod
 import io.ktor.server.engine.*
 import io.ktor.server.testing.*
 import io.netty.bootstrap.ServerBootstrap
+import io.netty.buffer.ByteBufInputStream
+import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.channel.epoll.EpollEventLoopGroup
 import io.netty.channel.epoll.EpollServerDomainSocketChannel
@@ -72,7 +74,7 @@ class LibeufinHttpHandler : SimpleChannelInboundHandler<FullHttpRequest>() {
                 method = HttpMethod(msg.method().name())
                 uri = msg.uri()
                 version = httpVersion.text()
-                setBody(msg.content().array())
+                setBody(ByteBufInputStream(msg.content()).readAllBytes())
             }
             val statusCode: Int = call.response.status()?.value ?: throw UtilError(
                 HttpStatusCode.InternalServerError,
@@ -80,7 +82,11 @@ class LibeufinHttpHandler : SimpleChannelInboundHandler<FullHttpRequest>() {
                 ec = null // FIXME: to be defined.
             )
             // Responding with Netty API.
-            val response = DefaultFullHttpResponse(httpVersion, HttpResponseStatus.valueOf(statusCode))
+            val response = DefaultFullHttpResponse(
+                httpVersion,
+                HttpResponseStatus.valueOf(statusCode),
+                Unpooled.wrappedBuffer(call.response.byteContent ?: ByteArray(0))
+            )
             call.response.headers.allValues().forEach { s, list ->
                 response.headers().set(s, list.joinToString()) // joinToString() separates with ", " by default.
             }
