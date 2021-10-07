@@ -360,7 +360,7 @@ def get_key_letter(obj, connection_name, output_file):
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception as e:
-i
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
