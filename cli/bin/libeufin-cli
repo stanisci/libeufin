@@ -30,6 +30,12 @@ def tell_user(resp, expected_status_code=200, withsuccess=False):
     if withsuccess:
         print(resp.content.decode("utf-8"))
 
+# Normalize the two components to "x/" and "y" and pass them
+# to urljoin().  This avoids drop-policies from plain urljoin().
+def urljoin_nodrop(a, b):
+    a = a + "/" # urljoin will drop extra trailing slashes.
+    b = "/".join([x for x in b.split("/") if x != ""]) # remove leading slashes.
+    return urljoin(a, b)
 
 # FIXME: deprecate this in favor of NexusContext
 def fetch_env():
@@ -89,7 +95,7 @@ def permissions(ctx):
 @users.command("self", help="Show information about authenticated user.")
 @click.pass_obj
 def users_self(obj):
-    url = urljoin(obj.nexus_base_url, f"/user")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/user")
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
     except Exception as e:
@@ -103,7 +109,7 @@ def users_self(obj):
 @users.command("list", help="List users")
 @click.pass_obj
 def list_users(obj):
-    url = urljoin(obj.nexus_base_url, f"/users")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/users")
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
     except Exception as e:
@@ -126,7 +132,7 @@ def list_users(obj):
 )
 @click.pass_obj
 def change_password(obj, username, new_password):
-    url = urljoin(obj.nexus_base_url, f"/users/{username}/password")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/users/{username}/password")
     try:
         body = dict(newPassword=new_password)
         resp = post(
@@ -154,7 +160,7 @@ def change_password(obj, username, new_password):
 )
 @click.pass_obj
 def create_user(obj, username, password):
-    url = urljoin(obj.nexus_base_url, f"/users")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/users")
     try:
         body = dict(
             username=username,
@@ -177,7 +183,7 @@ def create_user(obj, username, password):
 @permissions.command("list", help="Show permissions")
 @click.pass_obj
 def list_permission(obj):
-    url = urljoin(obj.nexus_base_url, f"/permissions")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/permissions")
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password))
     except Exception as e:
@@ -199,7 +205,7 @@ def list_permission(obj):
 def grant_permission(
     obj, subject_type, subject_id, resource_type, resource_id, permission_name
 ):
-    url = urljoin(obj.nexus_base_url, f"/permissions")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/permissions")
     try:
         permission = dict(
             subjectType=subject_type,
@@ -236,7 +242,7 @@ def grant_permission(
 def revoke_permission(
     obj, subject_type, subject_id, resource_type, resource_id, permission_name
 ):
-    url = urljoin(obj.nexus_base_url, f"/permissions")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/permissions")
     try:
         permission = dict(
             subjectType=subject_type,
@@ -350,7 +356,7 @@ def sandbox(ctx, sandbox_url):
 @click.argument("output_file")
 @click.pass_obj
 def get_key_letter(obj, connection_name, output_file):
-    url = urljoin(obj.nexus_base_url, f"/bank-connections/{connection_name}/keyletter")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/bank-connections/{connection_name}/keyletter")
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
@@ -371,7 +377,7 @@ def get_key_letter(obj, connection_name, output_file):
 @click.argument("connection-name")
 @click.pass_obj
 def export_backup(obj, connection_name, passphrase, output_file):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url, "/bank-connections/{}/export-backup".format(connection_name)
     )
     try:
@@ -399,7 +405,7 @@ def export_backup(obj, connection_name, passphrase, output_file):
 @click.pass_obj
 def delete_connection(obj, connection_name):
 
-    url = urljoin(obj.nexus_base_url, "/bank-connections/delete-connection")
+    url = urljoin_nodrop(obj.nexus_base_url, "/bank-connections/delete-connection")
     try:
         resp = post(
             url,
@@ -420,7 +426,7 @@ def delete_connection(obj, connection_name):
 @click.argument("connection-name")
 @click.pass_obj
 def restore_backup(obj, backup_file, passphrase, connection_name):
-    url = urljoin(obj.nexus_base_url, "/bank-connections")
+    url = urljoin_nodrop(obj.nexus_base_url, "/bank-connections")
     try:
         backup = open(backup_file, "r")
     except Exception:
@@ -458,7 +464,7 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
 def new_ebics_connection(
     obj, connection_name, ebics_url, host_id, partner_id, ebics_user_id
 ):
-    url = urljoin(obj.nexus_base_url, "/bank-connections")
+    url = urljoin_nodrop(obj.nexus_base_url, "/bank-connections")
     body = dict(
         name=connection_name,
         source="new",
@@ -484,7 +490,7 @@ def new_ebics_connection(
 @click.argument("connection-name")
 @click.pass_obj
 def connect(obj, connection_name):
-    url = urljoin(obj.nexus_base_url, f"/bank-connections/{connection_name}/connect")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/bank-connections/{connection_name}/connect")
     try:
         resp = post(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
@@ -510,7 +516,7 @@ def connect(obj, connection_name):
 def import_bank_account(
     obj, connection_name, offered_account_id, nexus_bank_account_id
 ):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url,
         "/bank-connections/{}/import-account".format(connection_name),
     )
@@ -537,7 +543,7 @@ def import_bank_account(
 @click.argument("connection-name")
 @click.pass_obj
 def download_bank_accounts(obj, connection_name):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url,
         "/bank-connections/{}/fetch-accounts".format(connection_name),
     )
@@ -556,7 +562,7 @@ def download_bank_accounts(obj, connection_name):
 @connections.command(help="List the connections.")
 @click.pass_obj
 def list_connections(obj):
-    url = urljoin(obj.nexus_base_url, "/bank-connections")
+    url = urljoin_nodrop(obj.nexus_base_url, "/bank-connections")
     try:
         resp = get(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
@@ -573,7 +579,7 @@ def list_connections(obj):
 @click.argument("connection-name")
 @click.pass_obj
 def show_connection(obj, connection_name):
-    url = urljoin(obj.nexus_base_url, f"/bank-connections/{connection_name}")
+    url = urljoin_nodrop(obj.nexus_base_url, f"/bank-connections/{connection_name}")
     try:
         resp = get(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
@@ -590,7 +596,7 @@ def show_connection(obj, connection_name):
 @click.argument("connection-name")
 @click.pass_obj
 def list_offered_bank_accounts(obj, connection_name):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url, "/bank-connections/{}/accounts".format(connection_name)
     )
     try:
@@ -635,7 +641,7 @@ def task_schedule(
     task_param_level,
 ):
 
-    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
+    url = urljoin_nodrop(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
     body = dict(name=task_name, cronspec=task_cronspec, type=task_type)
     if task_type == "fetch" and not (task_param_range_type or task_param_level):
         print("'fetch' type requires --task-param-range-type and --task-param-level")
@@ -659,7 +665,7 @@ def task_schedule(
 @click.option("--task-name", help="Name of the task", required=True)
 @click.pass_obj
 def task_status(obj, account_name, task_name):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url,
         "/bank-accounts/{}/schedule/{}".format(account_name, task_name),
     )
@@ -678,7 +684,7 @@ def task_status(obj, account_name, task_name):
 @click.option("--task-name", help="Name of the task", required=True)
 @click.pass_obj
 def task_delete(obj, account_name, task_name):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url,
         "/bank-accounts/{}/schedule/{}".format(account_name, task_name),
     )
@@ -696,7 +702,7 @@ def task_delete(obj, account_name, task_name):
 @click.argument("account-name")
 @click.pass_obj
 def tasks_show(obj, account_name):
-    url = urljoin(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
+    url = urljoin_nodrop(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception:
@@ -710,7 +716,7 @@ def tasks_show(obj, account_name):
 @accounts.command(help="Show accounts belonging to calling user")
 @click.pass_obj
 def show(obj):
-    url = urljoin(obj.nexus_base_url, "/bank-accounts")
+    url = urljoin_nodrop(obj.nexus_base_url, "/bank-accounts")
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception as e:
@@ -746,7 +752,7 @@ def prepare_payment(
     payment_amount,
     payment_subject,
 ):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url, "/bank-accounts/{}/payment-initiations".format(account_name)
     )
     body = dict(
@@ -772,7 +778,7 @@ def prepare_payment(
 @click.argument("account-name")
 @click.pass_obj
 def submit_payment(obj, account_name, payment_uuid):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url,
         "/bank-accounts/{}/payment-initiations/{}/submit".format(
             account_name, payment_uuid
@@ -795,7 +801,7 @@ def submit_payment(obj, account_name, payment_uuid):
 @click.argument("account-name")
 @click.pass_obj
 def show_payment(obj, account_name, payment_uuid):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url,
         f"/bank-accounts/{account_name}/payment-initiations/{payment_uuid}",
     )
@@ -813,7 +819,7 @@ def show_payment(obj, account_name, payment_uuid):
 @click.argument("account-name")
 @click.pass_obj
 def list_payments(obj, account_name):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url, f"/bank-accounts/{account_name}/payment-initiations"
     )
     try:
@@ -833,7 +839,7 @@ def list_payments(obj, account_name):
 @click.option("--payment-uuid", help="payment unique identifier", required=True)
 @click.pass_obj
 def delete_payment(obj, account_name, payment_uuid):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url,
         f"/bank-accounts/{account_name}/payment-initiations/{payment_uuid}",
     )
@@ -857,7 +863,7 @@ def delete_payment(obj, account_name, payment_uuid):
 @click.argument("account-name")
 @click.pass_obj
 def fetch_transactions(obj, account_name, range_type, level):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url, "/bank-accounts/{}/fetch-transactions".format(account_name)
     )
     try:
@@ -884,7 +890,7 @@ def fetch_transactions(obj, account_name, range_type, level):
 @click.argument("account-name")
 @click.pass_obj
 def transactions(obj, compact, account_name):
-    url = urljoin(
+    url = urljoin_nodrop(
         obj.nexus_base_url, "/bank-accounts/{}/transactions".format(account_name)
     )
     try:
@@ -913,7 +919,7 @@ def transactions(obj, compact, account_name):
 @facades.command("list", help="List active facades in the Nexus")
 @click.pass_obj
 def list_facades(obj):
-    url = urljoin(obj.nexus_base_url, "/facades")
+    url = urljoin_nodrop(obj.nexus_base_url, "/facades")
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
     except Exception as e:
@@ -933,7 +939,7 @@ def list_facades(obj):
 @click.argument("account-name")
 @click.pass_obj
 def new_anastasis_facade(obj, facade_name, connection_name, account_name, currency):
-    url = urljoin(obj.nexus_base_url, "/facades")
+    url = urljoin_nodrop(obj.nexus_base_url, "/facades")
     try:
         resp = post(
             url,
@@ -967,7 +973,7 @@ def new_anastasis_facade(obj, facade_name, connection_name, account_name, curren
 @click.argument("account-name")
 @click.pass_obj
 def new_twg_facade(obj, facade_name, connection_name, account_name, currency):
-    url = urljoin(obj.nexus_base_url, "/facades")
+    url = urljoin_nodrop(obj.nexus_base_url, "/facades")
     try:
         resp = post(
             url,
@@ -1002,7 +1008,7 @@ def sandbox_ebicshost(ctx):
 @click.pass_obj
 def check_sandbox_status(obj):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, "/config")
+    url = urljoin_nodrop(sandbox_base_url, "/config")
     try:
         resp = get(url)
     except Exception:
@@ -1018,7 +1024,7 @@ def check_sandbox_status(obj):
 @click.pass_obj
 def make_ebics_host(obj, host_id):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, "/admin/ebics/hosts")
+    url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/hosts")
     try:
         resp = post(
             url,
@@ -1037,7 +1043,7 @@ def make_ebics_host(obj, host_id):
 @click.pass_obj
 def list_ebics_host(obj):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, "/admin/ebics/hosts")
+    url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/hosts")
     try:
         resp = get(url)
     except Exception:
@@ -1061,7 +1067,7 @@ def sandbox_ebicssubscriber(ctx):
 @click.pass_obj
 def create_ebics_subscriber(obj, host_id, partner_id, user_id):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, "/admin/ebics/subscribers")
+    url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/subscribers")
     try:
         resp = post(
             url,
@@ -1080,7 +1086,7 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
 @click.pass_obj
 def list_ebics_subscriber(obj):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, "/admin/ebics/subscribers")
+    url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/subscribers")
     try:
         resp = get(url)
     except Exception:
@@ -1123,7 +1129,7 @@ def associate_bank_account(
     ebics_partner_id,
 ):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, "/admin/ebics/bank-accounts")
+    url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/bank-accounts")
     body = dict(
         currency=currency,
         subscriber=dict(
@@ -1156,7 +1162,7 @@ def sandbox_bankaccount(ctx):
 @click.pass_obj
 def bankaccount_list(obj):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(sandbox_base_url, f"/admin/bank-accounts")
+    url = urljoin_nodrop(sandbox_base_url, f"/admin/bank-accounts")
     try:
         resp = get(url)
     except Exception:
@@ -1172,7 +1178,7 @@ def bankaccount_list(obj):
 @click.pass_obj
 def transactions_list(obj, account_label):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(
+    url = urljoin_nodrop(
         sandbox_base_url, f"/admin/bank-accounts/{account_label}/transactions"
     )
     try:
@@ -1190,7 +1196,7 @@ def transactions_list(obj, account_label):
 @click.pass_obj
 def bankaccount_generate_transactions(obj, account_label):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(
+    url = urljoin_nodrop(
         sandbox_base_url, f"/admin/bank-accounts/{account_label}/generate-transactions"
     )
     try:
@@ -1223,7 +1229,7 @@ def simulate_incoming_transaction(
     subject,
 ):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin(
+    url = urljoin_nodrop(
         sandbox_base_url,
         f"/admin/bank-accounts/{account_name}/simulate-incoming-transaction",
     )
