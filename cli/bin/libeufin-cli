@@ -359,7 +359,8 @@ def get_key_letter(obj, connection_name, output_file):
     url = urljoin_nodrop(obj.nexus_base_url, f"/bank-connections/{connection_name}/keyletter")
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+i
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -386,7 +387,8 @@ def export_backup(obj, connection_name, passphrase, output_file):
             json=dict(passphrase=passphrase),
             auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -412,7 +414,8 @@ def delete_connection(obj, connection_name):
             json=dict(bankConnectionId=connection_name),
             auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -429,7 +432,8 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
     url = urljoin_nodrop(obj.nexus_base_url, "/bank-connections")
     try:
         backup = open(backup_file, "r")
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not open the backup at {}".format(backup_file))
         exit(1)
     backup_json = json.loads(backup.read())
@@ -446,7 +450,8 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
             ),
             auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -478,7 +483,8 @@ def new_ebics_connection(
     )
     try:
         resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print(f"Could not reach nexus at {url}")
         exit(1)
 
@@ -495,7 +501,8 @@ def connect(obj, connection_name):
         resp = post(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print(f"Could not reach nexus at {url}")
         exit(1)
     tell_user(resp, withsuccess=True)
@@ -551,7 +558,8 @@ def download_bank_accounts(obj, connection_name):
         resp = post(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -567,7 +575,8 @@ def list_connections(obj):
         resp = get(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -584,7 +593,8 @@ def show_connection(obj, connection_name):
         resp = get(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -603,7 +613,8 @@ def list_offered_bank_accounts(obj, connection_name):
         resp = get(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -652,7 +663,8 @@ def task_schedule(
     )
     try:
         resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -671,7 +683,8 @@ def task_status(obj, account_name, task_name):
     )
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus " + url)
         exit(1)
 
@@ -690,7 +703,8 @@ def task_delete(obj, account_name, task_name):
     )
     try:
         resp = delete(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus " + url)
         exit(1)
 
@@ -705,7 +719,8 @@ def tasks_show(obj, account_name):
     url = urljoin_nodrop(obj.nexus_base_url, "/bank-accounts/{}/schedule".format(account_name))
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus " + url)
         exit(1)
 
@@ -765,7 +780,8 @@ def prepare_payment(
 
     try:
         resp = post(url, json=body, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at " + url)
         exit(1)
 
@@ -788,7 +804,8 @@ def submit_payment(obj, account_name, payment_uuid):
         resp = post(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at" + url)
         exit(1)
 
@@ -807,7 +824,8 @@ def show_payment(obj, account_name, payment_uuid):
     )
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at" + url)
         exit(1)
 
@@ -824,7 +842,8 @@ def list_payments(obj, account_name):
     )
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at" + url)
         exit(1)
 
@@ -845,7 +864,8 @@ def delete_payment(obj, account_name, payment_uuid):
     )
     try:
         resp = delete(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus at" + url)
         exit(1)
 
@@ -872,7 +892,8 @@ def fetch_transactions(obj, account_name, range_type, level):
             json=dict(rangeType=range_type, level=level),
             auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus " + url)
         exit(1)
 
@@ -895,7 +916,8 @@ def transactions(obj, compact, account_name):
     )
     try:
         resp = get(url, auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach nexus " + url)
         exit(1)
 
@@ -1011,7 +1033,8 @@ def check_sandbox_status(obj):
     url = urljoin_nodrop(sandbox_base_url, "/config")
     try:
         resp = get(url)
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
@@ -1031,7 +1054,8 @@ def make_ebics_host(obj, host_id):
             json=dict(hostID=host_id, ebicsVersion="2.5"),
             auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
@@ -1046,7 +1070,8 @@ def list_ebics_host(obj):
     url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/hosts")
     try:
         resp = get(url)
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
@@ -1074,7 +1099,8 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
             json=dict(hostID=host_id, partnerID=partner_id, userID=user_id),
             auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
@@ -1089,7 +1115,8 @@ def list_ebics_subscriber(obj):
     url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/subscribers")
     try:
         resp = get(url)
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
@@ -1144,7 +1171,8 @@ def associate_bank_account(
     try:
         resp = post(url, json=body,
                     auth=auth.HTTPBasicAuth(obj.username, obj.password))
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
@@ -1165,7 +1193,8 @@ def bankaccount_list(obj):
     url = urljoin_nodrop(sandbox_base_url, f"/admin/bank-accounts")
     try:
         resp = get(url)
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
@@ -1183,7 +1212,8 @@ def transactions_list(obj, account_label):
     )
     try:
         resp = get(url)
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
@@ -1201,7 +1231,8 @@ def bankaccount_generate_transactions(obj, account_label):
     )
     try:
         resp = post(url)
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
@@ -1242,7 +1273,8 @@ def simulate_incoming_transaction(
     )
     try:
         resp = post(url, json=body)
-    except Exception:
+    except Exception as e:
+        print(e)
         print("Could not reach sandbox")
         exit(1)
 
