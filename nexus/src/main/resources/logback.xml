@@ -14,6 +14,7 @@
     <logger name="io.netty" level="WARN"/>
     <logger name="ktor" level="WARN"/>
     <logger name="Exposed" level="WARN"/>
+    <logger name="tech.libeufin.util" level="DEBUG"/>
 
     <root level="WARN">
         <appender-ref ref="STDERR"/>
