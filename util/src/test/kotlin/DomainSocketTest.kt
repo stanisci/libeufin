@@ -1,3 +1,8 @@
+import com.fasterxml.jackson.core.util.DefaultIndenter
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
@@ -6,22 +11,21 @@ import io.ktor.routing.*
 import org.junit.Test
 import io.ktor.jackson.jackson
 import io.ktor.request.*
+import org.junit.Assert
+import org.junit.Ignore
 
 class DomainSocketTest {
-    // @Test
+    @Test @Ignore
     fun bind() {
         startServer("/tmp/java.sock") {
             install(ContentNegotiation) { jackson() }
             routing {
-                // responds with a empty JSON object.
                 get("/") {
                     this.call.respond(object {})
                     return@get
                 }
-                // echoes what it read in the request.
                 post("/") {
-                    val body = this.call.receiveText()
-                    this.call.respondText(body)
+                    this.call.respond(object {})
                     return@post
                 }
             }
