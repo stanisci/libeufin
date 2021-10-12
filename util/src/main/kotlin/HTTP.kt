@@ -4,6 +4,53 @@ import UtilError
 import io.ktor.http.*
 import io.ktor.request.*
 import logger
+import java.net.URLDecoder
+
+private fun unauthorized(msg: String): UtilError {
+    return UtilError(
+        HttpStatusCode.Unauthorized,
+        msg,
+        LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
+    )
+}
+
+/**
+ * Returns the token (including the 'secret-token:' prefix)
+ * from a Authorization header.  Throws exception on malformations
+ * Note, the token gets URL-decoded before being returned.
+ */
+fun extractToken(authHeader: String): String {
+    val headerSplit = authHeader.split(" ", limit = 2)
+    if (headerSplit.elementAtOrNull(0) != "Bearer") throw unauthorized("Authorization header does not start with 'Bearer'")
+    val token = headerSplit.elementAtOrNull(1)
+    if (token == null) throw unauthorized("Authorization header did not have the token")
+    val tokenSplit = token.split(":", limit = 2)
+    if (tokenSplit.elementAtOrNull(0) != "secret-token")
+        throw unauthorized("Token lacks the 'secret-token:' prefix, see RFC 8959")
+    val maybeToken = tokenSplit.elementAtOrNull(1)
+    if(maybeToken == null || maybeToken == "")
+        throw unauthorized("Actual token missing after the 'secret-token:' prefix")
+    return "${tokenSplit[0]}:${URLDecoder.decode(tokenSplit[1], Charsets.UTF_8)}"
+}
+
+/**
+ * Authenticate the HTTP request with a given token.  This one
+ * is expected to comply with the RFC 8959 format; the function
+ * throws an exception when the authentication fails
+ *
+ * @param tokenEnv is the authorization token that was found in the
+ * environment.
+ */
+fun ApplicationRequest.authWithToken(tokenEnv: String?) {
+    if (tokenEnv == null) {
+        logger.info("Authenticating operation without any env token!")
+        throw unauthorized("Authentication is not available now")
+    }
+    val auth = this.headers[HttpHeaders.Authorization] ?:
+    throw unauthorized("Authorization header was not found in the request")
+    val tokenReq = extractToken(auth)
+    if (tokenEnv != tokenReq) throw unauthorized("Authentication failed, token did not match")
+}
 
 fun getHTTPBasicAuthCredentials(request: ApplicationRequest): Pair<String, String> {
     val authHeader = getAuthorizationHeader(request)

@@ -97,6 +97,8 @@ private val baseUrl = URL(
     getValueFromEnv("LIBEUFIN_SANDBOX_BASE_URL") ?: throw Exception(
         "env LIBEUFIN_SANDBOX_BASE_URL is not defined")
 )
+// when null, privileged operations turn impossible
+private val sandboxToken: String? = getValueFromEnv("LIBEUFIN_SANDBOX_TOKEN")
 
 data class SandboxError(
     val statusCode: HttpStatusCode,
@@ -106,42 +108,6 @@ data class SandboxError(
 
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
-
-class Superuser : CliktCommand("Add superuser or change pw") {
-    private val username by argument()
-    private val password by option().prompt(requireConfirmation = true, hideInput = true)
-    override fun run() {
-        execThrowableOrTerminate {
-            dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME))
-        }
-        try {
-            requireValidResourceName(username)
-        } catch (e: UtilError) {
-            println(e) // Gives instructions about the allowed format.
-            exitProcess(1)
-        }
-        transaction {
-            val user = SandboxUserEntity.find {
-                SandboxUsersTable.username eq username
-            }.firstOrNull()
-
-            val hashedPw = CryptoUtil.hashpw(password)
-            if (user == null) {
-                SandboxUserEntity.new {
-                    this.username = this@Superuser.username
-                    this.passwordHash = hashedPw
-                    this.superuser = true
-                }
-            } else {
-                if (!user.superuser) {
-                    println("Can only change password for superuser with this command.")
-                    throw ProgramResult(1)
-                }
-                user.passwordHash = hashedPw
-            }
-        }
-    }
-}
 
 class Config : CliktCommand("Insert one configuration into the database") {
     init {
@@ -371,7 +337,6 @@ class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnE
 
 fun main(args: Array<String>) {
     SandboxCommand().subcommands(
-        Superuser(),
         Serve(),
         ResetTables(),
         Config(),
@@ -513,7 +478,7 @@ val sandboxApp: Application.() -> Unit = {
          * requesting account.
          */
         post("/admin/payments/camt") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<CamtParams>()
             val bankaccount = getAccountFromLabel(body.bankaccount)
             if (body.type != 53) throw SandboxError(
@@ -535,7 +500,7 @@ val sandboxApp: Application.() -> Unit = {
         }
 
         post("/admin/bank-accounts/{label}") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<BankAccountInfo>()
             transaction {
                 tech.libeufin.sandbox.BankAccountEntity.new {
@@ -551,7 +516,7 @@ val sandboxApp: Application.() -> Unit = {
         }
 
         get("/admin/bank-accounts/{label}") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val label = ensureNonNull(call.parameters["label"])
             val ret = transaction {
                 val bankAccount = tech.libeufin.sandbox.BankAccountEntity.find {
@@ -574,7 +539,7 @@ val sandboxApp: Application.() -> Unit = {
         }
 
         post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<IncomingPaymentInfo>()
             // FIXME: generate nicer UUID!
             val accountLabel = ensureNonNull(call.parameters["label"])
@@ -617,7 +582,7 @@ val sandboxApp: Application.() -> Unit = {
          * Associates a new bank account with an existing Ebics subscriber.
          */
         post("/admin/ebics/bank-accounts") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<BankAccountRequest>()
             if (!validateBic(body.bic)) {
                 throw SandboxError(io.ktor.http.HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
@@ -647,7 +612,7 @@ val sandboxApp: Application.() -> Unit = {
             return@post
         }
         get("/admin/bank-accounts") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val accounts = mutableListOf<BankAccountInfo>()
             transaction {
                 tech.libeufin.sandbox.BankAccountEntity.all().forEach {
@@ -665,7 +630,7 @@ val sandboxApp: Application.() -> Unit = {
             call.respond(accounts)
         }
         get("/admin/bank-accounts/{label}/transactions") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val ret = AccountTransactions()
             transaction {
                 val accountLabel = ensureNonNull(call.parameters["label"])
@@ -704,7 +669,7 @@ val sandboxApp: Application.() -> Unit = {
             call.respond(ret)
         }
         post("/admin/bank-accounts/{label}/generate-transactions") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             transaction {
                 val accountLabel = ensureNonNull(call.parameters["label"])
                 val account = getBankAccountFromLabel(accountLabel)
@@ -756,7 +721,7 @@ val sandboxApp: Application.() -> Unit = {
          * Creates a new Ebics subscriber.
          */
         post("/admin/ebics/subscribers") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<EbicsSubscriberElement>()
             transaction {
                 tech.libeufin.sandbox.EbicsSubscriberEntity.new {
@@ -778,7 +743,7 @@ val sandboxApp: Application.() -> Unit = {
          * Shows all the Ebics subscribers' details.
          */
         get("/admin/ebics/subscribers") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val ret = AdminGetSubscribers()
             transaction {
                 tech.libeufin.sandbox.EbicsSubscriberEntity.all().forEach {
@@ -795,7 +760,7 @@ val sandboxApp: Application.() -> Unit = {
             return@get
         }
         post("/admin/ebics/hosts/{hostID}/rotate-keys") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val hostID: String = call.parameters["hostID"] ?: throw SandboxError(
                 io.ktor.http.HttpStatusCode.BadRequest, "host ID missing in URL"
             )
@@ -824,7 +789,7 @@ val sandboxApp: Application.() -> Unit = {
          * Creates a new EBICS host.
          */
         post("/admin/ebics/hosts") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val req = call.receiveJson<EbicsHostCreateRequest>()
             val pairA = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
             val pairB = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
@@ -850,7 +815,7 @@ val sandboxApp: Application.() -> Unit = {
          * Show the names of all the Ebics hosts
          */
         get("/admin/ebics/hosts") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             val ebicsHosts = transaction {
                 tech.libeufin.sandbox.EbicsHostEntity.all().map { it.hostId }
             }
@@ -888,7 +853,7 @@ val sandboxApp: Application.() -> Unit = {
          * the default exchange, from a designated/constant customer.
          */
         get("/taler") {
-            requireSuperuser(call.request)
+            call.request.authWithToken(sandboxToken)
             SandboxAssert(
                 currencyEnv != null,
                 "Currency not found.  Logs should have warned"

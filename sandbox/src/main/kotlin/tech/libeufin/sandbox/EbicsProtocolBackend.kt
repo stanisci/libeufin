@@ -502,7 +502,6 @@ fun getLastBalance(bankAccount: BankAccountEntity): BigDecimal {
 private fun constructCamtResponse(
     type: Int,
     subscriber: EbicsSubscriberEntity,
-    // fixes #6243
     dateRange: Pair<Long, Long>?): List<String> {
 
     if (type != 53 && type != 52) throw EbicsUnsupportedOrderType()

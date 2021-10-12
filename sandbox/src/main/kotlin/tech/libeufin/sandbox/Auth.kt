@@ -1,15 +1,17 @@
 package tech.libeufin.sandbox
 
 import UtilError
+import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import jdk.jshell.execution.Util
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.slf4j.LoggerFactory
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.LibeufinErrorCode
 import tech.libeufin.util.getHTTPBasicAuthCredentials
 
-
+private val logger = LoggerFactory.getLogger("tech.libeufin.util")
 /**
  * HTTP basic auth.  Throws error if password is wrong,
  * and makes sure that the user exists in the system.
