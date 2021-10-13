@@ -894,12 +894,10 @@ val nexusApp: Application.() -> Unit = {
                 FacadeShowInfo(
                     name = f.facadeName,
                     type = f.type,
-                    baseUrl = call.url {
-                        parameters.clear()
-                        encodedPath = call.request.getBaseUrl()
+                    baseUrl = URLBuilder(call.request.getBaseUrl()).apply {
                         pathComponents("facades", f.facadeName, f.type)
                         encodedPath += "/"
-                    },
+                    }.buildString(),
                     config = getFacadeState(f.type, f)
                 )
             }
@@ -921,12 +919,10 @@ val nexusApp: Application.() -> Unit = {
                         FacadeShowInfo(
                             name = it.facadeName,
                             type = it.type,
-                            baseUrl = call.url {
-                                parameters.clear()
-                                encodedPath = call.request.getBaseUrl()
+                            baseUrl = URLBuilder(call.request.getBaseUrl()).apply {
                                 pathComponents("facades", it.facadeName, it.type)
                                 encodedPath += "/"
-                            },
+                            }.buildString(),
                             config = getFacadeState(it.type, it)
                         )
                     )

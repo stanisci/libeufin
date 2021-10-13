@@ -45,13 +45,17 @@ private fun internalServerError(
         ec = libeufinErrorCode
     )
 }
+
 /**
  * Get the base URL of a request; handles proxied case.
  */
 fun ApplicationRequest.getBaseUrl(): String {
-
-    val isProxied = this.headers.contains("X-Forwarded-Host")
-    return if (isProxied) {
+    return if (this.headers.contains("X-Forwarded-Host")) {
+        logger.info("Building X-Forwarded- base URL")
+        var prefix: String = this.headers.get("X-Forwarded-Prefix")
+            ?: throw internalServerError("Reverse proxy did not define X-Forwarded-Prefix")
+        if (!prefix.endsWith("/"))
+            prefix += "/"
         URLBuilder(
             protocol = URLProtocol(
                 name = this.headers.get("X-Forwarded-Proto") ?: throw internalServerError("Reverse proxy did not define X-Forwarded-Proto"),
@@ -60,10 +64,12 @@ fun ApplicationRequest.getBaseUrl(): String {
             host = this.headers.get("X-Forwarded-Host") ?: throw internalServerError(
                 "Reverse proxy did not define X-Forwarded-Host"
             ),
-            encodedPath = this.headers.get("X-Forwarded-Prefix") ?: throw internalServerError(
-                "Reverse proxy did not define X-Forwarded-Prefix"
-            )
-        ).toString()
+            encodedPath = prefix
+        ).apply {
+            // Gets dropped otherwise.
+            if (!encodedPath.endsWith("/"))
+                encodedPath += "/"
+        }.buildString()
     } else {
         this.call.url {
             parameters.clear()
