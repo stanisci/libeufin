@@ -1,8 +1,10 @@
 package tech.libeufin.util
 
 import UtilError
+import io.ktor.application.*
 import io.ktor.http.*
 import io.ktor.request.*
+import io.ktor.util.*
 import logger
 import java.net.URLDecoder
 
@@ -31,6 +33,43 @@ fun extractToken(authHeader: String): String {
     if(maybeToken == null || maybeToken == "")
         throw unauthorized("Actual token missing after the 'secret-token:' prefix")
     return "${tokenSplit[0]}:${URLDecoder.decode(tokenSplit[1], Charsets.UTF_8)}"
+}
+
+private fun internalServerError(
+    reason: String,
+    libeufinErrorCode: LibeufinErrorCode? = LibeufinErrorCode.LIBEUFIN_EC_NONE
+): UtilError {
+    return UtilError(
+        HttpStatusCode.InternalServerError,
+        reason,
+        ec = libeufinErrorCode
+    )
+}
+/**
+ * Get the base URL of a request; handles proxied case.
+ */
+fun ApplicationRequest.getBaseUrl(): String {
+
+    val isProxied = this.headers.contains("X-Forwarded-Host")
+    return if (isProxied) {
+        URLBuilder(
+            protocol = URLProtocol(
+                name = this.headers.get("X-Forwarded-Proto") ?: throw internalServerError("Reverse proxy did not define X-Forwarded-Proto"),
+                defaultPort = -1 // Port must be specified with X-Forwarded-Host.
+            ),
+            host = this.headers.get("X-Forwarded-Host") ?: throw internalServerError(
+                "Reverse proxy did not define X-Forwarded-Host"
+            ),
+            encodedPath = this.headers.get("X-Forwarded-Prefix") ?: throw internalServerError(
+                "Reverse proxy did not define X-Forwarded-Prefix"
+            )
+        ).toString()
+    } else {
+        this.call.url {
+            parameters.clear()
+            encodedPath = "/"
+        }
+    }
 }
 
 /**

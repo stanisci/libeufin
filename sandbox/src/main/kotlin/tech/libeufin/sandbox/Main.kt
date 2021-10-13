@@ -38,65 +38,53 @@ package tech.libeufin.sandbox
 
 import UtilError
 import com.fasterxml.jackson.core.JsonParseException
-import io.ktor.server.engine.embeddedServer
+import com.fasterxml.jackson.core.util.DefaultIndenter
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
+import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.context
+import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.output.CliktHelpFormatter
+import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.options.*
+import com.github.ajalt.clikt.parameters.types.int
+import execThrowableOrTerminate
+import io.ktor.application.*
+import io.ktor.auth.*
+import io.ktor.features.*
+import io.ktor.http.*
+import io.ktor.jackson.*
+import io.ktor.request.*
+import io.ktor.response.*
+import io.ktor.routing.*
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
+import io.ktor.util.*
+import io.ktor.util.date.*
+import kotlinx.coroutines.newSingleThreadContext
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.statements.api.ExposedBlob
+import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
-import io.ktor.jackson.*
-import tech.libeufin.util.CryptoUtil
-import tech.libeufin.util.RawPayment
-import java.lang.ArithmeticException
-import java.math.BigDecimal
-import java.security.interfaces.RSAPublicKey
-import javax.xml.bind.JAXBContext
-import com.fasterxml.jackson.databind.exc.MismatchedInputException
-import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
-import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.ProgramResult
-import com.github.ajalt.clikt.core.context
-import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.output.CliktHelpFormatter
-import com.github.ajalt.clikt.parameters.options.*
-import com.github.ajalt.clikt.parameters.types.int
-import execThrowableOrTerminate
-import io.ktor.application.ApplicationCall
-import io.ktor.application.call
-import io.ktor.application.install
-import org.jetbrains.exposed.sql.statements.api.ExposedBlob
-import com.fasterxml.jackson.core.util.DefaultIndenter
-import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
-import com.fasterxml.jackson.module.kotlin.KotlinModule
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
-import io.ktor.features.StatusPages
-import io.ktor.response.respond
-import io.ktor.response.respondText
-import io.ktor.auth.*
-import io.ktor.http.*
-import io.ktor.request.*
-import io.ktor.routing.*
-import io.ktor.server.netty.*
-import io.ktor.util.date.*
-import io.ktor.application.*
-import io.ktor.util.*
-import kotlinx.coroutines.newSingleThreadContext
 import startServer
 import tech.libeufin.util.*
 import validatePlainAmount
+import java.math.BigDecimal
 import java.net.BindException
 import java.net.URL
+import java.security.interfaces.RSAPublicKey
+import javax.xml.bind.JAXBContext
 import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 private val currencyEnv: String? = getValueFromEnv("LIBEUFIN_SANDBOX_CURRENCY")
 private val envName: String? = getValueFromEnv("TALER_ENV_NAME")
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
-private val baseUrl = URL(
-    getValueFromEnv("LIBEUFIN_SANDBOX_BASE_URL") ?: throw Exception(
-        "env LIBEUFIN_SANDBOX_BASE_URL is not defined")
-)
 // when null, privileged operations turn impossible
 private val sandboxToken: String? = getValueFromEnv("LIBEUFIN_SANDBOX_TOKEN")
 
@@ -258,6 +246,7 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         help = "Bind the Sandbox to the Unix domain socket at PATH.  Overrides" +
                 "--port, when both are given", metavar = "PATH"
     )
+
     override fun run() {
         setLogLevel(logLevel)
         execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)) }
@@ -412,7 +401,8 @@ val sandboxApp: Application.() -> Unit = {
 
             val hostAuthPriv = transaction {
                 val host = tech.libeufin.sandbox.EbicsHostEntity.find {
-                    tech.libeufin.sandbox.EbicsHostsTable.hostID.upperCase() eq call.attributes.get(tech.libeufin.sandbox.EbicsHostIdAttribute).uppercase()
+                    tech.libeufin.sandbox.EbicsHostsTable.hostID.upperCase() eq call.attributes.get(tech.libeufin.sandbox.EbicsHostIdAttribute)
+                        .uppercase()
                 }.firstOrNull() ?: throw SandboxError(
                     io.ktor.http.HttpStatusCode.InternalServerError,
                     "Requested Ebics host ID not found."
@@ -451,59 +441,59 @@ val sandboxApp: Application.() -> Unit = {
         }
         exception<Throwable> { cause ->
             logger.error("Exception while handling '${call.request.uri}'", cause)
-            call.respondText("Internal server error.", io.ktor.http.ContentType.Text.Plain, io.ktor.http.HttpStatusCode.InternalServerError)
+            call.respondText(
+                "Internal server error.",
+                io.ktor.http.ContentType.Text.Plain,
+                io.ktor.http.HttpStatusCode.InternalServerError
+            )
         }
     }
-    intercept(io.ktor.application.ApplicationCallPipeline.Fallback) {
+    intercept(ApplicationCallPipeline.Fallback) {
         if (this.call.response.status() == null) {
-            call.respondText("Not found (no route matched).\n", io.ktor.http.ContentType.Text.Plain, io.ktor.http.HttpStatusCode.NotFound)
+            call.respondText(
+                "Not found (no route matched).\n",
+                io.ktor.http.ContentType.Text.Plain,
+                io.ktor.http.HttpStatusCode.NotFound
+            )
             return@intercept finish()
         }
     }
     routing {
 
         get("/") {
-            call.respondText("Hello, this is Sandbox\n", io.ktor.http.ContentType.Text.Plain)
+            call.respondText("Hello, this is Sandbox\n", ContentType.Text.Plain)
         }
-        get("/config") {
-            call.respond(object {
-                val name = "libeufin-sandbox"
 
-                // FIXME: use actual version here!
-                val version = "0.0.0-dev.0"
-            })
-        }
-        /**
-         * For now, only returns the last statement of the
-         * requesting account.
-         */
+        // Respond with the last statement of the requesting account.
+        // Query details in the body.
         post("/admin/payments/camt") {
             call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<CamtParams>()
             val bankaccount = getAccountFromLabel(body.bankaccount)
             if (body.type != 53) throw SandboxError(
-                io.ktor.http.HttpStatusCode.NotFound,
+                HttpStatusCode.NotFound,
                 "Only Camt.053 documents can be generated."
             )
             val camtMessage = transaction {
-                tech.libeufin.sandbox.BankAccountStatementEntity.find {
-                    tech.libeufin.sandbox.BankAccountStatementsTable.bankAccount eq bankaccount.id
+                BankAccountStatementEntity.find {
+                    BankAccountStatementsTable.bankAccount eq bankaccount.id
                 }.lastOrNull()?.xmlMessage ?: throw SandboxError(
-                    io.ktor.http.HttpStatusCode.NotFound,
+                    HttpStatusCode.NotFound,
                     "Could not find any statements; please wait next tick"
                 )
             }
             call.respondText(
-                camtMessage, io.ktor.http.ContentType.Text.Xml, io.ktor.http.HttpStatusCode.OK
+                camtMessage, ContentType.Text.Xml, HttpStatusCode.OK
             )
             return@post
         }
 
+        // create a new bank account, no EBICS relation.
         post("/admin/bank-accounts/{label}") {
             call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<BankAccountInfo>()
             transaction {
-                tech.libeufin.sandbox.BankAccountEntity.new {
+                BankAccountEntity.new {
                     iban = body.iban
                     bic = body.bic
                     name = body.name
@@ -515,6 +505,7 @@ val sandboxApp: Application.() -> Unit = {
             return@post
         }
 
+        // Information about one bank account.
         get("/admin/bank-accounts/{label}") {
             call.request.authWithToken(sandboxToken)
             val label = ensureNonNull(call.parameters["label"])
@@ -538,6 +529,8 @@ val sandboxApp: Application.() -> Unit = {
             return@get
         }
 
+        // Book one incoming payment for the requesting account.
+        // The debtor is not required to have an account at this Sandbox.
         post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
             call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<IncomingPaymentInfo>()
@@ -578,9 +571,8 @@ val sandboxApp: Application.() -> Unit = {
             call.respond(object {})
         }
 
-        /**
-         * Associates a new bank account with an existing Ebics subscriber.
-         */
+
+        // Associates a new bank account with an existing Ebics subscriber.
         post("/admin/ebics/bank-accounts") {
             call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<BankAccountRequest>()
@@ -611,6 +603,8 @@ val sandboxApp: Application.() -> Unit = {
             call.respondText("Bank account created")
             return@post
         }
+
+        // Information about all the bank accounts.
         get("/admin/bank-accounts") {
             call.request.authWithToken(sandboxToken)
             val accounts = mutableListOf<BankAccountInfo>()
@@ -629,6 +623,8 @@ val sandboxApp: Application.() -> Unit = {
             }
             call.respond(accounts)
         }
+
+        // Details of all the transactions of one bank account.
         get("/admin/bank-accounts/{label}/transactions") {
             call.request.authWithToken(sandboxToken)
             val ret = AccountTransactions()
@@ -668,6 +664,10 @@ val sandboxApp: Application.() -> Unit = {
             }
             call.respond(ret)
         }
+
+        // Generate one incoming and one outgoing transactions for
+        // one bank account.  Counterparts do not need to have an account
+        // at this Sandbox.
         post("/admin/bank-accounts/{label}/generate-transactions") {
             call.request.authWithToken(sandboxToken)
             transaction {
@@ -698,7 +698,7 @@ val sandboxApp: Application.() -> Unit = {
                 run {
                     val amount = kotlin.random.Random.nextLong(5, 25)
 
-                    tech.libeufin.sandbox.BankAccountTransactionEntity.new {
+                    BankAccountTransactionEntity.new {
                         debtorIban = account.iban
                         debtorBic = account.bic
                         debtorName = account.name
@@ -717,9 +717,8 @@ val sandboxApp: Application.() -> Unit = {
             }
             call.respond(object {})
         }
-        /**
-         * Creates a new Ebics subscriber.
-         */
+
+        // Creates a new Ebics subscriber.
         post("/admin/ebics/subscribers") {
             call.request.authWithToken(sandboxToken)
             val body = call.receiveJson<EbicsSubscriberElement>()
@@ -739,9 +738,8 @@ val sandboxApp: Application.() -> Unit = {
             )
             return@post
         }
-        /**
-         * Shows all the Ebics subscribers' details.
-         */
+
+        // Shows details of all the EBICS subscribers of this Sandbox.
         get("/admin/ebics/subscribers") {
             call.request.authWithToken(sandboxToken)
             val ret = AdminGetSubscribers()
@@ -759,6 +757,8 @@ val sandboxApp: Application.() -> Unit = {
             call.respond(ret)
             return@get
         }
+
+        // Change keys used in the EBICS communications.
         post("/admin/ebics/hosts/{hostID}/rotate-keys") {
             call.request.authWithToken(sandboxToken)
             val hostID: String = call.parameters["hostID"] ?: throw SandboxError(
@@ -785,9 +785,7 @@ val sandboxApp: Application.() -> Unit = {
             return@post
         }
 
-        /**
-         * Creates a new EBICS host.
-         */
+        // Create a new EBICS host
         post("/admin/ebics/hosts") {
             call.request.authWithToken(sandboxToken)
             val req = call.receiveJson<EbicsHostCreateRequest>()
@@ -811,9 +809,7 @@ val sandboxApp: Application.() -> Unit = {
             return@post
         }
 
-        /**
-         * Show the names of all the Ebics hosts
-         */
+        // Show the names of all the Ebics hosts
         get("/admin/ebics/hosts") {
             call.request.authWithToken(sandboxToken)
             val ebicsHosts = transaction {
@@ -821,9 +817,8 @@ val sandboxApp: Application.() -> Unit = {
             }
             call.respond(EbicsHostsResponse(ebicsHosts))
         }
-        /**
-         * Serves all the Ebics requests.
-         */
+
+        // Process one EBICS request
         post("/ebicsweb") {
             try {
                 call.ebicsweb()
@@ -848,6 +843,7 @@ val sandboxApp: Application.() -> Unit = {
             }
 
         }
+
         /**
          * Activates a withdraw operation of 1 currency unit with
          * the default exchange, from a designated/constant customer.
@@ -879,9 +875,7 @@ val sandboxApp: Application.() -> Unit = {
                     // wopid is autogenerated, and momentarily the only column
                 }
             }
-            /**
-             * Future versions will include the QR code in this response.
-             */
+            val baseUrl = URL(call.request.getBaseUrl())
             val ret = call.url {
                 protocol = URLProtocol(
                     "taler".plus(if (baseUrl.protocol.lowercase() == "http") "+http" else ""),
@@ -1055,6 +1049,7 @@ val sandboxApp: Application.() -> Unit = {
         }
     }
 }
+
 fun serverMain(port: Int) {
     val server = embeddedServer(Netty, port = port, module = sandboxApp)
     logger.info("LibEuFin Sandbox running on port $port")

@@ -56,11 +56,6 @@ import java.net.URLEncoder
 import kotlin.system.exitProcess
 import java.net.URL
 
-private val baseUrl = URL(
-    getValueFromEnv("LIBEUFIN_NEXUS_BASE_URL") ?: throw Exception(
-        "env LIBEUFIN_NEXUS_BASE_URL is not defined")
-)
-
 /**
  * Return facade state depending on the type.
  */
@@ -901,7 +896,7 @@ val nexusApp: Application.() -> Unit = {
                     type = f.type,
                     baseUrl = call.url {
                         parameters.clear()
-                        encodedPath = baseUrl.path
+                        encodedPath = call.request.getBaseUrl()
                         pathComponents("facades", f.facadeName, f.type)
                         encodedPath += "/"
                     },
@@ -928,7 +923,7 @@ val nexusApp: Application.() -> Unit = {
                             type = it.type,
                             baseUrl = call.url {
                                 parameters.clear()
-                                encodedPath = baseUrl.path
+                                encodedPath = call.request.getBaseUrl()
                                 pathComponents("facades", it.facadeName, it.type)
                                 encodedPath += "/"
                             },
