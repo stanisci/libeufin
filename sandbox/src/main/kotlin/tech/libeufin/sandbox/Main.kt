@@ -394,32 +394,6 @@ val sandboxApp: Application.() -> Unit = {
                 io.ktor.http.HttpStatusCode.InternalServerError
             )
         }
-        exception<EbicsRequestError> { cause ->
-            val resp = tech.libeufin.util.ebics_h004.EbicsResponse.createForUploadWithError(
-                cause.errorText,
-                cause.errorCode,
-                // assuming that the phase is always transfer,
-                // as errors during initialization should have
-                // already been caught by the chunking logic.
-                tech.libeufin.util.ebics_h004.EbicsTypes.TransactionPhaseType.TRANSFER
-            )
-
-            val hostAuthPriv = transaction {
-                val host = tech.libeufin.sandbox.EbicsHostEntity.find {
-                    tech.libeufin.sandbox.EbicsHostsTable.hostID.upperCase() eq call.attributes.get(tech.libeufin.sandbox.EbicsHostIdAttribute)
-                        .uppercase()
-                }.firstOrNull() ?: throw SandboxError(
-                    io.ktor.http.HttpStatusCode.InternalServerError,
-                    "Requested Ebics host ID not found."
-                )
-                tech.libeufin.util.CryptoUtil.loadRsaPrivateKey(host.authenticationPrivateKey.bytes)
-            }
-            call.respondText(
-                tech.libeufin.util.XMLUtil.signEbicsResponse(resp, hostAuthPriv),
-                io.ktor.http.ContentType.Application.Xml,
-                io.ktor.http.HttpStatusCode.OK
-            )
-        }
         exception<SandboxError> { cause ->
             logger.error("Exception while handling '${call.request.uri}', ${cause.reason}")
             call.respond(
@@ -444,6 +418,32 @@ val sandboxApp: Application.() -> Unit = {
                 )
             )
         }
+        exception<EbicsRequestError> { e ->
+            logger.debug("Handling EbicsRequestError: $e")
+            val resp = tech.libeufin.util.ebics_h004.EbicsResponse.createForUploadWithError(
+                e.errorText,
+                e.errorCode,
+                // assuming that the phase is always transfer,
+                // as errors during initialization should have
+                // already been caught by the chunking logic.
+                tech.libeufin.util.ebics_h004.EbicsTypes.TransactionPhaseType.TRANSFER
+            )
+            val hostAuthPriv = transaction {
+                val host = EbicsHostEntity.find {
+                    tech.libeufin.sandbox.EbicsHostsTable.hostID.upperCase() eq call.attributes.get(tech.libeufin.sandbox.EbicsHostIdAttribute)
+                        .uppercase()
+                }.firstOrNull() ?: throw SandboxError(
+                    io.ktor.http.HttpStatusCode.InternalServerError,
+                    "Requested Ebics host ID not found."
+                )
+                tech.libeufin.util.CryptoUtil.loadRsaPrivateKey(host.authenticationPrivateKey.bytes)
+            }
+            call.respondText(
+                tech.libeufin.util.XMLUtil.signEbicsResponse(resp, hostAuthPriv),
+                io.ktor.http.ContentType.Application.Xml,
+                io.ktor.http.HttpStatusCode.OK
+            )
+        }
         exception<Throwable> { cause ->
             logger.error("Exception while handling '${call.request.uri}'", cause)
             call.respondText(
@@ -454,13 +454,20 @@ val sandboxApp: Application.() -> Unit = {
         }
     }
     intercept(ApplicationCallPipeline.Setup) {
-        logger.info("Going Setup phase.")
         val ac: ApplicationCall = call
         ac.attributes.put(WITH_AUTH_ATTRIBUTE_KEY, WITH_AUTH)
-        if (adminPassword != null) {
-            ac.attributes.put(AttributeKey("adminPassword"), adminPassword)
+        if (WITH_AUTH) {
+            if(adminPassword == null) {
+                throw internalServerError(
+                    "Sandbox has no admin password defined." +
+                            " Please define LIBEUFIN_SANDBOX_ADMIN_PASSWORD in the environment."
+                )
+            }
+            ac.attributes.put(
+                ADMIN_PASSWORD_ATTRIBUTE_KEY,
+                adminPassword
+            )
         }
-        logger.info("Finish Setup phase.")
         return@intercept
     }
     intercept(ApplicationCallPipeline.Fallback) {
@@ -839,8 +846,12 @@ val sandboxApp: Application.() -> Unit = {
                 call.ebicsweb()
             }
             /**
-             * Those errors were all detected by the bank's logic.
+             * The catch blocks below act as translators from
+             * generic error types to EBICS-formatted responses.
              */
+            catch (e: UtilError) {
+                throw EbicsProcessingError("Serving EBICS threw unmanaged UtilError: ${e.reason}")
+            }
             catch (e: SandboxError) {
                 // Should translate to EBICS error code.
                 when (e.errorCode) {
@@ -848,15 +859,18 @@ val sandboxApp: Application.() -> Unit = {
                     tech.libeufin.util.LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE -> throw EbicsProcessingError("Inconsistent bank state.")
                     else -> throw EbicsProcessingError("Unknown LibEuFin error code: ${e.errorCode}.")
                 }
-
             }
-            /**
-             * An error occurred, but it wasn't explicitly thrown by the bank.
-             */
+            catch (e: EbicsRequestError) {
+                // Preventing the last catch-all block
+                // from capturing a known type.
+                throw e
+            }
             catch (e: Exception) {
-                throw EbicsProcessingError("Unmanaged error: $e")
+                if (e !is EbicsRequestError) {
+                    throw EbicsProcessingError("Unmanaged error: $e")
+                }
             }
-
+            return@post
         }
 
         /**

@@ -19,7 +19,7 @@ from getpass import getpass
 # was received.
 def check_response_status(resp, expected_status_code=200):
     if resp.status_code != expected_status_code:
-        print("Unexpected response status: {}".format(resp.status_code))
+        print("Unexpected response status: {}".format(resp.status_code), file=sys.stderr)
         sys.exit(1)
 
 
@@ -284,8 +284,9 @@ class SandboxContext:
         sandbox_username = os.environ.get("LIBEUFIN_SANDBOX_USERNAME")
         sandbox_password = os.environ.get("LIBEUFIN_SANDBOX_PASSWORD")
         if not sandbox_username or not sandbox_password:
-            raise click.UsageError(
-                "Please define LIBEUFIN_SANDBOX_USERNAME and LIBEUFIN_SANDBOX_PASSWORD in the environment"
+            print(
+                "LIBEUFIN_SANDBOX_USERNAME and LIBEUFIN_SANDBOX_PASSWORD\n" \
+                "not found in the environment, assuming tests are being run..."
             )
         return sandbox_username, sandbox_password
 
@@ -1052,7 +1053,7 @@ def make_ebics_host(obj, host_id):
         resp = post(
             url,
             json=dict(hostID=host_id, ebicsVersion="2.5"),
-            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
     except Exception as e:
         print(e)
@@ -1097,7 +1098,7 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
         resp = post(
             url,
             json=dict(hostID=host_id, partnerID=partner_id, userID=user_id),
-            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
     except Exception as e:
         print(e)
@@ -1171,7 +1172,7 @@ def associate_bank_account(
     try:
         resp = post(
             url, json=body,
-            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
         )
     except Exception as e:
         print(e)
@@ -1229,10 +1230,14 @@ def transactions_list(obj, account_label):
 def bankaccount_generate_transactions(obj, account_label):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin_nodrop(
-        sandbox_base_url, f"/admin/bank-accounts/{account_label}/generate-transactions"
+        sandbox_base_url,
+        f"/admin/bank-accounts/{account_label}/generate-transactions"
     )
     try:
-        resp = post(url)
+        resp = post(
+            url,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
     except Exception as e:
         print(e)
         print("Could not reach sandbox")

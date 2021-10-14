@@ -480,7 +480,7 @@ class XMLUtil private constructor() {
             dvc.setProperty("javax.xml.crypto.dsig.cacheReference", true)
             dvc.uriDereferencer = EbicsSigUriDereferencer()
             val sig = fac.unmarshalXMLSignature(dvc)
-            // FIXME: check that parameters are okay!s
+            // FIXME: check that parameters are okay!
             val valResult = sig.validate(dvc)
             sig.signedInfo.references[0].validate(dvc)
             return valResult

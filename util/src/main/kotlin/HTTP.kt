@@ -37,7 +37,7 @@ fun extractToken(authHeader: String): String {
     return "${tokenSplit[0]}:${URLDecoder.decode(tokenSplit[1], Charsets.UTF_8)}"
 }
 
-internal fun internalServerError(
+fun internalServerError(
     reason: String,
     libeufinErrorCode: LibeufinErrorCode? = LibeufinErrorCode.LIBEUFIN_EC_NONE
 ): UtilError {
@@ -97,11 +97,13 @@ fun ApplicationRequest.basicAuth() {
     val credentials = getHTTPBasicAuthCredentials(this)
     if (credentials.first == "admin") {
         // env must contain the admin password, because --with-auth is true.
-        val adminPassword = this.call.ensureAttribute(ADMIN_PASSWORD_ATTRIBUTE_KEY)
+        val adminPassword: String = this.call.ensureAttribute(ADMIN_PASSWORD_ATTRIBUTE_KEY)
         if (credentials.second != adminPassword) throw unauthorized(
             "Admin authentication failed"
         )
+        return
     }
+    throw unauthorized("Demobank customers not implemented yet!")
     /**
      * TODO: extract customer hashed password from the database and check.
      */
