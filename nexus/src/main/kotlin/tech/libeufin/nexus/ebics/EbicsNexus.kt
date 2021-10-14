@@ -608,7 +608,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             it.add(Paragraph("Verschlüsselungsschlüssel").setFontSize(24f))
             writeCommon(it)
             it.add(Paragraph("Öffentlicher Schlüssel (Public encryption key)"))
-            writeKey(it, ebicsSubscriber.customerSignPriv)
+            writeKey(it, ebicsSubscriber.customerEncPriv)
             it.add(Paragraph("\n"))
             writeSigLine(it)
         }
