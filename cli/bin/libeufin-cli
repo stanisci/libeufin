@@ -280,11 +280,6 @@ class SandboxContext:
         self.sandbox_base_url = None
         self.username, self.password = self.require_sandbox_credentials()
 
-    def require_sandbox_admin_token(self):
-        token = os.environ.get("LIBEUFIN_SANDBOX_TOKEN")
-        if not token:
-            raise click.UsageError("Please define LIBEUFIN_SANDBOX_TOKEN in the environment")
-        return token
     def require_sandbox_credentials(self):
         sandbox_username = os.environ.get("LIBEUFIN_SANDBOX_USERNAME")
         sandbox_password = os.environ.get("LIBEUFIN_SANDBOX_PASSWORD")
@@ -1057,7 +1052,7 @@ def make_ebics_host(obj, host_id):
         resp = post(
             url,
             json=dict(hostID=host_id, ebicsVersion="2.5"),
-            headers={"Authorization": "Bearer " + obj.require_sandbox_admin_token()}
+            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
         )
     except Exception as e:
         print(e)
@@ -1102,7 +1097,7 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
         resp = post(
             url,
             json=dict(hostID=host_id, partnerID=partner_id, userID=user_id),
-            headers={"Authorization": "Bearer " + obj.require_sandbox_admin_token()}
+            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
         )
     except Exception as e:
         print(e)
@@ -1176,7 +1171,7 @@ def associate_bank_account(
     try:
         resp = post(
             url, json=body,
-            headers={"Authorization": "Bearer " + obj.require_sandbox_admin_token()}
+            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password),
         )
     except Exception as e:
         print(e)
