@@ -1035,7 +1035,7 @@ def sandbox_ebicshost(ctx):
 @click.pass_obj
 def check_sandbox_status(obj):
     sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin_nodrop(sandbox_base_url, "/config")
+    url = urljoin_nodrop(sandbox_base_url, "/")
     try:
         resp = get(url)
     except Exception as e:
