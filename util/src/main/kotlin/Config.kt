@@ -52,7 +52,13 @@ fun setLogLevel(logLevel: String?) {
     }
 }
 
-internal fun <T : Any>ApplicationCall.getAttribute(name: String): T {
+internal fun <T : Any>ApplicationCall.maybeAttribute(name: String): T? {
+    val key = AttributeKey<T>("name")
+    if (!this.attributes.contains(key)) return null
+    return this.attributes[key]
+}
+
+internal fun <T : Any>ApplicationCall.ensureAttribute(name: String): T {
     val key = AttributeKey<T>("name")
     if (!this.attributes.contains(key))
         throw internalServerError("Attribute $name not found along the call.")

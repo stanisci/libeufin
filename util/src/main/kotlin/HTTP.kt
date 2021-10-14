@@ -89,14 +89,15 @@ fun ApplicationRequest.getBaseUrl(): String {
  * environment.
  */
 fun ApplicationRequest.basicAuth() {
-    val withAuth = this.call.getAttribute<Boolean>("withAuth")
+    val withAuth = this.call.ensureAttribute<Boolean>("withAuth")
     if (!withAuth) {
         logger.info("Authentication is disabled - assuming tests currently running.")
         return
     }
     val credentials = getHTTPBasicAuthCredentials(this)
     if (credentials.first == "admin") {
-        val adminPassword = this.call.getAttribute<String>("adminPassword")
+        // env must contain the admin password, because --with-auth is true.
+        val adminPassword = this.call.ensureAttribute<String>("adminPassword")
         if (credentials.second != adminPassword) throw unauthorized(
             "Admin authentication failed"
         )

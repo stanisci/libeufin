@@ -463,6 +463,9 @@ val sandboxApp: Application.() -> Unit = {
         call.application.apply {
             if (adminPassword != null) {
                 call.attributes.put(AttributeKey("adminPassword"), adminPassword)
+                /**
+                 * When not given, the checker expects --no-auth to have been specified on the CLI.
+                 */
             }
         }
     }
