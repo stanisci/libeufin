@@ -82,11 +82,11 @@ import javax.xml.bind.JAXBContext
 import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
-private val currencyEnv: String? = getValueFromEnv("LIBEUFIN_SANDBOX_CURRENCY")
-private val envName: String? = getValueFromEnv("TALER_ENV_NAME")
+private val currencyEnv: String? = System.getenv("LIBEUFIN_SANDBOX_CURRENCY")
+private val envName: String? = System.getenv("TALER_ENV_NAME")
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
-// when null, privileged operations turn impossible
-private val sandboxToken: String? = getValueFromEnv("LIBEUFIN_SANDBOX_TOKEN")
+private val adminPassword: String? = System.getenv("LIBEUFIN_SANDBOX_ADMIN_PASSWORD")
+private var WITH_AUTH = true
 
 data class SandboxError(
     val statusCode: HttpStatusCode,
@@ -240,6 +240,10 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         }
     }
 
+    private val auth by option(
+        "--auth",
+        help = "Disable authentication."
+    ).flag("--no-auth", default = true)
     private val logLevel by option()
     private val port by option().int().default(5000)
     private val withUnixSocket by option(
@@ -248,6 +252,7 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
     )
 
     override fun run() {
+        WITH_AUTH = auth
         setLogLevel(logLevel)
         execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)) }
         if (withUnixSocket != null) {
@@ -448,6 +453,19 @@ val sandboxApp: Application.() -> Unit = {
             )
         }
     }
+    intercept(ApplicationCallPipeline.Setup) {
+        /**
+         * Allows disabling authentication during tests.
+         */
+        call.application.apply {
+            attributes.put(AttributeKey("withAuth"), WITH_AUTH)
+        }
+        call.application.apply {
+            if (adminPassword != null) {
+                call.attributes.put(AttributeKey("adminPassword"), adminPassword)
+            }
+        }
+    }
     intercept(ApplicationCallPipeline.Fallback) {
         if (this.call.response.status() == null) {
             call.respondText(
@@ -467,7 +485,7 @@ val sandboxApp: Application.() -> Unit = {
         // Respond with the last statement of the requesting account.
         // Query details in the body.
         post("/admin/payments/camt") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val body = call.receiveJson<CamtParams>()
             val bankaccount = getAccountFromLabel(body.bankaccount)
             if (body.type != 53) throw SandboxError(
@@ -490,7 +508,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // create a new bank account, no EBICS relation.
         post("/admin/bank-accounts/{label}") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val body = call.receiveJson<BankAccountInfo>()
             transaction {
                 BankAccountEntity.new {
@@ -507,7 +525,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Information about one bank account.
         get("/admin/bank-accounts/{label}") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val label = ensureNonNull(call.parameters["label"])
             val ret = transaction {
                 val bankAccount = tech.libeufin.sandbox.BankAccountEntity.find {
@@ -532,7 +550,7 @@ val sandboxApp: Application.() -> Unit = {
         // Book one incoming payment for the requesting account.
         // The debtor is not required to have an account at this Sandbox.
         post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val body = call.receiveJson<IncomingPaymentInfo>()
             // FIXME: generate nicer UUID!
             val accountLabel = ensureNonNull(call.parameters["label"])
@@ -574,7 +592,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Associates a new bank account with an existing Ebics subscriber.
         post("/admin/ebics/bank-accounts") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val body = call.receiveJson<BankAccountRequest>()
             if (!validateBic(body.bic)) {
                 throw SandboxError(io.ktor.http.HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
@@ -606,7 +624,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Information about all the bank accounts.
         get("/admin/bank-accounts") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val accounts = mutableListOf<BankAccountInfo>()
             transaction {
                 tech.libeufin.sandbox.BankAccountEntity.all().forEach {
@@ -626,7 +644,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Details of all the transactions of one bank account.
         get("/admin/bank-accounts/{label}/transactions") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val ret = AccountTransactions()
             transaction {
                 val accountLabel = ensureNonNull(call.parameters["label"])
@@ -669,7 +687,7 @@ val sandboxApp: Application.() -> Unit = {
         // one bank account.  Counterparts do not need to have an account
         // at this Sandbox.
         post("/admin/bank-accounts/{label}/generate-transactions") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             transaction {
                 val accountLabel = ensureNonNull(call.parameters["label"])
                 val account = getBankAccountFromLabel(accountLabel)
@@ -720,7 +738,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Creates a new Ebics subscriber.
         post("/admin/ebics/subscribers") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val body = call.receiveJson<EbicsSubscriberElement>()
             transaction {
                 tech.libeufin.sandbox.EbicsSubscriberEntity.new {
@@ -741,7 +759,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Shows details of all the EBICS subscribers of this Sandbox.
         get("/admin/ebics/subscribers") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val ret = AdminGetSubscribers()
             transaction {
                 tech.libeufin.sandbox.EbicsSubscriberEntity.all().forEach {
@@ -760,7 +778,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Change keys used in the EBICS communications.
         post("/admin/ebics/hosts/{hostID}/rotate-keys") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val hostID: String = call.parameters["hostID"] ?: throw SandboxError(
                 io.ktor.http.HttpStatusCode.BadRequest, "host ID missing in URL"
             )
@@ -787,7 +805,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Create a new EBICS host
         post("/admin/ebics/hosts") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val req = call.receiveJson<EbicsHostCreateRequest>()
             val pairA = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
             val pairB = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
@@ -811,7 +829,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Show the names of all the Ebics hosts
         get("/admin/ebics/hosts") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             val ebicsHosts = transaction {
                 tech.libeufin.sandbox.EbicsHostEntity.all().map { it.hostId }
             }
@@ -849,7 +867,7 @@ val sandboxApp: Application.() -> Unit = {
          * the default exchange, from a designated/constant customer.
          */
         get("/taler") {
-            call.request.authWithToken(sandboxToken)
+            call.request.basicAuth()
             SandboxAssert(
                 currencyEnv != null,
                 "Currency not found.  Logs should have warned"

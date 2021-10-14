@@ -16,6 +16,8 @@ private fun unauthorized(msg: String): UtilError {
     )
 }
 
+
+
 /**
  * Returns the token (including the 'secret-token:' prefix)
  * from a Authorization header.  Throws exception on malformations
@@ -35,7 +37,7 @@ fun extractToken(authHeader: String): String {
     return "${tokenSplit[0]}:${URLDecoder.decode(tokenSplit[1], Charsets.UTF_8)}"
 }
 
-private fun internalServerError(
+internal fun internalServerError(
     reason: String,
     libeufinErrorCode: LibeufinErrorCode? = LibeufinErrorCode.LIBEUFIN_EC_NONE
 ): UtilError {
@@ -86,15 +88,22 @@ fun ApplicationRequest.getBaseUrl(): String {
  * @param tokenEnv is the authorization token that was found in the
  * environment.
  */
-fun ApplicationRequest.authWithToken(tokenEnv: String?) {
-    if (tokenEnv == null) {
-        logger.info("Authenticating operation without any env token!")
-        throw unauthorized("Authentication is not available now")
+fun ApplicationRequest.basicAuth() {
+    val withAuth = this.call.getAttribute<Boolean>("withAuth")
+    if (!withAuth) {
+        logger.info("Authentication is disabled - assuming tests currently running.")
+        return
     }
-    val auth = this.headers[HttpHeaders.Authorization] ?:
-    throw unauthorized("Authorization header was not found in the request")
-    val tokenReq = extractToken(auth)
-    if (tokenEnv != tokenReq) throw unauthorized("Authentication failed, token did not match")
+    val credentials = getHTTPBasicAuthCredentials(this)
+    if (credentials.first == "admin") {
+        val adminPassword = this.call.getAttribute<String>("adminPassword")
+        if (credentials.second != adminPassword) throw unauthorized(
+            "Admin authentication failed"
+        )
+    }
+    /**
+     * TODO: extract customer hashed password from the database and check.
+     */
 }
 
 fun getHTTPBasicAuthCredentials(request: ApplicationRequest): Pair<String, String> {

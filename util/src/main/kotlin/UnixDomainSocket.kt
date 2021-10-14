@@ -31,7 +31,10 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.nio.charset.Charset
 
-fun startServer(unixSocketPath: String, app: Application.() -> Unit) {
+fun startServer(
+    unixSocketPath: String,
+    app: Application.() -> Unit
+) {
     val boss = EpollEventLoopGroup()
     val worker = EpollEventLoopGroup()
     try {

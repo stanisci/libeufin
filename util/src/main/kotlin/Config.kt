@@ -4,6 +4,8 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.util.ContextInitializer
 import ch.qos.logback.core.util.Loader
+import io.ktor.application.*
+import io.ktor.util.*
 import org.slf4j.LoggerFactory
 import printLnErr
 import kotlin.system.exitProcess
@@ -48,6 +50,13 @@ fun setLogLevel(logLevel: String?) {
             }
         }
     }
+}
+
+internal fun <T : Any>ApplicationCall.getAttribute(name: String): T {
+    val key = AttributeKey<T>("name")
+    if (!this.attributes.contains(key))
+        throw internalServerError("Attribute $name not found along the call.")
+    return this.attributes[key]
 }
 
 fun getValueFromEnv(varName: String): String? {
