@@ -1,3 +1,9 @@
+libeufin (0.0.1-12) unstable; urgency=medium
+
+  * Fix key letter generation.
+
+ -- Florian Dold <florian@dold.me>  Thu, 14 Oct 2021 14:46:04 +0200
+
 libeufin (0.0.1-11) unstable; urgency=medium
 
   * Add anastasis facade to the nexus.
