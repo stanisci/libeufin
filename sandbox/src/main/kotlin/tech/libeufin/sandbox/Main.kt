@@ -454,20 +454,14 @@ val sandboxApp: Application.() -> Unit = {
         }
     }
     intercept(ApplicationCallPipeline.Setup) {
-        /**
-         * Allows disabling authentication during tests.
-         */
-        call.application.apply {
-            attributes.put(AttributeKey("withAuth"), WITH_AUTH)
+        logger.info("Going Setup phase.")
+        val ac: ApplicationCall = call
+        ac.attributes.put(WITH_AUTH_ATTRIBUTE_KEY, WITH_AUTH)
+        if (adminPassword != null) {
+            ac.attributes.put(AttributeKey("adminPassword"), adminPassword)
         }
-        call.application.apply {
-            if (adminPassword != null) {
-                call.attributes.put(AttributeKey("adminPassword"), adminPassword)
-                /**
-                 * When not given, the checker expects --no-auth to have been specified on the CLI.
-                 */
-            }
-        }
+        logger.info("Finish Setup phase.")
+        return@intercept
     }
     intercept(ApplicationCallPipeline.Fallback) {
         if (this.call.response.status() == null) {

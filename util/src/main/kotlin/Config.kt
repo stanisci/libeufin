@@ -10,6 +10,17 @@ import org.slf4j.LoggerFactory
 import printLnErr
 import kotlin.system.exitProcess
 
+/**
+ * Putting those values into the 'attributes' container because they
+ * are needed by the util routines that do NOT have Sandbox and Nexus
+ * as dependencies, and therefore cannot access their global variables.
+ *
+ * Note: putting Sandbox and Nexus as Utils dependencies would result
+ * into circular dependency.
+ */
+val WITH_AUTH_ATTRIBUTE_KEY = AttributeKey<Boolean>("withAuth")
+val ADMIN_PASSWORD_ATTRIBUTE_KEY = AttributeKey<String>("adminPassword")
+
 fun getVersion(): String {
     return Loader.getResource(
         "version.txt", ClassLoader.getSystemClassLoader()
@@ -58,10 +69,14 @@ internal fun <T : Any>ApplicationCall.maybeAttribute(name: String): T? {
     return this.attributes[key]
 }
 
-internal fun <T : Any>ApplicationCall.ensureAttribute(name: String): T {
-    val key = AttributeKey<T>("name")
-    if (!this.attributes.contains(key))
-        throw internalServerError("Attribute $name not found along the call.")
+/**
+ * Retun the attribute, or throw 500 Internal server error.
+ */
+fun <T : Any>ApplicationCall.ensureAttribute(key: AttributeKey<T>): T {
+    if (!this.attributes.contains(key)) {
+        println("Error: attribute $key not found along the call.")
+        throw internalServerError("Attribute $key not found along the call.")
+    }
     return this.attributes[key]
 }
 
