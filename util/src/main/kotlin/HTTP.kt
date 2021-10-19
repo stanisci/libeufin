@@ -16,7 +16,11 @@ private fun unauthorized(msg: String): UtilError {
     )
 }
 
-
+fun notFound(msg: String): UtilError {
+    return UtilError(
+        HttpStatusCode.NotFound, msg, LibeufinErrorCode.LIBEUFIN_EC_NONE
+    )
+}
 
 /**
  * Returns the token (including the 'secret-token:' prefix)
@@ -45,6 +49,14 @@ fun internalServerError(
         HttpStatusCode.InternalServerError,
         reason,
         ec = libeufinErrorCode
+    )
+}
+
+fun badRequest(msg: String): UtilError {
+    return UtilError(
+        HttpStatusCode.BadRequest,
+        msg,
+        ec = LibeufinErrorCode.LIBEUFIN_EC_NONE
     )
 }
 
@@ -81,18 +93,25 @@ fun ApplicationRequest.getBaseUrl(): String {
 }
 
 /**
- * Authenticate the HTTP request with a given token.  This one
- * is expected to comply with the RFC 8959 format; the function
- * throws an exception when the authentication fails
- *
- * @param tokenEnv is the authorization token that was found in the
- * environment.
+ * Get the URI (path's) component or throw Internal server error.
+ * @param component the name of the URI component to return.
  */
-fun ApplicationRequest.basicAuth() {
+fun ApplicationCall.getUriComponent(name: String): String {
+    val ret: String? = this.parameters[name]
+    if (ret == null) throw internalServerError("Component $name not found in URI")
+    return ret
+}
+/**
+ * Return:
+ * - null if the authentication is disabled (during tests, for example)
+ * - the name of the authenticated user
+ * - throw exception when the authentication fails
+ */
+fun ApplicationRequest.basicAuth(): String? {
     val withAuth = this.call.ensureAttribute(WITH_AUTH_ATTRIBUTE_KEY)
     if (!withAuth) {
         logger.info("Authentication is disabled - assuming tests currently running.")
-        return
+        return null
     }
     val credentials = getHTTPBasicAuthCredentials(this)
     if (credentials.first == "admin") {
@@ -101,12 +120,26 @@ fun ApplicationRequest.basicAuth() {
         if (credentials.second != adminPassword) throw unauthorized(
             "Admin authentication failed"
         )
-        return
+        return credentials.first
     }
     throw unauthorized("Demobank customers not implemented yet!")
     /**
      * TODO: extract customer hashed password from the database and check.
      */
+}
+
+/**
+ * Throw "unauthorized" if the request is not
+ * authenticated by "admin", silently return otherwise.
+ *
+ * @param username who made the request.
+ */
+fun expectAdmin(username: String?) {
+    if (username == null) {
+        logger.info("Skipping 'admin' authentication for tests.")
+        return
+    }
+    if (username != "admin") throw unauthorized("Only admin allowed: $username is not.")
 }
 
 fun getHTTPBasicAuthCredentials(request: ApplicationRequest): Pair<String, String> {
@@ -119,6 +152,7 @@ fun getHTTPBasicAuthCredentials(request: ApplicationRequest): Pair<String, Strin
  */
 fun getAuthorizationHeader(request: ApplicationRequest): String {
     val authorization = request.headers["Authorization"]
+    logger.debug("Found Authorization header: $authorization")
     return authorization ?: throw UtilError(
         HttpStatusCode.BadRequest, "Authorization header not found",
         LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED

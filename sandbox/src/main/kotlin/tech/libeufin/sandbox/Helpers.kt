@@ -87,24 +87,16 @@ fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccount
     }
 }
 
-/**
- * Fetch a configuration for Sandbox, corresponding to the host that runs the service.
- */
-fun getSandboxConfig(hostname: String?): SandboxConfigEntity {
-    var ret: SandboxConfigEntity? = transaction {
-        if (hostname == null) {
-            SandboxConfigEntity.all().firstOrNull()
+fun getSandboxConfig(name: String?): DemobankConfigEntity? {
+    return transaction {
+        if (name == null) {
+            DemobankConfigEntity.all().firstOrNull()
         } else {
-            SandboxConfigEntity.find {
-                SandboxConfigsTable.hostname eq hostname
+            DemobankConfigEntity.find {
+                DemobankConfigsTable.name eq name
             }.firstOrNull()
         }
     }
-    if (ret == null) throw SandboxError(
-        HttpStatusCode.InternalServerError,
-        "Serving from a non configured host"
-    )
-    return ret
 }
 
 fun getEbicsSubscriberFromDetails(userID: String, partnerID: String, hostID: String): EbicsSubscriberEntity {

@@ -22,6 +22,13 @@ package tech.libeufin.sandbox
 import tech.libeufin.util.PaymentInfo
 import tech.libeufin.util.RawPayment
 
+data class Demobank(
+    val currency: String,
+    val name: String,
+    val userDebtLimit: Int,
+    val bankDebtLimit: Int,
+    val allowRegistrations: Boolean
+)
 /**
  * Used to show the list of Ebics hosts that exist
  * in the system.

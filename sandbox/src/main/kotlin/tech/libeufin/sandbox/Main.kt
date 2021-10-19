@@ -104,8 +104,8 @@ class Config : CliktCommand("Insert one configuration into the database") {
         }
     }
 
-    private val hostnameOption by argument(
-        "HOSTNAME", help = "hostname that serves this configuration"
+    private val nameOption by argument(
+        "NAME", help = "Name of this configuration"
     )
     private val currencyOption by option("--currency").default("EUR")
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
@@ -120,12 +120,19 @@ class Config : CliktCommand("Insert one configuration into the database") {
         execThrowableOrTerminate {
             dbCreateTables(dbConnString)
             transaction {
-                SandboxConfigEntity.new {
+                val checkExist = DemobankConfigEntity.find {
+                    DemobankConfigsTable.name eq nameOption
+                }.firstOrNull()
+                if (checkExist != null) {
+                    println("Error, demobank ${nameOption} exists already, not overriding it.")
+                    exitProcess(1)
+                }
+                DemobankConfigEntity.new {
                     currency = currencyOption
                     bankDebtLimit = bankDebtLimitOption
                     usersDebtLimit = usersDebtLimitOption
                     allowRegistrations = allowRegistrationsOption
-                    hostname = hostnameOption
+                    name = nameOption
                 }
             }
         }
@@ -254,6 +261,11 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
     override fun run() {
         WITH_AUTH = auth
         setLogLevel(logLevel)
+        if (WITH_AUTH && adminPassword == null) {
+            println("Error: auth is enabled, but env LIBEUFIN_SANDBOX_ADMIN_PASSWORD is not."
+            + " (Option --no-auth exists for tests)")
+            exitProcess(1)
+        }
         execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)) }
         if (withUnixSocket != null) {
             startServer(
@@ -266,6 +278,15 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
     }
 }
 
+private fun getJsonFromDemobankConfig(fromDb: DemobankConfigEntity): Demobank {
+    return Demobank(
+        currency = fromDb.currency,
+        userDebtLimit = fromDb.usersDebtLimit,
+        bankDebtLimit = fromDb.bankDebtLimit,
+        allowRegistrations = fromDb.allowRegistrations,
+        name = fromDb.name
+    )
+}
 fun findEbicsSubscriber(partnerID: String, userID: String, systemID: String?): EbicsSubscriberEntity? {
     return if (systemID == null) {
         EbicsSubscriberEntity.find {
@@ -460,7 +481,9 @@ val sandboxApp: Application.() -> Unit = {
             if(adminPassword == null) {
                 throw internalServerError(
                     "Sandbox has no admin password defined." +
-                            " Please define LIBEUFIN_SANDBOX_ADMIN_PASSWORD in the environment."
+                            " Please define LIBEUFIN_SANDBOX_ADMIN_PASSWORD in the environment, " +
+                            "or launch with --no-auth."
+
                 )
             }
             ac.attributes.put(
@@ -1018,33 +1041,37 @@ val sandboxApp: Application.() -> Unit = {
         // debt limit and possibly other configuration
         // (could also be a CLI command for now)
         post("/demobanks") {
-
+            throw NotImplementedError("Only available in the CLI.")
         }
 
-        // List configured demobanks
         get("/demobanks") {
-
-        }
-
-        delete("/demobank/{demobankid") {
-
-        }
-
-        get("/demobank/{demobankid") {
-
-        }
-
-        route("/demobank/{demobankid}") {
-            // Note: Unlike the old pybank, the sandbox does *not* actually expose the
-            // taler wire gateway API, because the exchange uses the nexus.
-
-            // Endpoint(s) for making arbitrary payments in the sandbox for integration tests
-            // FIXME: Do we actually need this, or can we just use the sandbox admin APIs?
-            route("/testing-api") {
-
+            expectAdmin(call.request.basicAuth())
+            val ret = object { val demoBanks = mutableListOf<Demobank>() }
+            transaction {
+                DemobankConfigEntity.all().forEach {
+                    ret.demoBanks.add(getJsonFromDemobankConfig(it))
+                }
             }
+            call.respond(ret)
+            return@get
+        }
+
+        get("/demobanks/{demobankid}") {
+            expectAdmin(call.request.basicAuth())
+            val demobankId = call.getUriComponent("demobankid")
+            val ret: DemobankConfigEntity = transaction {
+                DemobankConfigEntity.find {
+                    DemobankConfigsTable.name eq demobankId
+                }.firstOrNull()
+            } ?: throw notFound("Demobank ${demobankId} not found")
+            call.respond(getJsonFromDemobankConfig(ret))
+            return@get
+        }
+
+        route("/demobanks/{demobankid}") {
 
             route("/access-api") {
+
                 get("/accounts/{account_name}") {
                     // Authenticated.  Accesses basic information (balance)
                     // about an account. (see docs)
@@ -1068,10 +1095,8 @@ val sandboxApp: Application.() -> Unit = {
                     // Get transaction history of a public account
                 }
 
-                post("/testing/register") {
-                    // Register a new account.
-                    // No authentication is required to register a new user.
-                    // FIXME:  Should probably not use "testing" as the prefix, since it's used "in production" in the demobank SPA
+                post("/register") {
+
                 }
             }
 

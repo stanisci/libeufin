@@ -88,64 +88,33 @@ enum class KeyState {
 }
 
 // FIXME:  This should be DemobankConfigTable!
-object SandboxConfigsTable : LongIdTable() {
+object DemobankConfigsTable : LongIdTable() {
     val currency = text("currency")
     val allowRegistrations = bool("allowRegistrations")
     val bankDebtLimit = integer("bankDebtLimit")
     val usersDebtLimit = integer("usersDebtLimit")
-    val hostname = text("hostname")
+    val name = text("hostname")
 }
 
-class SandboxConfigEntity(id: EntityID<Long>) : LongEntity(id) {
-    companion object : LongEntityClass<SandboxConfigEntity>(SandboxConfigsTable)
-    var currency by SandboxConfigsTable.currency
-    var allowRegistrations by SandboxConfigsTable.allowRegistrations
-    var bankDebtLimit by SandboxConfigsTable.bankDebtLimit
-    var usersDebtLimit by SandboxConfigsTable.usersDebtLimit
-    var hostname by SandboxConfigsTable.hostname
+class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<DemobankConfigEntity>(DemobankConfigsTable)
+    var currency by DemobankConfigsTable.currency
+    var allowRegistrations by DemobankConfigsTable.allowRegistrations
+    var bankDebtLimit by DemobankConfigsTable.bankDebtLimit
+    var usersDebtLimit by DemobankConfigsTable.usersDebtLimit
+    var name by DemobankConfigsTable.name
 }
-
-/**
- * Currently, this entity is never associated with a bank account,
- * as those get only paired with Ebics subscribers!  Eventually, a
- * Ebics subscriber should map to a SandboxUserEntity that in turn
- * will own bank accounts.
- *
- * FIXME:  Do we really need normal users and superusers for the sandbox?
- * => Nope, we don't even want user management for the sandbox!
- * => This table must be killed, instead we just read the admin token via env variable
- *    and use a fixed "admin" user name.
- */
-object SandboxUsersTable : LongIdTable() {
-    val username = text("username")
-    val passwordHash = text("password")
-    val superuser = bool("superuser") // admin
-    /**
-     * Some users may only have an administrative role in the system,
-     * therefore do not need a bank account.
-     */
-    val bankAccount = reference("bankAccount", BankAccountsTable).nullable()
-}
-
-class SandboxUserEntity(id: EntityID<Long>) : LongEntity(id) {
-    companion object : LongEntityClass<SandboxUserEntity>(SandboxUsersTable)
-    var username by SandboxUsersTable.username
-    var passwordHash by SandboxUsersTable.passwordHash
-    var superuser by SandboxUsersTable.superuser
-    var bankAccount by BankAccountEntity optionalReferencedOn SandboxUsersTable.bankAccount
-}
-
 
 /**
  * Users who are allowed to log into the demo bank.
  * Created via the /demobanks/{demobankname}/register endpoint.
  */
-object DemobankUsersTable : LongIdTable() {
-    // FIXME: ...
-    // var isPublic = ...
-    // var demobankConfig (=> which demobank is this user part of)
-    // ...
-    // FIXME: Must have a mandatory foreign key reference into BankAccountTransactionsTable
+object DemobankCustomersTable : LongIdTable() {
+    val isPublic = bool("isPublic").default(false)
+    val demobankConfig = reference("demobankConfig", DemobankConfigsTable)
+    val balance = text("balance")
+    val username = text("username")
+    val passwordHash = text("passwordHash")
 }
 
 
@@ -479,8 +448,7 @@ fun dbDropTables(dbConnectionString: String) {
             BankAccountsTable,
             BankAccountReportsTable,
             BankAccountStatementsTable,
-            SandboxConfigsTable,
-            SandboxUsersTable,
+            DemobankConfigsTable,
             TalerWithdrawalsTable
         )
     }
@@ -491,8 +459,7 @@ fun dbCreateTables(dbConnectionString: String) {
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         SchemaUtils.create(
-            SandboxConfigsTable,
-            SandboxUsersTable,
+            DemobankConfigsTable,
             EbicsSubscribersTable,
             EbicsHostsTable,
             EbicsDownloadTransactionsTable,
