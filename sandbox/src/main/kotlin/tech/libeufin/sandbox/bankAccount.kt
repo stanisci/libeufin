@@ -165,10 +165,10 @@ fun wireTransfer(
         BankAccountTransactionEntity.new {
             creditorIban = credit.iban
             creditorBic = credit.bic
-            creditorName = credit.name
+            creditorName = "Creditor Name"
             debtorIban = debit.iban
             debtorBic = debit.bic
-            debtorName = debit.name
+            debtorName = "Debitor Name"
             subject = subjectArg
             this.amount = amountObj.amount.toString()
             currency = amountObj.currency
@@ -180,10 +180,10 @@ fun wireTransfer(
         BankAccountTransactionEntity.new {
             creditorIban = credit.iban
             creditorBic = credit.bic
-            creditorName = credit.name
+            creditorName = "Creditor Name"
             debtorIban = debit.iban
             debtorBic = debit.bic
-            debtorName = debit.name
+            debtorName = "Debitor Name"
             subject = subjectArg
             this.amount = amountObj.amount.toString()
             currency = amountObj.currency

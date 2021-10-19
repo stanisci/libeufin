@@ -278,6 +278,11 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
     }
 }
 
+private fun getCustomerFromDb(username: String): DemobankCustomerEntity {
+    return transaction { DemobankCustomerEntity.find {
+        DemobankCustomersTable.username eq username
+    }.firstOrNull() } ?: throw notFound("Customer with username '$username' not found")
+}
 private fun getJsonFromDemobankConfig(fromDb: DemobankConfigEntity): Demobank {
     return Demobank(
         currency = fromDb.currency,
@@ -541,7 +546,6 @@ val sandboxApp: Application.() -> Unit = {
                 BankAccountEntity.new {
                     iban = body.iban
                     bic = body.bic
-                    name = body.name
                     label = body.label
                     currency = body.currency ?: "EUR"
                 }
@@ -566,7 +570,6 @@ val sandboxApp: Application.() -> Unit = {
                     val balance = "${bankAccount.currency}:${balance}"
                     val iban = bankAccount.iban
                     val bic = bankAccount.bic
-                    val name = bankAccount.name
                     val label = bankAccount.label
                 }
             }
@@ -600,7 +603,7 @@ val sandboxApp: Application.() -> Unit = {
                 tech.libeufin.sandbox.BankAccountTransactionEntity.new {
                     creditorIban = account.iban
                     creditorBic = account.bic
-                    creditorName = account.name
+                    creditorName = "Creditor Name" // FIXME: Waits to get this value from the DemobankCustomer type.
                     debtorIban = body.debtorIban
                     debtorBic = reqDebtorBic
                     debtorName = body.debtorName
@@ -640,7 +643,6 @@ val sandboxApp: Application.() -> Unit = {
                 subscriber.bankAccount = tech.libeufin.sandbox.BankAccountEntity.new {
                     iban = body.iban
                     bic = body.bic
-                    name = body.name
                     label = body.label
                     currency = body.currency.uppercase(java.util.Locale.ROOT)
                 }
@@ -658,10 +660,10 @@ val sandboxApp: Application.() -> Unit = {
                     accounts.add(
                         BankAccountInfo(
                             label = it.label,
-                            name = it.name,
                             bic = it.bic,
                             iban = it.iban,
-                            currency = it.currency
+                            currency = it.currency,
+                            name = "Bank account owner's name"
                         )
                     )
                 }
@@ -726,7 +728,7 @@ val sandboxApp: Application.() -> Unit = {
                     tech.libeufin.sandbox.BankAccountTransactionEntity.new {
                         creditorIban = account.iban
                         creditorBic = account.bic
-                        creditorName = account.name
+                        creditorName = "Creditor Name"
                         debtorIban = "DE64500105178797276788"
                         debtorBic = "DEUTDEBB101"
                         debtorName = "Max Mustermann"
@@ -746,7 +748,7 @@ val sandboxApp: Application.() -> Unit = {
                     BankAccountTransactionEntity.new {
                         debtorIban = account.iban
                         debtorBic = account.bic
-                        debtorName = account.name
+                        debtorName = "Debitor Name"
                         creditorIban = "DE64500105178797276788"
                         creditorBic = "DEUTDEBB101"
                         creditorName = "Max Mustermann"
@@ -896,49 +898,6 @@ val sandboxApp: Application.() -> Unit = {
             return@post
         }
 
-        /**
-         * Activates a withdraw operation of 1 currency unit with
-         * the default exchange, from a designated/constant customer.
-         */
-        get("/taler") {
-            call.request.basicAuth()
-            SandboxAssert(
-                currencyEnv != null,
-                "Currency not found.  Logs should have warned"
-            )
-            // check that the three canonical accounts exist
-            val wo = transaction {
-                val exchange = BankAccountEntity.find {
-                    BankAccountsTable.label eq "sandbox-account-exchange"
-                }.firstOrNull()
-                val customer = BankAccountEntity.find {
-                    BankAccountsTable.label eq "sandbox-account-customer"
-                }.firstOrNull()
-                val merchant = BankAccountEntity.find {
-                    BankAccountsTable.label eq "sandbox-account-merchant"
-                }.firstOrNull()
-
-                SandboxAssert(exchange != null, "exchange has no bank account")
-                SandboxAssert(customer != null, "customer has no bank account")
-                SandboxAssert(merchant != null, "merchant has no bank account")
-
-                // At this point, the three actors exist and a new withdraw operation can be created.
-                TalerWithdrawalEntity.new {
-                    // wopid is autogenerated, and momentarily the only column
-                }
-            }
-            val baseUrl = URL(call.request.getBaseUrl())
-            val ret = call.url {
-                protocol = URLProtocol(
-                    "taler".plus(if (baseUrl.protocol.lowercase() == "http") "+http" else ""),
-                    -1
-                )
-                pathComponents(baseUrl.path, "api", wo.wopid.toString())
-                encodedPath += "/"
-            }
-            call.respondText(ret)
-            return@get
-        }
         get("/api/config") {
             SandboxAssert(
                 currencyEnv != null,
@@ -1072,26 +1031,80 @@ val sandboxApp: Application.() -> Unit = {
 
             route("/access-api") {
 
+                post("/accounts/{account_name}/withdrawals") {
+                    val username = call.request.basicAuth()
+                    ensureDemobank(call.getUriComponent("demobankid"))
+                    /**
+                     * Check that the three canonical accounts exist.  The names
+                     * below match those used in the testing harnesses.
+                     */
+                    val wo: TalerWithdrawalEntity = transaction {
+                        val exchange = BankAccountEntity.find {
+                            BankAccountsTable.label eq "sandbox-account-exchange"
+                        }.firstOrNull()
+                        val customer = BankAccountEntity.find {
+                            BankAccountsTable.label eq "sandbox-account-customer"
+                        }.firstOrNull()
+                        val merchant = BankAccountEntity.find {
+                            BankAccountsTable.label eq "sandbox-account-merchant"
+                        }.firstOrNull()
+                        SandboxAssert(exchange != null, "exchange has no bank account")
+                        SandboxAssert(customer != null, "customer has no bank account")
+                        SandboxAssert(merchant != null, "merchant has no bank account")
+                        // At this point, the three actors exist and a new withdraw operation can be created.
+                        val wo = TalerWithdrawalEntity.new { /* wopid is autogenerated, and momentarily the only column */ }
+                        wo
+                    }
+                    val baseUrl = URL(call.request.getBaseUrl())
+                    val withdrawUri = call.url {
+                        protocol = URLProtocol(
+                            "taler".plus(if (baseUrl.protocol.lowercase() == "http") "+http" else ""),
+                            -1
+                        )
+                        pathComponents(baseUrl.path, "api", wo.wopid.toString())
+                        encodedPath += "/"
+                    }
+                    call.respond(object {
+                        val withdrawal_id = wo.id.value
+                        val taler_withdraw_uri = withdrawUri
+                    })
+                    return@post
+                }
+
+                // Confirm the wire transfer to the exchange.  Idempotent
+                post("/accounts/{account_name}/withdrawals/confirm") {
+
+
+                    return@post
+                }
                 get("/accounts/{account_name}") {
                     val username = call.request.basicAuth()
                     val accountAccessed = call.getUriComponent("account_name")
-                    if (username != accountAccessed) {
-                        throw forbidden("Account '$accountAccessed' not allowed for '$username'")
-                    }
-                    val customer = transaction {
-                        val res = DemobankCustomerEntity.find {
-                            DemobankCustomersTable.username eq username
+                    val bankAccount = transaction {
+                        val res = BankAccountEntity.find {
+                            BankAccountsTable.label eq accountAccessed
                         }.firstOrNull()
                         res
-                    } ?: throw internalServerError("Account '$accountAccessed' not found AFTER authentication!")
-                    val creditDebitIndicator = if (customer.isDebit) {
+                    } ?: throw notFound("Account '$accountAccessed' not found")
+
+                    // Check rights.
+                    if (WITH_AUTH) {
+                        val customer = getCustomerFromDb(username ?: throw internalServerError(
+                            "Optional authentication broken!"
+                        ))
+                        if (customer.bankAccount.label != accountAccessed) throw forbidden(
+                            "Customer '$username' cannot access bank account '$accountAccessed'"
+                        )
+                    }
+
+                    val creditDebitIndicator = if (bankAccount.isDebit) {
                         "debit"
                     } else {
                         "credit"
                     }
                     call.respond(object {
                         val balance = {
-                            val amount = customer.balance
+                            val amount = bankAccount.balance
                             val credit_debit_indicator = creditDebitIndicator
                         }
                     })
@@ -1119,8 +1132,8 @@ val sandboxApp: Application.() -> Unit = {
                             ret.publicAccounts.add(
                                 CustomerInfo(
                                     username = it.username,
-                                    balance = it.balance,
-                                    iban = it.iban,
+                                    balance = it.bankAccount.balance,
+                                    iban = it.bankAccount.iban,
                                     name = it.name ?: throw internalServerError(
                                         "Found name-less public account, username: ${it.username}"
                                     )
@@ -1155,12 +1168,17 @@ val sandboxApp: Application.() -> Unit = {
                     // Create new customer.
                     requireValidResourceName(req.username)
                     transaction {
-                        // FIXME: Since we now use IBANs everywhere, maybe the account should also be assigned an IBAN
+                        val bankAccount = BankAccountEntity.new {
+                            iban = getIban()
+                            label = req.username + "acct" // multiple accounts per username not allowed.
+                            currency = demobank.currency
+                            balance = "${demobank.currency}:0"
+                        }
                         DemobankCustomerEntity.new {
                             username = req.username
                             passwordHash = CryptoUtil.hashpw(req.password)
-                            demobankConfig = demobank.id
-                            iban = getIban()
+                            demobankConfig = demobank
+                            this.bankAccount = bankAccount
                         }
                     }
                     call.respondText("Registration successful")

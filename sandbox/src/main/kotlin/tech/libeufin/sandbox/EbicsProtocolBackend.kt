@@ -972,7 +972,11 @@ private fun makePartnerInfo(subscriber: EbicsSubscriberEntity): EbicsTypes.Partn
         this.accountInfoList = listOf(
             EbicsTypes.AccountInfo().apply {
                 this.id = bankAccount.label
-                this.accountHolder = bankAccount.name
+                /**
+                 * FIXME:
+                 * This value waits to be extracted from the DemobankCustomer type.
+                 */
+                this.accountHolder = "Account Holder"
                 this.accountNumberList = listOf(
                     EbicsTypes.GeneralAccountNumber().apply {
                         this.international = true

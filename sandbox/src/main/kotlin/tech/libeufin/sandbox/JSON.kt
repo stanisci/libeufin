@@ -67,6 +67,11 @@ data class BankAccountRequest(
     val subscriber: EbicsSubscriberElement,
     val iban: String,
     val bic: String,
+    /**
+     * Obsolete: kept around to allow progressive porting of tests.
+     * This value used to represent a _person_ name, but the new DemobankCustomer
+     * type is now responsible for that.
+     */
     val name: String,
     val label: String,
     val currency: String

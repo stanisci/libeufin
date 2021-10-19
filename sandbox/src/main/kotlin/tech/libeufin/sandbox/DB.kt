@@ -112,24 +112,20 @@ class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
 object DemobankCustomersTable : LongIdTable() {
     val isPublic = bool("isPublic").default(false)
     val demobankConfig = reference("demobankConfig", DemobankConfigsTable)
-    val balance = text("balance")
+    val bankAccount = reference("bankAccount", BankAccountsTable)
     val username = text("username")
     val passwordHash = text("passwordHash")
-    val isDebit = bool("isDebit").default(false)
     val name = text("name").nullable()
-    val iban = text("iban")
 }
 
 class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<DemobankCustomerEntity>(DemobankCustomersTable)
     var isPublic by DemobankCustomersTable.isPublic
-    var demobankConfig by DemobankCustomersTable.demobankConfig
-    var balance by DemobankCustomersTable.balance
+    var demobankConfig by DemobankConfigEntity referencedOn DemobankCustomersTable.demobankConfig
+    var bankAccount by BankAccountEntity referencedOn DemobankCustomersTable.bankAccount
     var username by DemobankCustomersTable.username
     var passwordHash by DemobankCustomersTable.passwordHash
-    var isDebit by DemobankCustomersTable.isDebit
     var name by DemobankCustomersTable.name
-    var iban by DemobankCustomersTable.iban
 }
 
 /**
@@ -371,10 +367,11 @@ class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
  */
 object BankAccountsTable : IntIdTable() {
     val iban = text("iban")
-    val bic = text("bic")
-    val name = text("name")
+    val bic = text("bic").default("EUSANDBOX")
     val label = text("label").uniqueIndex("accountLabelIndex")
     val currency = text("currency")
+    val isDebit = bool("isDebit").default(false)
+    val balance = text("balance")
 }
 
 class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -382,9 +379,10 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
 
     var iban by BankAccountsTable.iban
     var bic by BankAccountsTable.bic
-    var name by BankAccountsTable.name
     var label by BankAccountsTable.label
     var currency by BankAccountsTable.currency
+    var isDebit by BankAccountsTable.isDebit
+    var balance by BankAccountsTable.balance
 }
 
 object BankAccountStatementsTable : IntIdTable() {
