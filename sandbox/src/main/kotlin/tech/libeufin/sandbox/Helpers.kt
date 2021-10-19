@@ -23,6 +23,7 @@ import io.ktor.http.HttpStatusCode
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
+import tech.libeufin.util.internalServerError
 
 /**
  * Helps to communicate Camt values without having
@@ -84,6 +85,16 @@ fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccount
             HttpStatusCode.NotFound,
             "Subscriber doesn't have any bank account"
         )
+    }
+}
+
+fun ensureDemobank(name: String): DemobankConfigEntity {
+    return transaction {
+        val res = DemobankConfigEntity.find {
+            DemobankConfigsTable.name eq name
+        }.firstOrNull()
+        if (res == null) throw internalServerError("Demobank '$name' never created")
+        res
     }
 }
 

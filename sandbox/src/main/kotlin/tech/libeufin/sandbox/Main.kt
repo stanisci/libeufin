@@ -1075,8 +1075,6 @@ val sandboxApp: Application.() -> Unit = {
                 get("/accounts/{account_name}") {
                     // Authenticated.  Accesses basic information (balance)
                     // about an account. (see docs)
-
-                    // FIXME: Since we now use IBANs everywhere, maybe the account should also be assigned an IBAN
                 }
 
                 get("/accounts/{account_name}/history") {
@@ -1095,8 +1093,34 @@ val sandboxApp: Application.() -> Unit = {
                     // Get transaction history of a public account
                 }
 
-                post("/register") {
-
+                // Keeping the prefix "testing" to allow integration tests using this endpoint.
+                post("/testing/register") {
+                    // Check demobank was created.
+                    val demobank = ensureDemobank(call.getUriComponent("demobankid"))
+                    val req = call.receive<CustomerRegistration>()
+                    val checkExist = transaction {
+                        DemobankCustomerEntity.find {
+                            DemobankCustomersTable.username eq req.username
+                        }
+                    }.firstOrNull()
+                    if (checkExist != null) {
+                        throw SandboxError(
+                            HttpStatusCode.Conflict,
+                            "Username ${req.username} not available."
+                        )
+                    }
+                    // Create new customer.
+                    requireValidResourceName(req.username)
+                    transaction {
+                        // FIXME: Since we now use IBANs everywhere, maybe the account should also be assigned an IBAN
+                        DemobankCustomerEntity.new {
+                            username = req.username
+                            passwordHash = CryptoUtil.hashpw(req.password)
+                            demobankConfig = demobank.id
+                        }
+                    }
+                    call.respondText("Registration successful")
+                    return@post
                 }
             }
 

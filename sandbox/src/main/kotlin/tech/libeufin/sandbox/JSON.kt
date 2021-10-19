@@ -72,6 +72,11 @@ data class BankAccountRequest(
     val currency: String
 )
 
+data class CustomerRegistration(
+    val username: String,
+    val password: String
+)
+
 data class CamtParams(
     // name/label of the bank account to query.
     val bankaccount: String,

@@ -117,6 +117,15 @@ object DemobankCustomersTable : LongIdTable() {
     val passwordHash = text("passwordHash")
 }
 
+class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<DemobankCustomerEntity>(DemobankCustomersTable)
+    var isPublic by DemobankCustomersTable.isPublic
+    var demobankConfig by DemobankCustomersTable.demobankConfig
+    var balance by DemobankCustomersTable.balance
+    var username by DemobankCustomersTable.username
+    var passwordHash by DemobankCustomersTable.passwordHash
+}
+
 
 /**
  * This table stores RSA public keys of subscribers.
