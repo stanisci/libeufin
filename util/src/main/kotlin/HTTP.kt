@@ -41,6 +41,14 @@ fun extractToken(authHeader: String): String {
     return "${tokenSplit[0]}:${URLDecoder.decode(tokenSplit[1], Charsets.UTF_8)}"
 }
 
+fun forbidden(msg: String): UtilError {
+    return UtilError(
+        HttpStatusCode.Forbidden,
+        msg,
+        ec = LibeufinErrorCode.LIBEUFIN_EC_NONE
+    )
+}
+
 fun internalServerError(
     reason: String,
     libeufinErrorCode: LibeufinErrorCode? = LibeufinErrorCode.LIBEUFIN_EC_NONE
@@ -106,6 +114,10 @@ fun ApplicationCall.getUriComponent(name: String): String {
  * - null if the authentication is disabled (during tests, for example)
  * - the name of the authenticated user
  * - throw exception when the authentication fails
+ *
+ * Note: at this point it is ONLY checked whether the user provided
+ * a valid password for the username mentioned in the Authorization header.
+ * The actual access to the resources must be later checked by each handler.
  */
 fun ApplicationRequest.basicAuth(): String? {
     val withAuth = this.call.ensureAttribute(WITH_AUTH_ATTRIBUTE_KEY)

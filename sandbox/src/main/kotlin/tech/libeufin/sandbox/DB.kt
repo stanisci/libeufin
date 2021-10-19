@@ -115,6 +115,7 @@ object DemobankCustomersTable : LongIdTable() {
     val balance = text("balance")
     val username = text("username")
     val passwordHash = text("passwordHash")
+    val isDebit = bool("isDebit").default(false)
 }
 
 class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -124,8 +125,8 @@ class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
     var balance by DemobankCustomersTable.balance
     var username by DemobankCustomersTable.username
     var passwordHash by DemobankCustomersTable.passwordHash
+    var isDebit by DemobankCustomersTable.isDebit
 }
-
 
 /**
  * This table stores RSA public keys of subscribers.

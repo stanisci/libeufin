@@ -1073,8 +1073,29 @@ val sandboxApp: Application.() -> Unit = {
             route("/access-api") {
 
                 get("/accounts/{account_name}") {
-                    // Authenticated.  Accesses basic information (balance)
-                    // about an account. (see docs)
+                    val username = call.request.basicAuth()
+                    val accountAccessed = call.getUriComponent("account_name")
+                    if (username != accountAccessed) {
+                        throw forbidden("Account '$accountAccessed' not allowed for '$username'")
+                    }
+                    val customer = transaction {
+                        val res = DemobankCustomerEntity.find {
+                            DemobankCustomersTable.username eq username
+                        }.firstOrNull()
+                        res
+                    } ?: throw internalServerError("Account '$accountAccessed' not found AFTER authentication!")
+                    val creditDebitIndicator = if (customer.isDebit) {
+                        "debit"
+                    } else {
+                        "credit"
+                    }
+                    call.respond(object {
+                        val balance = {
+                            val amount = customer.balance
+                            val credit_debit_indicator = creditDebitIndicator
+                        }
+                    })
+                    return@get
                 }
 
                 get("/accounts/{account_name}/history") {
