@@ -117,6 +117,7 @@ object DemobankCustomersTable : LongIdTable() {
     val passwordHash = text("passwordHash")
     val isDebit = bool("isDebit").default(false)
     val name = text("name").nullable()
+    val iban = text("iban")
 }
 
 class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -128,6 +129,7 @@ class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
     var passwordHash by DemobankCustomersTable.passwordHash
     var isDebit by DemobankCustomersTable.isDebit
     var name by DemobankCustomersTable.name
+    var iban by DemobankCustomersTable.iban
 }
 
 /**

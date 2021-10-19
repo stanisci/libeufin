@@ -1120,7 +1120,7 @@ val sandboxApp: Application.() -> Unit = {
                                 CustomerInfo(
                                     username = it.username,
                                     balance = it.balance,
-                                    iban = "To Do",
+                                    iban = it.iban,
                                     name = it.name ?: throw internalServerError(
                                         "Found name-less public account, username: ${it.username}"
                                     )
@@ -1160,6 +1160,7 @@ val sandboxApp: Application.() -> Unit = {
                             username = req.username
                             passwordHash = CryptoUtil.hashpw(req.password)
                             demobankConfig = demobank.id
+                            iban = getIban()
                         }
                     }
                     call.respondText("Registration successful")
