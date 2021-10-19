@@ -1106,12 +1106,15 @@ val sandboxApp: Application.() -> Unit = {
                 // [...]
 
                 get("/public-accounts") {
+                    val demobank = ensureDemobank(call.getUriComponent("demobankid"))
                     val ret = object {
                         val publicAccounts = mutableListOf<CustomerInfo>()
                     }
                     transaction {
                         DemobankCustomerEntity.find {
-                            DemobankCustomersTable.isPublic eq true
+                            DemobankCustomersTable.isPublic eq true and(
+                                    DemobankCustomersTable.demobankConfig eq demobank.id
+                            )
                         }.forEach {
                             ret.publicAccounts.add(
                                 CustomerInfo(
