@@ -1106,8 +1106,27 @@ val sandboxApp: Application.() -> Unit = {
                 // [...]
 
                 get("/public-accounts") {
-                    // List public accounts.  Does not require any authentication.
-                    // XXX: New!
+                    val ret = object {
+                        val publicAccounts = mutableListOf<CustomerInfo>()
+                    }
+                    transaction {
+                        DemobankCustomerEntity.find {
+                            DemobankCustomersTable.isPublic eq true
+                        }.forEach {
+                            ret.publicAccounts.add(
+                                CustomerInfo(
+                                    username = it.username,
+                                    balance = it.balance,
+                                    iban = "To Do",
+                                    name = it.name ?: throw internalServerError(
+                                        "Found name-less public account, username: ${it.username}"
+                                    )
+                                )
+                            )
+                        }
+                    }
+                    call.respond(ret)
+                    return@get
                 }
 
                 get("/public-accounts/{account_name}/history") {

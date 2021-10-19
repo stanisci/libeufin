@@ -77,6 +77,19 @@ data class CustomerRegistration(
     val password: String
 )
 
+/**
+ * More detailed information about one customer.  This type
+ * is mainly required along public histories and/or customer
+ * data unrelated to the Access API.
+ */
+data class CustomerInfo(
+    val username: String,
+    val name: String,
+    val balance: String,
+    val iban: String,
+    // more ..?
+)
+
 data class CamtParams(
     // name/label of the bank account to query.
     val bankaccount: String,
