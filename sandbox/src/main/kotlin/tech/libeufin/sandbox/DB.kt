@@ -171,8 +171,6 @@ object EbicsSubscribersTable : IntIdTable() {
     val authenticationKey = reference("authorizationKey", EbicsSubscriberPublicKeysTable).nullable()
     val nextOrderID = integer("nextOrderID")
     val state = enumeration("state", SubscriberState::class)
-    // setting as nullable to integrate this change more seamlessly into the current
-    // implementation.  Can be removed eventually.
     val bankAccount = reference("bankAccount", BankAccountsTable).nullable()
 }
 
@@ -365,7 +363,6 @@ object BankAccountsTable : IntIdTable() {
     val label = text("label").uniqueIndex("accountLabelIndex")
     val currency = text("currency")
     val isDebit = bool("isDebit").default(false)
-    val balance = text("balance")
     /**
      * Allow to assign "admin" - who doesn't have a customer DB entry -
      * as the owner.  That allows tests using the --no-auth option to go on.
@@ -391,7 +388,6 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     var label by BankAccountsTable.label
     var currency by BankAccountsTable.currency
     var isDebit by BankAccountsTable.isDebit
-    var balance by BankAccountsTable.balance
     var owner by BankAccountsTable.owner
     var isPublic by BankAccountsTable.isPublic
     var demoBank by BankAccountsTable.demoBank

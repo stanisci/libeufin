@@ -19,6 +19,7 @@
 
 package tech.libeufin.sandbox
 
+import io.ktor.application.*
 import io.ktor.http.HttpStatusCode
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
@@ -159,7 +160,11 @@ fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccount
     }
 }
 
-fun ensureDemobank(name: String): DemobankConfigEntity {
+fun ensureDemobank(call: ApplicationCall): DemobankConfigEntity {
+    return ensureDemobank(call.getUriComponent("demobankid"))
+}
+
+private fun ensureDemobank(name: String): DemobankConfigEntity {
     return transaction {
         val res = DemobankConfigEntity.find {
             DemobankConfigsTable.name eq name

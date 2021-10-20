@@ -994,7 +994,7 @@ val sandboxApp: Application.() -> Unit = {
                             "Withdrawal operation: $wopid not found"
                         )
                     }
-                    val demobank = ensureDemobank(call.getUriComponent("demobankid"))
+                    val demobank = ensureDemobank(call)
                     val ret = TalerWithdrawalStatus(
                         selection_done = wo.selectionDone,
                         transfer_done = wo.transferDone,
@@ -1014,7 +1014,7 @@ val sandboxApp: Application.() -> Unit = {
                         "Taler withdrawal tried with authentication disabled. " +
                                 "That is impossible, because no bank account can get this operation debited."
                     )
-                    val demobank = ensureDemobank(call.getUriComponent("demobankid"))
+                    val demobank = ensureDemobank(call)
                     /**
                      * Check here if the user has the right over the claimed bank account.  After
                      * this check, the withdrawal operation will be allowed only by providing its
@@ -1075,7 +1075,7 @@ val sandboxApp: Application.() -> Unit = {
                                 subject = wo.reservePub ?: throw internalServerError(
                                     "Cannot transfer funds without reserve public key."
                                 ),
-                                demoBank = ensureDemobank(call.getUriComponent("demobankid"))
+                                demoBank = ensureDemobank(call)
                             )
                             wo.transferDone = true
                         }
@@ -1105,9 +1105,11 @@ val sandboxApp: Application.() -> Unit = {
                     } else {
                         "credit"
                     }
+                    val balance = balanceForAccount(bankAccount)
+                    val demobank = ensureDemobank(call)
                     call.respond(object {
                         val balance = {
-                            val amount = bankAccount.balance
+                            val amount = "${demobank.currency}:${balance}"
                             val credit_debit_indicator = creditDebitIndicator
                         }
                     })
@@ -1118,7 +1120,7 @@ val sandboxApp: Application.() -> Unit = {
                     // (could be merged with GET /accounts/{account_name}
                 }
                 get("/accounts/public") {
-                    val demobank = ensureDemobank(call.getUriComponent("demobankid"))
+                    val demobank = ensureDemobank(call)
                     val ret = object {
                         val publicAccounts = mutableListOf<PublicAccountInfo>()
                     }
@@ -1128,9 +1130,10 @@ val sandboxApp: Application.() -> Unit = {
                                     BankAccountsTable.demoBank eq demobank.id
                             )
                         }.forEach {
+                            val balanceIter = balanceForAccount(it)
                             ret.publicAccounts.add(
                                 PublicAccountInfo(
-                                    balance = it.balance,
+                                    balance = "${demobank.currency}:$balanceIter",
                                     iban = it.iban
                                 )
                             )
@@ -1143,11 +1146,10 @@ val sandboxApp: Application.() -> Unit = {
                 get("/accounts/public/{account_name}/history") {
                     // Get transaction history of a public account
                 }
-
                 // Keeping the prefix "testing" not to break tests.
                 post("/testing/register") {
                     // Check demobank was created.
-                    val demobank = ensureDemobank(call.getUriComponent("demobankid"))
+                    val demobank = ensureDemobank(call)
                     val req = call.receive<CustomerRegistration>()
                     val checkExist = transaction {
                         DemobankCustomerEntity.find {
@@ -1167,7 +1169,6 @@ val sandboxApp: Application.() -> Unit = {
                             iban = getIban()
                             label = req.username + "acct" // multiple accounts per username not allowed.
                             currency = demobank.currency
-                            balance = "${demobank.currency}:0"
                             owner = req.username
                             this.demoBank = demobank.id
                         }
