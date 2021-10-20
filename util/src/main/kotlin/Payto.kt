@@ -6,6 +6,7 @@ import java.net.URI
  * Helper data structures.
  */
 data class Payto(
+    // Can represent a the sender or a receiver.
     val name: String?,
     val iban: String,
     val bic: String?
@@ -23,7 +24,10 @@ fun parsePayto(paytoLine: String): Payto {
     if (javaParsedUri.scheme != "payto") {
         throw InvalidPaytoError("'${paytoLine}' is not payto")
     }
-
+    val wireMethod = javaParsedUri.host
+    if (wireMethod != "sepa") {
+        throw InvalidPaytoError("Only SEPA is supported, not '$wireMethod'")
+    }
     val accountOwner = if (javaParsedUri.query != null) {
         val queryStringAsList = javaParsedUri.query.split("&")
         // admit only ONE parameter: receiver-name.

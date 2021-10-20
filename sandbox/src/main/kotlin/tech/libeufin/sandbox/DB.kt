@@ -94,6 +94,7 @@ object DemobankConfigsTable : LongIdTable() {
     val bankDebtLimit = integer("bankDebtLimit")
     val usersDebtLimit = integer("usersDebtLimit")
     val name = text("hostname")
+    val suggestedExchange = text("suggestedExchange").nullable()
 }
 
 class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -103,6 +104,7 @@ class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
     var bankDebtLimit by DemobankConfigsTable.bankDebtLimit
     var usersDebtLimit by DemobankConfigsTable.usersDebtLimit
     var name by DemobankConfigsTable.name
+    var suggestedExchange by DemobankConfigsTable.suggestedExchange
 }
 
 /**
@@ -110,9 +112,7 @@ class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
  * Created via the /demobanks/{demobankname}/register endpoint.
  */
 object DemobankCustomersTable : LongIdTable() {
-    val isPublic = bool("isPublic").default(false)
     val demobankConfig = reference("demobankConfig", DemobankConfigsTable)
-    val bankAccount = reference("bankAccount", BankAccountsTable)
     val username = text("username")
     val passwordHash = text("passwordHash")
     val name = text("name").nullable()
@@ -120,9 +120,7 @@ object DemobankCustomersTable : LongIdTable() {
 
 class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<DemobankCustomerEntity>(DemobankCustomersTable)
-    var isPublic by DemobankCustomersTable.isPublic
     var demobankConfig by DemobankConfigEntity referencedOn DemobankCustomersTable.demobankConfig
-    var bankAccount by BankAccountEntity referencedOn DemobankCustomersTable.bankAccount
     var username by DemobankCustomersTable.username
     var passwordHash by DemobankCustomersTable.passwordHash
     var name by DemobankCustomersTable.name
@@ -316,7 +314,10 @@ object BankAccountTransactionsTable : LongIdTable() {
     val debtorBic = text("debtorBic").nullable()
     val debtorName = text("debtorName")
     val subject = text("subject")
-    val amount = text("amount") // NOT the usual $currency:x.y, but a BigInt as string
+    /**
+     * Amount is a stringified BigInt
+     */
+    val amount = text("amount")
     val currency = text("currency")
     val date = long("date")
 
@@ -344,7 +345,6 @@ class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
             return freshTx
         }
     }
-
     var creditorIban by BankAccountTransactionsTable.creditorIban
     var creditorBic by BankAccountTransactionsTable.creditorBic
     var creditorName by BankAccountTransactionsTable.creditorName
@@ -372,6 +372,13 @@ object BankAccountsTable : IntIdTable() {
     val currency = text("currency")
     val isDebit = bool("isDebit").default(false)
     val balance = text("balance")
+    /**
+     * Allow to assign "admin" - who doesn't have a customer DB entry -
+     * as the owner.  That allows tests using the --no-auth option to go on.
+     */
+    val owner = text("owner")
+    val isPublic = bool("isPublic")
+    val demoBank = reference("demoBank", DemobankConfigsTable)
 }
 
 class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -383,6 +390,9 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     var currency by BankAccountsTable.currency
     var isDebit by BankAccountsTable.isDebit
     var balance by BankAccountsTable.balance
+    var owner by BankAccountsTable.owner
+    var isPublic by BankAccountsTable.isPublic
+    var demoBank by BankAccountsTable.demoBank
 }
 
 object BankAccountStatementsTable : IntIdTable() {
@@ -410,13 +420,13 @@ class BankAccountStatementEntity(id: EntityID<Int>) : IntEntity(id) {
 
 object TalerWithdrawalsTable : LongIdTable() {
     val wopid = uuid("wopid").autoGenerate()
-
+    val amount = text("amount") // $currency:x.y
     /**
      * Turns to true after the wallet gave the reserve public key
      * and the exchange details to the bank.
      */
     val selectionDone = bool("selectionDone").default(false)
-
+    val aborted = bool("aborted").default(false)
     /**
      * Turns to true after the wire transfer to the exchange bank account
      * gets completed _on the bank's side_.  This does never guarantees that
@@ -425,7 +435,7 @@ object TalerWithdrawalsTable : LongIdTable() {
     val transferDone = bool("transferDone").default(false)
     val reservePub = text("reservePub").nullable()
     val selectedExchangePayto = text("selectedExchangePayto").nullable()
-
+    val walletBankAccount = reference("walletBankAccount", BankAccountsTable)
 }
 class TalerWithdrawalEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<TalerWithdrawalEntity>(TalerWithdrawalsTable)
@@ -434,6 +444,9 @@ class TalerWithdrawalEntity(id: EntityID<Long>) : LongEntity(id) {
     var transferDone by TalerWithdrawalsTable.transferDone
     var reservePub by TalerWithdrawalsTable.reservePub
     var selectedExchangePayto by TalerWithdrawalsTable.selectedExchangePayto
+    var amount by TalerWithdrawalsTable.amount
+    var walletBankAccount by BankAccountEntity referencedOn TalerWithdrawalsTable.walletBankAccount
+    var aborted by TalerWithdrawalsTable.aborted
 }
 
 object BankAccountReportsTable : IntIdTable() {

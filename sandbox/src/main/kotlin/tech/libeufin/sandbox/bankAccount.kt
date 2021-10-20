@@ -12,17 +12,6 @@ import java.math.BigDecimal
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 
-fun getAccountFromLabel(accountLabel: String): BankAccountEntity {
-    return transaction {
-        val account = BankAccountEntity.find {
-            BankAccountsTable.label eq accountLabel
-        }.firstOrNull()
-        if (account == null) throw SandboxError(
-            HttpStatusCode.NotFound, "Account '$accountLabel' not found"
-        )
-        account
-    }
-}
 // Mainly useful inside the CAMT generator.
 fun balanceForAccount(
     history: MutableList<RawPayment>,
@@ -120,10 +109,14 @@ fun historyForAccount(bankAccount: BankAccountEntity): MutableList<RawPayment> {
 /**
  * https://github.com/JetBrains/Exposed/wiki/Transactions#working-with-coroutines
  * https://medium.com/androiddevelopers/threading-models-in-coroutines-and-android-sqlite-api-6cab11f7eb90
+ *
+ * FIXME: This version will be deprecated.  It was made before introducing the demobank configuration
  */
 fun wireTransfer(
-    debitAccount: String, creditAccount: String,
-    amount: String, subjectArg: String
+    debitAccount: String,
+    creditAccount: String,
+    amount: String,
+    subjectArg: String
 ) {
     transaction {
         // check accounts exist

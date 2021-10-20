@@ -23,6 +23,8 @@ package tech.libeufin.util
  * (Very) generic information about one payment.  Can be
  * derived from a CAMT response, or from a prepared PAIN
  * document.
+ *
+ * Note:
  */
 data class RawPayment(
     val creditorIban: String,

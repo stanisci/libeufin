@@ -8,7 +8,7 @@ import io.ktor.util.*
 import logger
 import java.net.URLDecoder
 
-private fun unauthorized(msg: String): UtilError {
+fun unauthorized(msg: String): UtilError {
     return UtilError(
         HttpStatusCode.Unauthorized,
         msg,

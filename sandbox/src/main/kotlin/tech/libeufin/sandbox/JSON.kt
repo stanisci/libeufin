@@ -82,16 +82,10 @@ data class CustomerRegistration(
     val password: String
 )
 
-/**
- * More detailed information about one customer.  This type
- * is mainly required along public histories and/or customer
- * data unrelated to the Access API.
- */
-data class CustomerInfo(
-    val username: String,
-    val name: String,
+// Could be used as a general bank account info container.
+data class PublicAccountInfo(
     val balance: String,
-    val iban: String,
+    val iban: String
     // more ..?
 )
 
@@ -112,7 +106,7 @@ data class TalerWithdrawalStatus(
     val aborted: Boolean = false,
 )
 
-data class TalerWithdrawalConfirmation(
+data class TalerWithdrawalSelection(
     val reserve_pub: String,
     val selected_exchange: String?
 )

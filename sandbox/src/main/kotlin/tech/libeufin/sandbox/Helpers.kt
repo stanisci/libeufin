@@ -23,7 +23,8 @@ import io.ktor.http.HttpStatusCode
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.util.internalServerError
+import tech.libeufin.util.*
+import javax.security.auth.Subject
 
 /**
  * Helps to communicate Camt values without having
@@ -57,11 +58,81 @@ fun getOrderTypeFromTransactionId(transactionID: String): String {
     return uploadTransaction.orderType
 }
 
+/**
+ * Book a CRDT and a DBIT transaction and return the unique reference thereof.
+ *
+ * At the moment there is redundancy because all the creditor / debtor details
+ * are contained (directly or indirectly) already in the BankAccount parameters.
+ *
+ * This is kept both not to break the existing tests and to allow future versions
+ * where one party of the transaction is not a customer of the running Sandbox.
+ */
+
+fun wireTransfer(
+    debitAccount: BankAccountEntity,
+    creditAccount: BankAccountEntity,
+    demoBank: DemobankConfigEntity,
+    subject: String,
+    amount: String,
+): String {
+
+    fun getOwnerName(ownerUsername: String): String {
+        return if (creditAccount.owner == "admin") "admin" else {
+            val creditorCustomer = DemobankCustomerEntity.find(
+                DemobankCustomersTable.username eq creditAccount.owner
+            ).firstOrNull() ?: throw internalServerError(
+                "Owner of bank account '${creditAccount.label}' not found"
+            )
+            creditorCustomer.name ?: "Name not given"
+        }
+    }
+    val timeStamp = getUTCnow().toInstant().toEpochMilli()
+    val transactionRef = getRandomString(8)
+    transaction {
+        BankAccountTransactionEntity.new {
+            creditorIban = creditAccount.iban
+            creditorBic = creditAccount.bic
+            this.creditorName = getOwnerName(creditAccount.owner)
+            debtorIban = debitAccount.iban
+            debtorBic = debitAccount.bic
+            debtorName = getOwnerName(debitAccount.owner)
+            this.subject = subject
+            this.amount = amount
+            this.currency = demoBank.currency
+            date = timeStamp
+            accountServicerReference = transactionRef
+            account = creditAccount
+            direction = "CRDT"
+        }
+        BankAccountTransactionEntity.new {
+            creditorIban = creditAccount.iban
+            creditorBic = creditAccount.bic
+            this.creditorName = getOwnerName(creditAccount.owner)
+            debtorIban = debitAccount.iban
+            debtorBic = debitAccount.bic
+            debtorName = getOwnerName(debitAccount.owner)
+            this.subject = subject
+            this.amount = amount
+            this.currency = demoBank.currency
+            date = timeStamp
+            accountServicerReference = transactionRef
+            account = debitAccount
+            direction = "DBIT"
+        }
+    }
+    return transactionRef
+}
+
+
+fun getBankAccountFromPayto(paytoUri: String): BankAccountEntity {
+    val paytoParse = parsePayto(paytoUri)
+    return getBankAccountFromIban(paytoParse.iban)
+
+}
+
 fun getBankAccountFromIban(iban: String): BankAccountEntity {
     return transaction {
-        BankAccountEntity.find(
-            BankAccountsTable.iban eq iban
-        )
+        BankAccountEntity.find(BankAccountsTable.iban eq iban)
     }.firstOrNull() ?: throw SandboxError(
         HttpStatusCode.NotFound,
         "Did not find a bank account for ${iban}"
@@ -121,61 +192,3 @@ fun getEbicsSubscriberFromDetails(userID: String, partnerID: String, hostID: Str
         )
     }
 }
-
-/**
- * FIXME: commenting out until a solution for i18n is found.
- *
-private fun initJinjava(): Jinjava {
-    class JinjaFunctions {
-        // Used by templates to retrieve configuration values.
-        fun settings_value(name: String): String {
-            return "foo"
-        }
-        fun gettext(translatable: String): String {
-            // temporary, just to make the compiler happy.
-            return translatable
-        }
-        fun url(name: String): String {
-            val map = mapOf<String, String>(
-                "login" to "todo",
-                "profile" to "todo",
-                "register" to "todo",
-                "public-accounts" to "todo"
-            )
-            return map[name] ?: throw SandboxError(HttpStatusCode.InternalServerError, "URL name unknown")
-        }
-    }
-    val jinjava = Jinjava()
-    val settingsValueFunc = ELFunctionDefinition(
-        "tech.libeufin.sandbox", "settings_value",
-        JinjaFunctions::class.java, "settings_value", String::class.java
-    )
-    val gettextFuncAlias = ELFunctionDefinition(
-        "tech.libeufin.sandbox", "_",
-        JinjaFunctions::class.java, "gettext", String::class.java
-    )
-    val gettextFunc = ELFunctionDefinition(
-        "", "gettext",
-        JinjaFunctions::class.java, "gettext", String::class.java
-    )
-    val urlFunc = ELFunctionDefinition(
-        "tech.libeufin.sandbox", "url",
-        JinjaFunctions::class.java, "url", String::class.java
-    )
-
-    jinjava.globalContext.registerFunction(settingsValueFunc)
-    jinjava.globalContext.registerFunction(gettextFunc)
-    jinjava.globalContext.registerFunction(gettextFuncAlias)
-    jinjava.globalContext.registerFunction(urlFunc)
-
-    return jinjava
-}
-
-val jinjava = initJinjava()
-
-fun renderTemplate(templateName: String, context: Map<String, String>): String {
-    val template = Resources.toString(Resources.getResource(
-        "templates/$templateName"), Charsets.UTF_8
-    )
-    return jinjava.render(template, context)
-} **/

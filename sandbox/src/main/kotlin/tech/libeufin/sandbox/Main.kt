@@ -63,6 +63,7 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.util.*
 import io.ktor.util.date.*
+import io.ktor.util.pipeline.*
 import kotlinx.coroutines.newSingleThreadContext
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
@@ -519,7 +520,7 @@ val sandboxApp: Application.() -> Unit = {
         post("/admin/payments/camt") {
             call.request.basicAuth()
             val body = call.receiveJson<CamtParams>()
-            val bankaccount = getAccountFromLabel(body.bankaccount)
+            val bankaccount = getBankAccountFromLabel(body.bankaccount)
             if (body.type != 53) throw SandboxError(
                 HttpStatusCode.NotFound,
                 "Only Camt.053 documents can be generated."
@@ -540,7 +541,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // create a new bank account, no EBICS relation.
         post("/admin/bank-accounts/{label}") {
-            call.request.basicAuth()
+            val username = call.request.basicAuth()
             val body = call.receiveJson<BankAccountInfo>()
             transaction {
                 BankAccountEntity.new {
@@ -548,6 +549,7 @@ val sandboxApp: Application.() -> Unit = {
                     bic = body.bic
                     label = body.label
                     currency = body.currency ?: "EUR"
+                    owner = username ?: "admin" // allows
                 }
             }
             call.respond(object {})
@@ -622,7 +624,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Associates a new bank account with an existing Ebics subscriber.
         post("/admin/ebics/bank-accounts") {
-            call.request.basicAuth()
+            val username = call.request.basicAuth()
             val body = call.receiveJson<BankAccountRequest>()
             if (!validateBic(body.bic)) {
                 throw SandboxError(io.ktor.http.HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
@@ -633,18 +635,19 @@ val sandboxApp: Application.() -> Unit = {
                     body.subscriber.partnerID,
                     body.subscriber.hostID
                 )
-                val check = tech.libeufin.sandbox.BankAccountEntity.find {
-                    tech.libeufin.sandbox.BankAccountsTable.iban eq body.iban or (tech.libeufin.sandbox.BankAccountsTable.label eq body.label)
+                val check = BankAccountEntity.find {
+                    BankAccountsTable.iban eq body.iban or (BankAccountsTable.label eq body.label)
                 }.count()
                 if (check > 0) throw SandboxError(
-                    io.ktor.http.HttpStatusCode.BadRequest,
+                    HttpStatusCode.BadRequest,
                     "Either IBAN or account label were already taken; please choose fresh ones"
                 )
-                subscriber.bankAccount = tech.libeufin.sandbox.BankAccountEntity.new {
+                subscriber.bankAccount = BankAccountEntity.new {
                     iban = body.iban
                     bic = body.bic
                     label = body.label
                     currency = body.currency.uppercase(java.util.Locale.ROOT)
+                    owner = username ?: "admin"
                 }
             }
             call.respondText("Bank account created")
@@ -656,7 +659,7 @@ val sandboxApp: Application.() -> Unit = {
             call.request.basicAuth()
             val accounts = mutableListOf<BankAccountInfo>()
             transaction {
-                tech.libeufin.sandbox.BankAccountEntity.all().forEach {
+                BankAccountEntity.all().forEach {
                     accounts.add(
                         BankAccountInfo(
                             label = it.label,
@@ -725,7 +728,7 @@ val sandboxApp: Application.() -> Unit = {
 
                 run {
                     val amount = kotlin.random.Random.nextLong(5, 25)
-                    tech.libeufin.sandbox.BankAccountTransactionEntity.new {
+                    BankAccountTransactionEntity.new {
                         creditorIban = account.iban
                         creditorBic = account.bic
                         creditorName = "Creditor Name"
@@ -911,90 +914,6 @@ val sandboxApp: Application.() -> Unit = {
                 val currency = currencyEnv
             })
         }
-        /**
-         * not regulating the access here, as the wopid was only granted
-         * to logged-in users before (at the /taler endpoint) and has enough
-         * entropy to prevent guesses.
-         */
-        get("/api/withdrawal-operation/{wopid}") {
-            val wopid: String = ensureNonNull(call.parameters["wopid"])
-            val wo = transaction {
-
-                tech.libeufin.sandbox.TalerWithdrawalEntity.find {
-                    tech.libeufin.sandbox.TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
-                }.firstOrNull() ?: throw SandboxError(
-                    io.ktor.http.HttpStatusCode.NotFound,
-                    "Withdrawal operation: $wopid not found"
-                )
-            }
-            SandboxAssert(
-                envName != null,
-                "Env name not found, cannot suggest Exchange."
-            )
-            val ret = TalerWithdrawalStatus(
-                selection_done = wo.selectionDone,
-                transfer_done = wo.transferDone,
-                amount = "${currencyEnv}:5",
-                suggested_exchange = "https://exchange.${envName}.taler.net/"
-            )
-            call.respond(ret)
-            return@get
-        }
-        /**
-         * Here Sandbox collects the reserve public key to be used
-         * as the wire transfer subject, and pays the exchange - which
-         * is as well collected in this request.
-         */
-        post("/api/withdrawal-operation/{wopid}") {
-
-            val wopid: String = ensureNonNull(call.parameters["wopid"])
-            val body = call.receiveJson<TalerWithdrawalConfirmation>()
-
-            newSuspendedTransaction(context = singleThreadContext) {
-                var wo = tech.libeufin.sandbox.TalerWithdrawalEntity.find {
-                    tech.libeufin.sandbox.TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
-                }.firstOrNull() ?: throw SandboxError(
-                    io.ktor.http.HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
-                )
-                if (wo.selectionDone) {
-                    if (wo.transferDone) {
-                        logger.info("Wallet performs again this operation that was paid out earlier: idempotent")
-                        return@newSuspendedTransaction
-                    }
-                    // reservePub+exchange selected but not payed: check consistency
-                    if (body.reserve_pub != wo.reservePub) throw SandboxError(
-                        io.ktor.http.HttpStatusCode.Conflict,
-                        "Selecting a different reserve from the one already selected"
-                    )
-                    if (body.selected_exchange != wo.selectedExchangePayto) throw SandboxError(
-                        io.ktor.http.HttpStatusCode.Conflict,
-                        "Selecting a different exchange from the one already selected"
-                    )
-                }
-                // here only if (1) no selection done or (2) _only_ selection done:
-                // both ways no transfer must have happened.
-                SandboxAssert(!wo.transferDone, "Sandbox allowed paid but unselected reserve")
-
-                wireTransfer(
-                    "sandbox-account-customer",
-                    "sandbox-account-exchange",
-                    "$currencyEnv:5",
-                    body.reserve_pub
-                )
-                wo.reservePub = body.reserve_pub
-                wo.selectedExchangePayto = body.selected_exchange
-                wo.selectionDone = true
-                wo.transferDone = true
-            }
-            /**
-             * NOTE: is this always guaranteed to run AFTER the suspended
-             * transaction block above?
-             */
-            call.respond(object {
-                val transfer_done = true
-            })
-            return@post
-        }
 
         // Create a new demobank instance with a particular currency,
         // debt limit and possibly other configuration
@@ -1029,39 +948,93 @@ val sandboxApp: Application.() -> Unit = {
 
         route("/demobanks/{demobankid}") {
 
+            // Talk to wallets.
+            route("/integration-api") {
+                post("/api/withdrawal-operation/{wopid}") {
+                    val wopid: String = ensureNonNull(call.parameters["wopid"])
+                    val body = call.receiveJson<TalerWithdrawalSelection>()
+                    val transferDone = newSuspendedTransaction(context = singleThreadContext) {
+                        val wo = TalerWithdrawalEntity.find {
+                            TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
+                        }.firstOrNull() ?: throw SandboxError(
+                            HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
+                        )
+                        if (wo.selectionDone) {
+                            if (wo.transferDone) {
+                                logger.info("Wallet performs again this operation that was paid out earlier: idempotent")
+                                return@newSuspendedTransaction
+                            }
+                            // Selected already but NOT paid, check consistency.
+                            if (body.reserve_pub != wo.reservePub) throw SandboxError(
+                                HttpStatusCode.Conflict,
+                                "Selecting a different reserve from the one already selected"
+                            )
+                            if (body.selected_exchange != wo.selectedExchangePayto) throw SandboxError(
+                                HttpStatusCode.Conflict,
+                                "Selecting a different exchange from the one already selected"
+                            )
+                        }
+                        wo.reservePub = body.reserve_pub
+                        wo.selectedExchangePayto = body.selected_exchange
+                        wo.selectionDone = true
+                        wo.transferDone
+                    }
+                    call.respond(object {
+                        val transfer_done = transferDone
+                    })
+                    return@post
+                }
+                get("/withdrawal-operation/{wopid}") {
+                    val wopid: String = ensureNonNull(call.parameters["wopid"])
+                    val wo = transaction {
+                        TalerWithdrawalEntity.find {
+                            TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
+                        }.firstOrNull() ?: throw SandboxError(
+                            HttpStatusCode.NotFound,
+                            "Withdrawal operation: $wopid not found"
+                        )
+                    }
+                    val demobank = ensureDemobank(call.getUriComponent("demobankid"))
+                    val ret = TalerWithdrawalStatus(
+                        selection_done = wo.selectionDone,
+                        transfer_done = wo.transferDone,
+                        amount = wo.amount,
+                        suggested_exchange = demobank.suggestedExchange
+                    )
+                    call.respond(ret)
+                    return@get
+                }
+            }
+            // Talk to Web UI.
             route("/access-api") {
-
+                // Create a new withdrawal operation.
                 post("/accounts/{account_name}/withdrawals") {
                     val username = call.request.basicAuth()
-                    ensureDemobank(call.getUriComponent("demobankid"))
+                    if (username == null) throw badRequest(
+                        "Taler withdrawal tried with authentication disabled. " +
+                                "That is impossible, because no bank account can get this operation debited."
+                    )
+                    val demobank = ensureDemobank(call.getUriComponent("demobankid"))
                     /**
-                     * Check that the three canonical accounts exist.  The names
-                     * below match those used in the testing harnesses.
+                     * Check here if the user has the right over the claimed bank account.  After
+                     * this check, the withdrawal operation will be allowed only by providing its
+                     * UID.
                      */
-                    val wo: TalerWithdrawalEntity = transaction {
-                        val exchange = BankAccountEntity.find {
-                            BankAccountsTable.label eq "sandbox-account-exchange"
-                        }.firstOrNull()
-                        val customer = BankAccountEntity.find {
-                            BankAccountsTable.label eq "sandbox-account-customer"
-                        }.firstOrNull()
-                        val merchant = BankAccountEntity.find {
-                            BankAccountsTable.label eq "sandbox-account-merchant"
-                        }.firstOrNull()
-                        SandboxAssert(exchange != null, "exchange has no bank account")
-                        SandboxAssert(customer != null, "customer has no bank account")
-                        SandboxAssert(merchant != null, "merchant has no bank account")
-                        // At this point, the three actors exist and a new withdraw operation can be created.
-                        val wo = TalerWithdrawalEntity.new { /* wopid is autogenerated, and momentarily the only column */ }
-                        wo
-                    }
+                    val maybeOwnedAccount = getBankAccountFromLabel(call.getUriComponent("account_name"))
+                    if (maybeOwnedAccount.owner != username) throw unauthorized(
+                        "Customer '$username' has no rights over bank account '${maybeOwnedAccount.label}'"
+                    )
+                    val wo: TalerWithdrawalEntity = transaction { TalerWithdrawalEntity.new {
+                        amount = "${demobank.currency}:5"
+                        walletBankAccount = maybeOwnedAccount
+                    } }
                     val baseUrl = URL(call.request.getBaseUrl())
                     val withdrawUri = call.url {
                         protocol = URLProtocol(
                             "taler".plus(if (baseUrl.protocol.lowercase() == "http") "+http" else ""),
                             -1
                         )
-                        pathComponents(baseUrl.path, "api", wo.wopid.toString())
+                        pathComponents(baseUrl.path, "access-api", wo.wopid.toString())
                         encodedPath += "/"
                     }
                     call.respond(object {
@@ -1070,13 +1043,48 @@ val sandboxApp: Application.() -> Unit = {
                     })
                     return@post
                 }
-
-                // Confirm the wire transfer to the exchange.  Idempotent
-                post("/accounts/{account_name}/withdrawals/confirm") {
-
-
+                // Confirm a withdrawal.
+                post("/accounts/{account_name}/withdrawals/{withdrawal_id}/confirm") {
+                    val withdrawalId = call.getUriComponent("withdrawal_id")
+                    transaction {
+                        val wo = TalerWithdrawalEntity.find {
+                            TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(withdrawalId)
+                        }.firstOrNull() ?: throw SandboxError(
+                            HttpStatusCode.NotFound, "Withdrawal operation $withdrawalId not found."
+                        )
+                        if (wo.aborted) throw SandboxError(
+                            HttpStatusCode.Conflict,
+                            "Cannot confirm an aborted withdrawal."
+                        )
+                        if (!wo.selectionDone) throw SandboxError(
+                            HttpStatusCode.UnprocessableEntity,
+                            "Cannot confirm a unselected withdrawal: " +
+                                    "specify exchange and reserve public key via Integration API first."
+                        )
+                        val exchangeBankAccount = getBankAccountFromPayto(
+                            wo.selectedExchangePayto ?: throw internalServerError(
+                                "Cannot withdraw without an exchange."
+                            )
+                        )
+                        if (!wo.transferDone) {
+                            // Need the exchange bank account!
+                            wireTransfer(
+                                debitAccount = wo.walletBankAccount,
+                                creditAccount = exchangeBankAccount,
+                                amount = wo.amount,
+                                subject = wo.reservePub ?: throw internalServerError(
+                                    "Cannot transfer funds without reserve public key."
+                                ),
+                                demoBank = ensureDemobank(call.getUriComponent("demobankid"))
+                            )
+                            wo.transferDone = true
+                        }
+                        wo.transferDone
+                    }
+                    call.respond(object {})
                     return@post
                 }
+                // Bank account basic information.
                 get("/accounts/{account_name}") {
                     val username = call.request.basicAuth()
                     val accountAccessed = call.getUriComponent("account_name")
@@ -1086,17 +1094,12 @@ val sandboxApp: Application.() -> Unit = {
                         }.firstOrNull()
                         res
                     } ?: throw notFound("Account '$accountAccessed' not found")
-
                     // Check rights.
                     if (WITH_AUTH) {
-                        val customer = getCustomerFromDb(username ?: throw internalServerError(
-                            "Optional authentication broken!"
-                        ))
-                        if (customer.bankAccount.label != accountAccessed) throw forbidden(
+                        if (bankAccount.owner != username) throw forbidden(
                             "Customer '$username' cannot access bank account '$accountAccessed'"
                         )
                     }
-
                     val creditDebitIndicator = if (bankAccount.isDebit) {
                         "debit"
                     } else {
@@ -1110,33 +1113,25 @@ val sandboxApp: Application.() -> Unit = {
                     })
                     return@get
                 }
-
                 get("/accounts/{account_name}/history") {
                     // New endpoint, access account history to display in the SPA
                     // (could be merged with GET /accounts/{account_name}
                 }
-
-                // [...]
-
-                get("/public-accounts") {
+                get("/accounts/public") {
                     val demobank = ensureDemobank(call.getUriComponent("demobankid"))
                     val ret = object {
-                        val publicAccounts = mutableListOf<CustomerInfo>()
+                        val publicAccounts = mutableListOf<PublicAccountInfo>()
                     }
                     transaction {
-                        DemobankCustomerEntity.find {
-                            DemobankCustomersTable.isPublic eq true and(
-                                    DemobankCustomersTable.demobankConfig eq demobank.id
+                        BankAccountEntity.find {
+                            BankAccountsTable.isPublic eq true and(
+                                    BankAccountsTable.demoBank eq demobank.id
                             )
                         }.forEach {
                             ret.publicAccounts.add(
-                                CustomerInfo(
-                                    username = it.username,
-                                    balance = it.bankAccount.balance,
-                                    iban = it.bankAccount.iban,
-                                    name = it.name ?: throw internalServerError(
-                                        "Found name-less public account, username: ${it.username}"
-                                    )
+                                PublicAccountInfo(
+                                    balance = it.balance,
+                                    iban = it.iban
                                 )
                             )
                         }
@@ -1145,11 +1140,11 @@ val sandboxApp: Application.() -> Unit = {
                     return@get
                 }
 
-                get("/public-accounts/{account_name}/history") {
+                get("/accounts/public/{account_name}/history") {
                     // Get transaction history of a public account
                 }
 
-                // Keeping the prefix "testing" to allow integration tests using this endpoint.
+                // Keeping the prefix "testing" not to break tests.
                 post("/testing/register") {
                     // Check demobank was created.
                     val demobank = ensureDemobank(call.getUriComponent("demobankid"))
@@ -1173,12 +1168,12 @@ val sandboxApp: Application.() -> Unit = {
                             label = req.username + "acct" // multiple accounts per username not allowed.
                             currency = demobank.currency
                             balance = "${demobank.currency}:0"
+                            owner = req.username
                         }
                         DemobankCustomerEntity.new {
                             username = req.username
                             passwordHash = CryptoUtil.hashpw(req.password)
                             demobankConfig = demobank
-                            this.bankAccount = bankAccount
                         }
                     }
                     call.respondText("Registration successful")
