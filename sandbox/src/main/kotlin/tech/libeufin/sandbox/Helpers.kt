@@ -59,6 +59,33 @@ fun getOrderTypeFromTransactionId(transactionID: String): String {
     return uploadTransaction.orderType
 }
 
+fun getHistoryElementFromTransactionRow(dbRow: BankAccountTransactionEntity): RawPayment {
+    return RawPayment(
+        subject = dbRow.subject,
+        creditorIban = dbRow.creditorIban,
+        creditorBic = dbRow.creditorBic,
+        creditorName = dbRow.creditorName,
+        debtorIban = dbRow.debtorIban,
+        debtorBic = dbRow.debtorBic,
+        debtorName = dbRow.debtorName,
+        date = importDateFromMillis(dbRow.date).toDashedDate(),
+        amount = dbRow.amount,
+        currency = dbRow.currency,
+        // The line below produces a value too long (>35 chars),
+        // and dbRow makes the document invalid!
+        // uid = "${dbRow.pmtInfId}-${it.msgId}"
+        uid = dbRow.accountServicerReference,
+        direction = dbRow.direction,
+        pmtInfId = dbRow.pmtInfId
+    )
+}
+
+fun getHistoryElementFromTransactionRow(
+    dbRow: BankAccountFreshTransactionEntity
+): RawPayment {
+    return getHistoryElementFromTransactionRow(dbRow.transactionRef)
+}
+
 /**
  * Book a CRDT and a DBIT transaction and return the unique reference thereof.
  *

@@ -462,29 +462,6 @@ fun buildCamtString(
     )
 }
 
-fun getHistoryElementFromTransactionRow(
-    dbRow: BankAccountFreshTransactionEntity
-): RawPayment {
-    return RawPayment(
-        subject = dbRow.transactionRef.subject,
-        creditorIban = dbRow.transactionRef.creditorIban,
-        creditorBic = dbRow.transactionRef.creditorBic,
-        creditorName = dbRow.transactionRef.creditorName,
-        debtorIban = dbRow.transactionRef.debtorIban,
-        debtorBic = dbRow.transactionRef.debtorBic,
-        debtorName = dbRow.transactionRef.debtorName,
-        date = importDateFromMillis(dbRow.transactionRef.date).toDashedDate(),
-        amount = dbRow.transactionRef.amount,
-        currency = dbRow.transactionRef.currency,
-        // The line below produces a value too long (>35 chars),
-        // and dbRow makes the document invalid!
-        // uid = "${dbRow.pmtInfId}-${it.msgId}"
-        uid = dbRow.transactionRef.accountServicerReference,
-        direction = dbRow.transactionRef.direction,
-        pmtInfId = dbRow.transactionRef.pmtInfId
-    )
-}
-
 fun getLastBalance(bankAccount: BankAccountEntity): BigDecimal {
     val lastStatement = BankAccountStatementEntity.find {
         BankAccountStatementsTable.bankAccount eq bankAccount.id

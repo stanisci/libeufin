@@ -1095,11 +1095,9 @@ val sandboxApp: Application.() -> Unit = {
                         res
                     } ?: throw notFound("Account '$accountAccessed' not found")
                     // Check rights.
-                    if (WITH_AUTH) {
-                        if (bankAccount.owner != username) throw forbidden(
+                    if (WITH_AUTH && bankAccount.owner != username) throw forbidden(
                             "Customer '$username' cannot access bank account '$accountAccessed'"
                         )
-                    }
                     val creditDebitIndicator = if (bankAccount.isDebit) {
                         "debit"
                     } else {
@@ -1116,10 +1114,24 @@ val sandboxApp: Application.() -> Unit = {
                     return@get
                 }
                 get("/accounts/{account_name}/history") {
-                    // New endpoint, access account history to display in the SPA
-                    // (could be merged with GET /accounts/{account_name}
+                    val bankAccount = getBankAccountFromLabel(call.getUriComponent("account_name"))
+                    val authOk: Boolean = bankAccount.isPublic || (!WITH_AUTH)
+                    if (!authOk && (call.request.basicAuth() != bankAccount.owner)) throw forbidden(
+                        "Cannot access bank account ${bankAccount.label}"
+                    )
+                    val ret = mutableListOf<RawPayment>()
+                    transaction {
+                        BankAccountTransactionEntity.find {
+                            BankAccountTransactionsTable.account eq bankAccount.id
+                            // FIXME: more criteria to come.
+                        }.forEach {
+                            ret.add(getHistoryElementFromTransactionRow(it))
+                        }
+                    }
+                    call.respond(ret)
+                    return@get
                 }
-                get("/accounts/public") {
+                get("/public-accounts") {
                     val demobank = ensureDemobank(call)
                     val ret = object {
                         val publicAccounts = mutableListOf<PublicAccountInfo>()
@@ -1141,10 +1153,6 @@ val sandboxApp: Application.() -> Unit = {
                     }
                     call.respond(ret)
                     return@get
-                }
-
-                get("/accounts/public/{account_name}/history") {
-                    // Get transaction history of a public account
                 }
                 // Keeping the prefix "testing" not to break tests.
                 post("/testing/register") {
@@ -1177,11 +1185,10 @@ val sandboxApp: Application.() -> Unit = {
                             passwordHash = CryptoUtil.hashpw(req.password)
                         }
                     }
-                    call.respondText("Registration successful")
+                    call.respond(object {})
                     return@post
                 }
             }
-
         }
     }
 }
