@@ -112,7 +112,6 @@ class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
  * Created via the /demobanks/{demobankname}/register endpoint.
  */
 object DemobankCustomersTable : LongIdTable() {
-    val demobankConfig = reference("demobankConfig", DemobankConfigsTable)
     val username = text("username")
     val passwordHash = text("passwordHash")
     val name = text("name").nullable()
@@ -120,7 +119,6 @@ object DemobankCustomersTable : LongIdTable() {
 
 class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<DemobankCustomerEntity>(DemobankCustomersTable)
-    var demobankConfig by DemobankConfigEntity referencedOn DemobankCustomersTable.demobankConfig
     var username by DemobankCustomersTable.username
     var passwordHash by DemobankCustomersTable.passwordHash
     var name by DemobankCustomersTable.name
@@ -153,7 +151,6 @@ object EbicsHostsTable : IntIdTable() {
 
 class EbicsHostEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<EbicsHostEntity>(EbicsHostsTable)
-
     var hostId by EbicsHostsTable.hostID
     var ebicsVersion by EbicsHostsTable.ebicsVersion
     var signaturePrivateKey by EbicsHostsTable.signaturePrivateKey
@@ -237,7 +234,6 @@ object EbicsUploadTransactionsTable : IdTable<String>() {
 
 class EbicsUploadTransactionEntity(id: EntityID<String>) : Entity<String>(id) {
     companion object : EntityClass<String, EbicsUploadTransactionEntity>(EbicsUploadTransactionsTable)
-
     var orderType by EbicsUploadTransactionsTable.orderType
     var orderID by EbicsUploadTransactionsTable.orderID
     var host by EbicsHostEntity referencedOn EbicsUploadTransactionsTable.host
@@ -261,7 +257,6 @@ object EbicsOrderSignaturesTable : IntIdTable() {
 
 class EbicsOrderSignatureEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<EbicsOrderSignatureEntity>(EbicsOrderSignaturesTable)
-
     var orderID by EbicsOrderSignaturesTable.orderID
     var orderType by EbicsOrderSignaturesTable.orderType
     var partnerID by EbicsOrderSignaturesTable.partnerID
@@ -274,8 +269,7 @@ class EbicsOrderSignatureEntity(id: EntityID<Int>) : IntEntity(id) {
  * FIXME: document this.
  */
 object EbicsUploadTransactionChunksTable : IdTable<String>() {
-    override val id =
-        text("transactionID").entityId()
+    override val id = text("transactionID").entityId()
     val chunkIndex = integer("chunkIndex")
     val chunkContent = blob("chunkContent")
 }
@@ -283,7 +277,6 @@ object EbicsUploadTransactionChunksTable : IdTable<String>() {
 // FIXME: Is upload chunking not implemented somewhere?!
 class EbicsUploadTransactionChunkEntity(id: EntityID<String>) : Entity<String>(id) {
     companion object : EntityClass<String, EbicsUploadTransactionChunkEntity>(EbicsUploadTransactionChunksTable)
-
     var chunkIndex by EbicsUploadTransactionChunksTable.chunkIndex
     var chunkContent by EbicsUploadTransactionChunksTable.chunkContent
 }
@@ -299,7 +292,6 @@ object BankAccountFreshTransactionsTable : LongIdTable() {
 }
 class BankAccountFreshTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<BankAccountFreshTransactionEntity>(BankAccountFreshTransactionsTable)
-
     var transactionRef by BankAccountTransactionEntity referencedOn BankAccountFreshTransactionsTable.transactionRef
 }
 
@@ -315,23 +307,25 @@ object BankAccountTransactionsTable : LongIdTable() {
     val debtorName = text("debtorName")
     val subject = text("subject")
     /**
-     * Amount is a stringified BigInt
+     * Amount is a BigInt in String form.
      */
     val amount = text("amount")
     val currency = text("currency")
     val date = long("date")
-
     /**
      * Unique ID for this payment within the bank account.
      */
     val accountServicerReference = text("accountServicerReference")
-
     /**
      * Payment information ID, which is a reference to the payment initiation
      * that triggered this transaction.  Typically, only available with outgoing transactions.
      */
     val pmtInfId = text("pmtInfId").nullable()
     val direction = text("direction")
+    /**
+     * Bank account of the party whose 'direction' refers.  This version allows
+     * only both parties to be registered at the running Sandbox.
+     */
     val account = reference("account", BankAccountsTable)
 }
 
@@ -377,8 +371,16 @@ object BankAccountsTable : IntIdTable() {
      * as the owner.  That allows tests using the --no-auth option to go on.
      */
     val owner = text("owner")
-    val isPublic = bool("isPublic")
-    val demoBank = reference("demoBank", DemobankConfigsTable)
+    val isPublic = bool("isPublic").default(false)
+
+    /**
+     * Used only by the operations triggered under one /demobanks/$demobankId endpoint.
+     *
+     * For example, current tests do never configure one demobank or one customer account;
+     * for those, every bank account will have null demobank reference and "admin" owner that
+     * do not point to any customer row.
+     */
+    val demoBank = reference("demoBank", DemobankConfigsTable).nullable()
 }
 
 class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {

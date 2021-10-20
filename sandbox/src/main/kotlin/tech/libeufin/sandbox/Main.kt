@@ -627,7 +627,7 @@ val sandboxApp: Application.() -> Unit = {
             val username = call.request.basicAuth()
             val body = call.receiveJson<BankAccountRequest>()
             if (!validateBic(body.bic)) {
-                throw SandboxError(io.ktor.http.HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
+                throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
             }
             transaction {
                 val subscriber = getEbicsSubscriberFromDetails(
@@ -773,18 +773,18 @@ val sandboxApp: Application.() -> Unit = {
             call.request.basicAuth()
             val body = call.receiveJson<EbicsSubscriberElement>()
             transaction {
-                tech.libeufin.sandbox.EbicsSubscriberEntity.new {
+                EbicsSubscriberEntity.new {
                     partnerId = body.partnerID
                     userId = body.userID
                     systemId = null
                     hostId = body.hostID
-                    state = tech.libeufin.sandbox.SubscriberState.NEW
+                    state = SubscriberState.NEW
                     nextOrderID = 1
                 }
             }
             call.respondText(
                 "Subscriber created.",
-                io.ktor.http.ContentType.Text.Plain, io.ktor.http.HttpStatusCode.OK
+                ContentType.Text.Plain, HttpStatusCode.OK
             )
             return@post
         }
@@ -1163,17 +1163,17 @@ val sandboxApp: Application.() -> Unit = {
                     // Create new customer.
                     requireValidResourceName(req.username)
                     transaction {
-                        val bankAccount = BankAccountEntity.new {
+                        BankAccountEntity.new {
                             iban = getIban()
                             label = req.username + "acct" // multiple accounts per username not allowed.
                             currency = demobank.currency
                             balance = "${demobank.currency}:0"
                             owner = req.username
+                            this.demoBank = demobank.id
                         }
                         DemobankCustomerEntity.new {
                             username = req.username
                             passwordHash = CryptoUtil.hashpw(req.password)
-                            demobankConfig = demobank
                         }
                     }
                     call.respondText("Registration successful")
