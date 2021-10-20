@@ -111,7 +111,9 @@ fun ApplicationCall.getUriComponent(name: String): String {
 }
 /**
  * Return:
- * - null if the authentication is disabled (during tests, for example)
+ * - null if the authentication is disabled (during tests, for example).
+ *   This facilitates tests because allows requests to lack entirely a
+ *   Authorization header.
  * - the name of the authenticated user
  * - throw exception when the authentication fails
  *
