@@ -21,7 +21,6 @@ package tech.libeufin.util
 
 import UtilError
 import io.ktor.http.HttpStatusCode
-import validatePlainAmount
 import java.math.BigInteger
 import java.math.BigDecimal
 import java.util.*

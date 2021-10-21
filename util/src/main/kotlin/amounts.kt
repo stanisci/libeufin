@@ -1,8 +1,6 @@
+package tech.libeufin.util
+
 import io.ktor.http.*
-import tech.libeufin.util.Amount
-import tech.libeufin.util.AmountWithCurrency
-import tech.libeufin.util.EbicsProtocolError
-import java.math.BigDecimal
 
 /*
  * This file is part of LibEuFin.

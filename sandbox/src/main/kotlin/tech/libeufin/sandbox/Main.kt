@@ -71,10 +71,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
-import parseAmount
 import startServer
 import tech.libeufin.util.*
-import validatePlainAmount
 import java.math.BigDecimal
 import java.net.BindException
 import java.net.URL
@@ -1105,7 +1103,6 @@ val sandboxApp: Application.() -> Unit = {
                     call.respond(object {})
                     return@post
                 }
-
                 post("/accounts/{account_name}/withdrawals/{withdrawal_id}/abort") {
                     val withdrawalId = call.getUriComponent("withdrawal_id")
                     val operation = getWithdrawalOperation(withdrawalId)
