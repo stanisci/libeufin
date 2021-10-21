@@ -181,6 +181,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
     val transferRequest = call.receive<TalerTransferRequest>()
     val amountObj = parseAmount(transferRequest.amount)
     // FIXME: Right now we only parse the credit_account, should we also validate that it matches our account info?
+    // FIXME, another parse happens below; is this really useful here?
     parsePayto(transferRequest.credit_account)
     val facadeId = expectNonNull(call.parameters["fcid"])
     val opaqueRowId = transaction {

@@ -21,19 +21,21 @@ class PaytoTest {
         }
         try {
             parsePayto(
-                "payto://iban/BIC123/IBAN123?receiver-name=The%20Name&address=house"
-            )
-        } catch (e: InvalidPaytoError) {
-            println(e)
-            println("more than one parameter isn't allowed")
-        }
-        try {
-            parsePayto(
                 "payto:iban/BIC123/IBAN123?receiver-name=The%20Name&address=house"
             )
         } catch (e: InvalidPaytoError) {
             println(e)
             println("'://' missing, invalid Payto")
+        }
+        try {
+            parsePayto("payto://iban/BIC123/IBAN123?sender-name=Foo&receiver-name=Foo")
+        } catch (e: InvalidPaytoError) {
+            println(e)
+        }
+        try {
+            parsePayto("payto://wrong/BIC123/IBAN123?sender-name=Foo&receiver-name=Foo")
+        } catch (e: InvalidPaytoError) {
+            println(e)
         }
     }
 
@@ -43,5 +45,18 @@ class PaytoTest {
         assert(withBic.iban == "IBAN123")
         assert(withBic.bic == "BIC123")
         assert(withBic.name == "The Name")
+        val complete = parsePayto("payto://iban/BIC123/IBAN123?sender-name=The%20Name&amount=EUR:1&message=donation")
+        assert(withBic.iban == "IBAN123")
+        assert(withBic.bic == "BIC123")
+        assert(withBic.name == "The Name")
+        assert(complete.message == "donation")
+        assert(complete.amount == "EUR:1")
+        val withoutOptionals = parsePayto(
+            "payto://iban/IBAN123"
+        )
+        assert(withoutOptionals.bic == null)
+        assert(withoutOptionals.message == null)
+        assert(withoutOptionals.name == null)
+        assert(withoutOptionals.amount == null)
     }
 }
