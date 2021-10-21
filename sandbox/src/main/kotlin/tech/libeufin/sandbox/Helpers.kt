@@ -151,6 +151,15 @@ fun wireTransfer(
     return transactionRef
 }
 
+fun getWithdrawalOperation(opId: String): TalerWithdrawalEntity {
+    return transaction {
+        TalerWithdrawalEntity.find {
+            TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(opId)
+        }.firstOrNull() ?: throw SandboxError(
+            HttpStatusCode.NotFound, "Withdrawal operation $opId not found."
+        )
+    }
+}
 
 fun getBankAccountFromPayto(paytoUri: String): BankAccountEntity {
     val paytoParse = parsePayto(paytoUri)

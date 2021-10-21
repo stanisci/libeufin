@@ -68,6 +68,14 @@ fun badRequest(msg: String): UtilError {
     )
 }
 
+fun conflict(msg: String): UtilError {
+    return UtilError(
+        HttpStatusCode.Conflict,
+        msg,
+        ec = LibeufinErrorCode.LIBEUFIN_EC_NONE
+    )
+}
+
 /**
  * Get the base URL of a request; handles proxied case.
  */

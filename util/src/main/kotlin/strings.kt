@@ -122,13 +122,6 @@ fun parseDecimal(decimalStr: String): BigDecimal {
     }
 }
 
-fun parseAmount(amount: String): AmountWithCurrency {
-    val match = Regex("([A-Z]+):([0-9]+(\\.[0-9]+)?)").find(amount) ?: throw
-    EbicsProtocolError(HttpStatusCode.BadRequest, "invalid amount: $amount")
-    val (currency, number) = match.destructured
-    return AmountWithCurrency(currency, Amount(number))
-}
-
 fun getRandomString(length: Int): String {
     val allowedChars = ('A' .. 'Z') + ('0' .. '9')
     return (1 .. length)

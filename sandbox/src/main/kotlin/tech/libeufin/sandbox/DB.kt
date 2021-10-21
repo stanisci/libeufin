@@ -430,7 +430,7 @@ object TalerWithdrawalsTable : LongIdTable() {
      * gets completed _on the bank's side_.  This does never guarantees that
      * the payment arrived at the exchange's bank yet.
      */
-    val transferDone = bool("transferDone").default(false)
+    val confirmationDone = bool("confirmationDone").default(false)
     val reservePub = text("reservePub").nullable()
     val selectedExchangePayto = text("selectedExchangePayto").nullable()
     val walletBankAccount = reference("walletBankAccount", BankAccountsTable)
@@ -439,7 +439,7 @@ class TalerWithdrawalEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<TalerWithdrawalEntity>(TalerWithdrawalsTable)
     var wopid by TalerWithdrawalsTable.wopid
     var selectionDone by TalerWithdrawalsTable.selectionDone
-    var transferDone by TalerWithdrawalsTable.transferDone
+    var confirmationDone by TalerWithdrawalsTable.confirmationDone
     var reservePub by TalerWithdrawalsTable.reservePub
     var selectedExchangePayto by TalerWithdrawalsTable.selectedExchangePayto
     var amount by TalerWithdrawalsTable.amount

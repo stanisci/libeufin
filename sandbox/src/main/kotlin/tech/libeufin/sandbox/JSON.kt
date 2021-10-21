@@ -22,6 +22,14 @@ package tech.libeufin.sandbox
 import tech.libeufin.util.PaymentInfo
 import tech.libeufin.util.RawPayment
 
+data class WithdrawalRequest(
+    /**
+     * Note: the currency is redundant, because at each point during
+     * the execution the Demobank should have a handle of the currency.
+     */
+    val amount: String // $CURRENCY:X.Y
+)
+
 data class Demobank(
     val currency: String,
     val name: String,

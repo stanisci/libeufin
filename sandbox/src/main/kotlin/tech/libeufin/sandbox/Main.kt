@@ -63,7 +63,6 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.util.*
 import io.ktor.util.date.*
-import io.ktor.util.pipeline.*
 import kotlinx.coroutines.newSingleThreadContext
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
@@ -72,6 +71,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
+import parseAmount
 import startServer
 import tech.libeufin.util.*
 import validatePlainAmount
@@ -960,7 +960,7 @@ val sandboxApp: Application.() -> Unit = {
                             HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
                         )
                         if (wo.selectionDone) {
-                            if (wo.transferDone) {
+                            if (wo.confirmationDone) {
                                 logger.info("Wallet performs again this operation that was paid out earlier: idempotent")
                                 return@newSuspendedTransaction
                             }
@@ -977,7 +977,7 @@ val sandboxApp: Application.() -> Unit = {
                         wo.reservePub = body.reserve_pub
                         wo.selectedExchangePayto = body.selected_exchange
                         wo.selectionDone = true
-                        wo.transferDone
+                        wo.confirmationDone
                     }
                     call.respond(object {
                         val transfer_done = transferDone
@@ -997,7 +997,7 @@ val sandboxApp: Application.() -> Unit = {
                     val demobank = ensureDemobank(call)
                     val ret = TalerWithdrawalStatus(
                         selection_done = wo.selectionDone,
-                        transfer_done = wo.transferDone,
+                        transfer_done = wo.confirmationDone,
                         amount = wo.amount,
                         suggested_exchange = demobank.suggestedExchange
                     )
@@ -1007,13 +1007,31 @@ val sandboxApp: Application.() -> Unit = {
             }
             // Talk to Web UI.
             route("/access-api") {
+                // Information about one withdrawal.
+                get("/accounts/{account_name}/withdrawals/{withdrawal_id}") {
+                    val op = getWithdrawalOperation(call.getUriComponent("withdrawal_id"))
+                    val demobank = ensureDemobank(call)
+                    if (!op.selectionDone && op.reservePub != null) throw internalServerError(
+                        "Unselected withdrawal has a reserve public key",
+                        LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE
+                    )
+                    call.respond(object {
+                        val amount = "${demobank.currency}:${op.amount}"
+                        val aborted = op.aborted
+                        val confirmation_done = op.confirmationDone
+                        val selection_done = op.selectionDone
+                        val selected_reserve_pub = op.reservePub
+                        val selected_exchange_account = op.selectedExchangePayto
+                    })
+                    return@get
+                }
                 // Create a new withdrawal operation.
                 post("/accounts/{account_name}/withdrawals") {
-                    val username = call.request.basicAuth()
-                    if (username == null) throw badRequest(
-                        "Taler withdrawal tried with authentication disabled. " +
-                                "That is impossible, because no bank account can get this operation debited."
-                    )
+                    var username = call.request.basicAuth()
+                    if (username == null && (!WITH_AUTH)) {
+                        logger.info("Authentication is disabled to facilitate tests, defaulting to 'admin' username")
+                        username = "admin"
+                    }
                     val demobank = ensureDemobank(call)
                     /**
                      * Check here if the user has the right over the claimed bank account.  After
@@ -1024,8 +1042,14 @@ val sandboxApp: Application.() -> Unit = {
                     if (maybeOwnedAccount.owner != username) throw unauthorized(
                         "Customer '$username' has no rights over bank account '${maybeOwnedAccount.label}'"
                     )
+                    val req = call.receive<WithdrawalRequest>()
+                    // Check for currency consistency
+                    val amount = parseAmount(req.amount)
+                    if (amount.currency != demobank.currency) throw badRequest(
+                        "Currency ${amount.currency} differs from Demobank's: ${demobank.currency}"
+                    )
                     val wo: TalerWithdrawalEntity = transaction { TalerWithdrawalEntity.new {
-                        amount = "${demobank.currency}:5"
+                        this.amount = amount.amount.toPlainString()
                         walletBankAccount = maybeOwnedAccount
                     } }
                     val baseUrl = URL(call.request.getBaseUrl())
@@ -1043,15 +1067,11 @@ val sandboxApp: Application.() -> Unit = {
                     })
                     return@post
                 }
-                // Confirm a withdrawal.
+                // Confirm a withdrawal: no basic auth, because the ID should be unguessable.
                 post("/accounts/{account_name}/withdrawals/{withdrawal_id}/confirm") {
                     val withdrawalId = call.getUriComponent("withdrawal_id")
                     transaction {
-                        val wo = TalerWithdrawalEntity.find {
-                            TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(withdrawalId)
-                        }.firstOrNull() ?: throw SandboxError(
-                            HttpStatusCode.NotFound, "Withdrawal operation $withdrawalId not found."
-                        )
+                        val wo = getWithdrawalOperation(withdrawalId)
                         if (wo.aborted) throw SandboxError(
                             HttpStatusCode.Conflict,
                             "Cannot confirm an aborted withdrawal."
@@ -1066,7 +1086,7 @@ val sandboxApp: Application.() -> Unit = {
                                 "Cannot withdraw without an exchange."
                             )
                         )
-                        if (!wo.transferDone) {
+                        if (!wo.confirmationDone) {
                             // Need the exchange bank account!
                             wireTransfer(
                                 debitAccount = wo.walletBankAccount,
@@ -1075,12 +1095,22 @@ val sandboxApp: Application.() -> Unit = {
                                 subject = wo.reservePub ?: throw internalServerError(
                                     "Cannot transfer funds without reserve public key."
                                 ),
+                                // provide the currency.
                                 demoBank = ensureDemobank(call)
                             )
-                            wo.transferDone = true
+                            wo.confirmationDone = true
                         }
-                        wo.transferDone
+                        wo.confirmationDone
                     }
+                    call.respond(object {})
+                    return@post
+                }
+
+                post("/accounts/{account_name}/withdrawals/{withdrawal_id}/abort") {
+                    val withdrawalId = call.getUriComponent("withdrawal_id")
+                    val operation = getWithdrawalOperation(withdrawalId)
+                    if (operation.confirmationDone) throw conflict("Cannot abort paid withdrawal.")
+                    transaction { operation.aborted = true }
                     call.respond(object {})
                     return@post
                 }
