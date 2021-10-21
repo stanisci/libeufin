@@ -82,7 +82,6 @@ import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 private val currencyEnv: String? = System.getenv("LIBEUFIN_SANDBOX_CURRENCY")
-private val envName: String? = System.getenv("TALER_ENV_NAME")
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val adminPassword: String? = System.getenv("LIBEUFIN_SANDBOX_ADMIN_PASSWORD")
 private var WITH_AUTH = true
@@ -210,6 +209,23 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         Database.connect(dbConnString)
+        transaction {
+            /**
+             * No Demobank was configured so far - for example,
+             * current tests do not.  This branch provides a default.
+             *
+             * Not used yet.
+             */
+            if (DemobankConfigEntity.all().empty()) {
+                DemobankConfigEntity.new {
+                    currency = "EUR"
+                    bankDebtLimit = 1000000
+                    usersDebtLimit = 10000
+                    allowRegistrations = true
+                    name = "default"
+                }
+            }
+        }
         try {
             wireTransfer(debitAccount, creditAccount, amount, subjectArg)
         } catch (e: SandboxError) {
