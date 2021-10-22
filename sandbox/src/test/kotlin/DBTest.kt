@@ -17,7 +17,6 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
@@ -66,12 +65,19 @@ class DBTest {
                     BankAccountTransactionsTable,
                     BankAccountFreshTransactionsTable
                 )
+                val demobank = DemobankConfigEntity.new {
+                    currency = "EUR"
+                    bankDebtLimit = 1000000
+                    usersDebtLimit = 10000
+                    allowRegistrations = true
+                    name = "default"
+                }
                 val bankAccount = BankAccountEntity.new {
                     iban = "iban"
                     bic = "bic"
-                    name = "name"
                     label = "label"
-                    currency = "TESTKUDOS"
+                    owner = "test"
+                    demoBank = demobank
                 }
                 BankAccountTransactionEntity.new {
                     account = bankAccount
@@ -88,6 +94,7 @@ class DBTest {
                     pmtInfId = "0"
                     direction = "DBIT"
                     accountServicerReference = "test-account-servicer-reference"
+                    this.demobank = demobank
                 }
             }
             val result = transaction {

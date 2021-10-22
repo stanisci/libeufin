@@ -354,7 +354,7 @@ class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
     var pmtInfId by BankAccountTransactionsTable.pmtInfId
     var direction by BankAccountTransactionsTable.direction
     var account by BankAccountEntity referencedOn BankAccountTransactionsTable.account
-    var demobank by DemobankConfigEntity referencedOn BankAccountsTable.demoBank
+    var demobank by DemobankConfigEntity referencedOn BankAccountTransactionsTable.demobank
 }
 
 /**

@@ -17,12 +17,19 @@ class BalanceTest {
                     BankAccountTransactionsTable,
                     BankAccountFreshTransactionsTable
                 )
+                val demobank = DemobankConfigEntity.new {
+                    currency = "EUR"
+                    bankDebtLimit = 1000000
+                    usersDebtLimit = 10000
+                    allowRegistrations = true
+                    name = "default"
+                }
                 val one = BankAccountEntity.new {
-                    name = "Person 1"
                     iban = "IBAN 1"
                     bic = "BIC"
                     label = "label 1"
-                    currency = "EUR"
+                    owner = "test"
+                    this.demoBank = demobank
                 }
                 BankAccountTransactionEntity.new {
                     account = one
@@ -39,6 +46,7 @@ class BalanceTest {
                     pmtInfId = "0"
                     direction = "CRDT"
                     accountServicerReference = "test-account-servicer-reference"
+                    this.demobank = demobank
                 }
                 BankAccountTransactionEntity.new {
                     account = one
@@ -55,6 +63,7 @@ class BalanceTest {
                     pmtInfId = "0"
                     direction = "CRDT"
                     accountServicerReference = "test-account-servicer-reference"
+                    this.demobank = demobank
                 }
                 BankAccountTransactionEntity.new {
                     account = one
@@ -71,6 +80,7 @@ class BalanceTest {
                     pmtInfId = "0"
                     direction = "DBIT"
                     accountServicerReference = "test-account-servicer-reference"
+                    this.demobank = demobank
                 }
                 assert(java.math.BigDecimal.ONE == balanceForAccount(one))
             }
