@@ -203,31 +203,22 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
 
     private val creditAccount by option(help = "Label of the bank account receiving the payment").required()
     private val debitAccount by option(help = "Label of the bank account issuing the payment").required()
+    private val demobankArg by option("demobank", help = "Which Demobank books this transaction").default("default")
     private val amount by argument(help = "Amount, in the \$currency:x.y format")
     private val subjectArg by argument(name = "subject", help = "Payment's subject")
 
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         Database.connect(dbConnString)
-        transaction {
-            /**
-             * No Demobank was configured so far - for example,
-             * current tests do not.  This branch provides a default.
-             *
-             * Not used yet.
-             */
-            if (DemobankConfigEntity.all().empty()) {
-                DemobankConfigEntity.new {
-                    currency = "EUR"
-                    bankDebtLimit = 1000000
-                    usersDebtLimit = 10000
-                    allowRegistrations = true
-                    name = "default"
-                }
-            }
-        }
+        /**
+         * The function below create a default demobank
+         * if the 'config' command was never run before this point.
+         *
+         * This helps porting current tests to the "demobank model".
+         */
+        maybeCreateDefaultDemobank()
         try {
-            wireTransfer(debitAccount, creditAccount, amount, subjectArg)
+            wireTransfer(debitAccount, creditAccount, demobankArg, subjectArg, amount)
         } catch (e: SandboxError) {
             print(e.message)
             exitProcess(1)
@@ -338,7 +329,6 @@ data class BankAccountInfo(
     val name: String,
     val iban: String,
     val bic: String,
-    val currency: String?
 )
 
 data class BankAccountsListReponse(
@@ -526,7 +516,7 @@ val sandboxApp: Application.() -> Unit = {
     routing {
 
         get("/") {
-            call.respondText("Hello, this is Sandbox\n", ContentType.Text.Plain)
+            call.respondText("Hello, this is the Sandbox\n", ContentType.Text.Plain)
         }
 
         // Respond with the last statement of the requesting account.
@@ -534,7 +524,10 @@ val sandboxApp: Application.() -> Unit = {
         post("/admin/payments/camt") {
             call.request.basicAuth()
             val body = call.receiveJson<CamtParams>()
-            val bankaccount = getBankAccountFromLabel(body.bankaccount)
+            val bankaccount = getBankAccountFromLabel(
+                body.bankaccount,
+                getDefaultDemobank()
+            )
             if (body.type != 53) throw SandboxError(
                 HttpStatusCode.NotFound,
                 "Only Camt.053 documents can be generated."
@@ -562,8 +555,8 @@ val sandboxApp: Application.() -> Unit = {
                     iban = body.iban
                     bic = body.bic
                     label = body.label
-                    currency = body.currency ?: "EUR"
                     owner = username ?: "admin" // allows
+                    demoBank = getDefaultDemobank()
                 }
             }
             call.respond(object {})
@@ -573,17 +566,13 @@ val sandboxApp: Application.() -> Unit = {
         // Information about one bank account.
         get("/admin/bank-accounts/{label}") {
             call.request.basicAuth()
-            val label = ensureNonNull(call.parameters["label"])
+            val label = call.getUriComponent("label")
             val ret = transaction {
-                val bankAccount = tech.libeufin.sandbox.BankAccountEntity.find {
-                    tech.libeufin.sandbox.BankAccountsTable.label eq label
-                }.firstOrNull() ?: throw SandboxError(
-                    io.ktor.http.HttpStatusCode.NotFound,
-                    "Account '$label' not found"
-                )
+                val demobank = getDefaultDemobank()
+                val bankAccount = getBankAccountFromLabel(label, demobank)
                 val balance = balanceForAccount(bankAccount)
                 object {
-                    val balance = "${bankAccount.currency}:${balance}"
+                    val balance = "${bankAccount.demoBank.currency}:${balance}"
                     val iban = bankAccount.iban
                     val bic = bankAccount.bic
                     val label = bankAccount.label
@@ -602,21 +591,24 @@ val sandboxApp: Application.() -> Unit = {
             val accountLabel = ensureNonNull(call.parameters["label"])
             if (!validatePlainAmount(body.amount)) {
                 throw SandboxError(
-                    io.ktor.http.HttpStatusCode.BadRequest,
+                    HttpStatusCode.BadRequest,
                     "invalid amount (should be plain amount without currency)"
                 )
             }
             val reqDebtorBic = body.debtorBic
             if (reqDebtorBic != null && !validateBic(reqDebtorBic)) {
                 throw SandboxError(
-                    io.ktor.http.HttpStatusCode.BadRequest,
+                    HttpStatusCode.BadRequest,
                     "invalid BIC"
                 )
             }
             transaction {
-                val account = getBankAccountFromLabel(accountLabel)
+                val demobank = getDefaultDemobank()
+                val account = getBankAccountFromLabel(
+                    accountLabel, demobank
+                )
                 val randId = getRandomString(16)
-                tech.libeufin.sandbox.BankAccountTransactionEntity.new {
+                BankAccountTransactionEntity.new {
                     creditorIban = account.iban
                     creditorBic = account.bic
                     creditorName = "Creditor Name" // FIXME: Waits to get this value from the DemobankCustomer type.
@@ -625,11 +617,11 @@ val sandboxApp: Application.() -> Unit = {
                     debtorName = body.debtorName
                     subject = body.subject
                     amount = body.amount
-                    currency = account.currency
                     date = getUTCnow().toInstant().toEpochMilli()
                     accountServicerReference = "sandbox-$randId"
                     this.account = account
                     direction = "CRDT"
+                    this.demobank = demobank
                 }
             }
             call.respond(object {})
@@ -649,8 +641,18 @@ val sandboxApp: Application.() -> Unit = {
                     body.subscriber.partnerID,
                     body.subscriber.hostID
                 )
+                val demobank = getDefaultDemobank()
+
+                /**
+                 * Checking that the default demobank doesn't have already the
+                 * requested IBAN and bank account label.
+                 */
                 val check = BankAccountEntity.find {
-                    BankAccountsTable.iban eq body.iban or (BankAccountsTable.label eq body.label)
+                    BankAccountsTable.iban eq body.iban or (
+                            (BankAccountsTable.label eq body.label) and (
+                                    BankAccountsTable.demoBank eq demobank.id
+                                    )
+                            )
                 }.count()
                 if (check > 0) throw SandboxError(
                     HttpStatusCode.BadRequest,
@@ -660,26 +662,28 @@ val sandboxApp: Application.() -> Unit = {
                     iban = body.iban
                     bic = body.bic
                     label = body.label
-                    currency = body.currency.uppercase(java.util.Locale.ROOT)
                     owner = username ?: "admin"
+                    demoBank = demobank
                 }
             }
             call.respondText("Bank account created")
             return@post
         }
 
-        // Information about all the bank accounts.
+        // Information about all the default demobank's bank accounts
         get("/admin/bank-accounts") {
             call.request.basicAuth()
             val accounts = mutableListOf<BankAccountInfo>()
             transaction {
-                BankAccountEntity.all().forEach {
+                val demobank = getDefaultDemobank()
+                BankAccountEntity.find {
+                    BankAccountsTable.demoBank eq demobank.id
+                }.forEach {
                     accounts.add(
                         BankAccountInfo(
                             label = it.label,
                             bic = it.bic,
                             iban = it.iban,
-                            currency = it.currency,
                             name = "Bank account owner's name"
                         )
                     )
@@ -695,9 +699,10 @@ val sandboxApp: Application.() -> Unit = {
             transaction {
                 val accountLabel = ensureNonNull(call.parameters["label"])
                 transaction {
-                    val account = getBankAccountFromLabel(accountLabel)
-                    tech.libeufin.sandbox.BankAccountTransactionEntity.find {
-                        tech.libeufin.sandbox.BankAccountTransactionsTable.account eq account.id
+                    val demobank = getDefaultDemobank()
+                    val account = getBankAccountFromLabel(accountLabel, demobank)
+                    BankAccountTransactionEntity.find {
+                        BankAccountTransactionsTable.account eq account.id
                     }.forEach {
                         ret.payments.add(
                             PaymentInfo(
@@ -736,7 +741,8 @@ val sandboxApp: Application.() -> Unit = {
             call.request.basicAuth()
             transaction {
                 val accountLabel = ensureNonNull(call.parameters["label"])
-                val account = getBankAccountFromLabel(accountLabel)
+                val demobank = getDefaultDemobank()
+                val account = getBankAccountFromLabel(accountLabel, demobank)
                 val transactionReferenceCrdt = getRandomString(8)
                 val transactionReferenceDbit = getRandomString(8)
 
@@ -751,11 +757,11 @@ val sandboxApp: Application.() -> Unit = {
                         debtorName = "Max Mustermann"
                         subject = "sample transaction $transactionReferenceCrdt"
                         this.amount = amount.toString()
-                        currency = account.currency
                         date = getUTCnow().toInstant().toEpochMilli()
                         accountServicerReference = transactionReferenceCrdt
                         this.account = account
                         direction = "CRDT"
+                        this.demobank = demobank
                     }
                 }
 
@@ -771,11 +777,11 @@ val sandboxApp: Application.() -> Unit = {
                         creditorName = "Max Mustermann"
                         subject = "sample transaction $transactionReferenceDbit"
                         this.amount = amount.toString()
-                        currency = account.currency
                         date = getUTCnow().toInstant().toEpochMilli()
                         accountServicerReference = transactionReferenceDbit
                         this.account = account
                         direction = "DBIT"
+                        this.demobank = demobank
                     }
                 }
             }
@@ -834,17 +840,17 @@ val sandboxApp: Application.() -> Unit = {
                 }.firstOrNull() ?: throw SandboxError(
                     io.ktor.http.HttpStatusCode.NotFound, "Host $hostID not found"
                 )
-                val pairA = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
-                val pairB = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
-                val pairC = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
+                val pairA = CryptoUtil.generateRsaKeyPair(2048)
+                val pairB = CryptoUtil.generateRsaKeyPair(2048)
+                val pairC = CryptoUtil.generateRsaKeyPair(2048)
                 host.authenticationPrivateKey = ExposedBlob(pairA.private.encoded)
                 host.encryptionPrivateKey = ExposedBlob(pairB.private.encoded)
                 host.signaturePrivateKey = ExposedBlob(pairC.private.encoded)
             }
             call.respondText(
                 "Keys of '${hostID}' rotated.",
-                io.ktor.http.ContentType.Text.Plain,
-                io.ktor.http.HttpStatusCode.OK
+                ContentType.Text.Plain,
+                HttpStatusCode.OK
             )
             return@post
         }
@@ -853,11 +859,11 @@ val sandboxApp: Application.() -> Unit = {
         post("/admin/ebics/hosts") {
             call.request.basicAuth()
             val req = call.receiveJson<EbicsHostCreateRequest>()
-            val pairA = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
-            val pairB = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
-            val pairC = tech.libeufin.util.CryptoUtil.generateRsaKeyPair(2048)
+            val pairA = CryptoUtil.generateRsaKeyPair(2048)
+            val pairB = CryptoUtil.generateRsaKeyPair(2048)
+            val pairC = CryptoUtil.generateRsaKeyPair(2048)
             transaction {
-                tech.libeufin.sandbox.EbicsHostEntity.new {
+                EbicsHostEntity.new {
                     this.ebicsVersion = req.ebicsVersion
                     this.hostId = req.hostID
                     this.authenticationPrivateKey = ExposedBlob(pairA.private.encoded)
@@ -867,8 +873,8 @@ val sandboxApp: Application.() -> Unit = {
             }
             call.respondText(
                 "Host '${req.hostID}' created.",
-                io.ktor.http.ContentType.Text.Plain,
-                io.ktor.http.HttpStatusCode.OK
+                ContentType.Text.Plain,
+                HttpStatusCode.OK
             )
             return@post
         }
@@ -877,7 +883,7 @@ val sandboxApp: Application.() -> Unit = {
         get("/admin/ebics/hosts") {
             call.request.basicAuth()
             val ebicsHosts = transaction {
-                tech.libeufin.sandbox.EbicsHostEntity.all().map { it.hostId }
+                EbicsHostEntity.all().map { it.hostId }
             }
             call.respond(EbicsHostsResponse(ebicsHosts))
         }
@@ -897,8 +903,8 @@ val sandboxApp: Application.() -> Unit = {
             catch (e: SandboxError) {
                 // Should translate to EBICS error code.
                 when (e.errorCode) {
-                    tech.libeufin.util.LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
-                    tech.libeufin.util.LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE -> throw EbicsProcessingError("Inconsistent bank state.")
+                    LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
+                    LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE -> throw EbicsProcessingError("Inconsistent bank state.")
                     else -> throw EbicsProcessingError("Unknown LibEuFin error code: ${e.errorCode}.")
                 }
             }
@@ -1052,7 +1058,10 @@ val sandboxApp: Application.() -> Unit = {
                      * this check, the withdrawal operation will be allowed only by providing its
                      * UID.
                      */
-                    val maybeOwnedAccount = getBankAccountFromLabel(call.getUriComponent("account_name"))
+                    val maybeOwnedAccount = getBankAccountFromLabel(
+                        call.getUriComponent("account_name"),
+                        demobank
+                    )
                     if (maybeOwnedAccount.owner != username) throw unauthorized(
                         "Customer '$username' has no rights over bank account '${maybeOwnedAccount.label}'"
                     )
@@ -1157,7 +1166,11 @@ val sandboxApp: Application.() -> Unit = {
                     return@get
                 }
                 get("/accounts/{account_name}/history") {
-                    val bankAccount = getBankAccountFromLabel(call.getUriComponent("account_name"))
+                    val demobank = ensureDemobank(call)
+                    val bankAccount = getBankAccountFromLabel(
+                        call.getUriComponent("account_name"),
+                        demobank
+                    )
                     val authOk: Boolean = bankAccount.isPublic || (!WITH_AUTH)
                     if (!authOk && (call.request.basicAuth() != bankAccount.owner)) throw forbidden(
                         "Cannot access bank account ${bankAccount.label}"
@@ -1219,9 +1232,8 @@ val sandboxApp: Application.() -> Unit = {
                         BankAccountEntity.new {
                             iban = getIban()
                             label = req.username + "acct" // multiple accounts per username not allowed.
-                            currency = demobank.currency
                             owner = req.username
-                            this.demoBank = demobank.id
+                            this.demoBank = demobank
                         }
                         DemobankCustomerEntity.new {
                             username = req.username

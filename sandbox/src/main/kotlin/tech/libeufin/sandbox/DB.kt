@@ -19,6 +19,7 @@
 
 package tech.libeufin.sandbox
 
+import io.ktor.http.*
 import org.jetbrains.exposed.dao.Entity
 import org.jetbrains.exposed.dao.EntityClass
 import org.jetbrains.exposed.dao.IntEntity
@@ -326,6 +327,7 @@ object BankAccountTransactionsTable : LongIdTable() {
      * only both parties to be registered at the running Sandbox.
      */
     val account = reference("account", BankAccountsTable)
+    val demobank = reference("demobank", DemobankConfigsTable)
 }
 
 class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -352,6 +354,7 @@ class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
     var pmtInfId by BankAccountTransactionsTable.pmtInfId
     var direction by BankAccountTransactionsTable.direction
     var account by BankAccountEntity referencedOn BankAccountTransactionsTable.account
+    var demobank by DemobankConfigEntity referencedOn BankAccountsTable.demoBank
 }
 
 /**
@@ -362,7 +365,6 @@ object BankAccountsTable : IntIdTable() {
     val iban = text("iban")
     val bic = text("bic").default("EUSANDBOX")
     val label = text("label").uniqueIndex("accountLabelIndex")
-    val currency = text("currency")
     val isDebit = bool("isDebit").default(false)
     /**
      * Allow to assign "admin" - who doesn't have a customer DB entry -
@@ -370,15 +372,7 @@ object BankAccountsTable : IntIdTable() {
      */
     val owner = text("owner")
     val isPublic = bool("isPublic").default(false)
-
-    /**
-     * Used only by the operations triggered under one /demobanks/$demobankId endpoint.
-     *
-     * For example, current tests do never configure one demobank or one customer account;
-     * for those, every bank account will have null demobank reference and "admin" owner that
-     * do not point to any customer row.
-     */
-    val demoBank = reference("demoBank", DemobankConfigsTable).nullable()
+    val demoBank = reference("demoBank", DemobankConfigsTable)
 }
 
 class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -387,11 +381,10 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     var iban by BankAccountsTable.iban
     var bic by BankAccountsTable.bic
     var label by BankAccountsTable.label
-    var currency by BankAccountsTable.currency
     var isDebit by BankAccountsTable.isDebit
     var owner by BankAccountsTable.owner
     var isPublic by BankAccountsTable.isPublic
-    var demoBank by BankAccountsTable.demoBank
+    var demoBank by DemobankConfigEntity referencedOn BankAccountsTable.demoBank
 }
 
 object BankAccountStatementsTable : IntIdTable() {

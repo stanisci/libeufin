@@ -98,7 +98,67 @@ fun getPersonNameFromCustomer(ownerUsername: String): String {
         ownerCustomer.name ?: "Name not given"
     }
 }
+fun getDefaultDemobank(): DemobankConfigEntity {
+    return transaction {
+        DemobankConfigEntity.find {
+            DemobankConfigsTable.name eq "default"
+        }.firstOrNull()
+    } ?: throw SandboxError(
+        HttpStatusCode.InternalServerError,
+        "Default demobank is missing."
+    )
+}
+fun maybeCreateDefaultDemobank() {
+    transaction {
+        if (DemobankConfigEntity.all().empty()) {
+            DemobankConfigEntity.new {
+                currency = "EUR"
+                bankDebtLimit = 1000000
+                usersDebtLimit = 10000
+                allowRegistrations = true
+                name = "default"
+            }
+        }
+    }
+}
 
+fun wireTransfer(
+    debitAccount: String,
+    creditAccount: String,
+    demobank: String,
+    subject: String,
+    amount: String
+): String {
+    val args: Triple<BankAccountEntity, BankAccountEntity, DemobankConfigEntity> = transaction {
+        val debitAccount = BankAccountEntity.find {
+            BankAccountsTable.label eq debitAccount
+        }.firstOrNull() ?: throw SandboxError(
+            HttpStatusCode.NotFound,
+            "Debit account '$debitAccount' not found"
+        )
+        val creditAccount = BankAccountEntity.find {
+            BankAccountsTable.label eq creditAccount
+        }.firstOrNull() ?: throw SandboxError(
+            HttpStatusCode.NotFound,
+            "Credit account '$creditAccount' not found"
+        )
+        val demoBank = DemobankConfigEntity.find {
+            DemobankConfigsTable.name eq demobank
+        }.firstOrNull() ?: throw SandboxError(
+            HttpStatusCode.NotFound,
+            "Demobank '$demobank' not found"
+        )
+
+        Triple(debitAccount, creditAccount, demoBank)
+    }
+    return wireTransfer(
+        debitAccount = args.first,
+        creditAccount = args.second,
+        demoBank = args.third,
+        subject = subject,
+        amount = amount
+    )
+}
 /**
  * Book a CRDT and a DBIT transaction and return the unique reference thereof.
  *
@@ -179,10 +239,10 @@ fun getBankAccountFromIban(iban: String): BankAccountEntity {
     )
 }
 
-fun getBankAccountFromLabel(label: String): BankAccountEntity {
+fun getBankAccountFromLabel(label: String, demobank: DemobankConfigEntity): BankAccountEntity {
     return transaction {
         BankAccountEntity.find(
-            BankAccountsTable.label eq label
+            BankAccountsTable.label eq label and (BankAccountsTable.demoBank eq demobank.id)
         )
     }.firstOrNull() ?: throw SandboxError(
         HttpStatusCode.NotFound,
