@@ -8,7 +8,7 @@ import java.net.URLDecoder
  */
 data class Payto(
     // represent query param "sender-name" or "receiver-name".
-    val name: String?,
+    val receiverName: String?,
     val iban: String,
     val bic: String?,
     // Typically, a wire transfer's subject.
@@ -62,15 +62,11 @@ fun parsePayto(paytoLine: String): Payto {
         }
     } else null
 
-    val receiverName = getQueryParamOrNull("receiver-name", params)
-    val senderName = getQueryParamOrNull("sender-name", params)
-    if (receiverName != null  && senderName != null) throw InvalidPaytoError("URI had both sender and receiver")
-
     return Payto(
         iban = iban,
         bic = bic,
         amount = getQueryParamOrNull("amount", params),
         message = getQueryParamOrNull("message", params),
-        name = listOf(receiverName, senderName).firstNotNullOfOrNull { it }
+        receiverName = getQueryParamOrNull("receiver-name", params)
     )
 }

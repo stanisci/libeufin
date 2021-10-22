@@ -25,7 +25,6 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.util.*
-import javax.security.auth.Subject
 
 /**
  * Helps to communicate Camt values without having
@@ -87,6 +86,20 @@ fun getHistoryElementFromTransactionRow(
 }
 
 /**
+ * Get person name from a customer's username.
+ */
+fun getPersonNameFromCustomer(ownerUsername: String): String {
+    return if (ownerUsername == "admin") "admin" else {
+        val ownerCustomer = DemobankCustomerEntity.find(
+            DemobankCustomersTable.username eq ownerUsername
+        ).firstOrNull() ?: throw internalServerError(
+            "Person name of '$ownerUsername' not found"
+        )
+        ownerCustomer.name ?: "Name not given"
+    }
+}
+
+/**
  * Book a CRDT and a DBIT transaction and return the unique reference thereof.
  *
  * At the moment there is redundancy because all the creditor / debtor details
@@ -104,26 +117,16 @@ fun wireTransfer(
     amount: String,
 ): String {
 
-    fun getOwnerName(ownerUsername: String): String {
-        return if (creditAccount.owner == "admin") "admin" else {
-            val creditorCustomer = DemobankCustomerEntity.find(
-                DemobankCustomersTable.username eq creditAccount.owner
-            ).firstOrNull() ?: throw internalServerError(
-                "Owner of bank account '${creditAccount.label}' not found"
-            )
-            creditorCustomer.name ?: "Name not given"
-        }
-    }
     val timeStamp = getUTCnow().toInstant().toEpochMilli()
     val transactionRef = getRandomString(8)
     transaction {
         BankAccountTransactionEntity.new {
             creditorIban = creditAccount.iban
             creditorBic = creditAccount.bic
-            this.creditorName = getOwnerName(creditAccount.owner)
+            this.creditorName = getPersonNameFromCustomer(creditAccount.owner)
             debtorIban = debitAccount.iban
             debtorBic = debitAccount.bic
-            debtorName = getOwnerName(debitAccount.owner)
+            debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
             this.amount = amount
             this.currency = demoBank.currency
@@ -135,10 +138,10 @@ fun wireTransfer(
         BankAccountTransactionEntity.new {
             creditorIban = creditAccount.iban
             creditorBic = creditAccount.bic
-            this.creditorName = getOwnerName(creditAccount.owner)
+            this.creditorName = getPersonNameFromCustomer(creditAccount.owner)
             debtorIban = debitAccount.iban
             debtorBic = debitAccount.bic
-            debtorName = getOwnerName(debitAccount.owner)
+            debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
             this.amount = amount
             this.currency = demoBank.currency

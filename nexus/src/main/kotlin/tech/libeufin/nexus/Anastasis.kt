@@ -57,7 +57,7 @@ fun anastasisFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDeta
         subject = txDtls.unstructuredRemittanceInformation
         timestampMs = System.currentTimeMillis()
         debtorPaytoUri = buildIbanPaytoUri(
-            debtorIban, debtorAgent.bic, debtorName, "DBIT"
+            debtorIban, debtorAgent.bic, debtorName,
         )
     }
 }
@@ -96,7 +96,6 @@ private suspend fun historyIncoming(call: ApplicationCall) {
                             it.payment.bankAccount.iban,
                             it.payment.bankAccount.bankCode,
                             it.payment.bankAccount.accountHolder,
-                            "CRDT"
                         ),
                         debit_account = it.debtorPaytoUri
                     )

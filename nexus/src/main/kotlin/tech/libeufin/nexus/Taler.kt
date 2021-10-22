@@ -22,7 +22,6 @@ package tech.libeufin.nexus
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.application.ApplicationCall
 import io.ktor.application.call
-import io.ktor.client.HttpClient
 import io.ktor.content.TextContent
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -108,15 +107,13 @@ fun <T : Entity<Long>> SizedIterable<T>.orderTaler(delta: Int): List<T> {
     }
 }
 
-/**
- * Build an IBAN payto URI.
- */
 fun buildIbanPaytoUri(
-    iban: String, bic: String, name: String, direction: String
+    iban: String,
+    bic: String,
+    receiverName: String,
 ): String {
-    val nameParam = if (direction == "DBIT") "sender-name" else "receiver-name"
-    val nameUrlEnc = URLEncoder.encode(name, "utf-8")
-    return "payto://iban/$bic/$iban?$nameParam=$nameUrlEnc"
+    val nameUrlEnc = URLEncoder.encode(receiverName, "utf-8")
+    return "payto://iban/$bic/$iban?receiver-name=$nameUrlEnc"
 }
 
 /** Builds the comparison operator for history entries based on the sign of 'delta'  */
@@ -211,7 +208,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
             Pain001Data(
                 creditorIban = creditorData.iban,
                 creditorBic = creditorData.bic,
-                creditorName = creditorData.name ?: throw NexusError(
+                creditorName = creditorData.receiverName ?: throw NexusError(
                     HttpStatusCode.BadRequest, "Payto did not mention account owner"
                 ),
                 subject = transferRequest.wtid,
@@ -309,7 +306,7 @@ fun talerFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDetails)
         reservePublicKey = reservePub
         timestampMs = System.currentTimeMillis()
         debtorPaytoUri = buildIbanPaytoUri(
-            debtorIban, debtorAgent.bic, debtorName, "DBIT"
+            debtorIban, debtorAgent.bic, debtorName
         )
     }
 }
@@ -419,7 +416,6 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
                             subscriberBankAccount.iban,
                             subscriberBankAccount.bankCode,
                             subscriberBankAccount.accountHolder,
-                            "DBIT"
                         ),
                         exchange_base_url = "FIXME-to-request-along-subscriber-registration"
                     )
@@ -462,7 +458,6 @@ private suspend fun historyIncoming(call: ApplicationCall) {
                             it.payment.bankAccount.iban,
                             it.payment.bankAccount.bankCode,
                             it.payment.bankAccount.accountHolder,
-                            "CRDT"
                         ),
                         debit_account = it.debtorPaytoUri
                     )
