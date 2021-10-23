@@ -127,7 +127,7 @@ fun wireTransfer(
     creditAccount: String,
     demobank: String,
     subject: String,
-    amount: String
+    amount: String // $currency:x.y
 ): String {
     val args: Triple<BankAccountEntity, BankAccountEntity, DemobankConfigEntity> = transaction {
         val debitAccount = BankAccountEntity.find {
@@ -151,12 +151,13 @@ fun wireTransfer(
 
         Triple(debitAccount, creditAccount, demoBank)
     }
+    val amountObj = parseAmount(amount)
     return wireTransfer(
         debitAccount = args.first,
         creditAccount = args.second,
-        demoBank = args.third,
+        Demobank = args.third,
         subject = subject,
-        amount = amount
+        amount = amountObj.amount.toPlainString()
     )
 }
 /**
@@ -172,7 +173,7 @@ fun wireTransfer(
 fun wireTransfer(
     debitAccount: BankAccountEntity,
     creditAccount: BankAccountEntity,
-    demoBank: DemobankConfigEntity,
+    Demobank: DemobankConfigEntity,
     subject: String,
     amount: String,
 ): String {
@@ -189,11 +190,12 @@ fun wireTransfer(
             debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
             this.amount = amount
-            this.currency = demoBank.currency
+            this.currency = Demobank.currency
             date = timeStamp
             accountServicerReference = transactionRef
             account = creditAccount
             direction = "CRDT"
+            this.demobank = Demobank
         }
         BankAccountTransactionEntity.new {
             creditorIban = creditAccount.iban
@@ -204,11 +206,12 @@ fun wireTransfer(
             debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
             this.amount = amount
-            this.currency = demoBank.currency
+            this.currency = Demobank.currency
             date = timeStamp
             accountServicerReference = transactionRef
             account = debitAccount
             direction = "DBIT"
+            demobank = Demobank
         }
     }
     return transactionRef

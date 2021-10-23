@@ -399,7 +399,7 @@ val sandboxApp: Application.() -> Unit = {
             }
         }
     }
-    install(io.ktor.features.ContentNegotiation) {
+    install(ContentNegotiation) {
         jackson {
             enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT)
             setDefaultPrettyPrinter(DefaultPrettyPrinter().apply {
@@ -457,18 +457,18 @@ val sandboxApp: Application.() -> Unit = {
             )
             val hostAuthPriv = transaction {
                 val host = EbicsHostEntity.find {
-                    tech.libeufin.sandbox.EbicsHostsTable.hostID.upperCase() eq call.attributes.get(tech.libeufin.sandbox.EbicsHostIdAttribute)
+                    EbicsHostsTable.hostID.upperCase() eq call.attributes.get(tech.libeufin.sandbox.EbicsHostIdAttribute)
                         .uppercase()
                 }.firstOrNull() ?: throw SandboxError(
                     io.ktor.http.HttpStatusCode.InternalServerError,
                     "Requested Ebics host ID not found."
                 )
-                tech.libeufin.util.CryptoUtil.loadRsaPrivateKey(host.authenticationPrivateKey.bytes)
+                CryptoUtil.loadRsaPrivateKey(host.authenticationPrivateKey.bytes)
             }
             call.respondText(
-                tech.libeufin.util.XMLUtil.signEbicsResponse(resp, hostAuthPriv),
-                io.ktor.http.ContentType.Application.Xml,
-                io.ktor.http.HttpStatusCode.OK
+                XMLUtil.signEbicsResponse(resp, hostAuthPriv),
+                ContentType.Application.Xml,
+                HttpStatusCode.OK
             )
         }
         exception<Throwable> { cause ->
@@ -895,9 +895,11 @@ val sandboxApp: Application.() -> Unit = {
              * generic error types to EBICS-formatted responses.
              */
             catch (e: UtilError) {
+                logger.error(e)
                 throw EbicsProcessingError("Serving EBICS threw unmanaged UtilError: ${e.reason}")
             }
             catch (e: SandboxError) {
+                logger.error(e)
                 // Should translate to EBICS error code.
                 when (e.errorCode) {
                     LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
@@ -906,11 +908,13 @@ val sandboxApp: Application.() -> Unit = {
                 }
             }
             catch (e: EbicsRequestError) {
+                logger.error(e)
                 // Preventing the last catch-all block
                 // from capturing a known type.
                 throw e
             }
             catch (e: Exception) {
+                logger.error(e)
                 if (e !is EbicsRequestError) {
                     throw EbicsProcessingError("Unmanaged error: $e")
                 }
@@ -1116,7 +1120,7 @@ val sandboxApp: Application.() -> Unit = {
                                     "Cannot transfer funds without reserve public key."
                                 ),
                                 // provide the currency.
-                                demoBank = ensureDemobank(call)
+                                Demobank = ensureDemobank(call)
                             )
                             wo.confirmationDone = true
                         }
