@@ -151,6 +151,11 @@ fun wireTransfer(
 
         Triple(debitAccount, creditAccount, demoBank)
     }
+
+    /**
+     * Only validating the amount.  Actual check on the
+     * currency will be done by the callee below.
+     */
     val amountObj = parseAmount(amount)
     return wireTransfer(
         debitAccount = args.first,
