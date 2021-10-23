@@ -89,7 +89,6 @@ enum class KeyState {
     RELEASED
 }
 
-// FIXME:  This should be DemobankConfigTable!
 object DemobankConfigsTable : LongIdTable() {
     val currency = text("currency")
     val allowRegistrations = bool("allowRegistrations")
