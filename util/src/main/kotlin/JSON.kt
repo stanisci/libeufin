@@ -51,6 +51,10 @@ data class IncomingPaymentInfo(
     val debtorIban: String,
     val debtorBic: String?,
     val debtorName: String,
+    /**
+     * A stringified number, no currency required.  This
+     * one will be extracted from the demobank configuration.
+     */
     val amount: String,
     val subject: String
 )

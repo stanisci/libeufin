@@ -415,10 +415,10 @@ val sandboxApp: Application.() -> Unit = {
             logger.error("Exception while handling '${call.request.uri}'", cause)
             call.respondText(
                 "Invalid arithmetic attempted.",
-                io.ktor.http.ContentType.Text.Plain,
+                ContentType.Text.Plain,
                 // here is always the bank's fault, as it should always check
                 // the operands.
-                io.ktor.http.HttpStatusCode.InternalServerError
+                HttpStatusCode.InternalServerError
             )
         }
         exception<SandboxError> { cause ->
@@ -618,12 +618,11 @@ val sandboxApp: Application.() -> Unit = {
                     this.account = account
                     direction = "CRDT"
                     this.demobank = demobank
+                    currency = demobank.currency
                 }
             }
             call.respond(object {})
         }
-
-
         // Associates a new bank account with an existing Ebics subscriber.
         post("/admin/ebics/bank-accounts") {
             val username = call.request.basicAuth()
@@ -758,6 +757,7 @@ val sandboxApp: Application.() -> Unit = {
                         this.account = account
                         direction = "CRDT"
                         this.demobank = demobank
+                        currency = demobank.currency
                     }
                 }
 
@@ -778,6 +778,7 @@ val sandboxApp: Application.() -> Unit = {
                         this.account = account
                         direction = "DBIT"
                         this.demobank = demobank
+                        currency = demobank.currency
                     }
                 }
             }
