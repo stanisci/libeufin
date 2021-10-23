@@ -327,6 +327,10 @@ object BankAccountTransactionsTable : LongIdTable() {
      * only both parties to be registered at the running Sandbox.
      */
     val account = reference("account", BankAccountsTable)
+
+    /**
+     * Redundantly storing the demobank for query convenience.
+     */
     val demobank = reference("demobank", DemobankConfigsTable)
 }
 

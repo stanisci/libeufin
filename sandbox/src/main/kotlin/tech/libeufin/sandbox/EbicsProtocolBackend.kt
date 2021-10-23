@@ -660,8 +660,10 @@ private fun handleCct(paymentRequest: String) {
     val parseResult = parsePain001(paymentRequest)
     transaction {
         try {
+            val bankAccount = getBankAccountFromIban(parseResult.debtorIban)
             BankAccountTransactionEntity.new {
-                account = getBankAccountFromIban(parseResult.debtorIban)
+                account = bankAccount
+                demobank = bankAccount.demoBank
                 creditorIban = parseResult.creditorIban
                 creditorName = parseResult.creditorName
                 creditorBic = parseResult.creditorBic
@@ -682,6 +684,7 @@ private fun handleCct(paymentRequest: String) {
             if (maybeLocalCreditor != null) {
                 BankAccountTransactionEntity.new {
                     account = maybeLocalCreditor
+                    demobank = maybeLocalCreditor.demoBank
                     creditorIban = parseResult.creditorIban
                     creditorName = parseResult.creditorName
                     creditorBic = parseResult.creditorBic
