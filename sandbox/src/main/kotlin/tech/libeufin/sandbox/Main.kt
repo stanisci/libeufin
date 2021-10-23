@@ -273,6 +273,7 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             exitProcess(1)
         }
         execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)) }
+        maybeCreateDefaultDemobank()
         if (withUnixSocket != null) {
             startServer(
                 withUnixSocket ?: throw Exception("Could not use the Unix domain socket path value!"),
@@ -284,11 +285,6 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
     }
 }
 
-private fun getCustomerFromDb(username: String): DemobankCustomerEntity {
-    return transaction { DemobankCustomerEntity.find {
-        DemobankCustomersTable.username eq username
-    }.firstOrNull() } ?: throw notFound("Customer with username '$username' not found")
-}
 private fun getJsonFromDemobankConfig(fromDb: DemobankConfigEntity): Demobank {
     return Demobank(
         currency = fromDb.currency,
