@@ -82,7 +82,6 @@ data class BankAccountRequest(
      */
     val name: String,
     val label: String,
-    val currency: String
 )
 
 data class CustomerRegistration(
