@@ -520,15 +520,15 @@ val sandboxApp: Application.() -> Unit = {
         post("/admin/payments/camt") {
             call.request.basicAuth()
             val body = call.receiveJson<CamtParams>()
-            val bankaccount = getBankAccountFromLabel(
-                body.bankaccount,
-                getDefaultDemobank()
-            )
             if (body.type != 53) throw SandboxError(
                 HttpStatusCode.NotFound,
                 "Only Camt.053 documents can be generated."
             )
             val camtMessage = transaction {
+                val bankaccount = getBankAccountFromLabel(
+                    body.bankaccount,
+                    getDefaultDemobank()
+                )
                 BankAccountStatementEntity.find {
                     BankAccountStatementsTable.bankAccount eq bankaccount.id
                 }.lastOrNull()?.xmlMessage ?: throw SandboxError(
