@@ -1134,7 +1134,6 @@ def sandbox_ebicsbankaccount(ctx):
 @sandbox_ebicsbankaccount.command(
     "create", help="Create a bank account for a EBICS subscriber."
 )
-@click.option("--currency", help="currency", prompt=True)
 @click.option("--iban", help="IBAN", required=True)
 @click.option("--bic", help="BIC", required=True)
 @click.option("--person-name", help="bank account owner name", required=True)
@@ -1147,7 +1146,6 @@ def sandbox_ebicsbankaccount(ctx):
 @click.pass_obj
 def associate_bank_account(
     obj,
-    currency,
     iban,
     bic,
     person_name,
@@ -1159,7 +1157,6 @@ def associate_bank_account(
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/bank-accounts")
     body = dict(
-        currency=currency,
         subscriber=dict(
             userID=ebics_user_id, partnerID=ebics_partner_id, hostID=ebics_host_id
         ),
