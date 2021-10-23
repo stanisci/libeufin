@@ -42,11 +42,6 @@ fun ZonedDateTime.toDashedDate(): String {
     return DateTimeFormatter.ISO_DATE.format(this)
 }
 
-fun parseDashedDate(date: String): ZonedDateTime {
-    val dtf = DateTimeFormatter.ISO_DATE
-    return ZonedDateTime.parse(date, dtf)
-}
-
 fun importDateFromMillis(millis: Long): ZonedDateTime {
     return ZonedDateTime.ofInstant(
         Instant.ofEpochMilli(millis),

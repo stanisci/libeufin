@@ -22,7 +22,6 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.millis
-import tech.libeufin.util.parseDashedDate
 import java.io.File
 import java.time.LocalDateTime
 
@@ -97,16 +96,18 @@ class DBTest {
                     this.demobank = demobank
                 }
             }
-            val result = transaction {
+            // The block below tests the date range in the database query
+            transaction {
                 addLogger(StdOutSqlLogger)
                 BankAccountTransactionEntity.find {
                     BankAccountTransactionsTable.date.between(
-                        parseDashedDate("1970-01-01").toInstant().toEpochMilli(),
-                        LocalDateTime.now().millis()
+                        0, // 1970-01-01
+                        LocalDateTime.now().millis() //
                     )
-                }.firstOrNull()
+                }.apply {
+                    assert(this.count() == 1L)
+                }
             }
-            assert(result != null)
         }
     }
 }
