@@ -389,7 +389,8 @@ fun main(args: Array<String>) {
         ResetTables(),
         Config(),
         MakeTransaction(),
-        Camt053Tick()
+        Camt053Tick(),
+        DefaultExchange()
     ).main(args)
 }
 
