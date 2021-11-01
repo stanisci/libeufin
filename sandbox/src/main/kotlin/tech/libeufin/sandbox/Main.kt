@@ -95,6 +95,33 @@ data class SandboxError(
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
 
+class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.") {
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+    private val exchange by argument("EXCHANGE", "Payto URI of the default exchange")
+    private val demobank by argument("Which demobank defaults to EXCHANGE")
+
+    override fun run() {
+        val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
+        execThrowableOrTerminate {
+            dbCreateTables(dbConnString)
+            transaction {
+                val maybeDemobank: DemobankConfigEntity? = DemobankConfigEntity.find {
+                    DemobankConfigsTable.name eq demobank
+                }.firstOrNull()
+                if (maybeDemobank == null) {
+                    println("Error, demobank ${demobank} not found.")
+                    exitProcess(1)
+                }
+                maybeDemobank.suggestedExchange = exchange
+            }
+        }
+    }
+}
+
 class Config : CliktCommand("Insert one configuration into the database") {
     init {
         context {
