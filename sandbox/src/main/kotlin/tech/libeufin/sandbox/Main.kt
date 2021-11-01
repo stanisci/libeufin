@@ -102,7 +102,7 @@ class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.
         }
     }
     private val exchange by argument("EXCHANGE", "Payto URI of the default exchange")
-    private val demobank by argument("Which demobank defaults to EXCHANGE")
+    private val demobank by argument("DEMOBANK", "Which demobank defaults to EXCHANGE")
 
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
