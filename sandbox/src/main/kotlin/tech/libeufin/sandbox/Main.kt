@@ -102,7 +102,7 @@ class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.
         }
     }
     private val exchange by argument("EXCHANGE", "Payto URI of the default exchange")
-    private val demobank by argument("DEMOBANK", "Which demobank defaults to EXCHANGE")
+    private val demobank by option("--demobank", help = "Which demobank defaults to EXCHANGE").default("default")
 
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
@@ -654,7 +654,7 @@ val sandboxApp: Application.() -> Unit = {
         // Associates a new bank account with an existing Ebics subscriber.
         post("/admin/ebics/bank-accounts") {
             val username = call.request.basicAuth()
-            val body = call.receiveJson<BankAccountRequest>()
+            val body = call.receiveJson<EbicsBankAccountRequest>()
             if (!validateBic(body.bic)) {
                 throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
             }
@@ -813,10 +813,10 @@ val sandboxApp: Application.() -> Unit = {
             call.respond(object {})
         }
 
-        // Creates a new Ebics subscriber.
+
         post("/admin/ebics/subscribers") {
             call.request.basicAuth()
-            val body = call.receiveJson<EbicsSubscriberElement>()
+            val body = call.receiveJson<EbicsSubscriberObsoleteApi>()
             transaction {
                 EbicsSubscriberEntity.new {
                     partnerId = body.partnerID
@@ -839,12 +839,13 @@ val sandboxApp: Application.() -> Unit = {
             call.request.basicAuth()
             val ret = AdminGetSubscribers()
             transaction {
-                tech.libeufin.sandbox.EbicsSubscriberEntity.all().forEach {
+                EbicsSubscriberEntity.all().forEach {
                     ret.subscribers.add(
-                        EbicsSubscriberElement(
+                        EbicsSubscriberInfo(
                             userID = it.userId,
                             partnerID = it.partnerId,
-                            hostID = it.hostId
+                            hostID = it.hostId,
+                            demobankAccountLabel = it.bankAccount?.label ?: "not associated yet"
                         )
                     )
                 }
@@ -1169,9 +1170,12 @@ val sandboxApp: Application.() -> Unit = {
                 get("/accounts/{account_name}") {
                     val username = call.request.basicAuth()
                     val accountAccessed = call.getUriComponent("account_name")
+                    val demobank = ensureDemobank(call)
                     val bankAccount = transaction {
                         val res = BankAccountEntity.find {
-                            BankAccountsTable.label eq accountAccessed
+                            (BankAccountsTable.label eq accountAccessed).and(
+                                BankAccountsTable.demoBank eq demobank.id
+                            )
                         }.firstOrNull()
                         res
                     } ?: throw notFound("Account '$accountAccessed' not found")
@@ -1185,12 +1189,16 @@ val sandboxApp: Application.() -> Unit = {
                         "credit"
                     }
                     val balance = balanceForAccount(bankAccount)
-                    val demobank = ensureDemobank(call)
                     call.respond(object {
                         val balance = {
                             val amount = "${demobank.currency}:${balance}"
                             val credit_debit_indicator = creditDebitIndicator
                         }
+                        val paytoUri = buildIbanPaytoUri(
+                            iban = bankAccount.iban,
+                            bic = bankAccount.bic,
+                            receiverName = getPersonNameFromCustomer(username ?: "admin")
+                        )
                     })
                     return@get
                 }
@@ -1268,6 +1276,39 @@ val sandboxApp: Application.() -> Unit = {
                             username = req.username
                             passwordHash = CryptoUtil.hashpw(req.password)
                         }
+                    }
+                    call.respond(object {})
+                    return@post
+                }
+            }
+            route("/ebics") {
+                post("/subscribers") {
+                    val user = call.request.basicAuth()
+                    val body = call.receiveJson<EbicsSubscriberInfo>()
+                    /**
+                     * Create or get the Ebics subscriber that is found.
+                     */
+                    transaction {
+                        val subscriber: EbicsSubscriberEntity = EbicsSubscriberEntity.find {
+                            (EbicsSubscribersTable.partnerId eq body.partnerID).and(
+                                EbicsSubscribersTable.userId eq body.userID
+                            ).and(EbicsSubscribersTable.hostId eq body.hostID)
+                        }.firstOrNull() ?: EbicsSubscriberEntity.new {
+                            partnerId = body.partnerID
+                            userId = body.userID
+                            systemId = null
+                            hostId = body.hostID
+                            state = SubscriberState.NEW
+                            nextOrderID = 1
+                        }
+                        val bankAccount = getBankAccountFromLabel(
+                            body.demobankAccountLabel,
+                            ensureDemobank(call)
+                        )
+                        if (bankAccount.owner != user) throw forbidden(
+                            "User cannot access bank account '${bankAccount.label}'"
+                        )
+                        subscriber.bankAccount = bankAccount
                     }
                     call.respond(object {})
                     return@post

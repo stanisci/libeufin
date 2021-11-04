@@ -247,6 +247,14 @@ fun getBankAccountFromIban(iban: String): BankAccountEntity {
     )
 }
 
+fun getBankAccountFromLabel(label: String, demobankName: String): BankAccountEntity {
+    return transaction {
+        val demobank: DemobankConfigEntity = DemobankConfigEntity.find {
+            DemobankConfigsTable.name eq demobankName
+        }.firstOrNull() ?: throw notFound("Demobank ${demobankName} not found")
+        getBankAccountFromLabel(label, demobank)
+    }
+}
 fun getBankAccountFromLabel(label: String, demobank: DemobankConfigEntity): BankAccountEntity {
     return transaction {
         BankAccountEntity.find(

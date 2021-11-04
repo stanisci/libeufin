@@ -20,7 +20,6 @@
 package tech.libeufin.sandbox
 
 import tech.libeufin.util.PaymentInfo
-import tech.libeufin.util.RawPayment
 
 data class WithdrawalRequest(
     /**
@@ -60,26 +59,40 @@ data class AccountTransactions(
 /**
  * Used to create AND show one Ebics subscriber in the system.
  */
-data class EbicsSubscriberElement(
+data class EbicsSubscriberInfo(
+    val hostID: String,
+    val partnerID: String,
+    val userID: String,
+    val systemID: String? = null,
+    val demobankAccountLabel: String
+)
+
+data class AdminGetSubscribers(
+    var subscribers: MutableList<EbicsSubscriberInfo> = mutableListOf()
+)
+
+/**
+ * Some obsolete code creates a bank account and after the
+ * Ebics subscriber.  This doesn't allow to have bank accounts
+ * without a subscriber associated to it.  Demobank should allow
+ * this instead, because only one user - the exchange - will
+ * ever need a Ebics subscription at the Sandbox.
+ *
+ * The code is obsoleted by a new endpoint that's defined within
+ * the /demobanks/${demobankId} trunk.  This one allows to first create
+ * a bank account, and only optionally later give a Ebics account to
+ * it.
+ */
+data class EbicsSubscriberObsoleteApi(
     val hostID: String,
     val partnerID: String,
     val userID: String,
     val systemID: String? = null
 )
-
-data class AdminGetSubscribers(
-    var subscribers: MutableList<EbicsSubscriberElement> = mutableListOf()
-)
-
-data class BankAccountRequest(
-    val subscriber: EbicsSubscriberElement,
+data class EbicsBankAccountRequest(
+    val subscriber: EbicsSubscriberObsoleteApi,
     val iban: String,
     val bic: String,
-    /**
-     * Obsolete: kept around to allow progressive porting of tests.
-     * This value used to represent a _person_ name, but the new DemobankCustomer
-     * type is now responsible for that.
-     */
     val name: String,
     val label: String,
 )

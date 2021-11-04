@@ -2,6 +2,7 @@ package tech.libeufin.util
 
 import java.net.URI
 import java.net.URLDecoder
+import java.net.URLEncoder
 
 /**
  * Payto information.
@@ -69,4 +70,13 @@ fun parsePayto(paytoLine: String): Payto {
         message = getQueryParamOrNull("message", params),
         receiverName = getQueryParamOrNull("receiver-name", params)
     )
+}
+
+fun buildIbanPaytoUri(
+    iban: String,
+    bic: String,
+    receiverName: String,
+): String {
+    val nameUrlEnc = URLEncoder.encode(receiverName, "utf-8")
+    return "payto://iban/$bic/$iban?receiver-name=$nameUrlEnc"
 }

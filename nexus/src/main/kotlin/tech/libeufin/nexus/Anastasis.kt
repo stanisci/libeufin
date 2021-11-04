@@ -14,6 +14,7 @@ import kotlin.math.abs
 import kotlin.math.min
 import io.ktor.content.TextContent
 import io.ktor.routing.*
+import tech.libeufin.util.buildIbanPaytoUri
 
 data class AnastasisIncomingBankTransaction(
     val row_id: Long,

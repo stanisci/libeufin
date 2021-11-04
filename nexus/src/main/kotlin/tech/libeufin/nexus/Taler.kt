@@ -107,15 +107,6 @@ fun <T : Entity<Long>> SizedIterable<T>.orderTaler(delta: Int): List<T> {
     }
 }
 
-fun buildIbanPaytoUri(
-    iban: String,
-    bic: String,
-    receiverName: String,
-): String {
-    val nameUrlEnc = URLEncoder.encode(receiverName, "utf-8")
-    return "payto://iban/$bic/$iban?receiver-name=$nameUrlEnc"
-}
-
 /** Builds the comparison operator for history entries based on the sign of 'delta'  */
 fun getComparisonOperator(delta: Int, start: Long, table: IdTable<Long>): Op<Boolean> {
     return if (delta < 0) {
