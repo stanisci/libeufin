@@ -491,7 +491,8 @@ fun dbCreateTables(dbConnectionString: String) {
             BankAccountsTable,
             BankAccountReportsTable,
             BankAccountStatementsTable,
-            TalerWithdrawalsTable
+            TalerWithdrawalsTable,
+            DemobankCustomersTable
         )
     }
 }

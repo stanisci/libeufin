@@ -1180,7 +1180,10 @@ val sandboxApp: Application.() -> Unit = {
                         res
                     } ?: throw notFound("Account '$accountAccessed' not found")
                     // Check rights.
-                    if (WITH_AUTH && bankAccount.owner != username) throw forbidden(
+                    if (
+                        WITH_AUTH
+                        && (bankAccount.owner != username && username != "admin")
+                    ) throw forbidden(
                             "Customer '$username' cannot access bank account '$accountAccessed'"
                         )
                     val creditDebitIndicator = if (bankAccount.isDebit) {
@@ -1255,8 +1258,8 @@ val sandboxApp: Application.() -> Unit = {
                     val checkExist = transaction {
                         DemobankCustomerEntity.find {
                             DemobankCustomersTable.username eq req.username
-                        }
-                    }.firstOrNull()
+                        }.firstOrNull()
+                    }
                     if (checkExist != null) {
                         throw SandboxError(
                             HttpStatusCode.Conflict,
@@ -1268,7 +1271,7 @@ val sandboxApp: Application.() -> Unit = {
                     transaction {
                         BankAccountEntity.new {
                             iban = getIban()
-                            label = req.username + "acct" // multiple accounts per username not allowed.
+                            label = req.username + "-acct" // multiple accounts per username not allowed.
                             owner = req.username
                             this.demoBank = demobank
                         }
@@ -1305,8 +1308,8 @@ val sandboxApp: Application.() -> Unit = {
                             body.demobankAccountLabel,
                             ensureDemobank(call)
                         )
-                        if (bankAccount.owner != user) throw forbidden(
-                            "User cannot access bank account '${bankAccount.label}'"
+                        if ((user != "admin") && (bankAccount.owner != user)) throw forbidden(
+                            "User ${bankAccount.owner} cannot access bank account '${bankAccount.label}'"
                         )
                         subscriber.bankAccount = bankAccount
                     }
