@@ -10,8 +10,6 @@ import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import java.math.BigDecimal
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
-
 // Mainly useful inside the CAMT generator.
 fun balanceForAccount(
     history: MutableList<RawPayment>,

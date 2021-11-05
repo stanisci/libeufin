@@ -54,8 +54,6 @@ import java.util.zip.InflaterInputStream
 
 val EbicsHostIdAttribute = AttributeKey<String>("RequestedEbicsHostID")
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
-
 data class PainParseResult(
     val creditorIban: String,
     val creditorName: String,
