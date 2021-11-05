@@ -21,6 +21,7 @@ package tech.libeufin.sandbox
 
 import io.ktor.application.*
 import io.ktor.http.HttpStatusCode
+import io.ktor.request.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -39,6 +40,42 @@ data class SandboxCamt(
      */
     val creationTime: Long
 )
+
+/**
+ * Return:
+ * - null if the authentication is disabled (during tests, for example).
+ *   This facilitates tests because allows requests to lack entirely a
+ *   Authorization header.
+ * - the name of the authenticated user
+ * - throw exception when the authentication fails
+ *
+ * Note: at this point it is ONLY checked whether the user provided
+ * a valid password for the username mentioned in the Authorization header.
+ * The actual access to the resources must be later checked by each handler.
+ */
+fun ApplicationRequest.basicAuth(): String? {
+    val withAuth = this.call.ensureAttribute(WITH_AUTH_ATTRIBUTE_KEY)
+    if (!withAuth) {
+        logger.info("Authentication is disabled - assuming tests currently running.")
+        return null
+    }
+    val credentials = getHTTPBasicAuthCredentials(this)
+    if (credentials.first == "admin") {
+        // env must contain the admin password, because --with-auth is true.
+        val adminPassword: String = this.call.ensureAttribute(ADMIN_PASSWORD_ATTRIBUTE_KEY)
+        if (credentials.second != adminPassword) throw unauthorized(
+            "Admin authentication failed"
+        )
+        return credentials.first
+    }
+    val passwordHash = transaction {
+        val customer = getCustomer(credentials.first)
+        customer.passwordHash
+    }
+    if (!CryptoUtil.checkPwOrThrow(credentials.second, passwordHash))
+        throw unauthorized("Customer '${credentials.first}' gave wrong credentials")
+    return credentials.first
+}
 
 fun SandboxAssert(condition: Boolean, reason: String) {
     if (!condition) throw SandboxError(HttpStatusCode.InternalServerError, reason)
@@ -83,6 +120,13 @@ fun getHistoryElementFromTransactionRow(
     dbRow: BankAccountFreshTransactionEntity
 ): RawPayment {
     return getHistoryElementFromTransactionRow(dbRow.transactionRef)
+}
+
+// Need to be called within a transaction {} block.
+fun getCustomer(username: String): DemobankCustomerEntity {
+    return DemobankCustomerEntity.find {
+        DemobankCustomersTable.username eq username
+    }.firstOrNull() ?: throw notFound("Customer '${username}' not found")
 }
 
 /**

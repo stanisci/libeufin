@@ -6,6 +6,7 @@ import io.ktor.http.*
 import io.ktor.request.*
 import io.ktor.util.*
 import logger
+import org.jetbrains.exposed.sql.transactions.transaction
 import java.net.URLDecoder
 
 fun unauthorized(msg: String): UtilError {
@@ -116,38 +117,6 @@ fun ApplicationCall.getUriComponent(name: String): String {
     val ret: String? = this.parameters[name]
     if (ret == null) throw internalServerError("Component $name not found in URI")
     return ret
-}
-/**
- * Return:
- * - null if the authentication is disabled (during tests, for example).
- *   This facilitates tests because allows requests to lack entirely a
- *   Authorization header.
- * - the name of the authenticated user
- * - throw exception when the authentication fails
- *
- * Note: at this point it is ONLY checked whether the user provided
- * a valid password for the username mentioned in the Authorization header.
- * The actual access to the resources must be later checked by each handler.
- */
-fun ApplicationRequest.basicAuth(): String? {
-    val withAuth = this.call.ensureAttribute(WITH_AUTH_ATTRIBUTE_KEY)
-    if (!withAuth) {
-        logger.info("Authentication is disabled - assuming tests currently running.")
-        return null
-    }
-    val credentials = getHTTPBasicAuthCredentials(this)
-    if (credentials.first == "admin") {
-        // env must contain the admin password, because --with-auth is true.
-        val adminPassword: String = this.call.ensureAttribute(ADMIN_PASSWORD_ATTRIBUTE_KEY)
-        if (credentials.second != adminPassword) throw unauthorized(
-            "Admin authentication failed"
-        )
-        return credentials.first
-    }
-    throw unauthorized("Demobank customers not implemented yet!")
-    /**
-     * TODO: extract customer hashed password from the database and check.
-     */
 }
 
 /**

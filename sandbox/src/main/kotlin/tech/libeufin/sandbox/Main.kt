@@ -80,7 +80,7 @@ import java.security.interfaces.RSAPublicKey
 import javax.xml.bind.JAXBContext
 import kotlin.system.exitProcess
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
+val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 private val currencyEnv: String? = System.getenv("LIBEUFIN_SANDBOX_CURRENCY")
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val adminPassword: String? = System.getenv("LIBEUFIN_SANDBOX_ADMIN_PASSWORD")
