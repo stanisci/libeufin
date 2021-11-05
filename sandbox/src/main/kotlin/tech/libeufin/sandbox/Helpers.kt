@@ -303,11 +303,11 @@ fun getBankAccountFromLabel(label: String, demobank: DemobankConfigEntity): Bank
     return transaction {
         BankAccountEntity.find(
             BankAccountsTable.label eq label and (BankAccountsTable.demoBank eq demobank.id)
+        ).firstOrNull() ?: throw SandboxError(
+            HttpStatusCode.NotFound,
+            "Did not find a bank account for label ${label}"
         )
-    }.firstOrNull() ?: throw SandboxError(
-        HttpStatusCode.NotFound,
-        "Did not find a bank account for label ${label}"
-    )
+    }
 }
 
 fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccountEntity {

@@ -1111,11 +1111,11 @@ val sandboxApp: Application.() -> Unit = {
                             "taler".plus(if (baseUrl.protocol.lowercase() == "http") "+http" else ""),
                             -1
                         )
-                        pathComponents(baseUrl.path, "access-api", wo.wopid.toString())
+                        pathComponents(baseUrl.path, wo.wopid.toString())
                         encodedPath += "/"
                     }
                     call.respond(object {
-                        val withdrawal_id = wo.id.value
+                        val withdrawal_id = wo.id.value.toString()
                         val taler_withdraw_uri = withdrawUri
                     })
                     return@post
@@ -1271,7 +1271,12 @@ val sandboxApp: Application.() -> Unit = {
                     transaction {
                         BankAccountEntity.new {
                             iban = getIban()
-                            label = req.username + "-acct" // multiple accounts per username not allowed.
+                            /**
+                             * For now, keep same semantics of Pybank: a username
+                             * is AS WELL a bank account label.  In other words, it
+                             * identifies a customer AND a bank account.
+                             */
+                            label = req.username
                             owner = req.username
                             this.demoBank = demobank
                         }
