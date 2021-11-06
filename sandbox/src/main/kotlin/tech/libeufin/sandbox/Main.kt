@@ -101,7 +101,8 @@ class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-    private val exchange by argument("EXCHANGE", "Payto URI of the default exchange")
+    private val exchangeBaseUrl by argument("EXCHANGE-BASEURL", "base URL of the default exchange")
+    private val exchangePayto by argument("EXCHANGE-PAYTO", "default exchange's payto-address")
     private val demobank by option("--demobank", help = "Which demobank defaults to EXCHANGE").default("default")
 
     override fun run() {
@@ -116,7 +117,8 @@ class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.
                     println("Error, demobank ${demobank} not found.")
                     exitProcess(1)
                 }
-                maybeDemobank.suggestedExchange = exchange
+                maybeDemobank.suggestedExchangeBaseUrl = exchangeBaseUrl
+                maybeDemobank.suggestedExchangePayto = exchangePayto
             }
         }
     }
@@ -1046,7 +1048,7 @@ val sandboxApp: Application.() -> Unit = {
                         selection_done = wo.selectionDone,
                         transfer_done = wo.confirmationDone,
                         amount = "${demobank.currency}:${wo.amount}",
-                        suggested_exchange = demobank.suggestedExchange
+                        suggested_exchange = demobank.suggestedExchangeBaseUrl
                     )
                     call.respond(ret)
                     return@get

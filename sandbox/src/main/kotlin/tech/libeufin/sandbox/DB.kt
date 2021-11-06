@@ -95,7 +95,8 @@ object DemobankConfigsTable : LongIdTable() {
     val bankDebtLimit = integer("bankDebtLimit")
     val usersDebtLimit = integer("usersDebtLimit")
     val name = text("hostname")
-    val suggestedExchange = text("suggestedExchange").nullable()
+    val suggestedExchangeBaseUrl = text("suggestedExchangeBaseUrl").nullable()
+    val suggestedExchangePayto = text("suggestedExchangePayto").nullable()
 }
 
 class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -105,7 +106,8 @@ class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
     var bankDebtLimit by DemobankConfigsTable.bankDebtLimit
     var usersDebtLimit by DemobankConfigsTable.usersDebtLimit
     var name by DemobankConfigsTable.name
-    var suggestedExchange by DemobankConfigsTable.suggestedExchange
+    var suggestedExchangeBaseUrl by DemobankConfigsTable.suggestedExchangeBaseUrl
+    var suggestedExchangePayto by DemobankConfigsTable.suggestedExchangePayto
 }
 
 /**
