@@ -951,20 +951,6 @@ val sandboxApp: Application.() -> Unit = {
             return@post
         }
 
-        get("/api/config") {
-            SandboxAssert(
-                currencyEnv != null,
-                "Currency not found.  Logs should have warned"
-            )
-            call.respond(object {
-                val name = "taler-bank-integration"
-
-                // FIXME: use actual version here!
-                val version = "0:0:0"
-                val currency = currencyEnv
-            })
-        }
-
         // Create a new demobank instance with a particular currency,
         // debt limit and possibly other configuration
         // (could also be a CLI command for now)
@@ -1000,7 +986,18 @@ val sandboxApp: Application.() -> Unit = {
 
             // Talk to wallets.
             route("/integration-api") {
-                post("/api/withdrawal-operation/{wopid}") {
+
+                get("/config") {
+                    val demobank = ensureDemobank(call)
+                    call.respond(object {
+                        val name = "taler-bank-integration"
+                        // FIXME: avoid hard-coding the version!
+                        val version = "0:0:0"
+                        val currency = demobank.currency
+                    })
+                    return@get
+                }
+                post("/withdrawal-operation/{wopid}") {
                     val wopid: String = ensureNonNull(call.parameters["wopid"])
                     val body = call.receiveJson<TalerWithdrawalSelection>()
                     val transferDone = newSuspendedTransaction(context = singleThreadContext) {
@@ -1048,7 +1045,7 @@ val sandboxApp: Application.() -> Unit = {
                     val ret = TalerWithdrawalStatus(
                         selection_done = wo.selectionDone,
                         transfer_done = wo.confirmationDone,
-                        amount = wo.amount,
+                        amount = "${demobank.currency}:${wo.amount}",
                         suggested_exchange = demobank.suggestedExchange
                     )
                     call.respond(ret)
@@ -1086,8 +1083,7 @@ val sandboxApp: Application.() -> Unit = {
                     /**
                      * Check here if the user has the right over the claimed bank account.  After
                      * this check, the withdrawal operation will be allowed only by providing its
-                     * UID.
-                     */
+                     * UID. */
                     val maybeOwnedAccount = getBankAccountFromLabel(
                         call.getUriComponent("account_name"),
                         demobank
@@ -1101,21 +1097,37 @@ val sandboxApp: Application.() -> Unit = {
                     if (amount.currency != demobank.currency) throw badRequest(
                         "Currency ${amount.currency} differs from Demobank's: ${demobank.currency}"
                     )
-                    val wo: TalerWithdrawalEntity = transaction { TalerWithdrawalEntity.new {
+                    val wo: TalerWithdrawalEntity = transaction {
+                        TalerWithdrawalEntity.new {
                         this.amount = amount.amount.toPlainString()
                         walletBankAccount = maybeOwnedAccount
-                    } }
+                        }
+                    }
                     val baseUrl = URL(call.request.getBaseUrl())
-                    val withdrawUri = call.url {
+                    val withdrawUri = url {
                         protocol = URLProtocol(
                             "taler".plus(if (baseUrl.protocol.lowercase() == "http") "+http" else ""),
                             -1
                         )
-                        pathComponents(baseUrl.path, wo.wopid.toString())
-                        encodedPath += "/"
+                        host = "withdraw"
+                        pathComponents(
+                            /**
+                             * encodes the hostname(+port) of the actual
+                             * bank that will serve the withdrawal request.
+                             */
+                            baseUrl.host.plus(
+                                if (baseUrl.port != -1)
+                                    ":${baseUrl.port}"
+                                else ""
+                            ),
+                            "demobanks",
+                            demobank.name,
+                            "integration-api",
+                            wo.wopid.toString()
+                        )
                     }
                     call.respond(object {
-                        val withdrawal_id = wo.id.value.toString()
+                        val withdrawal_id = wo.wopid.toString()
                         val taler_withdraw_uri = withdrawUri
                     })
                     return@post
