@@ -61,7 +61,7 @@
 	</xs:complexType>
 	<xs:simpleType name="ActiveOrHistoricCurrencyCode">
 		<xs:restriction base="xs:string">
-			<xs:pattern value="[A-Z]{3,3}"/>
+			<xs:pattern value="[A-Z]{3,13}"/>
 		</xs:restriction>
 	</xs:simpleType>
 	<xs:simpleType name="AddressType2Code">
