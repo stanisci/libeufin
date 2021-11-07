@@ -368,7 +368,7 @@ class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
  */
 object BankAccountsTable : IntIdTable() {
     val iban = text("iban")
-    val bic = text("bic").default("EUSANDBOX")
+    val bic = text("bic").default("SANDBOXX")
     val label = text("label").uniqueIndex("accountLabelIndex")
     val isDebit = bool("isDebit").default(false)
     /**

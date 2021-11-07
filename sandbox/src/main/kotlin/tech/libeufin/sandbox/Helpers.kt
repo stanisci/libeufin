@@ -134,12 +134,14 @@ fun getCustomer(username: String): DemobankCustomerEntity {
  */
 fun getPersonNameFromCustomer(ownerUsername: String): String {
     return if (ownerUsername == "admin") "admin" else {
-        val ownerCustomer = DemobankCustomerEntity.find(
-            DemobankCustomersTable.username eq ownerUsername
-        ).firstOrNull() ?: throw internalServerError(
-            "Person name of '$ownerUsername' not found"
-        )
-        ownerCustomer.name ?: "Name not given"
+        return transaction {
+            val ownerCustomer = DemobankCustomerEntity.find(
+                DemobankCustomersTable.username eq ownerUsername
+            ).firstOrNull() ?: throw internalServerError(
+                "Person name of '$ownerUsername' not found"
+            )
+            ownerCustomer.name ?: "Name not given"
+        }
     }
 }
 fun getDefaultDemobank(): DemobankConfigEntity {

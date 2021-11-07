@@ -1011,7 +1011,7 @@ val sandboxApp: Application.() -> Unit = {
                         if (wo.selectionDone) {
                             if (wo.confirmationDone) {
                                 logger.info("Wallet performs again this operation that was paid out earlier: idempotent")
-                                return@newSuspendedTransaction
+                                return@newSuspendedTransaction wo.selectionDone
                             }
                             // Selected already but NOT paid, check consistency.
                             if (body.reserve_pub != wo.reservePub) throw SandboxError(
@@ -1027,9 +1027,10 @@ val sandboxApp: Application.() -> Unit = {
                         wo.selectedExchangePayto = body.selected_exchange
                         wo.selectionDone = true
                         wo.confirmationDone
+                        false // not confirmed (AKA transferred)
                     }
                     call.respond(object {
-                        val transfer_done = transferDone
+                        val transfer_done: Boolean = transferDone
                     })
                     return@post
                 }
