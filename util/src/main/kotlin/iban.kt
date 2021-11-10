@@ -1,11 +1,12 @@
 package tech.libeufin.util
 
+import java.math.BigInteger
+
 fun getIban(): String {
-    val bankCode = "00000000" // 8 digits
-    val accountCodeChars = ('0'..'9')
-    // 10 digits
-    val accountCode = (0..9).map {
-        accountCodeChars.random()
-    }.joinToString("")
-    return "EU00" + bankCode + accountCode
+    val ccNoCheck = "131400" // DE00
+    val bban = (0..3).map {
+        (0..9).random()
+    }.joinToString("") // 4 digits BBAN.
+    val checkDigits = "98".toBigInteger().minus("$bban$ccNoCheck".toBigInteger().mod("97".toBigInteger()))
+    return "DE$checkDigits$bban"
 }

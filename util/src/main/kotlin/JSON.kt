@@ -59,6 +59,12 @@ data class IncomingPaymentInfo(
     val subject: String
 )
 
+data class TWGAdminAddIncoming(
+    val amount: String,
+    val reserve_pub: String,
+    val debit_account: String
+)
+
 data class PaymentInfo(
     val accountLabel: String,
     val creditorIban: String,

@@ -74,9 +74,9 @@ fun parsePayto(paytoLine: String): Payto {
 
 fun buildIbanPaytoUri(
     iban: String,
-    bic: String,
+    bic: String?,
     receiverName: String,
 ): String {
     val nameUrlEnc = URLEncoder.encode(receiverName, "utf-8")
-    return "payto://iban/$bic/$iban?receiver-name=$nameUrlEnc"
+    return "payto://iban/${if (bic != null) "$bic/" else ""}$iban?receiver-name=$nameUrlEnc"
 }

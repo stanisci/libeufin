@@ -176,13 +176,13 @@ fun wireTransfer(
     amount: String // $currency:x.y
 ): String {
     val args: Triple<BankAccountEntity, BankAccountEntity, DemobankConfigEntity> = transaction {
-        val debitAccount = BankAccountEntity.find {
+        val debitAccountDb = BankAccountEntity.find {
             BankAccountsTable.label eq debitAccount
         }.firstOrNull() ?: throw SandboxError(
             HttpStatusCode.NotFound,
             "Debit account '$debitAccount' not found"
         )
-        val creditAccount = BankAccountEntity.find {
+        val creditAccountDb = BankAccountEntity.find {
             BankAccountsTable.label eq creditAccount
         }.firstOrNull() ?: throw SandboxError(
             HttpStatusCode.NotFound,
@@ -195,7 +195,7 @@ fun wireTransfer(
             "Demobank '$demobank' not found"
         )
 
-        Triple(debitAccount, creditAccount, demoBank)
+        Triple(debitAccountDb, creditAccountDb, demoBank)
     }
 
     /**
@@ -228,7 +228,8 @@ fun wireTransfer(
     subject: String,
     amount: String,
 ): String {
-
+    // sanity check on the amount, no currency allowed here.
+    parseDecimal(amount)
     val timeStamp = getUTCnow().toInstant().toEpochMilli()
     val transactionRef = getRandomString(8)
     transaction {
@@ -281,7 +282,6 @@ fun getWithdrawalOperation(opId: String): TalerWithdrawalEntity {
 fun getBankAccountFromPayto(paytoUri: String): BankAccountEntity {
     val paytoParse = parsePayto(paytoUri)
     return getBankAccountFromIban(paytoParse.iban)
-
 }
 
 fun getBankAccountFromIban(iban: String): BankAccountEntity {

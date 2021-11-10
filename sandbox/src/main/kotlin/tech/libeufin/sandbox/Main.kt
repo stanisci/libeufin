@@ -986,6 +986,39 @@ val sandboxApp: Application.() -> Unit = {
 
         route("/demobanks/{demobankid}") {
 
+            // NOTE: TWG assumes that username == bank account label.
+            route("/taler-wire-gateway") {
+                post("/{exchangeUsername}/admin/add-incoming") {
+                    val username = call.getUriComponent("exchangeUsername")
+                    val usernameAuth = call.request.basicAuth()
+                    if (username != usernameAuth) {
+                        throw forbidden(
+                            "Bank account name and username differ: $username vs $usernameAuth"
+                        )
+                    }
+                    logger.debug("TWG add-incoming passed authentication")
+                    val body = call.receive<TWGAdminAddIncoming>()
+                    transaction {
+                        val demobank = ensureDemobank(call)
+                        val bankAccountCredit = getBankAccountFromLabel(username, demobank)
+                        if (bankAccountCredit.owner != username) throw forbidden(
+                            "User '$username' cannot access bank account with label: $username."
+                        )
+                        val bankAccountDebit = getBankAccountFromPayto(body.debit_account)
+                        logger.debug("TWG add-incoming about to wire transfer")
+                        wireTransfer(
+                            bankAccountDebit.label,
+                            bankAccountCredit.label,
+                            demobank.name,
+                            body.reserve_pub,
+                            body.amount
+                        )
+                        logger.debug("TWG add-incoming has wire transferred")
+                    }
+                    call.respond(object {})
+                    return@post
+                }
+            }
             // Talk to wallets.
             route("/integration-api") {
 
@@ -1283,8 +1316,8 @@ val sandboxApp: Application.() -> Unit = {
                     }
                     // Create new customer.
                     requireValidResourceName(req.username)
-                    transaction {
-                        BankAccountEntity.new {
+                    val bankAccount = transaction {
+                        val bankAccount = BankAccountEntity.new {
                             iban = getIban()
                             /**
                              * For now, keep same semantics of Pybank: a username
@@ -1299,8 +1332,19 @@ val sandboxApp: Application.() -> Unit = {
                             username = req.username
                             passwordHash = CryptoUtil.hashpw(req.password)
                         }
+                        bankAccount
                     }
-                    call.respond(object {})
+                    call.respond(object {
+                        val balance = {
+                            val amount = "${demobank.currency}:0"
+                            val credit_debit_indicator = "CRDT"
+                        }
+                        val paytoUri = buildIbanPaytoUri(
+                            iban = bankAccount.iban,
+                            bic = bankAccount.bic,
+                            receiverName = getPersonNameFromCustomer(req.username)
+                        )
+                    })
                     return@post
                 }
             }
