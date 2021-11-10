@@ -7,6 +7,9 @@ fun getIban(): String {
     val bban = (0..3).map {
         (0..9).random()
     }.joinToString("") // 4 digits BBAN.
-    val checkDigits = "98".toBigInteger().minus("$bban$ccNoCheck".toBigInteger().mod("97".toBigInteger()))
+    var checkDigits = "98".toBigInteger().minus("$bban$ccNoCheck".toBigInteger().mod("97".toBigInteger())).toString()
+    if (checkDigits.length == 1) {
+        checkDigits = "0${checkDigits}"
+    }
     return "DE$checkDigits$bban"
 }
