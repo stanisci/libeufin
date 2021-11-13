@@ -243,6 +243,12 @@ private fun getRelatedParty(branch: XmlElementBuilder, payment: RawPayment) {
     }
 }
 
+// This should fix #6269.
+private fun getCreditDebitInd(balance: BigDecimal): String {
+    if (balance < BigDecimal.ZERO) return "DBIT"
+    return "CRDT"
+}
+
 fun buildCamtString(
     type: Int,
     subscriberIban: String,
@@ -342,14 +348,10 @@ fun buildCamtString(
                         }
                         element("Amt") {
                             attribute("Ccy", "EUR")
-                            if (balancePrcd < BigDecimal.ZERO) {
-                                text(balancePrcd.abs().toPlainString())
-                            } else {
-                                text(balancePrcd.toPlainString())
-                            }
+                            balancePrcd.abs().toPlainString()
                         }
                         element("CdtDbtInd") {
-                            text("CRDT")
+                            getCreditDebitInd(balancePrcd)
                         }
                         element("Dt/Dt") {
                             // date of this balance
@@ -365,22 +367,10 @@ fun buildCamtString(
                         }
                         element("Amt") {
                             attribute("Ccy", "EUR")
-                            // FIXME: the balance computation still not working properly
-                            //text(balanceForAccount(subscriberIban).toString())
-                            if (balanceClbd < BigDecimal.ZERO) {
-                                text(balanceClbd.abs().toPlainString())
-                            } else {
-                                text(balanceClbd.toPlainString())
-                            }
+                            balanceClbd.abs().toPlainString()
                         }
                         element("CdtDbtInd") {
-                            // a temporary value to get the camt to validate.
-                            // Should be fixed along #6269
-                            if (balanceClbd < BigDecimal.ZERO) {
-                                text("DBIT")
-                            } else {
-                                text("CRDT")
-                            }
+                            getCreditDebitInd(balanceClbd)
                         }
                         element("Dt/Dt") {
                             text(dashedDate)

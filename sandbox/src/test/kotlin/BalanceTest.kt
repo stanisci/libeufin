@@ -4,6 +4,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.millis
+import java.math.BigDecimal
 import java.time.LocalDateTime
 
 class BalanceTest {
@@ -85,5 +86,12 @@ class BalanceTest {
                 assert(java.math.BigDecimal.ONE == balanceForAccount(one))
             }
         }
+    }
+    @Test
+    fun balanceAbsTest() {
+        val minus = BigDecimal.ZERO - BigDecimal.ONE
+        val plus = BigDecimal.ONE
+        println(minus.abs().toPlainString())
+        println(plus.abs().toPlainString())
     }
 }

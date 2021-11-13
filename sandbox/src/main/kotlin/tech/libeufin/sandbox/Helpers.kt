@@ -133,8 +133,10 @@ fun getCustomer(username: String): DemobankCustomerEntity {
  * Get person name from a customer's username.
  */
 fun getPersonNameFromCustomer(ownerUsername: String): String {
-    return if (ownerUsername == "admin") "admin" else {
-        return transaction {
+    return when (ownerUsername) {
+        "admin" -> "admin" // Could be changed to Admin, or some different value.
+        "bank" -> "The Bank"
+        else -> transaction {
             val ownerCustomer = DemobankCustomerEntity.find(
                 DemobankCustomersTable.username eq ownerUsername
             ).firstOrNull() ?: throw internalServerError(
@@ -144,6 +146,15 @@ fun getPersonNameFromCustomer(ownerUsername: String): String {
         }
     }
 }
+fun getFirstDemobank(): DemobankConfigEntity {
+  return transaction {
+      DemobankConfigEntity.all().firstOrNull() ?: throw SandboxError(
+          HttpStatusCode.InternalServerError,
+          "Cannot find one demobank, please create one!"
+      )
+  }
+}
+
 fun getDefaultDemobank(): DemobankConfigEntity {
     return transaction {
         DemobankConfigEntity.find {
@@ -321,17 +332,25 @@ fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccount
     }
 }
 
+fun BankAccountEntity.bonus(amount: String) {
+    wireTransfer(
+        "bank",
+        this.label,
+        this.demoBank.name,
+        "Sign-up bonus",
+        amount
+    )
+}
+
 fun ensureDemobank(call: ApplicationCall): DemobankConfigEntity {
     return ensureDemobank(call.getUriComponent("demobankid"))
 }
 
 private fun ensureDemobank(name: String): DemobankConfigEntity {
     return transaction {
-        val res = DemobankConfigEntity.find {
+        DemobankConfigEntity.find {
             DemobankConfigsTable.name eq name
-        }.firstOrNull()
-        if (res == null) throw internalServerError("Demobank '$name' never created")
-        res
+        }.firstOrNull() ?: throw internalServerError("Demobank '$name' never created")
     }
 }
 

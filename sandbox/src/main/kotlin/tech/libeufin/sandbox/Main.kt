@@ -310,6 +310,18 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             )
             exitProcess(0)
         }
+        /**
+         * Create the bank's bank account, to award the 100 Kudos
+         * when new customers open bank account.  */
+        transaction {
+            BankAccountEntity.new {
+                iban = getIban()
+                label = "bank" // used by the wire helper
+                owner = "bank" // used by the person name finder
+                // For now, the model assumes always one demobank
+                demoBank = getFirstDemobank()
+            }
+        }
         serverMain(port)
     }
 }
@@ -437,7 +449,6 @@ val sandboxApp: Application.() -> Unit = {
                 indentObjectsWith(DefaultIndenter("  ", "\n"))
             })
             registerModule(KotlinModule(nullisSameAsDefault = true))
-            //registerModule(JavaTimeModule())
         }
     }
     install(StatusPages) {
@@ -1216,16 +1227,11 @@ val sandboxApp: Application.() -> Unit = {
                     ) throw forbidden(
                             "Customer '$username' cannot access bank account '$accountAccessed'"
                         )
-                    val creditDebitIndicator = if (bankAccount.isDebit) {
-                        "debit"
-                    } else {
-                        "credit"
-                    }
                     val balance = balanceForAccount(bankAccount)
                     call.respond(object {
-                        val balance = {
-                            val amount = "${demobank.currency}:${balance}"
-                            val credit_debit_indicator = creditDebitIndicator
+                        val balance = object {
+                            val amount = "${demobank.currency}:${balance.abs(). toPlainString()}"
+                            val credit_debit_indicator = if (balance < BigDecimal.ZERO) "debit" else "credit"
                         }
                         val paytoUri = buildIbanPaytoUri(
                             iban = bankAccount.iban,
@@ -1314,11 +1320,13 @@ val sandboxApp: Application.() -> Unit = {
                             username = req.username
                             passwordHash = CryptoUtil.hashpw(req.password)
                         }
+                        bankAccount.bonus("${demobank.currency}:100")
                         bankAccount
                     }
+                    val balance = balanceForAccount(bankAccount)
                     call.respond(object {
                         val balance = {
-                            val amount = "${demobank.currency}:0"
+                            val amount = "${demobank.currency}:${balance}"
                             val credit_debit_indicator = "CRDT"
                         }
                         val paytoUri = buildIbanPaytoUri(

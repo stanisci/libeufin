@@ -370,10 +370,16 @@ object BankAccountsTable : IntIdTable() {
     val iban = text("iban")
     val bic = text("bic").default("SANDBOXX")
     val label = text("label").uniqueIndex("accountLabelIndex")
-    val isDebit = bool("isDebit").default(false)
     /**
-     * Allow to assign "admin" - who doesn't have a customer DB entry -
-     * as the owner.  That allows tests using the --no-auth option to go on.
+     * This field is the username of the customer that owns the
+     * bank account.  Some actors do not have a customer registered,
+     * but they can still specify their "username" - merely a label
+     * that identifies their operations - to this field.
+     *
+     * Two examples of such actors are: "admin" and "bank".  Note:
+     * "admin" cannot act as the bank, because it participates in
+     * tests and therefore should not have its balance affected by
+     * awarding sign-up bonuses.
      */
     val owner = text("owner")
     val isPublic = bool("isPublic").default(false)
@@ -386,7 +392,6 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     var iban by BankAccountsTable.iban
     var bic by BankAccountsTable.bic
     var label by BankAccountsTable.label
-    var isDebit by BankAccountsTable.isDebit
     var owner by BankAccountsTable.owner
     var isPublic by BankAccountsTable.isPublic
     var demoBank by DemobankConfigEntity referencedOn BankAccountsTable.demoBank
