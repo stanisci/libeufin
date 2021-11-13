@@ -123,7 +123,7 @@ data class TalerWithdrawalStatus(
     val wire_types: List<String> = listOf("iban"),
     val suggested_exchange: String? = null,
     val sender_wire: String? = null,
-    val aborted: Boolean = false,
+    val aborted: Boolean
 )
 
 data class TalerWithdrawalSelection(

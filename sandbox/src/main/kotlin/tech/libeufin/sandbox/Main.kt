@@ -477,29 +477,7 @@ val sandboxApp: Application.() -> Unit = {
         }
         exception<EbicsRequestError> { e ->
             logger.debug("Handling EbicsRequestError: $e")
-            val resp = tech.libeufin.util.ebics_h004.EbicsResponse.createForUploadWithError(
-                e.errorText,
-                e.errorCode,
-                // assuming that the phase is always transfer,
-                // as errors during initialization should have
-                // already been caught by the chunking logic.
-                tech.libeufin.util.ebics_h004.EbicsTypes.TransactionPhaseType.TRANSFER
-            )
-            val hostAuthPriv = transaction {
-                val host = EbicsHostEntity.find {
-                    EbicsHostsTable.hostID.upperCase() eq call.attributes.get(tech.libeufin.sandbox.EbicsHostIdAttribute)
-                        .uppercase()
-                }.firstOrNull() ?: throw SandboxError(
-                    io.ktor.http.HttpStatusCode.InternalServerError,
-                    "Requested Ebics host ID not found."
-                )
-                CryptoUtil.loadRsaPrivateKey(host.authenticationPrivateKey.bytes)
-            }
-            call.respondText(
-                XMLUtil.signEbicsResponse(resp, hostAuthPriv),
-                ContentType.Application.Xml,
-                HttpStatusCode.OK
-            )
+            respondEbicsTransfer(call, e.errorText, e.errorCode)
         }
         exception<Throwable> { cause ->
             logger.error("Exception while handling '${call.request.uri}'", cause)
@@ -938,6 +916,9 @@ val sandboxApp: Application.() -> Unit = {
                     else -> throw EbicsProcessingError("Unknown LibEuFin error code: ${e.errorCode}.")
                 }
             }
+            catch (e: EbicsNoDownloadDataAvailable) {
+                respondEbicsTransfer(call, e.errorText, e.errorCode)
+            }
             catch (e: EbicsRequestError) {
                 logger.error(e)
                 // Preventing the last catch-all block
@@ -1082,7 +1063,8 @@ val sandboxApp: Application.() -> Unit = {
                         selection_done = wo.selectionDone,
                         transfer_done = wo.confirmationDone,
                         amount = "${demobank.currency}:${wo.amount}",
-                        suggested_exchange = demobank.suggestedExchangeBaseUrl
+                        suggested_exchange = demobank.suggestedExchangeBaseUrl,
+                        aborted = wo.aborted
                     )
                     call.respond(ret)
                     return@get

@@ -20,7 +20,7 @@
 
 package tech.libeufin.sandbox
 
-import io.ktor.application.ApplicationCall
+import io.ktor.application.*
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.request.receiveText
@@ -73,6 +73,11 @@ open class EbicsRequestError(
     val errorCode: String
 ) : Exception("EBICS request  error: $errorText ($errorCode)")
 
+class EbicsNoDownloadDataAvailable(camtType: Int) : EbicsRequestError(
+    "[EBICS_NO_DOWNLOAD_DATA_AVAILABLE] for Camt $camtType",
+    "090005"
+)
+
 class EbicsInvalidRequestError : EbicsRequestError(
     "[EBICS_INVALID_REQUEST] Invalid request",
     "060102"
@@ -113,6 +118,36 @@ class EbicsProcessingError(detail: String) : EbicsRequestError(
     "[EBICS_PROCESSING_ERROR] $detail",
     "091116"
 )
+
+suspend fun respondEbicsTransfer(
+    call: ApplicationCall,
+    errorText: String,
+    errorCode: String
+) {
+    val resp = EbicsResponse.createForUploadWithError(
+        errorText,
+        errorCode,
+        // For now, phase gets hard-coded as TRANSFER,
+        // because errors during initialization should have
+        // already been caught by the chunking logic.
+        EbicsTypes.TransactionPhaseType.TRANSFER
+    )
+    val hostAuthPriv = transaction {
+        val host = EbicsHostEntity.find {
+            EbicsHostsTable.hostID.upperCase() eq call.attributes[EbicsHostIdAttribute]
+                .uppercase()
+        }.firstOrNull() ?: throw SandboxError(
+            io.ktor.http.HttpStatusCode.InternalServerError,
+            "Requested Ebics host ID not found."
+        )
+        CryptoUtil.loadRsaPrivateKey(host.authenticationPrivateKey.bytes)
+    }
+    call.respondText(
+        signEbicsResponse(resp, hostAuthPriv),
+        ContentType.Application.Xml,
+        HttpStatusCode.OK
+    )
+}
 
 private suspend fun ApplicationCall.respondEbicsKeyManagement(
     errorText: String,
@@ -549,10 +584,8 @@ private fun constructCamtResponse(
             }
         }
     }
-    if (ret.size == 0) throw EbicsRequestError(
-        "[EBICS_NO_DOWNLOAD_DATA_AVAILABLE] as Camt $type",
-        "090005"
-    )
+    if (ret.size == 0) throw EbicsNoDownloadDataAvailable(type)
+
     return ret
 }
 
