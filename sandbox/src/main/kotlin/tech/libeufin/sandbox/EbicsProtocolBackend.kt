@@ -348,10 +348,10 @@ fun buildCamtString(
                         }
                         element("Amt") {
                             attribute("Ccy", "EUR")
-                            balancePrcd.abs().toPlainString()
+                            text(balancePrcd.abs().toPlainString())
                         }
                         element("CdtDbtInd") {
-                            getCreditDebitInd(balancePrcd)
+                            text(getCreditDebitInd(balancePrcd))
                         }
                         element("Dt/Dt") {
                             // date of this balance
@@ -367,10 +367,10 @@ fun buildCamtString(
                         }
                         element("Amt") {
                             attribute("Ccy", "EUR")
-                            balanceClbd.abs().toPlainString()
+                            text(balanceClbd.abs().toPlainString())
                         }
                         element("CdtDbtInd") {
-                            getCreditDebitInd(balanceClbd)
+                            text(getCreditDebitInd(balanceClbd))
                         }
                         element("Dt/Dt") {
                             text(dashedDate)
@@ -743,9 +743,10 @@ private fun handleEbicsC52(requestContext: RequestContext): ByteArray {
         report.size == 1,
         "C52 response does not contain one Camt.052 document"
     )
-    if (!XMLUtil.validateFromString(report[0])) throw EbicsProcessingError(
-        "One statement was found invalid."
-    )
+    if (!XMLUtil.validateFromString(report[0])) {
+        logger.error("This document was generated invalid:\n${report[0]}")
+        throw EbicsProcessingError("One outgoing report was found invalid.")
+    }
     return report.map { it.toByteArray() }.zip()
 }
 
@@ -777,9 +778,10 @@ private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
         dateRange
     )
     camtStatements.forEach {
-        if (!XMLUtil.validateFromString(it)) throw EbicsProcessingError(
-            "One statement was found invalid."
-        )
+        if (!XMLUtil.validateFromString(it)) {
+            logger.error("This document was generated invalid:\n$it")
+            throw EbicsProcessingError("One outgoing statement was found invalid.")
+        }
     }
     return camtStatements.map { it.toByteArray() }.zip()
 }
