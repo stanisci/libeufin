@@ -145,7 +145,7 @@ fun getAuthorizationHeader(request: ApplicationRequest): String {
     val authorization = request.headers["Authorization"]
     logger.debug("Found Authorization header: $authorization")
     return authorization ?: throw UtilError(
-        HttpStatusCode.BadRequest, "Authorization header not found",
+        HttpStatusCode.Unauthorized, "Authorization header not found",
         LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
     )
 }

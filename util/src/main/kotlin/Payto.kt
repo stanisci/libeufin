@@ -50,7 +50,7 @@ fun parsePayto(paytoLine: String): Payto {
     }
     val splitPath = javaParsedUri.path.split("/").filter { it.isNotEmpty() }
     if (splitPath.size > 2) {
-        throw InvalidPaytoError("too many path segments in iban payto URI")
+        throw InvalidPaytoError("too many path segments in iban payto URI: $paytoLine")
     }
     val (iban, bic) = if (splitPath.size == 1) {
         Pair(splitPath[0], null)

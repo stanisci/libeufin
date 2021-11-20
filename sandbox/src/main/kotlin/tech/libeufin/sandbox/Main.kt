@@ -423,7 +423,7 @@ suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
 
 val singleThreadContext = newSingleThreadContext("DB")
 val sandboxApp: Application.() -> Unit = {
-    install(io.ktor.features.CallLogging) {
+    install(CallLogging) {
         this.level = org.slf4j.event.Level.DEBUG
         this.logger = logger
     }
@@ -1013,7 +1013,6 @@ val sandboxApp: Application.() -> Unit = {
             }
             // Talk to wallets.
             route("/integration-api") {
-
                 get("/config") {
                     val demobank = ensureDemobank(call)
                     call.respond(object {
@@ -1149,6 +1148,7 @@ val sandboxApp: Application.() -> Unit = {
                                     ":${baseUrl.port}"
                                 else ""
                             ),
+                            baseUrl.path, // has x-forwarded-prefix, or single slash.
                             "demobanks",
                             demobank.name,
                             "integration-api",

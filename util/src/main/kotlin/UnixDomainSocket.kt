@@ -56,7 +56,7 @@ class LibeufinHttpInit(
 ) : ChannelInitializer<Channel>() {
     override fun initChannel(ch: Channel) {
         ch.pipeline(
-        ).addLast(LoggingHandler("tech.libeufin.util")
+        ).addLast(LoggingHandler("tech.libeufin.dev")
         ).addLast(HttpServerCodec() // in- and out- bound
         ).addLast(HttpObjectAggregator(Int.MAX_VALUE) // only in- bound
         ).addLast(ChunkedWriteHandler()
