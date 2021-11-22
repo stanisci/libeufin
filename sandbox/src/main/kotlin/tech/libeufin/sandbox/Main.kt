@@ -310,18 +310,6 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             )
             exitProcess(0)
         }
-        /**
-         * Create the bank's bank account, to award the 100 Kudos
-         * when new customers open bank account.  */
-        transaction {
-            BankAccountEntity.new {
-                iban = getIban()
-                label = "bank" // used by the wire helper
-                owner = "bank" // used by the person name finder
-                // For now, the model assumes always one demobank
-                demoBank = getFirstDemobank()
-            }
-        }
         serverMain(port)
     }
 }
@@ -1340,11 +1328,11 @@ val sandboxApp: Application.() -> Unit = {
             }
             route("/ebics") {
                 post("/subscribers") {
+                    // Only the admin can create Ebics subscribers.
                     val user = call.request.basicAuth()
+                    if (user != "admin") throw forbidden("Only the Admin can create Ebics subscribers.")
                     val body = call.receiveJson<EbicsSubscriberInfo>()
-                    /**
-                     * Create or get the Ebics subscriber that is found.
-                     */
+                    // Create or get the Ebics subscriber that is found.
                     transaction {
                         val subscriber: EbicsSubscriberEntity = EbicsSubscriberEntity.find {
                             (EbicsSubscribersTable.partnerId eq body.partnerID).and(
@@ -1361,9 +1349,6 @@ val sandboxApp: Application.() -> Unit = {
                         val bankAccount = getBankAccountFromLabel(
                             body.demobankAccountLabel,
                             ensureDemobank(call)
-                        )
-                        if ((user != "admin") && (bankAccount.owner != user)) throw forbidden(
-                            "User ${bankAccount.owner} cannot access bank account '${bankAccount.label}'"
                         )
                         subscriber.bankAccount = bankAccount
                     }

@@ -175,6 +175,15 @@ fun maybeCreateDefaultDemobank() {
                 allowRegistrations = true
                 name = "default"
             }
+            // Give one demobank a own bank account, mainly to award
+            // customer upon registration.
+            BankAccountEntity.new {
+                iban = getIban()
+                label = "bank" // used by the wire helper
+                owner = "bank" // used by the person name finder
+                // For now, the model assumes always one demobank
+                demoBank = getFirstDemobank()
+            }
         }
     }
 }

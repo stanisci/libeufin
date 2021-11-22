@@ -57,7 +57,7 @@ data class AccountTransactions(
 )
 
 /**
- * Used to create AND show one Ebics subscriber in the system.
+ * Used to create AND show one Ebics subscriber.
  */
 data class EbicsSubscriberInfo(
     val hostID: String,
@@ -72,17 +72,9 @@ data class AdminGetSubscribers(
 )
 
 /**
- * Some obsolete code creates a bank account and after the
- * Ebics subscriber.  This doesn't allow to have bank accounts
- * without a subscriber associated to it.  Demobank should allow
- * this instead, because only one user - the exchange - will
- * ever need a Ebics subscription at the Sandbox.
- *
- * The code is obsoleted by a new endpoint that's defined within
- * the /demobanks/${demobankId} trunk.  This one allows to first create
- * a bank account, and only optionally later give a Ebics account to
- * it.
- */
+ * The following definition is obsolete because it
+ * doesn't allow to specify a demobank that will host
+ * the Ebics subscriber.  */
 data class EbicsSubscriberObsoleteApi(
     val hostID: String,
     val partnerID: String,
