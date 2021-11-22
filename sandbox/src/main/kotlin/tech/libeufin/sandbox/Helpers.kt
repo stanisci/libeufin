@@ -142,7 +142,7 @@ fun getPersonNameFromCustomer(ownerUsername: String): String {
             ).firstOrNull() ?: throw internalServerError(
                 "Person name of '$ownerUsername' not found"
             )
-            ownerCustomer.name ?: "Name not given"
+            ownerCustomer.name ?: "Unknown"
         }
     }
 }
