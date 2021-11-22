@@ -20,8 +20,8 @@ from getpass import getpass
 def check_response_status(resp, expected_status_code=200):
     if resp.status_code != expected_status_code:
         print("Unexpected response status: {}".format(resp.status_code), file=sys.stderr)
+        print("Response: {}".format(resp.text))
         sys.exit(1)
-
 
 def tell_user(resp, expected_status_code=200, withsuccess=False):
     if resp.status_code != expected_status_code:
@@ -284,9 +284,8 @@ class SandboxContext:
         sandbox_username = os.environ.get("LIBEUFIN_SANDBOX_USERNAME")
         sandbox_password = os.environ.get("LIBEUFIN_SANDBOX_PASSWORD")
         if not sandbox_username or not sandbox_password:
-            print(
-                "LIBEUFIN_SANDBOX_USERNAME and LIBEUFIN_SANDBOX_PASSWORD\n" \
-                "not found in the environment, assuming tests are being run..."
+            print("""INFO: LIBEUFIN_SANDBOX_USERNAME and LIBEUFIN_SANDBOX_PASSWORD
+not found in the environment, assuming tests are being run..."""
             )
         return sandbox_username, sandbox_password
 
@@ -1185,6 +1184,87 @@ def associate_bank_account(
 def sandbox_bankaccount(ctx):
     pass
 
+
+# This group deals with the new Access API
+# and the 'demobank' model.
+@sandbox.group("demobank", help="manage customers")
+@click.pass_context
+def sandbox_demobank(ctx):
+    pass
+
+@sandbox_demobank.command("info", help="Return basic information of a bank account")
+@click.option(
+    "--bank-account",
+    help="Label of the bank account whose information should be returned.",
+    required=True
+)
+@click.pass_obj
+def sandbox_demobank_info(obj, bank_account):
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin_nodrop(sandbox_base_url, f"/access-api/accounts/{bank_account}")
+    try:
+        resp = get(
+            url,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach sandbox")
+        exit(1)
+    tell_user(resp, withsuccess=True)
+
+@sandbox_demobank.command("register",
+    help="""register a new bank account.  Note that the username
+will be both the username to login at the bank and the bank account
+label"""
+)
+@click.pass_obj
+def sandbox_demobank_register(obj):
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin_nodrop(sandbox_base_url, f"/access-api/testing/register")
+    try:
+        resp = post(url,
+            json=dict(username=obj.username, password=obj.password),
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach nexus at " + url)
+        exit(1)
+    check_response_status(resp)
+
+@sandbox_demobank.command("new-ebicssubscriber",
+    help="Associate a new Ebics subscriber to a existing bank account."
+)
+@click.option("--host-id", help="Ebics host ID", required=True)
+@click.option("--partner-id", help="Ebics partner ID", required=True)
+@click.option("--user-id", help="Ebics user ID", required=True)
+@click.option(
+    "--bank-account",
+    help="Label of the bank account to associate with this Ebics subscriber",
+    required=True
+)
+@click.pass_obj
+def sandbox_demobank_ebicssubscriber(obj, host_id, partner_id, user_id, bank_account):
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin_nodrop(sandbox_base_url, "/ebics/subscribers")
+    try:
+        resp = post(url,
+            json=dict(
+                hostID=host_id,
+                partnerID=partner_id,
+                userID=user_id,
+                demobankAccountLabel=bank_account
+            ),
+            auth=auth.HTTPBasicAuth(
+                obj.username,
+                obj.password
+            ),
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach sandbox")
+        exit(1)
+    check_response_status(resp)
 
 @sandbox_bankaccount.command("list", help="List accounts")
 @click.pass_obj
