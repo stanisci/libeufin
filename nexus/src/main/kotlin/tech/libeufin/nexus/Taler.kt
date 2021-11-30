@@ -348,7 +348,8 @@ fun maybeTalerRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
                         it[NexusBankTransactionsTable.bankAccount] == bankAccount.id,
                 "Cannot refund a _outgoing_ payment!"
             )
-            // FIXME: the amount to refund should be reduced, according to the refund fees.
+            // FIXME: the amount to refund should be reduced, according to the bounce fee
+            // see bug #7116.
             addPaymentInitiation(
                 Pain001Data(
                     creditorIban = debtorAccount.iban,
