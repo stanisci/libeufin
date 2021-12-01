@@ -1187,10 +1187,51 @@ def sandbox_bankaccount(ctx):
 
 # This group deals with the new Access API
 # and the 'demobank' model.
-@sandbox.group("demobank", help="manage customers")
+@sandbox.group(
+    "demobank",
+    help="Subcommands for the 'demobank' model and the Access API."
+)
 @click.pass_context
 def sandbox_demobank(ctx):
     pass
+
+@sandbox_demobank.command("new-transaction", help="Initiate a new transaction.")
+@click.option(
+    "--bank-account",
+    help="Label of the bank account to be debited for the transaction.",
+    required=True
+)
+# Including the subject in the payto to match the
+# payto returned by the merchant backend helper program
+# to create tip reserves.
+@click.option(
+    "--payto-with-subject",
+    help="Payto address including the subject as a query parameter.",
+    required=True
+)
+@click.option(
+    "--amount",
+    help="Amount to transfer, in the $currency:X.Y format.",
+    required=True
+)
+@click.pass_obj
+def sandbox_demobank_new_transaction(obj, bank_account, payto_with_subject, amount):
+    # expected to include the demobank name.
+    sandbox_base_url = obj.require_sandbox_base_url()
+    url = urljoin_nodrop(sandbox_base_url, f"/access-api/accounts/{bank_account}/transactions")
+    try:
+        body = dict(paytoUri=payto_with_subject, amount=amount)
+        resp = post(
+            url,
+            json=body,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach Sandbox at " + url)
+        exit(1)
+
+    check_response_status(resp)
 
 @sandbox_demobank.command("info", help="Return basic information of a bank account")
 @click.option(

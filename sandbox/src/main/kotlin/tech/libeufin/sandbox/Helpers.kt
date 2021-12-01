@@ -226,7 +226,7 @@ fun wireTransfer(
     return wireTransfer(
         debitAccount = args.first,
         creditAccount = args.second,
-        Demobank = args.third,
+        demobank = args.third,
         subject = subject,
         amount = amountObj.amount.toPlainString()
     )
@@ -244,7 +244,7 @@ fun wireTransfer(
 fun wireTransfer(
     debitAccount: BankAccountEntity,
     creditAccount: BankAccountEntity,
-    Demobank: DemobankConfigEntity,
+    demobank: DemobankConfigEntity,
     subject: String,
     amount: String,
 ): String {
@@ -262,12 +262,12 @@ fun wireTransfer(
             debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
             this.amount = amount
-            this.currency = Demobank.currency
+            this.currency = demobank.currency
             date = timeStamp
             accountServicerReference = transactionRef
             account = creditAccount
             direction = "CRDT"
-            this.demobank = Demobank
+            this.demobank = demobank
         }
         BankAccountTransactionEntity.new {
             creditorIban = creditAccount.iban
@@ -278,12 +278,12 @@ fun wireTransfer(
             debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
             this.amount = amount
-            this.currency = Demobank.currency
+            this.currency = demobank.currency
             date = timeStamp
             accountServicerReference = transactionRef
             account = debitAccount
             direction = "DBIT"
-            demobank = Demobank
+            this.demobank = demobank
         }
     }
     return transactionRef
@@ -306,10 +306,10 @@ fun getBankAccountFromPayto(paytoUri: String): BankAccountEntity {
 
 fun getBankAccountFromIban(iban: String): BankAccountEntity {
     return transaction {
-        BankAccountEntity.find(BankAccountsTable.iban eq iban)
-    }.firstOrNull() ?: throw SandboxError(
+        BankAccountEntity.find(BankAccountsTable.iban eq iban).firstOrNull()
+    } ?: throw SandboxError(
         HttpStatusCode.NotFound,
-        "Did not find a bank account for ${iban}"
+        "Did not find a bank account for $iban"
     )
 }
 
@@ -385,4 +385,32 @@ fun getEbicsSubscriberFromDetails(userID: String, partnerID: String, hostID: Str
             "Ebics subscriber not found"
         )
     }
+}
+
+/**
+ * This helper tries to:
+ * 1.  Authenticate the client.
+ * 2.  Extract the bank account's label from the request's path
+ * 3.  Return the bank account DB object if the client has access to it.
+ */
+fun getBankAccountWithAuth(call: ApplicationCall): BankAccountEntity {
+    val username = call.request.basicAuth()
+    val accountAccessed = call.getUriComponent("account_name")
+    val demobank = ensureDemobank(call)
+    val bankAccount = transaction {
+        val res = BankAccountEntity.find {
+            (BankAccountsTable.label eq accountAccessed).and(
+                BankAccountsTable.demoBank eq demobank.id
+            )
+        }.firstOrNull()
+        res
+    } ?: throw notFound("Account '$accountAccessed' not found")
+    // Check rights.
+    if (
+        WITH_AUTH
+        && (bankAccount.owner != username && username != "admin")
+    ) throw forbidden(
+        "Customer '$username' cannot access bank account '$accountAccessed'"
+    )
+    return bankAccount
 }

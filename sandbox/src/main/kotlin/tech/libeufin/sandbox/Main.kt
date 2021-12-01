@@ -84,7 +84,7 @@ val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
 private val currencyEnv: String? = System.getenv("LIBEUFIN_SANDBOX_CURRENCY")
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val adminPassword: String? = System.getenv("LIBEUFIN_SANDBOX_ADMIN_PASSWORD")
-private var WITH_AUTH = true
+var WITH_AUTH = true // Needed by helpers too, hence not making it private.
 
 data class SandboxError(
     val statusCode: HttpStatusCode,
@@ -1070,6 +1070,33 @@ val sandboxApp: Application.() -> Unit = {
             }
             // Talk to Web UI.
             route("/access-api") {
+                post("/accounts/{account_name}/transactions") {
+                    val bankAccount = getBankAccountWithAuth(call)
+                    val req = call.receive<NewTransactionReq>()
+                    val payto = parsePayto(req.paytoUri)
+                    val amount = parseAmount(req.amount)
+                    /**
+                     * Need a transaction block only to let the
+                     * 'demoBank' field of 'bankAccount' accessed.
+                     *
+                     * This could be fixed by making 'getBankAccountWithAuth()'
+                     * return a pair, consisting of the bank account and the demobank
+                     * hosting it.
+                     */
+                    transaction {
+                        wireTransfer(
+                            debitAccount = bankAccount,
+                            creditAccount = getBankAccountFromIban(payto.iban),
+                            demobank = bankAccount.demoBank,
+                            subject = payto.message ?: throw badRequest(
+                                "'message' query parameter missing in Payto address"
+                            ),
+                            amount = amount.amount.toPlainString()
+                        )
+                    }
+                    call.respond(object {})
+                    return@post
+                }
                 // Information about one withdrawal.
                 get("/accounts/{account_name}/withdrawals/{withdrawal_id}") {
                     val op = getWithdrawalOperation(call.getUriComponent("withdrawal_id"))
@@ -1178,7 +1205,7 @@ val sandboxApp: Application.() -> Unit = {
                                     "Cannot transfer funds without reserve public key."
                                 ),
                                 // provide the currency.
-                                Demobank = ensureDemobank(call)
+                                demobank = ensureDemobank(call)
                             )
                             wo.confirmationDone = true
                         }
