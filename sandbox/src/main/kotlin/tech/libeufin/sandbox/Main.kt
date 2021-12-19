@@ -1041,12 +1041,12 @@ val sandboxApp: Application.() -> Unit = {
                         }.firstOrNull() ?: throw SandboxError(
                             HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
                         )
+                        /**
+                         * Check for idempotency.  Note: to spare one 'if' statement,
+                         * the check happens even for 'confirmed' (= already paid) withdrawal
+                         * operations.
+                         */
                         if (wo.selectionDone) {
-                            if (wo.confirmationDone) {
-                                logger.info("Wallet performs again this operation that was paid out earlier: idempotent")
-                                return@newSuspendedTransaction wo.selectionDone
-                            }
-                            // Selected already but NOT paid, check consistency.
                             if (body.reserve_pub != wo.reservePub) throw SandboxError(
                                 HttpStatusCode.Conflict,
                                 "Selecting a different reserve from the one already selected"
@@ -1055,12 +1055,18 @@ val sandboxApp: Application.() -> Unit = {
                                 HttpStatusCode.Conflict,
                                 "Selecting a different exchange from the one already selected"
                             )
+                            return@newSuspendedTransaction wo.confirmationDone
                         }
+                        // Flow here means never selected, hence must as well never be paid.
+                        if (wo.confirmationDone) throw internalServerError(
+                            "Withdrawal ${wo.wopid} knew NO exchange and reserve pub, " +
+                                    "but is marked as paid!"
+                        )
                         wo.reservePub = body.reserve_pub
-                        wo.selectedExchangePayto = body.selected_exchange
+                        val demobank = ensureDemobank(call)
+                        wo.selectedExchangePayto = body.selected_exchange ?: demobank.suggestedExchangePayto
                         wo.selectionDone = true
-                        wo.confirmationDone
-                        false // not confirmed (AKA transferred)
+                        wo.confirmationDone // == false
                     }
                     call.respond(object {
                         val transfer_done: Boolean = transferDone
