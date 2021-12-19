@@ -1041,11 +1041,9 @@ val sandboxApp: Application.() -> Unit = {
                         }.firstOrNull() ?: throw SandboxError(
                             HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
                         )
-                        /**
-                         * Check for idempotency.  Note: to spare one 'if' statement,
-                         * the check happens even for 'confirmed' (= already paid) withdrawal
-                         * operations.
-                         */
+                        if (wo.confirmationDone) {
+                            return@newSuspendedTransaction true
+                        }
                         if (wo.selectionDone) {
                             if (body.reserve_pub != wo.reservePub) throw SandboxError(
                                 HttpStatusCode.Conflict,
@@ -1055,7 +1053,7 @@ val sandboxApp: Application.() -> Unit = {
                                 HttpStatusCode.Conflict,
                                 "Selecting a different exchange from the one already selected"
                             )
-                            return@newSuspendedTransaction wo.confirmationDone
+                            return@newSuspendedTransaction false
                         }
                         // Flow here means never selected, hence must as well never be paid.
                         if (wo.confirmationDone) throw internalServerError(
@@ -1063,10 +1061,9 @@ val sandboxApp: Application.() -> Unit = {
                                     "but is marked as paid!"
                         )
                         wo.reservePub = body.reserve_pub
-                        val demobank = ensureDemobank(call)
                         wo.selectedExchangePayto = body.selected_exchange
                         wo.selectionDone = true
-                        wo.confirmationDone // == false
+                        false
                     }
                     call.respond(object {
                         val transfer_done: Boolean = transferDone
