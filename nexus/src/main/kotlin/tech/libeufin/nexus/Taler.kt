@@ -92,9 +92,7 @@ data class TalerOutgoingHistory(
     var outgoing_transactions: MutableList<TalerOutgoingBankTransaction> = mutableListOf()
 )
 
-data class GnunetTimestamp(
-    val t_ms: Long
-)
+data class GnunetTimestamp(val t_s: Long)
 
 /**
  * Sort query results in descending order for negative deltas, and ascending otherwise.
@@ -228,17 +226,13 @@ private suspend fun talerTransfer(call: ApplicationCall) {
                      * Normally should point to the next round where the background
                      * routine will send new PAIN.001 data to the bank; work in progress..
                      */
-                    timestamp = roundTimestamp(GnunetTimestamp(System.currentTimeMillis())),
+                    timestamp = GnunetTimestamp(System.currentTimeMillis() / 1000L),
                     row_id = opaqueRowId
                 )
             ),
             ContentType.Application.Json
         )
     )
-}
-
-fun roundTimestamp(t: GnunetTimestamp): GnunetTimestamp {
-    return GnunetTimestamp(t.t_ms - (t.t_ms % 1000))
 }
 
 fun talerFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDetails) {
@@ -402,7 +396,7 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
                         row_id = it.id.value,
                         amount = it.amount,
                         wtid = it.wtid,
-                        date = GnunetTimestamp(it.preparedPayment.preparationDate),
+                        date = GnunetTimestamp(it.preparedPayment.preparationDate / 1000L),
                         credit_account = it.creditAccount,
                         debit_account = buildIbanPaytoUri(
                             subscriberBankAccount.iban,
@@ -442,7 +436,7 @@ private suspend fun historyIncoming(call: ApplicationCall) {
                 history.incoming_transactions.add(
                     TalerIncomingBankTransaction(
                         // Rounded timestamp
-                        date = GnunetTimestamp((it.timestampMs / 1000) * 1000),
+                        date = GnunetTimestamp(it.timestampMs / 1000L),
                         row_id = it.id.value,
                         amount = "${it.payment.currency}:${it.payment.amount}",
                         reserve_pub = it.reservePublicKey,

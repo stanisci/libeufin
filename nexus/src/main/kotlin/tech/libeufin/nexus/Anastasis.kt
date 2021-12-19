@@ -89,7 +89,7 @@ private suspend fun historyIncoming(call: ApplicationCall) {
                 history.incoming_transactions.add(
                     AnastasisIncomingBankTransaction(
                         // Rounded timestamp
-                        date = GnunetTimestamp((it.timestampMs / 1000) * 1000),
+                        date = GnunetTimestamp(it.timestampMs / 1000L),
                         row_id = it.id.value,
                         amount = "${it.payment.currency}:${it.payment.amount}",
                         subject = it.subject,
