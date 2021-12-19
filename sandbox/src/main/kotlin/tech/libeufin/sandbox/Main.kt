@@ -1064,7 +1064,7 @@ val sandboxApp: Application.() -> Unit = {
                         )
                         wo.reservePub = body.reserve_pub
                         val demobank = ensureDemobank(call)
-                        wo.selectedExchangePayto = body.selected_exchange ?: demobank.suggestedExchangePayto
+                        wo.selectedExchangePayto = body.selected_exchange
                         wo.selectionDone = true
                         wo.confirmationDone // == false
                     }
@@ -1217,6 +1217,13 @@ val sandboxApp: Application.() -> Unit = {
                             "Cannot confirm a unselected withdrawal: " +
                                     "specify exchange and reserve public key via Integration API first."
                         )
+                        /**
+                         * The wallet chose not to select any exchange, use the default.
+                         */
+                        val demobank = ensureDemobank(call)
+                        if (wo.selectedExchangePayto == null) {
+                            wo.selectedExchangePayto = demobank.suggestedExchangePayto
+                        }
                         val exchangeBankAccount = getBankAccountFromPayto(
                             wo.selectedExchangePayto ?: throw internalServerError(
                                 "Cannot withdraw without an exchange."
