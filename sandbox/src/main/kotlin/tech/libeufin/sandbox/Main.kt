@@ -73,6 +73,7 @@ import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
 import startServer
 import tech.libeufin.util.*
+import java.io.IOException
 import java.math.BigDecimal
 import java.net.BindException
 import java.net.URL
@@ -937,7 +938,7 @@ val sandboxApp: Application.() -> Unit = {
         // debt limit and possibly other configuration
         // (could also be a CLI command for now)
         post("/demobanks") {
-            throw NotImplementedError("Only available in the CLI.")
+            throw NotImplementedError("Only available in the Sandbox CLI.")
         }
 
         get("/demobanks") {
@@ -953,6 +954,26 @@ val sandboxApp: Application.() -> Unit = {
         }
 
         get("/demobanks/{demobankid}") {
+            /**
+             * Respond the SPA if the content type is not "application/json".
+             */
+            if (call.request.headers["Content-Type"] != "application/json") {
+                val spa = ClassLoader.getSystemClassLoader().getResourceAsStream("static/spa.html")
+                if (spa == null) throw internalServerError("SPA not found!")
+                call.respondBytesWriter(contentType = ContentType.Text.Html) {
+                    writeWhile {
+                        val content = try {
+                            spa.read()
+                        } catch (e: IOException) {
+                            throw internalServerError("Could not load the SPA")
+                        }
+                        if (content == -1) return@writeWhile false
+                        it.put(content.toByte())
+                        true
+                    }
+                }
+                return@get
+            }
             expectAdmin(call.request.basicAuth())
             val demobankId = call.getUriComponent("demobankid")
             val ret: DemobankConfigEntity = transaction {
