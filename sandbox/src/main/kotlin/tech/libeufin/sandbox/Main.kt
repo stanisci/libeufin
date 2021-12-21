@@ -954,6 +954,8 @@ val sandboxApp: Application.() -> Unit = {
         }
 
         get("/demobanks/{demobankid}") {
+            val demobank = ensureDemobank(call)
+
             /**
              * Respond the SPA if the content type is not "application/json".
              */
@@ -975,13 +977,7 @@ val sandboxApp: Application.() -> Unit = {
                 return@get
             }
             expectAdmin(call.request.basicAuth())
-            val demobankId = call.getUriComponent("demobankid")
-            val ret: DemobankConfigEntity = transaction {
-                DemobankConfigEntity.find {
-                    DemobankConfigsTable.name eq demobankId
-                }.firstOrNull()
-            } ?: throw notFound("Demobank ${demobankId} not found")
-            call.respond(getJsonFromDemobankConfig(ret))
+            call.respond(getJsonFromDemobankConfig(demobank))
             return@get
         }
 
