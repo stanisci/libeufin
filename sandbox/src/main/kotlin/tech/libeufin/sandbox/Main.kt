@@ -357,10 +357,6 @@ data class BankAccountInfo(
     val bic: String,
 )
 
-data class BankAccountsListReponse(
-    val accounts: List<BankAccountInfo>
-)
-
 inline fun <reified T> Document.toObject(): T {
     val jc = JAXBContext.newInstance(T::class.java)
     val m = jc.createUnmarshaller()
@@ -1283,6 +1279,7 @@ val sandboxApp: Application.() -> Unit = {
                     })
                     return@get
                 }
+                // This endpoint is being called "GET /transaction" in the docs.
                 get("/accounts/{account_name}/history") {
                     val demobank = ensureDemobank(call)
                     val bankAccount = getBankAccountFromLabel(
