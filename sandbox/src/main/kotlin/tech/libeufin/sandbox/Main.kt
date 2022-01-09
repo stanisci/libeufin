@@ -1279,8 +1279,7 @@ val sandboxApp: Application.() -> Unit = {
                     })
                     return@get
                 }
-                // This endpoint is being called "GET /transaction" in the docs.
-                get("/accounts/{account_name}/history") {
+                get("/accounts/{account_name}/transactions") {
                     val demobank = ensureDemobank(call)
                     val bankAccount = getBankAccountFromLabel(
                         call.getUriComponent("account_name"),
@@ -1290,13 +1289,36 @@ val sandboxApp: Application.() -> Unit = {
                     if (!authOk && (call.request.basicAuth() != bankAccount.owner)) throw forbidden(
                         "Cannot access bank account ${bankAccount.label}"
                     )
+
+                    val page: Int = Integer.decode(call.request.queryParameters["page"] ?: "1")
+                    val size: Int = Integer.decode(call.request.queryParameters["size"] ?: "5")
+
                     val ret = mutableListOf<RawPayment>()
+                    /**
+                     * Case where page number wasn't given,
+                     * therefore the results starts from the last transaction. */
                     transaction {
-                        BankAccountTransactionEntity.find {
-                            BankAccountTransactionsTable.account eq bankAccount.id
-                            // FIXME: more criteria to come.
-                        }.forEach {
-                            ret.add(getHistoryElementFromTransactionRow(it))
+                        /**
+                         * Get a history page - from the calling bank account - having
+                         * 'firstElementId' as the latest transaction in it.  */
+                        fun getPage(firstElementId: Long): Iterable<BankAccountTransactionEntity> {
+                            return BankAccountTransactionEntity.find {
+                                (BankAccountTransactionsTable.id lessEq firstElementId) and
+                                        (BankAccountTransactionsTable.account eq bankAccount.id)
+                            }.take(size)
+                        }
+                        val lt: BankAccountTransactionEntity? = bankAccount.lastTransaction
+                        if (lt == null) return@transaction
+                        var firstElement: BankAccountTransactionEntity = lt
+                        /**
+                         * This loop fetches (and discards) pages until the
+                         * desired one is found.  */
+                        for (i in 0..(page)) {
+                            val pageBuf = getPage(firstElement.id.value)
+                            firstElement = pageBuf.last()
+                            if (i == page) pageBuf.forEach {
+                                ret.add(getHistoryElementFromTransactionRow(it))
+                            }
                         }
                     }
                     call.respond(ret)

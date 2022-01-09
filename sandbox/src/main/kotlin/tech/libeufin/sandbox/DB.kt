@@ -338,10 +338,21 @@ object BankAccountTransactionsTable : LongIdTable() {
 class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<BankAccountTransactionEntity>(BankAccountTransactionsTable) {
         override fun new(init: BankAccountTransactionEntity.() -> Unit): BankAccountTransactionEntity {
+            /**
+             * Fresh transactions are those that wait to be included in a
+             * "history" report, likely a Camt.5x message.  The "fresh transactions"
+             * table keeps a list of such transactions.
+             */
             val freshTx = super.new(init)
             BankAccountFreshTransactionsTable.insert {
                 it[transactionRef] = freshTx.id
             }
+            /**
+             * The bank account involved in this transaction points to
+             * it as the "last known" transaction, to make it easier to
+             * build histories that depend on such record.
+             */
+            freshTx.account.lastTransaction = freshTx
             return freshTx
         }
     }
@@ -384,6 +395,13 @@ object BankAccountsTable : IntIdTable() {
     val owner = text("owner")
     val isPublic = bool("isPublic").default(false)
     val demoBank = reference("demoBank", DemobankConfigsTable)
+
+    /**
+     * Point to the last transaction related to this account, regardless
+     * of it being credit or debit.  This reference helps to construct
+     * history results that start from / depend on the last transaction.
+     */
+    val lastTransaction = reference("lastTransaction", BankAccountTransactionsTable).nullable()
 }
 
 class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -395,6 +413,7 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     var owner by BankAccountsTable.owner
     var isPublic by BankAccountsTable.isPublic
     var demoBank by DemobankConfigEntity referencedOn BankAccountsTable.demoBank
+    var lastTransaction by BankAccountTransactionEntity optionalReferencedOn BankAccountsTable.lastTransaction
 }
 
 object BankAccountStatementsTable : IntIdTable() {
