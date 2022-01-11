@@ -1279,6 +1279,27 @@ val sandboxApp: Application.() -> Unit = {
                     })
                     return@get
                 }
+                get("/accounts/{account_name}/transactions/{tId}") {
+                    val demobank = ensureDemobank(call)
+                    val bankAccount = getBankAccountFromLabel(
+                        call.getUriComponent("account_name"),
+                        demobank
+                    )
+                    val authOk: Boolean = bankAccount.isPublic || (!WITH_AUTH)
+                    if (!authOk && (call.request.basicAuth() != bankAccount.owner)) throw forbidden(
+                        "Cannot access bank account ${bankAccount.label}"
+                    )
+                    // Flow here == Right on the bank account.
+                    val tId = call.parameters["tId"] ?: throw badRequest("URI didn't contain the transaction ID")
+                    val tx: BankAccountTransactionEntity? = transaction {
+                        BankAccountTransactionEntity.find {
+                            BankAccountTransactionsTable.accountServicerReference eq tId
+                        }.firstOrNull()
+                    }
+                    if (tx == null) throw notFound("Transaction $tId wasn't found")
+                    call.respond(getHistoryElementFromTransactionRow(tx))
+                    return@get
+                }
                 get("/accounts/{account_name}/transactions") {
                     val demobank = ensureDemobank(call)
                     val bankAccount = getBankAccountFromLabel(
@@ -1321,7 +1342,7 @@ val sandboxApp: Application.() -> Unit = {
                             }
                         }
                     }
-                    call.respond(ret)
+                    call.respond(object {val transactions = ret})
                     return@get
                 }
                 get("/public-accounts") {
