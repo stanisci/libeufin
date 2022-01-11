@@ -1330,13 +1330,14 @@ val sandboxApp: Application.() -> Unit = {
                         }
                         val lt: BankAccountTransactionEntity? = bankAccount.lastTransaction
                         if (lt == null) return@transaction
-                        var firstElement: BankAccountTransactionEntity = lt
+                        var nextPageIdUpperLimit: Long = lt.id.value
                         /**
                          * This loop fetches (and discards) pages until the
                          * desired one is found.  */
                         for (i in 0..(page)) {
-                            val pageBuf = getPage(firstElement.id.value)
-                            firstElement = pageBuf.last()
+                            val pageBuf = getPage(nextPageIdUpperLimit)
+                            if (pageBuf.none()) return@transaction
+                            nextPageIdUpperLimit = pageBuf.last().id.value - 1
                             if (i == page) pageBuf.forEach {
                                 ret.add(getHistoryElementFromTransactionRow(it))
                             }
