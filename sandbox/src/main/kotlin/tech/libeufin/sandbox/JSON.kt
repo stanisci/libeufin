@@ -97,7 +97,10 @@ data class CustomerRegistration(
 // Could be used as a general bank account info container.
 data class PublicAccountInfo(
     val balance: String,
-    val iban: String
+    val iban: String,
+    // Name / Label of the bank account _and_ of the
+    // Sandbox username that owns it.
+    val accountLabel: String
     // more ..?
 )
 

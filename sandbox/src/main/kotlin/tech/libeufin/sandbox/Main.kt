@@ -1361,7 +1361,8 @@ val sandboxApp: Application.() -> Unit = {
                             ret.publicAccounts.add(
                                 PublicAccountInfo(
                                     balance = "${demobank.currency}:$balanceIter",
-                                    iban = it.iban
+                                    iban = it.iban,
+                                    accountLabel = it.label
                                 )
                             )
                         }
