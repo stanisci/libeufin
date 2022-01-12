@@ -1259,13 +1259,20 @@ def sandbox_demobank_info(obj, bank_account):
 will be both the username to login at the bank and the bank account
 label"""
 )
+@click.option(
+    "--public",
+    required=False,
+    default=False,
+    help="Creates a public bank account",
+)
 @click.pass_obj
-def sandbox_demobank_register(obj):
+def sandbox_demobank_register(obj, public):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin_nodrop(sandbox_base_url, f"/access-api/testing/register")
     try:
-        resp = post(url,
-            json=dict(username=obj.username, password=obj.password),
+        resp = post(
+            url,
+            json=dict(username=obj.username, password=obj.password, isPublic=public),
         )
     except Exception as e:
         print(e)
