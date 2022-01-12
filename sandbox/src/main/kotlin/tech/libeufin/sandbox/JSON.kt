@@ -91,7 +91,8 @@ data class EbicsBankAccountRequest(
 
 data class CustomerRegistration(
     val username: String,
-    val password: String
+    val password: String,
+    val isPublic: Boolean = false
 )
 
 // Could be used as a general bank account info container.

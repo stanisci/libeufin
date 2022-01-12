@@ -1399,6 +1399,7 @@ val sandboxApp: Application.() -> Unit = {
                             label = req.username
                             owner = req.username
                             this.demoBank = demobank
+                            isPublic = req.isPublic
                         }
                         DemobankCustomerEntity.new {
                             username = req.username
