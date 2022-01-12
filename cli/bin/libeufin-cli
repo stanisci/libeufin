@@ -1260,10 +1260,9 @@ will be both the username to login at the bank and the bank account
 label"""
 )
 @click.option(
-    "--public",
-    required=False,
+    "--public/--no-public",
     default=False,
-    help="Creates a public bank account",
+    help="Decides whether a bank account is public.",
 )
 @click.pass_obj
 def sandbox_demobank_register(obj, public):
