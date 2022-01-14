@@ -1323,10 +1323,11 @@ val sandboxApp: Application.() -> Unit = {
                          * Get a history page - from the calling bank account - having
                          * 'firstElementId' as the latest transaction in it.  */
                         fun getPage(firstElementId: Long): Iterable<BankAccountTransactionEntity> {
+                            logger.debug("History page from tx $firstElementId, including $size txs in the past.")
                             return BankAccountTransactionEntity.find {
                                 (BankAccountTransactionsTable.id lessEq firstElementId) and
                                         (BankAccountTransactionsTable.account eq bankAccount.id)
-                            }.take(size)
+                            }.sortedByDescending { it.id.value }.take(size)
                         }
                         val lt: BankAccountTransactionEntity? = bankAccount.lastTransaction
                         if (lt == null) return@transaction
@@ -1336,6 +1337,8 @@ val sandboxApp: Application.() -> Unit = {
                          * desired one is found.  */
                         for (i in 0..(page)) {
                             val pageBuf = getPage(nextPageIdUpperLimit)
+                            logger.debug("Processing page:")
+                            pageBuf.forEach { logger.debug("${it.id} ${it.subject} ${it.amount}") }
                             if (pageBuf.none()) return@transaction
                             nextPageIdUpperLimit = pageBuf.last().id.value - 1
                             if (i == page) pageBuf.forEach {
