@@ -175,7 +175,7 @@ class Config : CliktCommand("Insert one configuration into the database") {
  */
 class Camt053Tick : CliktCommand(
     "Make a new Camt.053 time tick; all the fresh transactions" +
-            "will be inserted in a new Camt.053 report"
+            " will be inserted in a new Camt.053 report"
 ) {
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
