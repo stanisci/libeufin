@@ -234,8 +234,8 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
     private val creditAccount by option(help = "Label of the bank account receiving the payment").required()
     private val debitAccount by option(help = "Label of the bank account issuing the payment").required()
     private val demobankArg by option("--demobank", help = "Which Demobank books this transaction").default("default")
-    private val amount by argument(help = "Amount, in the \$currency:x.y format")
-    private val subjectArg by argument(name = "subject", help = "Payment's subject")
+    private val amount by argument("AMOUNT", "Amount, in the \$currency:x.y format")
+    private val subjectArg by argument("SUBJECT", "Payment's subject")
 
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
