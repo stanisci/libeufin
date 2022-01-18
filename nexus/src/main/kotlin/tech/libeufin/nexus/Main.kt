@@ -84,7 +84,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
 
 class ParseCamt : CliktCommand("Parse a camt file") {
     private val logLevel by option()
-    private val filename by argument()
+    private val filename by argument("FILENAME", "File in CAMT format")
     override fun run() {
         setLogLevel(logLevel)
         val camtText = File(filename).readText(Charsets.UTF_8)
@@ -109,7 +109,7 @@ class ResetTables : CliktCommand("Drop all the tables from the database") {
 }
 
 class Superuser : CliktCommand("Add superuser or change pw") {
-    private val username by argument()
+    private val username by argument("USERNAME", "User name of superuser")
     private val password by option().prompt(requireConfirmation = true, hideInput = true)
     override fun run() {
         execThrowableOrTerminate {
