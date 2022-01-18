@@ -62,7 +62,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
     private val port by option().int().default(5001)
     private val withUnixSocket by option(
         help = "Bind the Sandbox to the Unix domain socket at PATH.  Overrides" +
-                "--port, when both are given", metavar = "PATH"
+                " --port, when both are given", metavar = "PATH"
     )
     private val logLevel by option()
     override fun run() {
