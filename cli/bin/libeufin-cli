@@ -1211,7 +1211,7 @@ def sandbox_demobank(ctx):
 )
 @click.option(
     "--amount",
-    help="Amount to transfer, in the $currency:X.Y format.",
+    help="Amount to transfer, in the CUR:X.Y format.",
     required=True
 )
 @click.pass_obj
