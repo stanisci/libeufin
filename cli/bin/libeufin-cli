@@ -1406,7 +1406,7 @@ def simulate_incoming_transaction(
         resp = post(
             url,
             json=body,
-            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password)
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
         )
     except Exception as e:
         print(e)
