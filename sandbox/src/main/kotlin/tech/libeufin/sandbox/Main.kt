@@ -155,12 +155,19 @@ class Config : CliktCommand("Insert one configuration into the database") {
                     println("Error, demobank ${nameOption} exists already, not overriding it.")
                     exitProcess(1)
                 }
-                DemobankConfigEntity.new {
+                val demoBank = DemobankConfigEntity.new {
                     currency = currencyOption
                     bankDebtLimit = bankDebtLimitOption
                     usersDebtLimit = usersDebtLimitOption
                     allowRegistrations = allowRegistrationsOption
                     name = nameOption
+                }
+                BankAccountEntity.new {
+                    iban = getIban()
+                    label = "bank" // used by the wire helper
+                    owner = "bank" // used by the person name finder
+                    // For now, the model assumes always one demobank
+                    this.demoBank = demoBank
                 }
             }
         }
