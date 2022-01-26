@@ -1403,7 +1403,11 @@ def simulate_incoming_transaction(
         subject=subject,
     )
     try:
-        resp = post(url, json=body)
+        resp = post(
+            url,
+            json=body,
+            auth=auth.HTTPBasicAuth(obj.nexus_username, obj.nexus_password)
+        )
     except Exception as e:
         print(e)
         print("Could not reach sandbox")
