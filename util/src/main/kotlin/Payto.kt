@@ -1,5 +1,7 @@
 package tech.libeufin.util
 
+import UtilError
+import io.ktor.http.*
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -16,7 +18,7 @@ data class Payto(
     val message: String?,
     val amount: String?
 )
-class InvalidPaytoError(msg: String) : Exception(msg)
+class InvalidPaytoError(msg: String) : UtilError(HttpStatusCode.BadRequest, msg)
 
 // Return the value of query string parameter 'name', or null if not found.
 // 'params' is the a list of key-value elements of all the query parameters found in the URI.
@@ -27,22 +29,23 @@ private fun getQueryParamOrNull(name: String, params: List<Pair<String, String>>
     }
 }
 
-fun parsePayto(paytoLine: String): Payto {
+fun parsePayto(paytoInput: String): Payto {
+    val payto = URLDecoder.decode(paytoInput, Charsets.UTF_8)
     /**
      * This check is due because URIs having a "payto:" prefix without
      * slashes are correctly parsed by the Java 'URI' class.  'mailto'
      * for example lacks the double-slash part.
      */
-    if (!paytoLine.startsWith("payto://"))
-        throw InvalidPaytoError("Invalid payto URI: $paytoLine")
+    if (!payto.startsWith("payto://"))
+        throw InvalidPaytoError("Invalid payto URI: $payto")
 
     val javaParsedUri = try {
-        URI(paytoLine)
+        URI(payto)
     } catch (e: java.lang.Exception) {
-        throw InvalidPaytoError("'${paytoLine}' is not a valid URI")
+        throw InvalidPaytoError("'${payto}' is not a valid URI")
     }
     if (javaParsedUri.scheme != "payto") {
-        throw InvalidPaytoError("'${paytoLine}' is not payto")
+        throw InvalidPaytoError("'${payto}' is not payto")
     }
     val wireMethod = javaParsedUri.host
     if (wireMethod != "iban") {
@@ -50,7 +53,7 @@ fun parsePayto(paytoLine: String): Payto {
     }
     val splitPath = javaParsedUri.path.split("/").filter { it.isNotEmpty() }
     if (splitPath.size > 2) {
-        throw InvalidPaytoError("too many path segments in iban payto URI: $paytoLine")
+        throw InvalidPaytoError("too many path segments in iban payto URI: $payto")
     }
     val (iban, bic) = if (splitPath.size == 1) {
         Pair(splitPath[0], null)

@@ -19,6 +19,7 @@
 
 package tech.libeufin.sandbox
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import tech.libeufin.util.PaymentInfo
 
 data class WithdrawalRequest(

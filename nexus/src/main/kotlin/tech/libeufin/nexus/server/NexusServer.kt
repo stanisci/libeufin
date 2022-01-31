@@ -543,7 +543,7 @@ val nexusApp: Application.() -> Unit = {
                 if (bankAccount == null) {
                     throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                 }
-                val holderEnc = URLEncoder.encode(bankAccount.accountHolder, "UTF-8")
+                val holderEnc = URLEncoder.encode(bankAccount.accountHolder, Charsets.UTF_8)
                 val lastSeenBalance = NexusBankBalanceEntity.find {
                     NexusBankBalancesTable.bankAccount eq bankAccount.id
                 }.lastOrNull()

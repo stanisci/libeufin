@@ -26,10 +26,10 @@ import org.slf4j.LoggerFactory
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
 
-data class UtilError(
+open class UtilError(
     val statusCode: HttpStatusCode,
     val reason: String,
-    val ec: LibeufinErrorCode?
+    val ec: LibeufinErrorCode? = null
 ) :
     Exception("$reason (HTTP status $statusCode)")
 

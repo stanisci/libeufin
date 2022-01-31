@@ -997,7 +997,7 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     logger.debug("TWG add-incoming passed authentication")
-                    val body = call.receive<TWGAdminAddIncoming>()
+                    val body = call.receiveJson<TWGAdminAddIncoming>()
                     transaction {
                         val demobank = ensureDemobank(call)
                         val bankAccountCredit = getBankAccountFromLabel(username, demobank)
@@ -1095,7 +1095,7 @@ val sandboxApp: Application.() -> Unit = {
             route("/access-api") {
                 post("/accounts/{account_name}/transactions") {
                     val bankAccount = getBankAccountWithAuth(call)
-                    val req = call.receive<NewTransactionReq>()
+                    val req = call.receiveJson<NewTransactionReq>()
                     val payto = parsePayto(req.paytoUri)
                     val amount: String? = payto.amount ?: req.amount
                     if (amount == null) throw badRequest("Amount is missing")
@@ -1158,7 +1158,7 @@ val sandboxApp: Application.() -> Unit = {
                     if (maybeOwnedAccount.owner != username) throw unauthorized(
                         "Customer '$username' has no rights over bank account '${maybeOwnedAccount.label}'"
                     )
-                    val req = call.receive<WithdrawalRequest>()
+                    val req = call.receiveJson<WithdrawalRequest>()
                     // Check for currency consistency
                     val amount = parseAmount(req.amount)
                     if (amount.currency != demobank.currency) throw badRequest(
@@ -1385,7 +1385,7 @@ val sandboxApp: Application.() -> Unit = {
                 post("/testing/register") {
                     // Check demobank was created.
                     val demobank = ensureDemobank(call)
-                    val req = call.receive<CustomerRegistration>()
+                    val req = call.receiveJson<CustomerRegistration>()
                     val checkExist = transaction {
                         DemobankCustomerEntity.find {
                             DemobankCustomersTable.username eq req.username
