@@ -29,8 +29,7 @@ private fun getQueryParamOrNull(name: String, params: List<Pair<String, String>>
     }
 }
 
-fun parsePayto(paytoInput: String): Payto {
-    val payto = URLDecoder.decode(paytoInput, Charsets.UTF_8)
+fun parsePayto(payto: String): Payto {
     /**
      * This check is due because URIs having a "payto:" prefix without
      * slashes are correctly parsed by the Java 'URI' class.  'mailto'
