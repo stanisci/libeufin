@@ -134,5 +134,5 @@ data class NewTransactionReq(
      */
     val paytoUri: String,
     // $currency:X.Y format
-    val amount: String
+    val amount: String?
 )

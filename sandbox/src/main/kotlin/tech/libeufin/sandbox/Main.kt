@@ -1097,7 +1097,8 @@ val sandboxApp: Application.() -> Unit = {
                     val bankAccount = getBankAccountWithAuth(call)
                     val req = call.receive<NewTransactionReq>()
                     val payto = parsePayto(req.paytoUri)
-                    val amount = parseAmount(req.amount)
+                    val amount: String? = payto.amount ?: req.amount
+                    if (amount == null) throw badRequest("Amount is missing")
                     /**
                      * Need a transaction block only to let the
                      * 'demoBank' field of 'bankAccount' accessed.
@@ -1114,7 +1115,7 @@ val sandboxApp: Application.() -> Unit = {
                             subject = payto.message ?: throw badRequest(
                                 "'message' query parameter missing in Payto address"
                             ),
-                            amount = amount.amount.toPlainString()
+                            amount = parseAmount(amount).amount.toPlainString()
                         )
                     }
                     call.respond(object {})
