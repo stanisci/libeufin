@@ -29,6 +29,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.util.*
+import java.math.BigDecimal
 
 /**
  * Helps to communicate Camt values without having
@@ -252,7 +253,8 @@ fun wireTransfer(
     amount: String,
 ): String {
     // sanity check on the amount, no currency allowed here.
-    parseDecimal(amount)
+    val checkAmount = parseDecimal(amount)
+    if (checkAmount == BigDecimal.ZERO) throw badRequest("Wire transfers of zero not possible.")
     val timeStamp = getUTCnow().toInstant().toEpochMilli()
     val transactionRef = getRandomString(8)
     transaction {
