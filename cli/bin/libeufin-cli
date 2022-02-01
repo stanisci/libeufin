@@ -1228,7 +1228,7 @@ def sandbox_demobank_new_transaction(obj, bank_account, payto_with_subject, amou
         )
     except Exception as e:
         print(e)
-        print("Could not reach Sandbox at " + url)
+        print("Could not reach sandbox at " + url)
         exit(1)
 
     check_response_status(resp)
