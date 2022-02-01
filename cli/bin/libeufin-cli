@@ -1255,9 +1255,10 @@ def sandbox_demobank_info(obj, bank_account):
     tell_user(resp, withsuccess=True)
 
 @sandbox_demobank.command("register",
-    help="""register a new bank account.  Note that the username
-will be both the username to login at the bank and the bank account
-label"""
+    help="""register a new bank account.  Credentials will be taken
+    from the LIBEUFIN_SANDBOX_{USERNAME, PASSWORD} env variables.  Note
+    that the username will be both the username to login at the bank
+    and the bank account label"""
 )
 @click.option(
     "--public/--no-public",

@@ -417,7 +417,6 @@ val singleThreadContext = newSingleThreadContext("DB")
 val sandboxApp: Application.() -> Unit = {
     install(CallLogging) {
         this.level = org.slf4j.event.Level.DEBUG
-        this.logger = logger
     }
     install(Authentication) {
         // Web-based authentication for Bank customers.
