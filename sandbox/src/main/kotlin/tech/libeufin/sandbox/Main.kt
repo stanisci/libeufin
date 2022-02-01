@@ -1420,8 +1420,8 @@ val sandboxApp: Application.() -> Unit = {
                     }
                     val balance = balanceForAccount(bankAccount)
                     call.respond(object {
-                        val balance = {
-                            val amount = "${demobank.currency}:${balance}"
+                        val balance = object {
+                            val amount = "${demobank.currency}:$balance"
                             val credit_debit_indicator = "CRDT"
                         }
                         val paytoUri = buildIbanPaytoUri(
