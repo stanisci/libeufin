@@ -299,6 +299,17 @@ not found in the environment, assuming tests are being run..."""
             )
         return sandbox_base_url
 
+    # For the Access-API endpoints, the user must choose exactly *one* bank
+    # and include that in ‘LIBEUFIN_SANDBOX_URL’ (or ‘--sandbox-url’).
+    def access_api_url(self, upath):
+        # NB: We expect that ‘base’ ends w/ f"demobanks/{bank}".
+        # This means that base for non-Access-API endpoints
+        # is incompatible w/ that for Access-API endpoints.
+        # (Using one for the other will result in 404.)  But that's
+        # OK because the non-Access-API endspoints are going away.
+        base = self.require_sandbox_base_url ()
+        return urljoin_nodrop (base, "/access-api" + upath)
+
 
 class NexusContext:
     def __init__(self):
@@ -1216,9 +1227,7 @@ def sandbox_demobank(ctx):
 )
 @click.pass_obj
 def sandbox_demobank_new_transaction(obj, bank_account, payto_with_subject, amount):
-    # expected to include the demobank name.
-    sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin_nodrop(sandbox_base_url, f"/access-api/accounts/{bank_account}/transactions")
+    url = obj.access_api_url (f"/accounts/{bank_account}/transactions")
     try:
         body = dict(paytoUri=payto_with_subject, amount=amount)
         resp = post(
@@ -1241,8 +1250,7 @@ def sandbox_demobank_new_transaction(obj, bank_account, payto_with_subject, amou
 )
 @click.pass_obj
 def sandbox_demobank_info(obj, bank_account):
-    sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin_nodrop(sandbox_base_url, f"/access-api/accounts/{bank_account}")
+    url = obj.access_api_url (f"/accounts/{bank_account}")
     try:
         resp = get(
             url,
@@ -1267,8 +1275,7 @@ def sandbox_demobank_info(obj, bank_account):
 )
 @click.pass_obj
 def sandbox_demobank_register(obj, public):
-    sandbox_base_url = obj.require_sandbox_base_url()
-    url = urljoin_nodrop(sandbox_base_url, f"/access-api/testing/register")
+    url = obj.access_api_url ("/testing/register")
     try:
         resp = post(
             url,
