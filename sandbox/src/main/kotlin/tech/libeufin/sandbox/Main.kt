@@ -418,6 +418,13 @@ val sandboxApp: Application.() -> Unit = {
     install(CallLogging) {
         this.level = org.slf4j.event.Level.DEBUG
     }
+    install(CORS) {
+        anyHost()
+        header(HttpHeaders.Authorization)
+        header(HttpHeaders.ContentType)
+        method(HttpMethod.Options)
+        allowCredentials = true
+    }
     install(Authentication) {
         // Web-based authentication for Bank customers.
         form("auth-form") {
