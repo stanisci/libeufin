@@ -1408,7 +1408,7 @@ val sandboxApp: Application.() -> Unit = {
                     requireValidResourceName(req.username)
                     val bankAccount = transaction {
                         val bankAccount = BankAccountEntity.new {
-                            iban = getIban()
+                            iban = req.iban ?: getIban()
                             /**
                              * For now, keep same semantics of Pybank: a username
                              * is AS WELL a bank account label.  In other words, it
