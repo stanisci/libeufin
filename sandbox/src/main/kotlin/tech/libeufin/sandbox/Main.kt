@@ -370,11 +370,6 @@ inline fun <reified T> Document.toObject(): T {
     return m.unmarshal(this, T::class.java).value
 }
 
-fun BigDecimal.signToString(): String {
-    return if (this.signum() > 0) "+" else ""
-    // minus sign is added by default already.
-}
-
 fun ensureNonNull(param: String?): String {
     return param ?: throw SandboxError(
         HttpStatusCode.BadRequest, "Bad ID given: $param"
@@ -426,25 +421,22 @@ val sandboxApp: Application.() -> Unit = {
         logger.info("Enabling CORS (assuming no endpoint uses cookies).")
         allowCredentials = true
     }
-    install(Authentication) {
-        // Web-based authentication for Bank customers.
-        form("auth-form") {
-            userParamName = "username"
-            passwordParamName = "password"
-            validate { credentials ->
-                if (credentials.name == "test") {
-                    UserIdPrincipal(credentials.name)
-                } else {
-                    null
-                }
-            }
-        }
-    }
     install(ContentNegotiation) {
-        jackson {
+        register(ContentType.Text.Xml, XMLEbicsConverter())
+        /**
+         * Content type "text" must go to the XML parser
+         * because Nexus can't set explicitly the Content-Type
+         * (see https://github.com/ktorio/ktor/issues/1127) to
+         * "xml" and the request made gets somehow assigned the
+         * "text/plain" type:  */
+        register(ContentType.Text.Plain, XMLEbicsConverter())
+        /**
+         * Make jackson the default parser.  It runs also when
+         * the Content-Type request header is missing. */
+        jackson(contentType = ContentType.Any) {
             enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT)
             setDefaultPrettyPrinter(DefaultPrettyPrinter().apply {
-                indentArraysWith(com.fasterxml.jackson.core.util.DefaultPrettyPrinter.FixedSpaceIndenter.instance)
+                indentArraysWith(DefaultPrettyPrinter.FixedSpaceIndenter.instance)
                 indentObjectsWith(DefaultIndenter("  ", "\n"))
             })
             registerModule(KotlinModule(nullisSameAsDefault = true))
@@ -493,8 +485,8 @@ val sandboxApp: Application.() -> Unit = {
             logger.error("Exception while handling '${call.request.uri}'", cause)
             call.respondText(
                 "Internal server error.",
-                io.ktor.http.ContentType.Text.Plain,
-                io.ktor.http.HttpStatusCode.InternalServerError
+                ContentType.Text.Plain,
+                HttpStatusCode.InternalServerError
             )
         }
     }
@@ -530,7 +522,10 @@ val sandboxApp: Application.() -> Unit = {
     routing {
 
         get("/") {
-            call.respondText("Hello, this is the Sandbox\n", ContentType.Text.Plain)
+            call.respondText(
+                "Hello, this is the Sandbox\n",
+                ContentType.Text.Plain
+            )
         }
 
         // Respond with the last statement of the requesting account.
@@ -937,9 +932,7 @@ val sandboxApp: Application.() -> Unit = {
             }
             catch (e: Exception) {
                 logger.error(e)
-                if (e !is EbicsRequestError) {
-                    throw EbicsProcessingError("Unmanaged error: $e")
-                }
+                throw EbicsProcessingError("Unmanaged error: $e")
             }
             return@post
         }
@@ -990,7 +983,6 @@ val sandboxApp: Application.() -> Unit = {
             call.respond(getJsonFromDemobankConfig(demobank))
             return@get
         }
-
         route("/demobanks/{demobankid}") {
 
             // NOTE: TWG assumes that username == bank account label.

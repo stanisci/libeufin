@@ -23,7 +23,7 @@ package tech.libeufin.sandbox
 import io.ktor.application.*
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.request.receiveText
+import io.ktor.request.*
 import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.util.AttributeKey
@@ -33,8 +33,6 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
 import tech.libeufin.util.*
 import tech.libeufin.util.XMLUtil.Companion.signEbicsResponse
@@ -46,8 +44,6 @@ import tech.libeufin.util.ebics_s001.UserSignatureData
 import java.math.BigDecimal
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
-import java.time.Instant
-import java.time.LocalDateTime
 import java.util.*
 import java.util.zip.DeflaterInputStream
 import java.util.zip.InflaterInputStream
@@ -124,6 +120,21 @@ suspend fun respondEbicsTransfer(
     errorText: String,
     errorCode: String
 ) {
+    /**
+     * Because this handler runs for any error, it could
+     * handle the case where the Ebics host ID is unknown due
+     * to an invalid request.  Recall: Sandbox is multi-host, and
+     * which Ebics host was requested belongs to the request document.
+     *
+     * Therefore, because any (? Please verify!) Ebics response
+     * should speak for one Ebics host, we won't respond any Ebics
+     * type when the Ebics host ID remains unknown due to invalid
+     * request.  Instead, we'll respond plain text:
+     */
+    if (!call.attributes.contains(EbicsHostIdAttribute)) {
+        call.respondText("Invalid document.", status = HttpStatusCode.BadRequest)
+        return
+    }
     val resp = EbicsResponse.createForUploadWithError(
         errorText,
         errorCode,
@@ -935,7 +946,7 @@ private suspend fun ApplicationCall.handleEbicsHpb(
 /**
  * Find the ebics host corresponding to the one specified in the header.
  */
-private fun ApplicationCall.ensureEbicsHost(requestHostID: String): EbicsHostPublicInfo {
+private fun ensureEbicsHost(requestHostID: String): EbicsHostPublicInfo {
     return transaction {
         val ebicsHost =
             EbicsHostEntity.find { EbicsHostsTable.hostID.upperCase() eq requestHostID.uppercase(Locale.getDefault()) }.firstOrNull()
@@ -952,21 +963,18 @@ private fun ApplicationCall.ensureEbicsHost(requestHostID: String): EbicsHostPub
         )
     }
 }
-
-private suspend fun ApplicationCall.receiveEbicsXml(): Document {
-    val body: String = receiveText()
-    logger.debug("Data received: $body")
-    val requestDocument: Document? = XMLUtil.parseStringIntoDom(body)
+fun receiveEbicsXmlInternal(xmlData: String): Document {
+    logger.debug("Data received: $xmlData")
+    val requestDocument: Document? = XMLUtil.parseStringIntoDom(xmlData)
     if (requestDocument == null || (!XMLUtil.validateFromDom(requestDocument))) {
         println("Problematic document was: $requestDocument")
         throw EbicsInvalidXmlError()
     }
-    val requestedHostID = requestDocument.getElementsByTagName("HostID")
-    this.attributes.put(
-        EbicsHostIdAttribute,
-        requestedHostID.item(0).textContent
-    )
     return requestDocument
+}
+suspend fun ApplicationCall.receiveEbicsXml(): Document {
+    val body: String = receiveText()
+    return receiveEbicsXmlInternal(body)
 }
 
 private fun makePartnerInfo(subscriber: EbicsSubscriberEntity): EbicsTypes.PartnerInfo {
@@ -1324,7 +1332,13 @@ private fun makeRequestContext(requestObject: EbicsRequest): RequestContext {
 }
 
 suspend fun ApplicationCall.ebicsweb() {
-    val requestDocument = receiveEbicsXml()
+    val requestDocument = this.request.call.receive<Document>()
+    val requestedHostID = requestDocument.getElementsByTagName("HostID")
+    this.attributes.put(
+        EbicsHostIdAttribute,
+        requestedHostID.item(0).textContent
+    )
+    // val requestDocument = receiveEbicsXml()
     logger.info("Processing ${requestDocument.documentElement.localName}")
     when (requestDocument.documentElement.localName) {
         "ebicsUnsecuredRequest" -> {

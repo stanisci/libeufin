@@ -24,8 +24,9 @@ package tech.libeufin.nexus.ebics
 
 import io.ktor.client.HttpClient
 import io.ktor.client.features.*
-import io.ktor.client.request.post
-import io.ktor.http.HttpStatusCode
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.util.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.NexusError
