@@ -1,5 +1,6 @@
 package tech.libeufin.util
 
+import UtilError
 import io.ktor.http.*
 
 /*
@@ -29,7 +30,7 @@ fun validatePlainAmount(plainAmount: String): Boolean {
 
 fun parseAmount(amount: String): AmountWithCurrency {
     val match = Regex("([A-Z]+):([0-9]+(\\.[0-9]+)?)").find(amount) ?: throw
-    EbicsProtocolError(HttpStatusCode.BadRequest, "invalid amount: $amount")
+    UtilError(HttpStatusCode.BadRequest, "invalid amount: $amount")
     val (currency, number) = match.destructured
     return AmountWithCurrency(currency, Amount(number))
 }
