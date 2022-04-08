@@ -61,7 +61,9 @@ fun parsePayto(payto: String): Payto {
     val params: List<Pair<String, String>>? = if (javaParsedUri.query != null) {
         val queryString: List<String> = javaParsedUri.query.split("&")
         queryString.map {
-            val split = it.split("="); Pair(split[0], split[1])
+            val split = it.split("=");
+            if (split.size != 2) throw InvalidPaytoError("parameter '$it' was malformed")
+            Pair(split[0], split[1])
         }
     } else null
 
