@@ -64,6 +64,7 @@ import io.ktor.server.netty.*
 import io.ktor.util.*
 import io.ktor.util.date.*
 import kotlinx.coroutines.newSingleThreadContext
+import org.apache.commons.compress.utils.IOUtils
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
@@ -73,7 +74,11 @@ import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
 import startServer
 import tech.libeufin.util.*
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.StringWriter
+import java.lang.StringBuilder
 import java.math.BigDecimal
 import java.net.BindException
 import java.net.URL
@@ -965,18 +970,31 @@ val sandboxApp: Application.() -> Unit = {
             if (call.request.headers["Content-Type"] != "application/json") {
                 val spa = ClassLoader.getSystemClassLoader().getResourceAsStream("static/spa.html")
                 if (spa == null) throw internalServerError("SPA not found!")
-                call.respondBytesWriter(contentType = ContentType.Text.Html) {
-                    writeWhile {
-                        val content = try {
-                            spa.read()
-                        } catch (e: IOException) {
-                            throw internalServerError("Could not load the SPA")
-                        }
-                        if (content == -1) return@writeWhile false
-                        it.put(content.toByte())
-                        true
-                    }
+
+                // load whole SPA from disk.  Now <200KB, so fine to block-reading it.
+                val builder = StringBuilder()
+                var buf: Int = spa.read();
+                while (buf != -1) {
+                    builder.append(buf)
+                    buf = spa.read()
                 }
+                val content = builder.toString()
+                val landingUrl = System.getenv(
+                    "TALER_ENV_URL_INTRO") ?: "https://demo.taler.net/"
+                content.replace("%DEMO_SITE_LANDING_URL%", landingUrl)
+                val bankUrl = System.getenv(
+                    "TALER_ENV_URL_BANK") ?: "https://demo.taler.net/sandbox/demobanks/default/"
+                content.replace("%DEMO_SITE_BANK_URL%", bankUrl)
+                val blogUrl = System.getenv(
+                    "TALER_ENV_URL_MERCHANT_BLOG") ?: "https://demo.taler.net/blog/"
+                content.replace("%DEMO_SITE_BLOG_URL%", blogUrl)
+                val donationsUrl = System.getenv(
+                    "TALER_ENV_URL_MERCHANT_DONATIONS") ?: "https://demo.taler.net/donations/"
+                content.replace("%DEMO_SITE_MERCHANT_DONATIONS%", donationsUrl)
+                val surveyUrl = System.getenv(
+                    "TALER_ENV_URL_MERCHANT_SURVEY") ?: "https://demo.taler.net/survey/"
+                content.replace("%DEMO_SITE_MERCHANT_SURVEY%", surveyUrl)
+                call.respondText(content)
                 return@get
             }
             expectAdmin(call.request.basicAuth())
