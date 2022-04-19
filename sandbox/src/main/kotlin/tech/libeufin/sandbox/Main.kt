@@ -74,10 +74,7 @@ import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
 import startServer
 import tech.libeufin.util.*
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.IOException
-import java.io.StringWriter
+import java.io.*
 import java.lang.StringBuilder
 import java.math.BigDecimal
 import java.net.BindException
@@ -968,33 +965,27 @@ val sandboxApp: Application.() -> Unit = {
              * Respond the SPA if the content type is not "application/json".
              */
             if (call.request.headers["Content-Type"] != "application/json") {
-                val spa = ClassLoader.getSystemClassLoader().getResourceAsStream("static/spa.html")
+                val spa: InputStream? = ClassLoader.getSystemClassLoader().getResourceAsStream("static/spa.html")
                 if (spa == null) throw internalServerError("SPA not found!")
-
-                // load whole SPA from disk.  Now <200KB, so fine to block-reading it.
-                val builder = StringBuilder()
-                var buf: Int = spa.read();
-                while (buf != -1) {
-                    builder.append(buf)
-                    buf = spa.read()
-                }
-                val content = builder.toString()
+                // load whole SPA from disk.  Now <200KB, fine to block-read it.
+                var content = String(spa.readBytes())
                 val landingUrl = System.getenv(
                     "TALER_ENV_URL_INTRO") ?: "https://demo.taler.net/"
-                content.replace("%DEMO_SITE_LANDING_URL%", landingUrl)
+                content = content.replace("%DEMO_SITE_LANDING_URL%", landingUrl)
                 val bankUrl = System.getenv(
                     "TALER_ENV_URL_BANK") ?: "https://demo.taler.net/sandbox/demobanks/default/"
-                content.replace("%DEMO_SITE_BANK_URL%", bankUrl)
+                content = content.replace("%DEMO_SITE_BANK_URL%", bankUrl)
                 val blogUrl = System.getenv(
                     "TALER_ENV_URL_MERCHANT_BLOG") ?: "https://demo.taler.net/blog/"
-                content.replace("%DEMO_SITE_BLOG_URL%", blogUrl)
+                content = content.replace("%DEMO_SITE_BLOG_URL%", blogUrl)
                 val donationsUrl = System.getenv(
                     "TALER_ENV_URL_MERCHANT_DONATIONS") ?: "https://demo.taler.net/donations/"
-                content.replace("%DEMO_SITE_MERCHANT_DONATIONS%", donationsUrl)
+                content = content.replace("%DEMO_SITE_MERCHANT_DONATIONS%", donationsUrl)
                 val surveyUrl = System.getenv(
                     "TALER_ENV_URL_MERCHANT_SURVEY") ?: "https://demo.taler.net/survey/"
-                content.replace("%DEMO_SITE_MERCHANT_SURVEY%", surveyUrl)
-                call.respondText(content)
+                content = content.replace("%DEMO_SITE_MERCHANT_SURVEY%", surveyUrl)
+                logger.debug("after links replacement + $content")
+                call.respondText(content, ContentType.Text.Html)
                 return@get
             }
             expectAdmin(call.request.basicAuth())
