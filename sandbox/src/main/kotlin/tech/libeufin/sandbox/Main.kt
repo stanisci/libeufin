@@ -52,7 +52,6 @@ import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import io.ktor.application.*
-import io.ktor.auth.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
@@ -64,7 +63,6 @@ import io.ktor.server.netty.*
 import io.ktor.util.*
 import io.ktor.util.date.*
 import kotlinx.coroutines.newSingleThreadContext
-import org.apache.commons.compress.utils.IOUtils
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
@@ -75,7 +73,6 @@ import org.w3c.dom.Document
 import startServer
 import tech.libeufin.util.*
 import java.io.*
-import java.lang.StringBuilder
 import java.math.BigDecimal
 import java.net.BindException
 import java.net.URL
@@ -423,6 +420,7 @@ val sandboxApp: Application.() -> Unit = {
         logger.info("Enabling CORS (assuming no endpoint uses cookies).")
         allowCredentials = true
     }
+    install(IgnoreTrailingSlash)
     install(ContentNegotiation) {
         register(ContentType.Text.Xml, XMLEbicsConverter())
         /**
@@ -958,7 +956,11 @@ val sandboxApp: Application.() -> Unit = {
             return@get
         }
 
-        get("/demobanks/{demobankid}") {
+        /**
+         * 'lang' unused.  It works around the /$lang-terminated
+         * links that some shops still have in their demo navigation bar.
+         */
+        get("/demobanks/{demobankid}/{lang?}/") {
             val demobank = ensureDemobank(call)
 
             /**
@@ -968,7 +970,7 @@ val sandboxApp: Application.() -> Unit = {
                 val spa: InputStream? = ClassLoader.getSystemClassLoader().getResourceAsStream("static/spa.html")
                 if (spa == null) throw internalServerError("SPA not found!")
                 // load whole SPA from disk.  Now <200KB, fine to block-read it.
-                var content = String(spa.readBytes())
+                var content = String(spa.readBytes(), Charsets.UTF_8)
                 val landingUrl = System.getenv(
                     "TALER_ENV_URL_INTRO") ?: "https://demo.taler.net/"
                 content = content.replace("%DEMO_SITE_LANDING_URL%", landingUrl)
@@ -980,10 +982,10 @@ val sandboxApp: Application.() -> Unit = {
                 content = content.replace("%DEMO_SITE_BLOG_URL%", blogUrl)
                 val donationsUrl = System.getenv(
                     "TALER_ENV_URL_MERCHANT_DONATIONS") ?: "https://demo.taler.net/donations/"
-                content = content.replace("%DEMO_SITE_MERCHANT_DONATIONS%", donationsUrl)
+                content = content.replace("%DEMO_SITE_DONATIONS_URL%", donationsUrl)
                 val surveyUrl = System.getenv(
                     "TALER_ENV_URL_MERCHANT_SURVEY") ?: "https://demo.taler.net/survey/"
-                content = content.replace("%DEMO_SITE_MERCHANT_SURVEY%", surveyUrl)
+                content = content.replace("%DEMO_SITE_SURVEY_URL%", surveyUrl)
                 logger.debug("after links replacement + $content")
                 call.respondText(content, ContentType.Text.Html)
                 return@get
