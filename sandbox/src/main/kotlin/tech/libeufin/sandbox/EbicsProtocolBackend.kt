@@ -519,7 +519,6 @@ private fun constructCamtResponse(
     val bankAccount = getBankAccountFromSubscriber(subscriber)
     if (type == 52) {
         val history = mutableListOf<RawPayment>()
-
         /**
          * This block adds all the fresh transactions to the intermediate
          * history list and returns the last balance that was reported in a

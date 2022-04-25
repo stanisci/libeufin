@@ -189,12 +189,8 @@ class Camt053Tick : CliktCommand(
         dbCreateTables(dbConnString)
         transaction {
             BankAccountEntity.all().forEach { accountIter ->
-                /**
-                 * Map of 'account name' -> fresh history
-                 */
-                val histories = mutableMapOf<
-                        String,
-                        MutableList<RawPayment>>()
+                // Map of 'account name' -> fresh history
+                val histories = mutableMapOf<String, MutableList<RawPayment>>()
                 BankAccountFreshTransactionEntity.all().forEach {
                     val bankAccountLabel = it.transactionRef.account.label
                     histories.putIfAbsent(bankAccountLabel, mutableListOf())
