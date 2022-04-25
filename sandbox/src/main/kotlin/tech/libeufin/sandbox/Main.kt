@@ -175,7 +175,7 @@ class Config : CliktCommand("Insert one configuration into the database") {
 
 /**
  * This command generates Camt53 statements - for all the bank accounts -
- * every time it gets run. The statements are only stored them into the database.
+ * every time it gets run. The statements are only stored into the database.
  * The user should then query either via Ebics or via the JSON interface,
  * in order to retrieve their statements.
  */
