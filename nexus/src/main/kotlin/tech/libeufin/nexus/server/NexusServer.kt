@@ -1050,8 +1050,8 @@ val nexusApp: Application.() -> Unit = {
         }
     }
 }
-fun serverMain(host: String, port: Int) {
-    val server = embeddedServer(Netty, port = port, host = host, module = nexusApp)
+fun serverMain(port: Int) {
+    val server = embeddedServer(Netty, port = port, module = nexusApp)
     logger.info("LibEuFin Nexus running on port $port")
     try {
         server.start(wait = true)

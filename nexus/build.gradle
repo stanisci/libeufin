@@ -107,6 +107,7 @@ dependencies {
 application {
     mainClassName = "tech.libeufin.nexus.MainKt"
     applicationName = "libeufin-nexus"
+    applicationDefaultJvmArgs = ['-Djava.net.preferIPv6Addresses=true']
 }
 
 

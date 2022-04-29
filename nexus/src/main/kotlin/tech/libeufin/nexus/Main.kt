@@ -58,7 +58,8 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-    private val host by option().default("127.0.0.1")
+    // Prevent IPv6 mode:
+    // private val host by option().default("127.0.0.1")
     private val port by option().int().default(5001)
     private val withUnixSocket by option(
         help = "Bind the Sandbox to the Unix domain socket at PATH.  Overrides" +
@@ -78,7 +79,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             )
             exitProcess(0)
         }
-        serverMain(host, port)
+        serverMain(port)
     }
 }
 
