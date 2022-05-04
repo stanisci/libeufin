@@ -136,7 +136,10 @@ fun getCustomer(username: String): DemobankCustomerEntity {
 /**
  * Get person name from a customer's username.
  */
-fun getPersonNameFromCustomer(ownerUsername: String): String {
+fun getPersonNameFromCustomer(ownerUsername: String?): String {
+    if (ownerUsername == null) {
+        return "Name unknown"
+    }
     return when (ownerUsername) {
         "admin" -> "admin" // Could be changed to Admin, or some different value.
         "bank" -> "The Bank"
@@ -146,7 +149,7 @@ fun getPersonNameFromCustomer(ownerUsername: String): String {
             ).firstOrNull() ?: throw internalServerError(
                 "Person name of '$ownerUsername' not found"
             )
-            ownerCustomer.name ?: "Unknown"
+            ownerCustomer.name ?: "Name unknown"
         }
     }
 }
@@ -170,7 +173,7 @@ fun getDefaultDemobank(): DemobankConfigEntity {
     )
 }
 
-fun maybeCreateDefaultDemobank() {
+fun maybeCreateDefaultDemobank(withSignupBonus: Boolean = false) {
     transaction {
         if (DemobankConfigEntity.all().empty()) {
             DemobankConfigEntity.new {
@@ -179,6 +182,7 @@ fun maybeCreateDefaultDemobank() {
                 usersDebtLimit = 10000
                 allowRegistrations = true
                 name = "default"
+                this.withSignupBonus = withSignupBonus
             }
             // Give one demobank a own bank account, mainly to award
             // customer upon registration.

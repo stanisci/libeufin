@@ -295,6 +295,10 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         help = "Bind the Sandbox to the Unix domain socket at PATH.  Overrides" +
                 " --port, when both are given", metavar = "PATH"
     )
+    private val withSignupBonus by option(
+        "--with-signup-bonus",
+        help = "Award new customers with 100 units of currency!"
+    ).flag("--without-signup-bonus", default = false)
 
     override fun run() {
         WITH_AUTH = auth
@@ -305,7 +309,7 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             exitProcess(1)
         }
         execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)) }
-        maybeCreateDefaultDemobank()
+        maybeCreateDefaultDemobank(withSignupBonus)
         if (withUnixSocket != null) {
             startServer(
                 withUnixSocket ?: throw Exception("Could not use the Unix domain socket path value!"),
@@ -590,16 +594,10 @@ val sandboxApp: Application.() -> Unit = {
         // Book one incoming payment for the requesting account.
         // The debtor is not required to have an account at this Sandbox.
         post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
-            call.request.basicAuth()
+            val username = call.request.basicAuth()
             val body = call.receiveJson<IncomingPaymentInfo>()
             // FIXME: generate nicer UUID!
             val accountLabel = ensureNonNull(call.parameters["label"])
-            if (!validatePlainAmount(body.amount)) {
-                throw SandboxError(
-                    HttpStatusCode.BadRequest,
-                    "invalid amount (should be plain amount without currency)"
-                )
-            }
             val reqDebtorBic = body.debtorBic
             if (reqDebtorBic != null && !validateBic(reqDebtorBic)) {
                 throw SandboxError(
@@ -607,8 +605,16 @@ val sandboxApp: Application.() -> Unit = {
                     "invalid BIC"
                 )
             }
+            val (amount, currency) = parseAmountAsString(body.amount)
             transaction {
                 val demobank = getDefaultDemobank()
+                /**
+                 * This API needs compatibility with the currency-less format.
+                 */
+                if (currency != null) {
+                    if (currency != demobank.currency)
+                        throw SandboxError(HttpStatusCode.BadRequest, "Currency ${currency} not supported.")
+                }
                 val account = getBankAccountFromLabel(
                     accountLabel, demobank
                 )
@@ -616,18 +622,18 @@ val sandboxApp: Application.() -> Unit = {
                 BankAccountTransactionEntity.new {
                     creditorIban = account.iban
                     creditorBic = account.bic
-                    creditorName = "Creditor Name" // FIXME: Waits to get this value from the DemobankCustomer type.
+                    creditorName = getPersonNameFromCustomer(username)
                     debtorIban = body.debtorIban
                     debtorBic = reqDebtorBic
                     debtorName = body.debtorName
                     subject = body.subject
-                    amount = body.amount
+                    this.amount = amount
                     date = getUTCnow().toInstant().toEpochMilli()
                     accountServicerReference = "sandbox-$randId"
                     this.account = account
                     direction = "CRDT"
                     this.demobank = demobank
-                    currency = demobank.currency
+                    this.currency = demobank.currency
                 }
             }
             call.respond(object {})
@@ -1436,8 +1442,10 @@ val sandboxApp: Application.() -> Unit = {
                         DemobankCustomerEntity.new {
                             username = req.username
                             passwordHash = CryptoUtil.hashpw(req.password)
+                            name = req.name // nullable
                         }
-                        bankAccount.bonus("${demobank.currency}:100")
+                        if (demobank.withSignupBonus)
+                            bankAccount.bonus("${demobank.currency}:100")
                         bankAccount
                     }
                     val balance = balanceForAccount(bankAccount)

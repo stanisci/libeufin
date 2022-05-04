@@ -92,6 +92,7 @@ enum class KeyState {
 object DemobankConfigsTable : LongIdTable() {
     val currency = text("currency")
     val allowRegistrations = bool("allowRegistrations")
+    val withSignupBonus = bool("withSignupBonus")
     val bankDebtLimit = integer("bankDebtLimit")
     val usersDebtLimit = integer("usersDebtLimit")
     val name = text("hostname")
@@ -103,6 +104,7 @@ class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<DemobankConfigEntity>(DemobankConfigsTable)
     var currency by DemobankConfigsTable.currency
     var allowRegistrations by DemobankConfigsTable.allowRegistrations
+    var withSignupBonus by DemobankConfigsTable.withSignupBonus
     var bankDebtLimit by DemobankConfigsTable.bankDebtLimit
     var usersDebtLimit by DemobankConfigsTable.usersDebtLimit
     var name by DemobankConfigsTable.name

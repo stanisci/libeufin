@@ -28,6 +28,21 @@ fun validatePlainAmount(plainAmount: String): Boolean {
     return re.matches(plainAmount)
 }
 
+/**
+ * Parse an "amount" where the currency is optional.  It returns
+ * a pair where the first item is always the amount, and the second
+ * is the currency or null (when this one wasn't given in the input)
+ */
+fun parseAmountAsString(amount: String): Pair<String, String?> {
+    val match = Regex("^([A-Z]+:)?([0-9]+(\\.[0-9]+)?)$").find(amount) ?: throw
+    UtilError(HttpStatusCode.BadRequest, "invalid amount: $amount")
+    var (currency, number) = match.destructured
+    // Currency given, need to strip the ":".
+    if (currency.isNotEmpty())
+        currency = currency.dropLast(1)
+    return Pair(number, if (currency.isEmpty()) null else currency)
+}
+
 fun parseAmount(amount: String): AmountWithCurrency {
     val match = Regex("([A-Z]+):([0-9]+(\\.[0-9]+)?)").find(amount) ?: throw
     UtilError(HttpStatusCode.BadRequest, "invalid amount: $amount")
