@@ -247,13 +247,13 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         Database.connect(dbConnString)
-        /**
-         * The function below create a default demobank
-         * if the 'config' command was never run before this point.
-         *
-         * This helps porting current tests to the "demobank model".
-         */
-        maybeCreateDefaultDemobank()
+        // Refuse to operate without a default demobank.
+        val demobank = getDemobank("default")
+        if (demobank == null) {
+            println("Sandbox cannot operate without a 'default' demobank.")
+            println("Please make one with the 'libeufin-cli config' command.")
+            exitProcess(1)
+        }
         try {
             wireTransfer(debitAccount, creditAccount, demobankArg, subjectArg, amount)
         } catch (e: SandboxError) {

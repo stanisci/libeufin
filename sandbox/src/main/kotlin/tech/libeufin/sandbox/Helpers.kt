@@ -173,30 +173,6 @@ fun getDefaultDemobank(): DemobankConfigEntity {
     )
 }
 
-fun maybeCreateDefaultDemobank(withSignupBonus: Boolean = false) {
-    transaction {
-        if (DemobankConfigEntity.all().empty()) {
-            DemobankConfigEntity.new {
-                currency = "CHF"
-                bankDebtLimit = 1000000
-                usersDebtLimit = 10000
-                allowRegistrations = true
-                name = "default"
-                this.withSignupBonus = withSignupBonus
-            }
-            // Give one demobank a own bank account, mainly to award
-            // customer upon registration.
-            BankAccountEntity.new {
-                iban = getIban()
-                label = "bank" // used by the wire helper
-                owner = "bank" // used by the person name finder
-                // For now, the model assumes always one demobank
-                demoBank = getFirstDemobank()
-            }
-        }
-    }
-}
-
 fun wireTransfer(
     debitAccount: String,
     creditAccount: String,
