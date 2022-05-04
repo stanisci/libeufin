@@ -1275,14 +1275,14 @@ def sandbox_demobank_info(obj, bank_account):
 )
 @click.option(
     "--name",
-    default=False,
+    default="",
     help="Person name",
 )
 @click.pass_obj
 def sandbox_demobank_register(obj, public, name):
     url = obj.access_api_url ("/testing/register")
     req = dict(username=obj.username, password=obj.password, isPublic=public)
-    if name:
+    if name != "":
         req.update(name=name)
     try:
         resp = post(
