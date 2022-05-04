@@ -1408,7 +1408,11 @@ val sandboxApp: Application.() -> Unit = {
                             DemobankCustomersTable.username eq req.username
                         }.firstOrNull()
                     }
-                    if (checkExist != null) {
+                    /**
+                     * Not allowing 'bank' username, as it's been assigned
+                     * to the default bank's bank account.
+                     */
+                    if (checkExist != null || req.username == "bank") {
                         throw SandboxError(
                             HttpStatusCode.Conflict,
                             "Username ${req.username} not available."

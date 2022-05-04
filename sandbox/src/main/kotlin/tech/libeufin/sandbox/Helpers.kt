@@ -169,11 +169,12 @@ fun getDefaultDemobank(): DemobankConfigEntity {
         "Default demobank is missing."
     )
 }
+
 fun maybeCreateDefaultDemobank() {
     transaction {
         if (DemobankConfigEntity.all().empty()) {
             DemobankConfigEntity.new {
-                currency = "EUR"
+                currency = "CHF"
                 bankDebtLimit = 1000000
                 usersDebtLimit = 10000
                 allowRegistrations = true
