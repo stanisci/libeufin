@@ -124,7 +124,9 @@ class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.
     }
 }
 
-class Config : CliktCommand("Insert one configuration into the database") {
+class Config : CliktCommand(
+    "Insert one configuration (a.k.a. demobank) into the database."
+) {
     init {
         context {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
