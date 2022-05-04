@@ -131,7 +131,7 @@ class Config : CliktCommand("Insert one configuration into the database") {
         }
     }
 
-    private val nameOption by argument(
+    private val nameArgument by argument(
         "NAME", help = "Name of this configuration"
     )
     private val currencyOption by option("--currency").default("EUR")
@@ -141,6 +141,10 @@ class Config : CliktCommand("Insert one configuration into the database") {
         "--allow-registrations",
         help = "(default: true)" /* mentioning here as help message did not.  */
     ).flag(default = true)
+    private val withSignupBonusOption by option(
+        "--with-signup-bonus",
+        help = "Award new customers with 100 units of currency!"
+    ).flag("--without-signup-bonus", default = false)
 
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
@@ -148,10 +152,10 @@ class Config : CliktCommand("Insert one configuration into the database") {
             dbCreateTables(dbConnString)
             transaction {
                 val checkExist = DemobankConfigEntity.find {
-                    DemobankConfigsTable.name eq nameOption
+                    DemobankConfigsTable.name eq nameArgument
                 }.firstOrNull()
                 if (checkExist != null) {
-                    println("Error, demobank ${nameOption} exists already, not overriding it.")
+                    println("Error, demobank ${nameArgument} exists already, not overriding it.")
                     exitProcess(1)
                 }
                 val demoBank = DemobankConfigEntity.new {
@@ -159,7 +163,8 @@ class Config : CliktCommand("Insert one configuration into the database") {
                     bankDebtLimit = bankDebtLimitOption
                     usersDebtLimit = usersDebtLimitOption
                     allowRegistrations = allowRegistrationsOption
-                    name = nameOption
+                    name = nameArgument
+                    this.withSignupBonus = withSignupBonusOption
                 }
                 BankAccountEntity.new {
                     iban = getIban()
@@ -284,7 +289,6 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-
     private val auth by option(
         "--auth",
         help = "Disable authentication."
@@ -295,11 +299,6 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         help = "Bind the Sandbox to the Unix domain socket at PATH.  Overrides" +
                 " --port, when both are given", metavar = "PATH"
     )
-    private val withSignupBonus by option(
-        "--with-signup-bonus",
-        help = "Award new customers with 100 units of currency!"
-    ).flag("--without-signup-bonus", default = false)
-
     override fun run() {
         WITH_AUTH = auth
         setLogLevel(logLevel)
@@ -309,7 +308,13 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             exitProcess(1)
         }
         execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)) }
-        maybeCreateDefaultDemobank(withSignupBonus)
+        // Refuse to operate without a 'default' demobank.
+        val demobank = getDemobank("default")
+        if (demobank == null) {
+            println("Sandbox cannot operate without a 'default' demobank.")
+            println("Please make one with the 'libeufin-cli config' command.")
+            exitProcess(1)
+        }
         if (withUnixSocket != null) {
             startServer(
                 withUnixSocket ?: throw Exception("Could not use the Unix domain socket path value!"),

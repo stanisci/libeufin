@@ -373,7 +373,7 @@ private fun ensureDemobank(name: String): DemobankConfigEntity {
     }
 }
 
-fun getSandboxConfig(name: String?): DemobankConfigEntity? {
+fun getDemobank(name: String?): DemobankConfigEntity? {
     return transaction {
         if (name == null) {
             DemobankConfigEntity.all().firstOrNull()
