@@ -36,6 +36,7 @@ import io.ktor.client.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
+import io.ktor.network.sockets.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
@@ -1051,7 +1052,20 @@ val nexusApp: Application.() -> Unit = {
     }
 }
 fun serverMain(port: Int) {
-    val server = embeddedServer(Netty, port = port, module = nexusApp)
+    val server = embeddedServer(
+        Netty,
+        environment = applicationEngineEnvironment {
+            connector {
+                this.port = port
+                this.host = "127.0.0.1"
+            }
+            connector {
+                this.port = port
+                this.host = "[::1]"
+            }
+            module(nexusApp)
+        }
+    )
     logger.info("LibEuFin Nexus running on port $port")
     try {
         server.start(wait = true)
