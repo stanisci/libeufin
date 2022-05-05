@@ -1505,7 +1505,20 @@ val sandboxApp: Application.() -> Unit = {
 }
 
 fun serverMain(port: Int) {
-    val server = embeddedServer(Netty, port = port, module = sandboxApp)
+    val server = embeddedServer(
+        Netty,
+        environment = applicationEngineEnvironment{
+            connector {
+                this.port = port
+                this.host = "127.0.0.1"
+            }
+            connector {
+                this.port = port
+                this.host = "[::1]"
+            }
+            module(sandboxApp)
+        }
+    )
     logger.info("LibEuFin Sandbox running on port $port")
     try {
         server.start(wait = true)
