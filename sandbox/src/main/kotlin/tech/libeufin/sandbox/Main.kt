@@ -137,7 +137,8 @@ class Config : CliktCommand(
         "NAME", help = "Name of this configuration"
     )
     private val overrideOption by option(
-        "--override", help = "Override an existing demobank."
+        "--override",
+        help = "Override an existing demobank.  WARNING: every value NOT given here will be reset to the default!"
     ).flag("--no-override", default = false)
     private val currencyOption by option("--currency").default("EUR")
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
