@@ -136,6 +136,9 @@ class Config : CliktCommand(
     private val nameArgument by argument(
         "NAME", help = "Name of this configuration"
     )
+    private val overrideOption by option(
+        "--override", help = "Override an existing demobank."
+    ).flag("--no-override", default = false)
     private val currencyOption by option("--currency").default("EUR")
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
     private val usersDebtLimitOption by option("--users-debt-limit").int().default(1000)
@@ -153,10 +156,18 @@ class Config : CliktCommand(
         execThrowableOrTerminate {
             dbCreateTables(dbConnString)
             transaction {
-                val checkExist = DemobankConfigEntity.find {
+                val maybeDemobank = DemobankConfigEntity.find {
                     DemobankConfigsTable.name eq nameArgument
                 }.firstOrNull()
-                if (checkExist != null) {
+                if (maybeDemobank != null) {
+                    if (overrideOption) {
+                        maybeDemobank.currency = currencyOption
+                        maybeDemobank.bankDebtLimit = bankDebtLimitOption
+                        maybeDemobank.usersDebtLimit = usersDebtLimitOption
+                        maybeDemobank.allowRegistrations = allowRegistrationsOption
+                        maybeDemobank.withSignupBonus = withSignupBonusOption
+                        return@transaction
+                    }
                     println("Error, demobank ${nameArgument} exists already, not overriding it.")
                     exitProcess(1)
                 }
@@ -1006,7 +1017,10 @@ val sandboxApp: Application.() -> Unit = {
                 val surveyUrl = System.getenv(
                     "TALER_ENV_URL_MERCHANT_SURVEY") ?: "https://demo.taler.net/survey/"
                 content = content.replace("%DEMO_SITE_SURVEY_URL%", surveyUrl)
-                logger.debug("after links replacement + $content")
+                content = content.replace(
+                    "%LIBEUFIN_UI_ALLOW_REGISTRATIONS%",
+                    demobank.allowRegistrations.toString()
+                )
                 call.respondText(content, ContentType.Text.Html)
                 return@get
             }
@@ -1415,6 +1429,12 @@ val sandboxApp: Application.() -> Unit = {
                 post("/testing/register") {
                     // Check demobank was created.
                     val demobank = ensureDemobank(call)
+                    if (!demobank.allowRegistrations) {
+                        throw SandboxError(
+                            HttpStatusCode.UnprocessableEntity,
+                            "The bank doesn't allow new registrations at the moment."
+                        )
+                    }
                     val req = call.receiveJson<CustomerRegistration>()
                     val checkExist = transaction {
                         DemobankCustomerEntity.find {

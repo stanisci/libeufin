@@ -19,4 +19,10 @@ class StringsTest {
         )
         println(content)
     }
+
+    @Test
+    fun booleanToString() {
+        assert(true.toString() == "true")
+        assert(false.toString() == "false")
+    }
 }
