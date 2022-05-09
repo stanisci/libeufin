@@ -144,9 +144,9 @@ class Config : CliktCommand(
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
     private val usersDebtLimitOption by option("--users-debt-limit").int().default(1000)
     private val allowRegistrationsOption by option(
-        "--allow-registrations",
+        "--with-registrations",
         help = "(default: true)" /* mentioning here as help message did not.  */
-    ).flag(default = true)
+    ).flag("--without-registrations", default = true)
     private val withSignupBonusOption by option(
         "--with-signup-bonus",
         help = "Award new customers with 100 units of currency!"
@@ -1005,21 +1005,21 @@ val sandboxApp: Application.() -> Unit = {
                 var content = String(spa.readBytes(), Charsets.UTF_8)
                 val landingUrl = System.getenv(
                     "TALER_ENV_URL_INTRO") ?: "https://demo.taler.net/"
-                content = content.replace("%DEMO_SITE_LANDING_URL%", landingUrl)
+                content = content.replace("__DEMO_SITE_LANDING_URL__", landingUrl)
                 val bankUrl = System.getenv(
                     "TALER_ENV_URL_BANK") ?: "https://demo.taler.net/sandbox/demobanks/default/"
-                content = content.replace("%DEMO_SITE_BANK_URL%", bankUrl)
+                content = content.replace("__DEMO_SITE_BANK_URL__", bankUrl)
                 val blogUrl = System.getenv(
                     "TALER_ENV_URL_MERCHANT_BLOG") ?: "https://demo.taler.net/blog/"
-                content = content.replace("%DEMO_SITE_BLOG_URL%", blogUrl)
+                content = content.replace("__DEMO_SITE_BLOG_URL__", blogUrl)
                 val donationsUrl = System.getenv(
                     "TALER_ENV_URL_MERCHANT_DONATIONS") ?: "https://demo.taler.net/donations/"
-                content = content.replace("%DEMO_SITE_DONATIONS_URL%", donationsUrl)
+                content = content.replace("__DEMO_SITE_DONATIONS_URL__", donationsUrl)
                 val surveyUrl = System.getenv(
                     "TALER_ENV_URL_MERCHANT_SURVEY") ?: "https://demo.taler.net/survey/"
-                content = content.replace("%DEMO_SITE_SURVEY_URL%", surveyUrl)
+                content = content.replace("__DEMO_SITE_SURVEY_URL__", surveyUrl)
                 content = content.replace(
-                    "%LIBEUFIN_UI_ALLOW_REGISTRATIONS%",
+                    "__LIBEUFIN_UI_ALLOW_REGISTRATIONS__",
                     demobank.allowRegistrations.toString()
                 )
                 call.respondText(content, ContentType.Text.Html)
