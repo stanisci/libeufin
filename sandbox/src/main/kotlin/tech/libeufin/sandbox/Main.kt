@@ -138,7 +138,7 @@ class Config : CliktCommand(
     )
     private val overrideOption by option(
         "--override",
-        help = "Override an existing --allow/disallow -registrations policy." +
+        help = "Override an existing --with/--without -registrations policy." +
                 "  It has NO effect on other options"
     ).flag("--no-override", default = false)
     private val currencyOption by option("--currency").default("EUR")
@@ -163,6 +163,7 @@ class Config : CliktCommand(
                 }.firstOrNull()
                 if (maybeDemobank != null) {
                     if (overrideOption) {
+                        println("Overriding the registration policy")
                         maybeDemobank.allowRegistrations = allowRegistrationsOption
                         return@transaction
                     }
