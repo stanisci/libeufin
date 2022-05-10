@@ -138,7 +138,8 @@ class Config : CliktCommand(
     )
     private val overrideOption by option(
         "--override",
-        help = "Override an existing demobank.  WARNING: every value NOT given here will be reset to the default!"
+        help = "Override an existing --allow/disallow -registrations policy." +
+                "  It has NO effect on other options"
     ).flag("--no-override", default = false)
     private val currencyOption by option("--currency").default("EUR")
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
@@ -162,11 +163,7 @@ class Config : CliktCommand(
                 }.firstOrNull()
                 if (maybeDemobank != null) {
                     if (overrideOption) {
-                        maybeDemobank.currency = currencyOption
-                        maybeDemobank.bankDebtLimit = bankDebtLimitOption
-                        maybeDemobank.usersDebtLimit = usersDebtLimitOption
                         maybeDemobank.allowRegistrations = allowRegistrationsOption
-                        maybeDemobank.withSignupBonus = withSignupBonusOption
                         return@transaction
                     }
                     println("Error, demobank ${nameArgument} exists already, not overriding it.")
