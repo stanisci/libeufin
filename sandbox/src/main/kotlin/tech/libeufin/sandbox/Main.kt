@@ -163,7 +163,8 @@ class Config : CliktCommand(
                 }.firstOrNull()
                 if (maybeDemobank != null) {
                     if (overrideOption) {
-                        println("Overriding the registration policy")
+                        println("Overriding the registration policy to: "
+                        + allowRegistrationsOption)
                         maybeDemobank.allowRegistrations = allowRegistrationsOption
                         return@transaction
                     }
