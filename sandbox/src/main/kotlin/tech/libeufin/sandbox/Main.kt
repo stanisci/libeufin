@@ -1444,6 +1444,16 @@ val sandboxApp: Application.() -> Unit = {
                     call.respond(ret)
                     return@get
                 }
+                post("/testing/unregister") {
+                    // Check demobank was created.
+                    ensureDemobank(call)
+                    transaction {
+                        val bankAccount = getBankAccountWithAuth(call)
+                        bankAccount.delete()
+                    }
+                    call.respond(object {})
+                    return@post
+                }
                 // Keeping the prefix "testing" not to break tests.
                 post("/testing/register") {
                     // Check demobank was created.

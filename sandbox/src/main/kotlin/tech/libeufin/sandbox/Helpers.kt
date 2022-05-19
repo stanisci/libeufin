@@ -46,6 +46,8 @@ data class SandboxCamt(
 )
 
 /**
+ * Throws exception if the credentials are wrong.
+ *
  * Return:
  * - null if the authentication is disabled (during tests, for example).
  *   This facilitates tests because allows requests to lack entirely a

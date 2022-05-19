@@ -439,7 +439,6 @@ class XMLUtil private constructor() {
             dsc.uriDereferencer = EbicsSigUriDereferencer()
             dsc.setProperty("javax.xml.crypto.dsig.cacheReference", true)
             sig.sign(dsc)
-            println("canon data: " + sig.signedInfo.canonicalizedData.readAllBytes().toString(Charsets.UTF_8))
             val innerSig = authSigNode.firstChild
             while (innerSig.hasChildNodes()) {
                 authSigNode.appendChild(innerSig.firstChild)
