@@ -1263,18 +1263,23 @@ def sandbox_demobank_info(obj, bank_account):
     tell_user(resp, withsuccess=True)
 
 @sandbox_demobank.command("delete",
-    help="""delete the bank account pointed by LIBEUFIN_SANDBOX_{USERNAME, PASSWORD}."""
+    help="""delete bank account"""
+)
+@click.option(
+    "--bank-account",
+    help="Label of the bank account to delete.",
+    required=True
 )
 @click.pass_obj
-def sandbox_demobank_register(obj, public, name):
-    url = obj.access_api_url ("/testing/unregister")
-    req = dict(username=obj.username, password=obj.password, isPublic=public)
-    if name != "":
-        req.update(name=name)
+def sandbox_demobank_delete(obj, bank_account):
+    url = obj.access_api_url (f"/accounts/{bank_account}")
     try:
-        resp = post(
+        resp = delete(
             url,
-            json=req,
+            auth=auth.HTTPBasicAuth(
+              obj.username,
+              obj.password
+            )
         )
     except Exception as e:
         print(e)
