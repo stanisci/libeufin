@@ -83,6 +83,9 @@ fun conflict(msg: String): UtilError {
 fun ApplicationRequest.getBaseUrl(): String {
     return if (this.headers.contains("X-Forwarded-Host")) {
         logger.info("Building X-Forwarded- base URL")
+        /**
+         * FIXME: should tolerate a missing X-Forwarded-Prefix.
+         */
         var prefix: String = this.headers.get("X-Forwarded-Prefix")
             ?: throw internalServerError("Reverse proxy did not define X-Forwarded-Prefix")
         if (!prefix.endsWith("/"))

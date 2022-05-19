@@ -64,6 +64,7 @@ import io.ktor.util.*
 import io.ktor.util.date.*
 import kotlinx.coroutines.newSingleThreadContext
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -134,13 +135,12 @@ class Config : CliktCommand(
     }
 
     private val nameArgument by argument(
-        "NAME", help = "Name of this configuration"
+        "NAME", help = "Name of this configuration.  Currently, only 'default' is admitted."
     )
-    private val overrideOption by option(
-        "--override",
-        help = "Override an existing --with/--without -registrations policy." +
-                "  It has NO effect on other options"
-    ).flag("--no-override", default = false)
+    private val showOption by option(
+        "--show",
+        help = "Only show values, other options will be ignored."
+    ).flag("--no-show", default = false)
     private val currencyOption by option("--currency").default("EUR")
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
     private val usersDebtLimitOption by option("--users-debt-limit").int().default(1000)
@@ -155,37 +155,56 @@ class Config : CliktCommand(
 
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
+        if (nameArgument != "default") {
+            println("This version admits only the 'default' name")
+            exitProcess(1)
+        }
         execThrowableOrTerminate {
             dbCreateTables(dbConnString)
             transaction {
-                val maybeDemobank = DemobankConfigEntity.find {
-                    DemobankConfigsTable.name eq nameArgument
-                }.firstOrNull()
-                if (maybeDemobank != null) {
-                    if (overrideOption) {
-                        println("Overriding the registration policy to: "
-                        + allowRegistrationsOption)
-                        maybeDemobank.allowRegistrations = allowRegistrationsOption
+                val maybeDemobank = BankAccountEntity.find(BankAccountsTable.label eq "bank").firstOrNull()
+                if (showOption) {
+                    if (maybeDemobank != null) {
+                        println(
+                            object {
+                                val currency = maybeDemobank.demoBank.currency
+                                val bankDebtLimit = maybeDemobank.demoBank.bankDebtLimit
+                                val usersDebtLimit = maybeDemobank.demoBank.usersDebtLimit
+                                val allowRegistrations = maybeDemobank.demoBank.allowRegistrations
+                                val name = maybeDemobank.demoBank.name // always 'default'
+                                val withSignupBonus = maybeDemobank.demoBank.withSignupBonus
+                            }
+                        )
                         return@transaction
                     }
-                    println("Error, demobank ${nameArgument} exists already, not overriding it.")
-                    exitProcess(1)
+                    println("Nothing to show")
+                    return@transaction
                 }
-                val demoBank = DemobankConfigEntity.new {
-                    currency = currencyOption
-                    bankDebtLimit = bankDebtLimitOption
-                    usersDebtLimit = usersDebtLimitOption
-                    allowRegistrations = allowRegistrationsOption
-                    name = nameArgument
-                    this.withSignupBonus = withSignupBonusOption
+                if (maybeDemobank == null) {
+                    val demoBank = DemobankConfigEntity.new {
+                        currency = currencyOption
+                        bankDebtLimit = bankDebtLimitOption
+                        usersDebtLimit = usersDebtLimitOption
+                        allowRegistrations = allowRegistrationsOption
+                        name = nameArgument
+                        this.withSignupBonus = withSignupBonusOption
+                    }
+                    BankAccountEntity.new {
+                        iban = getIban()
+                        label = "bank" // used by the wire helper
+                        owner = "bank" // used by the person name finder
+                        // For now, the model assumes always one demobank
+                        this.demoBank = demoBank
+                    }
+                    return@transaction
                 }
-                BankAccountEntity.new {
-                    iban = getIban()
-                    label = "bank" // used by the wire helper
-                    owner = "bank" // used by the person name finder
-                    // For now, the model assumes always one demobank
-                    this.demoBank = demoBank
-                }
+                println("Overriding existing values")
+                maybeDemobank.demoBank.currency = currencyOption
+                maybeDemobank.demoBank.bankDebtLimit = bankDebtLimitOption
+                maybeDemobank.demoBank.usersDebtLimit = usersDebtLimitOption
+                maybeDemobank.demoBank.allowRegistrations = allowRegistrationsOption
+                maybeDemobank.demoBank.withSignupBonus = withSignupBonusOption
+                maybeDemobank.demoBank.name = nameArgument
             }
         }
     }
