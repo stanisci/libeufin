@@ -40,6 +40,9 @@ import UtilError
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.SerializationConfig
+import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
@@ -165,15 +168,17 @@ class Config : CliktCommand(
                 val maybeDemobank = BankAccountEntity.find(BankAccountsTable.label eq "bank").firstOrNull()
                 if (showOption) {
                     if (maybeDemobank != null) {
+                        val ret = ObjectMapper()
+                        ret.configure(SerializationFeature.INDENT_OUTPUT, true)
                         println(
-                            object {
+                            ret.writeValueAsString(object {
                                 val currency = maybeDemobank.demoBank.currency
                                 val bankDebtLimit = maybeDemobank.demoBank.bankDebtLimit
                                 val usersDebtLimit = maybeDemobank.demoBank.usersDebtLimit
                                 val allowRegistrations = maybeDemobank.demoBank.allowRegistrations
                                 val name = maybeDemobank.demoBank.name // always 'default'
                                 val withSignupBonus = maybeDemobank.demoBank.withSignupBonus
-                            }
+                            })
                         )
                         return@transaction
                     }
