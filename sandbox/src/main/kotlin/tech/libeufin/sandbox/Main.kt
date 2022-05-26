@@ -1032,6 +1032,10 @@ val sandboxApp: Application.() -> Unit = {
                 if (spa == null) throw internalServerError("SPA not found!")
                 // load whole SPA from disk.  Now <200KB, fine to block-read it.
                 var content = String(spa.readBytes(), Charsets.UTF_8)
+                content = content.replace(
+                    "__LIBEUFIN_UI_IS_DEMO__",
+                    demobank.withSignupBonus.toString()
+                )
                 val landingUrl = System.getenv(
                     "TALER_ENV_URL_INTRO") ?: "https://demo.taler.net/"
                 content = content.replace("__DEMO_SITE_LANDING_URL__", landingUrl)
