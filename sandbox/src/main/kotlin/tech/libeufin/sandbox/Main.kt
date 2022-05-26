@@ -144,6 +144,9 @@ class Config : CliktCommand(
         "--show",
         help = "Only show values, other options will be ignored."
     ).flag("--no-show", default = false)
+    private val uiTitleOption by option(
+        "--ui-title", help = "Title of the Web UI"
+    ).default("Demo Bank")
     private val currencyOption by option("--currency").default("EUR")
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
     private val usersDebtLimitOption by option("--users-debt-limit").int().default(1000)
@@ -178,6 +181,7 @@ class Config : CliktCommand(
                                 val allowRegistrations = maybeDemobank.demoBank.allowRegistrations
                                 val name = maybeDemobank.demoBank.name // always 'default'
                                 val withSignupBonus = maybeDemobank.demoBank.withSignupBonus
+                                val uiTitle = maybeDemobank.demoBank.uiTitle
                             })
                         )
                         return@transaction
@@ -193,6 +197,7 @@ class Config : CliktCommand(
                         allowRegistrations = allowRegistrationsOption
                         name = nameArgument
                         this.withSignupBonus = withSignupBonusOption
+                        uiTitle = uiTitleOption
                     }
                     BankAccountEntity.new {
                         iban = getIban()
@@ -210,6 +215,7 @@ class Config : CliktCommand(
                 maybeDemobank.demoBank.allowRegistrations = allowRegistrationsOption
                 maybeDemobank.demoBank.withSignupBonus = withSignupBonusOption
                 maybeDemobank.demoBank.name = nameArgument
+                maybeDemobank.demoBank.uiTitle = uiTitleOption
             }
         }
     }
@@ -1044,6 +1050,10 @@ val sandboxApp: Application.() -> Unit = {
                 content = content.replace(
                     "__LIBEUFIN_UI_ALLOW_REGISTRATIONS__",
                     demobank.allowRegistrations.toString()
+                )
+                content = content.replace(
+                    "__LIBEUFIN_UI_BANK_NAME__",
+                    demobank.uiTitle
                 )
                 call.respondText(content, ContentType.Text.Html)
                 return@get

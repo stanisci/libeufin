@@ -98,6 +98,7 @@ object DemobankConfigsTable : LongIdTable() {
     val name = text("hostname")
     val suggestedExchangeBaseUrl = text("suggestedExchangeBaseUrl").nullable()
     val suggestedExchangePayto = text("suggestedExchangePayto").nullable()
+    val uiTitle = text("uiTitle")
 }
 
 class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -110,6 +111,7 @@ class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
     var name by DemobankConfigsTable.name
     var suggestedExchangeBaseUrl by DemobankConfigsTable.suggestedExchangeBaseUrl
     var suggestedExchangePayto by DemobankConfigsTable.suggestedExchangePayto
+    var uiTitle by DemobankConfigsTable.uiTitle
 }
 
 /**
