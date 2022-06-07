@@ -355,7 +355,7 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         val demobank = getDemobank("default")
         if (demobank == null) {
             println("Sandbox cannot operate without a 'default' demobank.")
-            println("Please make one with the 'libeufin-cli config' command.")
+            println("Please make one with the 'libeufin-sandbox config' command.")
             exitProcess(1)
         }
         if (withUnixSocket != null) {
