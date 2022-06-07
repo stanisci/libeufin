@@ -456,6 +456,15 @@ suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
 }
 
 val singleThreadContext = newSingleThreadContext("DB")
+fun setJsonHandler(ctx: ObjectMapper) {
+    ctx.enable(SerializationFeature.INDENT_OUTPUT)
+    ctx.setDefaultPrettyPrinter(DefaultPrettyPrinter().apply {
+        indentArraysWith(DefaultPrettyPrinter.FixedSpaceIndenter.instance)
+        indentObjectsWith(DefaultIndenter("  ", "\n"))
+    })
+    ctx.registerModule(KotlinModule(nullisSameAsDefault = true))
+}
+
 val sandboxApp: Application.() -> Unit = {
     install(CallLogging) {
         this.level = org.slf4j.event.Level.DEBUG
@@ -478,17 +487,11 @@ val sandboxApp: Application.() -> Unit = {
          * "xml" and the request made gets somehow assigned the
          * "text/plain" type:  */
         register(ContentType.Text.Plain, XMLEbicsConverter())
+        jackson(contentType = ContentType.Application.Json) { setJsonHandler(this) }
         /**
          * Make jackson the default parser.  It runs also when
          * the Content-Type request header is missing. */
-        jackson(contentType = ContentType.Any) {
-            enable(com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT)
-            setDefaultPrettyPrinter(DefaultPrettyPrinter().apply {
-                indentArraysWith(DefaultPrettyPrinter.FixedSpaceIndenter.instance)
-                indentObjectsWith(DefaultIndenter("  ", "\n"))
-            })
-            registerModule(KotlinModule(nullisSameAsDefault = true))
-        }
+        jackson(contentType = ContentType.Any) { setJsonHandler(this) }
     }
     install(StatusPages) {
         exception<ArithmeticException> { cause ->
@@ -1105,12 +1108,11 @@ val sandboxApp: Application.() -> Unit = {
             route("/integration-api") {
                 get("/config") {
                     val demobank = ensureDemobank(call)
-                    call.respond(object {
-                        val name = "taler-bank-integration"
-                        // FIXME: avoid hard-coding the version!
-                        val version = "0:0:0"
-                        val currency = demobank.currency
-                    })
+                    call.respond(SandboxConfig(
+                        name = "taler-bank-integration",
+                        version = "0:0:0",
+                        currency = demobank.currency
+                    ))
                     return@get
                 }
                 post("/withdrawal-operation/{wopid}") {

@@ -141,3 +141,9 @@ data class NewTransactionReq(
     // $currency:X.Y format
     val amount: String?
 )
+
+data class SandboxConfig(
+    val currency: String,
+    val version: String,
+    val name: String
+)
