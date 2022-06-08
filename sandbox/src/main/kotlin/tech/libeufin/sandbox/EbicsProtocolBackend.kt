@@ -963,7 +963,7 @@ private fun ensureEbicsHost(requestHostID: String): EbicsHostPublicInfo {
     }
 }
 fun receiveEbicsXmlInternal(xmlData: String): Document {
-    logger.debug("Data received: $xmlData")
+    // logger.debug("Data received: $xmlData")
     val requestDocument: Document? = XMLUtil.parseStringIntoDom(xmlData)
     if (requestDocument == null || (!XMLUtil.validateFromDom(requestDocument))) {
         println("Problematic document was: $requestDocument")
@@ -1280,7 +1280,7 @@ private fun makeRequestContext(requestObject: EbicsRequest): RequestContext {
     var downloadTransaction: EbicsDownloadTransactionEntity? = null
     var uploadTransaction: EbicsUploadTransactionEntity? = null
     val subscriber = if (requestTransactionID != null) {
-        println("finding subscriber by transactionID $requestTransactionID")
+        // println("finding subscriber by transactionID $requestTransactionID")
         downloadTransaction = EbicsDownloadTransactionEntity.findById(requestTransactionID.uppercase(Locale.getDefault()))
         if (downloadTransaction != null) {
             downloadTransaction.subscriber
@@ -1379,7 +1379,7 @@ suspend fun ApplicationCall.ebicsweb() {
             }
         }
         "ebicsRequest" -> {
-            logger.debug("ebicsRequest ${XMLUtil.convertDomToString(requestDocument)}")
+            // logger.debug("ebicsRequest ${XMLUtil.convertDomToString(requestDocument)}")
             val requestObject = requestDocument.toObject<EbicsRequest>()
             val responseXmlStr = transaction {
                 // Step 1 of 3:  Get information about the host and subscriber

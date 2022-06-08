@@ -391,7 +391,7 @@ class XMLUtil private constructor() {
             val doc = convertJaxbToDocument(ebicsResponse)
             signEbicsDocument(doc, privateKey)
             val signedDoc = XMLUtil.convertDomToString(doc)
-            logger.debug("response: $signedDoc")
+            // logger.debug("response: $signedDoc")
             return signedDoc
         }
 

@@ -474,7 +474,7 @@ val sandboxApp: Application.() -> Unit = {
         header(HttpHeaders.Authorization)
         header(HttpHeaders.ContentType)
         method(HttpMethod.Options)
-        logger.info("Enabling CORS (assuming no endpoint uses cookies).")
+        // logger.info("Enabling CORS (assuming no endpoint uses cookies).")
         allowCredentials = true
     }
     install(IgnoreTrailingSlash)

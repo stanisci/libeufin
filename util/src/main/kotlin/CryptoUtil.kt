@@ -133,7 +133,7 @@ object CryptoUtil {
         keyBytes.writeBytes(publicKey.publicExponent.toUnsignedHexString().lowercase().trimStart('0').toByteArray())
         keyBytes.write(' '.code)
         keyBytes.writeBytes(publicKey.modulus.toUnsignedHexString().lowercase().trimStart('0').toByteArray())
-        println("buffer before hashing: '${keyBytes.toString(Charsets.UTF_8)}'")
+        // println("buffer before hashing: '${keyBytes.toString(Charsets.UTF_8)}'")
         val digest = MessageDigest.getInstance("SHA-256")
         return digest.digest(keyBytes.toByteArray())
     }
