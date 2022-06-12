@@ -204,7 +204,7 @@ private suspend fun ApplicationCall.respondEbicsKeyManagement(
         }
     }
     val text = XMLUtil.convertJaxbToString(responseXml)
-    logger.info("responding with:\n${text}")
+    // logger.info("responding with:\n${text}")
     if (!XMLUtil.validateFromString(text)) throw SandboxError(
         HttpStatusCode.InternalServerError,
         "Outgoint EBICS key management response is invalid"
