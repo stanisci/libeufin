@@ -35,7 +35,7 @@ class XMLEbicsConverter : ContentConverter {
              * Not always a error: the content negotiation might have
              * only checked if this handler could convert the response.
              */
-            logger.debug("Could not convert XML to string with custom converter.")
+            logger.info("Could not use XML custom converter for this response.")
             return null
         }
         return OutputStreamContent({
