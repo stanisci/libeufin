@@ -1206,6 +1206,28 @@ def sandbox_bankaccount(ctx):
 def sandbox_demobank(ctx):
     pass
 
+@sandbox_demobank.command("list-transactions", help="List transactions.")
+@click.option(
+    "--bank-account",
+    help="Label of the bank account to be debited for the transaction.",
+    required=True
+)
+@click.pass_obj
+def sandbox_demobank_list_transactions(obj, bank_account):
+    url = obj.access_api_url (f"/accounts/{bank_account}/transactions")
+    try:
+        resp = get(
+            url,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password),
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach sandbox at " + url)
+        exit(1)
+
+    tell_user(resp, withsuccess=True)
+
+
 @sandbox_demobank.command("new-transaction", help="Initiate a new transaction.")
 @click.option(
     "--bank-account",
