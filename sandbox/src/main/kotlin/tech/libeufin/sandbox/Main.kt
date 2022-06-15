@@ -1403,7 +1403,7 @@ val sandboxApp: Application.() -> Unit = {
                         "Cannot access bank account ${bankAccount.label}"
                     )
 
-                    val page: Int = Integer.decode(call.request.queryParameters["page"] ?: "1")
+                    val page: Int = Integer.decode(call.request.queryParameters["page"] ?: "0")
                     val size: Int = Integer.decode(call.request.queryParameters["size"] ?: "5")
 
                     val ret = mutableListOf<RawPayment>()
