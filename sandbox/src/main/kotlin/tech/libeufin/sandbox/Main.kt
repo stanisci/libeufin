@@ -1538,6 +1538,7 @@ val sandboxApp: Application.() -> Unit = {
                             bic = bankAccount.bic,
                             receiverName = getPersonNameFromCustomer(req.username)
                         )
+                        val iban = bankAccount.iban
                     })
                     return@post
                 }
