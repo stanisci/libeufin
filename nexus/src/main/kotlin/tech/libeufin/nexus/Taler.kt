@@ -213,7 +213,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
             exchangeBaseUrl = transferRequest.exchange_base_url
             requestUid = transferRequest.request_uid
             amount = transferRequest.amount
-            wtid = transferRequest.wtid
+            wtid = "${transferRequest.exchange_base_url} ${transferRequest.wtid}"
             creditAccount = transferRequest.credit_account
         }
         row.id.value
