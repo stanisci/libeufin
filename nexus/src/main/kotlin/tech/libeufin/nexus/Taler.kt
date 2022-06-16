@@ -193,7 +193,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
             }
         }
         val exchangeBankAccount = getFacadeBankAccount(facadeId)
-        val paymentSubject = "${transferRequest.exchange_base_url} ${transferRequest.wtid}"
+        val paymentSubject = "${transferRequest.wtid} ${transferRequest.exchange_base_url}"
         val pain001 = addPaymentInitiation(
             Pain001Data(
                 creditorIban = creditorData.iban,
