@@ -1191,6 +1191,7 @@ val sandboxApp: Application.() -> Unit = {
                      * return a pair, consisting of the bank account and the demobank
                      * hosting it.
                      */
+                    if (!validatePlainAmount(amount)) throw badRequest("Invalid amount: $amount")
                     transaction {
                         wireTransfer(
                             debitAccount = bankAccount,
@@ -1199,7 +1200,7 @@ val sandboxApp: Application.() -> Unit = {
                             subject = payto.message ?: throw badRequest(
                                 "'message' query parameter missing in Payto address"
                             ),
-                            amount = parseAmount(amount).amount.toPlainString()
+                            amount = amount
                         )
                     }
                     call.respond(object {})

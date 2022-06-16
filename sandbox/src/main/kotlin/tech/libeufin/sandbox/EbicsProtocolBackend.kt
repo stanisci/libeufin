@@ -58,7 +58,7 @@ data class PainParseResult(
     val debtorName: String,
     val debtorBic: String?,
     val subject: String,
-    val amount: Amount,
+    val amount: String,
     val currency: String,
     val pmtInfId: String,
     val msgId: String
@@ -663,9 +663,14 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
 
                         }
                     }
+                    if (!validatePlainAmount(txDetails.amt.textContent)) {
+                        throw EbicsProcessingError(
+                            "Amount number malformed: ${txDetails.amt.textContent}"
+                        )
+                    }
                     PainParseResult(
                         currency = txDetails.amt.getAttribute("Ccy"),
-                        amount = Amount(txDetails.amt.textContent),
+                        amount = txDetails.amt.textContent,
                         subject = txDetails.subject,
                         debtorIban = debtorIban,
                         debtorName = debtorName,
@@ -692,6 +697,10 @@ private fun handleCct(paymentRequest: String) {
     transaction {
         try {
             val bankAccount = getBankAccountFromIban(parseResult.debtorIban)
+            if (parseResult.currency != bankAccount.demoBank.currency) throw EbicsRequestError(
+                "[EBICS_PROCESSING_ERROR] Currency (${parseResult.currency}) not supported.",
+                "091116"
+            )
             BankAccountTransactionEntity.new {
                 account = bankAccount
                 demobank = bankAccount.demoBank
@@ -702,7 +711,7 @@ private fun handleCct(paymentRequest: String) {
                 debtorName = parseResult.debtorName
                 debtorBic = parseResult.debtorBic
                 subject = parseResult.subject
-                amount = parseResult.amount.toString()
+                amount = parseResult.amount
                 currency = parseResult.currency
                 date = getUTCnow().toInstant().toEpochMilli()
                 pmtInfId = parseResult.pmtInfId
@@ -723,7 +732,7 @@ private fun handleCct(paymentRequest: String) {
                     debtorName = parseResult.debtorName
                     debtorBic = parseResult.debtorBic
                     subject = parseResult.subject
-                    amount = parseResult.amount.toString()
+                    amount = parseResult.amount
                     currency = parseResult.currency
                     date = getUTCnow().toInstant().toEpochMilli()
                     pmtInfId = parseResult.pmtInfId
