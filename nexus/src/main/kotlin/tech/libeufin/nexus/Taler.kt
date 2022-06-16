@@ -193,6 +193,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
             }
         }
         val exchangeBankAccount = getFacadeBankAccount(facadeId)
+        val paymentSubject = "${transferRequest.exchange_base_url} ${transferRequest.wtid}"
         val pain001 = addPaymentInitiation(
             Pain001Data(
                 creditorIban = creditorData.iban,
@@ -200,7 +201,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
                 creditorName = creditorData.receiverName ?: throw NexusError(
                     HttpStatusCode.BadRequest, "Payto did not mention account owner"
                 ),
-                subject = transferRequest.wtid,
+                subject = "${transferRequest.exchange_base_url} ${transferRequest.wtid}",
                 sum = amountObj.amount,
                 currency = amountObj.currency
             ),
@@ -213,7 +214,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
             exchangeBaseUrl = transferRequest.exchange_base_url
             requestUid = transferRequest.request_uid
             amount = transferRequest.amount
-            wtid = "${transferRequest.exchange_base_url} ${transferRequest.wtid}"
+            wtid = paymentSubject
             creditAccount = transferRequest.credit_account
         }
         row.id.value
