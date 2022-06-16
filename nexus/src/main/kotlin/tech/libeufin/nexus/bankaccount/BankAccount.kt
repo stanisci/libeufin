@@ -328,6 +328,7 @@ fun addPaymentInitiation(paymentData: Pain001Data, debtorAccount: NexusBankAccou
         val painHex = painCounter.toString(16)
         val acctHex = debtorAccount.id.value.toString(16)
         PaymentInitiationEntity.new {
+            currency = paymentData.currency
             bankAccount = debtorAccount
             subject = paymentData.subject
             sum = paymentData.sum

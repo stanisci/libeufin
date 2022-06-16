@@ -202,7 +202,7 @@ object PaymentInitiationsTable : LongIdTable() {
     val preparationDate = long("preparationDate")
     val submissionDate = long("submissionDate").nullable()
     val sum = amount("sum")
-    val currency = varchar("currency", length = 3).default("EUR")
+    val currency = text("currency")
     val endToEndId = text("endToEndId")
     val paymentInformationId = text("paymentInformationId")
     val instructionId = text("instructionId")
