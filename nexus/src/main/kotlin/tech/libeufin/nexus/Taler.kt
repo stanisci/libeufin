@@ -201,7 +201,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
                 creditorName = creditorData.receiverName ?: throw NexusError(
                     HttpStatusCode.BadRequest, "Payto did not mention account owner"
                 ),
-                subject = "${transferRequest.exchange_base_url} ${transferRequest.wtid}",
+                subject = paymentSubject,
                 sum = amountObj.amount,
                 currency = amountObj.currency
             ),
