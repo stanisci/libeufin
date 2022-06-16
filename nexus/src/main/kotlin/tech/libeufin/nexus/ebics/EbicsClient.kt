@@ -62,7 +62,7 @@ private suspend inline fun HttpClient.postToBank(url: String, body: String): Str
             e.message ?: "Could not reach the bank"
         )
     }
-    logger.debug("Receiving: $response")
+    // logger.debug("Receiving: $response")
     return response
 }
 
