@@ -146,7 +146,7 @@ fun getHTTPBasicAuthCredentials(request: ApplicationRequest): Pair<String, Strin
  */
 fun getAuthorizationHeader(request: ApplicationRequest): String {
     val authorization = request.headers["Authorization"]
-    logger.debug("Found Authorization header: $authorization")
+    // logger.debug("Found Authorization header: $authorization")
     return authorization ?: throw UtilError(
         HttpStatusCode.Unauthorized, "Authorization header not found",
         LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
@@ -159,7 +159,7 @@ fun getAuthorizationHeader(request: ApplicationRequest): String {
  * will then be compared with the one kept into the database.
  */
 fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
-    logger.debug("Authenticating: $authorizationHeader")
+    // logger.debug("Authenticating: $authorizationHeader")
     val (username, password) = try {
         // FIXME/note: line below doesn't check for "Basic" presence.
         val split = authorizationHeader.split(" ")

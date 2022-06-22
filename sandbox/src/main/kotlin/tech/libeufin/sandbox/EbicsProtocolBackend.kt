@@ -857,8 +857,7 @@ private suspend fun ApplicationCall.handleEbicsIni(header: EbicsUnsecuredRequest
     val plainOrderData = InflaterInputStream(orderData.inputStream()).use {
         it.readAllBytes()
     }
-    println("INI order data: ${plainOrderData.toString(Charsets.UTF_8)}")
-
+    //println("INI order data: ${plainOrderData.toString(Charsets.UTF_8)}")
     val keyObject = EbicsOrderUtil.decodeOrderDataXml<SignatureTypes.SignaturePubKeyOrderData>(orderData)
     val sigPubXml = keyObject.signaturePubKeyInfo.pubKeyValue.rsaKeyValue
     val sigPub = CryptoUtil.loadRsaPublicKeyFromComponents(sigPubXml.modulus, sigPubXml.exponent)
@@ -921,7 +920,6 @@ private suspend fun ApplicationCall.handleEbicsHpb(
     }
     val validationResult =
         XMLUtil.verifyEbicsDocument(requestDocument, subscriberKeys.authenticationPublicKey)
-    logger.info("validationResult: $validationResult")
     if (!validationResult) {
         throw EbicsKeyManagementError("invalid signature", "90000")
     }
