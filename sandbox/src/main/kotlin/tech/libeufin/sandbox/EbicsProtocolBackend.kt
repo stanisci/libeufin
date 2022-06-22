@@ -1345,7 +1345,7 @@ suspend fun ApplicationCall.ebicsweb() {
         requestedHostID.item(0).textContent
     )
     // val requestDocument = receiveEbicsXml()
-    logger.info("Processing ${requestDocument.documentElement.localName}")
+    // logger.info("Processing ${requestDocument.documentElement.localName}")
     when (requestDocument.documentElement.localName) {
         "ebicsUnsecuredRequest" -> {
             val requestObject = requestDocument.toObject<EbicsUnsecuredRequest>()

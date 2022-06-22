@@ -7,7 +7,7 @@
         </encoder>
     </appender>
 
-    <logger name="tech.libeufin.nexus" level="DEBUG"  additivity="false">
+    <logger name="tech.libeufin.nexus" level="ALL"  additivity="false">
         <appender-ref ref="STDERR" />
     </logger>
 
