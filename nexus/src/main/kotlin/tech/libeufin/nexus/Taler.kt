@@ -210,11 +210,11 @@ private suspend fun talerTransfer(call: ApplicationCall) {
         logger.debug("Taler requests payment: ${transferRequest.wtid}")
         val row = TalerRequestedPaymentEntity.new {
             this.facade = facade
-            preparedPayment = pain001 // not really used/needed, just here to silence warnings
+            preparedPayment = pain001
             exchangeBaseUrl = transferRequest.exchange_base_url
             requestUid = transferRequest.request_uid
             amount = transferRequest.amount
-            wtid = paymentSubject
+            wtid = transferRequest.wtid
             creditAccount = transferRequest.credit_account
         }
         row.id.value

@@ -166,7 +166,7 @@ fun processCamtMessage(
         res.reports.forEach {
             NexusAssert(
                 it.account.iban == acct.iban,
-                "Neuxs hit a report or statement of a wrong IBAN!"
+                "Nexus hit a report or statement of a wrong IBAN!"
             )
             it.balances.forEach { b ->
                 var clbdCount = 0

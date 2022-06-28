@@ -756,7 +756,7 @@ private fun handleCct(paymentRequest: String) {
  */
 private fun handleEbicsC52(requestContext: RequestContext): ByteArray {
     logger.debug("Handling C52 request")
-    // Ignoring any dateRange parameter. (FIXME: clarify whether that is fine.)
+    // Ignoring any dateRange parameter. (FIXME)
     val report = constructCamtResponse(52, requestContext.subscriber, dateRange = null)
     SandboxAssert(
         report.size == 1,
