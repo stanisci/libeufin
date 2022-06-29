@@ -51,7 +51,6 @@ fun requireBankAccount(call: ApplicationCall, parameterKey: String): NexusBankAc
     return account
 }
 
-// called twice: once from the background task, once from the ad-hoc endpoint.
 suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
     val r = transaction {
         val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
@@ -106,6 +105,7 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
         }
     }
     workQueue.forEach {
+        logger.debug("Submitting payment ${it.id}")
         submitPaymentInitiation(httpClient, it.id)
     }
 }
