@@ -58,7 +58,6 @@ data class EbicsProtocolError(
 data class EbicsDateRange(val start: ZonedDateTime, val end: ZonedDateTime)
 
 sealed class EbicsOrderParams
-
 data class EbicsStandardOrderParams(
     val dateRange: EbicsDateRange? = null
 ) : EbicsOrderParams()

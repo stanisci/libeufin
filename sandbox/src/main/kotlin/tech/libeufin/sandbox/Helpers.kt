@@ -347,7 +347,7 @@ private fun ensureDemobank(name: String): DemobankConfigEntity {
     return transaction {
         DemobankConfigEntity.find {
             DemobankConfigsTable.name eq name
-        }.firstOrNull() ?: throw internalServerError("Demobank '$name' never created")
+        }.firstOrNull() ?: throw notFound("Demobank '$name' not found.  Was it ever created?")
     }
 }
 
