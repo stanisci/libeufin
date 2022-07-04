@@ -284,6 +284,7 @@ fun buildCamtString(
     val zonedDateTime = creationTime.toZonedString()
     val creationTimeMillis = creationTime.toInstant().toEpochMilli()
     val messageId = "sandbox-${creationTimeMillis}"
+    val currency = getDefaultDemobank().currency
 
     val camtMessage = constructXml(indent = true) {
         root("Document") {
@@ -329,7 +330,7 @@ fun buildCamtString(
                             text(subscriberIban)
                         }
                         element("Ccy") {
-                            text("EUR")
+                            text(currency)
                         }
                         element("Ownr/Nm") {
                             text("Debitor/Owner Name")
@@ -358,7 +359,7 @@ fun buildCamtString(
                             text("PRCD")
                         }
                         element("Amt") {
-                            attribute("Ccy", "EUR")
+                            attribute("Ccy", currency)
                             text(balancePrcd.abs().toPlainString())
                         }
                         element("CdtDbtInd") {
@@ -377,7 +378,7 @@ fun buildCamtString(
                             text("CLBD")
                         }
                         element("Amt") {
-                            attribute("Ccy", "EUR")
+                            attribute("Ccy", currency)
                             text(balanceClbd.abs().toPlainString())
                         }
                         element("CdtDbtInd") {
@@ -452,7 +453,7 @@ fun buildCamtString(
                                     }
                                 }
                                 element("AmtDtls/TxAmt/Amt") {
-                                    attribute("Ccy", "EUR")
+                                    attribute("Ccy", currency)
                                     text(it.amount)
                                 }
                                 element("BkTxCd") {
