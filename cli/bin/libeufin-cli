@@ -800,17 +800,25 @@ def prepare_payment(
     check_response_status(resp)
 
 
-@accounts.command(help="Submit a payment initiation")
-@click.option("--payment-uuid", help="payment unique identifier", required=True)
+@accounts.command(help="Submit a payment initiation.  Submit every new payment if invoked without options.")
+@click.option("--payment-uuid", help="Payment unique identifier.  Submits only this payment.")
 @click.argument("account-name")
 @click.pass_obj
-def submit_payment(obj, account_name, payment_uuid):
-    url = urljoin_nodrop(
-        obj.nexus_base_url,
-        "/bank-accounts/{}/payment-initiations/{}/submit".format(
-            account_name, payment_uuid
-        ),
-    )
+def submit_payments(obj, account_name, payment_uuid):
+    if payment_uuid:
+        url = urljoin_nodrop(
+            obj.nexus_base_url,
+            "/bank-accounts/{}/payment-initiations/{}/submit".format(
+                account_name, payment_uuid
+            ),
+        )
+    else:
+        url = urljoin_nodrop(
+            obj.nexus_base_url,
+            "/bank-accounts/{}/submit-all-payment-initiations".format(
+                account_name
+            ),
+        )
     try:
         resp = post(
             url, json=dict(), auth=auth.HTTPBasicAuth(obj.username, obj.password)
