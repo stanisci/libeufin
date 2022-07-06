@@ -248,7 +248,7 @@ class XMLUtil private constructor() {
          * @param xmlDoc the XML document to validate
          * @return true when validation passes, false otherwise
          */
-        fun validate(xmlDoc: StreamSource): Boolean {
+        @Synchronized fun validate(xmlDoc: StreamSource): Boolean {
             try {
                 getEbicsValidator().validate(xmlDoc)
             } catch (e: Exception) {
@@ -264,7 +264,7 @@ class XMLUtil private constructor() {
          * @param domDocument DOM to validate
          * @return true/false if the document is valid/invalid
          */
-        fun validateFromDom(domDocument: Document): Boolean {
+        @Synchronized fun validateFromDom(domDocument: Document): Boolean {
             try {
                 getEbicsValidator().validate(DOMSource(domDocument))
             } catch (e: SAXException) {
