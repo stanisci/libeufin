@@ -302,14 +302,15 @@ fun buildCamtString(
                     element("CreDtTm") {
                         text(zonedDateTime)
                     }
-                    element("MsgPgntn") {
+                    // Block below used to fail validation:
+                    /*element("MsgPgntn") {
                         element("PgNb") {
                             text("001")
                         }
                         element("LastPgInd") {
                             text("true")
                         }
-                    }
+                    }*/
                 }
                 element(if (type == 52) "Rpt" else "Stmt") {
                     element("Id") {
