@@ -90,8 +90,6 @@ object NexusCron {
 fun startOperationScheduler(httpClient: HttpClient) {
     GlobalScope.launch {
         while (true) {
-            logger.trace("running schedule loop")
-
             // First, assign next execution time stamps to all tasks that need them
             transaction {
                 NexusScheduledTaskEntity.find {
