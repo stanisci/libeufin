@@ -1069,8 +1069,8 @@ val sandboxApp: Application.() -> Unit = {
             call.respond(getJsonFromDemobankConfig(demobank))
             return@get
         }
-        route("/demobanks/{demobankid}") {
 
+        route("/demobanks/{demobankid}") {
             // NOTE: TWG assumes that username == bank account label.
             route("/taler-wire-gateway") {
                 post("/{exchangeUsername}/admin/add-incoming") {
@@ -1082,7 +1082,15 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     logger.debug("TWG add-incoming passed authentication")
-                    val body = call.receiveJson<TWGAdminAddIncoming>()
+                    val body = try {
+                        call.receiveJson<TWGAdminAddIncoming>()
+                    } catch (e: Exception) {
+                        logger.error("/admin/add-incoming failed at parsing the request body")
+                        throw SandboxError(
+                            HttpStatusCode.BadRequest,
+                            "Invalid request"
+                        )
+                    }
                     transaction {
                         val demobank = ensureDemobank(call)
                         val bankAccountCredit = getBankAccountFromLabel(username, demobank)

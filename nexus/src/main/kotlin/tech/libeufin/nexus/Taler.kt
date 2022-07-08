@@ -22,15 +22,18 @@ package tech.libeufin.nexus
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.application.ApplicationCall
 import io.ktor.application.call
+import io.ktor.client.*
+import io.ktor.client.features.*
+import io.ktor.client.request.*
 import io.ktor.content.TextContent
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
 import io.ktor.request.receive
 import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.routing.Route
 import io.ktor.routing.get
 import io.ktor.routing.post
+import io.ktor.util.*
 import org.jetbrains.exposed.dao.Entity
 import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.*
@@ -39,7 +42,7 @@ import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
 import tech.libeufin.util.*
-import java.net.URLEncoder
+import java.net.URL
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -455,6 +458,71 @@ private suspend fun historyIncoming(call: ApplicationCall) {
     return call.respond(TextContent(customConverter(history), ContentType.Application.Json))
 }
 
+/**
+ * This call proxies /admin/add/incoming to the Sandbox,
+ * which is the service keeping the transactions ledger.
+ * The credentials are ASSUMED to be exchange/x (user/pass).
+ *
+ * In the future, a dedicate "add-incoming" facade should
+ * be provided, offering the mean to store the credentials
+ * at configuration time.
+ *
+ */
+private suspend fun addIncoming(call: ApplicationCall) {
+    val facadeId = ensureNonNull(call.parameters["fcid"])
+    val currentBody = call.receive<String>()
+    val sandboxUrl = transaction {
+        val f = FacadeEntity.findByName(facadeId) ?: throw notFound("facade $facadeId not found")
+        val state = FacadeStateEntity.find {
+            FacadeStateTable.facade eq f.id
+        }.firstOrNull() ?: throw internalServerError("facade $facadeId has no state!")
+        val conn = NexusBankConnectionEntity.findByName(state.bankConnection) ?: throw internalServerError(
+            "state of facade $facadeId has no bank connection!"
+        )
+        val ebicsData = NexusEbicsSubscribersTable.select {
+            NexusEbicsSubscribersTable.nexusBankConnection eq conn.id
+        }.firstOrNull() ?: throw internalServerError(
+            "Connection '${conn.connectionId}' doesn't have EBICS"
+        )
+        // Resort Sandbox URL from EBICS endpoint.
+        val sandboxUrl = URL(ebicsData[NexusEbicsSubscribersTable.ebicsURL])
+        // NOTE: the exchange username must be 'exchange', at the Sandbox.
+        return@transaction url {
+            protocol = URLProtocol(sandboxUrl.protocol, 80)
+            host = sandboxUrl.host
+            if (sandboxUrl.port != 80) port = sandboxUrl.port
+            path(
+                "demobanks",
+                "default",
+                "taler-wire-gateway",
+                "exchange",
+                "admin",
+                "add-incoming"
+            )
+
+        }
+    }
+    val client = HttpClient { followRedirects = true }
+    val resp = try {
+        client.post<String>(
+            urlString = sandboxUrl,
+            block = {
+                this.body = currentBody
+                this.header(
+                    "Authorization",
+                    buildBasicAuthLine("exchange", "x")
+                )
+                this.header("Content-Type", "application/json")
+            }
+        )
+    } catch (e: ClientRequestException) {
+        logger.error("Proxying /admin/add/incoming to the Sandbox failed: $e")
+    } catch (e: Exception) {
+        logger.error("Could not proxy /admin/add/incoming to the Sandbox: $e")
+    }
+    call.respond(resp)
+}
+
 private fun getCurrency(facadeName: String): String {
     return transaction {
         getFacadeState(facadeName).currency
@@ -486,6 +554,10 @@ fun talerFacadeRoutes(route: Route) {
     route.get("/history/incoming") {
         historyIncoming(call)
         return@get
+    }
+    route.post("/admin/add-incoming") {
+        addIncoming(call)
+        return@post
     }
     route.get("") {
         call.respondText("Hello, this is a Taler Facade")

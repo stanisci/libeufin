@@ -153,6 +153,13 @@ fun getAuthorizationHeader(request: ApplicationRequest): String {
     )
 }
 
+// Builds the Authorization:-header value, given the credentials.
+fun buildBasicAuthLine(username: String, password: String): String {
+    val ret = "Basic "
+    val cred = "$username:$password"
+    val enc = bytesToBase64(cred.toByteArray(Charsets.UTF_8))
+    return ret+enc
+}
 /**
  * This helper function parses a Authorization:-header line, decode the credentials
  * and returns a pair made of username and hashed (sha256) password.  The hashed value

@@ -1333,12 +1333,18 @@ def sandbox_demobank_delete(obj, bank_account):
     default="",
     help="Person name",
 )
+@click.option(
+    "--iban",
+    help="Uses this IBAN, instead of a random one.",
+)
 @click.pass_obj
-def sandbox_demobank_register(obj, public, name):
+def sandbox_demobank_register(obj, public, name, iban):
     url = obj.access_api_url ("/testing/register")
     req = dict(username=obj.username, password=obj.password, isPublic=public)
     if name != "":
         req.update(name=name)
+    if iban:
+        req.update(iban=iban)
     try:
         resp = post(
             url,
