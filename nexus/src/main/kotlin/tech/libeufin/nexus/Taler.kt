@@ -279,6 +279,11 @@ fun talerFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDetails)
         // FIXME: send back!
         return
     }
+    // Check if reserve_pub was used already
+    val maybeExist = TalerIncomingPaymentEntity.find {
+        TalerIncomingPaymentsTable.reservePublicKey eq reservePub
+    }.firstOrNull()
+    if (maybeExist != null) throw conflict("Reserve pub '$reservePub' was used already")
 
     if (!CryptoUtil.checkValidEddsaPublicKey(reservePub)) {
         // FIXME: send back!
