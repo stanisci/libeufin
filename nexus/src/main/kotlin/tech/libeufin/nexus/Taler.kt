@@ -39,6 +39,7 @@ import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
+import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
 import tech.libeufin.util.*
@@ -59,7 +60,7 @@ data class TalerTransferRequest(
 
 data class TalerTransferResponse(
     /**
-     * Point in time when the nexus put the payment instruction into the database.
+     * Point in time when Nexus put the payment instruction into the database.
      */
     val timestamp: GnunetTimestamp,
     val row_id: Long
@@ -471,7 +472,7 @@ private suspend fun historyIncoming(call: ApplicationCall) {
 private suspend fun addIncoming(call: ApplicationCall) {
     val facadeId = ensureNonNull(call.parameters["fcid"])
     val currentBody = call.receive<String>()
-    val sandboxUrl = transaction {
+    val fromDb = transaction {
         val f = FacadeEntity.findByName(facadeId) ?: throw notFound("facade $facadeId not found")
         val state = FacadeStateEntity.find {
             FacadeStateTable.facade eq f.id
@@ -487,7 +488,7 @@ private suspend fun addIncoming(call: ApplicationCall) {
         // Resort Sandbox URL from EBICS endpoint.
         val sandboxUrl = URL(ebicsData[NexusEbicsSubscribersTable.ebicsURL])
         // NOTE: the exchange username must be 'exchange', at the Sandbox.
-        return@transaction url {
+        return@transaction Pair(url {
             protocol = URLProtocol(sandboxUrl.protocol, 80)
             host = sandboxUrl.host
             if (sandboxUrl.port != 80) port = sandboxUrl.port
@@ -499,13 +500,13 @@ private suspend fun addIncoming(call: ApplicationCall) {
                 "admin",
                 "add-incoming"
             )
-
-        }
+        }, state.bankAccount
+        )
     }
     val client = HttpClient { followRedirects = true }
-    val resp = try {
+    try {
         client.post<String>(
-            urlString = sandboxUrl,
+            urlString = fromDb.first,
             block = {
                 this.body = currentBody
                 this.header(
@@ -520,7 +521,32 @@ private suspend fun addIncoming(call: ApplicationCall) {
     } catch (e: Exception) {
         logger.error("Could not proxy /admin/add/incoming to the Sandbox: $e")
     }
-    call.respond(resp)
+    /**
+     * At this point, Sandbox booked the payment.  Now the "row_id"
+     * value to put in the response needs to be resorted; that may
+     * be known by fetching a fresh C52 report, then let Nexus ingest
+     * the result, and finally _optimistically_ pick the latest entry
+     * in the received payments.  */
+    fetchBankAccountTransactions(
+        client,
+        FetchSpecLatestJson(
+            FetchLevel.REPORT,
+            null
+        ),
+        fromDb.second
+    )
+    /**
+     * The latest incoming payment should now be found among
+     * the ingested ones.
+     */
+    val lastIncomingPayment = transaction {
+        val lastRecord = TalerIncomingPaymentEntity.all().last()
+        return@transaction Pair(lastRecord.id.value, lastRecord.timestampMs)
+    }
+    call.respond(object {
+        val row_id = lastIncomingPayment.first
+        val timestamp = GnunetTimestamp(lastIncomingPayment.second / 1000L)
+    })
 }
 
 private fun getCurrency(facadeName: String): String {

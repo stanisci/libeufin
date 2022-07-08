@@ -415,7 +415,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             if (acct == null) {
                 throw NexusError(
                     HttpStatusCode.NotFound,
-                    "Account not found"
+                    "Account '$accountId' not found"
                 )
             }
             object {

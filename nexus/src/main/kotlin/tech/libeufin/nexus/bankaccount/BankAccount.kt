@@ -352,7 +352,7 @@ suspend fun fetchBankAccountTransactions(
         if (acct == null) {
             throw NexusError(
                 HttpStatusCode.NotFound,
-                "Account not found"
+                "Account '$accountId' not found"
             )
         }
         val conn = acct.defaultBankConnection
