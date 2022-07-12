@@ -241,6 +241,7 @@ private suspend fun talerTransfer(call: ApplicationCall) {
 }
 
 fun talerFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDetails) {
+    var isInvalid = false // True when pub is invalid or duplicate.
     val subject = txDtls.unstructuredRemittanceInformation
     val debtorName = txDtls.debtor?.name
     if (debtorName == null) {
@@ -276,24 +277,30 @@ fun talerFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDetails)
             this.payment = payment
             timestampMs = System.currentTimeMillis()
         }
-        // FIXME: send back!
+        // Will be paid back by the refund handler.
         return
     }
     // Check if reserve_pub was used already
     val maybeExist = TalerIncomingPaymentEntity.find {
         TalerIncomingPaymentsTable.reservePublicKey eq reservePub
     }.firstOrNull()
-    if (maybeExist != null) throw conflict("Reserve pub '$reservePub' was used already")
+    if (maybeExist != null) {
+        val msg = "Reserve pub '$reservePub' was used already"
+        logger.info(msg)
+        isInvalid = true
+    }
 
     if (!CryptoUtil.checkValidEddsaPublicKey(reservePub)) {
         // FIXME: send back!
-        logger.warn("invalid public key")
+        logger.info("invalid public key detected")
+        isInvalid = true
+    }
+    if (isInvalid) {
         TalerInvalidIncomingPaymentEntity.new {
             this.payment = payment
             timestampMs = System.currentTimeMillis()
         }
-        logger.warn("Invalid public key found")
-        // FIXME: send back!
+        // Will be paid back by the refund handler.
         return
     }
     TalerIncomingPaymentEntity.new {

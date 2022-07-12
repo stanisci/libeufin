@@ -80,7 +80,6 @@ fun ingestFacadeTransactions(
             lastId = it.id.value
         }
         try {
-            // FIXME: This currently does not do proper error handing.
             if (refundCb != null) {
                 refundCb(bankAccount, facadeState.highestSeenMessageSerialId)
             }
