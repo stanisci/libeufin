@@ -41,7 +41,7 @@ sourceSets {
 }
 
 def ktor_version = '1.6.1'
-def exposed_version = '0.32.1'
+def exposed_version = '0.38.2'
 
 dependencies {
     implementation "com.hubspot.jinjava:jinjava:2.5.9"
@@ -81,7 +81,6 @@ application {
     applicationName = "libeufin-sandbox"
     applicationDefaultJvmArgs = ['-Djava.net.preferIPv6Addresses=true']
 }
-
 
 jar {
     manifest {
