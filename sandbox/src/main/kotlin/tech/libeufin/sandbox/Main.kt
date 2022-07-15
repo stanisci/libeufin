@@ -58,6 +58,7 @@ import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
+import io.ktor.network.sockets.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
@@ -65,7 +66,10 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.util.*
 import io.ktor.util.date.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
+import kotlinx.coroutines.withContext
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
@@ -951,7 +955,6 @@ val sandboxApp: Application.() -> Unit = {
             }
             call.respond(EbicsHostsResponse(ebicsHosts))
         }
-
         // Process one EBICS request
         post("/ebicsweb") {
             try {
@@ -1600,6 +1603,10 @@ fun serverMain(port: Int) {
                 this.host = "[::1]"
             }
             module(sandboxApp)
+        },
+        configure = {
+            workerGroupSize = 1
+            callGroupSize = 1
         }
     )
     logger.info("LibEuFin Sandbox running on port $port")

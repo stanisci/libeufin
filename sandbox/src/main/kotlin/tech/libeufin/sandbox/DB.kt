@@ -481,8 +481,6 @@ object BankAccountReportsTable : IntIdTable() {
     val bankAccount = reference("bankAccount", BankAccountsTable)
 }
 
-
-
 fun dbDropTables(dbConnectionString: String) {
     Database.connect(dbConnectionString)
     transaction {

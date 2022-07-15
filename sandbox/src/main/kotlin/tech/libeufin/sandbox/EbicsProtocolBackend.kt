@@ -27,11 +27,14 @@ import io.ktor.request.*
 import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.util.AttributeKey
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.apache.xml.security.binding.xmldsig.RSAKeyValueType
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
+import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.w3c.dom.Document
 import tech.libeufin.util.*
@@ -44,6 +47,7 @@ import tech.libeufin.util.ebics_s001.UserSignatureData
 import java.math.BigDecimal
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
+import java.sql.Connection
 import java.util.*
 import java.util.zip.DeflaterInputStream
 import java.util.zip.InflaterInputStream
@@ -697,6 +701,16 @@ private fun handleCct(paymentRequest: String) {
     logger.debug("Pain.001: $paymentRequest")
     val parseResult = parsePain001(paymentRequest)
     transaction {
+        val maybeExist = BankAccountTransactionEntity.find {
+            BankAccountTransactionsTable.pmtInfId eq parseResult.pmtInfId
+        }.firstOrNull()
+        if (maybeExist != null) {
+            logger.info(
+                "Nexus submitted twice the PAIN: ${maybeExist.pmtInfId}. Not taking any action." +
+                        "  Sandbox gave it this reference: ${maybeExist.accountServicerReference}"
+            )
+            return@transaction
+        }
         try {
             val bankAccount = getBankAccountFromIban(parseResult.debtorIban)
             if (parseResult.currency != bankAccount.demoBank.currency) throw EbicsRequestError(
@@ -1002,7 +1016,7 @@ private fun makePartnerInfo(subscriber: EbicsSubscriberEntity): EbicsTypes.Partn
                         this.value = bankAccount.iban
                     }
                 )
-                this.currency = "EUR"
+                this.currency = bankAccount.demoBank.currency
                 this.description = "Ordinary Bank Account"
                 this.bankCodeList = listOf(
                     EbicsTypes.GeneralBankCode().apply {
@@ -1265,7 +1279,10 @@ private fun handleEbicsUploadTransactionTransmission(requestContext: RequestCont
             }
         }
         if (getOrderTypeFromTransactionId(requestTransactionID) == "CCT") {
-            logger.debug("Attempting a payment.")
+            logger.debug(
+                "Attempting a payment in thread (name/id): " +
+                        "${Thread.currentThread().name}/${Thread.currentThread().id}"
+            )
             handleCct(unzippedData.toString(Charsets.UTF_8))
         }
         return EbicsResponse.createForUploadTransferPhase(
