@@ -66,6 +66,16 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.util.*
 import io.ktor.util.date.*
+import io.netty.channel.DefaultEventLoop
+import io.netty.channel.DefaultEventLoopGroup
+import io.netty.channel.SingleThreadEventLoop
+import io.netty.channel.epoll.EpollEventLoopGroup
+import io.netty.channel.nio.NioEventLoop
+import io.netty.channel.nio.NioEventLoopGroup
+import io.netty.util.concurrent.AbstractEventExecutor
+import io.netty.util.concurrent.DefaultEventExecutor
+import io.netty.util.concurrent.GlobalEventExecutor
+import io.netty.util.concurrent.SingleThreadEventExecutor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newSingleThreadContext
@@ -1605,6 +1615,7 @@ fun serverMain(port: Int) {
             module(sandboxApp)
         },
         configure = {
+            connectionGroupSize = 1
             workerGroupSize = 1
             callGroupSize = 1
         }

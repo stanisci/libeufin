@@ -41,7 +41,12 @@ sourceSets {
 }
 
 def ktor_version = '1.6.1'
-def exposed_version = '0.38.2'
+/**
+ * Exposed 0.38.2 caused a SQLITE_BUSY error at test-auditor.sh.
+ * The error was caused by a concurrent handling of a CCT EBICS
+ * message (see handleCct()).
+ */
+def exposed_version = '0.32.1'
 
 dependencies {
     implementation "com.hubspot.jinjava:jinjava:2.5.9"
