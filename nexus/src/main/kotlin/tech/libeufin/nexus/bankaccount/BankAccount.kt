@@ -172,11 +172,14 @@ fun processCamtMessage(
                 var clbdCount = 0
                 if (b.type == "CLBD") {
                     clbdCount++
-                    NexusBankBalanceEntity.new {
-                        bankAccount = acct
-                        balance = b.amount.toPlainString()
-                        creditDebitIndicator = b.creditDebitIndicator.name
-                        date = b.date
+                    val lastBalance = NexusBankBalanceEntity.all().lastOrNull()
+                    if (lastBalance != null && b.amount.toPlainString() != lastBalance.balance) {
+                        NexusBankBalanceEntity.new {
+                            bankAccount = acct
+                            balance = b.amount.toPlainString()
+                            creditDebitIndicator = b.creditDebitIndicator.name
+                            date = b.date
+                        }
                     }
                 }
                 if (clbdCount == 0) {
