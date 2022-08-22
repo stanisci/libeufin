@@ -13,9 +13,9 @@
         <appender-ref ref="STDERR" />
     </logger>
 
-    <logger name="io.netty" level="WARN" />
-    <logger name="ktor" level="WARN" />
-    <logger name="Exposed" level="WARN" />
+    <logger name="io.netty" level="INFO" />
+    <logger name="ktor" level="TRACE" />
+    <logger name="Exposed" level="INFO" />
 
     <root level="WARN">
         <appender-ref ref="STDERR" />

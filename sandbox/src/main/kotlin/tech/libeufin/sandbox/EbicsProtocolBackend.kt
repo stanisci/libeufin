@@ -698,9 +698,8 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
  */
 private fun handleCct(paymentRequest: String) {
     logger.debug("Handling CCT")
-    logger.debug("Pain.001: $paymentRequest")
     val parseResult = parsePain001(paymentRequest)
-    transaction {
+    transaction(Connection.TRANSACTION_SERIALIZABLE, repetitionAttempts = 10) {
         val maybeExist = BankAccountTransactionEntity.find {
             BankAccountTransactionsTable.pmtInfId eq parseResult.pmtInfId
         }.firstOrNull()
@@ -711,15 +710,35 @@ private fun handleCct(paymentRequest: String) {
             )
             return@transaction
         }
-        try {
-            val bankAccount = getBankAccountFromIban(parseResult.debtorIban)
-            if (parseResult.currency != bankAccount.demoBank.currency) throw EbicsRequestError(
-                "[EBICS_PROCESSING_ERROR] Currency (${parseResult.currency}) not supported.",
-                "091116"
-            )
+        val bankAccount = getBankAccountFromIban(parseResult.debtorIban)
+        if (parseResult.currency != bankAccount.demoBank.currency) throw EbicsRequestError(
+            "[EBICS_PROCESSING_ERROR] Currency (${parseResult.currency}) not supported.",
+            "091116"
+        )
+        BankAccountTransactionEntity.new {
+            account = bankAccount
+            demobank = bankAccount.demoBank
+            creditorIban = parseResult.creditorIban
+            creditorName = parseResult.creditorName
+            creditorBic = parseResult.creditorBic
+            debtorIban = parseResult.debtorIban
+            debtorName = parseResult.debtorName
+            debtorBic = parseResult.debtorBic
+            subject = parseResult.subject
+            amount = parseResult.amount
+            currency = parseResult.currency
+            date = getUTCnow().toInstant().toEpochMilli()
+            pmtInfId = parseResult.pmtInfId
+            accountServicerReference = "sandboxref-${getRandomString(16)}"
+            direction = "DBIT"
+        }
+        val maybeLocalCreditor = BankAccountEntity.find(
+            BankAccountsTable.iban eq parseResult.creditorIban
+        ).firstOrNull()
+        if (maybeLocalCreditor != null) {
             BankAccountTransactionEntity.new {
-                account = bankAccount
-                demobank = bankAccount.demoBank
+                account = maybeLocalCreditor
+                demobank = maybeLocalCreditor.demoBank
                 creditorIban = parseResult.creditorIban
                 creditorName = parseResult.creditorName
                 creditorBic = parseResult.creditorBic
@@ -732,36 +751,8 @@ private fun handleCct(paymentRequest: String) {
                 date = getUTCnow().toInstant().toEpochMilli()
                 pmtInfId = parseResult.pmtInfId
                 accountServicerReference = "sandboxref-${getRandomString(16)}"
-                direction = "DBIT"
+                direction = "CRDT"
             }
-            val maybeLocalCreditor = BankAccountEntity.find(
-                BankAccountsTable.iban eq parseResult.creditorIban
-            ).firstOrNull()
-            if (maybeLocalCreditor != null) {
-                BankAccountTransactionEntity.new {
-                    account = maybeLocalCreditor
-                    demobank = maybeLocalCreditor.demoBank
-                    creditorIban = parseResult.creditorIban
-                    creditorName = parseResult.creditorName
-                    creditorBic = parseResult.creditorBic
-                    debtorIban = parseResult.debtorIban
-                    debtorName = parseResult.debtorName
-                    debtorBic = parseResult.debtorBic
-                    subject = parseResult.subject
-                    amount = parseResult.amount
-                    currency = parseResult.currency
-                    date = getUTCnow().toInstant().toEpochMilli()
-                    pmtInfId = parseResult.pmtInfId
-                    accountServicerReference = "sandboxref-${getRandomString(16)}"
-                    direction = "CRDT"
-                }
-            }
-        } catch (e: ExposedSQLException) {
-            logger.warn("Could not insert new payment into the database: ${e}")
-            throw EbicsRequestError(
-                "[EBICS_PROCESSING_ERROR] ${e.sqlState}",
-                "091116"
-            )
         }
     }
 }
@@ -1219,9 +1210,7 @@ private fun handleEbicsUploadTransactionInitialization(requestContext: RequestCo
         this.numSegments = numSegments.toInt()
         this.transactionKeyEnc = ExposedBlob(transactionKeyEnc)
     }
-    logger.debug("after SQL flush")
     val sigObj = XMLUtil.convertStringToJaxb<UserSignatureData>(plainSigData.toString(Charsets.UTF_8))
-    logger.debug("got UserSignatureData: ${plainSigData.toString(Charsets.UTF_8)}")
     for (sig in sigObj.value.orderSignatureList ?: listOf()) {
         logger.debug("inserting order signature for orderID $orderID and orderType $orderType")
         EbicsOrderSignatureEntity.new {
@@ -1279,10 +1268,6 @@ private fun handleEbicsUploadTransactionTransmission(requestContext: RequestCont
             }
         }
         if (getOrderTypeFromTransactionId(requestTransactionID) == "CCT") {
-            logger.debug(
-                "Attempting a payment in thread (name/id): " +
-                        "${Thread.currentThread().name}/${Thread.currentThread().id}"
-            )
             handleCct(unzippedData.toString(Charsets.UTF_8))
         }
         return EbicsResponse.createForUploadTransferPhase(
@@ -1407,7 +1392,7 @@ suspend fun ApplicationCall.ebicsweb() {
         "ebicsRequest" -> {
             // logger.debug("ebicsRequest ${XMLUtil.convertDomToString(requestDocument)}")
             val requestObject = requestDocument.toObject<EbicsRequest>()
-            val responseXmlStr = transaction {
+            val responseXmlStr = transaction(Connection.TRANSACTION_SERIALIZABLE, repetitionAttempts = 10) {
                 // Step 1 of 3:  Get information about the host and subscriber
                 val requestContext = makeRequestContext(requestObject)
                 // Step 2 of 3:  Validate the signature

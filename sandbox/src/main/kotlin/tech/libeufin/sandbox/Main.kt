@@ -76,10 +76,7 @@ import io.netty.util.concurrent.AbstractEventExecutor
 import io.netty.util.concurrent.DefaultEventExecutor
 import io.netty.util.concurrent.GlobalEventExecutor
 import io.netty.util.concurrent.SingleThreadEventExecutor
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.newSingleThreadContext
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
@@ -87,6 +84,7 @@ import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransacti
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.slf4j.event.Level
 import org.w3c.dom.Document
 import startServer
 import tech.libeufin.util.*
@@ -95,6 +93,7 @@ import java.math.BigDecimal
 import java.net.BindException
 import java.net.URL
 import java.security.interfaces.RSAPublicKey
+import java.util.concurrent.Executors
 import javax.xml.bind.JAXBContext
 import kotlin.system.exitProcess
 
@@ -469,7 +468,6 @@ suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
     }
 }
 
-val singleThreadContext = newSingleThreadContext("DB")
 fun setJsonHandler(ctx: ObjectMapper) {
     ctx.enable(SerializationFeature.INDENT_OUTPUT)
     ctx.setDefaultPrettyPrinter(DefaultPrettyPrinter().apply {
@@ -481,7 +479,13 @@ fun setJsonHandler(ctx: ObjectMapper) {
 
 val sandboxApp: Application.() -> Unit = {
     install(CallLogging) {
-        this.level = org.slf4j.event.Level.DEBUG
+        this.level = Level.DEBUG
+        this.logger = tech.libeufin.sandbox.logger
+        this.format { call ->
+            val t = Thread.currentThread()
+            "${call.response.status()}, ${call.request.httpMethod.value} ${call.request.path()}" +
+                    " - thread (id/name/group): ${t.id}/${t.name}/${t.threadGroup.name}"
+        }
     }
     install(CORS) {
         anyHost()
@@ -1139,14 +1143,14 @@ val sandboxApp: Application.() -> Unit = {
                 post("/withdrawal-operation/{wopid}") {
                     val wopid: String = ensureNonNull(call.parameters["wopid"])
                     val body = call.receiveJson<TalerWithdrawalSelection>()
-                    val transferDone = newSuspendedTransaction(context = singleThreadContext) {
+                    val transferDone = transaction {
                         val wo = TalerWithdrawalEntity.find {
                             TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
                         }.firstOrNull() ?: throw SandboxError(
                             HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
                         )
                         if (wo.confirmationDone) {
-                            return@newSuspendedTransaction true
+                            return@transaction true
                         }
                         if (wo.selectionDone) {
                             if (body.reserve_pub != wo.reservePub) throw SandboxError(
@@ -1157,7 +1161,7 @@ val sandboxApp: Application.() -> Unit = {
                                 HttpStatusCode.Conflict,
                                 "Selecting a different exchange from the one already selected"
                             )
-                            return@newSuspendedTransaction false
+                            return@transaction false
                         }
                         // Flow here means never selected, hence must as well never be paid.
                         if (wo.confirmationDone) throw internalServerError(
@@ -1613,11 +1617,6 @@ fun serverMain(port: Int) {
                 this.host = "[::1]"
             }
             module(sandboxApp)
-        },
-        configure = {
-            connectionGroupSize = 1
-            workerGroupSize = 1
-            callGroupSize = 1
         }
     )
     logger.info("LibEuFin Sandbox running on port $port")
