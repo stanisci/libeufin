@@ -70,6 +70,8 @@ class DBTest {
                     usersDebtLimit = 10000
                     allowRegistrations = true
                     name = "default"
+                    withSignupBonus = false
+                    uiTitle = "test"
                 }
                 val bankAccount = BankAccountEntity.new {
                     iban = "iban"

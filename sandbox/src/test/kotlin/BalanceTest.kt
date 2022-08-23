@@ -24,6 +24,8 @@ class BalanceTest {
                     usersDebtLimit = 10000
                     allowRegistrations = true
                     name = "default"
+                    withSignupBonus = false
+                    uiTitle = "test"
                 }
                 val one = BankAccountEntity.new {
                     iban = "IBAN 1"
@@ -83,7 +85,7 @@ class BalanceTest {
                     accountServicerReference = "test-account-servicer-reference"
                     this.demobank = demobank
                 }
-                assert(java.math.BigDecimal.ONE == balanceForAccount(one))
+                assert(BigDecimal.ONE == balanceForAccount(one))
             }
         }
     }
