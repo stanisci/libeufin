@@ -95,6 +95,7 @@ import java.net.URL
 import java.security.interfaces.RSAPublicKey
 import java.util.concurrent.Executors
 import javax.xml.bind.JAXBContext
+import kotlin.coroutines.CoroutineContext
 import kotlin.system.exitProcess
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
@@ -1616,7 +1617,13 @@ fun serverMain(port: Int) {
                 this.port = port
                 this.host = "[::1]"
             }
+            parentCoroutineContext = Dispatchers.Main
             module(sandboxApp)
+        },
+        configure = {
+            connectionGroupSize = 1
+            workerGroupSize = 1
+            callGroupSize = 1
         }
     )
     logger.info("LibEuFin Sandbox running on port $port")
