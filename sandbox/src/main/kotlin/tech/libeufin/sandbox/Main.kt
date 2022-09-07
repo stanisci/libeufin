@@ -1209,16 +1209,14 @@ val sandboxApp: Application.() -> Unit = {
                     val payto = parsePayto(req.paytoUri)
                     val amount: String? = payto.amount ?: req.amount
                     if (amount == null) throw badRequest("Amount is missing")
+                    val amountParsed = parseAmountAsString(amount)
                     /**
-                     * Need a transaction block only to let the
-                     * 'demoBank' field of 'bankAccount' accessed.
-                     *
-                     * This could be fixed by making 'getBankAccountWithAuth()'
-                     * return a pair, consisting of the bank account and the demobank
-                     * hosting it.
-                     */
-                    if (!validatePlainAmount(amount)) throw badRequest("Invalid amount: $amount")
+                     * The transaction block below lets the 'demoBank' field
+                     * of 'bankAccount' be correctly accessed.  */
                     transaction {
+                        if ((amountParsed.second != null)
+                            && (bankAccount.demoBank.currency != amountParsed.second))
+                            throw badRequest("Currency '${amountParsed.second}' is wrong")
                         wireTransfer(
                             debitAccount = bankAccount,
                             creditAccount = getBankAccountFromIban(payto.iban),
@@ -1226,7 +1224,7 @@ val sandboxApp: Application.() -> Unit = {
                             subject = payto.message ?: throw badRequest(
                                 "'message' query parameter missing in Payto address"
                             ),
-                            amount = amount
+                            amount = amountParsed.first
                         )
                     }
                     call.respond(object {})
