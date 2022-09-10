@@ -41,7 +41,6 @@ import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.SerializationConfig
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.KotlinModule
@@ -58,7 +57,6 @@ import io.ktor.application.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
-import io.ktor.network.sockets.*
 import io.ktor.request.*
 import io.ktor.response.*
 import io.ktor.routing.*
@@ -66,21 +64,10 @@ import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.util.*
 import io.ktor.util.date.*
-import io.netty.channel.DefaultEventLoop
-import io.netty.channel.DefaultEventLoopGroup
-import io.netty.channel.SingleThreadEventLoop
-import io.netty.channel.epoll.EpollEventLoopGroup
-import io.netty.channel.nio.NioEventLoop
-import io.netty.channel.nio.NioEventLoopGroup
-import io.netty.util.concurrent.AbstractEventExecutor
-import io.netty.util.concurrent.DefaultEventExecutor
-import io.netty.util.concurrent.GlobalEventExecutor
-import io.netty.util.concurrent.SingleThreadEventExecutor
 import kotlinx.coroutines.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -93,9 +80,7 @@ import java.math.BigDecimal
 import java.net.BindException
 import java.net.URL
 import java.security.interfaces.RSAPublicKey
-import java.util.concurrent.Executors
 import javax.xml.bind.JAXBContext
-import kotlin.coroutines.CoroutineContext
 import kotlin.system.exitProcess
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
@@ -1190,12 +1175,18 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     val demobank = ensureDemobank(call)
+                    var captcha_page = call.request.getBaseUrl()
+                    if (!captcha_page.endsWith("/")) {
+                        captcha_page += "/"
+                    }
+                    captcha_page += "demobanks/${demobank.name}"
                     val ret = TalerWithdrawalStatus(
                         selection_done = wo.selectionDone,
                         transfer_done = wo.confirmationDone,
                         amount = "${demobank.currency}:${wo.amount}",
                         suggested_exchange = demobank.suggestedExchangeBaseUrl,
-                        aborted = wo.aborted
+                        aborted = wo.aborted,
+                        confirm_transfer_url = captcha_page
                     )
                     call.respond(ret)
                     return@get
