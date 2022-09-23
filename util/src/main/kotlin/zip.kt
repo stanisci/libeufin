@@ -66,4 +66,5 @@ fun ByteArray.unzipWithLambda(process: (Pair<String, String>) -> Unit) {
             Pair(it.name, zipFile.getInputStream(it).readAllBytes().toString(Charsets.UTF_8))
         )
     }
+    zipFile.close()
 }
