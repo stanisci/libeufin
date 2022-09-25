@@ -14,8 +14,6 @@
     "@types/react-dom": "^16.9.0",
     "@types/react-redux": "^7.1.9",
     "@types/react-router-dom": "^5.1.5",
-    "@types/redux": "^3.6.0",
-    "@types/redux-thunk": "^2.1.0",
     "antd": "^4.2.4",
     "craco": "^0.0.3",
     "craco-less": "1.16",
