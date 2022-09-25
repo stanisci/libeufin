@@ -1,0 +1,1 @@
+The spa.html file is generated from merchant-backoffice.git -> /packages/bank/
