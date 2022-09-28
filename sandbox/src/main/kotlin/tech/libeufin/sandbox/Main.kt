@@ -335,6 +335,10 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         "--auth",
         help = "Disable authentication."
     ).flag("--no-auth", default = true)
+    private val localhostOnly by option(
+        "--localhost-only",
+        help = "Bind only to localhost.  On all interfaces otherwise"
+    ).flag("--no-localhost-only", default = true)
     private val logLevel by option()
     private val port by option().int().default(5000)
     private val withUnixSocket by option(
@@ -364,7 +368,7 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             )
             exitProcess(0)
         }
-        serverMain(port)
+        serverMain(port, localhostOnly)
     }
 }
 
@@ -1594,17 +1598,17 @@ val sandboxApp: Application.() -> Unit = {
     }
 }
 
-fun serverMain(port: Int) {
+fun serverMain(port: Int, localhostOnly: Boolean) {
     val server = embeddedServer(
         Netty,
         environment = applicationEngineEnvironment{
             connector {
                 this.port = port
-                this.host = "127.0.0.1"
+                this.host = if (localhostOnly) "127.0.0.1" else "0.0.0.0"
             }
             connector {
                 this.port = port
-                this.host = "[::1]"
+                this.host = if (localhostOnly) "[::1]" else "[::]"
             }
             parentCoroutineContext = Dispatchers.Main
             module(sandboxApp)

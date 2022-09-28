@@ -21,9 +21,6 @@ package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.options.default
-import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.prompt
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -33,7 +30,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import com.github.ajalt.clikt.core.*
-import com.github.ajalt.clikt.parameters.options.versionOption
+import com.github.ajalt.clikt.parameters.options.*
 import startServer
 import tech.libeufin.nexus.iso20022.parseCamtMessage
 import tech.libeufin.nexus.server.client
@@ -58,6 +55,10 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
+    private val localhostOnly by option(
+        "--localhost-only",
+        help = "Bind only to localhost.  On all interfaces otherwise"
+    ).flag("--no-localhost-only", default = true)
     // Prevent IPv6 mode:
     // private val host by option().default("127.0.0.1")
     private val port by option().int().default(5001)
@@ -79,7 +80,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             )
             exitProcess(0)
         }
-        serverMain(port)
+        serverMain(port, localhostOnly)
     }
 }
 

@@ -1051,17 +1051,17 @@ val nexusApp: Application.() -> Unit = {
         }
     }
 }
-fun serverMain(port: Int) {
+fun serverMain(port: Int, localhostOnly: Boolean) {
     val server = embeddedServer(
         Netty,
         environment = applicationEngineEnvironment {
             connector {
                 this.port = port
-                this.host = "127.0.0.1"
+                this.host = if (localhostOnly) "127.0.0.1" else "0.0.0.0"
             }
             connector {
                 this.port = port
-                this.host = "[::1]"
+                this.host = if (localhostOnly) "[::1]" else "[::]"
             }
             module(nexusApp)
         }
