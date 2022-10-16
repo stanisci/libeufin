@@ -1259,7 +1259,7 @@ val sandboxApp: Application.() -> Unit = {
                         call.getUriComponent("account_name"),
                         demobank
                     )
-                    if (maybeOwnedAccount.owner != username) throw unauthorized(
+                    if (maybeOwnedAccount.owner != username && WITH_AUTH) throw unauthorized(
                         "Customer '$username' has no rights over bank account '${maybeOwnedAccount.label}'"
                     )
                     val req = call.receiveJson<WithdrawalRequest>()
