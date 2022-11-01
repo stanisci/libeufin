@@ -59,6 +59,10 @@ class Serve : CliktCommand("Run nexus HTTP server") {
         "--localhost-only",
         help = "Bind only to localhost.  On all interfaces otherwise"
     ).flag("--no-localhost-only", default = true)
+    private val ipv4Only by option(
+        "--ipv4-only",
+        help = "Bind only to ipv4"
+    ).flag(default = false)
     // Prevent IPv6 mode:
     // private val host by option().default("127.0.0.1")
     private val port by option().int().default(5001)
@@ -80,7 +84,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             )
             exitProcess(0)
         }
-        serverMain(port, localhostOnly)
+        serverMain(port, localhostOnly, ipv4Only)
     }
 }
 

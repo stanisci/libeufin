@@ -339,6 +339,10 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         "--localhost-only",
         help = "Bind only to localhost.  On all interfaces otherwise"
     ).flag("--no-localhost-only", default = true)
+    private val ipv4Only by option(
+        "--ipv4-only",
+        help = "Bind only to ipv4"
+    ).flag(default = false)
     private val logLevel by option()
     private val port by option().int().default(5000)
     private val withUnixSocket by option(
@@ -368,7 +372,7 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             )
             exitProcess(0)
         }
-        serverMain(port, localhostOnly)
+        serverMain(port, localhostOnly, ipv4Only)
     }
 }
 
@@ -1559,7 +1563,7 @@ val sandboxApp: Application.() -> Unit = {
     }
 }
 
-fun serverMain(port: Int, localhostOnly: Boolean) {
+fun serverMain(port: Int, localhostOnly: Boolean, ipv4Only: Boolean) {
     val server = embeddedServer(
         Netty,
         environment = applicationEngineEnvironment{
@@ -1567,7 +1571,7 @@ fun serverMain(port: Int, localhostOnly: Boolean) {
                 this.port = port
                 this.host = if (localhostOnly) "127.0.0.1" else "0.0.0.0"
             }
-            connector {
+            if (!ipv4Only) connector {
                 this.port = port
                 this.host = if (localhostOnly) "[::1]" else "[::]"
             }
