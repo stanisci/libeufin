@@ -397,6 +397,7 @@ fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexus
         )
         // detect name collisions first.
         NexusBankAccountEntity.findByName(nexusBankAccountId).run {
+            // This variable will either host a new, or a found imported bank account.
             val importedAccount = when (this) {
                 is NexusBankAccountEntity -> {
                     if (this.iban != offeredAccount[OfferedBankAccountsTable.iban]) {
@@ -406,8 +407,11 @@ fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexus
                             "Cannot import two different accounts under one label: $nexusBankAccountId"
                         )
                     }
+                    // a imported bank account already exists and
+                    // the user tried to import the same IBAN to it.  Do nothing
                     this
                 }
+                // such named imported account didn't exist.  Make it
                 else -> {
                     val newImportedAccount = NexusBankAccountEntity.new {
                         bankAccountName = nexusBankAccountId
@@ -421,6 +425,8 @@ fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexus
                     newImportedAccount
                 }
             }
+            // Associate the bank account as named by the bank (the 'offered')
+            // with the imported/local one (the 'imported').  Rewrites are acceptable.
             OfferedBankAccountsTable.update(
                 {
                     OfferedBankAccountsTable.offeredAccountId eq offeredBankAccountId and

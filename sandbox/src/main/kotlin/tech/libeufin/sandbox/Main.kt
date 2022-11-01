@@ -1033,45 +1033,6 @@ val sandboxApp: Application.() -> Unit = {
          */
         get("/demobanks/{demobankid}") {
             val demobank = ensureDemobank(call)
-
-            /**
-             * Respond the SPA if the content type is not "application/json".
-             */
-            if (call.request.headers["Content-Type"] != "application/json") {
-                val spa: InputStream? = ClassLoader.getSystemClassLoader().getResourceAsStream("static/spa.html")
-                if (spa == null) throw internalServerError("SPA not found!")
-                // load whole SPA from disk.  Now <200KB, fine to block-read it.
-                var content = String(spa.readBytes(), Charsets.UTF_8)
-                content = content.replace(
-                    "__LIBEUFIN_UI_IS_DEMO__",
-                    demobank.withSignupBonus.toString()
-                )
-                val landingUrl = System.getenv(
-                    "TALER_ENV_URL_INTRO") ?: "https://demo.taler.net/"
-                content = content.replace("__DEMO_SITE_LANDING_URL__", landingUrl)
-                val bankUrl = System.getenv(
-                    "TALER_ENV_URL_BANK") ?: "https://demo.taler.net/sandbox/demobanks/default/"
-                content = content.replace("__DEMO_SITE_BANK_URL__", bankUrl)
-                val blogUrl = System.getenv(
-                    "TALER_ENV_URL_MERCHANT_BLOG") ?: "https://demo.taler.net/blog/"
-                content = content.replace("__DEMO_SITE_BLOG_URL__", blogUrl)
-                val donationsUrl = System.getenv(
-                    "TALER_ENV_URL_MERCHANT_DONATIONS") ?: "https://demo.taler.net/donations/"
-                content = content.replace("__DEMO_SITE_DONATIONS_URL__", donationsUrl)
-                val surveyUrl = System.getenv(
-                    "TALER_ENV_URL_MERCHANT_SURVEY") ?: "https://demo.taler.net/survey/"
-                content = content.replace("__DEMO_SITE_SURVEY_URL__", surveyUrl)
-                content = content.replace(
-                    "__LIBEUFIN_UI_ALLOW_REGISTRATIONS__",
-                    demobank.allowRegistrations.toString()
-                )
-                content = content.replace(
-                    "__LIBEUFIN_UI_BANK_NAME__",
-                    demobank.uiTitle
-                )
-                call.respondText(content, ContentType.Text.Html)
-                return@get
-            }
             expectAdmin(call.request.basicAuth())
             call.respond(getJsonFromDemobankConfig(demobank))
             return@get
