@@ -155,7 +155,7 @@ class Config : CliktCommand(
     ).flag("--without-registrations", default = true)
     private val withSignupBonusOption by option(
         "--with-signup-bonus",
-        help = "Award new customers with 100 units of currency!"
+        help = "Award new customers with 100 units of currency! (default: false)"
     ).flag("--without-signup-bonus", default = false)
 
     override fun run() {
