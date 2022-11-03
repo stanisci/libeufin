@@ -142,7 +142,7 @@ class Config : CliktCommand(
         "--show",
         help = "Only show values, other options will be ignored."
     ).flag("--no-show", default = false)
-    private val captchaUrl by option(
+    private val captchaUrlOption by option(
         "--captcha-url", help = "Needed for browser wallets."
     )
     private val currencyOption by option("--currency").default("EUR")
@@ -195,7 +195,7 @@ class Config : CliktCommand(
                         allowRegistrations = allowRegistrationsOption
                         name = nameArgument
                         this.withSignupBonus = withSignupBonusOption
-                        captchaUrl = captchaUrl
+                        captchaUrl = captchaUrlOption
                     }
                     BankAccountEntity.new {
                         iban = getIban()
