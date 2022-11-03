@@ -125,7 +125,8 @@ data class TalerWithdrawalStatus(
     val suggested_exchange: String? = null,
     val sender_wire: String? = null,
     val aborted: Boolean,
-    val confirm_transfer_url: String
+    // Not needed with CLI wallets.
+    val confirm_transfer_url: String?
 )
 
 data class TalerWithdrawalSelection(

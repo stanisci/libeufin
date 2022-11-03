@@ -75,7 +75,6 @@ import org.slf4j.event.Level
 import org.w3c.dom.Document
 import startServer
 import tech.libeufin.util.*
-import java.io.*
 import java.math.BigDecimal
 import java.net.BindException
 import java.net.URL
@@ -143,9 +142,9 @@ class Config : CliktCommand(
         "--show",
         help = "Only show values, other options will be ignored."
     ).flag("--no-show", default = false)
-    private val uiTitleOption by option(
-        "--ui-title", help = "Title of the Web UI"
-    ).default("Demo Bank")
+    private val captchaUrl by option(
+        "--captcha-url", help = "Needed for browser wallets."
+    )
     private val currencyOption by option("--currency").default("EUR")
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
     private val usersDebtLimitOption by option("--users-debt-limit").int().default(1000)
@@ -180,7 +179,7 @@ class Config : CliktCommand(
                                 val allowRegistrations = maybeDemobank.demoBank.allowRegistrations
                                 val name = maybeDemobank.demoBank.name // always 'default'
                                 val withSignupBonus = maybeDemobank.demoBank.withSignupBonus
-                                val uiTitle = maybeDemobank.demoBank.uiTitle
+                                val webuiUrl = maybeDemobank.demoBank.captchaUrl
                             })
                         )
                         return@transaction
@@ -196,7 +195,7 @@ class Config : CliktCommand(
                         allowRegistrations = allowRegistrationsOption
                         name = nameArgument
                         this.withSignupBonus = withSignupBonusOption
-                        uiTitle = uiTitleOption
+                        captchaUrl = captchaUrl
                     }
                     BankAccountEntity.new {
                         iban = getIban()
@@ -214,7 +213,6 @@ class Config : CliktCommand(
                 maybeDemobank.demoBank.allowRegistrations = allowRegistrationsOption
                 maybeDemobank.demoBank.withSignupBonus = withSignupBonusOption
                 maybeDemobank.demoBank.name = nameArgument
-                maybeDemobank.demoBank.uiTitle = uiTitleOption
             }
         }
     }
@@ -1144,10 +1142,8 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     val demobank = ensureDemobank(call)
-                    var captcha_page = call.request.header("X-Frontend-Uri") ?: call.request.getBaseUrl()
-                    if (!captcha_page.endsWith("/")) {
-                        captcha_page += "/"
-                    }
+                    var captcha_page = demobank.captchaUrl
+                    if (captcha_page == null) logger.warn("CAPTCHA URL not found")
                     captcha_page += "demobanks/${demobank.name}"
                     val ret = TalerWithdrawalStatus(
                         selection_done = wo.selectionDone,

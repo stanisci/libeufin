@@ -19,7 +19,6 @@
 
 package tech.libeufin.sandbox
 
-import io.ktor.http.*
 import org.jetbrains.exposed.dao.Entity
 import org.jetbrains.exposed.dao.EntityClass
 import org.jetbrains.exposed.dao.IntEntity
@@ -33,7 +32,6 @@ import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.util.internalServerError
 import java.sql.Connection
 
 /**
@@ -98,7 +96,7 @@ object DemobankConfigsTable : LongIdTable() {
     val name = text("hostname")
     val suggestedExchangeBaseUrl = text("suggestedExchangeBaseUrl").nullable()
     val suggestedExchangePayto = text("suggestedExchangePayto").nullable()
-    val uiTitle = text("uiTitle")
+    val captchaUrl = text("captchaUrl").nullable()
 }
 
 class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -109,9 +107,9 @@ class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
     var bankDebtLimit by DemobankConfigsTable.bankDebtLimit
     var usersDebtLimit by DemobankConfigsTable.usersDebtLimit
     var name by DemobankConfigsTable.name
+    var captchaUrl by DemobankConfigsTable.captchaUrl
     var suggestedExchangeBaseUrl by DemobankConfigsTable.suggestedExchangeBaseUrl
     var suggestedExchangePayto by DemobankConfigsTable.suggestedExchangePayto
-    var uiTitle by DemobankConfigsTable.uiTitle
 }
 
 /**
