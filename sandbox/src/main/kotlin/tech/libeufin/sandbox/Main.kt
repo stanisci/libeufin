@@ -179,7 +179,7 @@ class Config : CliktCommand(
                                 val allowRegistrations = maybeDemobank.demoBank.allowRegistrations
                                 val name = maybeDemobank.demoBank.name // always 'default'
                                 val withSignupBonus = maybeDemobank.demoBank.withSignupBonus
-                                val webuiUrl = maybeDemobank.demoBank.captchaUrl
+                                val captchaUrl = maybeDemobank.demoBank.captchaUrl
                             })
                         )
                         return@transaction
