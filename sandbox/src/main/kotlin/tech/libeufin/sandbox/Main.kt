@@ -1144,7 +1144,7 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     val demobank = ensureDemobank(call)
-                    var captcha_page = call.request.getBaseUrl()
+                    var captcha_page = call.request.header("X-Frontend-Uri") ?: call.request.getBaseUrl()
                     if (!captcha_page.endsWith("/")) {
                         captcha_page += "/"
                     }
