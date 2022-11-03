@@ -1144,7 +1144,6 @@ val sandboxApp: Application.() -> Unit = {
                     val demobank = ensureDemobank(call)
                     var captcha_page = demobank.captchaUrl
                     if (captcha_page == null) logger.warn("CAPTCHA URL not found")
-                    captcha_page += "demobanks/${demobank.name}"
                     val ret = TalerWithdrawalStatus(
                         selection_done = wo.selectionDone,
                         transfer_done = wo.confirmationDone,
