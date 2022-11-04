@@ -142,9 +142,10 @@ class Config : CliktCommand(
         "--show",
         help = "Only show values, other options will be ignored."
     ).flag("--no-show", default = false)
+    // FIXME: This really should not be a global option!
     private val captchaUrlOption by option(
         "--captcha-url", help = "Needed for browser wallets."
-    )
+    ).default("https://bank.demo.taler.net/")
     private val currencyOption by option("--currency").default("EUR")
     private val bankDebtLimitOption by option("--bank-debt-limit").int().default(1000000)
     private val usersDebtLimitOption by option("--users-debt-limit").int().default(1000)
