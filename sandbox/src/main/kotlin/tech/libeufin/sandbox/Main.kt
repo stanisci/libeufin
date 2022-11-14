@@ -214,6 +214,7 @@ class Config : CliktCommand(
                 maybeDemobank.demoBank.allowRegistrations = allowRegistrationsOption
                 maybeDemobank.demoBank.withSignupBonus = withSignupBonusOption
                 maybeDemobank.demoBank.name = nameArgument
+                maybeDemobank.demoBank.captchaUrl = captchaUrlOption
             }
         }
     }
