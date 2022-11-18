@@ -71,7 +71,7 @@ data class PainParseResult(
 open class EbicsRequestError(
     val errorText: String,
     val errorCode: String
-) : Exception("EBICS request  error: $errorText ($errorCode)")
+) : Exception("$errorText ($errorCode)")
 
 class EbicsNoDownloadDataAvailable(camtType: Int) : EbicsRequestError(
     "[EBICS_NO_DOWNLOAD_DATA_AVAILABLE] for Camt $camtType",
@@ -131,7 +131,7 @@ suspend fun respondEbicsTransfer(
      * which Ebics host was requested belongs to the request document.
      *
      * Therefore, because any (? Please verify!) Ebics response
-     * should speak for one Ebics host, we won't respond any Ebics
+     * should speak for one Ebics host, we can't respond any Ebics
      * type when the Ebics host ID remains unknown due to invalid
      * request.  Instead, we'll respond plain text:
      */
@@ -984,10 +984,6 @@ fun receiveEbicsXmlInternal(xmlData: String): Document {
         throw EbicsInvalidXmlError()
     }
     return requestDocument
-}
-suspend fun ApplicationCall.receiveEbicsXml(): Document {
-    val body: String = receiveText()
-    return receiveEbicsXmlInternal(body)
 }
 
 private fun makePartnerInfo(subscriber: EbicsSubscriberEntity): EbicsTypes.PartnerInfo {

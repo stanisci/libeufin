@@ -20,7 +20,14 @@ class XMLEbicsConverter : ContentConverter {
         context: PipelineContext<ApplicationReceiveRequest, ApplicationCall>): Any? {
         val value = context.subject.value as? ByteReadChannel ?: return null
         return withContext(Dispatchers.IO) {
-            receiveEbicsXmlInternal(value.toInputStream().reader().readText())
+            try {
+                receiveEbicsXmlInternal(value.toInputStream().reader().readText())
+            } catch (e: Exception) {
+                throw SandboxError(
+                    HttpStatusCode.BadRequest,
+                    "Document is invalid XML."
+                )
+            }
         }
     }
     override suspend fun convertForSend(

@@ -969,15 +969,14 @@ val sandboxApp: Application.() -> Unit = {
                 call.ebicsweb()
             }
             /**
-             * The catch blocks below act as translators from
-             * generic error types to EBICS-formatted responses.
-             */
+             * The catch blocks try to extract a EBICS error message from the
+             * exception type being handled.  NOT (double) logging under each
+             * catch block as ultimately the registered exception handler is expected
+             * to log. */
             catch (e: UtilError) {
-                logger.error(e.reason)
                 throw EbicsProcessingError("Serving EBICS threw unmanaged UtilError: ${e.reason}")
             }
             catch (e: SandboxError) {
-                logger.error(e.reason)
                 // Should translate to EBICS error code.
                 when (e.errorCode) {
                     LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
@@ -989,14 +988,12 @@ val sandboxApp: Application.() -> Unit = {
                 respondEbicsTransfer(call, e.errorText, e.errorCode)
             }
             catch (e: EbicsRequestError) {
-                logger.error(e.errorText)
                 // Preventing the last catch-all block
                 // from capturing a known type.
                 throw e
             }
             catch (e: Exception) {
-                logger.error(e.message)
-                throw EbicsProcessingError("Unmanaged error: $e")
+                throw EbicsProcessingError("Could not map error to EBICS code: $e")
             }
             return@post
         }
