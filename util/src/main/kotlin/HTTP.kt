@@ -19,7 +19,9 @@ fun unauthorized(msg: String): UtilError {
 
 fun notFound(msg: String): UtilError {
     return UtilError(
-        HttpStatusCode.NotFound, msg, LibeufinErrorCode.LIBEUFIN_EC_NONE
+        HttpStatusCode.NotFound,
+        msg,
+        LibeufinErrorCode.LIBEUFIN_EC_NONE
     )
 }
 

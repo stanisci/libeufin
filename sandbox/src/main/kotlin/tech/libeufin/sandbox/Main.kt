@@ -476,9 +476,7 @@ val sandboxApp: Application.() -> Unit = {
         this.level = Level.DEBUG
         this.logger = tech.libeufin.sandbox.logger
         this.format { call ->
-            val t = Thread.currentThread()
-            "${call.response.status()}, ${call.request.httpMethod.value} ${call.request.path()}" +
-                    " - thread (id/name/group): ${t.id}/${t.name}/${t.threadGroup.name}"
+            "${call.response.status()}, ${call.request.httpMethod.value} ${call.request.path()}"
         }
     }
     install(CORS) {
@@ -507,7 +505,7 @@ val sandboxApp: Application.() -> Unit = {
     }
     install(StatusPages) {
         exception<ArithmeticException> { cause ->
-            logger.error("Exception while handling '${call.request.uri}'", cause)
+            logger.error("Exception while handling '${call.request.uri}', ${cause.message}")
             call.respondText(
                 "Invalid arithmetic attempted.",
                 ContentType.Text.Plain,
@@ -529,7 +527,7 @@ val sandboxApp: Application.() -> Unit = {
             )
         }
         exception<UtilError> { cause ->
-            logger.error("Exception while handling '${call.request.uri}'", cause)
+            logger.error("Exception while handling '${call.request.uri}', ${cause.reason}")
             call.respond(
                 cause.statusCode,
                 SandboxErrorJson(
@@ -545,7 +543,7 @@ val sandboxApp: Application.() -> Unit = {
             respondEbicsTransfer(call, e.errorText, e.errorCode)
         }
         exception<Throwable> { cause ->
-            logger.error("Exception while handling '${call.request.uri}'", cause)
+            logger.error("Exception while handling '${call.request.uri}'", cause.message)
             call.respondText(
                 "Internal server error.",
                 ContentType.Text.Plain,
