@@ -26,7 +26,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.features.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import io.ktor.util.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.NexusError
@@ -223,7 +222,7 @@ suspend fun doEbicsUploadTransaction(
     logger.debug("INIT phase passed!")
     /* now send actual payload */
 
-    val tmp = createEbicsRequestForUploadTransferPhase(
+    val payload = createEbicsRequestForUploadTransferPhase(
         subscriberDetails,
         transactionID,
         preparedUploadData,
@@ -232,7 +231,7 @@ suspend fun doEbicsUploadTransaction(
 
     val txRespStr = client.postToBank(
         subscriberDetails.ebicsUrl,
-        tmp
+        payload
     )
 
     val txResp = parseAndValidateEbicsResponse(subscriberDetails, txRespStr)

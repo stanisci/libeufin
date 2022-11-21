@@ -89,6 +89,7 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
             (PaymentInitiationsTable.submitted eq false) and (
                     PaymentInitiationsTable.bankAccount eq account.id)
         }.forEach {
+            // Filter out non EBICS.
             val defaultBankConnectionId = it.bankAccount.defaultBankConnection?.id ?: throw NexusError(
                 HttpStatusCode.BadRequest,
                 "needs default bank connection"

@@ -112,7 +112,8 @@ private suspend fun fetchEbicsC5x(
         )
     } catch (e: EbicsProtocolError) {
         /**
-         * This error type is not an actual error in this handler.
+         * Although given a error type, a empty transactions list does
+         * not mean anything wrong.
          */
         if (e.ebicsTechnicalCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
             logger.info("Could not find new transactions to download")
@@ -543,6 +544,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             r.painMessage.toByteArray(Charsets.UTF_8),
             EbicsStandardOrderParams()
         )
+        // Mark the payment as submitted.
         transaction {
             val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
                 ?: throw NexusError(HttpStatusCode.NotFound, "payment initiation not found")

@@ -48,7 +48,6 @@ private data class TaskSchedule(
 private suspend fun runTask(client: HttpClient, sched: TaskSchedule) {
     logger.info("running task $sched")
     try {
-
         when (sched.resourceType) {
             "bank-account" -> {
                 when (sched.type) {

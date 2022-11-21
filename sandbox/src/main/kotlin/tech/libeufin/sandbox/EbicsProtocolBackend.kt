@@ -283,7 +283,7 @@ fun buildCamtString(
      * - Proprietary code of the bank transaction
      * - Id of the servicer (Issuer and Code)
      */
-    val creationTime = getUTCnow()
+    val creationTime = getUTCnow() // FIXME: should this be the payment time?
     val dashedDate = creationTime.toDashedDate()
     val zonedDateTime = creationTime.toZonedString()
     val creationTimeMillis = creationTime.toInstant().toEpochMilli()
