@@ -664,7 +664,6 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         node.set<JsonNode>("details", details)
         return node
     }
-
     override fun createConnection(connId: String, user: NexusUserEntity, data: JsonNode) {
         val bankConn = NexusBankConnectionEntity.new {
             this.connectionId = connId
