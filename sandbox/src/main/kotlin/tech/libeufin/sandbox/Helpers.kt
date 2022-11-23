@@ -30,6 +30,9 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.util.*
 import java.math.BigDecimal
+import java.security.interfaces.RSAPublicKey
+import java.util.*
+import java.util.zip.DeflaterInputStream
 
 /**
  * Helps to communicate Camt values without having
@@ -180,7 +183,8 @@ fun wireTransfer(
     creditAccount: String,
     demobank: String,
     subject: String,
-    amount: String // $currency:x.y
+    amount: String, // $currency:x.y
+    pmtInfId: String? = null
 ): String {
     val args: Triple<BankAccountEntity, BankAccountEntity, DemobankConfigEntity> = transaction {
         val debitAccountDb = BankAccountEntity.find {
@@ -215,7 +219,8 @@ fun wireTransfer(
         creditAccount = args.second,
         demobank = args.third,
         subject = subject,
-        amount = amountObj.amount.toPlainString()
+        amount = amountObj.amount.toPlainString(),
+        pmtInfId
     )
 }
 /**
@@ -234,6 +239,7 @@ fun wireTransfer(
     demobank: DemobankConfigEntity,
     subject: String,
     amount: String,
+    pmtInfId: String? = null
 ): String {
     // sanity check on the amount, no currency allowed here.
     val checkAmount = parseDecimal(amount)
@@ -256,6 +262,7 @@ fun wireTransfer(
             account = creditAccount
             direction = "CRDT"
             this.demobank = demobank
+            this.pmtInfId = pmtInfId
         }
         BankAccountTransactionEntity.new {
             creditorIban = creditAccount.iban
@@ -272,6 +279,7 @@ fun wireTransfer(
             account = debitAccount
             direction = "DBIT"
             this.demobank = demobank
+            this.pmtInfId = pmtInfId
         }
     }
     return transactionRef
@@ -401,4 +409,21 @@ fun getBankAccountWithAuth(call: ApplicationCall): BankAccountEntity {
         "Customer '$username' cannot access bank account '$accountAccessed'"
     )
     return bankAccount
+}
+
+/**
+ * Compress, encrypt, encode a EBICS payload.  The payload
+ * is assumed to be a Zip archive with only one entry.
+ * Return the customer key (second element) along the data.
+ */
+fun prepareEbicsPayload(
+    payload: String, pub: RSAPublicKey
+): Pair<String, CryptoUtil.EncryptionResult> {
+    val zipSingleton = mutableListOf(payload.toByteArray()).zip()
+    val compressedResponse = DeflaterInputStream(zipSingleton.inputStream()).use {
+        it.readAllBytes()
+    }
+    val enc = CryptoUtil.encryptEbicsE002(compressedResponse, pub)
+    return Pair(Base64.getEncoder().encodeToString(enc.encryptedData), enc)
+
 }
