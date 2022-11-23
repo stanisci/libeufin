@@ -60,11 +60,11 @@ private suspend fun runTask(client: HttpClient, sched: TaskSchedule) {
                         submitAllPaymentInitiations(client, sched.resourceId)
                     }
                     else -> {
-                        logger.error("task type ${sched.type} not understood")
+                        logger.error("task type ${sched.type} not supported")
                     }
                 }
             }
-            else -> logger.error("task on resource ${sched.resourceType} not understood")
+            else -> logger.error("task on resource ${sched.resourceType} not supported")
         }
     } catch (e: Exception) {
         logger.error("Exception during task $sched", e)

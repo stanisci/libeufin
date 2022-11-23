@@ -92,7 +92,7 @@ data class SandboxError(
     val statusCode: HttpStatusCode,
     val reason: String,
     val errorCode: LibeufinErrorCode? = null
-) : Exception()
+) : Exception(reason)
 
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
@@ -975,6 +975,8 @@ val sandboxApp: Application.() -> Unit = {
                 throw EbicsProcessingError("Serving EBICS threw unmanaged UtilError: ${e.reason}")
             }
             catch (e: SandboxError) {
+                val payload: String = e.message ?: e.stackTraceToString()
+                logger.info(payload)
                 // Should translate to EBICS error code.
                 when (e.errorCode) {
                     LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")

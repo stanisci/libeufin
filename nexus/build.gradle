@@ -61,6 +61,7 @@ dependencies {
 
     // LibEuFin util library
     implementation project(":util")
+    implementation project(":sandbox") // for testing
 
     // Logging
     implementation 'ch.qos.logback:logback-classic:1.2.5'
@@ -89,6 +90,7 @@ dependencies {
     implementation "io.ktor:ktor-server-core:$ktor_version"
     implementation "io.ktor:ktor-client-apache:$ktor_version"
     implementation "io.ktor:ktor-server-netty:$ktor_version"
+    implementation "io.ktor:ktor-server-test-host:$ktor_version"
     implementation "io.ktor:ktor-auth:$ktor_version"
     implementation "io.ktor:ktor-jackson:$ktor_version"
 

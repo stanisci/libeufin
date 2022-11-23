@@ -34,7 +34,6 @@ import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
-import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.w3c.dom.Document
 import tech.libeufin.util.*
@@ -152,8 +151,8 @@ suspend fun respondEbicsTransfer(
             EbicsHostsTable.hostID.upperCase() eq call.attributes[EbicsHostIdAttribute]
                 .uppercase()
         }.firstOrNull() ?: throw SandboxError(
-            io.ktor.http.HttpStatusCode.InternalServerError,
-            "Requested Ebics host ID not found."
+            HttpStatusCode.InternalServerError,
+            "Requested Ebics host ID (${call.attributes[EbicsHostIdAttribute]}) not found."
         )
         CryptoUtil.loadRsaPrivateKey(host.authenticationPrivateKey.bytes)
     }
@@ -1123,7 +1122,9 @@ private fun handleEbicsDownloadTransactionTransfer(requestContext: RequestContex
     )
 }
 
-
+/**
+ *
+ */
 private fun handleEbicsDownloadTransactionInitialization(requestContext: RequestContext): EbicsResponse {
     val orderType =
         requestContext.requestObject.header.static.orderDetails?.orderType ?: throw EbicsInvalidRequestError()
@@ -1149,6 +1150,10 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
     val totalSize = encodedResponse.length
     val numSegments = ((totalSize + segmentSize - 1) / segmentSize)
 
+    /**
+     * Clarify: the encoded response seems to be returned here
+     * (init phase) AND along the transfer phase.
+     */
     EbicsDownloadTransactionEntity.new(transactionID) {
         this.subscriber = requestContext.subscriber
         this.host = requestContext.ebicsHost
@@ -1163,7 +1168,7 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
         transactionID,
         numSegments,
         segmentSize,
-        enc,
+        enc, // has customer key
         encodedResponse
     )
 }
@@ -1287,7 +1292,6 @@ private fun makeRequestContext(requestObject: EbicsRequest): RequestContext {
     var downloadTransaction: EbicsDownloadTransactionEntity? = null
     var uploadTransaction: EbicsUploadTransactionEntity? = null
     val subscriber = if (requestTransactionID != null) {
-        // println("finding subscriber by transactionID $requestTransactionID")
         downloadTransaction = EbicsDownloadTransactionEntity.findById(requestTransactionID.uppercase(Locale.getDefault()))
         if (downloadTransaction != null) {
             downloadTransaction.subscriber
@@ -1344,8 +1348,6 @@ suspend fun ApplicationCall.ebicsweb() {
         EbicsHostIdAttribute,
         requestedHostID.item(0).textContent
     )
-    // val requestDocument = receiveEbicsXml()
-    // logger.info("Processing ${requestDocument.documentElement.localName}")
     when (requestDocument.documentElement.localName) {
         "ebicsUnsecuredRequest" -> {
             val requestObject = requestDocument.toObject<EbicsUnsecuredRequest>()
@@ -1370,7 +1372,6 @@ suspend fun ApplicationCall.ebicsweb() {
             }
 
             val strResp = XMLUtil.convertJaxbToString(hevResponse)
-            logger.debug("HEV response: $strResp")
             if (!XMLUtil.validateFromString(strResp)) throw SandboxError(
                 HttpStatusCode.InternalServerError,
                 "Outgoing HEV response is invalid"
@@ -1386,7 +1387,6 @@ suspend fun ApplicationCall.ebicsweb() {
             }
         }
         "ebicsRequest" -> {
-            // logger.debug("ebicsRequest ${XMLUtil.convertDomToString(requestDocument)}")
             val requestObject = requestDocument.toObject<EbicsRequest>()
             val responseXmlStr = transaction(Connection.TRANSACTION_SERIALIZABLE, repetitionAttempts = 10) {
                 // Step 1 of 3:  Get information about the host and subscriber
