@@ -1150,10 +1150,6 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
     val totalSize = encodedResponse.length
     val numSegments = ((totalSize + segmentSize - 1) / segmentSize)
 
-    /**
-     * Clarify: the encoded response seems to be returned here
-     * (init phase) AND along the transfer phase.
-     */
     EbicsDownloadTransactionEntity.new(transactionID) {
         this.subscriber = requestContext.subscriber
         this.host = requestContext.ebicsHost
