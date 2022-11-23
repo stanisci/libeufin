@@ -13,30 +13,6 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import java.io.File
 
-/**
- * Run a block after connecting to the test database.
- * Cleans up the DB file afterwards.
- */
-fun withTestDatabase(f: () -> Unit) {
-    val dbfile = "test-db.sqlite3"
-    File(dbfile).also {
-        if (it.exists()) {
-            it.delete()
-        }
-    }
-    Database.connect("jdbc:sqlite:$dbfile", "org.sqlite.JDBC")
-    try {
-        f()
-    }
-    finally {
-        File(dbfile).also {
-            if (it.exists()) {
-                it.delete()
-            }
-        }
-    }
-}
-
 object ContainedTableWithIntId : IntIdTable() {
     val column = text("column")
 }

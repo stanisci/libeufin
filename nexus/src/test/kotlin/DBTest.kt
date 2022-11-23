@@ -4,32 +4,8 @@ import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
+import withTestDatabase
 import java.io.File
-
-/**
- * Run a block after connecting to the test database.
- * Cleans up the DB file afterwards.
- */
-fun withTestDatabase(f: () -> Unit) {
-    val dbfile = "jdbc:sqlite:/tmp/nexus-test.sqlite3"
-    File(dbfile).also {
-        if (it.exists()) {
-            it.delete()
-        }
-    }
-    Database.connect("jdbc:sqlite:$dbfile")
-    dbDropTables(dbfile)
-    try {
-        f()
-    }
-    finally {
-        File(dbfile).also {
-            if (it.exists()) {
-                it.delete()
-            }
-        }
-    }
-}
 
 object MyTable : Table() {
     val col1 = text("col1")
