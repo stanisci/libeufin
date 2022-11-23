@@ -72,7 +72,9 @@ fun getCustomEbicsServer(r: EbicsResponses, endpoint: String = "/ebicsweb"): App
 }
 
 /**
- * Remove @Ignore, after having put asserts along tests.
+ * Remove @Ignore, after having put asserts along tests,
+ * and having had access to runTask and TaskSchedule, that
+ * are now 'private'.
  */
 @Ignore
 class SchedulingTest {
