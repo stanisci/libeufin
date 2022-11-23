@@ -71,6 +71,9 @@ fun getCustomEbicsServer(r: EbicsResponses, endpoint: String = "/ebicsweb"): App
     return ret
 }
 
+/**
+ * Remove @Ignore, after having put asserts along tests.
+ */
 @Ignore
 class SchedulingTest {
     /**
