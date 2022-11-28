@@ -24,6 +24,7 @@ import com.cronutils.model.time.ExecutionTime
 import com.cronutils.parser.CronParser
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.client.HttpClient
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.time.delay
@@ -35,6 +36,7 @@ import java.lang.IllegalArgumentException
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
+import kotlin.system.exitProcess
 
 private data class TaskSchedule(
     val taskId: Long,
@@ -68,6 +70,9 @@ private suspend fun runTask(client: HttpClient, sched: TaskSchedule) {
         }
     } catch (e: Exception) {
         logger.error("Exception during task $sched", e)
+    } catch (so: StackOverflowError) {
+        logger.error(so.stackTraceToString())
+        exitProcess(1)
     }
 }
 
@@ -85,9 +90,16 @@ object NexusCron {
         CronParser(cronDefinition)
     }
 }
-
+/**
+ * Here to catch StackOverflowError and exit.  It is not clear however
+ * if this handler catches also the 'Error' type.
+ */
+val fallback = CoroutineExceptionHandler { _, err ->
+    logger.error(err.stackTraceToString())
+    exitProcess(1)
+}
 fun startOperationScheduler(httpClient: HttpClient) {
-    GlobalScope.launch {
+    GlobalScope.launch(fallback) {
         while (true) {
             // First, assign next execution time stamps to all tasks that need them
             transaction {
@@ -117,7 +129,6 @@ fun startOperationScheduler(httpClient: HttpClient) {
                     TaskSchedule(it.id.value, it.taskName, it.taskType, it.resourceType, it.resourceId, it.taskParams)
                 }
             }
-
             // Execute those due tasks
             dueTasks.forEach {
                 runTask(httpClient, it)
