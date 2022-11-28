@@ -489,9 +489,8 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 }
             }
         }
-        /* Not handling errors here because
-          sub-calls should throw and get caught by
-          global handlers.
+        /**
+         * Downloads and stores the bank message into the database.  No ingestion.
          */
         for (spec in specs)
             fetchEbicsC5x(

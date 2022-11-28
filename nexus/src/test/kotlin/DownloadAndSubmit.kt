@@ -100,16 +100,29 @@ class SchedulingTest {
     @Test
     fun download() {
         withNexusAndSandboxUser {
+            wireTransfer(
+                "bank",
+                "foo",
+                "default",
+                "Show up in logging!",
+                "TESTKUDOS:5"
+            )
+            wireTransfer(
+                "bank",
+                "foo",
+                "default",
+                "Exist in logging!",
+                "TESTKUDOS:5"
+            )
             withTestApplication(sandboxApp) {
                 val conn = EbicsBankConnectionProtocol()
                 runBlocking {
-                    conn.fetchTransactions(
+                    fetchBankAccountTransactions(
+                        client,
                         fetchSpec = FetchSpecAllJson(
                             level = FetchLevel.REPORT,
                             "foo"
                         ),
-                        client,
-                        "foo",
                         "mock-bank-account"
                     )
                 }

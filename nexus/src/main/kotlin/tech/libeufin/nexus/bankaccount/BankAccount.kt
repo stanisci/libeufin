@@ -146,6 +146,10 @@ data class CamtTransactionsCount(
     val downloadedTransactions: Int
 )
 
+/**
+ * Get the Camt parsed by a helper function, discards duplicates
+ * and stores new transactions.
+ */
 fun processCamtMessage(
     bankAccountId: String, camtDoc: Document, code: String
 ): CamtTransactionsCount {
@@ -173,6 +177,7 @@ fun processCamtMessage(
                 if (b.type == "CLBD") {
                     clbdCount++
                     val lastBalance = NexusBankBalanceEntity.all().lastOrNull()
+                    // Only store non seen balances.
                     if (lastBalance != null && b.amount.toPlainString() != lastBalance.balance) {
                         NexusBankBalanceEntity.new {
                             bankAccount = acct
@@ -188,7 +193,10 @@ fun processCamtMessage(
                 }
             }
         }
-
+        /**
+         * Why is the report/statement creation timestamp important,
+         * rather than each individual payment identification value?
+         */
         val stamp =
             ZonedDateTime.parse(res.creationDateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant().toEpochMilli()
         when (code) {
@@ -206,7 +214,7 @@ fun processCamtMessage(
             }
         }
         val entries = res.reports.map { it.entries }.flatten()
-        logger.info("found ${entries.size} money movements")
+        var newPaymentsLog = ""
         downloadedTransactions = entries.size
         txloop@ for (entry in entries) {
             val singletonBatchedTransaction = entry.batches?.get(0)?.batchTransactions?.get(0)
@@ -238,6 +246,7 @@ fun processCamtMessage(
             }
             rawEntity.flush()
             newTransactions++
+            newPaymentsLog += "\n- " + entry.batches[0].batchTransactions[0].details.unstructuredRemittanceInformation
             // This block tries to acknowledge a former outgoing payment as booked.
             if (singletonBatchedTransaction.creditDebitIndicator == CreditDebitIndicator.DBIT) {
                 val t0 = singletonBatchedTransaction.details
@@ -255,6 +264,8 @@ fun processCamtMessage(
                 }
             }
         }
+        if (newTransactions > 0)
+            logger.debug("Camt $code '${res.messageId}' has new payments:${newPaymentsLog}")
     }
     return CamtTransactionsCount(
         newTransactions = newTransactions,

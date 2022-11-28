@@ -551,7 +551,12 @@ private fun constructCamtResponse(
             balancePrcd = lastBalance,
             balanceClbd = freshBalance
         )
-        logger.debug("camt.052 document '${camtData.messageId}' generated.")
+        val payments: String = if (logger.isDebugEnabled) {
+            var ret = " It includes the payments:"
+            for (p in history) ret += "\n- ${p.subject}"
+            ret
+        } else ""
+        logger.debug("camt.052 document '${camtData.messageId}' generated.$payments")
         return listOf(
             camtData.camtMessage
         )
