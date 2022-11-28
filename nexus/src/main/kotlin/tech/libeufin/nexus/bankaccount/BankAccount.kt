@@ -149,7 +149,6 @@ data class CamtTransactionsCount(
 fun processCamtMessage(
     bankAccountId: String, camtDoc: Document, code: String
 ): CamtTransactionsCount {
-    logger.info("processing CAMT message")
     var newTransactions = 0
     var downloadedTransactions = 0
     transaction {
@@ -371,7 +370,10 @@ suspend fun fetchBankAccountTransactions(
             val connectionName = conn.connectionId
         }
     }
-    // abstracts over the connection type: ebics or others.
+    /**
+     * Collects transactions from the bank and stores the (camt)
+     * document into the database.
+     */
     getConnectionPlugin(res.connectionType).fetchTransactions(
         fetchSpec,
         client,

@@ -156,7 +156,6 @@ private fun signOrder(
     return userSignatureData
 }
 
-
 fun createEbicsRequestForDownloadReceipt(
     subscriberDetails: EbicsClientSubscriberDetails,
     transactionID: String
@@ -232,11 +231,12 @@ fun createEbicsRequestForUploadInitialization(
     orderParams: EbicsOrderParams,
     preparedUploadData: PreparedUploadData
 ): String {
+    val nonce = getNonce(128)
     val req = EbicsRequest.createForUploadInitializationPhase(
         preparedUploadData.transactionKey,
         preparedUploadData.userSignatureDataEncrypted,
         subscriberDetails.hostId,
-        getNonce(128),
+        nonce,
         subscriberDetails.partnerId,
         subscriberDetails.userId,
         DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
@@ -246,6 +246,15 @@ fun createEbicsRequestForUploadInitialization(
         orderType,
         makeOrderParams(orderParams)
     )
+    /**
+     * FIXME: this log should be made by the caller.
+     * That way, all the EBICS transaction steps would be logged in only one function,
+     * as opposed to have them spread through the helpers here.  This function
+     * returning a string blocks now, since the caller should parse and stringify
+     * again the message, only to get its nonce.
+     */
+    logger.debug("Created EBICS $orderType document for upload initialization," +
+            " nonce: ${nonce.toHexString()}")
     val doc = XMLUtil.convertJaxbToDocument(req)
     XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv)
     return XMLUtil.convertDomToString(doc)
@@ -257,11 +266,12 @@ fun createEbicsRequestForDownloadInitialization(
     orderType: String,
     orderParams: EbicsOrderParams
 ): String {
+    val nonce = getNonce(128)
     val req = EbicsRequest.createForDownloadInitializationPhase(
         subscriberDetails.userId,
         subscriberDetails.partnerId,
         subscriberDetails.hostId,
-        getNonce(128),
+        nonce,
         DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
         subscriberDetails.bankEncPub ?: throw EbicsProtocolError(
             HttpStatusCode.BadRequest,
@@ -274,6 +284,15 @@ fun createEbicsRequestForDownloadInitialization(
         orderType,
         makeOrderParams(orderParams)
     )
+    /**
+     * FIXME: this log should be made by the caller.
+     * That way, all the EBICS transaction steps would be logged in only one function,
+     * as opposed to have them spread through the helpers here.  This function
+     * returning a string blocks now, since the caller should parse and stringify
+     * again the message, only to get its nonce.
+     */
+    logger.debug("Created EBICS $orderType document for download initialization," +
+            " nonce: ${nonce.toHexString()}")
     val doc = XMLUtil.convertJaxbToDocument(req)
     XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv)
     return XMLUtil.convertDomToString(doc)
@@ -295,7 +314,6 @@ fun createEbicsRequestForDownloadTransferPhase(
     XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv)
     return XMLUtil.convertDomToString(doc)
 }
-
 
 fun createEbicsRequestForUploadTransferPhase(
     subscriberDetails: EbicsClientSubscriberDetails,

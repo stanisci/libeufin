@@ -544,17 +544,19 @@ private fun constructCamtResponse(
             baseBalance = lastBalance
         )
 
+        val camtData = buildCamtString(
+            type,
+            bankAccount.iban,
+            history,
+            balancePrcd = lastBalance,
+            balanceClbd = freshBalance
+        )
+        logger.debug("camt.052 document '${camtData.messageId}' generated.")
         return listOf(
-            buildCamtString(
-                type,
-                bankAccount.iban,
-                history,
-                balancePrcd = lastBalance,
-                balanceClbd = freshBalance
-            ).camtMessage
+            camtData.camtMessage
         )
     }
-    SandboxAssert(type == 53, "Didn't catch unsupported Camt type")
+    SandboxAssert(type == 53, "Didn't catch unsupported CAMT type")
     logger.debug("Finding C$type records")
 
     /**
@@ -569,7 +571,7 @@ private fun constructCamtResponse(
      * time range given as a function's parameter.
      */
     if (dateRange != null) {
-        logger.debug("Querying c$type with date range: $dateRange")
+        logger.debug("Querying C$type with date range: $dateRange")
         BankAccountStatementEntity.find {
             BankAccountStatementsTable.creationTime.between(
                 dateRange.first,
@@ -696,8 +698,8 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
  * Process a payment request in the pain.001 format.
  */
 private fun handleCct(paymentRequest: String) {
-    logger.debug("Handling CCT")
     val parseResult = parsePain001(paymentRequest)
+    logger.debug("Handling Pain.001: ${parseResult.pmtInfId}")
     transaction(Connection.TRANSACTION_SERIALIZABLE, repetitionAttempts = 10) {
         val maybeExist = BankAccountTransactionEntity.find {
             BankAccountTransactionsTable.pmtInfId eq parseResult.pmtInfId
@@ -761,7 +763,6 @@ private fun handleCct(paymentRequest: String) {
  * to the querying subscriber.
  */
 private fun handleEbicsC52(requestContext: RequestContext): ByteArray {
-    logger.debug("Handling C52 request")
     // Ignoring any dateRange parameter. (FIXME)
     val report = constructCamtResponse(52, requestContext.subscriber, dateRange = null)
     SandboxAssert(
@@ -776,8 +777,6 @@ private fun handleEbicsC52(requestContext: RequestContext): ByteArray {
 }
 
 private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
-    logger.debug("Handling C53 request")
-
     // Fetch date range.
     val orderParams = requestContext.requestObject.header.static.orderDetails?.orderParams // as EbicsRequest.StandardOrderParams
     val dateRange = if (orderParams != null) {
@@ -1094,7 +1093,6 @@ private fun handleEbicsHkd(requestContext: RequestContext): ByteArray {
     return str.toByteArray()
 }
 
-
 private data class RequestContext(
     val ebicsHost: EbicsHostEntity,
     val subscriber: EbicsSubscriberEntity,
@@ -1108,6 +1106,10 @@ private data class RequestContext(
     val downloadTransaction: EbicsDownloadTransactionEntity?
 )
 
+/**
+ * Get segmentation values and the EBICS transaction ID, before
+ * handing the response to 'createForDownloadTransferPhase()'.
+ */
 private fun handleEbicsDownloadTransactionTransfer(requestContext: RequestContext): EbicsResponse {
     val segmentNumber =
         requestContext.requestObject.header.mutable.segmentNumber?.value ?: throw EbicsInvalidRequestError()
@@ -1128,7 +1130,7 @@ private fun handleEbicsDownloadTransactionTransfer(requestContext: RequestContex
 private fun handleEbicsDownloadTransactionInitialization(requestContext: RequestContext): EbicsResponse {
     val orderType =
         requestContext.requestObject.header.static.orderDetails?.orderType ?: throw EbicsInvalidRequestError()
-    logger.debug("handling initialization for order type $orderType")
+    val nonce = requestContext.requestObject.header.static.nonce
     val response = when (orderType) {
         "HTD" -> handleEbicsHtd(requestContext)
         "HKD" -> handleEbicsHkd(requestContext)
@@ -1139,10 +1141,14 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
         else -> throw EbicsInvalidXmlError()
     }
     val transactionID = EbicsOrderUtil.generateTransactionId()
+    logger.debug(
+        "Handling download initialization for order type $orderType, " +
+                "nonce: ${nonce?.toHexString() ?: "not given"}, " +
+                "transaction ID: $transactionID"
+    )
     val compressedResponse = DeflaterInputStream(response.inputStream()).use {
         it.readAllBytes()
     }
-
     val enc = CryptoUtil.encryptEbicsE002(compressedResponse, requestContext.clientEncPub)
     val encodedResponse = Base64.getEncoder().encodeToString(enc.encryptedData)
 
@@ -1169,11 +1175,14 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
     )
 }
 
-
 private fun handleEbicsUploadTransactionInitialization(requestContext: RequestContext): EbicsResponse {
     val orderType =
         requestContext.requestObject.header.static.orderDetails?.orderType ?: throw EbicsInvalidRequestError()
     val transactionID = EbicsOrderUtil.generateTransactionId()
+    logger.debug("Handling upload initialization for order $orderType, " +
+            "transactionID $transactionID, nonce: " +
+            (requestContext.requestObject.header.static.nonce?.toHexString() ?: "not given")
+    )
     val oidn = requestContext.subscriber.nextOrderID++
     if (EbicsOrderUtil.checkOrderIDOverflow(oidn)) throw NotImplementedError()
     val orderID = EbicsOrderUtil.computeOrderIDFromNumber(oidn)
@@ -1197,7 +1206,6 @@ private fun handleEbicsUploadTransactionInitialization(requestContext: RequestCo
     val plainSigData = InflaterInputStream(decryptedSignatureData.inputStream()).use {
         it.readAllBytes()
     }
-    logger.debug("creating upload transaction for transactionID $transactionID")
     EbicsUploadTransactionEntity.new(transactionID) {
         this.host = requestContext.ebicsHost
         this.subscriber = requestContext.subscriber
@@ -1209,7 +1217,7 @@ private fun handleEbicsUploadTransactionInitialization(requestContext: RequestCo
     }
     val sigObj = XMLUtil.convertStringToJaxb<UserSignatureData>(plainSigData.toString(Charsets.UTF_8))
     for (sig in sigObj.value.orderSignatureList ?: listOf()) {
-        logger.debug("inserting order signature for orderID $orderID and orderType $orderType")
+        logger.debug("inserting order signature for orderID $orderID, order type $orderType, transaction '$transactionID'")
         EbicsOrderSignatureEntity.new {
             this.orderID = orderID
             this.orderType = orderType
@@ -1238,7 +1246,6 @@ private fun handleEbicsUploadTransactionTransmission(requestContext: RequestCont
         )
         val unzippedData =
             InflaterInputStream(zippedData.inputStream()).use { it.readAllBytes() }
-        // logger.debug("got upload data: ${unzippedData.toString(Charsets.UTF_8)}")
 
         val sigs = EbicsOrderSignatureEntity.find {
             (EbicsOrderSignaturesTable.orderID eq uploadTransaction.orderID) and
@@ -1415,9 +1422,12 @@ suspend fun ApplicationCall.ebicsweb() {
                             requestObject.header.static.transactionID ?: throw EbicsInvalidRequestError()
                         if (requestContext.downloadTransaction == null)
                             throw EbicsInvalidRequestError()
+                        logger.debug("Handling download receipt for EBICS transaction: " +
+                                requestTransactionID)
                         val receiptCode =
                             requestObject.body.transferReceipt?.receiptCode ?: throw EbicsInvalidRequestError()
                         EbicsResponse.createForDownloadReceiptPhase(requestTransactionID, receiptCode == 0)
+
                     }
                 }
                 signEbicsResponse(ebicsResponse, requestContext.hostAuthPriv)

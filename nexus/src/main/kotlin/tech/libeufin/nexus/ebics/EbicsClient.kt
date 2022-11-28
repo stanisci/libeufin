@@ -121,9 +121,9 @@ suspend fun doEbicsDownloadTransaction(
     val transactionID =
         initResponse.transactionID ?: throw NexusError(
             HttpStatusCode.InternalServerError,
-            "initial response must contain transaction ID"
+            "Initial response must contain transaction ID"
         )
-
+    logger.debug("Bank acknowledges EBICS download initialization.  Transaction ID: $transactionID.")
     val encryptionInfo = initResponse.dataEncryptionInfo
         ?: throw NexusError(HttpStatusCode.InternalServerError, "initial response did not contain encryption info")
 
@@ -139,10 +139,10 @@ suspend fun doEbicsDownloadTransaction(
         ?: throw NexusError(HttpStatusCode.FailedDependency, "missing segment number in EBICS download init response")
 
     // Transfer phase
-
     for (x in 2 .. numSegments) {
         val transferReqStr =
             createEbicsRequestForDownloadTransferPhase(subscriberDetails, transactionID, x, numSegments)
+        logger.debug("EBICS download transfer phase of ${transactionID}: sending segment $x")
         val transferResponseStr = client.postToBank(subscriberDetails.ebicsUrl, transferReqStr)
         val transferResponse = parseAndValidateEbicsResponse(subscriberDetails, transferResponseStr)
         when (transferResponse.technicalReturnCode) {
@@ -171,6 +171,7 @@ suspend fun doEbicsDownloadTransaction(
                 "transfer response for download transaction does not contain data transfer"
             )
         payloadChunks.add(transferOrderDataEncChunk)
+        logger.debug("Download transfer phase of ${transactionID}: bank acknowledges $x")
     }
 
     val respPayload = decryptAndDecompressResponse(subscriberDetails, encryptionInfo, payloadChunks)
@@ -193,10 +194,13 @@ suspend fun doEbicsDownloadTransaction(
             )
         }
     }
+    logger.debug("Bank acknowledges EBICS download receipt.  Transaction ID: $transactionID.")
     return EbicsDownloadSuccessResult(respPayload)
 }
 
-
+/**
+ * Currently only 1-segment requests.
+ */
 suspend fun doEbicsUploadTransaction(
     client: HttpClient,
     subscriberDetails: EbicsClientSubscriberDetails,
@@ -221,8 +225,7 @@ suspend fun doEbicsUploadTransaction(
             HttpStatusCode.InternalServerError,
             "init response must have transaction ID"
         )
-
-    logger.debug("INIT phase passed!")
+    logger.debug("Bank acknowledges EBICS upload initialization.  Transaction ID: $transactionID.")
     /* now send actual payload */
 
     val payload = createEbicsRequestForUploadTransferPhase(
@@ -231,14 +234,12 @@ suspend fun doEbicsUploadTransaction(
         preparedUploadData,
         0
     )
-
     val txRespStr = client.postToBank(
         subscriberDetails.ebicsUrl,
         payload
     )
 
     val txResp = parseAndValidateEbicsResponse(subscriberDetails, txRespStr)
-
     when (txResp.technicalReturnCode) {
         EbicsReturnCode.EBICS_OK -> {
         }
@@ -248,6 +249,7 @@ suspend fun doEbicsUploadTransaction(
             )
         }
     }
+    logger.debug("Bank acknowledges EBICS upload transfer.  Transaction ID: $transactionID")
 }
 
 suspend fun doEbicsHostVersionQuery(client: HttpClient, ebicsBaseUrl: String, ebicsHostId: String): EbicsHevDetails {

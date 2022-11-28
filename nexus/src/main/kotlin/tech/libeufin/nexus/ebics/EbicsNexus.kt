@@ -73,7 +73,7 @@ private data class EbicsFetchSpec(
 fun storeCamt(bankConnectionId: String, camt: String, historyType: String) {
     val camt53doc = XMLUtil.parseStringIntoDom(camt)
     val msgId = camt53doc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
-    logger.info("msg id $msgId")
+    logger.info("camt document '$msgId' received.")
     transaction {
         val conn = NexusBankConnectionEntity.findByName(bankConnectionId)
         if (conn == null) {
@@ -102,7 +102,6 @@ private suspend fun fetchEbicsC5x(
     orderParams: EbicsOrderParams,
     subscriberDetails: EbicsClientSubscriberDetails
 ) {
-    logger.debug("Requesting $historyType")
     val response = try {
         doEbicsDownloadTransaction(
             client,
@@ -529,6 +528,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                     messageId = paymentInitiation.messageId
                 )
             )
+            logger.debug("Sending Pain.001: ${paymentInitiation.paymentInformationId}")
             if (!XMLUtil.validateFromString(painMessage)) throw NexusError(
                 HttpStatusCode.InternalServerError, "Pain.001 message is invalid."
             )

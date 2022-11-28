@@ -1,4 +1,6 @@
 import io.ktor.application.*
+import io.ktor.client.*
+import io.ktor.client.request.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.request.*
@@ -6,17 +8,31 @@ import io.ktor.response.*
 import io.ktor.routing.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
 import org.junit.Test
 import org.w3c.dom.Document
 import tech.libeufin.nexus.*
+import tech.libeufin.nexus.bankaccount.addPaymentInitiation
+import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
+import tech.libeufin.nexus.ebics.EbicsBankConnectionProtocol
+import tech.libeufin.nexus.server.FetchLevel
+import tech.libeufin.nexus.server.FetchSpecAllJson
+import tech.libeufin.nexus.server.FetchSpecJson
+import tech.libeufin.nexus.server.Pain001Data
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsRequest
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
 
+/**
+ * This source is NOT a test case -- as it uses no assertions --
+ * but merely a tool to download and submit payments to the bank
+ * via Nexus.
+ * /
 
+ */
 /**
  * Data to make the test server return for EBICS
  * phases.  Currently only init is supported.
@@ -76,64 +92,56 @@ fun getCustomEbicsServer(r: EbicsResponses, endpoint: String = "/ebicsweb"): App
  * and having had access to runTask and TaskSchedule, that
  * are now 'private'.
  */
-@Ignore
+// @Ignore
 class SchedulingTest {
     /**
      * Instruct the server to return invalid CAMT content.
      */
     @Test
-    fun inject() {
+    fun download() {
         withNexusAndSandboxUser {
-            val payload = """
-                Invalid Camt Document
-            """.trimIndent()
-            withTestApplication(
-                getCustomEbicsServer(EbicsResponses(payload))
-            ) {
+            withTestApplication(sandboxApp) {
+                val conn = EbicsBankConnectionProtocol()
                 runBlocking {
-                    runTask(
+                    conn.fetchTransactions(
+                        fetchSpec = FetchSpecAllJson(
+                            level = FetchLevel.REPORT,
+                            "foo"
+                        ),
                         client,
-                        TaskSchedule(
-                            0L,
-                            "test-schedule",
-                            "fetch",
-                            "bank-account",
-                            "mock-bank-account",
-                            params = "{\"level\":\"report\",\"rangeType\":\"all\"}"
-                        )
+                        "foo",
+                        "mock-bank-account"
                     )
                 }
             }
         }
     }
-    /**
-     * Create two payments and asks for C52.
-     */
+
     @Test
-    fun ordinary() {
-        withNexusAndSandboxUser { // DB prep
-            for (t in 1 .. 2) {
-                wireTransfer(
-                    "bank",
-                    "foo",
-                    "default",
-                    "1HJX78AH7WAGBDJTCXJ4JKX022DBCHERA051KH7D3EC48X09G4RG",
-                    "TESTKUDOS:5",
-                    "xxx"
-                )
-            }
+    fun upload() {
+        withNexusAndSandboxUser {
             withTestApplication(sandboxApp) {
+                val conn = EbicsBankConnectionProtocol()
                 runBlocking {
-                    runTask(
+                    // Create Pain.001 to be submitted.
+                    addPaymentInitiation(
+                        Pain001Data(
+                            creditorIban = getIban(),
+                            creditorBic = "SANDBOXX",
+                            creditorName = "Tester",
+                            subject = "test payment",
+                            sum = Amount(1),
+                            currency = "TESTKUDOS"
+                        ),
+                        transaction {
+                            NexusBankAccountEntity.findByName(
+                                "mock-bank-account"
+                            ) ?: throw Exception("Test failed")
+                        }
+                    )
+                    conn.submitPaymentInitiation(
                         client,
-                        TaskSchedule(
-                            0L,
-                            "test-schedule",
-                            "fetch",
-                            "bank-account",
-                            "mock-bank-account",
-                            params = "{\"level\":\"report\",\"rangeType\":\"all\"}"
-                        )
+                        1L
                     )
                 }
             }
