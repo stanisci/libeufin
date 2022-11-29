@@ -343,15 +343,15 @@ data class NexusPaymentInitiationData(
     val debtorName: String,
     val messageId: String,
     val paymentInformationId: String,
-    val endToEndId: String?,
+    val endToEndId: String? = null,
     val amount: String,
     val currency: String,
     val subject: String,
     val preparationTimestamp: Long,
     val creditorName: String,
     val creditorIban: String,
-    val creditorBic: String?,
-    val instructionId: String?
+    val creditorBic: String? = null,
+    val instructionId: String? = null
 )
 
 /**

@@ -18,7 +18,8 @@ data class EbicsKeys(
 const val TEST_DB_FILE = "/tmp/nexus-test.sqlite3"
 const val TEST_DB_CONN = "jdbc:sqlite:$TEST_DB_FILE"
 val BANK_IBAN = getIban()
-val USER_IBAN = getIban()
+val FOO_USER_IBAN = getIban()
+val BAR_USER_IBAN = getIban()
 
 val bankKeys = EbicsKeys(
     auth = CryptoUtil.generateRsaKeyPair(2048),
@@ -86,11 +87,19 @@ fun prepNexusDb() {
         }
         val a = NexusBankAccountEntity.new {
             bankAccountName = "mock-bank-account"
-            iban = USER_IBAN
+            iban = FOO_USER_IBAN
             bankCode = "SANDBOXX"
             defaultBankConnection = c
             highestSeenBankMessageSerialId = 0
             accountHolder = "foo"
+        }
+        val b = NexusBankAccountEntity.new {
+            bankAccountName = "bar-bank-account"
+            iban = BAR_USER_IBAN
+            bankCode = "SANDBOXX"
+            defaultBankConnection = c
+            highestSeenBankMessageSerialId = 0
+            accountHolder = "bar"
         }
     }
 }
@@ -122,7 +131,7 @@ fun prepSandboxDb() {
             this.signaturePrivateKey = ExposedBlob(bankKeys.sig.private.encoded)
         }
         val bankAccount = BankAccountEntity.new {
-            iban = USER_IBAN
+            iban = FOO_USER_IBAN
             /**
              * For now, keep same semantics of Pybank: a username
              * is AS WELL a bank account label.  In other words, it
@@ -130,6 +139,18 @@ fun prepSandboxDb() {
              */
             label = "foo"
             owner = "foo"
+            this.demoBank = demoBank
+            isPublic = false
+        }
+        val otherBankAccount = BankAccountEntity.new {
+            iban = BAR_USER_IBAN
+            /**
+             * For now, keep same semantics of Pybank: a username
+             * is AS WELL a bank account label.  In other words, it
+             * identifies a customer AND a bank account.
+             */
+            label = "bar"
+            owner = "bar"
             this.demoBank = demoBank
             isPublic = false
         }

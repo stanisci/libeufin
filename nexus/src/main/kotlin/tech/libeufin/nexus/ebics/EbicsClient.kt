@@ -238,14 +238,13 @@ suspend fun doEbicsUploadTransaction(
         subscriberDetails.ebicsUrl,
         payload
     )
-
     val txResp = parseAndValidateEbicsResponse(subscriberDetails, txRespStr)
     when (txResp.technicalReturnCode) {
         EbicsReturnCode.EBICS_OK -> {
         }
         else -> {
             throw NexusError(HttpStatusCode.InternalServerError,
-                "Unexpected EBICS return code: ${txResp.technicalReturnCode}"
+                "Unexpected EBICS technical return code: ${txResp.technicalReturnCode}"
             )
         }
     }

@@ -180,7 +180,7 @@ private fun getEbicsSubscriberDetailsInternal(subscriber: EbicsSubscriberEntity)
 /**
  * Retrieve Ebics subscriber details given a bank connection.
  */
-private fun getEbicsSubscriberDetails(bankConnectionId: String): EbicsClientSubscriberDetails {
+fun getEbicsSubscriberDetails(bankConnectionId: String): EbicsClientSubscriberDetails {
     val transport = NexusBankConnectionEntity.findByName(bankConnectionId)
     if (transport == null) {
         throw NexusError(HttpStatusCode.NotFound, "transport not found")

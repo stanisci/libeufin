@@ -30,9 +30,8 @@ import tech.libeufin.util.ebics_h004.EbicsTypes
  * This source is NOT a test case -- as it uses no assertions --
  * but merely a tool to download and submit payments to the bank
  * via Nexus.
- * /
-
  */
+
 /**
  * Data to make the test server return for EBICS
  * phases.  Currently only init is supported.
@@ -92,8 +91,8 @@ fun getCustomEbicsServer(r: EbicsResponses, endpoint: String = "/ebicsweb"): App
  * and having had access to runTask and TaskSchedule, that
  * are now 'private'.
  */
-// @Ignore
-class SchedulingTest {
+@Ignore
+class DownloadAndSubmit {
     /**
      * Instruct the server to return invalid CAMT content.
      */

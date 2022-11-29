@@ -539,7 +539,7 @@ val sandboxApp: Application.() -> Unit = {
             )
         }
         exception<EbicsRequestError> { e ->
-            logger.debug("Handling EbicsRequestError: $e")
+            logger.info("Handling EbicsRequestError: ${e.message}")
             respondEbicsTransfer(call, e.errorText, e.errorCode)
         }
         exception<Throwable> { cause ->

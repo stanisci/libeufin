@@ -81,8 +81,8 @@ class EbicsInvalidRequestError : EbicsRequestError(
     "[EBICS_INVALID_REQUEST] Invalid request",
     "060102"
 )
-class EbicsAccountAuthorisationFailed : EbicsRequestError(
-    "[EBICS_ACCOUNT_AUTHORISATION_FAILED] Subscriber's signature didn't verify",
+class EbicsAccountAuthorisationFailed(reason: String) : EbicsRequestError(
+    "[EBICS_ACCOUNT_AUTHORISATION_FAILED] $reason",
     "091302"
 )
 
@@ -702,11 +702,23 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
 /**
  * Process a payment request in the pain.001 format.
  */
-private fun handleCct(paymentRequest: String) {
+private fun handleCct(paymentRequest: String,
+                      requestingSubscriber: EbicsSubscriberEntity
+) {
     val parseResult = parsePain001(paymentRequest)
     logger.debug("Handling Pain.001: ${parseResult.pmtInfId}, " +
             "for payment: ${parseResult.subject}")
     transaction(Connection.TRANSACTION_SERIALIZABLE, repetitionAttempts = 10) {
+        // Check that subscriber has a bank account
+        // and that they have rights over the debtor IBAN
+        if (requestingSubscriber.bankAccount == null) throw EbicsProcessingError(
+            "Subscriber '${requestingSubscriber.userId}' does not have a bank account."
+        )
+        if (requestingSubscriber.bankAccount!!.iban != parseResult.debtorIban) throw
+                EbicsAccountAuthorisationFailed(
+                    "Subscriber '${requestingSubscriber.userId}' does not have rights" +
+                            " over the debtor IBAN '${parseResult.debtorIban}'"
+                )
         val maybeExist = BankAccountTransactionEntity.find {
             BankAccountTransactionsTable.pmtInfId eq parseResult.pmtInfId
         }.firstOrNull()
@@ -722,6 +734,7 @@ private fun handleCct(paymentRequest: String) {
             "[EBICS_PROCESSING_ERROR] Currency (${parseResult.currency}) not supported.",
             "091116"
         )
+        // FIXME: check that debtor IBAN _is_ the requesting subscriber.
         BankAccountTransactionEntity.new {
             account = bankAccount
             demobank = bankAccount.demoBank
@@ -1278,7 +1291,9 @@ private fun handleEbicsUploadTransactionTransmission(requestContext: RequestCont
             }
         }
         if (getOrderTypeFromTransactionId(requestTransactionID) == "CCT") {
-            handleCct(unzippedData.toString(Charsets.UTF_8))
+            handleCct(unzippedData.toString(Charsets.UTF_8),
+                requestContext.subscriber
+            )
         }
         return EbicsResponse.createForUploadTransferPhase(
             requestTransactionID,
@@ -1403,7 +1418,7 @@ suspend fun ApplicationCall.ebicsweb() {
                 // Step 2 of 3:  Validate the signature
                 val verifyResult = XMLUtil.verifyEbicsDocument(requestDocument, requestContext.clientAuthPub)
                 if (!verifyResult) {
-                    throw EbicsAccountAuthorisationFailed()
+                    throw EbicsAccountAuthorisationFailed("Subscriber's signature did not verify")
                 }
                 // Step 3 of 3:  Generate response
                 val ebicsResponse: EbicsResponse = when (requestObject.header.mutable.transactionPhase) {
