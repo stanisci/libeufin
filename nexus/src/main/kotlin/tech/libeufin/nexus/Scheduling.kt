@@ -91,8 +91,7 @@ object NexusCron {
     }
 }
 /**
- * Here to catch StackOverflowError and exit.  It is not clear however
- * if this handler catches also the 'Error' type.
+ * Fails whenever a unmanaged Throwable reaches the root thread.
  */
 val fallback = CoroutineExceptionHandler { _, err ->
     logger.error(err.stackTraceToString())
