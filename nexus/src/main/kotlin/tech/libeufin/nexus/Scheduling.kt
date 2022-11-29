@@ -91,7 +91,7 @@ object NexusCron {
     }
 }
 /**
- * Fails whenever a unmanaged Throwable reaches the root thread.
+ * Fails whenever a unmanaged Throwable reaches the root coroutine.
  */
 val fallback = CoroutineExceptionHandler { _, err ->
     logger.error(err.stackTraceToString())
