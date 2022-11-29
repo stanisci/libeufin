@@ -91,7 +91,7 @@ fun getCustomEbicsServer(r: EbicsResponses, endpoint: String = "/ebicsweb"): App
  * and having had access to runTask and TaskSchedule, that
  * are now 'private'.
  */
-@Ignore
+// @Ignore
 class DownloadAndSubmit {
     /**
      * Instruct the server to return invalid CAMT content.
@@ -122,7 +122,7 @@ class DownloadAndSubmit {
                             level = FetchLevel.REPORT,
                             "foo"
                         ),
-                        "mock-bank-account"
+                        "foo"
                     )
                 }
             }
@@ -147,7 +147,7 @@ class DownloadAndSubmit {
                         ),
                         transaction {
                             NexusBankAccountEntity.findByName(
-                                "mock-bank-account"
+                                "foo"
                             ) ?: throw Exception("Test failed")
                         }
                     )

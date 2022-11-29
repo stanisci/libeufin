@@ -86,7 +86,7 @@ fun prepNexusDb() {
             bankAuthenticationPublicKey = ExposedBlob(bankKeys.auth.public.encoded)
         }
         val a = NexusBankAccountEntity.new {
-            bankAccountName = "mock-bank-account"
+            bankAccountName = "foo"
             iban = FOO_USER_IBAN
             bankCode = "SANDBOXX"
             defaultBankConnection = c
@@ -94,7 +94,7 @@ fun prepNexusDb() {
             accountHolder = "foo"
         }
         val b = NexusBankAccountEntity.new {
-            bankAccountName = "bar-bank-account"
+            bankAccountName = "bar"
             iban = BAR_USER_IBAN
             bankCode = "SANDBOXX"
             defaultBankConnection = c

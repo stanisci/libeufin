@@ -84,21 +84,28 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
             HttpStatusCode.NotFound,
             "account not found"
         )
+        /**
+         * Skip submitted and invalid preparations.
+         */
         PaymentInitiationEntity.find {
-            (PaymentInitiationsTable.submitted eq false) and (
-                    PaymentInitiationsTable.bankAccount eq account.id)
+            // Not submitted.
+            (PaymentInitiationsTable.submitted eq false) and
+                    // From the correct bank account.
+            (PaymentInitiationsTable.bankAccount eq account.id)
         }.forEach {
-            // Filter out non EBICS.
+            if (it.invalid == true) return@forEach
             val defaultBankConnectionId = it.bankAccount.defaultBankConnection?.id ?: throw NexusError(
                 HttpStatusCode.NotFound,
                 "Default bank connection not found.  Can't submit Pain document"
             )
+            // Rare, but filter out bank accounts without a bank connection.
             val bankConnection = NexusBankConnectionEntity.findById(defaultBankConnectionId) ?: throw NexusError(
                 HttpStatusCode.InternalServerError,
                 "Bank connection '$defaultBankConnectionId' " +
                         "(pointed by bank account '${it.bankAccount.bankAccountName}')" +
                         " not found in the database."
             )
+            // Filter out non EBICS.
             if (bankConnection.type != "ebics") {
                 logger.info("Skipping non-implemented bank connection '${bankConnection.type}'")
                 return@forEach

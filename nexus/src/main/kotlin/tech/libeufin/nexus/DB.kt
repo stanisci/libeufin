@@ -211,6 +211,7 @@ object PaymentInitiationsTable : LongIdTable() {
     val creditorBic = text("creditorBic").nullable()
     val creditorName = text("creditorName")
     val submitted = bool("submitted").default(false)
+    var invalid = bool("invalid").nullable()
     val messageId = text("messageId")
 
     /**
@@ -234,6 +235,7 @@ class PaymentInitiationEntity(id: EntityID<Long>) : LongEntity(id) {
     var creditorBic by PaymentInitiationsTable.creditorBic
     var creditorName by PaymentInitiationsTable.creditorName
     var submitted by PaymentInitiationsTable.submitted
+    var invalid by PaymentInitiationsTable.invalid
     var paymentInformationId by PaymentInitiationsTable.paymentInformationId
     var instructionId by PaymentInitiationsTable.instructionId
     var messageId by PaymentInitiationsTable.messageId

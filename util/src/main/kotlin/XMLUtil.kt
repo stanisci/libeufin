@@ -252,7 +252,11 @@ class XMLUtil private constructor() {
             try {
                 getEbicsValidator().validate(xmlDoc)
             } catch (e: Exception) {
-                e.printStackTrace()
+                /**
+                 * Would be convenient to return also the error
+                 * message to the caller, so that it can link it
+                 * to a document ID in the logs.
+                 */
                 logger.warn("Validation failed: ${e}")
                 return false
             }

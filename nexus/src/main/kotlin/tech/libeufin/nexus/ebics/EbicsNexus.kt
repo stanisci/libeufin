@@ -44,8 +44,10 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
+import tech.libeufin.nexus.bankaccount.getPaymentInitiation
 import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
 import tech.libeufin.nexus.iso20022.createPain001document
 import tech.libeufin.nexus.logger
@@ -531,9 +533,18 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             )
             logger.debug("Sending Pain.001: ${paymentInitiation.paymentInformationId}," +
                     " for payment: '${paymentInitiation.subject}'")
-            if (!XMLUtil.validateFromString(painMessage)) throw NexusError(
-                HttpStatusCode.InternalServerError, "Pain.001 message is invalid."
-            )
+            if (!XMLUtil.validateFromString(painMessage)) {
+                logger.error("Pain.001 ${paymentInitiation.paymentInformationId}" +
+                        " is invalid, not submitting it and flag as invalid.")
+                val payment = getPaymentInitiation(paymentInitiationId)
+                payment.invalid = true
+                // The following commit prevents the thrown error
+                // to lose the database transaction data.
+                TransactionManager.current().commit()
+                throw NexusError(
+                    HttpStatusCode.InternalServerError, "Pain.001 message is invalid."
+                )
+            }
             object {
                 val subscriberDetails = subscriberDetails
                 val painMessage = painMessage
@@ -546,12 +557,10 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             r.painMessage.toByteArray(Charsets.UTF_8),
             EbicsStandardOrderParams()
         )
-        // Mark the payment as submitted.
         transaction {
-            val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
-                ?: throw NexusError(HttpStatusCode.NotFound, "payment initiation not found")
-            paymentInitiation.submitted = true
-            paymentInitiation.submissionDate = LocalDateTime.now().millis()
+            val payment = getPaymentInitiation(paymentInitiationId)
+            payment.submitted = true
+            payment.submissionDate = LocalDateTime.now().millis()
         }
     }
 
