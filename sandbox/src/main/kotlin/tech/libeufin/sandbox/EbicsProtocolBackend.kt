@@ -704,14 +704,15 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
  */
 private fun handleCct(paymentRequest: String) {
     val parseResult = parsePain001(paymentRequest)
-    logger.debug("Handling Pain.001: ${parseResult.pmtInfId}")
+    logger.debug("Handling Pain.001: ${parseResult.pmtInfId}, " +
+            "for payment: ${parseResult.subject}")
     transaction(Connection.TRANSACTION_SERIALIZABLE, repetitionAttempts = 10) {
         val maybeExist = BankAccountTransactionEntity.find {
             BankAccountTransactionsTable.pmtInfId eq parseResult.pmtInfId
         }.firstOrNull()
         if (maybeExist != null) {
             logger.info(
-                "Nexus submitted twice the PAIN: ${maybeExist.pmtInfId}. Not taking any action." +
+                "Nexus submitted twice the Pain: ${maybeExist.pmtInfId}. Not taking any action." +
                         "  Sandbox gave it this reference: ${maybeExist.accountServicerReference}"
             )
             return@transaction

@@ -53,11 +53,17 @@ private suspend fun runTask(client: HttpClient, sched: TaskSchedule) {
         when (sched.resourceType) {
             "bank-account" -> {
                 when (sched.type) {
+                    /**
+                     * Downloads and ingests the payment records from the bank.
+                     */
                     "fetch" -> {
                         @Suppress("BlockingMethodInNonBlockingContext")
                         val fetchSpec = jacksonObjectMapper().readValue(sched.params, FetchSpecJson::class.java)
                         fetchBankAccountTransactions(client, fetchSpec, sched.resourceId)
                     }
+                    /**
+                     * Submits the payment preparations that are found in the database.
+                     */
                     "submit" -> {
                         submitAllPaymentInitiations(client, sched.resourceId)
                     }

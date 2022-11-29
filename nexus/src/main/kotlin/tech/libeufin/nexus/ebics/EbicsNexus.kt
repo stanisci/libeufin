@@ -501,7 +501,9 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 subscriberDetails
             )
     }
-
+    /**
+     * Submit one Pain.001 for one payment initiations.
+     */
     override suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
         val r = transaction {
             val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
@@ -527,7 +529,8 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                     messageId = paymentInitiation.messageId
                 )
             )
-            logger.debug("Sending Pain.001: ${paymentInitiation.paymentInformationId}")
+            logger.debug("Sending Pain.001: ${paymentInitiation.paymentInformationId}," +
+                    " for payment: '${paymentInitiation.subject}'")
             if (!XMLUtil.validateFromString(painMessage)) throw NexusError(
                 HttpStatusCode.InternalServerError, "Pain.001 message is invalid."
             )

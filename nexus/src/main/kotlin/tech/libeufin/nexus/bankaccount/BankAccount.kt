@@ -78,7 +78,6 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
     data class Submission(
         val id: Long
     )
-    logger.debug("auto-submitter started")
     val workQueue = mutableListOf<Submission>()
     transaction {
         val account = NexusBankAccountEntity.findByName(accountid) ?: throw NexusError(
@@ -91,12 +90,14 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
         }.forEach {
             // Filter out non EBICS.
             val defaultBankConnectionId = it.bankAccount.defaultBankConnection?.id ?: throw NexusError(
-                HttpStatusCode.BadRequest,
-                "needs default bank connection"
+                HttpStatusCode.NotFound,
+                "Default bank connection not found.  Can't submit Pain document"
             )
             val bankConnection = NexusBankConnectionEntity.findById(defaultBankConnectionId) ?: throw NexusError(
                 HttpStatusCode.InternalServerError,
-                "Bank account '${it.id.value}' doesn't map to any bank connection (named '${defaultBankConnectionId}')"
+                "Bank connection '$defaultBankConnectionId' " +
+                        "(pointed by bank account '${it.bankAccount.bankAccountName}')" +
+                        " not found in the database."
             )
             if (bankConnection.type != "ebics") {
                 logger.info("Skipping non-implemented bank connection '${bankConnection.type}'")
@@ -106,7 +107,6 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
         }
     }
     workQueue.forEach {
-        logger.debug("Submitting payment ${it.id}")
         submitPaymentInitiation(httpClient, it.id)
     }
 }
