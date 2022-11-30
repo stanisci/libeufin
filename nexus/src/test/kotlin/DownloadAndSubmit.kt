@@ -240,7 +240,6 @@ class DownloadAndSubmit {
     fun invalidPain001() {
         withNexusAndSandboxUser {
             withTestApplication(sandboxApp) {
-                val conn = EbicsBankConnectionProtocol()
                 runBlocking {
                     // Create Pain.001 to be submitted.
                     addPaymentInitiation(
@@ -269,6 +268,40 @@ class DownloadAndSubmit {
                     assert(thrown)
                     // No errors, since it should not retry.
                     submitAllPaymentInitiations(client, "foo")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun unsupportedCurrency() {
+        withNexusAndSandboxUser {
+            withTestApplication(sandboxApp) {
+                runBlocking {
+                    // Create Pain.001 to be submitted.
+                    addPaymentInitiation(
+                        Pain001Data(
+                            creditorIban = getIban(),
+                            creditorBic = "SANDBOXX",
+                            creditorName = "Tester",
+                            subject = "test payment",
+                            sum = Amount(1),
+                            currency = "EUR"
+                        ),
+                        transaction {
+                            NexusBankAccountEntity.findByName(
+                                "foo"
+                            ) ?: throw Exception("Test failed")
+                        }
+                    )
+                    var thrown = false
+                    try {
+                        submitAllPaymentInitiations(client, "foo")
+                    } catch (e: EbicsProtocolError) {
+                        if (e.ebicsTechnicalCode == EbicsReturnCode.EBICS_PROCESSING_ERROR)
+                            thrown = true
+                    }
+                    assert(thrown)
                 }
             }
         }
