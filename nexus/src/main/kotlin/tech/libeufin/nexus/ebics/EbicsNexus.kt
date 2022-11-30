@@ -542,7 +542,10 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 // to lose the database transaction data.
                 TransactionManager.current().commit()
                 throw NexusError(
-                    HttpStatusCode.InternalServerError, "Pain.001 message is invalid."
+                    HttpStatusCode.InternalServerError,
+                    "Attempted Pain.001 (${paymentInitiation.paymentInformationId})" +
+                            " message is invalid.  Not sent to the bank.",
+                    LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE
                 )
             }
             object {

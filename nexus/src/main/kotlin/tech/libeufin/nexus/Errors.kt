@@ -20,8 +20,13 @@
 package tech.libeufin.nexus
 
 import io.ktor.http.HttpStatusCode
+import tech.libeufin.util.LibeufinErrorCode
 
-data class NexusError(val statusCode: HttpStatusCode, val reason: String) :
+data class NexusError(
+    val statusCode: HttpStatusCode,
+    val reason: String,
+    val code: LibeufinErrorCode? = null
+    ) :
     Exception("$reason (HTTP status $statusCode)")
 
 fun NexusAssert(condition: Boolean, errorMsg: String): Boolean {

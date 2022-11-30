@@ -1,3 +1,4 @@
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.application.*
 import io.ktor.client.*
 import io.ktor.client.request.*
@@ -15,7 +16,12 @@ import org.w3c.dom.Document
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
+import tech.libeufin.nexus.bankaccount.submitAllPaymentInitiations
 import tech.libeufin.nexus.ebics.EbicsBankConnectionProtocol
+import tech.libeufin.nexus.ebics.doEbicsUploadTransaction
+import tech.libeufin.nexus.ebics.getEbicsSubscriberDetails
+import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
+import tech.libeufin.nexus.iso20022.createPain001document
 import tech.libeufin.nexus.server.FetchLevel
 import tech.libeufin.nexus.server.FetchSpecAllJson
 import tech.libeufin.nexus.server.FetchSpecJson
@@ -44,9 +50,9 @@ data class EbicsResponses(
 
 /**
  * Minimal server responding always the 'init' field of a EbicsResponses
- * object along a download EBICS message.  Suitable to set arbitrary data
+ * object to a download EBICS message.  Suitable to set arbitrary data
  * in said response.  Signs the response assuming the client is the one
- * created a MakeEnv.kt.
+ * created in MakeEnv.kt.
  */
 fun getCustomEbicsServer(r: EbicsResponses, endpoint: String = "/ebicsweb"): Application.() -> Unit {
     val ret: Application.() -> Unit = {
@@ -91,10 +97,9 @@ fun getCustomEbicsServer(r: EbicsResponses, endpoint: String = "/ebicsweb"): App
  * and having had access to runTask and TaskSchedule, that
  * are now 'private'.
  */
-// @Ignore
 class DownloadAndSubmit {
     /**
-     * Instruct the server to return invalid CAMT content.
+     * Download a C52 report from the bank.
      */
     @Test
     fun download() {
@@ -104,7 +109,7 @@ class DownloadAndSubmit {
                 "foo",
                 "default",
                 "Show up in logging!",
-                "TESTKUDOS:5"
+                "TESTKUDOS:1"
             )
             wireTransfer(
                 "bank",
@@ -114,7 +119,6 @@ class DownloadAndSubmit {
                 "TESTKUDOS:5"
             )
             withTestApplication(sandboxApp) {
-                val conn = EbicsBankConnectionProtocol()
                 runBlocking {
                     fetchBankAccountTransactions(
                         client,
@@ -125,10 +129,19 @@ class DownloadAndSubmit {
                         "foo"
                     )
                 }
+                transaction {
+                    // FIXME: assert on the subject.
+                    assert(
+                        NexusBankTransactionEntity[1].amount == "1" &&
+                                NexusBankTransactionEntity[2].amount == "5"
+                    )
+                }
             }
         }
     }
-
+    /**
+     * Upload one payment instruction to the bank.
+     */
     @Test
     fun upload() {
         withNexusAndSandboxUser {
@@ -155,6 +168,107 @@ class DownloadAndSubmit {
                         client,
                         1L
                     )
+                }
+                transaction {
+                    val payment = BankAccountTransactionEntity[1]
+                    assert(payment.debtorIban == FOO_USER_IBAN &&
+                            payment.subject == "test payment" &&
+                            payment.direction == "DBIT"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Upload one payment instruction charging one IBAN
+     * that does not belong to the requesting EBICS subscriber.
+     */
+    @Test
+    fun unallowedDebtorIban() {
+        withNexusAndSandboxUser {
+            withTestApplication(sandboxApp) {
+                runBlocking {
+                    val bar = transaction { NexusBankAccountEntity.findByName("bar") }
+                    val painMessage = createPain001document(
+                        NexusPaymentInitiationData(
+                            debtorIban = bar!!.iban,
+                            debtorBic = bar!!.bankCode,
+                            debtorName = bar!!.accountHolder,
+                            currency = "TESTKUDOS",
+                            amount = "1",
+                            creditorIban = getIban(),
+                            creditorName = "Get",
+                            creditorBic = "SANDBOXX",
+                            paymentInformationId = "entropy-0",
+                            preparationTimestamp = 1970L,
+                            subject = "Unallowed",
+                            messageId = "entropy-1",
+                            endToEndId = null,
+                            instructionId = null
+                        )
+                    )
+                    val unallowedSubscriber = transaction { getEbicsSubscriberDetails("foo") }
+                    var thrown = false
+                    try {
+                        doEbicsUploadTransaction(
+                            client,
+                            unallowedSubscriber,
+                            "CCT",
+                            painMessage.toByteArray(Charsets.UTF_8),
+                            EbicsStandardOrderParams()
+                        )
+                    } catch (e: EbicsProtocolError) {
+                        if (e.ebicsTechnicalCode ==
+                                EbicsReturnCode.EBICS_ACCOUNT_AUTHORISATION_FAILED
+                        )
+                            thrown = true
+                    }
+                    assert(thrown)
+                }
+            }
+        }
+    }
+
+    /**
+     * Submit one payment instruction with a invalid Pain.001
+     * document, and check that it was marked as invalid.  Hence,
+     * the error is expected only by the first submission, since
+     * the second won't pick the invalid payment.
+     */
+    @Test
+    fun invalidPain001() {
+        withNexusAndSandboxUser {
+            withTestApplication(sandboxApp) {
+                val conn = EbicsBankConnectionProtocol()
+                runBlocking {
+                    // Create Pain.001 to be submitted.
+                    addPaymentInitiation(
+                        Pain001Data(
+                            creditorIban = getIban(),
+                            creditorBic = "not-a-BIC",
+                            creditorName = "Tester",
+                            subject = "test payment",
+                            sum = Amount(1),
+                            currency = "TESTKUDOS"
+                        ),
+                        transaction {
+                            NexusBankAccountEntity.findByName(
+                                "foo"
+                            ) ?: throw Exception("Test failed")
+                        }
+                    )
+                    // Encounters errors.
+                    var thrown = false
+                    try {
+                        submitAllPaymentInitiations(client, "foo")
+                    } catch (e: NexusError) {
+                        assert((e.code == LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE))
+                        thrown = true
+                    }
+                    assert(thrown)
+                    // No errors, since it should not retry.
+                    submitAllPaymentInitiations(client, "foo")
                 }
             }
         }

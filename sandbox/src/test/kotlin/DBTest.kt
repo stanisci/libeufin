@@ -71,7 +71,6 @@ class DBTest {
                     allowRegistrations = true
                     name = "default"
                     withSignupBonus = false
-                    uiTitle = "test"
                 }
                 val bankAccount = BankAccountEntity.new {
                     iban = "iban"

@@ -243,8 +243,15 @@ suspend fun doEbicsUploadTransaction(
         EbicsReturnCode.EBICS_OK -> {
         }
         else -> {
-            throw NexusError(HttpStatusCode.InternalServerError,
-                "Unexpected EBICS technical return code: ${txResp.technicalReturnCode}"
+            throw EbicsProtocolError(
+                /**
+                 * 500 because Nexus walked until having the
+                 * bank rejecting the operation instead of it
+                 * detecting the problem.
+                 */
+                HttpStatusCode.InternalServerError,
+                "Unexpected EBICS technical return code: ${txResp.technicalReturnCode}",
+                txResp.technicalReturnCode
             )
         }
     }

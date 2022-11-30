@@ -25,7 +25,6 @@ class BalanceTest {
                     allowRegistrations = true
                     name = "default"
                     withSignupBonus = false
-                    uiTitle = "test"
                 }
                 val one = BankAccountEntity.new {
                     iban = "IBAN 1"
