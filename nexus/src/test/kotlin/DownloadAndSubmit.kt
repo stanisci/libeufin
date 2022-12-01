@@ -33,12 +33,6 @@ import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
 
 /**
- * This source is NOT a test case -- as it uses no assertions --
- * but merely a tool to download and submit payments to the bank
- * via Nexus.
- */
-
-/**
  * Data to make the test server return for EBICS
  * phases.  Currently only init is supported.
  */

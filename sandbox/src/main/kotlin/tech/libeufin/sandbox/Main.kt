@@ -779,8 +779,6 @@ val sandboxApp: Application.() -> Unit = {
                             PaymentInfo(
                                 accountLabel = account.label,
                                 creditorIban = it.creditorIban,
-                                // FIXME: We need to modify the transactions table to have an actual
-                                // account servicer reference here.
                                 accountServicerReference = it.accountServicerReference,
                                 paymentInformationId = it.pmtInfId,
                                 debtorIban = it.debtorIban,
@@ -861,7 +859,11 @@ val sandboxApp: Application.() -> Unit = {
             call.respond(object {})
         }
 
-
+        /**
+         * Create a new EBICS subscriber without associating
+         * a bank account to it.  Currently every registered
+         * user is allowed to call this.
+         */
         post("/admin/ebics/subscribers") {
             call.request.basicAuth()
             val body = call.receiveJson<EbicsSubscriberObsoleteApi>()
@@ -909,10 +911,10 @@ val sandboxApp: Application.() -> Unit = {
                 io.ktor.http.HttpStatusCode.BadRequest, "host ID missing in URL"
             )
             transaction {
-                val host = tech.libeufin.sandbox.EbicsHostEntity.find {
-                    tech.libeufin.sandbox.EbicsHostsTable.hostID eq hostID
+                val host = EbicsHostEntity.find {
+                    EbicsHostsTable.hostID eq hostID
                 }.firstOrNull() ?: throw SandboxError(
-                    io.ktor.http.HttpStatusCode.NotFound, "Host $hostID not found"
+                    HttpStatusCode.NotFound, "Host $hostID not found"
                 )
                 val pairA = CryptoUtil.generateRsaKeyPair(2048)
                 val pairB = CryptoUtil.generateRsaKeyPair(2048)
@@ -998,11 +1000,13 @@ val sandboxApp: Application.() -> Unit = {
             return@post
         }
 
-        // Create a new demobank instance with a particular currency,
-        // debt limit and possibly other configuration
-        // (could also be a CLI command for now)
+        /**
+         * Create a new demobank instance with a particular currency,
+         * debt limit and possibly other configuration
+         * (could also be a CLI command for now)
+         */
         post("/demobanks") {
-            throw NotImplementedError("Only available in the Sandbox CLI.")
+            throw NotImplementedError("Feature only available at the libeufin-sandbox CLI")
         }
 
         get("/demobanks") {
@@ -1028,10 +1032,6 @@ val sandboxApp: Application.() -> Unit = {
             call.respondRedirect(url,true)
             return@get
         }
-        /**
-         * 'lang' unused.  It works around the /$lang-terminated
-         * links that some shops still have in their demo navigation bar.
-         */
         get("/demobanks/{demobankid}") {
             val demobank = ensureDemobank(call)
             expectAdmin(call.request.basicAuth())
@@ -1524,6 +1524,10 @@ val sandboxApp: Application.() -> Unit = {
                 }
             }
             route("/ebics") {
+                /**
+                 * Associate a bank account to one EBICS subscriber.
+                 * If the subscriber is not found, it is created.
+                 */
                 post("/subscribers") {
                     // Only the admin can create Ebics subscribers.
                     val user = call.request.basicAuth()
