@@ -82,12 +82,22 @@ data class EbicsSubscriberObsoleteApi(
     val userID: String,
     val systemID: String? = null
 )
+
+/**
+ * Allows the admin to associate a new bank account
+ * to a EBICS subscriber.
+ */
 data class EbicsBankAccountRequest(
     val subscriber: EbicsSubscriberObsoleteApi,
     val iban: String,
     val bic: String,
     val name: String,
     val label: String,
+    /**
+     * Customer username that will own this
+     * EBICS subscriber.
+     */
+    val owner: String
 )
 
 data class CustomerRegistration(

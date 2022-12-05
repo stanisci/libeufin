@@ -35,7 +35,6 @@ import java.util.*
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
 
 private suspend inline fun HttpClient.postToBank(url: String, body: String): String {
-    // logger.debug("Posting: $body")
     if (!XMLUtil.validateFromString(body)) throw NexusError(
         HttpStatusCode.InternalServerError,
         "EBICS (outgoing) document is invalid"

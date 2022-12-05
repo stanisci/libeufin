@@ -83,7 +83,6 @@ import javax.xml.bind.JAXBContext
 import kotlin.system.exitProcess
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
-private val currencyEnv: String? = System.getenv("LIBEUFIN_SANDBOX_CURRENCY")
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val adminPassword: String? = System.getenv("LIBEUFIN_SANDBOX_ADMIN_PASSWORD")
 var WITH_AUTH = true // Needed by helpers too, hence not making it private.
@@ -588,16 +587,18 @@ val sandboxApp: Application.() -> Unit = {
                 ContentType.Text.Plain
             )
         }
-
         // Respond with the last statement of the requesting account.
         // Query details in the body.
         post("/admin/payments/camt") {
-            call.request.basicAuth()
+            val username = call.request.basicAuth()
             val body = call.receiveJson<CamtParams>()
             if (body.type != 53) throw SandboxError(
                 HttpStatusCode.NotFound,
                 "Only Camt.053 documents can be generated."
             )
+            if (!allowOwnerOrAdmin(username, body.bankaccount))
+                throw unauthorized("User '${username}' has no rights over" +
+                        " bank account '${body.bankaccount}'")
             val camtMessage = transaction {
                 val bankaccount = getBankAccountFromLabel(
                     body.bankaccount,
@@ -616,16 +617,34 @@ val sandboxApp: Application.() -> Unit = {
             return@post
         }
 
-        // create a new bank account, no EBICS relation.
+        /**
+         * Create a new bank account, no EBICS relation.  Okay
+         * to let a user, since having a particular username allocates
+         * already a bank account with such label.
+         */
         post("/admin/bank-accounts/{label}") {
             val username = call.request.basicAuth()
             val body = call.receiveJson<BankAccountInfo>()
+            if (!allowOwnerOrAdmin(username, body.label))
+                throw unauthorized("User '$username' has no rights over" +
+                        " bank account '${body.label}'"
+                )
             transaction {
+                val maybeBankAccount = BankAccountEntity.find {
+                    BankAccountsTable.label eq body.label
+                }.firstOrNull()
+                if (maybeBankAccount != null)
+                    throw conflict("Bank account '${body.label}' exist already")
                 BankAccountEntity.new {
                     iban = body.iban
                     bic = body.bic
                     label = body.label
-                    owner = username ?: "admin" // allows
+                    /**
+                     * The null username case exist when auth is
+                     * disabled.  In this case, we assign the bank
+                     * account to 'admin'.
+                     */
+                    owner = username ?: "admin"
                     demoBank = getDefaultDemobank()
                 }
             }
@@ -635,11 +654,13 @@ val sandboxApp: Application.() -> Unit = {
 
         // Information about one bank account.
         get("/admin/bank-accounts/{label}") {
-            call.request.basicAuth()
+            val username = call.request.basicAuth()
             val label = call.getUriComponent("label")
             val ret = transaction {
                 val demobank = getDefaultDemobank()
                 val bankAccount = getBankAccountFromLabel(label, demobank)
+                if (!allowOwnerOrAdmin(username, label))
+                    throw unauthorized("'${username}' has no rights over '$label'")
                 val balance = balanceForAccount(bankAccount)
                 object {
                     val balance = "${bankAccount.demoBank.currency}:${balance}"
@@ -655,9 +676,8 @@ val sandboxApp: Application.() -> Unit = {
         // Book one incoming payment for the requesting account.
         // The debtor is not required to have an account at this Sandbox.
         post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
-            val username = call.request.basicAuth()
+            call.request.basicAuth(onlyAdmin = true)
             val body = call.receiveJson<IncomingPaymentInfo>()
-            // FIXME: generate nicer UUID!
             val accountLabel = ensureNonNull(call.parameters["label"])
             val reqDebtorBic = body.debtorBic
             if (reqDebtorBic != null && !validateBic(reqDebtorBic)) {
@@ -680,10 +700,11 @@ val sandboxApp: Application.() -> Unit = {
                     accountLabel, demobank
                 )
                 val randId = getRandomString(16)
+                val customer = getCustomer(accountLabel)
                 BankAccountTransactionEntity.new {
                     creditorIban = account.iban
                     creditorBic = account.bic
-                    creditorName = getPersonNameFromCustomer(username)
+                    creditorName = customer.name ?: "Name not given."
                     debtorIban = body.debtorIban
                     debtorBic = reqDebtorBic
                     debtorName = body.debtorName
@@ -701,8 +722,13 @@ val sandboxApp: Application.() -> Unit = {
         }
         // Associates a new bank account with an existing Ebics subscriber.
         post("/admin/ebics/bank-accounts") {
-            val username = call.request.basicAuth()
+            call.request.basicAuth(onlyAdmin = true)
             val body = call.receiveJson<EbicsBankAccountRequest>()
+            if (body.owner != body.label)
+                throw conflict(
+                    "Customer username '${body.owner}'" +
+                            " differs from bank account name '${body.label}'"
+                )
             if (!validateBic(body.bic)) {
                 throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
             }
@@ -712,8 +738,9 @@ val sandboxApp: Application.() -> Unit = {
                     body.subscriber.partnerID,
                     body.subscriber.hostID
                 )
+                if (subscriber.bankAccount != null)
+                    throw conflict("subscriber has already a bank account: ${subscriber.bankAccount?.label}")
                 val demobank = getDefaultDemobank()
-
                 /**
                  * Checking that the default demobank doesn't have already the
                  * requested IBAN and bank account label.
@@ -733,7 +760,7 @@ val sandboxApp: Application.() -> Unit = {
                     iban = body.iban
                     bic = body.bic
                     label = body.label
-                    owner = username ?: "admin"
+                    owner = body.owner
                     demoBank = demobank
                 }
             }
@@ -743,7 +770,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Information about all the default demobank's bank accounts
         get("/admin/bank-accounts") {
-            call.request.basicAuth()
+            call.request.basicAuth(onlyAdmin = true)
             val accounts = mutableListOf<BankAccountInfo>()
             transaction {
                 val demobank = getDefaultDemobank()
@@ -765,49 +792,52 @@ val sandboxApp: Application.() -> Unit = {
 
         // Details of all the transactions of one bank account.
         get("/admin/bank-accounts/{label}/transactions") {
-            call.request.basicAuth()
+            val username = call.request.basicAuth()
             val ret = AccountTransactions()
+            val accountLabel = ensureNonNull(call.parameters["label"])
+            if (!allowOwnerOrAdmin(username, accountLabel))
+                throw unauthorized("Requesting user '${username}'" +
+                        " has no rights over bank account '${accountLabel}'"
+            )
             transaction {
-                val accountLabel = ensureNonNull(call.parameters["label"])
-                transaction {
-                    val demobank = getDefaultDemobank()
-                    val account = getBankAccountFromLabel(accountLabel, demobank)
-                    BankAccountTransactionEntity.find {
-                        BankAccountTransactionsTable.account eq account.id
-                    }.forEach {
-                        ret.payments.add(
-                            PaymentInfo(
-                                accountLabel = account.label,
-                                creditorIban = it.creditorIban,
-                                accountServicerReference = it.accountServicerReference,
-                                paymentInformationId = it.pmtInfId,
-                                debtorIban = it.debtorIban,
-                                subject = it.subject,
-                                date = GMTDate(it.date).toHttpDate(),
-                                amount = it.amount,
-                                creditorBic = it.creditorBic,
-                                creditorName = it.creditorName,
-                                debtorBic = it.debtorBic,
-                                debtorName = it.debtorName,
-                                currency = it.currency,
-                                creditDebitIndicator = when (it.direction) {
-                                    "CRDT" -> "credit"
-                                    "DBIT" -> "debit"
-                                    else -> throw Error("invalid direction")
-                                }
-                            )
+                val demobank = getDefaultDemobank()
+                val account = getBankAccountFromLabel(accountLabel, demobank)
+                BankAccountTransactionEntity.find {
+                    BankAccountTransactionsTable.account eq account.id
+                }.forEach {
+                    ret.payments.add(
+                        PaymentInfo(
+                            accountLabel = account.label,
+                            creditorIban = it.creditorIban,
+                            accountServicerReference = it.accountServicerReference,
+                            paymentInformationId = it.pmtInfId,
+                            debtorIban = it.debtorIban,
+                            subject = it.subject,
+                            date = GMTDate(it.date).toHttpDate(),
+                            amount = it.amount,
+                            creditorBic = it.creditorBic,
+                            creditorName = it.creditorName,
+                            debtorBic = it.debtorBic,
+                            debtorName = it.debtorName,
+                            currency = it.currency,
+                            creditDebitIndicator = when (it.direction) {
+                                "CRDT" -> "credit"
+                                "DBIT" -> "debit"
+                                else -> throw Error("invalid direction")
+                            }
                         )
-                    }
+                    )
                 }
             }
             call.respond(ret)
         }
-
-        // Generate one incoming and one outgoing transactions for
-        // one bank account.  Counterparts do not need to have an account
-        // at this Sandbox.
+        /**
+         * Generate one incoming and one outgoing transactions for
+         * one bank account.  Counterparts do not need to have an account
+         * at this Sandbox.
+         */
         post("/admin/bank-accounts/{label}/generate-transactions") {
-            call.request.basicAuth()
+            call.request.basicAuth(onlyAdmin = true)
             transaction {
                 val accountLabel = ensureNonNull(call.parameters["label"])
                 val demobank = getDefaultDemobank()
@@ -865,9 +895,18 @@ val sandboxApp: Application.() -> Unit = {
          * user is allowed to call this.
          */
         post("/admin/ebics/subscribers") {
-            call.request.basicAuth()
+            call.request.basicAuth(onlyAdmin = true)
             val body = call.receiveJson<EbicsSubscriberObsoleteApi>()
             transaction {
+                // Check it exists first.
+                val maybeSubscriber = EbicsSubscriberEntity.find {
+                    EbicsSubscribersTable.userId eq body.userID and (
+                            EbicsSubscribersTable.partnerId eq body.partnerID
+                            ) and (
+                            EbicsSubscribersTable.systemId eq body.systemID
+                                    )
+                }.firstOrNull()
+                if (maybeSubscriber != null) throw conflict("EBICS subscriber exists already")
                 EbicsSubscriberEntity.new {
                     partnerId = body.partnerID
                     userId = body.userID
@@ -886,7 +925,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Shows details of all the EBICS subscribers of this Sandbox.
         get("/admin/ebics/subscribers") {
-            call.request.basicAuth()
+            call.request.basicAuth(onlyAdmin = true)
             val ret = AdminGetSubscribers()
             transaction {
                 EbicsSubscriberEntity.all().forEach {
@@ -906,7 +945,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Change keys used in the EBICS communications.
         post("/admin/ebics/hosts/{hostID}/rotate-keys") {
-            call.request.basicAuth()
+            call.request.basicAuth(onlyAdmin = true)
             val hostID: String = call.parameters["hostID"] ?: throw SandboxError(
                 io.ktor.http.HttpStatusCode.BadRequest, "host ID missing in URL"
             )
@@ -933,7 +972,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Create a new EBICS host
         post("/admin/ebics/hosts") {
-            call.request.basicAuth()
+            call.request.basicAuth(onlyAdmin = true)
             val req = call.receiveJson<EbicsHostCreateRequest>()
             val pairA = CryptoUtil.generateRsaKeyPair(2048)
             val pairB = CryptoUtil.generateRsaKeyPair(2048)
@@ -957,7 +996,7 @@ val sandboxApp: Application.() -> Unit = {
 
         // Show the names of all the Ebics hosts
         get("/admin/ebics/hosts") {
-            call.request.basicAuth()
+            call.request.basicAuth(onlyAdmin = true)
             val ebicsHosts = transaction {
                 EbicsHostEntity.all().map { it.hostId }
             }

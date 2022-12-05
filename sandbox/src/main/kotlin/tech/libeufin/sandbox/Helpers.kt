@@ -19,9 +19,6 @@
 
 package tech.libeufin.sandbox
 
-import com.fasterxml.jackson.core.JsonParseException
-import com.fasterxml.jackson.databind.exc.MismatchedInputException
-import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import io.ktor.application.*
 import io.ktor.http.HttpStatusCode
 import io.ktor.request.*
@@ -29,6 +26,7 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.util.*
+import java.awt.Label
 import java.math.BigDecimal
 import java.security.interfaces.RSAPublicKey
 import java.util.*
@@ -49,20 +47,37 @@ data class SandboxCamt(
 )
 
 /**
+ *
+ * Return true if access to the bank account can be granted,
+ * false otherwise.
+ *
+ * Given the policy of having bank account names matching
+ * their owner's username, this function enforces such policy
+ * with the exception that 'admin' can access every bank
+ * account.  A null username indicates disabled authentication
+ * checks, hence it grants the access.
+ */
+fun allowOwnerOrAdmin(username: String?, bankAccountLabel: String): Boolean {
+    if (username == null) return true
+    if (username == "admin") return true
+    return username == bankAccountLabel
+}
+
+/**
  * Throws exception if the credentials are wrong.
  *
  * Return:
  * - null if the authentication is disabled (during tests, for example).
  *   This facilitates tests because allows requests to lack entirely a
  *   Authorization header.
- * - the name of the authenticated user
+ * - the username of the authenticated user
  * - throw exception when the authentication fails
  *
  * Note: at this point it is ONLY checked whether the user provided
  * a valid password for the username mentioned in the Authorization header.
  * The actual access to the resources must be later checked by each handler.
  */
-fun ApplicationRequest.basicAuth(): String? {
+fun ApplicationRequest.basicAuth(onlyAdmin: Boolean = false): String? {
     val withAuth = this.call.ensureAttribute(WITH_AUTH_ATTRIBUTE_KEY)
     if (!withAuth) {
         logger.info("Authentication is disabled - assuming tests currently running.")
@@ -77,6 +92,10 @@ fun ApplicationRequest.basicAuth(): String? {
         )
         return credentials.first
     }
+    /**
+     * If only admin auth was allowed, here it failed already,
+     * hence throw 401.  */
+    if (onlyAdmin) throw unauthorized("Only admin allowed.")
     val passwordHash = transaction {
         val customer = getCustomer(credentials.first)
         customer.passwordHash
@@ -131,7 +150,15 @@ fun getHistoryElementFromTransactionRow(
     return getHistoryElementFromTransactionRow(dbRow.transactionRef)
 }
 
-// Need to be called within a transaction {} block.
+/**
+ * Need to be called within a transaction {} block.  It
+ * is acceptable to pass a bank account's label as the
+ * parameter, because usernames can only own one bank
+ * account whose label equals the owner's username.
+ *
+ * Future versions may relax this policy to allow one
+ * customer to own multiple bank accounts.
+ */
 fun getCustomer(username: String): DemobankCustomerEntity {
     return DemobankCustomerEntity.find {
         DemobankCustomersTable.username eq username
@@ -378,7 +405,7 @@ fun getEbicsSubscriberFromDetails(userID: String, partnerID: String, hostID: Str
                     (EbicsSubscribersTable.hostId eq hostID)
         }.firstOrNull() ?: throw SandboxError(
             HttpStatusCode.NotFound,
-            "Ebics subscriber not found"
+            "Ebics subscriber (${userID}, ${partnerID}, ${hostID}) not found"
         )
     }
 }
