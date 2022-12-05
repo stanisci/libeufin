@@ -89,6 +89,7 @@ dependencies {
     // Ktor, an HTTP client and server library
     implementation "io.ktor:ktor-server-core:$ktor_version"
     implementation "io.ktor:ktor-client-apache:$ktor_version"
+    implementation "io.ktor:ktor-client-auth:$ktor_version"
     implementation "io.ktor:ktor-server-netty:$ktor_version"
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
     implementation "io.ktor:ktor-auth:$ktor_version"
@@ -101,9 +102,18 @@ dependencies {
     implementation 'com.cronutils:cron-utils:9.1.5'
 
     // Unit testing
-    testImplementation 'junit:junit:4.13.2'
+    // testImplementation 'junit:junit:4.13.2'
+    // From https://docs.gradle.org/current/userguide/java_testing.html#sec:java_testing_basics:
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
     testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
+}
+
+test {
+    useJUnit()
+    failFast = true
+    testLogging.showStandardStreams = false
+    environment.put("LIBEUFIN_SANDBOX_ADMIN_PASSWORD", "foo")
 }
 
 application {
@@ -111,7 +121,6 @@ application {
     applicationName = "libeufin-nexus"
     applicationDefaultJvmArgs = ['-Djava.net.preferIPv6Addresses=true']
 }
-
 
 jar {
     manifest {

@@ -187,8 +187,8 @@ class DownloadAndSubmit {
                     val painMessage = createPain001document(
                         NexusPaymentInitiationData(
                             debtorIban = bar!!.iban,
-                            debtorBic = bar!!.bankCode,
-                            debtorName = bar!!.accountHolder,
+                            debtorBic = bar.bankCode,
+                            debtorName = bar.accountHolder,
                             currency = "TESTKUDOS",
                             amount = "1",
                             creditorIban = getIban(),
