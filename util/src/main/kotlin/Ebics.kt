@@ -631,3 +631,8 @@ fun makeEbicsHpbRequest(subscriberDetails: EbicsClientSubscriberDetails): String
     XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv)
     return XMLUtil.convertDomToString(doc)
 }
+
+fun dumpEbicsSubscriber(ebicsHeader: EbicsUnsecuredRequest.StaticHeaderType): String {
+    return "userID: ${ebicsHeader.userID}, partnerID: ${ebicsHeader.partnerID}, systemID: ${ebicsHeader.systemID}"
+
+}

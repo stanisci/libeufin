@@ -895,13 +895,8 @@ private suspend fun ApplicationCall.handleEbicsIni(header: EbicsUnsecuredRequest
         val ebicsSubscriber =
             findEbicsSubscriber(header.static.partnerID, header.static.userID, header.static.systemID)
         if (ebicsSubscriber == null) {
-            logger.warn(
-                "ebics subscriber, userID: ${header.static.userID}" +
-                        ", partnerID: ${header.static.partnerID}" +
-                        ", systemID: ${header.static.systemID}," +
-                        "not found"
-            )
-            throw EbicsUserUnknown(header.static.userID)
+            logger.warn("ebics subscriber, ${dumpEbicsSubscriber(header.static)}, not found")
+            throw EbicsUserUnknown(dumpEbicsSubscriber(header.static))
         }
         when (ebicsSubscriber.state) {
             SubscriberState.NEW -> {}
