@@ -95,6 +95,11 @@ class EbicsSubscriberStateError : EbicsRequestError(
     "[EBICS_INVALID_USER_OR_USER_STATE] Subscriber unknown or subscriber state inadmissible",
     "091002"
 )
+// hint should mention at least the userID
+class EbicsUserUnknown(hint: String) : EbicsRequestError(
+    "[EBICS_USER_UNKNOWN] $hint",
+    "091003"
+)
 
 open class EbicsKeyManagementError(val errorText: String, val errorCode: String) :
     Exception("EBICS key management error: $errorText ($errorCode)")
@@ -890,8 +895,13 @@ private suspend fun ApplicationCall.handleEbicsIni(header: EbicsUnsecuredRequest
         val ebicsSubscriber =
             findEbicsSubscriber(header.static.partnerID, header.static.userID, header.static.systemID)
         if (ebicsSubscriber == null) {
-            logger.warn("ebics subscriber ('${header.static.partnerID}' / '${header.static.userID}' / '${header.static.systemID}') not found")
-            throw EbicsInvalidRequestError()
+            logger.warn(
+                "ebics subscriber, userID: ${header.static.userID}" +
+                        ", partnerID: ${header.static.partnerID}" +
+                        ", systemID: ${header.static.systemID}," +
+                        "not found"
+            )
+            throw EbicsUserUnknown(header.static.userID)
         }
         when (ebicsSubscriber.state) {
             SubscriberState.NEW -> {}

@@ -54,6 +54,7 @@ import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import io.ktor.application.*
+import io.ktor.client.statement.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
@@ -87,12 +88,14 @@ const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val adminPassword: String? = System.getenv("LIBEUFIN_SANDBOX_ADMIN_PASSWORD")
 var WITH_AUTH = true // Needed by helpers too, hence not making it private.
 
+// Internal error type.
 data class SandboxError(
     val statusCode: HttpStatusCode,
     val reason: String,
     val errorCode: LibeufinErrorCode? = null
 ) : Exception(reason)
 
+// HTTP response error type.
 data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
 
@@ -166,7 +169,9 @@ class Config : CliktCommand(
         execThrowableOrTerminate {
             dbCreateTables(dbConnString)
             transaction {
-                val maybeDemobank = BankAccountEntity.find(BankAccountsTable.label eq "bank").firstOrNull()
+                val maybeDemobank = BankAccountEntity.find(
+                    BankAccountsTable.label eq "bank"
+                ).firstOrNull()
                 if (showOption) {
                     if (maybeDemobank != null) {
                         val ret = ObjectMapper()
@@ -503,14 +508,17 @@ val sandboxApp: Application.() -> Unit = {
         jackson(contentType = ContentType.Any) { setJsonHandler(this) }
     }
     install(StatusPages) {
+        // Bank's fault: it should check the operands.  Respond 500
         exception<ArithmeticException> { cause ->
-            logger.error("Exception while handling '${call.request.uri}', ${cause.message}")
-            call.respondText(
-                "Invalid arithmetic attempted.",
-                ContentType.Text.Plain,
-                // here is always the bank's fault, as it should always check
-                // the operands.
-                HttpStatusCode.InternalServerError
+            logger.error("Exception while handling '${call.request.uri}', ${cause.stackTraceToString()}")
+            call.respond(
+                HttpStatusCode.InternalServerError,
+                SandboxErrorJson(
+                    error = SandboxErrorDetailJson(
+                        type = "sandbox-error",
+                        description = cause.message ?: "Bank's error: arithmetic exception."
+                    )
+                )
             )
         }
         exception<SandboxError> { cause ->
@@ -537,17 +545,22 @@ val sandboxApp: Application.() -> Unit = {
                 )
             )
         }
+        // Catch-all error, respond 500 because the bank didn't handle it.
+        exception<Throwable> { cause ->
+            logger.error("Exception while handling '${call.request.uri}'", cause.stackTrace)
+            call.respond(
+                HttpStatusCode.InternalServerError,
+                SandboxErrorJson(
+                    error = SandboxErrorDetailJson(
+                        type = "sandbox-error",
+                        description = cause.message ?: "Bank's error: unhandled exception."
+                    )
+                )
+            )
+        }
         exception<EbicsRequestError> { e ->
             logger.info("Handling EbicsRequestError: ${e.message}")
             respondEbicsTransfer(call, e.errorText, e.errorCode)
-        }
-        exception<Throwable> { cause ->
-            logger.error("Exception while handling '${call.request.uri}'", cause.message)
-            call.respondText(
-                "Internal server error.",
-                ContentType.Text.Plain,
-                HttpStatusCode.InternalServerError
-            )
         }
     }
     intercept(ApplicationCallPipeline.Setup) {
@@ -1564,7 +1577,7 @@ val sandboxApp: Application.() -> Unit = {
             }
             route("/ebics") {
                 /**
-                 * Associate a bank account to one EBICS subscriber.
+                 * Associate an existing bank account to one EBICS subscriber.
                  * If the subscriber is not found, it is created.
                  */
                 post("/subscribers") {
