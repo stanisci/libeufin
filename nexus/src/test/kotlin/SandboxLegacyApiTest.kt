@@ -161,7 +161,6 @@ class SandboxLegacyApiTest {
                         val bic = "SANDBOXX"
                         val name = "Now Have Account"
                         val label = "baz"
-                        val owner = "baz"
                     })
                     client.post<HttpResponse>("/admin/ebics/bank-accounts") {
                         expectSuccess = true

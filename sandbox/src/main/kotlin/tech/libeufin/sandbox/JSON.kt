@@ -92,12 +92,13 @@ data class EbicsBankAccountRequest(
     val iban: String,
     val bic: String,
     val name: String,
-    val label: String,
     /**
-     * Customer username that will own this
-     * EBICS subscriber.
+     * This value labels the bank account to be created
+     * AND its owner.  The 'owner' is a bank's customer
+     * whose username equals this label AND has the rights
+     * over such bank accounts.
      */
-    val owner: String
+    val label: String
 )
 
 data class CustomerRegistration(

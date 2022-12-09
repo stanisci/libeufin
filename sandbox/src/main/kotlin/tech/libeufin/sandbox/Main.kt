@@ -189,7 +189,7 @@ class Config : CliktCommand(
                         )
                         return@transaction
                     }
-                    println("Nothing to show")
+                    println("Nothing to show.")
                     return@transaction
                 }
                 if (maybeDemobank == null) {
@@ -204,14 +204,13 @@ class Config : CliktCommand(
                     }
                     BankAccountEntity.new {
                         iban = getIban()
-                        label = "bank" // used by the wire helper
-                        owner = "bank" // used by the person name finder
+                        label = "bank"
+                        owner = "bank" // Not backed by an actual customer object.
                         // For now, the model assumes always one demobank
                         this.demoBank = demoBank
                     }
                     return@transaction
                 }
-                println("Overriding existing values")
                 maybeDemobank.demoBank.currency = currencyOption
                 maybeDemobank.demoBank.bankDebtLimit = bankDebtLimitOption
                 maybeDemobank.demoBank.usersDebtLimit = usersDebtLimitOption
@@ -279,11 +278,8 @@ class Camt053Tick : CliktCommand(
 
 class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank accounts") {
     init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
+        context { helpFormatter = CliktHelpFormatter(showDefaultValues = true) }
     }
-
     private val creditAccount by option(help = "Label of the bank account receiving the payment").required()
     private val debitAccount by option(help = "Label of the bank account issuing the payment").required()
     private val demobankArg by option("--demobank", help = "Which Demobank books this transaction").default("default")
@@ -296,18 +292,17 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
         // Refuse to operate without a default demobank.
         val demobank = getDemobank("default")
         if (demobank == null) {
-            println("Sandbox cannot operate without a 'default' demobank.")
-            println("Please make one with the 'libeufin-sandbox config' command.")
+            System.err.println("Sandbox cannot operate without a 'default' demobank.")
+            System.err.println("Please make one with the 'libeufin-sandbox config' command.")
             exitProcess(1)
         }
         try {
             wireTransfer(debitAccount, creditAccount, demobankArg, subjectArg, amount)
         } catch (e: SandboxError) {
-            print(e.message)
+            System.err.println(e.message)
             exitProcess(1)
         } catch (e: Exception) {
-            // Here, Sandbox is in a highly unstable state.
-            println(e)
+            System.err.println(e)
             exitProcess(1)
         }
     }
@@ -648,16 +643,18 @@ val sandboxApp: Application.() -> Unit = {
                 }.firstOrNull()
                 if (maybeBankAccount != null)
                     throw conflict("Bank account '${body.label}' exist already")
+                // owner username == bank account label
+                val maybeCustomer = DemobankCustomerEntity.find {
+                    DemobankCustomersTable.username eq body.label
+                }.firstOrNull()
+                if (maybeCustomer == null)
+                    throw notFound("Customer '${body.label}' not found," +
+                            " cannot own any bank account.")
                 BankAccountEntity.new {
                     iban = body.iban
                     bic = body.bic
                     label = body.label
-                    /**
-                     * The null username case exist when auth is
-                     * disabled.  In this case, we assign the bank
-                     * account to 'admin'.
-                     */
-                    owner = username ?: "admin"
+                    owner = body.label
                     demoBank = getDefaultDemobank()
                 }
             }
@@ -737,11 +734,6 @@ val sandboxApp: Application.() -> Unit = {
         post("/admin/ebics/bank-accounts") {
             call.request.basicAuth(onlyAdmin = true)
             val body = call.receiveJson<EbicsBankAccountRequest>()
-            if (body.owner != body.label)
-                throw conflict(
-                    "Customer username '${body.owner}'" +
-                            " differs from bank account name '${body.label}'"
-                )
             if (!validateBic(body.bic)) {
                 throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
             }
@@ -773,7 +765,9 @@ val sandboxApp: Application.() -> Unit = {
                     iban = body.iban
                     bic = body.bic
                     label = body.label
-                    owner = body.owner
+                    /* Current version invariant:
+                       owner's username == bank account label. */
+                    owner = body.label
                     demoBank = demobank
                 }
             }
@@ -1397,7 +1391,7 @@ val sandboxApp: Application.() -> Unit = {
                         val paytoUri = buildIbanPaytoUri(
                             iban = bankAccount.iban,
                             bic = bankAccount.bic,
-                            receiverName = getPersonNameFromCustomer(username ?: "admin")
+                            receiverName = getPersonNameFromCustomer(username ?: "Not given.")
                         )
                         val iban = bankAccount.iban
                     })
@@ -1520,6 +1514,9 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     val req = call.receiveJson<CustomerRegistration>()
+                    // Forbid 'admin' or 'bank' usernames.
+                    if (req.username == "bank" || req.username == "admin")
+                        throw forbidden("Unallowed username: ${req.username}")
                     val checkExist = transaction {
                         DemobankCustomerEntity.find {
                             DemobankCustomersTable.username eq req.username
@@ -1529,7 +1526,7 @@ val sandboxApp: Application.() -> Unit = {
                      * Not allowing 'bank' username, as it's been assigned
                      * to the default bank's bank account.
                      */
-                    if (checkExist != null || req.username == "bank") {
+                    if (checkExist != null) {
                         throw SandboxError(
                             HttpStatusCode.Conflict,
                             "Username ${req.username} not available."

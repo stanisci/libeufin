@@ -168,20 +168,18 @@ fun getCustomer(username: String): DemobankCustomerEntity {
 /**
  * Get person name from a customer's username.
  */
-fun getPersonNameFromCustomer(ownerUsername: String?): String {
-    if (ownerUsername == null) {
-        return "Name unknown"
-    }
+fun getPersonNameFromCustomer(ownerUsername: String): String {
     return when (ownerUsername) {
         "admin" -> "admin" // Could be changed to Admin, or some different value.
         "bank" -> "The Bank"
         else -> transaction {
             val ownerCustomer = DemobankCustomerEntity.find(
                 DemobankCustomersTable.username eq ownerUsername
-            ).firstOrNull() ?: throw internalServerError(
-                "Person name of '$ownerUsername' not found"
+            ).firstOrNull() ?: throw SandboxError(
+                HttpStatusCode.InternalServerError,
+                "'$ownerUsername' not a customer."
             )
-            ownerCustomer.name ?: "Name unknown"
+            ownerCustomer.name ?: "Never given."
         }
     }
 }

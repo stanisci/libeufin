@@ -184,8 +184,12 @@ fun processCamtMessage(
                 if (b.type == "CLBD") {
                     clbdCount++
                     val lastBalance = NexusBankBalanceEntity.all().lastOrNull()
-                    // Only store non seen balances.
-                    if (lastBalance != null && b.amount.toPlainString() != lastBalance.balance) {
+                    /**
+                     * Store balances different from the one that came from the bank,
+                     * or the very first balance.
+                     */
+                    if ((lastBalance == null) ||
+                        (b.amount.toPlainString() != lastBalance.balance)) {
                         NexusBankBalanceEntity.new {
                             bankAccount = acct
                             balance = b.amount.toPlainString()
