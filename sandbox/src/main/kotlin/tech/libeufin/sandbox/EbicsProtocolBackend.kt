@@ -838,8 +838,6 @@ private suspend fun ApplicationCall.handleEbicsHia(header: EbicsUnsecuredRequest
     val plainOrderData = InflaterInputStream(orderData.inputStream()).use {
         it.readAllBytes()
     }
-    println("HIA order data: ${plainOrderData.toString(Charsets.UTF_8)}")
-
     val keyObject = EbicsOrderUtil.decodeOrderDataXml<HIARequestOrderData>(orderData)
     val encPubXml = keyObject.encryptionPubKeyInfo.pubKeyValue.rsaKeyValue
     val authPubXml = keyObject.authenticationPubKeyInfo.pubKeyValue.rsaKeyValue
