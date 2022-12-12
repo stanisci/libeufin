@@ -36,20 +36,19 @@ val userKeys = EbicsKeys(
  * Cleans up the DB file afterwards.
  */
 fun withTestDatabase(f: () -> Unit) {
-    val dbfile = TEST_DB_CONN
-    File(dbfile).also {
+    File(TEST_DB_FILE).also {
         if (it.exists()) {
             it.delete()
         }
     }
-    Database.connect("jdbc:sqlite:$dbfile")
-    dbDropTables(dbfile)
+    Database.connect("jdbc:sqlite:$TEST_DB_FILE")
+    dbDropTables(TEST_DB_CONN)
     tech.libeufin.sandbox.dbDropTables(TEST_DB_CONN)
     try {
         f()
     }
     finally {
-        File(dbfile).also {
+        File(TEST_DB_FILE).also {
             if (it.exists()) {
                 it.delete()
             }
@@ -187,6 +186,25 @@ fun withNexusAndSandboxUser(f: () -> Unit) {
     withTestDatabase {
         prepNexusDb()
         prepSandboxDb()
+        f()
+    }
+}
+
+// Creates tables and the default demobank.
+fun withSandboxTestDatabase(f: () -> Unit) {
+    withTestDatabase {
+        tech.libeufin.sandbox.dbCreateTables(TEST_DB_CONN)
+        transaction {
+            DemobankConfigEntity.new {
+                currency = "TESTKUDOS"
+                bankDebtLimit = 10000
+                usersDebtLimit = 1000
+                allowRegistrations = true
+                name = "default"
+                this.withSignupBonus = false
+                captchaUrl = "http://example.com/" // unused
+            }
+        }
         f()
     }
 }

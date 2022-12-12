@@ -36,7 +36,7 @@ data class RawPayment(
     val amount: String,
     val currency: String,
     val subject: String,
-    val date: String? = null,
+    val date: String,
     val uid: String, // FIXME: explain this value.
     val direction: String, // FIXME: this following value should be restricted to only DBIT/CRDT.
 
