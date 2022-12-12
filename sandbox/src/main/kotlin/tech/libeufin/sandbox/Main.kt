@@ -54,7 +54,6 @@ import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import io.ktor.application.*
-import io.ktor.client.statement.*
 import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.jackson.*
@@ -1517,7 +1516,7 @@ val sandboxApp: Application.() -> Unit = {
                     // Forbid 'admin' or 'bank' usernames.
                     if (req.username == "bank" || req.username == "admin")
                         throw forbidden("Unallowed username: ${req.username}")
-                    val checkExist = transaction {
+                    val checkCustomerExist = transaction {
                         DemobankCustomerEntity.find {
                             DemobankCustomersTable.username eq req.username
                         }.firstOrNull()
@@ -1526,17 +1525,25 @@ val sandboxApp: Application.() -> Unit = {
                      * Not allowing 'bank' username, as it's been assigned
                      * to the default bank's bank account.
                      */
-                    if (checkExist != null) {
+                    if (checkCustomerExist != null) {
                         throw SandboxError(
                             HttpStatusCode.Conflict,
                             "Username ${req.username} not available."
                         )
                     }
+                    val newIban = req.iban ?: getIban()
+                    // Double-check if IBAN was taken already.
+                    val checkIbanExist = transaction {
+                        BankAccountEntity.find(BankAccountsTable.iban eq newIban).firstOrNull()
+                    }
+                    if (checkIbanExist != null)
+                        throw conflict("Proposed IBAN not available.")
+
                     // Create new customer.
                     requireValidResourceName(req.username)
                     val bankAccount = transaction {
                         val bankAccount = BankAccountEntity.new {
-                            iban = req.iban ?: getIban()
+                            iban = newIban
                             /**
                              * For now, keep same semantics of Pybank: a username
                              * is AS WELL a bank account label.  In other words, it
