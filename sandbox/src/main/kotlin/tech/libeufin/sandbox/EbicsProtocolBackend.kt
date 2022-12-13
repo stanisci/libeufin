@@ -27,10 +27,7 @@ import io.ktor.request.*
 import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.util.AttributeKey
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.apache.xml.security.binding.xmldsig.RSAKeyValueType
-import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
@@ -287,10 +284,10 @@ fun buildCamtString(
      * - Proprietary code of the bank transaction
      * - Id of the servicer (Issuer and Code)
      */
-    val creationTime = getUTCnow() // FIXME: should this be the payment time?
-    val dashedDate = creationTime.toDashedDate()
-    val zonedDateTime = creationTime.toZonedString()
-    val creationTimeMillis = creationTime.toInstant().toEpochMilli()
+    val camtCreationTime = getUTCnow() // FIXME: should this be the payment time?
+    val dashedDate = camtCreationTime.toDashedDate()
+    val zonedDateTime = camtCreationTime.toZonedString()
+    val creationTimeMillis = camtCreationTime.toInstant().toEpochMilli()
     val messageId = "sandbox-${creationTimeMillis}"
     val currency = getDefaultDemobank().currency
 

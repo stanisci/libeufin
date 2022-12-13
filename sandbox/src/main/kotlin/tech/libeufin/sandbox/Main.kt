@@ -17,23 +17,6 @@
  * <http://www.gnu.org/licenses/>
  */
 
-
-/*
-General thoughts:
-
- - since sandbox will run on the public internet for the demobank, all endpoints except
-   explicitly public ones should use authentication (basic auth)
- - the authentication should be *very* simple and *not* be part of the database state.
-   instead, a LIBEUFIN_SANDBOX_ADMIN_TOKEN environment variable will be used to
-   set the authentication.
-
- - All sandbox will require the ADMIN_TOKEN, except:
-   - the /ebicsweb endpoint, because EBICS handles authentication here
-     (EBICS subscribers are checked)
-   - the /demobank(/...) endpoints (except registration and public accounts),
-     because authentication is handled by checking the demobank user credentials
- */
-
 package tech.libeufin.sandbox
 
 import UtilError
