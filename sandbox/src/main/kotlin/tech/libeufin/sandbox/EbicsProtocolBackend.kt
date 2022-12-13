@@ -508,7 +508,8 @@ fun getLastBalance(bankAccount: BankAccountEntity): BigDecimal {
         BankAccountStatementsTable.bankAccount eq bankAccount.id
     }.firstOrNull()
     val lastBalance = if (lastStatement == null) {
-        BigDecimal.ZERO } else { BigDecimal(lastStatement.balanceClbd) }
+        BigDecimal.ZERO
+    } else { BigDecimal(lastStatement.balanceClbd) }
     return lastBalance
 }
 
@@ -520,17 +521,28 @@ fun getLastBalance(bankAccount: BankAccountEntity): BigDecimal {
 private fun constructCamtResponse(
     type: Int,
     subscriber: EbicsSubscriberEntity,
-    dateRange: Pair<Long, Long>?): List<String> {
+    dateRange: Pair<Long, Long>?
+): List<String> {
 
     if (type != 53 && type != 52) throw EbicsUnsupportedOrderType()
     val bankAccount = getBankAccountFromSubscriber(subscriber)
     if (type == 52) {
+        if (dateRange != null)
+            throw NotImplementedError() // FIXME: #6243.
+        /**
+         * Note: before addressing #6243, the C52 is always generated
+         * without taking the time range into consideration.  That means
+         * that the request is treated always as "give last non booked"
+         * transactions.  The current implementation returns non booked
+         * transactions only on the first request, when the time range is
+         * missing.
+         */
         val history = mutableListOf<RawPayment>()
         /**
-         * This block adds all the fresh transactions to the intermediate
+         * This block adds all the non booked transactions to the intermediate
          * history list and returns the last balance that was reported in a
          * C53 document.  This latter will be the base balance to calculate
-         * the final balance after the fresh transactions.
+         * the final balance after the non booked transactions.
          */
         val lastBalance = transaction {
             BankAccountFreshTransactionEntity.all().forEach {
@@ -559,13 +571,9 @@ private fun constructCamtResponse(
             ret
         } else ""
         logger.debug("camt.052 document '${camtData.messageId}' generated.$payments")
-        return listOf(
-            camtData.camtMessage
-        )
+        return listOf(camtData.camtMessage)
     }
     SandboxAssert(type == 53, "Didn't catch unsupported CAMT type")
-    logger.debug("Finding C$type records")
-
     /**
      * FIXME: when this function throws an exception, it makes a JSON response being responded.
      * That is bad, because here we're inside a Ebics handler and only XML should
@@ -575,10 +583,10 @@ private fun constructCamtResponse(
     val ret = mutableListOf<String>()
     /**
      * Retrieve all the records whose creation date lies into the
-     * time range given as a function's parameter.
+     * time range given in the function parameters.
      */
     if (dateRange != null) {
-        logger.debug("Querying C$type with date range: $dateRange")
+        logger.debug("Querying C53 with date range: $dateRange")
         BankAccountStatementEntity.find {
             BankAccountStatementsTable.creationTime.between(
                 dateRange.first,
@@ -589,7 +597,6 @@ private fun constructCamtResponse(
         /**
          * No time range was given, hence pick the latest statement.
          */
-        logger.debug("No date range was given for c$type, respond with latest document")
         BankAccountStatementEntity.find {
             BankAccountStatementsTable.bankAccount eq bankAccount.id
         }.lastOrNull().apply {
@@ -1445,10 +1452,26 @@ suspend fun ApplicationCall.ebicsweb() {
                             throw EbicsInvalidRequestError()
                         logger.debug("Handling download receipt for EBICS transaction: " +
                                 requestTransactionID)
+                        /**
+                         * The receipt phase means that the client has already
+                         * received all the data related to the current download
+                         * transaction.  Hence this data can now be removed from
+                         * the database.
+                         */
+                        val ebicsData = transaction {
+                            EbicsDownloadTransactionEntity.findById(requestTransactionID)
+                        }
+                        if (ebicsData == null)
+                            throw SandboxError(
+                                HttpStatusCode.InternalServerError,
+                                "EBICS transaction $requestTransactionID was not" +
+                                        "found in the database for deletion.",
+                                LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE
+                            )
+                        ebicsData.delete()
                         val receiptCode =
                             requestObject.body.transferReceipt?.receiptCode ?: throw EbicsInvalidRequestError()
                         EbicsResponse.createForDownloadReceiptPhase(requestTransactionID, receiptCode == 0)
-
                     }
                 }
                 signEbicsResponse(ebicsResponse, requestContext.hostAuthPriv)

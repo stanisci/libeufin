@@ -1005,8 +1005,8 @@ val sandboxApp: Application.() -> Unit = {
                 throw EbicsProcessingError("Serving EBICS threw unmanaged UtilError: ${e.reason}")
             }
             catch (e: SandboxError) {
-                val payload: String = e.message ?: e.stackTraceToString()
-                logger.info(payload)
+                val errorInfo: String = e.message ?: e.stackTraceToString()
+                logger.info(errorInfo)
                 // Should translate to EBICS error code.
                 when (e.errorCode) {
                     LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
