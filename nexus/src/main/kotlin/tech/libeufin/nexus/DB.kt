@@ -285,9 +285,6 @@ object NexusBankAccountsTable : LongIdTable() {
     val lastStatementCreationTimestamp = long("lastStatementCreationTimestamp").nullable()
     val lastReportCreationTimestamp = long("lastReportCreationTimestamp").nullable()
     val lastNotificationCreationTimestamp = long("lastNotificationCreationTimestamp").nullable()
-
-    // Highest bank message ID that this bank account is aware of.
-    val highestSeenBankMessageSerialId = long("highestSeenBankMessageSerialId")
     val pain001Counter = long("pain001counter").default(1)
 }
 
@@ -297,13 +294,11 @@ class NexusBankAccountEntity(id: EntityID<Long>) : LongEntity(id) {
             return find { NexusBankAccountsTable.bankAccountName eq name }.firstOrNull()
         }
     }
-
     var bankAccountName by NexusBankAccountsTable.bankAccountName
     var accountHolder by NexusBankAccountsTable.accountHolder
     var iban by NexusBankAccountsTable.iban
     var bankCode by NexusBankAccountsTable.bankCode
     var defaultBankConnection by NexusBankConnectionEntity optionalReferencedOn NexusBankAccountsTable.defaultBankConnection
-    var highestSeenBankMessageSerialId by NexusBankAccountsTable.highestSeenBankMessageSerialId
     var pain001Counter by NexusBankAccountsTable.pain001Counter
     var lastStatementCreationTimestamp by NexusBankAccountsTable.lastStatementCreationTimestamp
     var lastReportCreationTimestamp by NexusBankAccountsTable.lastReportCreationTimestamp

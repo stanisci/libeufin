@@ -89,7 +89,6 @@ fun prepNexusDb() {
             iban = FOO_USER_IBAN
             bankCode = "SANDBOXX"
             defaultBankConnection = c
-            highestSeenBankMessageSerialId = 0
             accountHolder = "foo"
         }
         val b = NexusBankAccountEntity.new {
@@ -97,7 +96,6 @@ fun prepNexusDb() {
             iban = BAR_USER_IBAN
             bankCode = "SANDBOXX"
             defaultBankConnection = c
-            highestSeenBankMessageSerialId = 0
             accountHolder = "bar"
         }
     }

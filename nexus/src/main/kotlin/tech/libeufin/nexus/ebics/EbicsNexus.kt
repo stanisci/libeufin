@@ -305,7 +305,6 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
                                     reason = "bank gave no BIC"
                                 )
                             defaultBankConnection = conn
-                            highestSeenBankMessageSerialId = 0
                         }
                     }
                 }

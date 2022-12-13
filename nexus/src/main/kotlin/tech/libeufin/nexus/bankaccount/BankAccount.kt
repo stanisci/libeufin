@@ -39,6 +39,9 @@ import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
+// Defaults to false.  Gets true if defined as "yes".
+private val keepBankMessages: String? = System.getenv("LIBEUFIN_NEXUS_KEEP_BANK_MESSAGES")
+
 fun requireBankAccount(call: ApplicationCall, parameterKey: String): NexusBankAccountEntity {
     val name = call.parameters[parameterKey]
     if (name == null) {
@@ -301,10 +304,10 @@ fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: Strin
         if (acct == null) {
             throw NexusError(HttpStatusCode.InternalServerError, "account not found")
         }
-        var lastId = acct.highestSeenBankMessageSerialId
         NexusBankMessageEntity.find {
-            (NexusBankMessagesTable.bankConnection eq conn.id) and
-                    (NexusBankMessagesTable.id greater acct.highestSeenBankMessageSerialId)
+            (NexusBankMessagesTable.bankConnection eq conn.id) and not(
+                NexusBankMessagesTable.errors
+            )
         }.orderBy(Pair(NexusBankMessagesTable.id, SortOrder.ASC)).forEach {
             val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
             val processingResult = processCamtMessage(bankAccountId, doc, it.code)
@@ -312,11 +315,14 @@ fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: Strin
                 it.errors = true
                 return@forEach
             }
-            lastId = it.id.value
+            /**
+             * The XML document from the bank parsed correctly,
+             * remove now from the database.
+             */
+            if (keepBankMessages == null || keepBankMessages != "yes") it.delete()
             totalNew += processingResult.newTransactions
             downloadedTransactions += processingResult.downloadedTransactions
         }
-        acct.highestSeenBankMessageSerialId = lastId
     }
     // return totalNew
     return CamtTransactionsCount(
@@ -443,7 +449,6 @@ fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexus
                         iban = offeredAccount[OfferedBankAccountsTable.iban]
                         bankCode = offeredAccount[OfferedBankAccountsTable.bankCode]
                         defaultBankConnection = conn
-                        highestSeenBankMessageSerialId = 0
                         accountHolder = offeredAccount[OfferedBankAccountsTable.accountHolder]
                     }
                     logger.info("Account ${newImportedAccount.id} gets imported")
