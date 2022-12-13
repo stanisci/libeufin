@@ -39,14 +39,14 @@ import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-// Defaults to false.  Gets true if defined as "yes".
 private val keepBankMessages: String? = System.getenv("LIBEUFIN_NEXUS_KEEP_BANK_MESSAGES")
-
 fun requireBankAccount(call: ApplicationCall, parameterKey: String): NexusBankAccountEntity {
     val name = call.parameters[parameterKey]
-    if (name == null) {
-        throw NexusError(HttpStatusCode.InternalServerError, "no parameter for bank account")
-    }
+    if (name == null)
+        throw NexusError(
+            HttpStatusCode.InternalServerError,
+            "no parameter for bank account"
+        )
     val account = transaction { NexusBankAccountEntity.findByName(name) }
     if (account == null) {
         throw NexusError(HttpStatusCode.NotFound, "bank connection '$name' not found")
@@ -291,7 +291,10 @@ fun processCamtMessage(
  * Create new transactions for an account based on bank messages it
  * did not see before.
  */
-fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: String): CamtTransactionsCount {
+fun ingestBankMessagesIntoAccount(
+    bankConnectionId: String,
+    bankAccountId: String
+): CamtTransactionsCount {
     var totalNew = 0
     var downloadedTransactions = 0
     transaction {
@@ -304,25 +307,35 @@ fun ingestBankMessagesIntoAccount(bankConnectionId: String, bankAccountId: Strin
         if (acct == null) {
             throw NexusError(HttpStatusCode.InternalServerError, "account not found")
         }
+        var lastId = acct.highestSeenBankMessageSerialId
         NexusBankMessageEntity.find {
-            (NexusBankMessagesTable.bankConnection eq conn.id) and not(
-                NexusBankMessagesTable.errors
-            )
+            (NexusBankMessagesTable.bankConnection eq conn.id) and
+                    (NexusBankMessagesTable.id greater acct.highestSeenBankMessageSerialId) and
+                    // Wrong messages got already skipped by the
+                    // index check above.  Below is a extra check.
+                    not(NexusBankMessagesTable.errors)
         }.orderBy(Pair(NexusBankMessagesTable.id, SortOrder.ASC)).forEach {
             val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
             val processingResult = processCamtMessage(bankAccountId, doc, it.code)
             if (processingResult.newTransactions == -1) {
                 it.errors = true
+                lastId = it.id.value
                 return@forEach
             }
-            /**
-             * The XML document from the bank parsed correctly,
-             * remove now from the database.
-             */
-            if (keepBankMessages == null || keepBankMessages != "yes") it.delete()
             totalNew += processingResult.newTransactions
             downloadedTransactions += processingResult.downloadedTransactions
+            /**
+             * Disk-space conservative check: only store if "yes" was
+             * explicitly set into the environment variable.  Any other
+             * value or non given falls back to deletion.
+             */
+            if (keepBankMessages == null || keepBankMessages != "yes") {
+                it.delete()
+                return@forEach
+            }
+            lastId = it.id.value
         }
+        acct.highestSeenBankMessageSerialId = lastId
     }
     // return totalNew
     return CamtTransactionsCount(
@@ -449,6 +462,7 @@ fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexus
                         iban = offeredAccount[OfferedBankAccountsTable.iban]
                         bankCode = offeredAccount[OfferedBankAccountsTable.bankCode]
                         defaultBankConnection = conn
+                        highestSeenBankMessageSerialId = 0
                         accountHolder = offeredAccount[OfferedBankAccountsTable.accountHolder]
                     }
                     logger.info("Account ${newImportedAccount.id} gets imported")
