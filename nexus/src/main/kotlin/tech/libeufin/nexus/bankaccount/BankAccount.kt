@@ -201,10 +201,6 @@ fun processCamtMessage(
                         }
                     }
                 }
-                if (clbdCount == 0) {
-                    logger.warn("The bank didn't return ANY CLBD balances," +
-                            " in the message: ${res.messageId}.  Please clarify!")
-                }
             }
         }
         /**
@@ -244,7 +240,7 @@ fun processCamtMessage(
             }
             val duplicate = findDuplicate(bankAccountId, acctSvcrRef)
             if (duplicate != null) {
-                logger.info("Found a duplicate: $acctSvcrRef")
+                logger.info("Found a duplicate (acctSvcrRef): $acctSvcrRef")
                 // FIXME(dold): See if an old transaction needs to be superseded by this one
                 // https://bugs.gnunet.org/view.php?id=6381
                 continue@txloop

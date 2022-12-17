@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import java.math.BigDecimal
 
-// Mainly useful inside the CAMT generator.
+// Mainly useful inside the Camt generator.
 fun balanceForAccount(
     history: MutableList<RawPayment>,
     baseBalance: BigDecimal

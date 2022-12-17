@@ -69,8 +69,8 @@ open class EbicsRequestError(
     val errorCode: String
 ) : Exception("$errorText ($errorCode)")
 
-class EbicsNoDownloadDataAvailable(camtType: Int) : EbicsRequestError(
-    "[EBICS_NO_DOWNLOAD_DATA_AVAILABLE] for Camt $camtType",
+class EbicsNoDownloadDataAvailable(reason: String? = null) : EbicsRequestError(
+    "[EBICS_NO_DOWNLOAD_DATA_AVAILABLE]" + if (reason != null) " $reason" else "",
     "090005"
 )
 
@@ -98,7 +98,13 @@ class EbicsUserUnknown(hint: String) : EbicsRequestError(
     "091003"
 )
 
-open class EbicsKeyManagementError(val errorText: String, val errorCode: String) :
+class EbicsOrderParamsIgnored(hint: String) : EbicsRequestError(
+    "[EBICS_ORDER_PARAMS_IGNORED] $hint",
+    "031001"
+)
+
+
+open class EbicsKeyManagementError(private val errorText: String, private val errorCode: String) :
     Exception("EBICS key management error: $errorText ($errorCode)")
 
 private class EbicsInvalidXmlError : EbicsKeyManagementError(
@@ -268,7 +274,7 @@ private fun getCreditDebitInd(balance: BigDecimal): String {
 fun buildCamtString(
     type: Int,
     subscriberIban: String,
-    freshHistory: MutableList<RawPayment>,
+    history: MutableList<RawPayment>,
     balancePrcd: BigDecimal, // Balance up to freshHistory (excluded).
     balanceClbd: BigDecimal
 ): SandboxCamt {
@@ -288,7 +294,7 @@ fun buildCamtString(
     val dashedDate = camtCreationTime.toDashedDate()
     val zonedDateTime = camtCreationTime.toZonedString()
     val creationTimeMillis = camtCreationTime.toInstant().toEpochMilli()
-    val messageId = "sandbox-${creationTimeMillis}"
+    val messageId = "sandbox-${creationTimeMillis / 1000}-${getRandomString(10)}"
     val currency = getDefaultDemobank().currency
 
     val camtMessage = constructXml(indent = true) {
@@ -307,15 +313,6 @@ fun buildCamtString(
                     element("CreDtTm") {
                         text(zonedDateTime)
                     }
-                    // Block below used to fail validation:
-                    /*element("MsgPgntn") {
-                        element("PgNb") {
-                            text("001")
-                        }
-                        element("LastPgInd") {
-                            text("true")
-                        }
-                    }*/
                 }
                 element(if (type == 52) "Rpt" else "Stmt") {
                     element("Id") {
@@ -394,7 +391,7 @@ fun buildCamtString(
                             text(dashedDate)
                         }
                     }
-                    freshHistory.forEach {
+                    history.forEach {
                         this.element("Ntry") {
                             element("Amt") {
                                 attribute("Ccy", it.currency)
@@ -503,10 +500,16 @@ fun buildCamtString(
     )
 }
 
-fun getLastBalance(bankAccount: BankAccountEntity): BigDecimal {
+/**
+ * The last balance is the one accounted in the bank account's
+ * last statement.
+ */
+fun getLastBalance(
+    bankAccount: BankAccountEntity,
+): BigDecimal {
     val lastStatement = BankAccountStatementEntity.find {
         BankAccountStatementsTable.bankAccount eq bankAccount.id
-    }.firstOrNull()
+    }.lastOrNull()
     val lastBalance = if (lastStatement == null) {
         BigDecimal.ZERO
     } else { BigDecimal(lastStatement.balanceClbd) }
@@ -528,30 +531,18 @@ private fun constructCamtResponse(
     val bankAccount = getBankAccountFromSubscriber(subscriber)
     if (type == 52) {
         if (dateRange != null)
-            throw NotImplementedError() // FIXME: #6243.
-        /**
-         * Note: before addressing #6243, the C52 is always generated
-         * without taking the time range into consideration.  That means
-         * that the request is treated always as "give last non booked"
-         * transactions.  The current implementation returns non booked
-         * transactions only on the first request, when the time range is
-         * missing.
-         */
+            throw EbicsOrderParamsIgnored("C52 does not support date ranges.")
         val history = mutableListOf<RawPayment>()
-        /**
-         * This block adds all the non booked transactions to the intermediate
-         * history list and returns the last balance that was reported in a
-         * C53 document.  This latter will be the base balance to calculate
-         * the final balance after the non booked transactions.
-         */
         val lastBalance = transaction {
             BankAccountFreshTransactionEntity.all().forEach {
                 if (it.transactionRef.account.label == bankAccount.label) {
                     history.add(getHistoryElementFromTransactionRow(it))
                 }
             }
-            getLastBalance(bankAccount)  // last reported balance
+            getLastBalance(bankAccount)
         }
+        if (history.size == 0)
+            throw EbicsNoDownloadDataAvailable()
 
         val freshBalance = balanceForAccount(
             history = history,
@@ -565,48 +556,43 @@ private fun constructCamtResponse(
             balancePrcd = lastBalance,
             balanceClbd = freshBalance
         )
-        val payments: String = if (logger.isDebugEnabled) {
+        val paymentsList: String = if (logger.isDebugEnabled) {
             var ret = " It includes the payments:"
             for (p in history) ret += "\n- ${p.subject}"
             ret
         } else ""
-        logger.debug("camt.052 document '${camtData.messageId}' generated.$payments")
+        logger.debug("camt.052 document '${camtData.messageId}' generated.$paymentsList")
         return listOf(camtData.camtMessage)
-    }
-    SandboxAssert(type == 53, "Didn't catch unsupported CAMT type")
-    /**
-     * FIXME: when this function throws an exception, it makes a JSON response being responded.
-     * That is bad, because here we're inside a Ebics handler and only XML should
-     * be returned to the requester.  This problem makes the (unhelpful) "bank didn't
-     * return XML" message appear in the Nexus logs.
-     */
+    } // end of C52 case.
     val ret = mutableListOf<String>()
     /**
      * Retrieve all the records whose creation date lies into the
      * time range given in the function parameters.
      */
     if (dateRange != null) {
-        logger.debug("Querying C53 with date range: $dateRange")
+        logger.debug("Serving C53 with date range: $dateRange")
         BankAccountStatementEntity.find {
             BankAccountStatementsTable.creationTime.between(
                 dateRange.first,
                 dateRange.second) and(
                     BankAccountStatementsTable.bankAccount eq bankAccount.id)
-        }.forEach { ret.add(it.xmlMessage) }
+        }.forEach {
+            logger.debug("Including Camt.053: ${it.statementId}")
+            ret.add(it.xmlMessage)
+        }
     } else {
-        /**
-         * No time range was given, hence pick the latest statement.
-         */
+        logger.debug("Serving C53 without date range.")
+        // No time range was given, hence pick the latest statement.
         BankAccountStatementEntity.find {
             BankAccountStatementsTable.bankAccount eq bankAccount.id
         }.lastOrNull().apply {
             if (this != null) {
+                logger.debug("Including Camt.053: ${this.statementId}")
                 ret.add(this.xmlMessage)
             }
         }
     }
-    if (ret.size == 0) throw EbicsNoDownloadDataAvailable(type)
-
+    if (ret.size == 0) throw EbicsNoDownloadDataAvailable()
     return ret
 }
 
@@ -791,11 +777,14 @@ private fun handleCct(paymentRequest: String,
  * to the querying subscriber.
  */
 private fun handleEbicsC52(requestContext: RequestContext): ByteArray {
-    // Ignoring any dateRange parameter. (FIXME)
-    val report = constructCamtResponse(52, requestContext.subscriber, dateRange = null)
+    val report = constructCamtResponse(
+        52,
+        requestContext.subscriber,
+        dateRange = null
+    )
     SandboxAssert(
         report.size == 1,
-        "C52 response does not contain one Camt.052 document"
+        "C52 response contains more than one Camt.052 document"
     )
     if (!XMLUtil.validateFromString(report[0])) {
         logger.error("This document was generated invalid:\n${report[0]}")
@@ -817,9 +806,8 @@ private fun handleEbicsC53(requestContext: RequestContext): ByteArray {
         } else {
             Pair(start, end)
         }
-    } else {
+    } else
         null
-    }
     /**
      * By multiple statements, this function is responsible to return
      * a list of Strings: one for each statement.
@@ -1150,13 +1138,16 @@ private fun handleEbicsDownloadTransactionTransfer(requestContext: RequestContex
     )
 }
 
-/**
- *
- */
 private fun handleEbicsDownloadTransactionInitialization(requestContext: RequestContext): EbicsResponse {
     val orderType =
         requestContext.requestObject.header.static.orderDetails?.orderType ?: throw EbicsInvalidRequestError()
     val nonce = requestContext.requestObject.header.static.nonce
+    val transactionID = EbicsOrderUtil.generateTransactionId()
+    logger.debug(
+        "Handling download initialization for order type $orderType, " +
+                "nonce: ${nonce?.toHexString() ?: "not given"}, " +
+                "transaction ID: $transactionID"
+    )
     val response = when (orderType) {
         "HTD" -> handleEbicsHtd(requestContext)
         "HKD" -> handleEbicsHkd(requestContext)
@@ -1166,12 +1157,6 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
         "PTK" -> handleEbicsPTK()
         else -> throw EbicsInvalidXmlError()
     }
-    val transactionID = EbicsOrderUtil.generateTransactionId()
-    logger.debug(
-        "Handling download initialization for order type $orderType, " +
-                "nonce: ${nonce?.toHexString() ?: "not given"}, " +
-                "transaction ID: $transactionID"
-    )
     val compressedResponse = DeflaterInputStream(response.inputStream()).use {
         it.readAllBytes()
     }
@@ -1191,6 +1176,19 @@ private fun handleEbicsDownloadTransactionInitialization(requestContext: Request
         this.encodedResponse = encodedResponse
         this.numSegments = numSegments
         this.receiptReceived = false
+    }
+    /**
+     * In case of C52, the payload (that includes all the pending
+     * transactions) got at this point persisted into the database.
+     * The next block causes such transactions NOT to be returned
+     * along the next C52 request.
+     */
+    if (orderType == "C52") {
+        val account = getBankAccountFromSubscriber(requestContext.subscriber)
+        BankAccountFreshTransactionEntity.all().forEach {
+            if (it.transactionRef.account.label == account.label)
+                it.delete()
+        }
     }
     return EbicsResponse.createForDownloadInitializationPhase(
         transactionID,

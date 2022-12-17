@@ -75,7 +75,7 @@ private data class EbicsFetchSpec(
 fun storeCamt(bankConnectionId: String, camt: String, historyType: String) {
     val camt53doc = XMLUtil.parseStringIntoDom(camt)
     val msgId = camt53doc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
-    logger.info("camt document '$msgId' received.")
+    logger.info("Camt document '$msgId' received via $historyType.")
     transaction {
         val conn = NexusBankConnectionEntity.findByName(bankConnectionId)
         if (conn == null) {

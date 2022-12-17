@@ -219,15 +219,33 @@ class Camt053Tick : CliktCommand(
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         Database.connect(dbConnString)
         dbCreateTables(dbConnString)
+        val newStatements = mutableMapOf<String, MutableList<RawPayment>>()
+        /**
+         * For each bank account, extract the latest statement and
+         * include all the later transactions in a new statement.
+         * Build empty statement, if the account does not have any
+         * transaction yet.
+         */
         transaction {
             BankAccountEntity.all().forEach { accountIter ->
-                // Map of 'account name' -> fresh history
-                val histories = mutableMapOf<String, MutableList<RawPayment>>()
-                BankAccountFreshTransactionEntity.all().forEach {
-                    val bankAccountLabel = it.transactionRef.account.label
-                    histories.putIfAbsent(bankAccountLabel, mutableListOf())
-                    val historyIter = histories[bankAccountLabel]
-                    historyIter?.add(getHistoryElementFromTransactionRow(it))
+                // Give this account a entry in the final output.
+                newStatements.putIfAbsent(accountIter.label, mutableListOf())
+                val lastStatement = BankAccountStatementEntity.find {
+                    BankAccountStatementsTable.bankAccount eq accountIter.id.value
+                }.lastOrNull()
+                val lastStatementTime = lastStatement?.creationTime ?: 0L
+                BankAccountTransactionEntity.find {
+                    BankAccountTransactionsTable.date.greater(lastStatementTime) and(
+                            BankAccountTransactionsTable.account eq accountIter.id.value
+                    )
+                }.forEach {
+                    newStatements[accountIter.label]?.add(
+                        getHistoryElementFromTransactionRow(it)
+                    ) ?: run {
+                        logger.warn("Array operation failed while building statements for account: ${accountIter.label}")
+                        println("Fatal array error while building the statement, please report.")
+                        exitProcess(1)
+                    }
                 }
                 /**
                  * Resorting the closing (CLBD) balance of the last statement; will
@@ -235,13 +253,13 @@ class Camt053Tick : CliktCommand(
                  */
                 val lastBalance = getLastBalance(accountIter)
                 val balanceClbd = balanceForAccount(
-                    history = histories[accountIter.label] ?: mutableListOf(),
+                    history = newStatements[accountIter.label] ?: mutableListOf(),
                     baseBalance = lastBalance
                 )
                 val camtData = buildCamtString(
                     53,
                     accountIter.iban,
-                    histories[accountIter.label] ?: mutableListOf(),
+                    newStatements[accountIter.label]!!,
                     balanceClbd = balanceClbd,
                     balancePrcd = lastBalance
                 )
