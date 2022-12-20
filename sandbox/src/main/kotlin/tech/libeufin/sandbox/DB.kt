@@ -309,15 +309,11 @@ object BankAccountTransactionsTable : LongIdTable() {
     val debtorBic = text("debtorBic").nullable()
     val debtorName = text("debtorName")
     val subject = text("subject")
-    /**
-     * Amount is a BigInt in String form.
-     */
+    // Amount is a BigDecimal in String form.
     val amount = text("amount")
     val currency = text("currency")
     val date = long("date")
-    /**
-     * Unique ID for this payment within the bank account.
-     */
+    // Unique ID for this payment within the bank account.
     val accountServicerReference = text("accountServicerReference")
     /**
      * Payment information ID, which is a reference to the payment initiation
@@ -330,10 +326,7 @@ object BankAccountTransactionsTable : LongIdTable() {
      * only both parties to be registered at the running Sandbox.
      */
     val account = reference("account", BankAccountsTable)
-
-    /**
-     * Redundantly storing the demobank for query convenience.
-     */
+    // Redundantly storing the demobank for query convenience.
     val demobank = reference("demobank", DemobankConfigsTable)
 }
 
@@ -423,13 +416,8 @@ object BankAccountStatementsTable : IntIdTable() {
     val creationTime = long("creationTime")
     val xmlMessage = text("xmlMessage")
     val bankAccount = reference("bankAccount", BankAccountsTable)
-    /**
-     * Storing the closing balance (= the one obtained after all
-     * the transactions mentioned in the statement), a.k.a. CLBD.
-     * For statement S, this value will act as the opening balance
-     * (a.k.a. PRCD) of statement S+1.
-     */
-    val balanceClbd = text("balanceClbd") // normally, a BigDecimal
+    // Signed BigDecimal representing a Camt.053 CLBD field.
+    val balanceClbd = text("balanceClbd")
 }
 
 class BankAccountStatementEntity(id: EntityID<Int>) : IntEntity(id) {
