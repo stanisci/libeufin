@@ -28,10 +28,6 @@ import java.math.RoundingMode
 const val SCALE_TWO = 2
 const val NUMBER_MAX_DIGITS = 20
 class BadAmount(badValue: Any?) : Exception("Value '${badValue}' is not a valid amount")
-
-/**
- * Any number can become an Amount IF it does NOT need to be rounded to comply to the scale == 2.
- */
 typealias Amount = BigDecimal
 
 class AmountColumnType : ColumnType() {

@@ -23,8 +23,10 @@ import io.ktor.http.*
  */
 
 val re = Regex("^([0-9]+(\\.[0-9]+)?)$")
+val reWithSign = Regex("^-?([0-9]+(\\.[0-9]+)?)$")
 
-fun validatePlainAmount(plainAmount: String): Boolean {
+fun validatePlainAmount(plainAmount: String, withSign: Boolean = false): Boolean {
+    if (withSign) return reWithSign.matches(plainAmount)
     return re.matches(plainAmount)
 }
 
@@ -44,8 +46,8 @@ fun parseAmountAsString(amount: String): Pair<String, String?> {
 }
 
 fun parseAmount(amount: String): AmountWithCurrency {
-    val match = Regex("([A-Z]+):([0-9]+(\\.[0-9]+)?)").find(amount) ?: throw
-    UtilError(HttpStatusCode.BadRequest, "invalid amount: $amount")
+    val match = Regex("([A-Z]+):([0-9]+(\\.[0-9]+)?)").find(amount) ?:
+        throw UtilError(HttpStatusCode.BadRequest, "invalid amount: $amount")
     val (currency, number) = match.destructured
     return AmountWithCurrency(currency, Amount(number))
 }

@@ -104,7 +104,7 @@ data class AmountWithCurrency(
 )
 
 fun parseDecimal(decimalStr: String): BigDecimal {
-    if(!validatePlainAmount(decimalStr))
+    if(!validatePlainAmount(decimalStr, withSign = true))
         throw UtilError(
             HttpStatusCode.BadRequest,
             "Bad string amount given: $decimalStr",
