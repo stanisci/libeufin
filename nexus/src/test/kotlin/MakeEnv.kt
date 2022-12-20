@@ -176,7 +176,7 @@ fun prepSandboxDb() {
         }
         DemobankCustomerEntity.new {
             username = "foo"
-            passwordHash = "foo"
+            passwordHash = CryptoUtil.hashpw("foo")
             name = "Foo"
         }
     }

@@ -12,8 +12,50 @@ import tech.libeufin.sandbox.sandboxApp
 import tech.libeufin.util.buildBasicAuthLine
 
 class SandboxAccessApiTest {
-
     val mapper = ObjectMapper()
+    // Check successful and failing case due to insufficient funds.
+    @Test
+    fun debitWithdraw() {
+        withTestDatabase {
+            prepSandboxDb()
+            withTestApplication(sandboxApp) {
+                runBlocking {
+                    // Normal, successful withdrawal.
+                    client.post<Any>("/demobanks/default/access-api/accounts/foo/withdrawals") {
+                        expectSuccess = true
+                        headers {
+                            append(
+                                HttpHeaders.ContentType,
+                                ContentType.Application.Json
+                            )
+                            append(
+                                HttpHeaders.Authorization,
+                                buildBasicAuthLine("foo", "foo")
+                            )
+                        }
+                        this.body = "{\"amount\": \"TESTKUDOS:1\"}"
+                    }
+                    // Withdrawal over the debit threshold.
+                    val r: HttpStatusCode = client.post("/demobanks/default/access-api/accounts/foo/withdrawals") {
+                        expectSuccess = false
+                        headers {
+                            append(
+                                HttpHeaders.ContentType,
+                                ContentType.Application.Json
+                            )
+                            append(
+                                HttpHeaders.Authorization,
+                                buildBasicAuthLine("foo", "foo")
+                            )
+                        }
+                        this.body = "{\"amount\": \"TESTKUDOS:99999999999\"}"
+                    }
+                    assert(HttpStatusCode.Forbidden.value == r.value)
+                }
+            }
+        }
+    }
+
     @Test
     fun registerTest() {
         // Test IBAN conflict detection.
