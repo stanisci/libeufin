@@ -16,7 +16,8 @@ class BalanceTest {
                 SchemaUtils.create(
                     BankAccountsTable,
                     BankAccountTransactionsTable,
-                    BankAccountFreshTransactionsTable
+                    BankAccountFreshTransactionsTable,
+                    BankAccountStatementsTable
                 )
                 val demobank = DemobankConfigEntity.new {
                     currency = "EUR"
@@ -84,7 +85,7 @@ class BalanceTest {
                     accountServicerReference = "test-account-servicer-reference"
                     this.demobank = demobank
                 }
-                assert(BigDecimal.ONE == balanceForAccount(one))
+                assert(BigDecimal.ONE == getBalance(one, withPending = true))
             }
         }
     }

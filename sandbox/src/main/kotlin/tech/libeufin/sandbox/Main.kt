@@ -251,11 +251,8 @@ class Camt053Tick : CliktCommand(
                  * Resorting the closing (CLBD) balance of the last statement; will
                  * become the PRCD balance of the _new_ one.
                  */
-                val lastBalance = getLastBalance(accountIter)
-                val balanceClbd = balanceForAccount(
-                    history = newStatements[accountIter.label] ?: mutableListOf(),
-                    baseBalance = lastBalance
-                )
+                val lastBalance = getBalance(accountIter, withPending = false)
+                val balanceClbd = getBalance(accountIter, withPending = true)
                 val camtData = buildCamtString(
                     53,
                     accountIter.iban,
@@ -671,7 +668,7 @@ val sandboxApp: Application.() -> Unit = {
                 val bankAccount = getBankAccountFromLabel(label, demobank)
                 if (!allowOwnerOrAdmin(username, label))
                     throw unauthorized("'${username}' has no rights over '$label'")
-                val balance = balanceForAccount(bankAccount)
+                val balance = getBalance(bankAccount, withPending = true)
                 object {
                     val balance = "${bankAccount.demoBank.currency}:${balance}"
                     val iban = bankAccount.iban
@@ -1192,7 +1189,7 @@ val sandboxApp: Application.() -> Unit = {
                     val ret = TalerWithdrawalStatus(
                         selection_done = wo.selectionDone,
                         transfer_done = wo.confirmationDone,
-                        amount = "${demobank.currency}:${wo.amount}",
+                        amount = wo.amount,
                         suggested_exchange = demobank.suggestedExchangeBaseUrl,
                         aborted = wo.aborted,
                         confirm_transfer_url = captcha_page
@@ -1209,14 +1206,10 @@ val sandboxApp: Application.() -> Unit = {
                     val payto = parsePayto(req.paytoUri)
                     val amount: String? = payto.amount ?: req.amount
                     if (amount == null) throw badRequest("Amount is missing")
-                    val amountParsed = parseAmountAsString(amount)
                     /**
                      * The transaction block below lets the 'demoBank' field
                      * of 'bankAccount' be correctly accessed.  */
                     transaction {
-                        if ((amountParsed.second != null)
-                            && (bankAccount.demoBank.currency != amountParsed.second))
-                            throw badRequest("Currency '${amountParsed.second}' is wrong")
                         wireTransfer(
                             debitAccount = bankAccount,
                             creditAccount = getBankAccountFromIban(payto.iban),
@@ -1224,7 +1217,7 @@ val sandboxApp: Application.() -> Unit = {
                             subject = payto.message ?: throw badRequest(
                                 "'message' query parameter missing in Payto address"
                             ),
-                            amount = amountParsed.first
+                            amount = amount
                         )
                     }
                     call.respond(object {})
@@ -1233,13 +1226,13 @@ val sandboxApp: Application.() -> Unit = {
                 // Information about one withdrawal.
                 get("/accounts/{account_name}/withdrawals/{withdrawal_id}") {
                     val op = getWithdrawalOperation(call.getUriComponent("withdrawal_id"))
-                    val demobank = ensureDemobank(call)
+                    ensureDemobank(call)
                     if (!op.selectionDone && op.reservePub != null) throw internalServerError(
                         "Unselected withdrawal has a reserve public key",
                         LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE
                     )
                     call.respond(object {
-                        val amount = "${demobank.currency}:${op.amount}"
+                        val amount = op.amount
                         val aborted = op.aborted
                         val confirmation_done = op.confirmationDone
                         val selection_done = op.selectionDone
@@ -1270,12 +1263,25 @@ val sandboxApp: Application.() -> Unit = {
                     val req = call.receiveJson<WithdrawalRequest>()
                     // Check for currency consistency
                     val amount = parseAmount(req.amount)
-                    if (amount.currency != demobank.currency) throw badRequest(
-                        "Currency ${amount.currency} differs from Demobank's: ${demobank.currency}"
-                    )
+                    if (amount.currency != demobank.currency)
+                        throw badRequest("Currency ${amount.currency} differs from Demobank's: ${demobank.currency}")
+                    /**
+                     * Check for debit threshold.  That's however also later checked
+                     * after the /confirm call.  Username == null case is handled above.
+                     */
+                    val pendingBalance = getBalance(username!!, withPending = true)
+                    if ((pendingBalance - amount.amount).abs() > BigDecimal.valueOf(demobank.usersDebtLimit.toLong())) {
+                        logger.info("User $username would surpass user debit " +
+                                "threshold of ${demobank.usersDebtLimit}.  Rollback Taler withdrawal"
+                        )
+                        throw SandboxError(
+                            HttpStatusCode.Forbidden,
+                            "Insufficient funds."
+                        )
+                    }
                     val wo: TalerWithdrawalEntity = transaction {
                         TalerWithdrawalEntity.new {
-                        this.amount = amount.amount.toPlainString()
+                        this.amount = req.amount
                         walletBankAccount = maybeOwnedAccount
                         }
                     }
@@ -1336,7 +1342,6 @@ val sandboxApp: Application.() -> Unit = {
                             )
                         )
                         if (!wo.confirmationDone) {
-                            // Need the exchange bank account!
                             wireTransfer(
                                 debitAccount = wo.walletBankAccount,
                                 creditAccount = exchangeBankAccount,
@@ -1382,7 +1387,7 @@ val sandboxApp: Application.() -> Unit = {
                     ) throw forbidden(
                             "Customer '$username' cannot access bank account '$accountAccessed'"
                         )
-                    val balance = balanceForAccount(bankAccount)
+                    val balance = getBalance(bankAccount, withPending = true)
                     call.respond(object {
                         val balance = object {
                             val amount = "${demobank.currency}:${balance.abs(). toPlainString()}"
@@ -1478,7 +1483,7 @@ val sandboxApp: Application.() -> Unit = {
                                     BankAccountsTable.demoBank eq demobank.id
                             )
                         }.forEach {
-                            val balanceIter = balanceForAccount(it)
+                            val balanceIter = getBalance(it, withPending = true)
                             ret.publicAccounts.add(
                                 PublicAccountInfo(
                                     balance = "${demobank.currency}:$balanceIter",
@@ -1564,7 +1569,7 @@ val sandboxApp: Application.() -> Unit = {
                             bankAccount.bonus("${demobank.currency}:100")
                         bankAccount
                     }
-                    val balance = balanceForAccount(bankAccount)
+                    val balance = getBalance(bankAccount, withPending = true)
                     call.respond(object {
                         val balance = object {
                             val amount = "${demobank.currency}:$balance"

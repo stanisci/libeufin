@@ -501,22 +501,6 @@ fun buildCamtString(
 }
 
 /**
- * The last balance is the one accounted in the bank account's
- * last statement.
- */
-fun getLastBalance(
-    bankAccount: BankAccountEntity,
-): BigDecimal {
-    val lastStatement = BankAccountStatementEntity.find {
-        BankAccountStatementsTable.bankAccount eq bankAccount.id
-    }.lastOrNull()
-    val lastBalance = if (lastStatement == null) {
-        BigDecimal.ZERO
-    } else { BigDecimal(lastStatement.balanceClbd) }
-    return lastBalance
-}
-
-/**
  * Builds CAMT response.
  *
  * @param type 52 or 53.
@@ -533,28 +517,46 @@ private fun constructCamtResponse(
         if (dateRange != null)
             throw EbicsOrderParamsIgnored("C52 does not support date ranges.")
         val history = mutableListOf<RawPayment>()
-        val lastBalance = transaction {
+        transaction {
             BankAccountFreshTransactionEntity.all().forEach {
                 if (it.transactionRef.account.label == bankAccount.label) {
                     history.add(getHistoryElementFromTransactionRow(it))
                 }
             }
-            getLastBalance(bankAccount)
         }
-        if (history.size == 0)
-            throw EbicsNoDownloadDataAvailable()
+        if (history.size == 0) throw EbicsNoDownloadDataAvailable()
 
-        val freshBalance = balanceForAccount(
-            history = history,
-            baseBalance = lastBalance
-        )
-
+        /**
+         * PRCD balance: balance mentioned in the last statement.  This
+         * will be normally zero, because statements need to be explicitly created.
+         *
+         * CLBD balance: PRCD + transactions accounted in the current C52.
+         * Alternatively, that could be changed into: PRCD + all the pending
+         * transactions.  This way, the CLBD balance would closer reflect the
+         * latest (pending) activities.
+         */
+        val prcdBalance = getBalance(bankAccount, withPending = false)
+        val clbdBalance = run {
+            var base = prcdBalance
+            history.forEach { tx ->
+                when (tx.direction) {
+                    "DBIT" -> base -= parseDecimal(tx.amount)
+                    "CRDT" -> base += parseDecimal(tx.amount)
+                    else -> {
+                        logger.error("Transaction with subject '${tx.subject}' is " +
+                                "inconsistent: neither DBIT nor CRDT")
+                        throw internalServerError("Transactions internal error.")
+                    }
+                }
+            }
+            base
+        }
         val camtData = buildCamtString(
             type,
             bankAccount.iban,
             history,
-            balancePrcd = lastBalance,
-            balanceClbd = freshBalance
+            balancePrcd = prcdBalance,
+            balanceClbd = clbdBalance
         )
         val paymentsList: String = if (logger.isDebugEnabled) {
             var ret = " It includes the payments:"
