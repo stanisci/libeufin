@@ -749,9 +749,7 @@ private fun handleCct(paymentRequest: String,
             accountServicerReference = "sandboxref-${getRandomString(16)}"
             direction = "DBIT"
         }
-        val maybeLocalCreditor = BankAccountEntity.find(
-            BankAccountsTable.iban eq parseResult.creditorIban
-        ).firstOrNull()
+        val maybeLocalCreditor = BankAccountEntity.find(BankAccountsTable.iban eq parseResult.creditorIban).firstOrNull()
         if (maybeLocalCreditor != null) {
             BankAccountTransactionEntity.new {
                 account = maybeLocalCreditor

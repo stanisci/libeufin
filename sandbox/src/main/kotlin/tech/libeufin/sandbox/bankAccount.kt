@@ -55,10 +55,8 @@ fun getBalance(
 
 // Wrapper offering to get bank accounts from a string.
 fun getBalance(accountLabel: String, withPending: Boolean = false): BigDecimal {
-    val account = transaction {
-        BankAccountEntity.find { BankAccountsTable.label.eq(accountLabel) }.firstOrNull()
-    }
-    if (account == null) throw notFound("Bank account $accountLabel not found")
+    val defaultDemobank = getDefaultDemobank()
+    val account = getBankAccountFromLabel(accountLabel, defaultDemobank)
     return getBalance(account, withPending)
 }
 
@@ -71,28 +69,11 @@ fun wireTransfer(
     pmtInfId: String? = null
 ): String {
     val args: Triple<BankAccountEntity, BankAccountEntity, DemobankConfigEntity> = transaction {
-        val debitAccountDb = BankAccountEntity.find {
-            BankAccountsTable.label eq debitAccount
-        }.firstOrNull() ?: throw SandboxError(
-            HttpStatusCode.NotFound,
-            "Debit account '$debitAccount' not found"
-        )
-        val creditAccountDb = BankAccountEntity.find {
-            BankAccountsTable.label eq creditAccount
-        }.firstOrNull() ?: throw SandboxError(
-            HttpStatusCode.NotFound,
-            "Credit account '$creditAccount' not found"
-        )
-        val demoBank = DemobankConfigEntity.find {
-            DemobankConfigsTable.name eq demobank
-        }.firstOrNull() ?: throw SandboxError(
-            HttpStatusCode.NotFound,
-            "Demobank '$demobank' not found"
-        )
-
-        Triple(debitAccountDb, creditAccountDb, demoBank)
+        val demobankDb = ensureDemobank(demobank)
+        val debitAccountDb = getBankAccountFromLabel(debitAccount, demobankDb)
+        val creditAccountDb = getBankAccountFromLabel(creditAccount, demobankDb)
+        Triple(debitAccountDb, creditAccountDb, demobankDb)
     }
-
     return wireTransfer(
         debitAccount = args.first,
         creditAccount = args.second,

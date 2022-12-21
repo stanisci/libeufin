@@ -151,9 +151,7 @@ class Config : CliktCommand(
         execThrowableOrTerminate {
             dbCreateTables(dbConnString)
             transaction {
-                val maybeDemobank = BankAccountEntity.find(
-                    BankAccountsTable.label eq "bank"
-                ).firstOrNull()
+                val maybeDemobank = BankAccountEntity.find(BankAccountsTable.label eq "bank").firstOrNull()
                 if (showOption) {
                     if (maybeDemobank != null) {
                         val ret = ObjectMapper()
@@ -634,6 +632,9 @@ val sandboxApp: Application.() -> Unit = {
                 throw unauthorized("User '$username' has no rights over" +
                         " bank account '${body.label}'"
                 )
+            if (body.label == "admin" || body.label == "bank") throw forbidden(
+                "Requested bank account label '${body.label}' not allowed."
+            )
             transaction {
                 val maybeBankAccount = BankAccountEntity.find {
                     BankAccountsTable.label eq body.label
@@ -743,6 +744,10 @@ val sandboxApp: Application.() -> Unit = {
                 if (subscriber.bankAccount != null)
                     throw conflict("subscriber has already a bank account: ${subscriber.bankAccount?.label}")
                 val demobank = getDefaultDemobank()
+                // Forbid institutional names for bank account.
+                if (body.label == "admin" || body.label == "bank") throw forbidden(
+                    "Requested bank account label '${body.label}' not allowed."
+                )
                 /**
                  * Checking that the default demobank doesn't have already the
                  * requested IBAN and bank account label.
@@ -778,9 +783,8 @@ val sandboxApp: Application.() -> Unit = {
             val accounts = mutableListOf<BankAccountInfo>()
             transaction {
                 val demobank = getDefaultDemobank()
-                BankAccountEntity.find {
-                    BankAccountsTable.demoBank eq demobank.id
-                }.forEach {
+                // Finds all the accounts of this demobank.
+                BankAccountEntity.find { BankAccountsTable.demoBank eq demobank.id }.forEach {
                     accounts.add(
                         BankAccountInfo(
                             label = it.label,
@@ -1270,7 +1274,10 @@ val sandboxApp: Application.() -> Unit = {
                      * after the /confirm call.  Username == null case is handled above.
                      */
                     val pendingBalance = getBalance(username!!, withPending = true)
-                    if ((pendingBalance - amount.amount).abs() > BigDecimal.valueOf(demobank.usersDebtLimit.toLong())) {
+                    val maxDebt = if (username == "admin") {
+                        demobank.bankDebtLimit
+                    } else demobank.usersDebtLimit
+                    if ((pendingBalance - amount.amount).abs() > BigDecimal.valueOf(maxDebt.toLong())) {
                         logger.info("User $username would surpass user debit " +
                                 "threshold of ${demobank.usersDebtLimit}.  Rollback Taler withdrawal"
                         )
@@ -1372,14 +1379,7 @@ val sandboxApp: Application.() -> Unit = {
                     val username = call.request.basicAuth()
                     val accountAccessed = call.getUriComponent("account_name")
                     val demobank = ensureDemobank(call)
-                    val bankAccount = transaction {
-                        val res = BankAccountEntity.find {
-                            (BankAccountsTable.label eq accountAccessed).and(
-                                BankAccountsTable.demoBank eq demobank.id
-                            )
-                        }.firstOrNull()
-                        res
-                    } ?: throw notFound("Account '$accountAccessed' not found")
+                    val bankAccount = getBankAccountFromLabel(accountAccessed, demobank)
                     // Check rights.
                     if (
                         WITH_AUTH

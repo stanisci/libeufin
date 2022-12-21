@@ -227,21 +227,19 @@ fun getBankAccountFromIban(iban: String): BankAccountEntity {
     )
 }
 
-fun getBankAccountFromLabel(label: String, demobankName: String): BankAccountEntity {
+fun getBankAccountFromLabel(label: String,
+                            demobank: DemobankConfigEntity
+): BankAccountEntity {
+    var labelCheck = label;
+    /**
+     * Admin is the only exception to the "username == bank account label" rule.
+     * Consider calling the default demobank's bank account directly "admin"?
+     */
+    if (label == "admin") labelCheck = "bank"
     return transaction {
-        val demobank: DemobankConfigEntity = DemobankConfigEntity.find {
-            DemobankConfigsTable.name eq demobankName
-        }.firstOrNull() ?: throw notFound("Demobank ${demobankName} not found")
-        getBankAccountFromLabel(label, demobank)
-    }
-}
-fun getBankAccountFromLabel(label: String, demobank: DemobankConfigEntity): BankAccountEntity {
-    return transaction {
-        BankAccountEntity.find(
-            BankAccountsTable.label eq label and (BankAccountsTable.demoBank eq demobank.id)
-        ).firstOrNull() ?: throw SandboxError(
+        BankAccountEntity.find(BankAccountsTable.label eq labelCheck and (BankAccountsTable.demoBank eq demobank.id)).firstOrNull() ?: throw SandboxError(
             HttpStatusCode.NotFound,
-            "Did not find a bank account for label ${label}"
+            "Did not find a bank account for label $label"
         )
     }
 }
@@ -269,7 +267,7 @@ fun ensureDemobank(call: ApplicationCall): DemobankConfigEntity {
     return ensureDemobank(call.getUriComponent("demobankid"))
 }
 
-private fun ensureDemobank(name: String): DemobankConfigEntity {
+fun ensureDemobank(name: String): DemobankConfigEntity {
     return transaction {
         DemobankConfigEntity.find {
             DemobankConfigsTable.name eq name
@@ -311,21 +309,9 @@ fun getBankAccountWithAuth(call: ApplicationCall): BankAccountEntity {
     val username = call.request.basicAuth()
     val accountAccessed = call.getUriComponent("account_name")
     val demobank = ensureDemobank(call)
-    val bankAccount = transaction {
-        val res = BankAccountEntity.find {
-            (BankAccountsTable.label eq accountAccessed).and(
-                BankAccountsTable.demoBank eq demobank.id
-            )
-        }.firstOrNull()
-        res
-    } ?: throw notFound("Account '$accountAccessed' not found")
-    // Check rights.
-    if (
-        WITH_AUTH
-        && (bankAccount.owner != username && username != "admin")
-    ) throw forbidden(
-        "Customer '$username' cannot access bank account '$accountAccessed'"
-    )
+    val bankAccount = getBankAccountFromLabel(accountAccessed, demobank)
+    if (WITH_AUTH && (bankAccount.owner != username && username != "admin"))
+        throw forbidden("Customer '$username' cannot access bank account '$accountAccessed'")
     return bankAccount
 }
 
