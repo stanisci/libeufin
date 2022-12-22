@@ -6,14 +6,16 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import tech.libeufin.sandbox.sandboxApp
 
-class CircuitApiTest {
+class SandboxCircuitApiTest {
     // Get /config
     @Test
     fun config() {
-        withTestApplication(sandboxApp) {
-            runBlocking {
-                val r: String = client.get("/demobanks/default/circuit-api/config")
-                println(r)
+        withSandboxTestDatabase {
+            withTestApplication(sandboxApp) {
+                runBlocking {
+                    val r: String = client.get("/demobanks/default/circuit-api/config33")
+                    println(r)
+                }
             }
         }
     }
