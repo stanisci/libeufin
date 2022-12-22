@@ -66,6 +66,7 @@ import javax.xml.bind.JAXBContext
 import kotlin.system.exitProcess
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
+const val SANDBOX_VERSION = "0:0:0"
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val adminPassword: String? = System.getenv("LIBEUFIN_SANDBOX_ADMIN_PASSWORD")
 var WITH_AUTH = true // Needed by helpers too, hence not making it private.
@@ -1136,7 +1137,7 @@ val sandboxApp: Application.() -> Unit = {
                     val demobank = ensureDemobank(call)
                     call.respond(SandboxConfig(
                         name = "taler-bank-integration",
-                        version = "0:0:0",
+                        version = SANDBOX_VERSION,
                         currency = demobank.currency
                     ))
                     return@get
@@ -1203,6 +1204,9 @@ val sandboxApp: Application.() -> Unit = {
                     call.respond(ret)
                     return@get
                 }
+            }
+            route("/circuit-api") {
+                circuitApi(this)
             }
             // Talk to Web UI.
             route("/access-api") {
