@@ -13,7 +13,7 @@ class SandboxCircuitApiTest {
         withSandboxTestDatabase {
             withTestApplication(sandboxApp) {
                 runBlocking {
-                    val r: String = client.get("/demobanks/default/circuit-api/config33")
+                    val r: String = client.get("/demobanks/default/circuit-api/config")
                     println(r)
                 }
             }
