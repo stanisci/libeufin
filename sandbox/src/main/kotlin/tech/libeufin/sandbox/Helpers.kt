@@ -26,8 +26,6 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.util.*
-import java.awt.Label
-import java.math.BigDecimal
 import java.security.interfaces.RSAPublicKey
 import java.util.*
 import java.util.zip.DeflaterInputStream
@@ -166,19 +164,23 @@ fun getCustomer(username: String): DemobankCustomerEntity {
 }
 
 /**
- * Get person name from a customer's username.
+ * Get person name from a customer's username, or throw
+ * exception if not found.
  */
-fun getPersonNameFromCustomer(ownerUsername: String): String {
-    return when (ownerUsername) {
-        "admin" -> "admin" // Could be changed to Admin, or some different value.
-        "bank" -> "The Bank"
+fun getPersonNameFromCustomer(customerUsername: String): String {
+    return when (customerUsername) {
+        "admin" -> "Admin"
         else -> transaction {
             val ownerCustomer = DemobankCustomerEntity.find(
-                DemobankCustomersTable.username eq ownerUsername
-            ).firstOrNull() ?: throw SandboxError(
-                HttpStatusCode.InternalServerError,
-                "'$ownerUsername' not a customer."
-            )
+                DemobankCustomersTable.username eq customerUsername
+            ).firstOrNull() ?: run {
+                logger.error("Customer '${customerUsername}' not found, couldn't get their name.")
+                throw SandboxError(
+                    HttpStatusCode.InternalServerError,
+                    "'$customerUsername' not a customer."
+                )
+
+            }
             ownerCustomer.name ?: "Never given."
         }
     }
@@ -227,17 +229,26 @@ fun getBankAccountFromIban(iban: String): BankAccountEntity {
     )
 }
 
+fun getBankAccountFromLabel(label: String, demobank: String = "default"): BankAccountEntity {
+    val maybeDemobank = getDemobank(demobank)
+    if (maybeDemobank == null) {
+        logger.error("Demobank '$demobank' not found")
+        throw SandboxError(
+            HttpStatusCode.NotFound,
+            "Demobank '$demobank' not found"
+        )
+    }
+    return getBankAccountFromLabel(label, maybeDemobank)
+}
 fun getBankAccountFromLabel(label: String,
                             demobank: DemobankConfigEntity
 ): BankAccountEntity {
-    var labelCheck = label;
-    /**
-     * Admin is the only exception to the "username == bank account label" rule.
-     * Consider calling the default demobank's bank account directly "admin"?
-     */
-    if (label == "admin") labelCheck = "bank"
     return transaction {
-        BankAccountEntity.find(BankAccountsTable.label eq labelCheck and (BankAccountsTable.demoBank eq demobank.id)).firstOrNull() ?: throw SandboxError(
+        BankAccountEntity.find(
+            BankAccountsTable.label eq label and (
+                    BankAccountsTable.demoBank eq demobank.id
+                    )
+        ).firstOrNull() ?: throw SandboxError(
             HttpStatusCode.NotFound,
             "Did not find a bank account for label $label"
         )
@@ -255,7 +266,7 @@ fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccount
 
 fun BankAccountEntity.bonus(amount: String) {
     wireTransfer(
-        "bank",
+        "admin",
         this.label,
         this.demoBank.name,
         "Sign-up bonus",

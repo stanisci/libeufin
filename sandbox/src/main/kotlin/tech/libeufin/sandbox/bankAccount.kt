@@ -60,6 +60,12 @@ fun getBalance(accountLabel: String, withPending: Boolean = false): BigDecimal {
     return getBalance(account, withPending)
 }
 
+/**
+ * 'debitAccount' and 'creditAccount' are customer usernames
+ * and ALSO labels of the bank accounts owned by them.  They are
+ * used to both resort a bank account and the legal name owning
+ * the bank accounts.
+ */
 fun wireTransfer(
     debitAccount: String,
     creditAccount: String,
@@ -108,7 +114,7 @@ fun wireTransfer(
         throw badRequest("Won't wire transfer with currency: ${checkAmount.currency}")
     // Check funds are sufficient.
     val pendingBalance = getBalance(debitAccount, withPending = true)
-    val maxDebt = if (debitAccount.label == "bank") {
+    val maxDebt = if (debitAccount.label == "admin") {
         demobank.bankDebtLimit
     } else demobank.usersDebtLimit
     if ((pendingBalance - checkAmount.amount).abs() > BigDecimal.valueOf(maxDebt.toLong())) {

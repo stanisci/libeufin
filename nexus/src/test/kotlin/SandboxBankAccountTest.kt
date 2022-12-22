@@ -19,7 +19,7 @@ class SandboxBankAccountTest {
         withTestDatabase {
             prepSandboxDb()
             wireTransfer(
-                "bank",
+                "admin",
                 "foo",
                 "default",
                 "Show up in logging!",
@@ -30,22 +30,22 @@ class SandboxBankAccountTest {
              * the payment is still pending (= not booked), the pending
              * transactions must be included in the calculation.
              */
-            var bankBalance = getBalance("bank", true)
+            var bankBalance = getBalance("admin", true)
             assert(bankBalance == parseDecimal("-1"))
             wireTransfer(
                 "foo",
-                "bank",
+                "admin",
                 "default",
                 "Show up in logging!",
                 "TESTKUDOS:5"
             )
-            bankBalance = getBalance("bank", true)
+            bankBalance = getBalance("admin", true)
             assert(bankBalance == parseDecimal("4"))
             // Trigger Insufficient funds case for users.
             try {
                 wireTransfer(
                     "foo",
-                    "bank",
+                    "admin",
                     "default",
                     "Show up in logging!",
                     "TESTKUDOS:5000"
@@ -57,7 +57,7 @@ class SandboxBankAccountTest {
             // Trigger Insufficient funds case for the bank.
             try {
                 wireTransfer(
-                    "bank",
+                    "admin",
                     "foo",
                     "default",
                     "Show up in logging!",
@@ -68,7 +68,7 @@ class SandboxBankAccountTest {
                 assert(e.statusCode == HttpStatusCode.PreconditionFailed)
             }
             // Check balance didn't change for both parties.
-            bankBalance = getBalance("bank", true)
+            bankBalance = getBalance("admin", true)
             assert(bankBalance == parseDecimal("4"))
             val fooBalance = getBalance("foo", true)
             assert(fooBalance == parseDecimal("-4"))

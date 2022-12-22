@@ -151,7 +151,9 @@ class Config : CliktCommand(
         execThrowableOrTerminate {
             dbCreateTables(dbConnString)
             transaction {
-                val maybeDemobank = BankAccountEntity.find(BankAccountsTable.label eq "bank").firstOrNull()
+                val maybeDemobank = BankAccountEntity.find(
+                    BankAccountsTable.label eq "admin"
+                ).firstOrNull()
                 if (showOption) {
                     if (maybeDemobank != null) {
                         val ret = ObjectMapper()
@@ -184,8 +186,8 @@ class Config : CliktCommand(
                     }
                     BankAccountEntity.new {
                         iban = getIban()
-                        label = "bank"
-                        owner = "bank" // Not backed by an actual customer object.
+                        label = "admin"
+                        owner = "admin" // Not backed by an actual customer object.
                         // For now, the model assumes always one demobank
                         this.demoBank = demoBank
                     }
@@ -682,7 +684,7 @@ val sandboxApp: Application.() -> Unit = {
         }
 
         // Book one incoming payment for the requesting account.
-        // The debtor is not required to have an account at this Sandbox.
+        // The debtor is not required to have a customer account at this Sandbox.
         post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
             call.request.basicAuth(onlyAdmin = true)
             val body = call.receiveJson<IncomingPaymentInfo>()
@@ -1396,7 +1398,10 @@ val sandboxApp: Application.() -> Unit = {
                         val paytoUri = buildIbanPaytoUri(
                             iban = bankAccount.iban,
                             bic = bankAccount.bic,
-                            receiverName = getPersonNameFromCustomer(username ?: "Not given.")
+                            // username 'null' should only happen when auth is disabled.
+                            receiverName = getPersonNameFromCustomer(
+                                username ?: "Not given."
+                            )
                         )
                         val iban = bankAccount.iban
                     })

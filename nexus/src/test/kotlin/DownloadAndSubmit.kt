@@ -99,14 +99,14 @@ class DownloadAndSubmit {
     fun download() {
         withNexusAndSandboxUser {
             wireTransfer(
-                "bank",
+                "admin",
                 "foo",
                 "default",
                 "Show up in logging!",
                 "TESTKUDOS:1"
             )
             wireTransfer(
-                "bank",
+                "admin",
                 "foo",
                 "default",
                 "Exist in logging!",

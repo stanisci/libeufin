@@ -7,8 +7,9 @@ import io.ktor.http.*
 import io.ktor.server.testing.*
 import io.netty.handler.codec.http.HttpResponseStatus
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
-import tech.libeufin.sandbox.sandboxApp
+import tech.libeufin.sandbox.*
 import tech.libeufin.util.buildBasicAuthLine
 
 class SandboxAccessApiTest {
@@ -51,6 +52,66 @@ class SandboxAccessApiTest {
                         this.body = "{\"amount\": \"TESTKUDOS:99999999999\"}"
                     }
                     assert(HttpStatusCode.Forbidden.value == r.value)
+                }
+            }
+        }
+    }
+
+    /**
+     * Tests that 'admin' and 'bank' are not possible to register
+     * and that after 'admin' logs in it gets access to the bank's
+     * main account.
+     */
+    @Test
+    fun adminRegisterAndLoginTest() {
+        withTestDatabase {
+            prepSandboxDb()
+            withTestApplication(sandboxApp) {
+                runBlocking {
+                    val registerAdmin = mapper.writeValueAsString(object {
+                        val username = "admin"
+                        val password = "y"
+                    })
+                    val registerBank = mapper.writeValueAsString(object {
+                        val username = "bank"
+                        val password = "y"
+                    })
+                    for (b in mutableListOf<String>(registerAdmin, registerBank)) {
+                        val r = client.post<HttpResponse>(
+                            urlString = "/demobanks/default/access-api/testing/register",
+                        ) {
+                            this.body = b
+                            expectSuccess = false
+                            headers {
+                                append(
+                                    HttpHeaders.ContentType,
+                                    ContentType.Application.Json
+                                )
+                            }
+                        }
+                        assert(r.status.value == HttpStatusCode.Forbidden.value)
+                    }
+                    // Set arbitrary balance to the bank.
+                    wireTransfer(
+                        "foo",
+                        "admin",
+                        "default",
+                        "setting the balance",
+                        "TESTKUDOS:99"
+                    )
+                    // Get admin's balance.
+                    val r = client.get<String>(
+                        urlString = "/demobanks/default/access-api/accounts/admin",
+                    ) {
+                        expectSuccess = true
+                        headers {
+                            append(
+                                HttpHeaders.Authorization,
+                                buildBasicAuthLine("admin", "foo")
+                            )
+                        }
+                    }
+                    println(r)
                 }
             }
         }

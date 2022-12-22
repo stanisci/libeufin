@@ -378,14 +378,8 @@ object BankAccountsTable : IntIdTable() {
     val label = text("label").uniqueIndex("accountLabelIndex")
     /**
      * This field is the username of the customer that owns the
-     * bank account.  Some actors do not have a customer registered,
-     * but they can still specify their "username" - merely a label
-     * that identifies their operations - to this field.
-     *
-     * Two examples of such actors are: "admin" and "bank".  Note:
-     * "admin" cannot act as the bank, because it participates in
-     * tests and therefore should not have its balance affected by
-     * awarding sign-up bonuses.
+     * bank account.  Admin is the only exception: that can specify
+     * this field as "admin" although no customer backs it.
      */
     val owner = text("owner")
     val isPublic = bool("isPublic").default(false)

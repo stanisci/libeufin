@@ -117,8 +117,8 @@ fun prepSandboxDb() {
         }
         BankAccountEntity.new {
             iban = BANK_IBAN
-            label = "bank" // used by the wire helper
-            owner = "bank" // used by the person name finder
+            label = "admin" // used by the wire helper
+            owner = "admin" // used by the person name finder
             // For now, the model assumes always one demobank
             this.demoBank = demoBank
         }
@@ -190,12 +190,12 @@ fun withNexusAndSandboxUser(f: () -> Unit) {
     }
 }
 
-// Creates tables and the default demobank.
+// Creates tables, the default demobank, and admin's bank account.
 fun withSandboxTestDatabase(f: () -> Unit) {
     withTestDatabase {
         tech.libeufin.sandbox.dbCreateTables(TEST_DB_CONN)
         transaction {
-            DemobankConfigEntity.new {
+            val d = DemobankConfigEntity.new {
                 currency = "TESTKUDOS"
                 bankDebtLimit = 10000
                 usersDebtLimit = 1000
@@ -203,6 +203,14 @@ fun withSandboxTestDatabase(f: () -> Unit) {
                 name = "default"
                 this.withSignupBonus = false
                 captchaUrl = "http://example.com/" // unused
+            }
+            // admin's bank account.
+            BankAccountEntity.new {
+                iban = BANK_IBAN
+                label = "admin" // used by the wire helper
+                owner = "admin" // used by the person name finder
+                // For now, the model assumes always one demobank
+                this.demoBank = d
             }
         }
         f()
