@@ -120,6 +120,8 @@ object DemobankCustomersTable : LongIdTable() {
     val username = text("username")
     val passwordHash = text("passwordHash")
     val name = text("name").nullable()
+    val email = text("email").nullable()
+    val phone = text("phone").nullable()
 }
 
 class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -127,6 +129,8 @@ class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
     var username by DemobankCustomersTable.username
     var passwordHash by DemobankCustomersTable.passwordHash
     var name by DemobankCustomersTable.name
+    var email by DemobankCustomersTable.email
+    var phone by DemobankCustomersTable.phone
 }
 
 /**
@@ -370,7 +374,9 @@ class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
 
 /**
  * Table that keeps information about which bank accounts (iban+bic+name)
- * are active in the system.
+ * are active in the system.  In the current version, 'label' and 'owner'
+ * are always equal; future versions may change this, when one customer can
+ * own multiple bank accounts.
  */
 object BankAccountsTable : IntIdTable() {
     val iban = text("iban")

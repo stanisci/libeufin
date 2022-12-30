@@ -23,8 +23,9 @@
 package tech.libeufin.nexus.ebics
 
 import io.ktor.client.HttpClient
-import io.ktor.client.features.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -39,13 +40,10 @@ private suspend inline fun HttpClient.postToBank(url: String, body: String): Str
         HttpStatusCode.InternalServerError,
         "EBICS (outgoing) document is invalid"
     )
-    val response: String = try {
-        this.post(
-            urlString = url,
-            block = {
-                this.body = body
-            }
-        )
+    val response: HttpResponse = try {
+        this.post(urlString = url) {
+                setBody(body)
+        }
     } catch (e: ClientRequestException) {
         logger.error(e.message)
         throw NexusError(
@@ -60,8 +58,17 @@ private suspend inline fun HttpClient.postToBank(url: String, body: String): Str
             e.message ?: "Could not reach the bank"
         )
     }
-    // logger.debug("Receiving: $response")
-    return response
+    /**
+     * EBICS should be expected only after a 200 OK response
+     * (including problematic ones); throw exception in all the other cases,
+     * by echoing what the bank said.
+     */
+    if (response.status.value != HttpStatusCode.OK.value)
+        throw NexusError(
+            HttpStatusCode.BadGateway,
+            "bank says: ${response.bodyAsText()}"
+        )
+    return response.bodyAsText()
 }
 
 sealed class EbicsDownloadResult
@@ -227,7 +234,7 @@ suspend fun doEbicsUploadTransaction(
     logger.debug("Bank acknowledges EBICS upload initialization.  Transaction ID: $transactionID.")
     /* now send actual payload */
 
-    val payload = createEbicsRequestForUploadTransferPhase(
+    val ebicsPayload = createEbicsRequestForUploadTransferPhase(
         subscriberDetails,
         transactionID,
         preparedUploadData,
@@ -235,7 +242,7 @@ suspend fun doEbicsUploadTransaction(
     )
     val txRespStr = client.postToBank(
         subscriberDetails.ebicsUrl,
-        payload
+        ebicsPayload
     )
     val txResp = parseAndValidateEbicsResponse(subscriberDetails, txRespStr)
     when (txResp.technicalReturnCode) {

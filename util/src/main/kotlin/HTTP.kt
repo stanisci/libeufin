@@ -1,12 +1,12 @@
 package tech.libeufin.util
 
 import UtilError
-import io.ktor.application.*
 import io.ktor.http.*
-import io.ktor.request.*
+import io.ktor.server.application.*
+import io.ktor.server.request.*
+import io.ktor.server.util.*
 import io.ktor.util.*
 import logger
-import org.jetbrains.exposed.sql.transactions.transaction
 import java.net.URLDecoder
 
 fun unauthorized(msg: String): UtilError {
@@ -85,9 +85,8 @@ fun conflict(msg: String): UtilError {
 fun ApplicationRequest.getBaseUrl(): String {
     return if (this.headers.contains("X-Forwarded-Host")) {
         logger.info("Building X-Forwarded- base URL")
-        /**
-         * FIXME: should tolerate a missing X-Forwarded-Prefix.
-         */
+
+        // FIXME: should tolerate a missing X-Forwarded-Prefix.
         var prefix: String = this.headers.get("X-Forwarded-Prefix")
             ?: throw internalServerError("Reverse proxy did not define X-Forwarded-Prefix")
         if (!prefix.endsWith("/"))
@@ -100,8 +99,8 @@ fun ApplicationRequest.getBaseUrl(): String {
             host = this.headers.get("X-Forwarded-Host") ?: throw internalServerError(
                 "Reverse proxy did not define X-Forwarded-Host"
             ),
-            encodedPath = prefix
         ).apply {
+            encodedPath = prefix
             // Gets dropped otherwise.
             if (!encodedPath.endsWith("/"))
                 encodedPath += "/"
@@ -138,7 +137,7 @@ fun expectAdmin(username: String?) {
     if (username != "admin") throw unauthorized("Only admin allowed: $username is not.")
 }
 
-fun getHTTPBasicAuthCredentials(request: ApplicationRequest): Pair<String, String> {
+fun getHTTPBasicAuthCredentials(request: io.ktor.server.request.ApplicationRequest): Pair<String, String> {
     val authHeader = getAuthorizationHeader(request)
     return extractUserAndPassword(authHeader)
 }
@@ -168,7 +167,6 @@ fun buildBasicAuthLine(username: String, password: String): String {
  * will then be compared with the one kept into the database.
  */
 fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
-    // logger.debug("Authenticating: $authorizationHeader")
     val (username, password) = try {
         // FIXME/note: line below doesn't check for "Basic" presence.
         val split = authorizationHeader.split(" ")
@@ -181,7 +179,7 @@ fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
     } catch (e: Exception) {
         throw UtilError(
             HttpStatusCode.BadRequest,
-            "invalid Authorization:-header received: ${e.message}",
+            "invalid Authorization header received: ${e.message}",
             LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
         )
     }

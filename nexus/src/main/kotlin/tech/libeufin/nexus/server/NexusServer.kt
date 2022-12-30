@@ -20,6 +20,8 @@
 package tech.libeufin.nexus.server
 
 import UtilError
+import io.ktor.serialization.jackson.*
+import io.ktor.server.plugins.contentnegotiation.*
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.JsonNode
@@ -28,20 +30,19 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
-import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import io.ktor.application.*
+import com.fasterxml.jackson.module.kotlin.*
 import io.ktor.client.*
-import io.ktor.features.*
 import io.ktor.http.*
-import io.ktor.jackson.*
 import io.ktor.network.sockets.*
-import io.ktor.request.*
-import io.ktor.response.*
-import io.ktor.routing.*
+import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.ktor.server.plugins.*
+import io.ktor.server.plugins.callloging.*
+import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import io.ktor.util.*
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.and
@@ -51,11 +52,12 @@ import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
+import tech.libeufin.sandbox.SandboxErrorDetailJson
+import tech.libeufin.sandbox.SandboxErrorJson
 import tech.libeufin.util.*
 import java.net.BindException
 import java.net.URLEncoder
 import kotlin.system.exitProcess
-import java.net.URL
 
 /**
  * Return facade state depending on the type.
@@ -121,18 +123,6 @@ fun ApplicationCall.expectUrlParameter(name: String): String {
         ?: throw NexusError(HttpStatusCode.BadRequest, "Parameter '$name' not provided in URI")
 }
 
-suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
-    try {
-        return this.receive()
-    } catch (e: MissingKotlinParameterException) {
-        throw NexusError(HttpStatusCode.BadRequest, "Missing value for ${e.pathReference}")
-    } catch (e: MismatchedInputException) {
-        throw NexusError(HttpStatusCode.BadRequest, "Invalid value for '${e.pathReference}'")
-    } catch (e: JsonParseException) {
-        throw NexusError(HttpStatusCode.BadRequest, "Invalid JSON")
-    }
-}
-
 fun requireBankConnectionInternal(connId: String): NexusBankConnectionEntity {
     return transaction {
         NexusBankConnectionEntity.find { NexusBankConnectionsTable.connectionId eq connId }.firstOrNull()
@@ -157,6 +147,7 @@ val nexusApp: Application.() -> Unit = {
         this.level = Level.DEBUG
         this.logger = tech.libeufin.nexus.logger
     }
+    install(LibeufinDecompressionPlugin)
     install(ContentNegotiation) {
         jackson {
             enable(SerializationFeature.INDENT_OUTPUT)
@@ -164,12 +155,21 @@ val nexusApp: Application.() -> Unit = {
                 indentArraysWith(DefaultPrettyPrinter.FixedSpaceIndenter.instance)
                 indentObjectsWith(DefaultIndenter("  ", "\n"))
             })
-            registerModule(KotlinModule(nullisSameAsDefault = true))
+            registerModule(
+                KotlinModule.Builder()
+                    .withReflectionCacheSize(512)
+                    .configure(KotlinFeature.NullToEmptyCollection, false)
+                    .configure(KotlinFeature.NullToEmptyMap, false)
+                    .configure(KotlinFeature.NullIsSameAsDefault, enabled = true)
+                    .configure(KotlinFeature.SingletonSupport, enabled = false)
+                    .configure(KotlinFeature.StrictNullChecks, false)
+                    .build()
+            )
             configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
         }
     }
     install(StatusPages) {
-        exception<NexusError> { cause ->
+        exception<NexusError> { call, cause ->
             logger.error("Caught exception while handling '${call.request.uri} (${cause.reason})")
             call.respond(
                 status = cause.statusCode,
@@ -180,7 +180,7 @@ val nexusApp: Application.() -> Unit = {
                 )
             )
         }
-        exception<JsonMappingException> { cause ->
+        exception<JsonMappingException> { call, cause ->
             logger.error("Exception while handling '${call.request.uri}'", cause)
             call.respond(
                 HttpStatusCode.BadRequest,
@@ -191,7 +191,7 @@ val nexusApp: Application.() -> Unit = {
                 )
             )
         }
-        exception<UtilError> { cause ->
+        exception<UtilError> { call, cause ->
             logger.error("Exception while handling '${call.request.uri}'", cause)
             call.respond(
                 cause.statusCode,
@@ -202,7 +202,7 @@ val nexusApp: Application.() -> Unit = {
                 )
             )
         }
-        exception<EbicsProtocolError> { cause ->
+        exception<EbicsProtocolError> { call, cause ->
             logger.error("Caught exception while handling '${call.request.uri}' (${cause.reason})")
             call.respond(
                 cause.httpStatusCode,
@@ -213,7 +213,19 @@ val nexusApp: Application.() -> Unit = {
                 )
             )
         }
-        exception<Exception> { cause ->
+        exception<BadRequestException> { call, cause ->
+            tech.libeufin.sandbox.logger.error("Exception while handling '${call.request.uri}', ${cause.message}")
+            call.respond(
+                HttpStatusCode.BadRequest,
+                SandboxErrorJson(
+                    error = SandboxErrorDetailJson(
+                        type = "util-error",
+                        description = cause.message ?: "Bad request but did not find exact cause."
+                    )
+                )
+            )
+        }
+        exception<Exception> { call, cause ->
             logger.error("Uncaught exception while handling '${call.request.uri}'")
             cause.printStackTrace()
             call.respond(
@@ -226,7 +238,6 @@ val nexusApp: Application.() -> Unit = {
             )
         }
     }
-    install(RequestBodyDecompression)
     intercept(ApplicationCallPipeline.Fallback) {
         if (this.call.response.status() == null) {
             call.respondText("Not found (no route matched).\n", ContentType.Text.Plain, HttpStatusCode.NotFound)
@@ -332,7 +343,7 @@ val nexusApp: Application.() -> Unit = {
 
         // change a user's password
         post("/users/{username}/password") {
-            val body = call.receiveJson<ChangeUserPassword>()
+            val body = call.receive<ChangeUserPassword>()
             val targetUsername = ensureNonNull(call.parameters["username"])
             transaction {
                 requireSuperuser(call.request)
@@ -351,7 +362,7 @@ val nexusApp: Application.() -> Unit = {
 
         // Add a new ordinary user in the system (requires superuser privileges)
         post("/users") {
-            val body = call.receiveJson<CreateUserRequest>()
+            val body = call.receive<CreateUserRequest>()
             val requestedUsername = requireValidResourceName(body.username)
             transaction {
                 requireSuperuser(call.request)
@@ -896,7 +907,7 @@ val nexusApp: Application.() -> Unit = {
                     name = f.facadeName,
                     type = f.type,
                     baseUrl = URLBuilder(call.request.getBaseUrl()).apply {
-                        pathComponents("facades", f.facadeName, f.type)
+                        this.appendPathSegments(listOf("facades", f.facadeName, f.type))
                         encodedPath += "/"
                     }.buildString(),
                     config = getFacadeState(f.type, f)
@@ -921,7 +932,7 @@ val nexusApp: Application.() -> Unit = {
                             name = it.facadeName,
                             type = it.type,
                             baseUrl = URLBuilder(call.request.getBaseUrl()).apply {
-                                pathComponents("facades", it.facadeName, it.type)
+                                this.appendPathSegments(listOf("facades", it.facadeName, it.type))
                                 encodedPath += "/"
                             }.buildString(),
                             config = getFacadeState(it.type, it)
@@ -1041,7 +1052,7 @@ val nexusApp: Application.() -> Unit = {
             talerFacadeRoutes(this)
         }
         route("/facades/{fcid}/anastasis") {
-            anastasisFacadeRoutes(this, client)
+            anastasisFacadeRoutes(this)
         }
 
         // Hello endpoint.

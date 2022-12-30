@@ -70,7 +70,8 @@ fun prepNexusDb() {
             type = "ebics"
         }
         tech.libeufin.nexus.EbicsSubscriberEntity.new {
-            ebicsURL = "http://localhost:5000/ebicsweb"
+            // ebicsURL = "http://localhost:5000/ebicsweb"
+            ebicsURL = "http://localhost/ebicsweb"
             hostID = "eufinSandbox"
             partnerID = "foo"
             userID = "foo"
@@ -84,7 +85,7 @@ fun prepNexusDb() {
             bankEncryptionPublicKey = ExposedBlob(bankKeys.enc.public.encoded)
             bankAuthenticationPublicKey = ExposedBlob(bankKeys.auth.public.encoded)
         }
-        val a = NexusBankAccountEntity.new {
+        NexusBankAccountEntity.new {
             bankAccountName = "foo"
             iban = FOO_USER_IBAN
             bankCode = "SANDBOXX"
@@ -92,7 +93,7 @@ fun prepNexusDb() {
             highestSeenBankMessageSerialId = 0
             accountHolder = "foo"
         }
-        val b = NexusBankAccountEntity.new {
+        NexusBankAccountEntity.new {
             bankAccountName = "bar"
             iban = BAR_USER_IBAN
             bankCode = "SANDBOXX"
@@ -141,7 +142,7 @@ fun prepSandboxDb() {
             this.demoBank = demoBank
             isPublic = false
         }
-        val otherBankAccount = BankAccountEntity.new {
+        BankAccountEntity.new {
             iban = BAR_USER_IBAN
             /**
              * For now, keep same semantics of Pybank: a username

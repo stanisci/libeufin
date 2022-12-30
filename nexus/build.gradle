@@ -3,14 +3,6 @@ plugins {
     id 'java'
     id 'application'
     id 'org.jetbrains.kotlin.jvm'
-    /**
-     * Design choice: native installation logic doesn't provide one
-     * single command to generate a unique jar, and even by generating
-     * a unique jar manually, then the usual gradle wrappers wouldn't be
-     * able to run those.  Therefore, the dependency below ('shadow')
-     * was added as it provides _both_: unique jar packaging _and_ a
-     * suitable launch script.
-     */
     id "com.github.johnrengelman.shadow" version "5.2.0"
 }
 
@@ -51,12 +43,8 @@ compileTestKotlin {
     }
 }
 
-def ktor_version = '1.6.1'
-def exposed_version = '0.32.1'
-
 dependencies {
     // Core language libraries
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.5.21'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1-native-mt'
 
     // LibEuFin util library
@@ -78,7 +66,6 @@ dependencies {
     implementation('com.github.ajalt:clikt:2.8.0')
 
     // Exposed, an SQL library
-    implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
     implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
     implementation "org.jetbrains.exposed:exposed-jdbc:$exposed_version"
 
@@ -88,12 +75,15 @@ dependencies {
 
     // Ktor, an HTTP client and server library
     implementation "io.ktor:ktor-server-core:$ktor_version"
+    implementation "io.ktor:ktor-server-content-negotiation:$ktor_version"
+    implementation "io.ktor:ktor-server-status-pages:$ktor_version"
     implementation "io.ktor:ktor-client-apache:$ktor_version"
     implementation "io.ktor:ktor-client-auth:$ktor_version"
     implementation "io.ktor:ktor-server-netty:$ktor_version"
+    // Brings the call-logging library too.
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
-    implementation "io.ktor:ktor-auth:$ktor_version"
-    implementation "io.ktor:ktor-jackson:$ktor_version"
+    implementation "io.ktor:ktor-auth:$ktor_auth_version"
+    implementation "io.ktor:ktor-serialization-jackson:$ktor_version"
 
     // PDF generation
     implementation 'com.itextpdf:itext7-core:7.1.16'

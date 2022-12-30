@@ -21,11 +21,15 @@ package tech.libeufin.sandbox
 
 import UtilError
 import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
+import com.fasterxml.jackson.databind.DeserializationFeature
+import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
+import com.fasterxml.jackson.module.kotlin.KotlinFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import com.github.ajalt.clikt.core.CliktCommand
@@ -36,15 +40,21 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
-import io.ktor.application.*
-import io.ktor.features.*
+import io.ktor.server.application.*
 import io.ktor.http.*
-import io.ktor.jackson.*
-import io.ktor.request.*
-import io.ktor.response.*
-import io.ktor.routing.*
+import io.ktor.serialization.*
+import io.ktor.serialization.jackson.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.ktor.server.plugins.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import io.ktor.server.util.*
+import io.ktor.server.plugins.callloging.*
+import io.ktor.server.plugins.cors.routing.*
 import io.ktor.util.*
 import io.ktor.util.date.*
 import kotlinx.coroutines.*
@@ -446,26 +456,22 @@ fun main(args: Array<String>) {
     ).main(args)
 }
 
-suspend inline fun <reified T : Any> ApplicationCall.receiveJson(): T {
-    try {
-        return this.receive()
-    } catch (e: MissingKotlinParameterException) {
-        throw SandboxError(HttpStatusCode.BadRequest, "Missing value for ${e.pathReference}")
-    } catch (e: MismatchedInputException) {
-        // Note: POSTing "[]" gets here but e.pathReference is blank.
-        throw SandboxError(HttpStatusCode.BadRequest, "Invalid value for '${e.pathReference}'")
-    } catch (e: JsonParseException) {
-        throw SandboxError(HttpStatusCode.BadRequest, "Invalid JSON")
-    }
-}
-
 fun setJsonHandler(ctx: ObjectMapper) {
     ctx.enable(SerializationFeature.INDENT_OUTPUT)
     ctx.setDefaultPrettyPrinter(DefaultPrettyPrinter().apply {
         indentArraysWith(DefaultPrettyPrinter.FixedSpaceIndenter.instance)
         indentObjectsWith(DefaultIndenter("  ", "\n"))
     })
-    ctx.registerModule(KotlinModule(nullisSameAsDefault = true))
+    ctx.registerModule(
+        KotlinModule.Builder()
+            .withReflectionCacheSize(512)
+            .configure(KotlinFeature.NullToEmptyCollection, false)
+            .configure(KotlinFeature.NullToEmptyMap, false)
+            .configure(KotlinFeature.NullIsSameAsDefault, enabled = true)
+            .configure(KotlinFeature.SingletonSupport, enabled = false)
+            .configure(KotlinFeature.StrictNullChecks, false)
+            .build()
+    )
 }
 
 val sandboxApp: Application.() -> Unit = {
@@ -478,14 +484,14 @@ val sandboxApp: Application.() -> Unit = {
     }
     install(CORS) {
         anyHost()
-        header(HttpHeaders.Authorization)
-        header(HttpHeaders.ContentType)
-        method(HttpMethod.Options)
-        // logger.info("Enabling CORS (assuming no endpoint uses cookies).")
+        allowHeader(HttpHeaders.Authorization)
+        allowHeader(HttpHeaders.ContentType)
+        allowMethod(HttpMethod.Options)
         allowCredentials = true
     }
     install(IgnoreTrailingSlash)
     install(ContentNegotiation) {
+
         register(ContentType.Text.Xml, XMLEbicsConverter())
         /**
          * Content type "text" must go to the XML parser
@@ -502,7 +508,7 @@ val sandboxApp: Application.() -> Unit = {
     }
     install(StatusPages) {
         // Bank's fault: it should check the operands.  Respond 500
-        exception<ArithmeticException> { cause ->
+        exception<ArithmeticException> { call, cause ->
             logger.error("Exception while handling '${call.request.uri}', ${cause.stackTraceToString()}")
             call.respond(
                 HttpStatusCode.InternalServerError,
@@ -514,8 +520,9 @@ val sandboxApp: Application.() -> Unit = {
                 )
             )
         }
-        exception<SandboxError> { cause ->
-            logger.error("Exception while handling '${call.request.uri}', ${cause.reason}")
+        // Not necessarily the bank's fault.
+        exception<SandboxError> { call, cause ->
+            logger.debug("Exception while handling '${call.request.uri}', ${cause.reason}")
             call.respond(
                 cause.statusCode,
                 SandboxErrorJson(
@@ -526,8 +533,9 @@ val sandboxApp: Application.() -> Unit = {
                 )
             )
         }
-        exception<UtilError> { cause ->
-            logger.error("Exception while handling '${call.request.uri}', ${cause.reason}")
+        // Not necessarily the bank's fault.
+        exception<UtilError> { call, cause ->
+            logger.debug("Exception while handling '${call.request.uri}', ${cause.reason}")
             call.respond(
                 cause.statusCode,
                 SandboxErrorJson(
@@ -538,9 +546,30 @@ val sandboxApp: Application.() -> Unit = {
                 )
             )
         }
+        // Happens when a request fails to parse.
+        exception<BadRequestException> { call, wrapper ->
+            var errorMessage: String? = wrapper.message // default, if no further details can be found.
+            if (errorMessage == null) {
+                logger.error("The bank didn't detect the cause of a bad request, fail.")
+                throw SandboxError(
+                    HttpStatusCode.InternalServerError,
+                    "Did not find bad request details."
+                )
+            }
+            logger.debug(errorMessage)
+            call.respond(
+                HttpStatusCode.BadRequest,
+                SandboxErrorJson(
+                    error = SandboxErrorDetailJson(
+                        type = "util-error",
+                        description = errorMessage
+                    )
+                )
+            )
+        }
         // Catch-all error, respond 500 because the bank didn't handle it.
-        exception<Throwable> { cause ->
-            logger.error("Exception while handling '${call.request.uri}'", cause.stackTrace)
+        exception<Throwable> { call, cause ->
+            logger.error("Unhandled exception while handling '${call.request.uri}'\n${cause.stackTraceToString()}")
             call.respond(
                 HttpStatusCode.InternalServerError,
                 SandboxErrorJson(
@@ -551,9 +580,9 @@ val sandboxApp: Application.() -> Unit = {
                 )
             )
         }
-        exception<EbicsRequestError> { e ->
-            logger.info("Handling EbicsRequestError: ${e.message}")
-            respondEbicsTransfer(call, e.errorText, e.errorCode)
+        exception<EbicsRequestError> { call, cause ->
+            logger.info("Handling EbicsRequestError: ${cause.message}")
+            respondEbicsTransfer(call, cause.errorText, cause.errorCode)
         }
     }
     intercept(ApplicationCallPipeline.Setup) {
@@ -568,10 +597,7 @@ val sandboxApp: Application.() -> Unit = {
 
                 )
             }
-            ac.attributes.put(
-                ADMIN_PASSWORD_ATTRIBUTE_KEY,
-                adminPassword
-            )
+            ac.attributes.put(ADMIN_PASSWORD_ATTRIBUTE_KEY, adminPassword)
         }
         return@intercept
     }
@@ -586,7 +612,6 @@ val sandboxApp: Application.() -> Unit = {
         }
     }
     routing {
-
         get("/") {
             call.respondText(
                 "Hello, this is the Sandbox\n",
@@ -597,7 +622,7 @@ val sandboxApp: Application.() -> Unit = {
         // Query details in the body.
         post("/admin/payments/camt") {
             val username = call.request.basicAuth()
-            val body = call.receiveJson<CamtParams>()
+            val body = call.receive<CamtParams>()
             if (body.type != 53) throw SandboxError(
                 HttpStatusCode.NotFound,
                 "Only Camt.053 documents can be generated."
@@ -630,7 +655,7 @@ val sandboxApp: Application.() -> Unit = {
          */
         post("/admin/bank-accounts/{label}") {
             val username = call.request.basicAuth()
-            val body = call.receiveJson<BankAccountInfo>()
+            val body = call.receive<BankAccountInfo>()
             if (!allowOwnerOrAdmin(username, body.label))
                 throw unauthorized("User '$username' has no rights over" +
                         " bank account '${body.label}'"
@@ -688,7 +713,7 @@ val sandboxApp: Application.() -> Unit = {
         // The debtor is not required to have a customer account at this Sandbox.
         post("/admin/bank-accounts/{label}/simulate-incoming-transaction") {
             call.request.basicAuth(onlyAdmin = true)
-            val body = call.receiveJson<IncomingPaymentInfo>()
+            val body = call.receive<IncomingPaymentInfo>()
             val accountLabel = ensureNonNull(call.parameters["label"])
             val reqDebtorBic = body.debtorBic
             if (reqDebtorBic != null && !validateBic(reqDebtorBic)) {
@@ -734,7 +759,7 @@ val sandboxApp: Application.() -> Unit = {
         // Associates a new bank account with an existing Ebics subscriber.
         post("/admin/ebics/bank-accounts") {
             call.request.basicAuth(onlyAdmin = true)
-            val body = call.receiveJson<EbicsBankAccountRequest>()
+            val body = call.receive<EbicsBankAccountRequest>()
             if (!validateBic(body.bic)) {
                 throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
             }
@@ -907,7 +932,7 @@ val sandboxApp: Application.() -> Unit = {
          */
         post("/admin/ebics/subscribers") {
             call.request.basicAuth(onlyAdmin = true)
-            val body = call.receiveJson<EbicsSubscriberObsoleteApi>()
+            val body = call.receive<EbicsSubscriberObsoleteApi>()
             transaction {
                 // Check it exists first.
                 val maybeSubscriber = EbicsSubscriberEntity.find {
@@ -984,11 +1009,18 @@ val sandboxApp: Application.() -> Unit = {
         // Create a new EBICS host
         post("/admin/ebics/hosts") {
             call.request.basicAuth(onlyAdmin = true)
-            val req = call.receiveJson<EbicsHostCreateRequest>()
+            val req = call.receive<EbicsHostCreateRequest>()
             val pairA = CryptoUtil.generateRsaKeyPair(2048)
             val pairB = CryptoUtil.generateRsaKeyPair(2048)
             val pairC = CryptoUtil.generateRsaKeyPair(2048)
             transaction {
+                val maybeHost = EbicsHostEntity.find {
+                    EbicsHostsTable.hostID eq req.hostID
+                }.firstOrNull()
+                if (maybeHost != null) {
+                    logger.info("EBICS host '${req.hostID}' exists already, this request conflicts.")
+                    throw conflict("EBICS host '${req.hostID}' exists already")
+                }
                 EbicsHostEntity.new {
                     this.ebicsVersion = req.ebicsVersion
                     this.hostId = req.hostID
@@ -1091,7 +1123,7 @@ val sandboxApp: Application.() -> Unit = {
                     }
                     logger.debug("TWG add-incoming passed authentication")
                     val body = try {
-                        call.receiveJson<TWGAdminAddIncoming>()
+                        call.receive<TWGAdminAddIncoming>()
                     } catch (e: Exception) {
                         logger.error("/admin/add-incoming failed at parsing the request body")
                         throw SandboxError(
@@ -1133,7 +1165,7 @@ val sandboxApp: Application.() -> Unit = {
                 }
                 post("/withdrawal-operation/{wopid}") {
                     val wopid: String = ensureNonNull(call.parameters["wopid"])
-                    val body = call.receiveJson<TalerWithdrawalSelection>()
+                    val body = call.receive<TalerWithdrawalSelection>()
                     val transferDone = transaction {
                         val wo = TalerWithdrawalEntity.find {
                             TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
@@ -1201,7 +1233,7 @@ val sandboxApp: Application.() -> Unit = {
             route("/access-api") {
                 post("/accounts/{account_name}/transactions") {
                     val bankAccount = getBankAccountWithAuth(call)
-                    val req = call.receiveJson<NewTransactionReq>()
+                    val req = call.receive<NewTransactionReq>()
                     val payto = parsePayto(req.paytoUri)
                     val amount: String? = payto.amount ?: req.amount
                     if (amount == null) throw badRequest("Amount is missing")
@@ -1259,7 +1291,7 @@ val sandboxApp: Application.() -> Unit = {
                     if (maybeOwnedAccount.owner != username && WITH_AUTH) throw unauthorized(
                         "Customer '$username' has no rights over bank account '${maybeOwnedAccount.label}'"
                     )
-                    val req = call.receiveJson<WithdrawalRequest>()
+                    val req = call.receive<WithdrawalRequest>()
                     // Check for currency consistency
                     val amount = parseAmount(req.amount)
                     if (amount.currency != demobank.currency)
@@ -1294,21 +1326,23 @@ val sandboxApp: Application.() -> Unit = {
                             -1
                         )
                         host = "withdraw"
-                        pathComponents(
-                            /**
-                             * encodes the hostname(+port) of the actual
-                             * bank that will serve the withdrawal request.
-                             */
-                            baseUrl.host.plus(
-                                if (baseUrl.port != -1)
-                                    ":${baseUrl.port}"
-                                else ""
-                            ),
-                            baseUrl.path, // has x-forwarded-prefix, or single slash.
-                            "demobanks",
-                            demobank.name,
-                            "integration-api",
-                            wo.wopid.toString()
+                        this.appendPathSegments(
+                            listOf(
+                                /**
+                                 * encodes the hostname(+port) of the actual
+                                 * bank that will serve the withdrawal request.
+                                 */
+                                baseUrl.host.plus(
+                                    if (baseUrl.port != -1)
+                                        ":${baseUrl.port}"
+                                    else ""
+                                ),
+                                baseUrl.path, // has x-forwarded-prefix, or single slash.
+                                "demobanks",
+                                demobank.name,
+                                "integration-api",
+                                wo.wopid.toString()
+                            )
                         )
                     }
                     call.respond(object {
@@ -1516,69 +1550,28 @@ val sandboxApp: Application.() -> Unit = {
                             "The bank doesn't allow new registrations at the moment."
                         )
                     }
-                    val req = call.receiveJson<CustomerRegistration>()
-                    // Forbid 'admin' or 'bank' usernames.
-                    if (req.username == "bank" || req.username == "admin")
-                        throw forbidden("Unallowed username: ${req.username}")
-                    val checkCustomerExist = transaction {
-                        DemobankCustomerEntity.find {
-                            DemobankCustomersTable.username eq req.username
-                        }.firstOrNull()
-                    }
-                    /**
-                     * Not allowing 'bank' username, as it's been assigned
-                     * to the default bank's bank account.
-                     */
-                    if (checkCustomerExist != null) {
-                        throw SandboxError(
-                            HttpStatusCode.Conflict,
-                            "Username ${req.username} not available."
+                    val req = call.receive<CustomerRegistration>()
+                    val newAccount = transaction {
+                        insertNewAccount(
+                            req.username,
+                            req.password,
+                            name = req.name,
+                            iban = req.iban,
+                            isPublic = req.isPublic
                         )
                     }
-                    val newIban = req.iban ?: getIban()
-                    // Double-check if IBAN was taken already.
-                    val checkIbanExist = transaction {
-                        BankAccountEntity.find(BankAccountsTable.iban eq newIban).firstOrNull()
-                    }
-                    if (checkIbanExist != null)
-                        throw conflict("Proposed IBAN not available.")
-
-                    // Create new customer.
-                    requireValidResourceName(req.username)
-                    val bankAccount = transaction {
-                        val bankAccount = BankAccountEntity.new {
-                            iban = newIban
-                            /**
-                             * For now, keep same semantics of Pybank: a username
-                             * is AS WELL a bank account label.  In other words, it
-                             * identifies a customer AND a bank account.
-                             */
-                            label = req.username
-                            owner = req.username
-                            this.demoBank = demobank
-                            isPublic = req.isPublic
-                        }
-                        DemobankCustomerEntity.new {
-                            username = req.username
-                            passwordHash = CryptoUtil.hashpw(req.password)
-                            name = req.name // nullable
-                        }
-                        if (demobank.withSignupBonus)
-                            bankAccount.bonus("${demobank.currency}:100")
-                        bankAccount
-                    }
-                    val balance = getBalance(bankAccount, withPending = true)
+                    val balance = getBalance(newAccount.bankAccount, withPending = true)
                     call.respond(object {
                         val balance = object {
-                            val amount = "${demobank.currency}:$balance"
-                            val credit_debit_indicator = "CRDT"
+                            val amount = "${demobank.currency}:${balance.abs()}"
+                            val credit_debit_indicator = if (balance < BigDecimal.ZERO) "DBIT" else "CRDT"
                         }
                         val paytoUri = buildIbanPaytoUri(
-                            iban = bankAccount.iban,
-                            bic = bankAccount.bic,
+                            iban = newAccount.bankAccount.iban,
+                            bic = newAccount.bankAccount.bic,
                             receiverName = getPersonNameFromCustomer(req.username)
                         )
-                        val iban = bankAccount.iban
+                        val iban = newAccount.bankAccount.iban
                     })
                     return@post
                 }
@@ -1592,7 +1585,7 @@ val sandboxApp: Application.() -> Unit = {
                     // Only the admin can create Ebics subscribers.
                     val user = call.request.basicAuth()
                     if (user != "admin") throw forbidden("Only the Admin can create Ebics subscribers.")
-                    val body = call.receiveJson<EbicsSubscriberInfo>()
+                    val body = call.receive<EbicsSubscriberInfo>()
                     // Create or get the Ebics subscriber that is found.
                     transaction {
                         val subscriber: EbicsSubscriberEntity = EbicsSubscriberEntity.find {
@@ -1633,7 +1626,7 @@ fun serverMain(port: Int, localhostOnly: Boolean, ipv4Only: Boolean) {
                 this.port = port
                 this.host = if (localhostOnly) "[::1]" else "[::]"
             }
-            parentCoroutineContext = Dispatchers.Main
+            // parentCoroutineContext = Dispatchers.Main
             module(sandboxApp)
         },
         configure = {

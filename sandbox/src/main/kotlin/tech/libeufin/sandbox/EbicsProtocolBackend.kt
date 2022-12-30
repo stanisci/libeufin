@@ -20,12 +20,12 @@
 
 package tech.libeufin.sandbox
 
-import io.ktor.application.*
+import io.ktor.server.application.*
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.request.*
-import io.ktor.response.respond
-import io.ktor.response.respondText
+import io.ktor.server.request.*
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
 import io.ktor.util.AttributeKey
 import org.apache.xml.security.binding.xmldsig.RSAKeyValueType
 import org.jetbrains.exposed.sql.*

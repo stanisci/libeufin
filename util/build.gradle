@@ -26,12 +26,9 @@ sourceSets {
     main.java.srcDirs = ['src/main/java', 'src/main/kotlin']
 }
 
-def exposed_version = '0.32.1'
 def netty_version = '4.1.68.Final'
-def ktor_version = '1.6.1'
 
 dependencies {
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.5.21'
     implementation 'io.ktor:ktor-server-netty:1.6.1'
     implementation 'ch.qos.logback:logback-classic:1.2.5'
 
@@ -53,8 +50,9 @@ dependencies {
     implementation "io.netty:netty-all:$netty_version"
     implementation "io.netty:netty-transport-native-epoll:$netty_version"
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
-    implementation "io.ktor:ktor-jackson:$ktor_version"
+    implementation "io.ktor:ktor-serialization-jackson:$ktor_version"
 
+    testImplementation "io.ktor:ktor-server-content-negotiation:$ktor_version"
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
     testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'

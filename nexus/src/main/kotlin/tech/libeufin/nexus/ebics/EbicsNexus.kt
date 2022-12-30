@@ -31,15 +31,15 @@ import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.layout.Document
 import com.itextpdf.layout.element.AreaBreak
 import com.itextpdf.layout.element.Paragraph
-import io.ktor.application.call
+import io.ktor.server.application.call
 import io.ktor.client.HttpClient
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.request.receiveOrNull
-import io.ktor.response.respond
-import io.ktor.response.respondText
-import io.ktor.routing.Route
-import io.ktor.routing.post
+import io.ktor.server.request.*
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.post
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
@@ -196,13 +196,12 @@ fun getEbicsSubscriberDetails(bankConnectionId: String): EbicsClientSubscriberDe
 
 fun Route.ebicsBankProtocolRoutes(client: HttpClient) {
     post("test-host") {
-        val r = call.receiveJson<EbicsHostTestRequest>()
+        val r = call.receive<EbicsHostTestRequest>()
         val qr = doEbicsHostVersionQuery(client, r.ebicsBaseUrl, r.ebicsHostId)
         call.respond(qr)
         return@post
     }
 }
-
 
 fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
     post("/send-ini") {
@@ -320,12 +319,8 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
         if (orderType.length != 3) {
             throw NexusError(HttpStatusCode.BadRequest, "ebics order type must be three characters")
         }
-        val paramsJson = call.receiveOrNull<EbicsStandardOrderParamsDateJson>()
-        val orderParams = if (paramsJson == null) {
-            EbicsStandardOrderParams()
-        } else {
-            paramsJson.toOrderParams()
-        }
+        val paramsJson = call.receiveNullable<EbicsStandardOrderParamsDateJson>()
+        val orderParams = paramsJson?.toOrderParams() ?: EbicsStandardOrderParams()
         val subscriberDetails = transaction {
             val conn = requireBankConnection(call, "connid")
             if (conn.type != "ebics") {

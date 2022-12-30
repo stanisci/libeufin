@@ -1,7 +1,8 @@
 import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '1.5.30'
+    // id 'org.jetbrains.kotlin.jvm' version '1.5.30'
+    id 'org.jetbrains.kotlin.jvm' version '1.7.22'
     id 'idea'
 }
 
@@ -12,6 +13,10 @@ if (!JavaVersion.current().isJava11Compatible()){
 }
 
 allprojects {
+    ext.set("ktor_version", "2.2.1")
+    ext.set("ktor_auth_version", "1.6.8")
+    ext.set("exposed_version", "0.32.1")
+
     repositories {
         mavenCentral()
         jcenter()

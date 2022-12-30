@@ -1,9 +1,8 @@
 package tech.libeufin.nexus
 
 import UtilError
-import io.ktor.application.*
 import io.ktor.http.*
-import io.ktor.request.*
+import io.ktor.server.request.*
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.server.Permission

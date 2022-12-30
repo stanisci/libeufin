@@ -1,4 +1,6 @@
-import io.ktor.application.*
+import io.ktor.client.plugins.*
+import io.ktor.client.request.*
+import io.ktor.server.application.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.http.HttpHeaders
@@ -67,30 +69,24 @@ class LibeufinHttpInit(
 class LibeufinHttpHandler(
     private val app: Application.() -> Unit
 ) : SimpleChannelInboundHandler<FullHttpRequest>() {
-    @OptIn(EngineAPI::class)
+    // @OptIn(EngineAPI::class)
     override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpRequest) {
-        withTestApplication(app) {
+        testApplication {
+            application(app)
             val httpVersion = msg.protocolVersion()
             // Proxying the request to Ktor API.
-            val call = handleRequest {
-                msg.headers().forEach { addHeader(it.key, it.value) }
+            val r = client.request(msg.uri()) {
+                expectSuccess = false
                 method = HttpMethod(msg.method().name())
-                uri = msg.uri()
-                version = httpVersion.text()
                 setBody(ByteBufInputStream(msg.content()).readAllBytes())
             }
-            val statusCode: Int = call.response.status()?.value ?: throw UtilError(
-                HttpStatusCode.InternalServerError,
-                "app proxied via Unix domain socket did not include a response status code",
-                ec = null // FIXME: to be defined.
-            )
             // Responding to Netty API.
             val response = DefaultHttpResponse(
                 httpVersion,
-                HttpResponseStatus.valueOf(statusCode)
+                HttpResponseStatus.valueOf(r.status.value)
             )
             var chunked = false
-            call.response.headers.allValues().forEach { s, list ->
+            r.headers.forEach { s, list ->
                 if (s == HttpHeaders.TransferEncoding && list.contains("chunked"))
                     chunked = true
                 response.headers().set(s, list.joinToString())
@@ -100,12 +96,12 @@ class LibeufinHttpHandler(
                 ctx.writeAndFlush(
                     HttpChunkedInput(
                         ChunkedStream(
-                            ByteArrayInputStream(call.response.byteContent)
+                            ByteArrayInputStream(r.readBytes())
                         )
                     )
                 )
             } else {
-                ctx.writeAndFlush(Unpooled.wrappedBuffer(call.response.byteContent))
+                ctx.writeAndFlush(Unpooled.wrappedBuffer(r.readBytes()))
             }
         }
     }

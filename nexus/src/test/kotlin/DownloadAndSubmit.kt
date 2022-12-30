@@ -1,12 +1,12 @@
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import io.ktor.application.*
+import io.ktor.server.application.*
 import io.ktor.client.*
 import io.ktor.client.request.*
-import io.ktor.features.*
 import io.ktor.http.*
-import io.ktor.request.*
-import io.ktor.response.*
-import io.ktor.routing.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -112,7 +112,8 @@ class DownloadAndSubmit {
                 "Exist in logging!",
                 "TESTKUDOS:5"
             )
-            withTestApplication(sandboxApp) {
+            testApplication {
+                application(sandboxApp)
                 runBlocking {
                     fetchBankAccountTransactions(
                         client,
@@ -139,7 +140,8 @@ class DownloadAndSubmit {
     @Test
     fun upload() {
         withNexusAndSandboxUser {
-            withTestApplication(sandboxApp) {
+            testApplication {
+                application(sandboxApp)
                 val conn = EbicsBankConnectionProtocol()
                 runBlocking {
                     // Create Pain.001 to be submitted.
@@ -181,7 +183,8 @@ class DownloadAndSubmit {
     @Test
     fun unallowedDebtorIban() {
         withNexusAndSandboxUser {
-            withTestApplication(sandboxApp) {
+            testApplication {
+                application(sandboxApp)
                 runBlocking {
                     val bar = transaction { NexusBankAccountEntity.findByName("bar") }
                     val painMessage = createPain001document(
@@ -233,7 +236,8 @@ class DownloadAndSubmit {
     @Test
     fun invalidPain001() {
         withNexusAndSandboxUser {
-            withTestApplication(sandboxApp) {
+            testApplication {
+                application(sandboxApp)
                 runBlocking {
                     // Create Pain.001 to be submitted.
                     addPaymentInitiation(
@@ -246,9 +250,7 @@ class DownloadAndSubmit {
                             currency = "TESTKUDOS"
                         ),
                         transaction {
-                            NexusBankAccountEntity.findByName(
-                                "foo"
-                            ) ?: throw Exception("Test failed")
+                            NexusBankAccountEntity.findByName("foo") ?: throw Exception("Test failed")
                         }
                     )
                     // Encounters errors.
@@ -270,7 +272,8 @@ class DownloadAndSubmit {
     @Test
     fun unsupportedCurrency() {
         withNexusAndSandboxUser {
-            withTestApplication(sandboxApp) {
+            testApplication {
+                application(sandboxApp)
                 runBlocking {
                     // Create Pain.001 to be submitted.
                     addPaymentInitiation(
@@ -283,9 +286,7 @@ class DownloadAndSubmit {
                             currency = "EUR"
                         ),
                         transaction {
-                            NexusBankAccountEntity.findByName(
-                                "foo"
-                            ) ?: throw Exception("Test failed")
+                            NexusBankAccountEntity.findByName("foo") ?: throw Exception("Test failed")
                         }
                     )
                     var thrown = false

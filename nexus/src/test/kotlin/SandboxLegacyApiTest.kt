@@ -1,9 +1,7 @@
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.util.ByteBufferBackedInputStream
-import io.ktor.client.features.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
-import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import io.ktor.util.*
@@ -16,12 +14,7 @@ import tech.libeufin.sandbox.sandboxApp
 import tech.libeufin.util.buildBasicAuthLine
 import tech.libeufin.util.getIban
 import java.io.ByteArrayOutputStream
-import java.io.InputStream
-import java.nio.ByteBuffer
 
-/**
- * Mostly checking legacy API's access control.
- */
 class SandboxLegacyApiTest {
     fun dbHelper (f: () -> Unit) {
         withTestDatabase {
@@ -31,12 +24,12 @@ class SandboxLegacyApiTest {
     }
     val mapper = ObjectMapper()
 
-
     // EBICS Subscribers API.
     @Test
-    fun adminEbiscSubscribers() {
+    fun adminEbicsSubscribers() {
         dbHelper {
-            withTestApplication(sandboxApp) {
+            testApplication {
+                application(sandboxApp)
                 runBlocking {
                     /**
                      * Create a EBICS subscriber.  That conflicts because
@@ -51,79 +44,42 @@ class SandboxLegacyApiTest {
                     })
                     var r: HttpResponse = client.post("/admin/ebics/subscribers") {
                         expectSuccess = false
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "foo")
-                            )
-                            append(
-                                HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                        }
-                        this.body = body
+                        contentType(ContentType.Application.Json)
+                        basicAuth("admin", "foo")
+                        setBody(body)
                     }
                     assert(r.status.value == HttpStatusCode.Conflict.value)
-                    /**
-                     * Check that EBICS subscriber indeed exists.
-                     */
+
+                    // Check that EBICS subscriber indeed exists.
                     r = client.get("/admin/ebics/subscribers") {
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "foo")
-                            )
-                        }
+                        basicAuth("admin", "foo")
                     }
                     assert(r.status.value == HttpStatusCode.OK.value)
-                    val buf = ByteArrayOutputStream()
-                    r.content.read { buf.write(it.array()) }
-                    val respObj = mapper.readTree(buf.toString())
+                    val respObj = mapper.readTree(r.bodyAsText())
                     assert("foo" == respObj.get("subscribers").get(0).get("userID").asText())
-                    /**
-                     * Try same operations as above, with wrong admin credentials
-                     */
+
+                    // Try same operations as above, with wrong admin credentials
                     r = client.get("/admin/ebics/subscribers") {
                         expectSuccess = false
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "wrong")
-                            )
-                        }
+                        basicAuth("admin", "wrong")
                     }
                     assert(r.status.value == HttpStatusCode.Unauthorized.value)
                     r = client.post("/admin/ebics/subscribers") {
                         expectSuccess = false
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "wrong")
-                            )
-                        }
+                        basicAuth("admin", "wrong")
                     }
                     assert(r.status.value == HttpStatusCode.Unauthorized.value)
-                    // Good credentials, but unauthorized user.
+                    // Good credentials, but insufficient rights.
                     r = client.get("/admin/ebics/subscribers") {
                         expectSuccess = false
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("foo", "foo")
-                            )
-                        }
+                        basicAuth("foo", "foo")
                     }
-                    assert(r.status.value == HttpStatusCode.Unauthorized.value)
+                    assert(r.status.value == HttpStatusCode.Forbidden.value)
                     r = client.post("/admin/ebics/subscribers") {
                         expectSuccess = false
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("foo", "foo")
-                            )
-                        }
+                        basicAuth("foo", "foo")
                     }
-                    assert(r.status.value == HttpStatusCode.Unauthorized.value)
+                    assert(r.status.value == HttpStatusCode.Forbidden.value)
                     /**
                      * Give a bank account to the existing subscriber.  Bank account
                      * is (implicitly / hard-coded) hosted at default demobank.
@@ -135,19 +91,11 @@ class SandboxLegacyApiTest {
                         val partnerID = "baz"
                         val systemID = "foo"
                     })
-                    client.post<HttpResponse>("/admin/ebics/subscribers") {
+                    client.post("/admin/ebics/subscribers") {
                         expectSuccess = true
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "foo")
-                            )
-                            append(
-                                HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                        }
-                        this.body = body
+                        contentType(ContentType.Application.Json)
+                        basicAuth("admin", "foo")
+                        setBody(body)
                     }
                     // Associate new bank account to it.
                     body = mapper.writeValueAsString(object {
@@ -162,65 +110,42 @@ class SandboxLegacyApiTest {
                         val name = "Now Have Account"
                         val label = "baz"
                     })
-                    client.post<HttpResponse>("/admin/ebics/bank-accounts") {
+                    client.post("/admin/ebics/bank-accounts") {
                         expectSuccess = true
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "foo")
-                            )
-                            append(
-                                HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                        }
-                        this.body = body
+                        expectSuccess = true
+                        contentType(ContentType.Application.Json)
+                        basicAuth("admin", "foo")
+                        setBody(body)
                     }
                     r = client.get("/admin/ebics/subscribers") {
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "foo")
-                            )
-                        }
+                        basicAuth("admin", "foo")
                     }
                     assert(r.status.value == HttpStatusCode.OK.value)
-                    val buf_ = ByteArrayOutputStream()
-                    r.content.read { buf_.write(it.array()) }
-                    val respObj_ = mapper.readTree(buf_.toString())
+                    val respObj_ = mapper.readTree(r.bodyAsText())
                     val bankAccountLabel = respObj_.get("subscribers").get(1).get("demobankAccountLabel").asText()
                     assert("baz" == bankAccountLabel)
                     // Same operation, wrong/unauth credentials.
                     r = client.post("/admin/ebics/bank-accounts") {
                         expectSuccess = false
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "wrong")
-                            )
-                        }
+                        basicAuth("admin", "wrong")
                     }
                     assert(r.status.value == HttpStatusCode.Unauthorized.value)
                     r = client.post("/admin/ebics/bank-accounts") {
                         expectSuccess = false
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("foo", "foo")
-                            )
-                        }
+                        basicAuth("foo", "foo")
                     }
-                    assert(r.status.value == HttpStatusCode.Unauthorized.value)
+                    assert(r.status.value == HttpStatusCode.Forbidden.value)
                 }
             }
         }
     }
 
     // EBICS Hosts API.
-    @Ignore
+    @Test
     fun adminEbicsCreateHost() {
         dbHelper {
-            withTestApplication(sandboxApp) {
+            testApplication {
+                application(sandboxApp)
                 runBlocking {
                     val body = mapper.writeValueAsString(
                         object {
@@ -229,73 +154,38 @@ class SandboxLegacyApiTest {
                         }
                     )
                     // Valid request, good credentials.
-                    var r = client.post<HttpResponse>("/admin/ebics/hosts") {
-                        this.body = body
-                        this.headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "foo")
-                            )
-                            append(
-                                HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                        }
+                    client.post("/admin/ebics/hosts") {
+                        expectSuccess = true
+                        setBody(body)
+                        contentType(ContentType.Application.Json)
+                        basicAuth("admin", "foo")
                     }
-                    assert(r.status.value == HttpResponseStatus.OK.code())
-                    r = client.get("/admin/ebics/hosts") {
-                        expectSuccess = false
-
-                    }
+                    var r = client.get("/admin/ebics/hosts") { expectSuccess = false }
                     assert(r.status.value == HttpResponseStatus.UNAUTHORIZED.code())
-                    r = client.get("/admin/ebics/hosts") {
-                        this.headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "foo")
-                            )
-                        }
+                    client.get("/admin/ebics/hosts") {
+                        basicAuth("admin", "foo")
+                        expectSuccess = true
                     }
-                    assert(r.status.value == HttpResponseStatus.OK.code())
                     // Invalid, with good credentials.
                     r = client.post("/admin/ebics/hosts") {
                         expectSuccess = false
-                        this.body = "invalid"
-                        this.headers {
-                            append(
-                                io.ktor.http.HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "foo")
-                            )
-                            append(
-                                io.ktor.http.HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                        }
+                        setBody("invalid")
+                        contentType(ContentType.Application.Json)
+                        basicAuth("admin", "foo")
                     }
-                    assert(r.status.value == HttpResponseStatus.BAD_REQUEST.code())
+                    assert(r.status.value == HttpStatusCode.BadRequest.value)
                     // Unauth: admin with wrong password.
                     r = client.post("/admin/ebics/hosts") {
                         expectSuccess = false
-                        this.headers {
-                            append(
-                                io.ktor.http.HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "bar")
-                            )
-                        }
+                        basicAuth("admin", "bar")
                     }
-                    assert(r.status.value == HttpResponseStatus.UNAUTHORIZED.code())
+                    assert(r.status.value == HttpStatusCode.Unauthorized.value)
                     // Auth & forbidden resource.
                     r = client.post("/admin/ebics/hosts") {
                         expectSuccess = false
-                        this.headers {
-                            append(
-                                io.ktor.http.HttpHeaders.Authorization,
-                                // Exist, but no rights over the EBICS host.
-                                buildBasicAuthLine("foo", "foo")
-                            )
-                        }
+                        basicAuth("foo", "foo")
                     }
-                    assert(r.status.value == HttpResponseStatus.UNAUTHORIZED.code())
+                    assert(r.status.value == HttpStatusCode.Forbidden.value)
                 }
             }
         }

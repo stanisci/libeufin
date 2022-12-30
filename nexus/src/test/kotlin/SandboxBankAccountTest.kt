@@ -1,9 +1,4 @@
-import io.ktor.client.features.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.testing.*
-import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import tech.libeufin.sandbox.SandboxError
 import tech.libeufin.sandbox.getBalance

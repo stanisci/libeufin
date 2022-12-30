@@ -1,27 +1,25 @@
 package tech.libeufin.sandbox
 
-import io.ktor.application.*
-import io.ktor.features.*
 import io.ktor.http.*
 import io.ktor.http.content.*
-import io.ktor.request.*
-import io.ktor.response.*
-import io.ktor.util.pipeline.*
+import io.ktor.serialization.*
+import io.ktor.util.reflect.*
 import io.ktor.utils.io.*
+import io.ktor.utils.io.charsets.*
 import io.ktor.utils.io.jvm.javaio.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tech.libeufin.util.XMLUtil
-import java.io.OutputStream
-import java.nio.channels.ByteChannel
 
 class XMLEbicsConverter : ContentConverter {
-    override suspend fun convertForReceive(
-        context: PipelineContext<ApplicationReceiveRequest, ApplicationCall>): Any? {
-        val value = context.subject.value as? ByteReadChannel ?: return null
+    override suspend fun deserialize(
+        charset: io.ktor.utils.io.charsets.Charset,
+        typeInfo: io.ktor.util.reflect.TypeInfo,
+        content: ByteReadChannel
+    ): Any? {
         return withContext(Dispatchers.IO) {
             try {
-                receiveEbicsXmlInternal(value.toInputStream().reader().readText())
+                receiveEbicsXmlInternal(content.toInputStream().reader().readText())
             } catch (e: Exception) {
                 throw SandboxError(
                     HttpStatusCode.BadRequest,
@@ -30,11 +28,28 @@ class XMLEbicsConverter : ContentConverter {
             }
         }
     }
-    override suspend fun convertForSend(
-        context: PipelineContext<Any, ApplicationCall>,
+
+    // The following annotation was suggested by Intellij.
+    @Deprecated(
+        "Please override and use serializeNullable instead",
+        replaceWith = ReplaceWith("serializeNullable(charset, typeInfo, contentType, value)"),
+        level = DeprecationLevel.WARNING
+    )
+    override suspend fun serialize(
         contentType: ContentType,
+        charset: Charset,
+        typeInfo: TypeInfo,
         value: Any
-    ): Any? {
+    ): OutgoingContent? {
+        return super.serializeNullable(contentType, charset, typeInfo, value)
+    }
+
+    override suspend fun serializeNullable(
+        contentType: ContentType,
+        charset: Charset,
+        typeInfo: TypeInfo,
+        value: Any?
+    ): OutgoingContent? {
         val conv = try {
             XMLUtil.convertJaxbToString(value)
         } catch (e: Exception) {
@@ -42,7 +57,6 @@ class XMLEbicsConverter : ContentConverter {
              * Not always a error: the content negotiation might have
              * only checked if this handler could convert the response.
              */
-            // logger.info("Could not use XML custom converter for this response.")
             return null
         }
         return OutputStreamContent({
@@ -50,7 +64,7 @@ class XMLEbicsConverter : ContentConverter {
             withContext(Dispatchers.IO) {
                 out.write(conv.toByteArray())
             }},
-            contentType.withCharset(context.call.suitableCharset())
+            contentType.withCharset(charset)
         )
     }
 }

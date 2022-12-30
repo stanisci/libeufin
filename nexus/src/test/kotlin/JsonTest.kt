@@ -2,8 +2,13 @@ import com.fasterxml.jackson.databind.JsonNode
 import org.junit.Test
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import io.ktor.client.plugins.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.server.testing.*
 import tech.libeufin.nexus.server.CreateBankConnectionFromBackupRequestJson
 import tech.libeufin.nexus.server.CreateBankConnectionFromNewRequestJson
+import tech.libeufin.sandbox.sandboxApp
 
 
 class JsonTest {
@@ -23,5 +28,15 @@ class JsonTest {
         assert(roundTripNew.data.toString() == "{}" && roundTripNew.type == "ebics" && roundTripNew.name == "new-connection")
     }
 
-
+    /*@Test
+    fun testSandboxJsonParsing() {
+        testApplication {
+            application(sandboxApp)
+            client.post("/admin/ebics/subscribers") {
+                basicAuth("admin", "foo")
+                contentType(ContentType.Application.Json)
+                setBody("{}")
+            }
+        }
+    }*/
 }

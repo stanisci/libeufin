@@ -20,20 +20,20 @@
 package tech.libeufin.nexus
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import io.ktor.application.ApplicationCall
-import io.ktor.application.call
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.call
 import io.ktor.client.*
-import io.ktor.client.features.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.content.TextContent
 import io.ktor.http.*
-import io.ktor.request.receive
-import io.ktor.response.respond
-import io.ktor.response.respondText
-import io.ktor.routing.Route
-import io.ktor.routing.get
-import io.ktor.routing.post
-import io.ktor.util.*
+import io.ktor.server.request.receive
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.util.*
 import org.jetbrains.exposed.dao.Entity
 import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.*
@@ -486,10 +486,10 @@ private suspend fun addIncoming(call: ApplicationCall) {
     val currentBody = call.receive<String>()
     val fromDb = transaction {
         val f = FacadeEntity.findByName(facadeId) ?: throw notFound("facade $facadeId not found")
-        val state = FacadeStateEntity.find {
+        val facadeState = FacadeStateEntity.find {
             FacadeStateTable.facade eq f.id
         }.firstOrNull() ?: throw internalServerError("facade $facadeId has no state!")
-        val conn = NexusBankConnectionEntity.findByName(state.bankConnection) ?: throw internalServerError(
+        val conn = NexusBankConnectionEntity.findByName(facadeState.bankConnection) ?: throw internalServerError(
             "state of facade $facadeId has no bank connection!"
         )
         val ebicsData = NexusEbicsSubscribersTable.select {
@@ -500,10 +500,12 @@ private suspend fun addIncoming(call: ApplicationCall) {
         // Resort Sandbox URL from EBICS endpoint.
         val sandboxUrl = URL(ebicsData[NexusEbicsSubscribersTable.ebicsURL])
         // NOTE: the exchange username must be 'exchange', at the Sandbox.
-        return@transaction Pair(url {
-            protocol = URLProtocol(sandboxUrl.protocol, 80)
-            host = sandboxUrl.host
-            if (sandboxUrl.port != 80) port = sandboxUrl.port
+        return@transaction Pair(
+            url {
+                protocol = URLProtocol(sandboxUrl.protocol, 80)
+                host = sandboxUrl.host
+            if (sandboxUrl.port != 80)
+                port = sandboxUrl.port
             path(
                 "demobanks",
                 "default",
@@ -512,22 +514,17 @@ private suspend fun addIncoming(call: ApplicationCall) {
                 "admin",
                 "add-incoming"
             )
-        }, state.bankAccount
+        },
+            facadeState.bankAccount
         )
     }
     val client = HttpClient { followRedirects = true }
     try {
-        client.post<String>(
-            urlString = fromDb.first,
-            block = {
-                this.body = currentBody
-                this.header(
-                    "Authorization",
-                    buildBasicAuthLine("exchange", "x")
-                )
-                this.header("Content-Type", "application/json")
-            }
-        )
+        client.post(fromDb.first) {
+            setBody(currentBody)
+            basicAuth("exchange", "x")
+            contentType(ContentType.Application.Json)
+        }
     } catch (e: ClientRequestException) {
         logger.error("Proxying /admin/add/incoming to the Sandbox failed: $e")
     } catch (e: Exception) {

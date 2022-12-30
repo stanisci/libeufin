@@ -1,16 +1,12 @@
 import com.fasterxml.jackson.databind.ObjectMapper
-import io.ktor.client.features.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.client.utils.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import io.netty.handler.codec.http.HttpResponseStatus
 import kotlinx.coroutines.runBlocking
-import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.*
-import tech.libeufin.util.buildBasicAuthLine
 
 class SandboxAccessApiTest {
     val mapper = ObjectMapper()
@@ -19,39 +15,24 @@ class SandboxAccessApiTest {
     fun debitWithdraw() {
         withTestDatabase {
             prepSandboxDb()
-            withTestApplication(sandboxApp) {
+            testApplication {
+                this.application(sandboxApp)
                 runBlocking {
                     // Normal, successful withdrawal.
-                    client.post<Any>("/demobanks/default/access-api/accounts/foo/withdrawals") {
+                    client.post("/demobanks/default/access-api/accounts/foo/withdrawals") {
                         expectSuccess = true
-                        headers {
-                            append(
-                                HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("foo", "foo")
-                            )
-                        }
-                        this.body = "{\"amount\": \"TESTKUDOS:1\"}"
+                        setBody("{\"amount\": \"TESTKUDOS:1\"}")
+                        contentType(ContentType.Application.Json)
+                        basicAuth("foo", "foo")
                     }
                     // Withdrawal over the debit threshold.
-                    val r: HttpStatusCode = client.post("/demobanks/default/access-api/accounts/foo/withdrawals") {
+                    val r: HttpResponse = client.post("/demobanks/default/access-api/accounts/foo/withdrawals") {
                         expectSuccess = false
-                        headers {
-                            append(
-                                HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("foo", "foo")
-                            )
-                        }
-                        this.body = "{\"amount\": \"TESTKUDOS:99999999999\"}"
+                        contentType(ContentType.Application.Json)
+                        basicAuth("foo", "foo")
+                        setBody("{\"amount\": \"TESTKUDOS:99999999999\"}")
                     }
-                    assert(HttpStatusCode.Forbidden.value == r.value)
+                    assert(HttpStatusCode.Forbidden.value == r.status.value)
                 }
             }
         }
@@ -61,12 +42,13 @@ class SandboxAccessApiTest {
      * Tests that 'admin' and 'bank' are not possible to register
      * and that after 'admin' logs in it gets access to the bank's
      * main account.
-     */
+     */ // FIXME: avoid giving Content-Type at every request.
     @Test
     fun adminRegisterAndLoginTest() {
         withTestDatabase {
             prepSandboxDb()
-            withTestApplication(sandboxApp) {
+            testApplication {
+                application(sandboxApp)
                 runBlocking {
                     val registerAdmin = mapper.writeValueAsString(object {
                         val username = "admin"
@@ -77,17 +59,10 @@ class SandboxAccessApiTest {
                         val password = "y"
                     })
                     for (b in mutableListOf<String>(registerAdmin, registerBank)) {
-                        val r = client.post<HttpResponse>(
-                            urlString = "/demobanks/default/access-api/testing/register",
-                        ) {
-                            this.body = b
+                        val r = client.post("/demobanks/default/access-api/testing/register") {
+                            setBody(b)
+                            contentType(ContentType.Application.Json)
                             expectSuccess = false
-                            headers {
-                                append(
-                                    HttpHeaders.ContentType,
-                                    ContentType.Application.Json
-                                )
-                            }
                         }
                         assert(r.status.value == HttpStatusCode.Forbidden.value)
                     }
@@ -99,17 +74,11 @@ class SandboxAccessApiTest {
                         "setting the balance",
                         "TESTKUDOS:99"
                     )
-                    // Get admin's balance.
-                    val r = client.get<String>(
-                        urlString = "/demobanks/default/access-api/accounts/admin",
-                    ) {
+                    // Get admin's balance.  Not asserting; it
+                    // fails on != 200 responses.
+                    val r = client.get("/demobanks/default/access-api/accounts/admin") {
                         expectSuccess = true
-                        headers {
-                            append(
-                                HttpHeaders.Authorization,
-                                buildBasicAuthLine("admin", "foo")
-                            )
-                        }
+                        basicAuth("admin", "foo")
                     }
                     println(r)
                 }
@@ -121,7 +90,8 @@ class SandboxAccessApiTest {
     fun registerTest() {
         // Test IBAN conflict detection.
         withSandboxTestDatabase {
-            withTestApplication(sandboxApp) {
+            testApplication {
+                application(sandboxApp)
                 runBlocking {
                     val bodyFoo = mapper.writeValueAsString(object {
                         val username = "x"
@@ -138,58 +108,24 @@ class SandboxAccessApiTest {
                         val password = "y"
                         val iban = BAR_USER_IBAN
                     })
-                    // The following block would allow to save many LOC,
-                    // but gets somehow ignored.
-                    /*client.config {
-                        this.defaultRequest {
-                            headers {
-                                append(
-                                    HttpHeaders.ContentType,
-                                    ContentType.Application.Json
-                                )
-                            }
-                            expectSuccess = false
-                        }
-                    }*/
                     // Succeeds.
-                    client.post<HttpResponse>(
-                        urlString = "/demobanks/default/access-api/testing/register",
-                    ) {
-                        this.body = bodyFoo
+                    client.post("/demobanks/default/access-api/testing/register") {
+                        setBody(bodyFoo)
+                        contentType(ContentType.Application.Json)
                         expectSuccess = true
-                        headers {
-                            append(
-                                HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                        }
                     }
                     // Hits conflict, because of the same IBAN.
-                    val r = client.post<HttpResponse>(
-                        "/demobanks/default/access-api/testing/register"
-                    ) {
-                        this.body = bodyBar
+                    val r = client.post("/demobanks/default/access-api/testing/register") {
+                        setBody(bodyBar)
                         expectSuccess = false
-                        headers {
-                            append(
-                                HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                        }
+                        contentType(ContentType.Application.Json)
                     }
-                    assert(r.status.value == HttpResponseStatus.CONFLICT.code())
+                    assert(r.status.value == HttpStatusCode.Conflict.value)
                     // Succeeds, because of a new IBAN.
-                    client.post<HttpResponse>(
-                        "/demobanks/default/access-api/testing/register"
-                    ) {
-                        this.body = bodyBaz
+                    client.post("/demobanks/default/access-api/testing/register") {
+                        setBody(bodyBaz)
                         expectSuccess = true
-                        headers {
-                            append(
-                                HttpHeaders.ContentType,
-                                ContentType.Application.Json
-                            )
-                        }
+                        contentType(ContentType.Application.Json)
                     }
                 }
             }

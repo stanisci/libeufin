@@ -4,7 +4,7 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.classic.util.ContextInitializer
 import ch.qos.logback.core.util.Loader
-import io.ktor.application.*
+import io.ktor.server.application.*
 import io.ktor.util.*
 import org.slf4j.LoggerFactory
 import printLnErr
@@ -61,12 +61,6 @@ fun setLogLevel(logLevel: String?) {
             }
         }
     }
-}
-
-internal fun <T : Any>ApplicationCall.maybeAttribute(name: String): T? {
-    val key = AttributeKey<T>("name")
-    if (!this.attributes.contains(key)) return null
-    return this.attributes[key]
 }
 
 /**

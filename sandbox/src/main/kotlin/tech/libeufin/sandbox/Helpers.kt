@@ -19,9 +19,9 @@
 
 package tech.libeufin.sandbox
 
-import io.ktor.application.*
+import io.ktor.server.application.*
 import io.ktor.http.HttpStatusCode
-import io.ktor.request.*
+import io.ktor.server.request.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -43,6 +43,89 @@ data class SandboxCamt(
      */
     val creationTime: Long
 )
+
+/**
+ * DB helper inserting a new "account" into the database.
+ * The account is made of a 'customer' and 'bank account'
+ * object.  The helper checks first that the username is
+ * acceptable (chars, no institutional names, available
+ * names); then checks that IBAN is available and then adds
+ * the two database objects under the given demobank.  This
+ * function contains the common logic shared by the Access
+ * and Circuit API.  Additional data that is peculiar to one
+ * API should be added separately.
+ *
+ * It returns a AccountPair type.  That contains the customer
+ * object and the bank account; the caller may this way add custom
+ * values to them.  */
+data class AccountPair(
+    val customer: DemobankCustomerEntity,
+    val bankAccount: BankAccountEntity
+)
+fun insertNewAccount(username: String,
+                     password: String,
+                     name: String? = null, // tests do not usually give one.
+                     iban: String? = null,
+                     isPublic: Boolean = false,
+                     demobank: String = "default"): AccountPair {
+    requireValidResourceName(username)
+    // Forbid institutional usernames.
+    if (username == "bank" || username == "admin") {
+        logger.info("Username: $username not allowed.")
+        throw forbidden("Username: $username is not allowed.")
+    }
+
+    val demobankFromDb = getDemobank(demobank)
+    // Bank's fault, because when this function gets
+    // called, the demobank must exist.
+    if (demobankFromDb == null) {
+        logger.error("Demobank '$demobank' not found.  Won't add account $username")
+        throw internalServerError("Demobank $demobank not found.  Won't add account $username")
+    }
+    // Generate a IBAN if the caller didn't provide one.
+    val newIban = iban ?: getIban()
+    // Check IBAN collisions.
+    val checkIbanExist = BankAccountEntity.find(BankAccountsTable.iban eq newIban).firstOrNull()
+    if (checkIbanExist != null) {
+        logger.info("IBAN $newIban not available.  Won't register username $username")
+        throw conflict("IBAN $iban not available.")
+    }
+    // Check username availability.
+    val checkCustomerExist = transaction {
+        DemobankCustomerEntity.find {
+            DemobankCustomersTable.username eq username
+        }.firstOrNull()
+    }
+    if (checkCustomerExist != null) {
+        throw SandboxError(
+            HttpStatusCode.Conflict,
+            "Username $username not available."
+        )
+    }
+    val newCustomer = DemobankCustomerEntity.new {
+        this.username = username
+        passwordHash = CryptoUtil.hashpw(password)
+        this.name = name // nullable
+    }
+    // Actual account creation.
+    val newBankAccount = BankAccountEntity.new {
+        this.iban = newIban
+        /**
+         * For now, keep same semantics of Pybank: a username
+         * is AS WELL a bank account label.  In other words, it
+         * identifies a customer AND a bank account.  The reason
+         * to have the two values (label and owner) is to allow
+         * multiple bank accounts being owned by one customer.
+         */
+        label = username
+        owner = username
+        this.demoBank = demobankFromDb
+        this.isPublic = isPublic
+    }
+    if (demobankFromDb.withSignupBonus)
+        newBankAccount.bonus("${demobankFromDb.currency}:100")
+    return AccountPair(customer = newCustomer, bankAccount = newBankAccount)
+}
 
 /**
  *
@@ -90,10 +173,7 @@ fun ApplicationRequest.basicAuth(onlyAdmin: Boolean = false): String? {
         )
         return credentials.first
     }
-    /**
-     * If only admin auth was allowed, here it failed already,
-     * hence throw 401.  */
-    if (onlyAdmin) throw unauthorized("Only admin allowed.")
+    if (onlyAdmin) throw forbidden("Only admin allowed.")
     val passwordHash = transaction {
         val customer = getCustomer(credentials.first)
         customer.passwordHash

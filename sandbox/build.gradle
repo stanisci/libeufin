@@ -1,7 +1,8 @@
 plugins {
+    id 'kotlin'
     id 'java'
-    id 'org.jetbrains.kotlin.jvm'
     id 'application'
+    id 'org.jetbrains.kotlin.jvm'
     id "com.github.johnrengelman.shadow" version "5.2.0"
 }
 
@@ -10,6 +11,12 @@ targetCompatibility = "11"
 version = rootProject.version
 
 compileKotlin {
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+}
+
+compileTestKotlin {
     kotlinOptions {
         jvmTarget = "11"
     }
@@ -29,29 +36,20 @@ task installToPrefix(type: Copy) {
      */
     into "${project.findProperty('prefix') ?: '/tmp'}"
 }
-
-compileTestKotlin {
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-}
+apply plugin: 'kotlin-kapt'
 
 sourceSets {
-    main.java.srcDirs = ['src/main/java', 'src/main/kotlin']
+    main.java.srcDirs = [
+            'src/main/java',
+            'src/main/kotlin'
+    ]
 }
 
-def ktor_version = '1.6.1'
-/**
- * Exposed 0.38.2 caused a SQLITE_BUSY error at test-auditor.sh.
- * The error was caused by a concurrent handling of a CCT EBICS
- * message (see handleCct()).
- */
-def exposed_version = '0.32.1'
-
 dependencies {
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1-native-mt'
     implementation "com.hubspot.jinjava:jinjava:2.5.9"
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.5.21'
     implementation 'ch.qos.logback:logback-classic:1.2.5'
+    implementation project(":util")
 
     // XML:
     implementation "javax.xml.bind:jaxb-api:2.3.0"
@@ -68,18 +66,21 @@ dependencies {
     implementation "org.jetbrains.exposed:exposed-jdbc:$exposed_version"
 
     implementation "io.ktor:ktor-server-core:$ktor_version"
+    implementation "io.ktor:ktor-server-call-logging:$ktor_version"
+    implementation "io.ktor:ktor-server-cors:$ktor_version"
+    implementation "io.ktor:ktor-server-content-negotiation:$ktor_version"
+    implementation "io.ktor:ktor-server-status-pages:$ktor_version"
     implementation "io.ktor:ktor-client-apache:$ktor_version"
+    implementation "io.ktor:ktor-client-auth:$ktor_version"
     implementation "io.ktor:ktor-server-netty:$ktor_version"
-    implementation "io.ktor:ktor-jackson:$ktor_version"
-    implementation "io.ktor:ktor-auth:$ktor_version"
+    implementation "io.ktor:ktor-server-test-host:$ktor_version"
+    implementation "io.ktor:ktor-auth:$ktor_auth_version"
+    implementation "io.ktor:ktor-serialization-jackson:$ktor_version"
 
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
     testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'
     testImplementation group: "junit", name: "junit", version: '4.13.2'
-
-    implementation project(":util")
 }
-
 
 application {
     mainClassName = "tech.libeufin.sandbox.MainKt"

@@ -20,7 +20,7 @@
 package tech.libeufin.nexus.bankaccount
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import io.ktor.application.ApplicationCall
+import io.ktor.server.application.ApplicationCall
 import io.ktor.client.HttpClient
 import io.ktor.http.HttpStatusCode
 import org.jetbrains.exposed.sql.*
@@ -183,13 +183,14 @@ fun processCamtMessage(
                 "Nexus hit a report or statement of a wrong IBAN!"
             )
             it.balances.forEach { b ->
-                var clbdCount = 0
                 if (b.type == "CLBD") {
-                    clbdCount++
                     val lastBalance = NexusBankBalanceEntity.all().lastOrNull()
                     /**
                      * Store balances different from the one that came from the bank,
-                     * or the very first balance.
+                     * or the very first balance.  This approach has the following inconvenience:
+                     * the 'balance' held at Nexus does not differentiate between one
+                     * coming from a statement and one coming from a report.  As a consequence,
+                     * the two types of balances may override each other without notice.
                      */
                     if ((lastBalance == null) ||
                         (b.amount.toPlainString() != lastBalance.balance)) {

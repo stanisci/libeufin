@@ -1,9 +1,7 @@
 package tech.libeufin.nexus
 
-import io.ktor.application.*
 import io.ktor.client.*
 import io.ktor.http.*
-import io.ktor.response.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.iso20022.TransactionDetails
 import tech.libeufin.nexus.server.PermissionQuery
@@ -13,7 +11,9 @@ import tech.libeufin.util.EbicsProtocolError
 import kotlin.math.abs
 import kotlin.math.min
 import io.ktor.content.TextContent
-import io.ktor.routing.*
+import io.ktor.server.application.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import tech.libeufin.util.buildIbanPaytoUri
 
 data class AnastasisIncomingBankTransaction(
@@ -107,7 +107,7 @@ private suspend fun historyIncoming(call: ApplicationCall) {
     return call.respond(TextContent(customConverter(history), ContentType.Application.Json))
 }
 
-fun anastasisFacadeRoutes(route: Route, httpClient: HttpClient) {
+fun anastasisFacadeRoutes(route: Route) {
     route.get("/history/incoming") {
         historyIncoming(call)
         return@get

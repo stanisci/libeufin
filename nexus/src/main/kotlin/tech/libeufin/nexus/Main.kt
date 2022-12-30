@@ -40,7 +40,7 @@ import java.io.File
 import kotlin.system.exitProcess
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
-val NEXUS_DB_ENV_VAR_NAME = "LIBEUFIN_NEXUS_DB_CONNECTION"
+const val NEXUS_DB_ENV_VAR_NAME = "LIBEUFIN_NEXUS_DB_CONNECTION"
 
 class NexusCommand : CliktCommand() {
     init {
