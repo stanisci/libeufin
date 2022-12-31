@@ -13,10 +13,10 @@ import tech.libeufin.util.XMLUtil
 
 class XMLEbicsConverter : ContentConverter {
     override suspend fun deserialize(
-        charset: io.ktor.utils.io.charsets.Charset,
-        typeInfo: io.ktor.util.reflect.TypeInfo,
+        charset: Charset,
+        typeInfo: TypeInfo,
         content: ByteReadChannel
-    ): Any? {
+    ): Any {
         return withContext(Dispatchers.IO) {
             try {
                 receiveEbicsXmlInternal(content.toInputStream().reader().readText())

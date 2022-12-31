@@ -491,7 +491,6 @@ val sandboxApp: Application.() -> Unit = {
     }
     install(IgnoreTrailingSlash)
     install(ContentNegotiation) {
-
         register(ContentType.Text.Xml, XMLEbicsConverter())
         /**
          * Content type "text" must go to the XML parser
@@ -548,9 +547,12 @@ val sandboxApp: Application.() -> Unit = {
         }
         // Happens when a request fails to parse.
         exception<BadRequestException> { call, wrapper ->
-            var errorMessage: String? = wrapper.message // default, if no further details can be found.
+            var rootCause = wrapper.cause
+            while (rootCause?.cause != null) rootCause = rootCause.cause
+            val errorMessage: String? = rootCause?.message ?: wrapper.message
             if (errorMessage == null) {
                 logger.error("The bank didn't detect the cause of a bad request, fail.")
+                logger.error(wrapper.stackTraceToString())
                 throw SandboxError(
                     HttpStatusCode.InternalServerError,
                     "Did not find bad request details."
@@ -1052,9 +1054,8 @@ val sandboxApp: Application.() -> Unit = {
             }
             /**
              * The catch blocks try to extract a EBICS error message from the
-             * exception type being handled.  NOT (double) logging under each
-             * catch block as ultimately the registered exception handler is expected
-             * to log. */
+             * exception type being handled.  NOT logging under each catch block
+             * as ultimately the registered exception handler is expected to log. */
             catch (e: UtilError) {
                 throw EbicsProcessingError("Serving EBICS threw unmanaged UtilError: ${e.reason}")
             }
@@ -1065,15 +1066,18 @@ val sandboxApp: Application.() -> Unit = {
                 when (e.errorCode) {
                     LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE -> throw EbicsProcessingError("Invalid bank state.")
                     LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE -> throw EbicsProcessingError("Inconsistent bank state.")
-                    else -> throw EbicsProcessingError("Unknown LibEuFin error code: ${e.errorCode}.")
+                    else -> throw EbicsProcessingError("Unknown Libeufin error code: ${e.errorCode}.")
                 }
             }
             catch (e: EbicsNoDownloadDataAvailable) {
                 respondEbicsTransfer(call, e.errorText, e.errorCode)
             }
             catch (e: EbicsRequestError) {
-                // Preventing the last catch-all block
-                // from capturing a known type.
+                /**
+                 * Preventing the last catch-all block from handling
+                 * a known error type.  Rethrowing here to let the top-level
+                 * handler take action.
+                 */
                 throw e
             }
             catch (e: Exception) {

@@ -137,7 +137,7 @@ suspend fun respondEbicsTransfer(
      * to an invalid request.  Recall: Sandbox is multi-host, and
      * which Ebics host was requested belongs to the request document.
      *
-     * Therefore, because any (? Please verify!) Ebics response
+     * Therefore, because any Ebics response
      * should speak for one Ebics host, we can't respond any Ebics
      * type when the Ebics host ID remains unknown due to invalid
      * request.  Instead, we'll respond plain text:
