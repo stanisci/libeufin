@@ -545,7 +545,12 @@ val sandboxApp: Application.() -> Unit = {
                 )
             )
         }
-        // Happens when a request fails to parse.
+        /**
+         * Happens when a request fails to parse.  This branch triggers
+         * only when a JSON request fails.  XML problems are caught within
+         * the /ebicsweb handler and always ultimately rethrown as "EbicsRequestError",
+         * hence they do not reach this branch.
+         */
         exception<BadRequestException> { call, wrapper ->
             var rootCause = wrapper.cause
             while (rootCause?.cause != null) rootCause = rootCause.cause
