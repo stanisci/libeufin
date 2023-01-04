@@ -278,6 +278,7 @@ def accounts(ctx):
 class SandboxContext:
     def __init__(self):
         self.sandbox_base_url = None
+        self.demobank_name = None
         self.username, self.password = self.require_sandbox_credentials()
 
     def require_sandbox_credentials(self):
@@ -299,17 +300,14 @@ not found in the environment, assuming tests are being run..."""
             )
         return sandbox_base_url
 
-    # For the Access-API endpoints, the user must choose exactly *one* bank
-    # and include that in ‘LIBEUFIN_SANDBOX_URL’ (or ‘--sandbox-url’).
     def access_api_url(self, upath):
-        # NB: We expect that ‘base’ ends w/ f"demobanks/{bank}".
-        # This means that base for non-Access-API endpoints
-        # is incompatible w/ that for Access-API endpoints.
-        # (Using one for the other will result in 404.)  But that's
-        # OK because the non-Access-API endspoints are going away.
-        base = self.require_sandbox_base_url ()
-        return urljoin_nodrop (base, "/access-api" + upath)
+        base = self.require_sandbox_base_url()
+        # return urljoin_nodrop(demobank_base, "/access-api" + upath)
+        return urljoin_nodrop(self.demobank_base_url(), "/access-api" + upath)
 
+    def demobank_base_url(self):
+        base = self.require_sandbox_base_url()
+        return  urljoin_nodrop(base, f"demobanks/{self.demobank_name}")
 
 class NexusContext:
     def __init__(self):
@@ -1210,8 +1208,15 @@ def sandbox_bankaccount(ctx):
     "demobank",
     help="Subcommands for the 'demobank' model and the Access API."
 )
+@click.option(
+    "--demobank-name",
+    help="Defaults to 'default'",
+    required=False,
+    default="default"
+    )
 @click.pass_context
-def sandbox_demobank(ctx):
+def sandbox_demobank(ctx, demobank_name):
+    ctx.obj.demobank_name = demobank_name
     pass
 
 @sandbox_demobank.command("list-transactions", help="List transactions.")
@@ -1291,6 +1296,16 @@ def sandbox_demobank_info(obj, bank_account):
         print("Could not reach sandbox")
         exit(1)
     tell_user(resp, withsuccess=True)
+
+
+@sandbox_demobank.command(
+  "debug-url",
+  help="Prints the base URL for the demobank to address, according to the related values passed via the environment or the command line."
+)
+@click.pass_obj
+def debug_url(obj):
+    print("demobank URL", obj.demobank_base_url())
+    print("access API registration URL", obj.access_api_url("/testing/register"))
 
 @sandbox_demobank.command("delete",
     help="""delete bank account"""
