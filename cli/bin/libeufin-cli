@@ -10,10 +10,29 @@ from datetime import datetime
 import requests
 
 # FIXME: always use qualified name
-from requests import post, get, auth, delete
+from requests import post, get, auth, delete, patch
 from urllib.parse import urljoin
 from getpass import getpass
 
+# Extracts the circuit account username by processing
+# the arguments or the environment.  It gives precedence
+# to the username met on the CLI, defaulting to the environment
+# when that is missing.  Returns the username, or None if that
+# could not be found.  This function helps when a username
+# is a 'resource name'.  Namely, when such username points
+# at a customer username; therefore, the value 'admin' is not
+# accepted since that's never used in that way.
+def get_circuit_username(usernameCli, usernameEnv):
+    maybeUsername = usernameCli
+    if not maybeUsername:
+        maybeUsername = usernameEnv
+    if not maybeUsername:
+        print("No username was found", file=sys.stderr)
+        return None
+    if maybeUsername == "admin":
+        print("admin username not suitable", file=sys.stderr)
+        return None
+    return maybeUsername
 
 # Exit the program according to the HTTP status code that
 # was received.
@@ -304,6 +323,11 @@ not found in the environment, assuming tests are being run..."""
         base = self.require_sandbox_base_url()
         # return urljoin_nodrop(demobank_base, "/access-api" + upath)
         return urljoin_nodrop(self.demobank_base_url(), "/access-api" + upath)
+
+    # Empty upath gets just the slash-ended circuit API URL initial segment.
+    def circuit_api_url(self, upath):
+        circuit_base_url = urljoin_nodrop(self.demobank_base_url(), "/circuit-api")
+        return urljoin_nodrop(circuit_base_url, upath)
 
     def demobank_base_url(self):
         base = self.require_sandbox_base_url()
@@ -1508,5 +1532,190 @@ def simulate_incoming_transaction(
     tell_user(resp)
     check_response_status(resp)
 
+
+# The commands below request to the latest CIRCUIT API.
+
+@sandbox_demobank.command(
+  "circuit-register",
+  help="Register a new account with cash-out capabilities.  It needs administrator credentials, and the new account password exported in LIBEUFIN_NEW_CIRCUIT_ACCOUNT_PASSWORD."
+)
+@click.option(
+    "--username",
+    help="new account username",
+    required=True,
+    prompt=True
+)
+@click.option(
+    "--cashout-address",
+    help="Payto address where to send fiat payments on cash-outs",
+    required=True,
+    prompt=True
+)
+@click.option(
+    "--name",
+    help="Legal name associated to the account.",
+    required=True,
+    prompt=True
+)
+@click.option(
+    "--phone",
+    help="SMS where to send the cash-out TAN.",
+)
+@click.option(
+    "--email",
+    help="E-mail address where to send the cash-out TAN.",
+)
+@click.pass_obj
+def circuit_register(
+  obj,
+  username,
+  cashout_address,
+  name,
+  phone,
+  email
+):
+    # Check admin is requesting.
+    if (obj.username != "admin"):
+        print("Not running as 'admin'.  Won't request", file=sys.stderr)
+        exit(1)
+    new_account_password = os.environ.get("LIBEUFIN_NEW_CIRCUIT_ACCOUNT_PASSWORD")
+    # Check that the new account password got
+    # exported into the environment.
+    if not new_account_password:
+        print("LIBEUFIN_NEW_CIRCUIT_ACCOUNT_PASSWORD not found in the environment", file=sys.stderr)
+        exit(1)
+
+    # Get the bank base URL.
+    registration_endpoint = obj.circuit_api_url("accounts")
+
+    # Craft the request.
+
+    contact_data = dict()
+    if (phone):
+        contact_data.update(phone=phone)
+    if (email):
+        contact_data.update(email=email)
+    req = dict(
+        contact_data=contact_data,
+        username=username,
+        password=new_account_password,
+        name=name,
+        cashout_address=cashout_address
+    )
+    try:
+        resp = post(
+            registration_endpoint,
+            json=req,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach sandbox at " + registration_endpoint)
+        exit(1)
+
+    check_response_status(resp, expected_status_code=204)
+
+
+@sandbox_demobank.command(
+  "circuit-reconfig",
+  help="Reconfigure an account with cash-out capabilities.  It needs administrator or owner credentials"
+)
+@click.option(
+    "--phone",
+    help="Phone number for the SMS TAN",
+)
+@click.option(
+    "--email",
+    help="E-mail address for receiving the TAN",
+)
+@click.option(
+    "--cashout-address",
+    help="Payto address where to send fiat payments on cash-outs",
+    required=True,
+    prompt=True
+)
+@click.option(
+    "--username",
+    help="Username associated with the account to reconfigure.  It defaults to LIBEUFIN_SANDBOX_USERNAME and doesn't accept 'admin'.",
+)
+@click.pass_obj
+def circuit_reconfig(
+  obj,
+  phone,
+  email,
+  cashout_address,
+  username
+):
+    resource_name = get_circuit_username(username, obj.username)
+    if not resource_name:
+        print("Could not find any username to reconfigure.", file=sys.stderr)
+    reconfig_endpoint = obj.circuit_api_url(f"accounts/{resource_name}")
+    contact_data = dict()
+    if (phone):
+        contact_data.update(phone=phone)
+    if (email):
+        contact_data.update(email=email)
+    req = dict(contact_data=contact_data, cashout_address=cashout_address)
+
+    try:
+        resp = patch(
+            reconfig_endpoint,
+            json=req,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach sandbox at " + reconfig_endpoint)
+        exit(1)
+
+    check_response_status(resp, expected_status_code=204)
+
+
+@sandbox_demobank.command(
+  "circuit-password-reconfig",
+  help="Ask interactively to change the password. It needs administrator or owner credentials"
+)
+@click.option(
+    "--username",
+    help="Username whose password will change.  Defaults to LIBEUFIN_SANDBOX_USERNAME and doesn't accept 'admin' as a value.",
+    required=False
+)
+@click.pass_obj
+def password_reconfig(obj, username):
+    resource_name = get_circuit_username(username, obj.username)
+    if not resource_name:
+        print(
+            "Couldn't find the username whose password should change.",
+            file=sys.stderr
+        )
+        exit(1)
+    print(f"Change password for account: {resource_name}.")
+    new_password = click.prompt(
+        "Enter the new password",
+        hide_input=True,
+        type=str
+    )
+    confirm_new_password = click.prompt(
+        "Enter the new password again",
+        hide_input=True,
+        type=str
+    )
+    if (new_password != confirm_new_password):
+        print("The password entered the second time didn't match.", file=sys.stderr)
+        exit(1)
+    password_reconfig_endpoint = obj.circuit_api_url(f"accounts/{resource_name}/auth")
+    req = dict(new_password=confirm_new_password)
+    try:
+        resp = patch(
+            password_reconfig_endpoint,
+            json=req,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach sandbox at " + password_reconfig_endpoint)
+        exit(1)
+
+    check_response_status(resp, expected_status_code=204)
 
 cli()
