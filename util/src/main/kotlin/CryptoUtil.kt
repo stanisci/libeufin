@@ -310,12 +310,10 @@ object CryptoUtil {
         return "sha256-salted\$$salt\$$pwh"
     }
 
-    /**
-     * Throws error when credentials don't match.  Only returns in case of success.
-     */
+    // Throws error when credentials don't match.  Only returns in case of success.
     fun checkPwOrThrow(pw: String, storedPwHash: String): Boolean {
         if(!this.checkpw(pw, storedPwHash)) throw UtilError(
-            HttpStatusCode.Forbidden,
+            HttpStatusCode.Unauthorized,
             "Credentials did not match",
             LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
         )

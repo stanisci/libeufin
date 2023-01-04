@@ -74,61 +74,59 @@ fun insertNewAccount(username: String,
         logger.info("Username: $username not allowed.")
         throw forbidden("Username: $username is not allowed.")
     }
-
-    val demobankFromDb = getDemobank(demobank)
-    // Bank's fault, because when this function gets
-    // called, the demobank must exist.
-    if (demobankFromDb == null) {
-        logger.error("Demobank '$demobank' not found.  Won't add account $username")
-        throw internalServerError("Demobank $demobank not found.  Won't add account $username")
-    }
-    // Generate a IBAN if the caller didn't provide one.
-    val newIban = iban ?: getIban()
-    // Check IBAN collisions.
-    val checkIbanExist = BankAccountEntity.find(BankAccountsTable.iban eq newIban).firstOrNull()
-    if (checkIbanExist != null) {
-        logger.info("IBAN $newIban not available.  Won't register username $username")
-        throw conflict("IBAN $iban not available.")
-    }
-    // Check username availability.
-    val checkCustomerExist = transaction {
-        DemobankCustomerEntity.find {
+    return transaction {
+        val demobankFromDb = getDemobank(demobank)
+        // Bank's fault, because when this function gets
+        // called, the demobank must exist.
+        if (demobankFromDb == null) {
+            logger.error("Demobank '$demobank' not found.  Won't add account $username")
+            throw internalServerError("Demobank $demobank not found.  Won't add account $username")
+        }
+        // Generate a IBAN if the caller didn't provide one.
+        val newIban = iban ?: getIban()
+        // Check IBAN collisions.
+        val checkIbanExist = BankAccountEntity.find(BankAccountsTable.iban eq newIban).firstOrNull()
+        if (checkIbanExist != null) {
+            logger.info("IBAN $newIban not available.  Won't register username $username")
+            throw conflict("IBAN $iban not available.")
+        }
+        // Check username availability.
+        val checkCustomerExist = DemobankCustomerEntity.find {
             DemobankCustomersTable.username eq username
         }.firstOrNull()
+        if (checkCustomerExist != null) {
+            throw SandboxError(
+                HttpStatusCode.Conflict,
+                "Username $username not available."
+            )
+        }
+        val newCustomer = DemobankCustomerEntity.new {
+            this.username = username
+            passwordHash = CryptoUtil.hashpw(password)
+            this.name = name // nullable
+        }
+        // Actual account creation.
+        val newBankAccount = BankAccountEntity.new {
+            this.iban = newIban
+            /**
+             * For now, keep same semantics of Pybank: a username
+             * is AS WELL a bank account label.  In other words, it
+             * identifies a customer AND a bank account.  The reason
+             * to have the two values (label and owner) is to allow
+             * multiple bank accounts being owned by one customer.
+             */
+            label = username
+            owner = username
+            this.demoBank = demobankFromDb
+            this.isPublic = isPublic
+        }
+        if (demobankFromDb.withSignupBonus)
+            newBankAccount.bonus("${demobankFromDb.currency}:100")
+        AccountPair(customer = newCustomer, bankAccount = newBankAccount)
     }
-    if (checkCustomerExist != null) {
-        throw SandboxError(
-            HttpStatusCode.Conflict,
-            "Username $username not available."
-        )
-    }
-    val newCustomer = DemobankCustomerEntity.new {
-        this.username = username
-        passwordHash = CryptoUtil.hashpw(password)
-        this.name = name // nullable
-    }
-    // Actual account creation.
-    val newBankAccount = BankAccountEntity.new {
-        this.iban = newIban
-        /**
-         * For now, keep same semantics of Pybank: a username
-         * is AS WELL a bank account label.  In other words, it
-         * identifies a customer AND a bank account.  The reason
-         * to have the two values (label and owner) is to allow
-         * multiple bank accounts being owned by one customer.
-         */
-        label = username
-        owner = username
-        this.demoBank = demobankFromDb
-        this.isPublic = isPublic
-    }
-    if (demobankFromDb.withSignupBonus)
-        newBankAccount.bonus("${demobankFromDb.currency}:100")
-    return AccountPair(customer = newCustomer, bankAccount = newBankAccount)
 }
 
 /**
- *
  * Return true if access to the bank account can be granted,
  * false otherwise.
  *
@@ -183,7 +181,7 @@ fun ApplicationRequest.basicAuth(onlyAdmin: Boolean = false): String? {
     return credentials.first
 }
 
-fun SandboxAssert(condition: Boolean, reason: String) {
+fun sandboxAssert(condition: Boolean, reason: String) {
     if (!condition) throw SandboxError(HttpStatusCode.InternalServerError, reason)
 }
 
@@ -238,9 +236,11 @@ fun getHistoryElementFromTransactionRow(
  * customer to own multiple bank accounts.
  */
 fun getCustomer(username: String): DemobankCustomerEntity {
-    return DemobankCustomerEntity.find {
-        DemobankCustomersTable.username eq username
-    }.firstOrNull() ?: throw notFound("Customer '${username}' not found")
+    return transaction {
+        DemobankCustomerEntity.find {
+            DemobankCustomersTable.username eq username
+        }.firstOrNull()
+    } ?: throw notFound("Customer '${username}' not found")
 }
 
 /**
@@ -264,14 +264,6 @@ fun getPersonNameFromCustomer(customerUsername: String): String {
             ownerCustomer.name ?: "Never given."
         }
     }
-}
-fun getFirstDemobank(): DemobankConfigEntity {
-  return transaction {
-      DemobankConfigEntity.all().firstOrNull() ?: throw SandboxError(
-          HttpStatusCode.InternalServerError,
-          "Cannot find one demobank, please create one!"
-      )
-  }
 }
 
 fun getDefaultDemobank(): DemobankConfigEntity {

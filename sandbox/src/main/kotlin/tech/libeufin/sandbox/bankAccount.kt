@@ -69,11 +69,12 @@ fun getBalance(accountLabel: String, withPending: Boolean = false): BigDecimal {
 fun wireTransfer(
     debitAccount: String,
     creditAccount: String,
-    demobank: String,
+    demobank: String = "default",
     subject: String,
     amount: String, // $currency:x.y
     pmtInfId: String? = null
 ): String {
+    logger.debug("Maybe wire transfer: $debitAccount -> $creditAccount, $subject, $amount")
     val args: Triple<BankAccountEntity, BankAccountEntity, DemobankConfigEntity> = transaction {
         val demobankDb = ensureDemobank(demobank)
         val debitAccountDb = getBankAccountFromLabel(debitAccount, demobankDb)
@@ -113,11 +114,16 @@ fun wireTransfer(
     if (checkAmount.currency != demobank.currency)
         throw badRequest("Won't wire transfer with currency: ${checkAmount.currency}")
     // Check funds are sufficient.
+    /**
+     * Using 'pending' balance because Libeufin never books.  The
+     * reason is that booking is not Taler-relevant.
+     */
     val pendingBalance = getBalance(debitAccount, withPending = true)
     val maxDebt = if (debitAccount.label == "admin") {
         demobank.bankDebtLimit
     } else demobank.usersDebtLimit
-    if ((pendingBalance - checkAmount.amount).abs() > BigDecimal.valueOf(maxDebt.toLong())) {
+    val balanceCheck = pendingBalance - checkAmount.amount
+    if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal.valueOf(maxDebt.toLong())) {
         logger.info("Account ${debitAccount.label} would surpass debit threshold of $maxDebt.  Rollback wire transfer")
         throw SandboxError(HttpStatusCode.PreconditionFailed, "Insufficient funds")
     }

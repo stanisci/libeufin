@@ -782,7 +782,7 @@ private fun handleEbicsC52(requestContext: RequestContext): ByteArray {
         requestContext.subscriber,
         dateRange = null
     )
-    SandboxAssert(
+    sandboxAssert(
         report.size == 1,
         "C52 response contains more than one Camt.052 document"
     )

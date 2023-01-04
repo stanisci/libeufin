@@ -122,6 +122,7 @@ object DemobankCustomersTable : LongIdTable() {
     val name = text("name").nullable()
     val email = text("email").nullable()
     val phone = text("phone").nullable()
+    val cashout_address = text("cashout_address").nullable()
 }
 
 class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -131,6 +132,7 @@ class DemobankCustomerEntity(id: EntityID<Long>) : LongEntity(id) {
     var name by DemobankCustomersTable.name
     var email by DemobankCustomersTable.email
     var phone by DemobankCustomersTable.phone
+    var cashout_address by DemobankCustomersTable.cashout_address
 }
 
 /**
@@ -429,6 +431,34 @@ class BankAccountStatementEntity(id: EntityID<Int>) : IntEntity(id) {
     var balanceClbd by BankAccountStatementsTable.balanceClbd
 }
 
+enum class CashoutOperationState { CONFIRMED, PENDING }
+object CashoutOperationsTable : LongIdTable() {
+    val uuid = uuid("uuid").autoGenerate()
+    /**
+     * This amount is the one the user entered in the cash-out
+     * dialog.  That will show up as the outgoing transfer in their
+     * local currency bank account.
+     */
+    val amountDebit = text("amountDebit")
+    val subject = text("subject")
+    val creationTime = long("creationTime") // in seconds.
+    val tanChannel = text("tanChannel")
+    val account = text("account")
+    val tan = text("tan")
+    val state = enumeration("state", CashoutOperationState::class).default(CashoutOperationState.PENDING)
+}
+
+class CashoutOperationEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<CashoutOperationEntity>(CashoutOperationsTable)
+    var uuid by CashoutOperationsTable.uuid
+    var amountDebit by CashoutOperationsTable.amountDebit
+    var subject by CashoutOperationsTable.subject
+    var creationTime by CashoutOperationsTable.creationTime
+    var tanChannel by CashoutOperationsTable.tanChannel
+    var account by CashoutOperationsTable.account
+    var tan by CashoutOperationsTable.tan
+    var state by CashoutOperationsTable.state
+}
 object TalerWithdrawalsTable : LongIdTable() {
     val wopid = uuid("wopid").autoGenerate()
     val amount = text("amount") // $currency:x.y
@@ -506,7 +536,8 @@ fun dbCreateTables(dbConnectionString: String) {
             BankAccountReportsTable,
             BankAccountStatementsTable,
             TalerWithdrawalsTable,
-            DemobankCustomersTable
+            DemobankCustomersTable,
+            CashoutOperationsTable
         )
     }
 }

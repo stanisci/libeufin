@@ -25,6 +25,7 @@ import io.ktor.http.*
 val re = Regex("^([0-9]+(\\.[0-9]+)?)$")
 val reWithSign = Regex("^-?([0-9]+(\\.[0-9]+)?)$")
 
+
 fun validatePlainAmount(plainAmount: String, withSign: Boolean = false): Boolean {
     if (withSign) return reWithSign.matches(plainAmount)
     return re.matches(plainAmount)

@@ -1,4 +1,5 @@
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.Test
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -6,10 +7,13 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import org.junit.Ignore
 import tech.libeufin.nexus.server.CreateBankConnectionFromBackupRequestJson
 import tech.libeufin.nexus.server.CreateBankConnectionFromNewRequestJson
 import tech.libeufin.sandbox.sandboxApp
 
+enum class EnumTest { TEST }
+data class EnumWrapper(val enum_test: EnumTest)
 
 class JsonTest {
 
@@ -28,7 +32,20 @@ class JsonTest {
         assert(roundTripNew.data.toString() == "{}" && roundTripNew.type == "ebics" && roundTripNew.name == "new-connection")
     }
 
-    /*@Test
+    // Tests how Jackson+Kotlin handle enum types.  Fails if an exception is thrown
+    @Test
+    fun enumTest() {
+        val m = jacksonObjectMapper()
+         m.readValue<EnumWrapper>("{\"enum_test\":\"TEST\"}")
+        m.readValue<EnumTest>("\"TEST\"")
+    }
+
+    /**
+     * Ignored because this test was only used to check
+     * the logs, as opposed to assert over values.
+     */
+    @Ignore
+    @Test
     fun testSandboxJsonParsing() {
         testApplication {
             application(sandboxApp)
@@ -38,5 +55,5 @@ class JsonTest {
                 setBody("{}")
             }
         }
-    }*/
+    }
 }

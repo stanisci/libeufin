@@ -1560,15 +1560,13 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     val req = call.receive<CustomerRegistration>()
-                    val newAccount = transaction {
-                        insertNewAccount(
+                    val newAccount = insertNewAccount(
                             req.username,
                             req.password,
                             name = req.name,
                             iban = req.iban,
                             isPublic = req.isPublic
-                        )
-                    }
+                    )
                     val balance = getBalance(newAccount.bankAccount, withPending = true)
                     call.respond(object {
                         val balance = object {

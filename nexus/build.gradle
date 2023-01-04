@@ -104,6 +104,7 @@ test {
     failFast = true
     testLogging.showStandardStreams = false
     environment.put("LIBEUFIN_SANDBOX_ADMIN_PASSWORD", "foo")
+    environment.put("LIBEUFIN_CASHOUT_TEST_TAN", "foo")
 }
 
 application {
