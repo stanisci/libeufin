@@ -121,7 +121,7 @@ class SandboxCircuitApiTest {
                 // Check that the status is pending.
                 assert(mapper.readTree(R.readBytes()).get("status").asText() == "PENDING")
                 // Now confirm the operation.
-                R = client.post("/demobanks/default/circuit-api/cashouts/${operationUuid}/confirm") {
+                client.post("/demobanks/default/circuit-api/cashouts/${operationUuid}/confirm") {
                     basicAuth("shop", "secret")
                     contentType(ContentType.Application.Json)
                     setBody("{\"tan\":\"foo\"}")
@@ -245,7 +245,7 @@ class SandboxCircuitApiTest {
                     }
                     assert(R.status.value == HttpStatusCode.OK.value)
                     // Change user balance.
-                    val account = transaction {
+                    transaction {
                         val account = BankAccountEntity.find {
                             BankAccountsTable.label eq "shop"
                         }.firstOrNull() ?: throw Exception("Circuit test account not found in the database!")
