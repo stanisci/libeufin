@@ -129,12 +129,19 @@ fun isTanChannelSupported(tanMethod: String): Boolean {
 fun circuitApi(circuitRoute: Route) {
     // Abort a cash-out operation.
     circuitRoute.post("/cashouts/{uuid}/abort") {
-        val user = call.request.basicAuth()
-        val uuid = call.getUriComponent("uuid")
+        call.request.basicAuth() // both admin and author allowed
+        val arg = call.getUriComponent("uuid")
+        // Parse and check the UUID.
+        val maybeUuid = try {
+            UUID.fromString(arg)
+        } catch (e: Exception) {
+            val msg = "The cash-out UUID is invalid: $arg"
+            logger.debug(e.message)
+            logger.debug(msg)
+            throw badRequest(msg)
+        }
         val maybeOperation = transaction {
-            CashoutOperationEntity.find {
-                CashoutOperationsTable.uuid eq UUID.fromString(uuid)
-            }.firstOrNull()
+            CashoutOperationEntity.find { uuid eq maybeUuid }.firstOrNull()
         }
         if (maybeOperation == null) {
             val msg = "Cash-out operation $uuid not found."
@@ -192,6 +199,8 @@ fun circuitApi(circuitRoute: Route) {
          */
         val req = call.receive<CashoutConfirmation>()
         val maybeTanFromEnv = System.getenv("LIBEUFIN_CASHOUT_TEST_TAN")
+        if (maybeTanFromEnv != null)
+            logger.warn("TAN being read from the environment.  Assuming tests are being run")
         val checkTan = maybeTanFromEnv ?: op.tan
         if (req.tan != checkTan) {
             logger.debug("The confirmation of '${op.uuid}' has a wrong TAN '${req.tan}'")
@@ -216,7 +225,7 @@ fun circuitApi(circuitRoute: Route) {
     }
     // Retrieve the status of a cash-out operation.
     circuitRoute.get("/cashouts/{uuid}") {
-        val user = call.request.basicAuth()
+        call.request.basicAuth() // both admin and author
         val operationUuid = call.getUriComponent("uuid")
         // Parse and check the UUID.
         val maybeUuid = try {
@@ -488,7 +497,8 @@ fun circuitApi(circuitRoute: Route) {
             val newAccount = insertNewAccount(
                 username = req.username,
                 password = req.password,
-                name = req.name
+                name = req.name,
+                iban = req.internal_iban
             )
             newAccount.customer.phone = req.contact_data.phone
             newAccount.customer.email = req.contact_data.email
