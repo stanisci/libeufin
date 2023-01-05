@@ -35,6 +35,7 @@ assemble:
 .PHONY: check
 check:
 	@./gradlew check
+	@cd ./cli/bin && ./circuit_test.sh
 
 
 .PHONY: parse
