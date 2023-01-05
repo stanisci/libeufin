@@ -14,16 +14,8 @@ from requests import post, get, auth, delete, patch
 from urllib.parse import urljoin
 from getpass import getpass
 
-# Extracts the circuit account username by processing
-# the arguments or the environment.  It gives precedence
-# to the username met on the CLI, defaulting to the environment
-# when that is missing.  Returns the username, or None if that
-# could not be found.  This function helps when a username
-# is a 'resource name'.  Namely, when such username points
-# at a customer username; therefore, the value 'admin' is not
-# accepted since that's never used in that way.
-def get_circuit_username(usernameCli, usernameEnv):
-    maybeUsername = usernameCli
+def get_account_name(accountNameCli, usernameEnv):
+    maybeUsername = accountNameCli
     if not maybeUsername:
         maybeUsername = usernameEnv
     if not maybeUsername:
@@ -42,6 +34,8 @@ def check_response_status(resp, expected_status_code=200):
         print("Response: {}".format(resp.text), file=sys.stderr)
         sys.exit(1)
 
+# Prints unexpected responses without exiting
+# and optionally prints expected respones.
 def tell_user(resp, expected_status_code=200, withsuccess=False):
     if resp.status_code != expected_status_code:
         print(resp.content.decode("utf-8"), file=sys.stderr)
@@ -1536,6 +1530,128 @@ def simulate_incoming_transaction(
 # The commands below request to the latest CIRCUIT API.
 
 @sandbox_demobank.command(
+  "circuit-cashout-confirm",
+  help="Confirm a cash-out operation.  Only the author is allowed (no admin)."
+)
+@click.option(
+    "--tan",
+    help="TAN that authorizes the cash-out operaion.",
+    required=True,
+    prompt=True
+)
+@click.option(
+    "--uuid",
+    help="UUID of the cash-out operation to confirm.",
+    required=True,
+    prompt=True
+)
+@click.pass_obj
+def circuit_cashout_confirm(obj, tan, uuid):
+    cashout_confirm_endpoint = obj.circuit_api_url(f"cashouts/{uuid}/confirm")
+    req = dict(tan=tan)
+    try:
+        resp = post(
+            cashout_confirm_endpoint,
+            json=req,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach the bank at " + cashout_abort_endpoint)
+        exit(1)
+
+    check_response_status(resp, 204)
+    
+
+@sandbox_demobank.command(
+  "circuit-cashout-abort",
+  help="Abort a cash-out operation.  Admin and author are allowed to request."
+)
+@click.option(
+    "--uuid",
+    help="UUID of the cash-out operation to abort.",
+    required=True,
+    prompt=True
+)
+@click.pass_obj
+def circuit_cashout_abort(obj, uuid):
+    cashout_abort_endpoint = obj.circuit_api_url(f"cashouts/{uuid}/abort")
+    try:
+        resp = post(
+            cashout_abort_endpoint,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach the bank at " + cashout_abort_endpoint)
+        exit(1)
+
+    check_response_status(resp, 204)
+
+@sandbox_demobank.command(
+  "circuit-cashout-details",
+  help="Retrieve status information about one cash-out operation.  Admin and author are allowed to request."
+)
+@click.option(
+    "--uuid",
+    help="UUID of the cash-out operation to retrieve.",
+    required=True,
+    prompt=True
+)
+@click.pass_obj
+def circuit_cashout_info(obj, uuid):
+    cashout_info_endpoint = obj.circuit_api_url(f"cashouts/{uuid}")
+    try:
+        resp = get(
+            cashout_info_endpoint,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach the bank at " + cashout_info_endpoint)
+        exit(1)
+
+    check_response_status(resp)
+    tell_user(resp, withsuccess=True)
+
+@sandbox_demobank.command(
+  "circuit-delete-account",
+  help="Delete one account.  Only available to the administrator and for accounts with zero balance."
+)
+@click.option(
+    "--username",
+    help="account to delete",
+    required=True,
+    prompt=True
+)
+@click.pass_obj
+def circuit_delete(obj, username):
+
+    # Check that admin wasn't specified.
+    # Note: even if 'admin' gets through here,
+    # the bank can't delete it because its profile
+    # doesn't get a ordinary entry into the database.
+    if username == "admin":
+        print("Won't delete 'admin'", file=sys.stderr)
+        exit(1)
+
+    # Do not check credentials to let the --no-auth case
+    # function, in case the bank allows it.
+    account_deletion_endpoint = obj.circuit_api_url(f"accounts/{username}")
+    try:
+        resp = delete(
+            account_deletion_endpoint,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach sandbox at " + account_deletion_endpoint)
+        exit(1)
+  
+    check_response_status(resp, expected_status_code=204)
+
+
+@sandbox_demobank.command(
   "circuit-register",
   help="Register a new account with cash-out capabilities.  It needs administrator credentials, and the new account password exported in LIBEUFIN_NEW_CIRCUIT_ACCOUNT_PASSWORD."
 )
@@ -1565,14 +1681,19 @@ def simulate_incoming_transaction(
     "--email",
     help="E-mail address where to send the cash-out TAN.",
 )
+@click.option(
+    "--internal-iban",
+    help="Which IBAN to associate to this account.  The IBAN participates only in the local currency circuit.  If missing, the bank generates one.",
+)
 @click.pass_obj
 def circuit_register(
-  obj,
-  username,
-  cashout_address,
-  name,
-  phone,
-  email
+    obj,
+    username,
+    cashout_address,
+    name,
+    phone,
+    email,
+    internal_iban
 ):
     # Check admin is requesting.
     if (obj.username != "admin"):
@@ -1588,8 +1709,6 @@ def circuit_register(
     # Get the bank base URL.
     registration_endpoint = obj.circuit_api_url("accounts")
 
-    # Craft the request.
-
     contact_data = dict()
     if (phone):
         contact_data.update(phone=phone)
@@ -1602,6 +1721,8 @@ def circuit_register(
         name=name,
         cashout_address=cashout_address
     )
+    if internal_iban:
+        req.update(internal_iban=internal_iban)
     try:
         resp = post(
             registration_endpoint,
@@ -1646,7 +1767,7 @@ def circuit_reconfig(
   cashout_address,
   username
 ):
-    resource_name = get_circuit_username(username, obj.username)
+    resource_name = get_account_name(username, obj.username)
     if not resource_name:
         print("Could not find any username to reconfigure.", file=sys.stderr)
     reconfig_endpoint = obj.circuit_api_url(f"accounts/{resource_name}")
@@ -1682,7 +1803,7 @@ def circuit_reconfig(
 )
 @click.pass_obj
 def password_reconfig(obj, username):
-    resource_name = get_circuit_username(username, obj.username)
+    resource_name = get_account_name(username, obj.username)
     if not resource_name:
         print(
             "Couldn't find the username whose password should change.",
@@ -1717,5 +1838,60 @@ def password_reconfig(obj, username):
         exit(1)
 
     check_response_status(resp, expected_status_code=204)
+
+
+@sandbox_demobank.command(
+  "circuit-cashout",
+  help="Create a cash-out operation.  If successful, the user gets a TAN."
+)
+@click.option(
+    "--subject",
+    help="Payment subject to associate to the outgoing and incoming payments that are associated with this cash-out operation.",
+    required=False
+)
+@click.option(
+    "--amount-debit",
+    help="Amount that will debited to the local currency account, in the <currency>:X.Y format.",
+    required=True,
+    prompt=True
+)
+@click.option(
+    "--amount-credit",
+    help="Amount that will credited to the fiat currency account, in the <currency>:X.Y format.",
+    required=True,
+    prompt=True
+)
+@click.option(
+    "--tan-channel",
+    help="Indicates how to send the TAN to the user: only 'sms' or 'email' are valid values.  If missing, the bank defaults to SMS",
+    required=False
+)
+@click.pass_obj
+def circuit_cashout(obj, subject, amount_debit, amount_credit, tan_channel):
+    # (not) resorting auth credentials, if they're None, request fails at the server.
+    # Craft the request.  
+    req = dict(
+        amount_debit=amount_debit,
+        amount_credit=amount_credit
+    )
+    if subject:
+        req.update(subject=subject)
+    if tan_channel:
+        req.update(tan_channel=tan_channel)
+  
+    cashout_creation_endpoint = obj.circuit_api_url("cashouts")
+    try:
+        resp = post(
+            cashout_creation_endpoint,
+            json=req,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach sandbox at " + cashout_creation_endpoint)
+        exit(1)
+  
+    check_response_status(resp, expected_status_code=202)
+    tell_user(resp, 202, withsuccess=True) # Communicates back the operation UUID.
 
 cli()
