@@ -20,18 +20,12 @@
 package tech.libeufin.sandbox
 
 import UtilError
-import com.fasterxml.jackson.core.JsonParseException
-import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
-import com.fasterxml.jackson.databind.DeserializationFeature
-import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.SerializationFeature
-import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.KotlinFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.fasterxml.jackson.module.kotlin.MissingKotlinParameterException
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
@@ -42,7 +36,6 @@ import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import io.ktor.server.application.*
 import io.ktor.http.*
-import io.ktor.serialization.*
 import io.ktor.serialization.jackson.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -55,9 +48,7 @@ import io.ktor.server.routing.*
 import io.ktor.server.util.*
 import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.cors.routing.*
-import io.ktor.util.*
 import io.ktor.util.date.*
-import kotlinx.coroutines.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
@@ -1173,13 +1164,19 @@ val sandboxApp: Application.() -> Unit = {
                     return@get
                 }
                 post("/withdrawal-operation/{wopid}") {
-                    val wopid: String = ensureNonNull(call.parameters["wopid"])
+                    val arg = ensureNonNull(call.parameters["wopid"])
+                    val maybeWithdrawalUUid = try {
+                        java.util.UUID.fromString(arg)
+                    } catch (e: Exception) {
+                        logger.debug(e.message)
+                        throw badRequest("Withdrawal operation UUID was invalid: $arg")
+                    }
                     val body = call.receive<TalerWithdrawalSelection>()
                     val transferDone = transaction {
                         val wo = TalerWithdrawalEntity.find {
-                            TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
+                            TalerWithdrawalsTable.wopid eq maybeWithdrawalUUid
                         }.firstOrNull() ?: throw SandboxError(
-                            HttpStatusCode.NotFound, "Withdrawal operation $wopid not found."
+                            HttpStatusCode.NotFound, "Withdrawal operation $maybeWithdrawalUUid not found."
                         )
                         if (wo.confirmationDone) {
                             return@transaction true
@@ -1211,24 +1208,30 @@ val sandboxApp: Application.() -> Unit = {
                     return@post
                 }
                 get("/withdrawal-operation/{wopid}") {
-                    val wopid: String = ensureNonNull(call.parameters["wopid"])
-                    val wo = transaction {
+                    val arg = ensureNonNull(call.parameters["wopid"])
+                    val maybeWithdrawalUuid = try {
+                        java.util.UUID.fromString(arg)
+                    } catch (e: Exception) {
+                        logger.debug(e.message)
+                        throw badRequest("Withdrawal UUID invalid: $arg")
+                    }
+                    val maybeWithdrawalOp = transaction {
                         TalerWithdrawalEntity.find {
-                            TalerWithdrawalsTable.wopid eq java.util.UUID.fromString(wopid)
+                            TalerWithdrawalsTable.wopid eq maybeWithdrawalUuid
                         }.firstOrNull() ?: throw SandboxError(
                             HttpStatusCode.NotFound,
-                            "Withdrawal operation: $wopid not found"
+                            "Withdrawal operation: $arg not found"
                         )
                     }
                     val demobank = ensureDemobank(call)
                     var captcha_page = demobank.captchaUrl
                     if (captcha_page == null) logger.warn("CAPTCHA URL not found")
                     val ret = TalerWithdrawalStatus(
-                        selection_done = wo.selectionDone,
-                        transfer_done = wo.confirmationDone,
-                        amount = wo.amount,
+                        selection_done = maybeWithdrawalOp.selectionDone,
+                        transfer_done = maybeWithdrawalOp.confirmationDone,
+                        amount = maybeWithdrawalOp.amount,
                         suggested_exchange = demobank.suggestedExchangeBaseUrl,
-                        aborted = wo.aborted,
+                        aborted = maybeWithdrawalOp.aborted,
                         confirm_transfer_url = captcha_page
                     )
                     call.respond(ret)

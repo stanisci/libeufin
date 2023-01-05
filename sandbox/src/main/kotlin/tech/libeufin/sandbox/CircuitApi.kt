@@ -218,11 +218,18 @@ fun circuitApi(circuitRoute: Route) {
     circuitRoute.get("/cashouts/{uuid}") {
         val user = call.request.basicAuth()
         val operationUuid = call.getUriComponent("uuid")
+        // Parse and check the UUID.
+        val maybeUuid = try {
+            UUID.fromString(operationUuid)
+        } catch (e: Exception) {
+            val msg = "The cash-out UUID is invalid: $operationUuid"
+            logger.debug(e.message)
+            logger.debug(msg)
+            throw badRequest(msg)
+        }
         // Get the operation from the database.
         val maybeOperation = transaction {
-            CashoutOperationEntity.find {
-                uuid eq UUID.fromString(operationUuid)
-            }.firstOrNull()
+            CashoutOperationEntity.find { uuid eq maybeUuid }.firstOrNull()
         }
         if (maybeOperation == null) {
             val msg = "Cash-out operation $operationUuid not found."
