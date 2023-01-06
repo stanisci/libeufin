@@ -468,7 +468,14 @@ private suspend fun historyIncoming(call: ApplicationCall) {
             }
         }
     }
-    return call.respond(TextContent(customConverter(history), ContentType.Application.Json))
+    val responseCode = if (history.incoming_transactions.size == 0)
+        HttpStatusCode.NoContent else
+            HttpStatusCode.OK
+    return call.respond(
+        status = responseCode,
+        TextContent(customConverter(history),
+            ContentType.Application.Json)
+    )
 }
 
 /**
