@@ -52,7 +52,7 @@ class SandboxCircuitApiTest {
             testApplication {
                 application(sandboxApp)
                 // Register a new account.
-                var R = client.post("/demobanks/default/circuit-api/accounts") {
+                client.post("/demobanks/default/circuit-api/accounts") {
                     expectSuccess = true
                     contentType(ContentType.Application.Json)
                     basicAuth("admin", "foo")
@@ -77,7 +77,7 @@ class SandboxCircuitApiTest {
                     amount = initialBalance
                 )
                 // Check the balance before cashing out.
-                R = client.get("/demobanks/default/access-api/accounts/shop") {
+                var R = client.get("/demobanks/default/access-api/accounts/shop") {
                     basicAuth("shop", "secret")
                 }
                 val mapper = ObjectMapper()
