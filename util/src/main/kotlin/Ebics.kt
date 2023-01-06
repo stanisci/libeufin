@@ -47,7 +47,7 @@ data class EbicsProtocolError(
     val httpStatusCode: HttpStatusCode,
     val reason: String,
     /**
-     * This error type is also used when Nexus finds itself
+     * This class is also used when Nexus finds itself
      * in an inconsistent state, without interacting with the
      * bank.  In this case, the EBICS code below can be left
      * null.
@@ -386,6 +386,7 @@ data class EbicsResponseContent(
     val orderDataEncChunk: String?,
     val technicalReturnCode: EbicsReturnCode,
     val bankReturnCode: EbicsReturnCode,
+    val reportText: String,
     val segmentNumber: Int?,
     // Only present in init phase
     val numSegments: Int?
@@ -496,6 +497,8 @@ fun parseAndValidateEbicsResponse(
     val techReturnCodeStr = resp.value.header.mutable.returnCode
     val techReturnCode = EbicsReturnCode.lookup(techReturnCodeStr)
 
+    val reportText = resp.value.header.mutable.reportText
+
     val daeXml = resp.value.body.dataTransfer?.dataEncryptionInfo
     val dataEncryptionInfo = if (daeXml == null) {
         null
@@ -507,6 +510,7 @@ fun parseAndValidateEbicsResponse(
         transactionID = resp.value.header._static.transactionID,
         bankReturnCode = bankReturnCode,
         technicalReturnCode = techReturnCode,
+        reportText = reportText,
         orderDataEncChunk = resp.value.body.dataTransfer?.orderData?.value,
         dataEncryptionInfo = dataEncryptionInfo,
         numSegments = resp.value.header._static.numSegments?.toInt(),

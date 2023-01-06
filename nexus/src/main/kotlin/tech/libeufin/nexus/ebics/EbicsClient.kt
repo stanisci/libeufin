@@ -255,9 +255,9 @@ suspend fun doEbicsUploadTransaction(
                  * bank rejecting the operation instead of it
                  * detecting the problem.
                  */
-                HttpStatusCode.InternalServerError,
-                "Unexpected EBICS technical return code: ${txResp.technicalReturnCode}",
-                txResp.technicalReturnCode
+                httpStatusCode = HttpStatusCode.InternalServerError,
+                reason = txResp.reportText,
+                ebicsTechnicalCode = txResp.technicalReturnCode
             )
         }
     }
