@@ -1402,7 +1402,8 @@ def sandbox_demobank_register(obj, public, name, iban):
 )
 @click.pass_obj
 def sandbox_demobank_ebicssubscriber(obj, host_id, partner_id, user_id, bank_account):
-    url = obj.demobank_base_url("/ebics/subscribers")
+    demobank_url = obj.demobank_base_url()
+    url = urljoin_nodrop(demobank_url, "/ebics/subscribers")
     try:
         resp = post(url,
             json=dict(
