@@ -100,7 +100,7 @@ fun chunkString(input: String): String {
 
 data class AmountWithCurrency(
     val currency: String,
-    val amount: Amount
+    val amount: String
 )
 
 fun parseDecimal(decimalStr: String): BigDecimal {

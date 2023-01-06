@@ -632,7 +632,7 @@ private fun XmlElementDestructor.extractParty(): PartyIdentification {
 
 private fun XmlElementDestructor.extractCurrencyAmount(): CurrencyAmount {
     return CurrencyAmount(
-        value = BigDecimal(requireUniqueChildNamed("Amt") { focusElement.textContent }),
+        value = requireUniqueChildNamed("Amt") { focusElement.textContent },
         currency = requireUniqueChildNamed("Amt") { focusElement.getAttribute("Ccy") }
     )
 }
@@ -641,7 +641,7 @@ private fun XmlElementDestructor.maybeExtractCurrencyAmount(): CurrencyAmount? {
     return maybeUniqueChildNamed("Amt") {
         CurrencyAmount(
             focusElement.getAttribute("Ccy"),
-            BigDecimal(focusElement.textContent)
+            focusElement.textContent
         )
     }
 }
@@ -667,7 +667,7 @@ private fun XmlElementDestructor.extractBatches(
     if (mapEachChildNamed("NtryDtls") {}.size != 1) throw CamtParsingError(
         "This money movement (AcctSvcrRef: $acctSvcrRef) is not a singleton #0"
     )
-    var txs = requireUniqueChildNamed("NtryDtls") {
+    val txs = requireUniqueChildNamed("NtryDtls") {
         if (mapEachChildNamed("TxDtls") {}.size != 1) {
             throw CamtParsingError("This money movement (AcctSvcrRef: $acctSvcrRef) is not a singleton #1")
         }

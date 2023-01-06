@@ -54,7 +54,7 @@ class Iso20022Test {
         assertEquals(1, r.reports.size)
 
         // First Entry
-        assertTrue(BigDecimal(100).compareTo(r.reports[0].entries[0].amount.value) == 0)
+        assertTrue("100" == r.reports[0].entries[0].amount.value)
         assertEquals("EUR", r.reports[0].entries[0].amount.currency)
         assertEquals(CreditDebitIndicator.CRDT, r.reports[0].entries[0].creditDebitIndicator)
         assertEquals(EntryStatus.BOOK, r.reports[0].entries[0].status)

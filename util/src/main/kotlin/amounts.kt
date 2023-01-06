@@ -22,33 +22,18 @@ import io.ktor.http.*
  * <http://www.gnu.org/licenses/>
  */
 
-val re = Regex("^([0-9]+(\\.[0-9]+)?)$")
-val reWithSign = Regex("^-?([0-9]+(\\.[0-9]+)?)$")
-
+const val plainAmountRe = "^([0-9]+(\\.[0-9][0-9]?)?)$"
+const val plainAmountReWithSign = "^-?([0-9]+(\\.[0-9][0-9]?)?)$"
+const val amountWithCurrencyRe = "^([A-Z]+):([0-9]+(\\.[0-9][0-9]?)?)$"
 
 fun validatePlainAmount(plainAmount: String, withSign: Boolean = false): Boolean {
-    if (withSign) return reWithSign.matches(plainAmount)
-    return re.matches(plainAmount)
-}
-
-/**
- * Parse an "amount" where the currency is optional.  It returns
- * a pair where the first item is always the amount, and the second
- * is the currency or null (when this one wasn't given in the input)
- */
-fun parseAmountAsString(amount: String): Pair<String, String?> {
-    val match = Regex("^([A-Z]+:)?([0-9]+(\\.[0-9]+)?)$").find(amount) ?: throw
-    UtilError(HttpStatusCode.BadRequest, "invalid amount: $amount")
-    var (currency, number) = match.destructured
-    // Currency given, need to strip the ":".
-    if (currency.isNotEmpty())
-        currency = currency.dropLast(1)
-    return Pair(number, if (currency.isEmpty()) null else currency)
+    if (withSign) return Regex(plainAmountReWithSign).matches(plainAmount)
+    return Regex(plainAmountRe).matches(plainAmount)
 }
 
 fun parseAmount(amount: String): AmountWithCurrency {
-    val match = Regex("([A-Z]+):([0-9]+(\\.[0-9]+)?)").find(amount) ?:
+    val match = Regex(amountWithCurrencyRe).find(amount) ?:
         throw UtilError(HttpStatusCode.BadRequest, "invalid amount: $amount")
     val (currency, number) = match.destructured
-    return AmountWithCurrency(currency, Amount(number))
+    return AmountWithCurrency(currency = currency, amount = number)
 }

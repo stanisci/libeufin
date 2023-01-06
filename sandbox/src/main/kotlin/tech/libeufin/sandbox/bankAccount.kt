@@ -108,11 +108,15 @@ fun wireTransfer(
     amount: String, // $currency:$value
     pmtInfId: String? = null
 ): String {
-    val checkAmount = parseAmount(amount)
-    if (checkAmount.amount == BigDecimal.ZERO)
+    val parsedAmount = parseAmount(amount)
+    val amountAsNumber = BigDecimal(parsedAmount.amount)
+    if (amountAsNumber == BigDecimal.ZERO)
         throw badRequest("Wire transfers of zero not possible.")
-    if (checkAmount.currency != demobank.currency)
-        throw badRequest("Won't wire transfer with currency: ${checkAmount.currency}")
+    if (parsedAmount.currency != demobank.currency)
+        throw badRequest(
+            "Won't wire transfer with currency: ${parsedAmount.currency}." +
+                    "  Only ${demobank.currency} allowed."
+        )
     // Check funds are sufficient.
     /**
      * Using 'pending' balance because Libeufin never books.  The
@@ -122,7 +126,7 @@ fun wireTransfer(
     val maxDebt = if (debitAccount.label == "admin") {
         demobank.bankDebtLimit
     } else demobank.usersDebtLimit
-    val balanceCheck = pendingBalance - checkAmount.amount
+    val balanceCheck = pendingBalance - amountAsNumber
     if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal.valueOf(maxDebt.toLong())) {
         logger.info("Account ${debitAccount.label} would surpass debit threshold of $maxDebt.  Rollback wire transfer")
         throw SandboxError(HttpStatusCode.PreconditionFailed, "Insufficient funds")
@@ -138,7 +142,7 @@ fun wireTransfer(
             debtorBic = debitAccount.bic
             debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
-            this.amount = checkAmount.amount.toPlainString()
+            this.amount = parsedAmount.amount
             this.currency = demobank.currency
             date = timeStamp
             accountServicerReference = transactionRef
@@ -155,7 +159,7 @@ fun wireTransfer(
             debtorBic = debitAccount.bic
             debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
-            this.amount = checkAmount.amount.toPlainString()
+            this.amount = parsedAmount.amount
             this.currency = demobank.currency
             date = timeStamp
             accountServicerReference = transactionRef

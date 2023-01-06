@@ -151,7 +151,7 @@ class DownloadAndSubmit {
                             creditorBic = "SANDBOXX",
                             creditorName = "Tester",
                             subject = "test payment",
-                            sum = Amount(1),
+                            sum = "1",
                             currency = "TESTKUDOS"
                         ),
                         transaction {
@@ -246,7 +246,7 @@ class DownloadAndSubmit {
                             creditorBic = "not-a-BIC",
                             creditorName = "Tester",
                             subject = "test payment",
-                            sum = Amount(1),
+                            sum = "1",
                             currency = "TESTKUDOS"
                         ),
                         transaction {
@@ -282,7 +282,7 @@ class DownloadAndSubmit {
                             creditorBic = "SANDBOXX",
                             creditorName = "Tester",
                             subject = "test payment",
-                            sum = Amount(1),
+                            sum = "1",
                             currency = "EUR"
                         ),
                         transaction {

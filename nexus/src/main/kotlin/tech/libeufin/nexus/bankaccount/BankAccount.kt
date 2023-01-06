@@ -249,7 +249,7 @@ fun processCamtMessage(
             val rawEntity = NexusBankTransactionEntity.new {
                 bankAccount = acct
                 accountTransactionId = "AcctSvcrRef:$acctSvcrRef"
-                amount = singletonBatchedTransaction.amount.value.toPlainString()
+                amount = singletonBatchedTransaction.amount.value
                 currency = singletonBatchedTransaction.amount.currency
                 transactionJson = jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(entry)
                 creditDebitIndicator = singletonBatchedTransaction.creditDebitIndicator.name

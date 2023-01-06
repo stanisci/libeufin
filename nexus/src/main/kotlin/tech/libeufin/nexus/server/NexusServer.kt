@@ -208,7 +208,7 @@ val nexusApp: Application.() -> Unit = {
                 cause.httpStatusCode,
                 message = ErrorResponse(
                     code = TalerErrorCode.TALER_EC_LIBEUFIN_NEXUS_GENERIC_ERROR.code,
-                    hint = "EBICS protocol error",
+                    hint = "The EBICS communication with the bank failed: ${cause.ebicsTechnicalCode}",
                     detail = cause.reason,
                 )
             )

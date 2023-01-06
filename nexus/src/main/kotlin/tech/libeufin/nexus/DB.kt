@@ -201,7 +201,7 @@ object PaymentInitiationsTable : LongIdTable() {
     val bankAccount = reference("bankAccount", NexusBankAccountsTable)
     val preparationDate = long("preparationDate")
     val submissionDate = long("submissionDate").nullable()
-    val sum = amount("sum")
+    val sum = text("sum") // the amount to transfer.
     val currency = text("currency")
     val endToEndId = text("endToEndId")
     val paymentInformationId = text("paymentInformationId")

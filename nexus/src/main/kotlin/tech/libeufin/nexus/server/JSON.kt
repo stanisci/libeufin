@@ -381,7 +381,7 @@ data class Pain001Data(
     val creditorIban: String,
     val creditorBic: String?,
     val creditorName: String,
-    val sum: Amount,
+    val sum: String,
     val currency: String,
     val subject: String
 )
@@ -418,7 +418,7 @@ class CurrencyAmountDeserializer(jc: Class<*> = CurrencyAmount::class.java) : St
         val s = p.valueAsString
         val components = s.split(":")
         // FIXME: error handling!
-        return CurrencyAmount(components[0], BigDecimal(components[1]))
+        return CurrencyAmount(components[0], components[1])
     }
 }
 
@@ -430,19 +430,20 @@ class CurrencyAmountSerializer(jc: Class<CurrencyAmount> = CurrencyAmount::class
         if (value == null) {
             gen.writeNull()
         } else {
-            gen.writeString("${value.currency}:${value.value.toPlainString()}")
+            gen.writeString("${value.currency}:${value.value}")
         }
     }
 }
 
+// FIXME: this type duplicates AmountWithCurrency.
 @JsonDeserialize(using = CurrencyAmountDeserializer::class)
 @JsonSerialize(using = CurrencyAmountSerializer::class)
 data class CurrencyAmount(
     val currency: String,
-    val value: BigDecimal // allows calculations
+    val value: String // allows calculations
 )
 fun CurrencyAmount.toPlainString(): String {
-    return "${this.currency}:${this.value.toPlainString()}"
+    return "${this.currency}:${this.value}"
 }
 
 data class InitiatedPayments(

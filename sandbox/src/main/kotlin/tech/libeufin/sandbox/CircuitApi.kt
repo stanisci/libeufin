@@ -113,8 +113,8 @@ fun generateCashoutSubject(
     amountCredit: AmountWithCurrency,
     amountDebit: AmountWithCurrency
 ): String {
-    return "Cash-out of ${amountDebit.currency}:${amountDebit.amount.toPlainString()}" +
-            " to ${amountCredit.currency}:${amountCredit.amount.toPlainString()}"
+    return "Cash-out of ${amountDebit.currency}:${amountDebit.amount}" +
+            " to ${amountCredit.currency}:${amountCredit.amount}"
 }
 
 /**
@@ -295,18 +295,20 @@ fun circuitApi(circuitRoute: Route) {
         // check rates correctness
         val sellRatio = BigDecimal(ratiosAndFees.sell_at_ratio.toString())
         val sellFee = BigDecimal(ratiosAndFees.sell_out_fee.toString())
-        val amountCreditCheck = (amountDebit.amount * sellRatio) - sellFee
+        val amountDebitAsNumber = BigDecimal(amountDebit.amount)
+        val expectedAmountCredit = (amountDebitAsNumber * sellRatio) - sellFee
         val commonRounding = MathContext(2) // ensures both amounts end with ".XY"
-        if (amountCreditCheck.round(commonRounding) != amountCredit.amount.round(commonRounding)) {
+        val amountCreditAsNumber = BigDecimal(amountCredit.amount)
+        if (expectedAmountCredit.round(commonRounding) != amountCreditAsNumber.round(commonRounding)) {
             val msg = "Rates application are incorrect." +
-                    "  The expected amount to credit is: ${amountCreditCheck}," +
-                    " but ${amountCredit.amount.toPlainString()} was specified."
+                    "  The expected amount to credit is: ${expectedAmountCredit}," +
+                    " but ${amountCredit.amount} was specified."
             logger.info(msg)
             throw badRequest(msg)
         }
         // check that the balance is sufficient
         val balance = getBalance(user, withPending = true)
-        val balanceCheck = balance - amountDebit.amount
+        val balanceCheck = balance - amountDebitAsNumber
         if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal(demobank.usersDebtLimit)) {
             val msg = "Cash-out not possible due to insufficient funds.  Balance ${balance.toPlainString()} would reach ${balanceCheck.toPlainString()}"
             logger.info(msg)

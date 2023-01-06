@@ -720,16 +720,9 @@ val sandboxApp: Application.() -> Unit = {
                     "invalid BIC"
                 )
             }
-            val (amount, currency) = parseAmountAsString(body.amount)
+            val amount = parseAmount(body.amount)
             transaction {
                 val demobank = getDefaultDemobank()
-                /**
-                 * This API needs compatibility with the currency-less format.
-                 */
-                if (currency != null) {
-                    if (currency != demobank.currency)
-                        throw SandboxError(HttpStatusCode.BadRequest, "Currency ${currency} not supported.")
-                }
                 val account = getBankAccountFromLabel(
                     accountLabel, demobank
                 )
@@ -743,7 +736,7 @@ val sandboxApp: Application.() -> Unit = {
                     debtorBic = reqDebtorBic
                     debtorName = body.debtorName
                     subject = body.subject
-                    this.amount = amount
+                    this.amount = amount.amount
                     date = getUTCnow().toInstant().toEpochMilli()
                     accountServicerReference = "sandbox-$randId"
                     this.account = account
@@ -1316,7 +1309,8 @@ val sandboxApp: Application.() -> Unit = {
                     val maxDebt = if (username == "admin") {
                         demobank.bankDebtLimit
                     } else demobank.usersDebtLimit
-                    if ((pendingBalance - amount.amount).abs() > BigDecimal.valueOf(maxDebt.toLong())) {
+                    val amountAsNumber = BigDecimal(amount.amount)
+                    if ((pendingBalance - amountAsNumber).abs() > BigDecimal.valueOf(maxDebt.toLong())) {
                         logger.info("User $username would surpass user debit " +
                                 "threshold of ${demobank.usersDebtLimit}.  Rollback Taler withdrawal"
                         )
