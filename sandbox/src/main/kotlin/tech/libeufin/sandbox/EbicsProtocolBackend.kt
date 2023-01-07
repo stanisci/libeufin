@@ -677,6 +677,11 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
 
                         }
                     }
+                    /**
+                     * NOTE: this check breaks the compatibility with pain.001,
+                     * because that allows up to 5 fractional digits.  For Taler
+                     * compatibility however, we enforce the max 2 fractional digits policy.
+                     */
                     if (!validatePlainAmount(txDetails.amt.textContent)) {
                         throw EbicsProcessingError(
                             "Amount number malformed: ${txDetails.amt.textContent}"
