@@ -302,6 +302,34 @@ class DownloadAndSubmit {
         }
     }
 
+    /**
+     * Test that pain.001 amounts ALSO have max 2 fractional digits, like Taler's.
+     * That makes Sandbox however NOT completely compatible with the pain.001 standard,
+     * since this allows up to 5 fractional digits.  */
+    @Test
+    fun testFractionalDigits() {
+        withNexusAndSandboxUser {
+            testApplication {
+                application(sandboxApp)
+                runBlocking {
+                    // Create Pain.001 with excessive amount.
+                    addPaymentInitiation(
+                        Pain001Data(
+                            creditorIban = getIban(),
+                            creditorBic = "SANDBOXX",
+                            creditorName = "Tester",
+                            subject = "test payment",
+                            sum = "1.001", // wrong 3 fractional digits.
+                            currency = "TESTKUDOS"
+                        ),
+                        "foo"
+                    )
+                    assertException<EbicsProtocolError> { submitAllPaymentInitiations(client, "foo") }
+                }
+            }
+        }
+    }
+
     // Test the EBICS error message in case of debt threshold being surpassed
     @Test
     fun testDebit() {
