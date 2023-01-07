@@ -46,8 +46,12 @@ private suspend inline fun HttpClient.postToBank(url: String, body: String): Str
         }
     } catch (e: ClientRequestException) {
         logger.error(e.message)
+        val returnStatus = if (e.response.status.value == HttpStatusCode.RequestTimeout.value)
+            HttpStatusCode.GatewayTimeout
+        else HttpStatusCode.BadGateway
+        
         throw NexusError(
-            HttpStatusCode.BadGateway,
+            returnStatus,
             e.message
         )
     }
