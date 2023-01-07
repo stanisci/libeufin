@@ -102,11 +102,8 @@ fun checkEmailAddress(emailAddress: String): Boolean {
 }
 
 fun throwIfInstitutionalName(resourceName: String) {
-    if (resourceName == "bank" || resourceName == "admin") {
-        val msg = "Can't operate on institutional resource '$resourceName'"
-        logger.error(msg)
-        throw forbidden(msg)
-    }
+    if (resourceName == "bank" || resourceName == "admin")
+        throw forbidden("Can't operate on institutional resource '$resourceName'")
 }
 
 fun generateCashoutSubject(
@@ -135,29 +132,21 @@ fun circuitApi(circuitRoute: Route) {
         val maybeUuid = try {
             UUID.fromString(arg)
         } catch (e: Exception) {
-            val msg = "The cash-out UUID is invalid: $arg"
             logger.error(e.message)
-            logger.error(msg)
-            throw badRequest(msg)
+            throw badRequest("The cash-out UUID is invalid: $arg") // global handler logs this.
         }
         val maybeOperation = transaction {
             CashoutOperationEntity.find { uuid eq maybeUuid }.firstOrNull()
         }
-        if (maybeOperation == null) {
-            val msg = "Cash-out operation $uuid not found."
-            logger.error(msg)
-            throw notFound(msg)
-        }
-        if (maybeOperation.state == CashoutOperationState.CONFIRMED) {
-            val msg = "Cash-out operation '$uuid' was confirmed already."
-            logger.error(msg)
-            throw SandboxError(HttpStatusCode.PreconditionFailed, msg)
-        }
-        if (maybeOperation.state != CashoutOperationState.PENDING) {
-            val msg = "Found an unsupported cash-out operation state: ${maybeOperation.state}"
-            logger.error(msg)
-            throw internalServerError(msg)
-        }
+        if (maybeOperation == null)
+            throw notFound("Cash-out operation $uuid not found.")
+        if (maybeOperation.state == CashoutOperationState.CONFIRMED)
+            throw SandboxError(
+                HttpStatusCode.PreconditionFailed,
+                "Cash-out operation '$uuid' was confirmed already."
+            )
+        if (maybeOperation.state != CashoutOperationState.PENDING)
+            throw internalServerError("Found an unsupported cash-out operation state: ${maybeOperation.state}")
         // Operation found and pending: delete from the database.
         transaction { maybeOperation.delete() }
         call.respond(HttpStatusCode.NoContent)
@@ -167,11 +156,8 @@ fun circuitApi(circuitRoute: Route) {
     circuitRoute.post("/cashouts/{uuid}/confirm") {
         val user = call.request.basicAuth()
         // Exclude admin from this operation.
-        if (user == "admin" || user == "bank") {
-            val msg = "Institutional user '$user' shouldn't confirm any cash-out."
-            logger.error(msg)
-            throw conflict(msg)
-        }
+        if (user == "admin" || user == "bank")
+            throw conflict("Institutional user '$user' shouldn't confirm any cash-out.")
         // Get the operation identifier.
         val operationUuid = call.getUriComponent("uuid")
         val op = transaction {
@@ -180,17 +166,14 @@ fun circuitApi(circuitRoute: Route) {
             }.firstOrNull()
         }
         // 404 if the operation is not found.
-        if (op == null) {
-            val msg = "Cash-out operation $operationUuid not found"
-            logger.error(msg)
-            throw notFound(msg)
-        }
-        // 412 if the operation got already confirmefd.
-        if (op.state == CashoutOperationState.CONFIRMED) {
-            val msg = "Cash-out operation $operationUuid was already confirmed."
-            logger.error(msg)
-            throw SandboxError(HttpStatusCode.PreconditionFailed, msg)
-        }
+        if (op == null)
+            throw notFound("Cash-out operation $operationUuid not found")
+        // 412 if the operation got already confirmed.
+        if (op.state == CashoutOperationState.CONFIRMED)
+            throw SandboxError(
+                HttpStatusCode.PreconditionFailed,
+                "Cash-out operation $operationUuid was already confirmed."
+            )
         /**
          * Check the TAN.  Give precedence to the TAN found
          * in the environment, for testing purposes.  If that's
@@ -202,10 +185,8 @@ fun circuitApi(circuitRoute: Route) {
         if (maybeTanFromEnv != null)
             logger.warn("TAN being read from the environment.  Assuming tests are being run")
         val checkTan = maybeTanFromEnv ?: op.tan
-        if (req.tan != checkTan) {
-            logger.error("The confirmation of '${op.uuid}' has a wrong TAN '${req.tan}'")
-            throw forbidden("wrong TAN")
-        }
+        if (req.tan != checkTan)
+            throw forbidden("The confirmation of '${op.uuid}' has a wrong TAN '${req.tan}'")
         /**
          * Correct TAN.  Wire the funds to the admin's bank account.  After
          * this step, the conversion monitor should detect this payment and
@@ -231,20 +212,15 @@ fun circuitApi(circuitRoute: Route) {
         val maybeUuid = try {
             UUID.fromString(operationUuid)
         } catch (e: Exception) {
-            val msg = "The cash-out UUID is invalid: $operationUuid"
             logger.error(e.message)
-            logger.error(msg)
-            throw badRequest(msg)
+            throw badRequest("The cash-out UUID is invalid: $operationUuid")
         }
         // Get the operation from the database.
         val maybeOperation = transaction {
             CashoutOperationEntity.find { uuid eq maybeUuid }.firstOrNull()
         }
-        if (maybeOperation == null) {
-            val msg = "Cash-out operation $operationUuid not found."
-            logger.error(msg)
-            throw notFound(msg)
-        }
+        if (maybeOperation == null)
+            throw notFound("Cash-out operation $operationUuid not found.")
         call.respond(object { val status = maybeOperation.state })
         return@get
     }
@@ -263,35 +239,23 @@ fun circuitApi(circuitRoute: Route) {
         val amountDebit = parseAmount(req.amount_debit) // amount before rates.
         val amountCredit = parseAmount(req.amount_credit) // amount after rates, as expected by the client
         val demobank = ensureDemobank(call)
-        if (amountDebit.currency != demobank.currency) {
-            val msg = "The '${req::amount_debit.name}' field has the wrong currency"
-            logger.error(msg)
-            throw badRequest(msg)
-        }
-        if (amountCredit.currency == demobank.currency) {
-            val msg = "The '${req::amount_credit.name}' field didn't change the currency."
-            logger.error(msg)
-            throw badRequest(msg)
-        }
+        if (amountDebit.currency != demobank.currency)
+            throw badRequest("The '${req::amount_debit.name}' field has the wrong currency")
+        if (amountCredit.currency == demobank.currency)
+            throw badRequest("The '${req::amount_credit.name}' field didn't change the currency.")
         // check if TAN is supported.
         val tanChannel = req.tan_channel?.uppercase() ?: SupportedTanChannels.SMS.name
-        if (!isTanChannelSupported(tanChannel)) {
-            val msg = "TAN method $tanChannel not supported."
-            logger.error(msg)
-            throw SandboxError(HttpStatusCode.ServiceUnavailable, msg)
-        }
+        if (!isTanChannelSupported(tanChannel))
+            throw SandboxError(
+                HttpStatusCode.ServiceUnavailable,
+                "TAN method $tanChannel not supported."
+            )
         // check if the user contact data would allow the TAN channel.
         val customer = getCustomer(username = user)
-        if ((tanChannel == SupportedTanChannels.EMAIL.name)
-        and (customer.email == null)) {
-            logger.error("TAN can't be sent via e-mail.  User '$user' didn't share any address.")
-            throw conflict("E-mail address not found.  Can't send the TAN")
-        }
-        if ((tanChannel == SupportedTanChannels.SMS.name)
-            and (customer.phone == null)) {
-            logger.error("TAN can't be sent via SMS.  User '$user' didn't share any phone number.")
-            throw conflict("Phone number not found.  Can't send the TAN")
-        }
+        if ((tanChannel == SupportedTanChannels.EMAIL.name) && (customer.email == null))
+            throw conflict("E-mail address not found for '$user'.  Can't send the TAN")
+        if ((tanChannel == SupportedTanChannels.SMS.name) && (customer.phone == null))
+            throw conflict("Phone number not found for '$user'.  Can't send the TAN")
         // check rates correctness
         val sellRatio = BigDecimal(ratiosAndFees.sell_at_ratio.toString())
         val sellFee = BigDecimal(ratiosAndFees.sell_out_fee.toString())
@@ -300,20 +264,18 @@ fun circuitApi(circuitRoute: Route) {
         val commonRounding = MathContext(2) // ensures both amounts end with ".XY"
         val amountCreditAsNumber = BigDecimal(amountCredit.amount)
         if (expectedAmountCredit.round(commonRounding) != amountCreditAsNumber.round(commonRounding)) {
-            val msg = "Rates application are incorrect." +
+            throw badRequest("Rates application are incorrect." +
                     "  The expected amount to credit is: ${expectedAmountCredit}," +
-                    " but ${amountCredit.amount} was specified."
-            logger.error(msg)
-            throw badRequest(msg)
+                    " but ${amountCredit.amount} was specified.")
         }
         // check that the balance is sufficient
         val balance = getBalance(user, withPending = true)
         val balanceCheck = balance - amountDebitAsNumber
-        if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal(demobank.usersDebtLimit)) {
-            val msg = "Cash-out not possible due to insufficient funds.  Balance ${balance.toPlainString()} would reach ${balanceCheck.toPlainString()}"
-            logger.error(msg)
-            throw SandboxError(HttpStatusCode.PreconditionFailed, msg)
-        }
+        if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal(demobank.usersDebtLimit))
+            throw SandboxError(
+                HttpStatusCode.PreconditionFailed,
+                "Cash-out not possible due to insufficient funds.  Balance ${balance.toPlainString()} would reach ${balanceCheck.toPlainString()}"
+            )
         // generate a subject if that's missing
         val cashoutSubject = req.subject ?: generateCashoutSubject(
             amountCredit = amountCredit,
@@ -337,11 +299,8 @@ fun circuitApi(circuitRoute: Route) {
             SupportedTanChannels.SMS.name -> {
                 // TBD
             }
-            else -> {
-                val msg = "The bank didn't catch a unsupported TAN channel: $tanChannel."
-                logger.error(msg)
-                throw internalServerError(msg)
-            }
+            else ->
+                throw internalServerError("The bank didn't catch a unsupported TAN channel: $tanChannel.")
         }
         call.respond(HttpStatusCode.Accepted, object {val uuid = op.uuid})
         return@post
@@ -411,30 +370,20 @@ fun circuitApi(circuitRoute: Route) {
     // Change account (mostly contact) data.
     circuitRoute.patch("/accounts/{resourceName}") {
         val username = call.request.basicAuth()
-        if (username == null) {
-            val msg = "Authentication disabled, don't have a default for this request."
-            logger.error(msg)
-            throw internalServerError(msg)
-        }
+        if (username == null)
+            throw internalServerError("Authentication disabled, don't have a default for this request.")
         val resourceName = call.getUriComponent("resourceName")
         throwIfInstitutionalName(resourceName)
         allowOwnerOrAdmin(username, resourceName)
         // account found and authentication succeeded
         val req = call.receive<CircuitAccountReconfiguration>()
-        if ((req.contact_data.email != null) && (!checkEmailAddress(req.contact_data.email))) {
-            val msg = "Invalid e-mail address: ${req.contact_data.email}"
-            logger.error(msg)
-            throw badRequest(msg)
-        }
-        if ((req.contact_data.phone != null) && (!checkPhoneNumber(req.contact_data.phone))) {
-            val msg = "Invalid phone number: ${req.contact_data.phone}"
-            logger.error(msg)
-            throw badRequest(msg)
-        }
-        try { parsePayto(req.cashout_address) } catch (e: InvalidPaytoError) {
-            val msg = "Invalid cash-out address: ${req.cashout_address}"
-            logger.error(msg)
-            throw badRequest(msg)
+        if ((req.contact_data.email != null) && (!checkEmailAddress(req.contact_data.email)))
+            throw badRequest("Invalid e-mail address: ${req.contact_data.email}")
+        if ((req.contact_data.phone != null) && (!checkPhoneNumber(req.contact_data.phone)))
+            throw badRequest("Invalid phone number: ${req.contact_data.phone}")
+        try { parsePayto(req.cashout_address) }
+        catch (e: InvalidPaytoError) {
+            throw badRequest("Invalid cash-out address: ${req.cashout_address}")
         }
         transaction {
             val user = getCustomer(resourceName)
@@ -451,36 +400,27 @@ fun circuitApi(circuitRoute: Route) {
         val req = call.receive<CircuitAccountRequest>()
         // Validity and availability check on the input data.
         if (req.contact_data.email != null) {
-            if (!checkEmailAddress(req.contact_data.email)) {
-                val msg = "Invalid e-mail address: ${req.contact_data.email}.  Won't register"
-                logger.error(msg)
-                throw badRequest(msg)
-            }
+            if (!checkEmailAddress(req.contact_data.email))
+                throw badRequest("Invalid e-mail address: ${req.contact_data.email}.  Won't register")
             val maybeEmailConflict = DemobankCustomerEntity.find {
                 DemobankCustomersTable.email eq req.contact_data.email
             }.firstOrNull()
-            if (maybeEmailConflict != null) {
-                // Warning since two individuals claimed one same e-mail address.
-                val msg = "Won't register user ${req.username}: e-mail conflict on ${req.contact_data.email}"
-                logger.error(msg)
-                throw conflict(msg)
-            }
+            // Warning since two individuals claimed one same e-mail address.
+            if (maybeEmailConflict != null)
+                throw conflict("Won't register user ${req.username}: e-mail conflict on ${req.contact_data.email}")
         }
         if (req.contact_data.phone != null) {
-            if (!checkEmailAddress(req.contact_data.phone)) {
-                val msg = "Invalid phone number: ${req.contact_data.phone}.  Won't register"
-                logger.error(msg)
-                throw badRequest(msg)
-            }
+
+            if (!checkEmailAddress(req.contact_data.phone))
+                throw badRequest("Invalid phone number: ${req.contact_data.phone}.  Won't register")
+
             val maybePhoneConflict = DemobankCustomerEntity.find {
                 DemobankCustomersTable.phone eq req.contact_data.phone
             }.firstOrNull()
-            if (maybePhoneConflict != null) {
-                // Warning since two individuals claimed one same phone number.
-                val msg = "Won't register user ${req.username}: phone conflict on ${req.contact_data.phone}"
-                logger.error(msg)
-                throw conflict(msg)
-            }
+
+            // Warning since two individuals claimed one same phone number.
+            if (maybePhoneConflict != null)
+                throw conflict("Won't register user ${req.username}: phone conflict on ${req.contact_data.phone}")
         }
         /**
          * Check that cash-out address parses.  IBAN is not
@@ -488,12 +428,11 @@ fun circuitApi(circuitRoute: Route) {
          * just fails for invalid IBANs and the user has then
          * the chance to update their IBAN.
          */
-        try { parsePayto(req.cashout_address) }
+        try {
+            parsePayto(req.cashout_address)
+        }
         catch (e: InvalidPaytoError) {
-            // Warning because the UI could avoid this.
-            val invalidPaytoError = "Won't register account ${req.username}: invalid cash-out address: ${req.cashout_address}"
-            logger.error(invalidPaytoError)
-            throw badRequest(invalidPaytoError)
+            throw badRequest("Won't register account ${req.username}: invalid cash-out address: ${req.cashout_address}")
         }
         transaction {
             val newAccount = insertNewAccount(
@@ -522,14 +461,11 @@ fun circuitApi(circuitRoute: Route) {
         val bankAccount = getBankAccountFromLabel(resourceName)
         val customer = getCustomer(resourceName)
         val balance = getBalance(bankAccount)
-        if (balance != BigDecimal.ZERO) {
-            val msg = "Account $resourceName doesn't have zero balance.  Won't delete it"
-            logger.error(msg)
+        if (balance != BigDecimal.ZERO)
             throw SandboxError(
                 HttpStatusCode.PreconditionFailed,
-                "Account balance is not zero."
+                "Account $resourceName doesn't have zero balance.  Won't delete it"
             )
-        }
         transaction {
             bankAccount.delete()
             customer.delete()
