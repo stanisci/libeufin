@@ -3,13 +3,12 @@ Installing LibEuFin
 
 $ ./bootstrap
 $ ./configure --prefix=$PFX
-$ make install # Note: This may require Java=18; Java=17 broke for me, Java>=19 is unsupported by gradle
+$ make install # Note: This may require Java=18; Java=17 had errors, Java>=19 is unsupported by gradle
 
 If the previous step succeeded, libeufin-nexus and a command line
 client (libeufin-cli) should be found under $PFX/bin.  Additionally,
 the libeufin-sandbox command used for testing should be found under
 $PFX/bin as well.
-
 
 Launching LibEuFin
 ==================
@@ -17,6 +16,11 @@ Launching LibEuFin
 Launch Nexus:
 
 $ libeufin-nexus serve --with-db=jdbc:postgres://localhost:5433?user=foo&password=bar
+
+More instructions about configuring and setting Libeufin
+are available at this link:
+
+https://docs.taler.net/libeufin/nexus-tutorial.html
 
 Exporting a dist-file
 =====================
