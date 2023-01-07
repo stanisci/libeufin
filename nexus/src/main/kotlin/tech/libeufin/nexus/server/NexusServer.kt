@@ -52,8 +52,6 @@ import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
-import tech.libeufin.sandbox.SandboxErrorDetailJson
-import tech.libeufin.sandbox.SandboxErrorJson
 import tech.libeufin.util.*
 import java.net.BindException
 import java.net.URLEncoder
@@ -214,14 +212,13 @@ val nexusApp: Application.() -> Unit = {
             )
         }
         exception<BadRequestException> { call, cause ->
-            tech.libeufin.sandbox.logger.error("Exception while handling '${call.request.uri}', ${cause.message}")
+            logger.error("Exception while handling '${call.request.uri}', ${cause.message}")
             call.respond(
                 HttpStatusCode.BadRequest,
-                SandboxErrorJson(
-                    error = SandboxErrorDetailJson(
-                        type = "util-error",
-                        description = cause.message ?: "Bad request but did not find exact cause."
-                    )
+                ErrorResponse(
+                    code = TalerErrorCode.TALER_EC_LIBEUFIN_NEXUS_GENERIC_ERROR.code,
+                    detail = cause.message ?: "Bad request but did not find exact cause.",
+                    hint = "Malformed request or unacceptable values"
                 )
             )
         }
