@@ -352,7 +352,20 @@ fun getPaymentInitiation(uuid: Long): PaymentInitiationEntity {
         "Payment '$uuid' not found"
     )
 }
-
+fun getBankAccount(label: String): NexusBankAccountEntity {
+    val maybeBankAccount = transaction {
+        NexusBankAccountEntity.findByName(label)
+    }
+    return maybeBankAccount ?:
+    throw NexusError(
+        HttpStatusCode.NotFound,
+        "Account $label not found"
+    )
+}
+fun addPaymentInitiation(paymentData: Pain001Data, debtorAccount: String): PaymentInitiationEntity {
+    val bankAccount = getBankAccount(debtorAccount)
+    return addPaymentInitiation(paymentData, bankAccount)
+}
 
 /**
  * Insert one row in the database, and leaves it marked as non-submitted.
