@@ -5,14 +5,14 @@
 
 set -eu
 
+echo TESTING THE CLI SIDE OF THE CIRCUIT API
 jq --version &> /dev/null || (echo "'jq' command not found"; exit 77)
 curl --version &> /dev/null || (echo "'curl' command not found"; exit 77)
 
 DB_PATH=/tmp/circuit-test.sqlite3
 export LIBEUFIN_SANDBOX_DB_CONNECTION=jdbc:sqlite:$DB_PATH
+# NOTE: unset this variable to test the SMS or e-mail TAN.
 export LIBEUFIN_CASHOUT_TEST_TAN=secret-tan
-
-echo TESTING THE CLI SIDE OF THE CIRCUIT API
 
 echo -n Delete previous data..
 rm -f $DB_PATH
