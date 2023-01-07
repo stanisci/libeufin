@@ -78,7 +78,7 @@ class EbicsDownloadSuccessResult(
 ) : EbicsDownloadResult()
 
 /**
- * Some bank-technical error occured.
+ * A bank-technical error occurred.
  */
 class EbicsDownloadBankErrorResult(
     val returnCode: EbicsReturnCode
@@ -106,8 +106,12 @@ suspend fun doEbicsDownloadTransaction(
             // Success, nothing to do!
         }
         else -> {
+            /**
+             * The bank gave a valid response that contains however
+             * an error.  Hence Nexus sent not processable instructions. */
+
             throw EbicsProtocolError(
-                HttpStatusCode.InternalServerError,
+                HttpStatusCode.UnprocessableEntity,
                 "unexpected return code ${initResponse.technicalReturnCode}",
                 initResponse.technicalReturnCode
             )
@@ -126,16 +130,19 @@ suspend fun doEbicsDownloadTransaction(
 
     val transactionID =
         initResponse.transactionID ?: throw NexusError(
-            HttpStatusCode.InternalServerError,
+            HttpStatusCode.BadGateway,
             "Initial response must contain transaction ID"
         )
     logger.debug("Bank acknowledges EBICS download initialization.  Transaction ID: $transactionID.")
     val encryptionInfo = initResponse.dataEncryptionInfo
-        ?: throw NexusError(HttpStatusCode.InternalServerError, "initial response did not contain encryption info")
+        ?: throw NexusError(
+            HttpStatusCode.BadGateway,
+            "initial response did not contain encryption info"
+        )
 
     val initOrderDataEncChunk = initResponse.orderDataEncChunk
         ?: throw NexusError(
-            HttpStatusCode.InternalServerError,
+            HttpStatusCode.BadGateway,
             "initial response for download transaction does not contain data transfer"
         )
 
@@ -173,7 +180,7 @@ suspend fun doEbicsDownloadTransaction(
         }
         val transferOrderDataEncChunk = transferResponse.orderDataEncChunk
             ?: throw NexusError(
-                HttpStatusCode.InternalServerError,
+                HttpStatusCode.BadGateway,
                 "transfer response for download transaction does not contain data transfer"
             )
         payloadChunks.add(transferOrderDataEncChunk)
@@ -222,18 +229,22 @@ suspend fun doEbicsUploadTransaction(
     val responseStr = client.postToBank(subscriberDetails.ebicsUrl, req)
 
     val initResponse = parseAndValidateEbicsResponse(subscriberDetails, responseStr)
+    // The bank indicated one error, hence Nexus sent invalid data.
     if (initResponse.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
-        throw NexusError(HttpStatusCode.InternalServerError, reason = "unexpected return code")
-    }
-
-    val transactionID =
-        initResponse.transactionID ?: throw NexusError(
+        throw NexusError(
             HttpStatusCode.InternalServerError,
+            reason = "unexpected return code"
+        )
+    }
+    // The bank did NOT indicate any error, but the response
+    // lacks required information, blame the bank.
+    val transactionID = initResponse.transactionID ?: throw NexusError(
+            HttpStatusCode.BadGateway,
             "init response must have transaction ID"
         )
     logger.debug("Bank acknowledges EBICS upload initialization.  Transaction ID: $transactionID.")
-    /* now send actual payload */
 
+    /* now send actual payload */
     val ebicsPayload = createEbicsRequestForUploadTransferPhase(
         subscriberDetails,
         transactionID,
@@ -251,11 +262,11 @@ suspend fun doEbicsUploadTransaction(
         else -> {
             throw EbicsProtocolError(
                 /**
-                 * 500 because Nexus walked until having the
-                 * bank rejecting the operation instead of it
-                 * detecting the problem.
-                 */
-                httpStatusCode = HttpStatusCode.InternalServerError,
+                 * The communication was valid, but the content may have
+                 * caused a problem in the bank.  Nexus MAY but it's not required
+                 * to check all possible business conditions before requesting
+                 * to the bank. */
+                httpStatusCode = HttpStatusCode.UnprocessableEntity,
                 reason = txResp.reportText,
                 ebicsTechnicalCode = txResp.technicalReturnCode
             )
