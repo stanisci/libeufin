@@ -10,6 +10,56 @@ import tech.libeufin.sandbox.*
 
 class SandboxAccessApiTest {
     val mapper = ObjectMapper()
+
+    // Move funds between accounts.
+    @Test
+    fun wireTransfer() {
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                runBlocking {
+                    // Foo gives 20 to Bar
+                    client.post("/demobanks/default/access-api/accounts/foo/transactions") {
+                        expectSuccess = true
+                        contentType(ContentType.Application.Json)
+                        basicAuth("foo", "foo")
+                        setBody("""{
+                            "paytoUri": "payto://iban/${BAR_USER_IBAN}?message=test",
+                            "amount": "TESTKUDOS:20"
+                        }""".trimIndent()
+                        )
+                    }
+                    // Foo checks its balance: -20
+                    var R = client.get("/demobanks/default/access-api/accounts/foo") {
+                        basicAuth("foo", "foo")
+                    }
+                    val mapper = ObjectMapper()
+                    var j = mapper.readTree(R.readBytes())
+                    assert(j.get("balance").get("amount").asText() == "TESTKUDOS:20")
+                    assert(j.get("balance").get("credit_debit_indicator").asText().lowercase() == "debit")
+                    // Bar checks its balance: 20
+                    R = client.get("/demobanks/default/access-api/accounts/bar") {
+                        basicAuth("bar", "bar")
+                    }
+                    j = mapper.readTree(R.readBytes())
+                    assert(j.get("balance").get("amount").asText() == "TESTKUDOS:20")
+                    assert(j.get("balance").get("credit_debit_indicator").asText().lowercase() == "credit")
+                    // Foo tries with an invalid amount
+                    R = client.post("/demobanks/default/access-api/accounts/foo/transactions") {
+                        contentType(ContentType.Application.Json)
+                        basicAuth("foo", "foo")
+                        setBody("""{
+                            "paytoUri": "payto://iban/${BAR_USER_IBAN}?message=test",
+                            "amount": "TESTKUDOS:20.001"
+                        }""".trimIndent()
+                        )
+                    }
+                    assert(R.status.value == HttpStatusCode.BadRequest.value)
+                }
+            }
+        }
+    }
     // Check successful and failing case due to insufficient funds.
     @Test
     fun debitWithdraw() {
