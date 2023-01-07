@@ -7,6 +7,32 @@ import tech.libeufin.util.*
 import java.math.BigDecimal
 
 /**
+ * Check whether the given bank account would surpass the
+ * debit threshold, in case the potential amount gets transferred.
+ * Returns true when the debit WOULD be surpassed.  */
+fun maybeDebit(
+    accountLabel: String,
+    requestedAmount: BigDecimal,
+    demobankName: String = "default"
+): Boolean {
+    val demobank = getDemobank(demobankName) ?: throw notFound(
+        "Demobank '${demobankName}' not found when trying to check the debit threshold" +
+                " for user $accountLabel"
+    )
+    val balance = getBalance(accountLabel, withPending = true)
+    val maxDebt = if (accountLabel == "admin") {
+        demobank.bankDebtLimit
+    } else demobank.usersDebtLimit
+    val balanceCheck = balance - requestedAmount
+    if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal.valueOf(maxDebt.toLong())) {
+        logger.warn("User '$accountLabel' would surpass the debit" +
+                " threshold of $maxDebt, given the requested amount of ${requestedAmount.toPlainString()}")
+        return true
+    }
+    return false
+}
+
+/**
  * The last balance is the one mentioned in the bank account's
  * last statement.  If the bank account does not have any statement
  * yet, then zero is returned.  When 'withPending' is true, it adds
@@ -54,7 +80,7 @@ fun getBalance(
 }
 
 // Wrapper offering to get bank accounts from a string.
-fun getBalance(accountLabel: String, withPending: Boolean = false): BigDecimal {
+fun getBalance(accountLabel: String, withPending: Boolean = true): BigDecimal {
     val defaultDemobank = getDefaultDemobank()
     val account = getBankAccountFromLabel(accountLabel, defaultDemobank)
     return getBalance(account, withPending)
@@ -90,16 +116,8 @@ fun wireTransfer(
         pmtInfId
     )
 }
-/**
- * Book a CRDT and a DBIT transaction and return the unique reference thereof.
- *
- * At the moment there is redundancy because all the creditor / debtor details
- * are contained (directly or indirectly) already in the BankAccount parameters.
- *
- * This is kept both not to break the existing tests and to allow future versions
- * where one party of the transaction is not a customer of the running Sandbox.
- */
 
+// Book a CRDT and a DBIT transaction and return the unique reference thereof.
 fun wireTransfer(
     debitAccount: BankAccountEntity,
     creditAccount: BankAccountEntity,
@@ -118,17 +136,8 @@ fun wireTransfer(
                     "  Only ${demobank.currency} allowed."
         )
     // Check funds are sufficient.
-    /**
-     * Using 'pending' balance because Libeufin never books.  The
-     * reason is that booking is not Taler-relevant.
-     */
-    val pendingBalance = getBalance(debitAccount, withPending = true)
-    val maxDebt = if (debitAccount.label == "admin") {
-        demobank.bankDebtLimit
-    } else demobank.usersDebtLimit
-    val balanceCheck = pendingBalance - amountAsNumber
-    if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal.valueOf(maxDebt.toLong())) {
-        logger.info("Account ${debitAccount.label} would surpass debit threshold of $maxDebt.  Rollback wire transfer")
+    if (maybeDebit(debitAccount.label, amountAsNumber)) {
+        logger.error("Account ${debitAccount.label} would surpass debit threshold.  Rollback wire transfer")
         throw SandboxError(HttpStatusCode.PreconditionFailed, "Insufficient funds")
     }
     val timeStamp = getUTCnow().toInstant().toEpochMilli()
