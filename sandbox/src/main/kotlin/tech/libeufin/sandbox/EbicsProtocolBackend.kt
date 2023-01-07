@@ -67,7 +67,7 @@ data class PainParseResult(
 open class EbicsRequestError(
     val errorText: String,
     val errorCode: String
-) : Exception("$errorText ($errorCode)")
+) : Exception("$errorText (EBICS error code: $errorCode)")
 
 class EbicsNoDownloadDataAvailable(reason: String? = null) : EbicsRequestError(
     "[EBICS_NO_DOWNLOAD_DATA_AVAILABLE]" + if (reason != null) " $reason" else "",
@@ -124,6 +124,11 @@ private class EbicsUnsupportedOrderType : EbicsRequestError(
 class EbicsProcessingError(detail: String) : EbicsRequestError(
     "[EBICS_PROCESSING_ERROR] $detail",
     "091116"
+)
+
+class EbicsAmountCheckError(detail: String): EbicsRequestError(
+    "[EBICS_AMOUNT_CHECK_FAILED] $detail",
+    "091303"
 )
 
 suspend fun respondEbicsTransfer(
@@ -697,8 +702,12 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
 }
 
 /**
- * Process a payment request in the pain.001 format.
- */
+ * Process a payment request in the pain.001 format.  Note:
+ * the receiver IBAN is NOT checked to have one account at
+ * the Sandbox.  That's because (1) it leaves open to send
+ * payments outside of the running Sandbox and (2) may ease
+ * tests where the preparation logic can skip creating also
+ * the receiver account.  */
 private fun handleCct(paymentRequest: String,
                       requestingSubscriber: EbicsSubscriberEntity
 ) {
@@ -731,7 +740,17 @@ private fun handleCct(paymentRequest: String,
             "[EBICS_PROCESSING_ERROR] Currency (${parseResult.currency}) not supported.",
             "091116"
         )
-        // FIXME: check that debtor IBAN _is_ the requesting subscriber.
+        // Check for the debit case.
+        val maybeAmount = try {
+            BigDecimal(parseResult.amount)
+        } catch (e: Exception) {
+            logger.warn("Although PAIN validated, BigDecimal didn't parse its amount (${parseResult.amount})!")
+            throw EbicsProcessingError("The CCT request contains an invalid amount: ${parseResult.amount}")
+        }
+        if (maybeDebit(bankAccount.label, maybeAmount))
+            throw EbicsAmountCheckError("The requested amount (${parseResult.amount}) would exceed the debit threshold")
+
+        // Get the two parties.
         BankAccountTransactionEntity.new {
             account = bankAccount
             demobank = bankAccount.demoBank
