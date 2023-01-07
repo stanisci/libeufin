@@ -301,4 +301,29 @@ class DownloadAndSubmit {
             }
         }
     }
+
+    // Test the EBICS error message in case of debt threshold being surpassed
+    @Test
+    fun testDebit() {
+        withNexusAndSandboxUser {
+            testApplication {
+                application(sandboxApp)
+                runBlocking {
+                    // Create Pain.001 with excessive amount.
+                    addPaymentInitiation(
+                        Pain001Data(
+                            creditorIban = getIban(),
+                            creditorBic = "SANDBOXX",
+                            creditorName = "Tester",
+                            subject = "test payment",
+                            sum = "1000000",
+                            currency = "TESTKUDOS"
+                        ),
+                        "foo"
+                    )
+                    assertException<EbicsProtocolError> { submitAllPaymentInitiations(client, "foo") }
+                }
+            }
+        }
+    }
 }

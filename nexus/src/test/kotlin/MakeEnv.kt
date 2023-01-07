@@ -31,6 +31,18 @@ val userKeys = EbicsKeys(
     enc = CryptoUtil.generateRsaKeyPair(2048),
     sig = CryptoUtil.generateRsaKeyPair(2048)
 )
+
+// New versions of JUnit provide this!
+inline fun <reified ExceptionType> assertException(block: () -> Unit) {
+    try {
+        block()
+    } catch (e: Throwable) {
+        assert(e.javaClass == ExceptionType::class.java)
+        return
+    }
+    return assert(false)
+}
+
 /**
  * Run a block after connecting to the test database.
  * Cleans up the DB file afterwards.
