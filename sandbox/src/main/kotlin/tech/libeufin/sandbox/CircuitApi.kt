@@ -410,8 +410,7 @@ fun circuitApi(circuitRoute: Route) {
                 throw conflict("Won't register user ${req.username}: e-mail conflict on ${req.contact_data.email}")
         }
         if (req.contact_data.phone != null) {
-
-            if (!checkEmailAddress(req.contact_data.phone))
+            if (!checkPhoneNumber(req.contact_data.phone))
                 throw badRequest("Invalid phone number: ${req.contact_data.phone}.  Won't register")
 
             val maybePhoneConflict = DemobankCustomerEntity.find {
