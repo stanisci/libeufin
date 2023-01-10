@@ -8,6 +8,7 @@ import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.sandbox.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
+import java.io.File
 import java.math.BigDecimal
 import java.math.MathContext
 import java.util.*
@@ -118,9 +119,17 @@ fun generateCashoutSubject(
  * NOTE: future versions take the supported TAN method from
  * the configuration, or options passed when starting the bank.
  */
-enum class SupportedTanChannels { SMS, EMAIL }
-fun isTanChannelSupported(tanMethod: String): Boolean {
-    return listOf(SupportedTanChannels.SMS.name, SupportedTanChannels.EMAIL.name).contains(tanMethod.uppercase())
+const val LIBEUFIN_TAN_TMP_FILE = "/tmp/libeufin-cashout-tan.txt"
+enum class SupportedTanChannels {
+    SMS,
+    EMAIL,
+    FILE // Test channel writing the TAN to the LIBEUFIN_TAN_TMP_FILE location.
+}
+fun isTanChannelSupported(tanChannel: String): Boolean {
+    enumValues<SupportedTanChannels>().forEach {
+        if (tanChannel.uppercase() == it.name) return true
+    }
+    return false
 }
 
 fun circuitApi(circuitRoute: Route) {
@@ -243,12 +252,12 @@ fun circuitApi(circuitRoute: Route) {
             throw badRequest("The '${req::amount_debit.name}' field has the wrong currency")
         if (amountCredit.currency == demobank.currency)
             throw badRequest("The '${req::amount_credit.name}' field didn't change the currency.")
-        // check if TAN is supported.
+        // check if TAN is supported.  Default to SMS, if that's missing.
         val tanChannel = req.tan_channel?.uppercase() ?: SupportedTanChannels.SMS.name
         if (!isTanChannelSupported(tanChannel))
             throw SandboxError(
                 HttpStatusCode.ServiceUnavailable,
-                "TAN method $tanChannel not supported."
+                "TAN channel '$tanChannel' not supported."
             )
         // check if the user contact data would allow the TAN channel.
         val customer = getCustomer(username = user)
@@ -298,6 +307,14 @@ fun circuitApi(circuitRoute: Route) {
             }
             SupportedTanChannels.SMS.name -> {
                 // TBD
+            }
+            SupportedTanChannels.FILE.name -> {
+                try {
+                    File(LIBEUFIN_TAN_TMP_FILE).writeText(op.tan)
+                } catch (e: Exception) {
+                    logger.error(e.message)
+                    throw internalServerError("File TAN failed: could not write to $LIBEUFIN_TAN_TMP_FILE")
+                }
             }
             else ->
                 throw internalServerError("The bank didn't catch a unsupported TAN channel: $tanChannel.")

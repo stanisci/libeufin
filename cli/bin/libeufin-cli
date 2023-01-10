@@ -1863,8 +1863,8 @@ def password_reconfig(obj, username):
 )
 @click.option(
     "--tan-channel",
-    help="Indicates how to send the TAN to the user: only 'sms' or 'email' are valid values.  If missing, the bank defaults to SMS",
-    required=False
+    help="Indicates how to send the TAN to the user: 'sms', 'email' and 'file' are valid values.  If missing, the bank defaults to SMS.  'file' makes the server write the TAN to /tmp/libeufin-cashout-tan.txt, normally used for testing.",
+    required=False,
 )
 @click.pass_obj
 def circuit_cashout(obj, subject, amount_debit, amount_credit, tan_channel):
@@ -1878,7 +1878,6 @@ def circuit_cashout(obj, subject, amount_debit, amount_credit, tan_channel):
         req.update(subject=subject)
     if tan_channel:
         req.update(tan_channel=tan_channel)
-  
     cashout_creation_endpoint = obj.circuit_api_url("cashouts")
     try:
         resp = post(

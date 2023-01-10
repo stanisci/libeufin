@@ -11,8 +11,6 @@ curl --version &> /dev/null || (echo "'curl' command not found"; exit 77)
 
 DB_PATH=/tmp/circuit-test.sqlite3
 export LIBEUFIN_SANDBOX_DB_CONNECTION=jdbc:sqlite:$DB_PATH
-# NOTE: unset this variable to test the SMS or e-mail TAN.
-export LIBEUFIN_CASHOUT_TEST_TAN=secret-tan
 
 echo -n Delete previous data..
 rm -f $DB_PATH
@@ -55,9 +53,13 @@ echo -n Create a cash-out operation...
 CASHOUT_RESP=$(./libeufin-cli \
   sandbox --sandbox-url http://localhost:5000/ \
   demobank \
-  circuit-cashout --amount-debit=EUR:1 --amount-credit=CHF:0.95)
+  circuit-cashout \
+    --tan-channel=file \
+    --amount-debit=EUR:1 \
+    --amount-credit=CHF:0.95
+)
 echo DONE
-echo -n Extract the cash-out UUID...
+echo -n "Extract the cash-out UUID..."
 CASHOUT_UUID=$(echo ${CASHOUT_RESP} | jq --raw-output '.uuid')
 echo DONE
 echo -n Get cash-out details...
@@ -73,7 +75,7 @@ if ! test "$OPERATION_STATUS" = "PENDING"; then
     exit 1
 fi
 echo DONE
-echo -n Delete the cash-out operation...
+echo -n Abort the cash-out operation...
 RESP=$(./libeufin-cli \
   sandbox --sandbox-url http://localhost:5000/ \
   demobank \
@@ -85,14 +87,20 @@ echo -n Create another cash-out operation...
 CASHOUT_RESP=$(./libeufin-cli \
   sandbox --sandbox-url http://localhost:5000/ \
   demobank \
-  circuit-cashout --amount-debit=EUR:1 --amount-credit=CHF:0.95)
+  circuit-cashout \
+    --tan-channel=file \
+    --amount-debit=EUR:1 \
+    --amount-credit=CHF:0.95
+)
 CASHOUT_UUID=$(echo ${CASHOUT_RESP} | jq --raw-output '.uuid')
 echo DONE
+echo Reading the TAN from /tmp/libeufin-cashout-tan.txt
+INPUT_TAN=$(cat /tmp/libeufin-cashout-tan.txt)
 echo -n Confirm the last cash-out operation...
 ./libeufin-cli \
   sandbox --sandbox-url http://localhost:5000/ \
   demobank \
-  circuit-cashout-confirm --uuid $CASHOUT_UUID --tan secret-tan
+  circuit-cashout-confirm --uuid $CASHOUT_UUID --tan $INPUT_TAN
 echo DONE
 # The user now has -1 balance.  Let the bank
 # award EUR:1 to them, in order to bring their
