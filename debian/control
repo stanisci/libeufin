@@ -13,7 +13,7 @@ Homepage: https://taler.net/
 
 Package: libeufin
 Architecture: all
-Depends: openjdk-11-jdk-headless | openjdk-11-jdk,
+Depends: openjdk-11-jdk-headless | openjdk-11-jdk | openjdk-12-jdk-headless | openjdk-12-jdk | openjdk-13-jdk-headless | openjdk-13-jdk | openjdk-14-jdk-headless | openjdk-14-jdk | openjdk-15-jdk-headless | openjdk-15-jdk | openjdk-16-jdk-headless | openjdk-16-jdk | openjdk-17-jdk-headless | openjdk-17-jdk,
          python3 (>= 3.7),
          python3-click,
          python3-requests,
