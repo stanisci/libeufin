@@ -6,7 +6,7 @@ Uploaders: Christian Grothoff <grothoff@gnu.org>, Florian Dold <dold@taler.net>
 Build-Depends:
  debhelper-compat (= 12),
  unzip,
- openjdk-11-jdk-headless | openjdk-11-jdk
+ openjdk-11-jdk-headless | openjdk-11-jdk | openjdk-12-jdk-headless | openjdk-12-jdk | openjdk-13-jdk-headless | openjdk-13-jdk | openjdk-14-jdk-headless | openjdk-14-jdk | openjdk-15-jdk-headless | openjdk-15-jdk | openjdk-16-jdk-headless | openjdk-16-jdk | openjdk-17-jdk-headless | openjdk-17-jdk
 Standards-Version: 4.1.0
 Vcs-Git: https://git.taler.net/libeufin.git
 Homepage: https://taler.net/
