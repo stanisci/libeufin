@@ -24,7 +24,8 @@ override_dh_auto_build:
 	true
 override_dh_auto_test:
 	true
-
+override_dh_auto_configure:
+	true
 
 override_dh_auto_install:
 	unzip build/distributions/libeufin-$(FULLVER).zip
