@@ -1588,7 +1588,7 @@ val sandboxApp: Application.() -> Unit = {
                 post("/subscribers") {
                     // Only the admin can create Ebics subscribers.
                     val user = call.request.basicAuth()
-                    if (user != "admin") throw forbidden("Only the Admin can create Ebics subscribers.")
+                    if (WITH_AUTH && (user != "admin")) throw forbidden("Only the Administrator can create Ebics subscribers.")
                     val body = call.receive<EbicsSubscriberInfo>()
                     // Create or get the Ebics subscriber that is found.
                     transaction {
