@@ -1,3 +1,4 @@
+import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.util.getNow
 import tech.libeufin.util.setClock
@@ -6,6 +7,8 @@ import java.time.format.DateTimeFormatter
 
 // https://stackoverflow.com/questions/32437550/whats-the-difference-between-instant-and-localdatetime
 
+// Ignoring because no assert takes place here.
+@Ignore
 class TimeTest {
     @Test
     fun mock() {
@@ -24,6 +27,13 @@ class TimeTest {
         }
         val ret = fromLong(0)
         println(ret.toString())
+    }
+
+    @Test
+    fun printLong() {
+        val l = 1111111L
+        println(l.javaClass)
+        println(l.toString())
     }
 
     @Test
