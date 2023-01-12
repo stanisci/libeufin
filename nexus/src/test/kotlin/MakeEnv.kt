@@ -33,11 +33,16 @@ val userKeys = EbicsKeys(
 )
 
 // New versions of JUnit provide this!
-inline fun <reified ExceptionType> assertException(block: () -> Unit) {
+inline fun <reified ExceptionType> assertException(
+    block: () -> Unit,
+    assertBlock: (Throwable) -> Unit = {}
+) {
     try {
         block()
     } catch (e: Throwable) {
         assert(e.javaClass == ExceptionType::class.java)
+        // Expected type, try more custom asserts on it
+        assertBlock(e)
         return
     }
     return assert(false)

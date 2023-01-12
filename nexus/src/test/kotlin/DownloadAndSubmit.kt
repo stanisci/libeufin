@@ -31,6 +31,7 @@ import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsRequest
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
+import kotlin.reflect.full.isSubclassOf
 
 /**
  * Data to make the test server return for EBICS
@@ -324,7 +325,7 @@ class DownloadAndSubmit {
                         ),
                         "foo"
                     )
-                    assertException<EbicsProtocolError> { submitAllPaymentInitiations(client, "foo") }
+                    assertException<EbicsProtocolError>({ submitAllPaymentInitiations(client, "foo") })
                 }
             }
         }
@@ -349,7 +350,16 @@ class DownloadAndSubmit {
                         ),
                         "foo"
                     )
-                    assertException<EbicsProtocolError> { submitAllPaymentInitiations(client, "foo") }
+                    assertException<EbicsProtocolError>(
+                        { submitAllPaymentInitiations(client, "foo") },
+                        {
+                            val nexusEbicsException = it as EbicsProtocolError
+                            assert(
+                                EbicsReturnCode.EBICS_AMOUNT_CHECK_FAILED.errorCode ==
+                                nexusEbicsException.ebicsTechnicalCode?.errorCode
+                            )
+                        }
+                    )
                 }
             }
         }

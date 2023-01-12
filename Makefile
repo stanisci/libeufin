@@ -36,8 +36,8 @@ assemble:
 check:
 	@./gradlew check
 	@cd ./cli/bin && ./circuit_test.sh
+	@cd ./cli/bin && ./debit_test.sh
 
-
-.PHONY: parse
-parse:
-	@cd parsing-tests; py.test -s checks.py
+# .PHONY: parse
+# parse:
+#	@cd parsing-tests; py.test -s checks.py
