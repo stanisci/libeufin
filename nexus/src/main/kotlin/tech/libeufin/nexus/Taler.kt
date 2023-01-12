@@ -315,8 +315,8 @@ fun talerFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDetails)
 
 fun maybeTalerRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
     logger.debug(
-        "Searching refundable payments of account: ${bankAccount}," +
-                " after last seen transaction id: ${lastSeenId}"
+        "Searching refundable payments of account: ${bankAccount.bankAccountName}," +
+                " after last seen transaction id: $lastSeenId"
     )
     transaction {
         TalerInvalidIncomingPaymentsTable.innerJoin(NexusBankTransactionsTable,
