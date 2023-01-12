@@ -117,7 +117,7 @@ private suspend fun fetchEbicsC5x(
          * not mean anything wrong.
          */
         if (e.ebicsTechnicalCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
-            logger.info("Could not find new transactions to download")
+            logger.debug("EBICS had no new data")
             return
         }
         // re-throw in any other error case.
