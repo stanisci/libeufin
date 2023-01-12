@@ -208,7 +208,7 @@ fun getHistoryElementFromTransactionRow(dbRow: BankAccountTransactionEntity): Ra
         debtorIban = dbRow.debtorIban,
         debtorBic = dbRow.debtorBic,
         debtorName = dbRow.debtorName,
-        date = importDateFromMillis(dbRow.date).toDashedDate(),
+        date = dbRow.date.toString(),
         amount = dbRow.amount,
         currency = dbRow.currency,
         // The line below produces a value too long (>35 chars),
