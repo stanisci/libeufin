@@ -14,6 +14,17 @@ from requests import post, get, auth, delete, patch
 from urllib.parse import urljoin
 from getpass import getpass
 
+# Prepares the 'auth' option to pass to requests.
+def maybe_auth(sandbox_ctx):
+    if (sandbox_ctx.credentials_found):
+        return dict(
+            auth=auth.HTTPBasicAuth(
+                sandbox_ctx.username,
+                sandbox_ctx.password
+            )
+        )
+    return dict()
+
 def get_account_name(accountNameCli, usernameEnv):
     maybeUsername = accountNameCli
     if not maybeUsername:
@@ -292,16 +303,18 @@ class SandboxContext:
     def __init__(self):
         self.sandbox_base_url = None
         self.demobank_name = None
-        self.username, self.password = self.require_sandbox_credentials()
-
-    def require_sandbox_credentials(self):
-        sandbox_username = os.environ.get("LIBEUFIN_SANDBOX_USERNAME")
-        sandbox_password = os.environ.get("LIBEUFIN_SANDBOX_PASSWORD")
-        if not sandbox_username or not sandbox_password:
-            print("""INFO: LIBEUFIN_SANDBOX_USERNAME and LIBEUFIN_SANDBOX_PASSWORD
-not found in the environment, assuming tests are being run..."""
+        self.init_sandbox_credentials()
+        if not self.credentials_found:
+            print("""INFO: LIBEUFIN_SANDBOX_USERNAME or LIBEUFIN_SANDBOX_PASSWORD
+not found in the environment.  Won't authenticate"""
             )
-        return sandbox_username, sandbox_password
+
+    def init_sandbox_credentials(self):
+        self.username = os.environ.get("LIBEUFIN_SANDBOX_USERNAME")
+        self.password = os.environ.get("LIBEUFIN_SANDBOX_PASSWORD")
+        self.credentials_found = False
+        if self.username and self.password:
+            self.credentials_found = True 
 
     def require_sandbox_base_url(self):
         if self.sandbox_base_url:
@@ -1087,7 +1100,7 @@ def make_ebics_host(obj, host_id):
         resp = post(
             url,
             json=dict(hostID=host_id, ebicsVersion="2.5"),
-            auth=auth.HTTPBasicAuth(obj.username, obj.password),
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1104,7 +1117,7 @@ def list_ebics_host(obj):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/hosts")
     try:
-        resp = get(url,auth=auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = get(url, **maybe_auth(obj))
     except Exception as e:
         print(e)
         print("Could not reach sandbox")
@@ -1132,7 +1145,7 @@ def create_ebics_subscriber(obj, host_id, partner_id, user_id):
         resp = post(
             url,
             json=dict(hostID=host_id, partnerID=partner_id, userID=user_id),
-            auth=auth.HTTPBasicAuth(obj.username, obj.password),
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1149,7 +1162,7 @@ def list_ebics_subscriber(obj):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin_nodrop(sandbox_base_url, "/admin/ebics/subscribers")
     try:
-        resp = get(url,auth=auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = get(url, **maybe_auth(obj))
     except Exception as e:
         print(e)
         print("Could not reach sandbox")
@@ -1203,7 +1216,7 @@ def associate_bank_account(
     try:
         resp = post(
             url, json=body,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password),
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1247,10 +1260,7 @@ def sandbox_demobank(ctx, demobank_name):
 def sandbox_demobank_list_transactions(obj, bank_account):
     url = obj.access_api_url (f"/accounts/{bank_account}/transactions")
     try:
-        resp = get(
-            url,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password),
-        )
+        resp = get(url, **maybe_auth(obj))
     except Exception as e:
         print(e)
         print("Could not reach sandbox at " + url)
@@ -1286,7 +1296,7 @@ def sandbox_demobank_new_transaction(obj, bank_account, payto_with_subject, amou
         resp = post(
             url,
             json=body,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password),
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1305,10 +1315,7 @@ def sandbox_demobank_new_transaction(obj, bank_account, payto_with_subject, amou
 def sandbox_demobank_info(obj, bank_account):
     url = obj.access_api_url (f"/accounts/{bank_account}")
     try:
-        resp = get(
-            url,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
-        )
+        resp = get(url, **maybe_auth(obj))
     except Exception as e:
         print(e)
         print("Could not reach sandbox")
@@ -1337,13 +1344,7 @@ def debug_url(obj):
 def sandbox_demobank_delete(obj, bank_account):
     url = obj.access_api_url (f"/accounts/{bank_account}")
     try:
-        resp = delete(
-            url,
-            auth=auth.HTTPBasicAuth(
-              obj.username,
-              obj.password
-            )
-        )
+        resp = delete(url, **maybe_auth(obj))
     except Exception as e:
         print(e)
         print("Could not reach sandbox at " + url)
@@ -1373,16 +1374,15 @@ def sandbox_demobank_delete(obj, bank_account):
 @click.pass_obj
 def sandbox_demobank_register(obj, public, name, iban):
     url = obj.access_api_url ("/testing/register")
+    if not obj.credentials_found:
+        print("WARNING: registering with unset credentials in the environment!!")
     req = dict(username=obj.username, password=obj.password, isPublic=public)
     if name != "":
         req.update(name=name)
     if iban:
         req.update(iban=iban)
     try:
-        resp = post(
-            url,
-            json=req,
-        )
+        resp = post(url, json=req)
     except Exception as e:
         print(e)
         print("Could not reach sandbox at " + url)
@@ -1412,10 +1412,7 @@ def sandbox_demobank_ebicssubscriber(obj, host_id, partner_id, user_id, bank_acc
                 userID=user_id,
                 demobankAccountLabel=bank_account
             ),
-            auth=auth.HTTPBasicAuth(
-                obj.username,
-                obj.password
-            ),
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1429,7 +1426,7 @@ def bankaccount_list(obj):
     sandbox_base_url = obj.require_sandbox_base_url()
     url = urljoin_nodrop(sandbox_base_url, f"/admin/bank-accounts")
     try:
-        resp = get(url,auth=auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = get(url, **maybe_auth(obj))
     except Exception as e:
         print(e)
         print("Could not reach sandbox")
@@ -1448,7 +1445,7 @@ def transactions_list(obj, account_label):
         sandbox_base_url, f"/admin/bank-accounts/{account_label}/transactions"
     )
     try:
-        resp = get(url,auth=auth.HTTPBasicAuth(obj.username, obj.password))
+        resp = get(url, **maybe_auth(obj))
     except Exception as e:
         print(e)
         print("Could not reach sandbox")
@@ -1468,10 +1465,7 @@ def bankaccount_generate_transactions(obj, account_label):
         f"/admin/bank-accounts/{account_label}/generate-transactions"
     )
     try:
-        resp = post(
-            url,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
-        )
+        resp = post(url, **maybe_auth(obj))
     except Exception as e:
         print(e)
         print("Could not reach sandbox")
@@ -1516,7 +1510,7 @@ def simulate_incoming_transaction(
         resp = post(
             url,
             json=body,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1553,11 +1547,11 @@ def circuit_cashout_confirm(obj, tan, uuid):
         resp = post(
             cashout_confirm_endpoint,
             json=req,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
-        print("Could not reach the bank at " + cashout_abort_endpoint)
+        print("Could not reach the bank at " + cashout_confirm_endpoint)
         exit(1)
 
     check_response_status(resp, 204)
@@ -1579,7 +1573,7 @@ def circuit_cashout_abort(obj, uuid):
     try:
         resp = post(
             cashout_abort_endpoint,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1604,7 +1598,7 @@ def circuit_cashout_info(obj, uuid):
     try:
         resp = get(
             cashout_info_endpoint,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1641,7 +1635,7 @@ def circuit_delete(obj, username):
     try:
         resp = delete(
             account_deletion_endpoint,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1727,7 +1721,7 @@ def circuit_register(
         resp = post(
             registration_endpoint,
             json=req,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1782,7 +1776,7 @@ def circuit_reconfig(
         resp = patch(
             reconfig_endpoint,
             json=req,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1830,7 +1824,7 @@ def password_reconfig(obj, username):
         resp = patch(
             password_reconfig_endpoint,
             json=req,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
@@ -1883,7 +1877,7 @@ def circuit_cashout(obj, subject, amount_debit, amount_credit, tan_channel):
         resp = post(
             cashout_creation_endpoint,
             json=req,
-            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+            **maybe_auth(obj)
         )
     except Exception as e:
         print(e)
