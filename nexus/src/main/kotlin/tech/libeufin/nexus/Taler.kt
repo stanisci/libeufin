@@ -164,9 +164,7 @@ fun extractReservePubFromSubject(rawSubject: String): String? {
     return result.value.uppercase()
 }
 
-/**
- * Handle a Taler Wire Gateway /transfer request.
- */
+// Handle a Taler Wire Gateway /transfer request.
 private suspend fun talerTransfer(call: ApplicationCall) {
     val transferRequest = call.receive<TalerTransferRequest>()
     val amountObj = parseAmount(transferRequest.amount)

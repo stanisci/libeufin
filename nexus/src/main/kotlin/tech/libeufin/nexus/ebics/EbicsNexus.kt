@@ -262,9 +262,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
         call.respond(object {})
     }
 
-    /**
-     * Directly import accounts.  Used for testing.
-     */
+    // Directly import accounts.  Used for testing.
     post("/import-accounts") {
         val subscriberDetails = transaction {
             authenticateRequest(call.request)
