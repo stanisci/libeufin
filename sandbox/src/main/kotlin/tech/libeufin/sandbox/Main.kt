@@ -1304,7 +1304,7 @@ val sandboxApp: Application.() -> Unit = {
                     // Check funds are sufficient.
                     if (maybeDebit(maybeOwnedAccount.label, BigDecimal(amount.amount))) {
                         logger.error("Account ${maybeOwnedAccount.label} would surpass debit threshold.  Not withdrawing")
-                        throw SandboxError(HttpStatusCode.PreconditionFailed, "Insufficient funds")
+                        throw SandboxError(HttpStatusCode.Forbidden, "Insufficient funds")
                     }
                     val wo: TalerWithdrawalEntity = transaction {
                         TalerWithdrawalEntity.new {
