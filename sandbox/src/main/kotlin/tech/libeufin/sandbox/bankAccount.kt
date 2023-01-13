@@ -127,6 +127,7 @@ fun wireTransfer(
     pmtInfId: String? = null
 ): String {
     val parsedAmount = parseAmount(amount)
+    // Potential amount to transfer.
     val amountAsNumber = BigDecimal(parsedAmount.amount)
     if (amountAsNumber == BigDecimal.ZERO)
         throw badRequest("Wire transfers of zero not possible.")

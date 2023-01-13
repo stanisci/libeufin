@@ -1301,23 +1301,10 @@ val sandboxApp: Application.() -> Unit = {
                     val amount = parseAmount(req.amount)
                     if (amount.currency != demobank.currency)
                         throw badRequest("Currency ${amount.currency} differs from Demobank's: ${demobank.currency}")
-                    /**
-                     * Check for debit threshold.  That's however also later checked
-                     * after the /confirm call.  Username == null case is handled above.
-                     */
-                    val pendingBalance = getBalance(username!!, withPending = true)
-                    val maxDebt = if (username == "admin") {
-                        demobank.bankDebtLimit
-                    } else demobank.usersDebtLimit
-                    val amountAsNumber = BigDecimal(amount.amount)
-                    if ((pendingBalance - amountAsNumber).abs() > BigDecimal.valueOf(maxDebt.toLong())) {
-                        logger.info("User $username would surpass user debit " +
-                                "threshold of ${demobank.usersDebtLimit}.  Rollback Taler withdrawal"
-                        )
-                        throw SandboxError(
-                            HttpStatusCode.Forbidden,
-                            "Insufficient funds."
-                        )
+                    // Check funds are sufficient.
+                    if (maybeDebit(maybeOwnedAccount.label, BigDecimal(amount.amount))) {
+                        logger.error("Account ${maybeOwnedAccount.label} would surpass debit threshold.  Not withdrawing")
+                        throw SandboxError(HttpStatusCode.PreconditionFailed, "Insufficient funds")
                     }
                     val wo: TalerWithdrawalEntity = transaction {
                         TalerWithdrawalEntity.new {

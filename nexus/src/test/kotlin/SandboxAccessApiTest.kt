@@ -60,6 +60,38 @@ class SandboxAccessApiTest {
             }
         }
     }
+    @Test
+    fun withdrawWithHighBalance() {
+        withTestDatabase {
+            prepSandboxDb()
+            /**
+             * A problem appeared (Sandbox responding "insufficient funds")
+             * when B - A > T, where B is the balance, A the potential amount
+             * to withdraw and T is the debit threshold for the user.  T is
+             * 1000 here, therefore setting B as 2000 and A as 1 should get
+             * this case tested.
+             */
+            wireTransfer(
+                "admin",
+                "foo",
+                "default",
+                "bring balance to high amount",
+                "TESTKUDOS:2000"
+            )
+            testApplication {
+                this.application(sandboxApp)
+                runBlocking {
+                    // Normal, successful withdrawal.
+                    client.post("/demobanks/default/access-api/accounts/foo/withdrawals") {
+                        expectSuccess = true
+                        setBody("{\"amount\": \"TESTKUDOS:1\"}")
+                        contentType(ContentType.Application.Json)
+                        basicAuth("foo", "foo")
+                    }
+                }
+            }
+        }
+    }
     // Check successful and failing case due to insufficient funds.
     @Test
     fun debitWithdraw() {
