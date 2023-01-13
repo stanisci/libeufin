@@ -28,8 +28,7 @@ import io.ktor.client.request.*
 import io.ktor.content.TextContent
 import io.ktor.http.*
 import io.ktor.server.request.receive
-import io.ktor.server.response.respond
-import io.ktor.server.response.respondText
+import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -424,11 +423,15 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
             }
         }
     }
-    val responseCode = if (history.outgoing_transactions.size == 0)
-        HttpStatusCode.NoContent else
-        HttpStatusCode.OK
+    if (history.outgoing_transactions.size == 0) {
+        call.respondBytes(
+            bytes = ByteArray(0),
+            status = HttpStatusCode.NoContent
+        )
+        return
+    }
     call.respond(
-        status = responseCode,
+        status = HttpStatusCode.OK,
         TextContent(customConverter(history), ContentType.Application.Json)
     )
 }
@@ -472,13 +475,16 @@ private suspend fun historyIncoming(call: ApplicationCall) {
             }
         }
     }
-    val responseCode = if (history.incoming_transactions.size == 0)
-        HttpStatusCode.NoContent else
-            HttpStatusCode.OK
+    if (history.incoming_transactions.size == 0) {
+        call.respondBytes(
+            bytes = ByteArray(0),
+            status = HttpStatusCode.NoContent
+        )
+        return
+    }
     return call.respond(
-        status = responseCode,
-        TextContent(customConverter(history),
-            ContentType.Application.Json)
+        status = HttpStatusCode.OK,
+        TextContent(customConverter(history), ContentType.Application.Json)
     )
 }
 
