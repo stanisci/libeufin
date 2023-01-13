@@ -43,9 +43,7 @@ val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 const val NEXUS_DB_ENV_VAR_NAME = "LIBEUFIN_NEXUS_DB_CONNECTION"
 
 class NexusCommand : CliktCommand() {
-    init {
-        versionOption(getVersion())
-    }
+    init { versionOption(getVersion()) }
     override fun run() = Unit
 }
 
@@ -79,7 +77,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
         startOperationScheduler(client)
         if (withUnixSocket != null) {
             startServer(
-                withUnixSocket ?: throw Exception("Could not use the Unix domain socket path value!"),
+                withUnixSocket!!,
                 app = nexusApp
             )
             exitProcess(0)
@@ -132,7 +130,7 @@ class Superuser : CliktCommand("Add superuser or change pw") {
                 }
             } else {
                 if (!user.superuser) {
-                    println("Can only change password for superuser with this command.")
+                    System.err.println("Can only change password for superuser with this command.")
                     throw ProgramResult(1)
                 }
                 user.passwordHash = hashedPw

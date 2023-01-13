@@ -102,7 +102,7 @@ class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.
                     DemobankConfigsTable.name eq demobank
                 }.firstOrNull()
                 if (maybeDemobank == null) {
-                    println("Error, demobank ${demobank} not found.")
+                    System.err.println("Error, demobank $demobank not found.")
                     exitProcess(1)
                 }
                 maybeDemobank.suggestedExchangeBaseUrl = exchangeBaseUrl
@@ -112,9 +112,7 @@ class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.
     }
 }
 
-class Config : CliktCommand(
-    "Insert one configuration (a.k.a. demobank) into the database."
-) {
+class Config : CliktCommand("Insert one configuration (a.k.a. demobank) into the database.") {
     init {
         context {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
@@ -147,7 +145,7 @@ class Config : CliktCommand(
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         if (nameArgument != "default") {
-            println("This version admits only the 'default' name")
+            System.err.println("This version admits only the 'default' name")
             exitProcess(1)
         }
         execThrowableOrTerminate {
@@ -244,8 +242,8 @@ class Camt053Tick : CliktCommand(
                     newStatements[accountIter.label]?.add(
                         getHistoryElementFromTransactionRow(it)
                     ) ?: run {
-                        logger.warn("Array operation failed while building statements for account: ${accountIter.label}")
-                        println("Fatal array error while building the statement, please report.")
+                        logger.error("Array operation failed while building statements for account: ${accountIter.label}")
+                        System.err.println("Fatal array error while building the statement, please report.")
                         exitProcess(1)
                     }
                 }
@@ -301,7 +299,7 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
             System.err.println(e.message)
             exitProcess(1)
         } catch (e: Exception) {
-            System.err.println(e)
+            System.err.println(e.message)
             exitProcess(1)
         }
     }
@@ -313,7 +311,6 @@ class ResetTables : CliktCommand("Drop all the tables from the database") {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
         }
     }
-
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         execThrowableOrTerminate {
@@ -351,7 +348,7 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         WITH_AUTH = auth
         setLogLevel(logLevel)
         if (WITH_AUTH && adminPassword == null) {
-            println("Error: auth is enabled, but env LIBEUFIN_SANDBOX_ADMIN_PASSWORD is not."
+            System.err.println("Error: auth is enabled, but env LIBEUFIN_SANDBOX_ADMIN_PASSWORD is not."
             + " (Option --no-auth exists for tests)")
             exitProcess(1)
         }
@@ -359,13 +356,13 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         // Refuse to operate without a 'default' demobank.
         val demobank = getDemobank("default")
         if (demobank == null) {
-            println("Sandbox cannot operate without a 'default' demobank.")
-            println("Please make one with the 'libeufin-sandbox config' command.")
+            System.err.println("Sandbox cannot operate without a 'default' demobank.")
+            System.err.println("Please make one with the 'libeufin-sandbox config' command.")
             exitProcess(1)
         }
         if (withUnixSocket != null) {
             startServer(
-                withUnixSocket ?: throw Exception("Could not use the Unix domain socket path value!"),
+                withUnixSocket!!,
                 app = sandboxApp
             )
             exitProcess(0)
@@ -429,10 +426,7 @@ fun ensureNonNull(param: String?): String {
 }
 
 class SandboxCommand : CliktCommand(invokeWithoutSubcommand = true, printHelpOnEmptyArgs = true) {
-    init {
-        versionOption(getVersion())
-    }
-
+    init { versionOption(getVersion()) }
     override fun run() = Unit
 }
 
