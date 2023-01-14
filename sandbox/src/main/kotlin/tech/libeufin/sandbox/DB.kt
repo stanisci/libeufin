@@ -513,7 +513,9 @@ fun dbDropTables(dbConnectionString: String) {
             BankAccountReportsTable,
             BankAccountStatementsTable,
             DemobankConfigsTable,
-            TalerWithdrawalsTable
+            TalerWithdrawalsTable,
+            DemobankCustomersTable,
+            CashoutOperationsTable
         )
     }
 }
