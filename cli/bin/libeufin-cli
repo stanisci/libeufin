@@ -173,7 +173,7 @@ def change_password(obj, username, new_password):
     check_response_status(resp)
 
 
-@users.command("create", help="Create a new user")
+@users.command("create", help="Create a new user without superuser privileges")
 @click.argument("username")
 @click.option(
     "--password",
