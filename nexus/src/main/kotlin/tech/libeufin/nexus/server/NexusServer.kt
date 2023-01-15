@@ -168,7 +168,7 @@ val nexusApp: Application.() -> Unit = {
     }
     install(StatusPages) {
         exception<NexusError> { call, cause ->
-            logger.error("Caught exception while handling '${call.request.uri} (${cause.reason})")
+            logger.error("Caught exception while handling '${call.request.uri} (${cause.message})")
             call.respond(
                 status = cause.statusCode,
                 message = ErrorResponse(
@@ -179,7 +179,7 @@ val nexusApp: Application.() -> Unit = {
             )
         }
         exception<JsonMappingException> { call, cause ->
-            logger.error("Exception while handling '${call.request.uri}'", cause)
+            logger.error("Exception while handling '${call.request.uri}'", cause.message)
             call.respond(
                 HttpStatusCode.BadRequest,
                 message = ErrorResponse(
@@ -190,7 +190,7 @@ val nexusApp: Application.() -> Unit = {
             )
         }
         exception<UtilError> { call, cause ->
-            logger.error("Exception while handling '${call.request.uri}'", cause)
+            logger.error("Exception while handling '${call.request.uri}'", cause.message)
             call.respond(
                 cause.statusCode,
                 message = ErrorResponse(
@@ -201,7 +201,7 @@ val nexusApp: Application.() -> Unit = {
             )
         }
         exception<EbicsProtocolError> { call, cause ->
-            logger.error("Caught exception while handling '${call.request.uri}' (${cause.reason})")
+            logger.error("Caught exception while handling '${call.request.uri}' (${cause.message})")
             call.respond(
                 cause.httpStatusCode,
                 message = ErrorResponse(
@@ -223,7 +223,7 @@ val nexusApp: Application.() -> Unit = {
             )
         }
         exception<Exception> { call, cause ->
-            logger.error("Uncaught exception while handling '${call.request.uri}'")
+            logger.error("Uncaught exception while handling '${call.request.uri}'", cause.message)
             cause.printStackTrace()
             call.respond(
                 HttpStatusCode.InternalServerError,
