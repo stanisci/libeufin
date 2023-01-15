@@ -223,7 +223,10 @@ val nexusApp: Application.() -> Unit = {
             )
         }
         exception<Exception> { call, cause ->
-            logger.error("Uncaught exception while handling '${call.request.uri}'", cause.message)
+            logger.error(
+                "Uncaught exception while handling '${call.request.uri}'",
+                cause.stackTraceToString()
+            )
             cause.printStackTrace()
             call.respond(
                 HttpStatusCode.InternalServerError,
