@@ -353,7 +353,7 @@ class NexusContext:
         val = os.environ.get("LIBEUFIN_NEXUS_URL")
         if not val:
             raise click.UsageError(
-                "nexus URL must be given as an argument or in LIBEUFIN_NEXUS_URL"
+                "nexus URL not found in LIBEUFIN_NEXUS_URL"
             )
         self._nexus_base_url = val
         return val
