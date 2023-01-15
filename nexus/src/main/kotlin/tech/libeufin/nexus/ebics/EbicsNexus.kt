@@ -205,6 +205,7 @@ fun Route.ebicsBankProtocolRoutes(client: HttpClient) {
 
 fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
     post("/send-ini") {
+        requireSuperuser(call.request)
         val subscriber = transaction {
             val conn = requireBankConnection(call, "connid")
             if (conn.type != "ebics") {
@@ -220,6 +221,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
     }
 
     post("/send-hia") {
+        requireSuperuser(call.request)
         val subscriber = transaction {
             val conn = requireBankConnection(call, "connid")
             if (conn.type != "ebics") {
@@ -232,6 +234,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
     }
 
     post("/send-hev") {
+        requireSuperuser(call.request)
         val subscriber = transaction {
             val conn = requireBankConnection(call, "connid")
             if (conn.type != "ebics") {
@@ -244,6 +247,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
     }
 
     post("/send-hpb") {
+        requireSuperuser(call.request)
         val subscriberDetails = transaction {
             val conn = requireBankConnection(call, "connid")
             if (conn.type != "ebics") {
@@ -264,8 +268,8 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
 
     // Directly import accounts.  Used for testing.
     post("/import-accounts") {
+        requireSuperuser(call.request)
         val subscriberDetails = transaction {
-            authenticateRequest(call.request)
             val conn = requireBankConnection(call, "connid")
             if (conn.type != "ebics") {
                 throw NexusError(HttpStatusCode.BadRequest, "bank connection is not of type 'ebics'")
@@ -313,6 +317,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
     }
 
     post("/download/{msgtype}") {
+        requireSuperuser(call.request)
         val orderType = requireNotNull(call.parameters["msgtype"]).uppercase(Locale.ROOT)
         if (orderType.length != 3) {
             throw NexusError(HttpStatusCode.BadRequest, "ebics order type must be three characters")

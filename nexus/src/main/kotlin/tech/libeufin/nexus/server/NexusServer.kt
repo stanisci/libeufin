@@ -359,10 +359,10 @@ val nexusApp: Application.() -> Unit = {
 
         // Add a new ordinary user in the system (requires superuser privileges)
         post("/users") {
+            requireSuperuser(call.request)
             val body = call.receive<CreateUserRequest>()
             val requestedUsername = requireValidResourceName(body.username)
             transaction {
-                requireSuperuser(call.request)
                 // check if username is available
                 val checkUsername = NexusUserEntity.find {
                     NexusUsersTable.username eq requestedUsername
@@ -400,10 +400,9 @@ val nexusApp: Application.() -> Unit = {
 
         // Shows the bank accounts belonging to the requesting user.
         get("/bank-accounts") {
+            requireSuperuser(call.request)
             val bankAccounts = BankAccounts()
             transaction {
-                authenticateRequest(call.request)
-                // FIXME(dold): Only return accounts the user has at least read access to?
                 NexusBankAccountEntity.all().forEach {
                     bankAccounts.accounts.add(
                         BankAccount(
@@ -458,7 +457,6 @@ val nexusApp: Application.() -> Unit = {
             val schedSpec = call.receive<CreateAccountTaskRequest>()
             val accountId = ensureNonNull(call.parameters["accountId"])
             transaction {
-                authenticateRequest(call.request)
                 NexusBankAccountEntity.findByName(accountId)
                     ?: throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
                 try {
@@ -577,9 +575,6 @@ val nexusApp: Application.() -> Unit = {
         post("/bank-accounts/{accountid}/payment-initiations/{uuid}/submit") {
             requireSuperuser(call.request)
             val uuid = ensureLong(call.parameters["uuid"])
-            transaction {
-                authenticateRequest(call.request)
-            }
             submitPaymentInitiation(client, uuid)
             call.respondText("Payment $uuid submitted")
             return@post
@@ -588,9 +583,6 @@ val nexusApp: Application.() -> Unit = {
         post("/bank-accounts/{accountid}/submit-all-payment-initiations") {
             requireSuperuser(call.request)
             val accountId = ensureNonNull(call.parameters["accountid"])
-            transaction {
-                authenticateRequest(call.request)
-            }
             submitAllPaymentInitiations(client, accountId)
             call.respond(object {})
             return@post
@@ -676,7 +668,6 @@ val nexusApp: Application.() -> Unit = {
                 throw NexusError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
             }
             val res = transaction {
-                authenticateRequest(call.request)
                 val bankAccount = NexusBankAccountEntity.findByName(accountId)
                 if (bankAccount == null) {
                     throw NexusError(HttpStatusCode.NotFound, "unknown bank account ($accountId)")
@@ -733,7 +724,6 @@ val nexusApp: Application.() -> Unit = {
             val bankAccountId = expectNonNull(call.parameters["accountid"])
             val ret = Transactions()
             transaction {
-                authenticateRequest(call.request)
                 val bankAccount = NexusBankAccountEntity.findByName(bankAccountId)
                 if (bankAccount == null) {
                     throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
@@ -823,7 +813,6 @@ val nexusApp: Application.() -> Unit = {
 
         post("/bank-connections/{connectionName}/export-backup") {
             requireSuperuser(call.request)
-            transaction { authenticateRequest(call.request) }
             val body = call.receive<BackupRequestJson>()
             val response = run {
                 val conn = requireBankConnection(call, "connectionName")
@@ -839,7 +828,6 @@ val nexusApp: Application.() -> Unit = {
         post("/bank-connections/{connectionName}/connect") {
             requireSuperuser(call.request)
             val conn = transaction {
-                authenticateRequest(call.request)
                 requireBankConnection(call, "connectionName")
             }
             val plugin = getConnectionPlugin(conn.type)
@@ -850,7 +838,6 @@ val nexusApp: Application.() -> Unit = {
         get("/bank-connections/{connectionName}/keyletter") {
             requireSuperuser(call.request)
             val conn = transaction {
-                authenticateRequest(call.request)
                 requireBankConnection(call, "connectionName")
             }
             val pdfBytes = getConnectionPlugin(conn.type).exportAnalogDetails(conn)
@@ -1001,7 +988,6 @@ val nexusApp: Application.() -> Unit = {
             post("/fetch-accounts") {
                 requireSuperuser(call.request)
                 val conn = transaction {
-                    authenticateRequest(call.request)
                     requireBankConnection(call, "connid")
                 }
                 getConnectionPlugin(conn.type).fetchAccounts(client, conn.connectionId)

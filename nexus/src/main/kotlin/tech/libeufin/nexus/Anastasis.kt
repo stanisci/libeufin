@@ -63,9 +63,7 @@ fun anastasisFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDeta
     }
 }
 
-/**
- * Handle a /taler-wire-gateway/history/incoming request.
- */
+// Handle a /taler-wire-gateway/history/incoming request.
 private suspend fun historyIncoming(call: ApplicationCall) {
     val facadeId = expectNonNull(call.parameters["fcid"])
     call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.anastasis.history"))
