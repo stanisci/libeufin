@@ -377,7 +377,7 @@ class NexusContext:
         val = os.environ.get("LIBEUFIN_NEXUS_PASSWORD")
         if not val:
             raise click.UsageError(
-                "nexus password must be given as an argument or in LIBEUFIN_NEXUS_PASSWORD"
+                "Could not find the password in LIBEUFIN_NEXUS_PASSWORD"
             )
         self._nexus_password = val
         return val
