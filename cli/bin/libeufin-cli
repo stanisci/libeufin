@@ -365,7 +365,7 @@ class NexusContext:
         val = os.environ.get("LIBEUFIN_NEXUS_USERNAME")
         if not val:
             raise click.UsageError(
-                "nexus username must be given as an argument or in LIBEUFIN_NEXUS_USERNAME"
+                "Could not find the username in LIBEUFIN_NEXUS_USERNAME"
             )
         self._nexus_username = val
         return val
