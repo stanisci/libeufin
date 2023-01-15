@@ -5,6 +5,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.*
 
@@ -60,6 +61,48 @@ class SandboxAccessApiTest {
             }
         }
     }
+    // Tests for #7482
+    @Test
+    fun highAmountWithdraw() {
+        withTestDatabase {
+            prepSandboxDb()
+            val b = getDefaultDemobank()
+            testApplication {
+                application(sandboxApp)
+                transaction { b.usersDebtLimit = 900000000 }
+                // Create the operation.
+                val r = client.post("/demobanks/default/access-api/accounts/foo/withdrawals") {
+                    expectSuccess = true
+                    setBody("{\"amount\": \"TESTKUDOS:500000000\"}")
+                    contentType(ContentType.Application.Json)
+                    basicAuth("foo", "foo")
+                }
+                println(r.bodyAsText())
+                val j = mapper.readTree(r.readBytes())
+                val op = j.get("withdrawal_id").asText()
+                // Select exchange and specify a reserve pub.
+                client.post("/demobanks/default/integration-api/withdrawal-operation/$op") {
+                    expectSuccess = true
+                    contentType(ContentType.Application.Json)
+                    setBody("""{
+                        "selected_exchange":"payto://iban/${BAR_USER_IBAN}",
+                        "reserve_pub": "not-used"
+                    }""".trimIndent())
+                }
+                // Confirm the operation.
+                client.post("/demobanks/default/access-api/accounts/foo/withdrawals/$op/confirm") {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                // Check the withdrawal amount in the unique transaction.
+                val t = client.get("/demobanks/default/access-api/accounts/foo/transactions") {
+                    basicAuth("foo", "foo")
+                }
+                val amount = mapper.readTree(t.readBytes()).get("transactions").get(0).get("amount").asText()
+                assert(amount == "500000000")
+            }
+        }
+    }
     @Test
     fun withdrawWithHighBalance() {
         withTestDatabase {
@@ -81,7 +124,6 @@ class SandboxAccessApiTest {
             testApplication {
                 this.application(sandboxApp)
                 runBlocking {
-                    // Normal, successful withdrawal.
                     client.post("/demobanks/default/access-api/accounts/foo/withdrawals") {
                         expectSuccess = true
                         setBody("{\"amount\": \"TESTKUDOS:1\"}")

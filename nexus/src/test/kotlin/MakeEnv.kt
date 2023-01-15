@@ -132,6 +132,7 @@ fun prepSandboxDb() {
             name = "default"
             this.withSignupBonus = false
             captchaUrl = "http://example.com/" // unused
+            suggestedExchangePayto = "payto://iban/${BAR_USER_IBAN}"
         }
         BankAccountEntity.new {
             iban = BANK_IBAN
