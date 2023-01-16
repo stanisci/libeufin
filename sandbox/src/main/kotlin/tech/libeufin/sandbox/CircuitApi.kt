@@ -141,7 +141,7 @@ fun isTanChannelSupported(tanChannel: String): Boolean {
 /**
  * Runs the command and returns True/False if that succeeded/failed.
  * A failed command causes "500 Internal Server Error" to be responded
- * along a "/confirm" call.  'address' is a phone number or a e-mail address,
+ * along a cash-out creation.  'address' is a phone number or a e-mail address,
  * according to which TAN channel is used.  'message' carries the TAN.
  *
  * The caller is expected to manage the exceptions thrown by this function.
