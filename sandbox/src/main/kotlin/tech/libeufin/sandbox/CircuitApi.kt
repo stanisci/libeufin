@@ -144,7 +144,7 @@ fun isTanChannelSupported(tanChannel: String): Boolean {
  * along a "/confirm" call.  'address' is a phone number or a e-mail address,
  * according to which TAN channel is used.  'message' carries the TAN.
  *
- * The caller should try and catch this function.
+ * The caller is expected to manage the exceptions thrown by this function.
  */
 fun runTanCommand(command: String, address: String, message: String): Boolean {
     val prep = ProcessBuilder(command, address)
