@@ -5,14 +5,11 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.utils.io.core.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.sandbox.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
-import java.io.BufferedWriter
 import java.io.File
 import java.io.InputStreamReader
-import java.io.OutputStreamWriter
 import java.math.BigDecimal
 import java.math.MathContext
 import java.util.*
@@ -137,6 +134,9 @@ fun isTanChannelSupported(tanChannel: String): Boolean {
     }
     return false
 }
+
+var EMAIL_TAN_CMD: String? = null
+var SMS_TAN_CMD: String? = null
 
 /**
  * Runs the command and returns True/False if that succeeded/failed.
@@ -345,10 +345,44 @@ fun circuitApi(circuitRoute: Route) {
         // Send the TAN.
         when (tanChannel) {
             SupportedTanChannels.EMAIL.name -> {
-                // TBD
+                val isSuccessful = try {
+                    runTanCommand(
+                        command = EMAIL_TAN_CMD ?: throw internalServerError(
+                            "E-mail TAN supported but the command" +
+                                    " was not found.  See the --email-tan option from 'serve'"
+                        ),
+                        address = customer.email ?: throw internalServerError(
+                            "Customer has no e-mail address, but previous check should" +
+                                    " have detected it!"
+                        ),
+                        message = op.tan
+                    )
+                } catch (e: Exception) {
+                    throw internalServerError("E-mail TAN command threw exception: ${e.message}")
+                }
+                if (!isSuccessful)
+                    throw internalServerError("E-mail TAN command failed.")
             }
             SupportedTanChannels.SMS.name -> {
-                // TBD
+                val isSuccessful = try {
+                    runTanCommand(
+                        command = SMS_TAN_CMD ?: throw internalServerError(
+                            "SMS TAN supported but the command" +
+                                    " was not found.  See the --sms-tan option from 'serve'"
+                        ),
+                        address = customer.email ?: throw internalServerError(
+                        "Customer has no phone number, but previous check should" +
+                                " have detected it!"
+
+                        ),
+                        message = op.tan
+                    )
+
+                } catch (e: Exception) {
+                    throw internalServerError("SMS TAN command threw exception: ${e.message}")
+                }
+                if (!isSuccessful)
+                    throw internalServerError("SMS TAN command failed.")
             }
             SupportedTanChannels.FILE.name -> {
                 try {
@@ -461,9 +495,11 @@ fun circuitApi(circuitRoute: Route) {
         if (req.contact_data.email != null) {
             if (!checkEmailAddress(req.contact_data.email))
                 throw badRequest("Invalid e-mail address: ${req.contact_data.email}.  Won't register")
-            val maybeEmailConflict = DemobankCustomerEntity.find {
-                DemobankCustomersTable.email eq req.contact_data.email
-            }.firstOrNull()
+            val maybeEmailConflict = transaction {
+                DemobankCustomerEntity.find {
+                    DemobankCustomersTable.email eq req.contact_data.email
+                }.firstOrNull()
+            }
             // Warning since two individuals claimed one same e-mail address.
             if (maybeEmailConflict != null)
                 throw conflict("Won't register user ${req.username}: e-mail conflict on ${req.contact_data.email}")
@@ -472,10 +508,11 @@ fun circuitApi(circuitRoute: Route) {
             if (!checkPhoneNumber(req.contact_data.phone))
                 throw badRequest("Invalid phone number: ${req.contact_data.phone}.  Won't register")
 
-            val maybePhoneConflict = DemobankCustomerEntity.find {
-                DemobankCustomersTable.phone eq req.contact_data.phone
-            }.firstOrNull()
-
+            val maybePhoneConflict = transaction {
+                DemobankCustomerEntity.find {
+                    DemobankCustomersTable.phone eq req.contact_data.phone
+                }.firstOrNull()
+            }
             // Warning since two individuals claimed one same phone number.
             if (maybePhoneConflict != null)
                 throw conflict("Won't register user ${req.username}: phone conflict on ${req.contact_data.phone}")

@@ -344,6 +344,13 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         help = "Bind the Sandbox to the Unix domain socket at PATH.  Overrides" +
                 " --port, when both are given", metavar = "PATH"
     )
+    private val smsTan by option(help = "Command to send the TAN via SMS." +
+            "  The command gets the TAN via STDIN and the phone number" +
+            " as its first parameter"
+    )
+    private val emailTan by option(help = "Command to send the TAN via e-mail." +
+            "  The command gets the TAN via STDIN and the e-mail address as its" +
+            " first parameter.")
     override fun run() {
         WITH_AUTH = auth
         setLogLevel(logLevel)
@@ -367,6 +374,8 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             )
             exitProcess(0)
         }
+        SMS_TAN_CMD = smsTan
+        EMAIL_TAN_CMD = emailTan
         serverMain(port, localhostOnly, ipv4Only)
     }
 }
