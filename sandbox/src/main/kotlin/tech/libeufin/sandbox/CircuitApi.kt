@@ -5,13 +5,19 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.utils.io.core.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.sandbox.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
+import java.io.BufferedWriter
 import java.io.File
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
 import java.math.BigDecimal
 import java.math.MathContext
 import java.util.*
+import java.util.concurrent.TimeUnit
+import kotlin.text.toByteArray
 
 // CIRCUIT API TYPES
 data class CircuitCashoutRequest(
@@ -130,6 +136,42 @@ fun isTanChannelSupported(tanChannel: String): Boolean {
         if (tanChannel.uppercase() == it.name) return true
     }
     return false
+}
+
+/**
+ * Runs the command and returns True/False if that succeeded/failed.
+ * A failed command causes "500 Internal Server Error" to be responded
+ * along a "/confirm" call.  'address' is a phone number or a e-mail address,
+ * according to which TAN channel is used.  'message' carries the TAN.
+ *
+ * The caller should try and catch this function.
+ */
+fun runTanCommand(command: String, address: String, message: String): Boolean {
+    val prep = ProcessBuilder(command, address)
+    prep.redirectErrorStream(true) // merge STDOUT and STDERR
+    val proc = prep.start()
+    proc.outputStream.write(message.toByteArray())
+    proc.outputStream.flush(); proc.outputStream.close()
+    var isSuccessful = false
+    // Wait the command to finish.
+    proc.waitFor(10L, TimeUnit.SECONDS)
+    // Check if timed out.  Kill if so.
+    if (proc.isAlive) {
+        logger.error("TAN command '$command' timed out, killing it.")
+        proc.destroy()
+        // Check if exited gracefully.  Kill forcibly if not.
+        proc.waitFor(5L, TimeUnit.SECONDS)
+        if (proc.isAlive) {
+            logger.error("TAN command '$command' didn't terminate after killing it.  Try forcefully.")
+            proc.destroyForcibly()
+        }
+    }
+    // Check if successful.  Switch the state if so.
+    if (proc.exitValue() == 0) isSuccessful = true
+    // Log STDOUT and STDERR if failed.
+    if (!isSuccessful)
+        logger.error(InputStreamReader(proc.inputStream).readText())
+    return isSuccessful
 }
 
 fun circuitApi(circuitRoute: Route) {

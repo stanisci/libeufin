@@ -10,8 +10,8 @@ import io.ktor.util.*
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
-import tech.libeufin.nexus.server.client
 import tech.libeufin.sandbox.*
+import java.io.File
 
 class SandboxCircuitApiTest {
     // Get /config, fails if != 200.
@@ -280,5 +280,24 @@ class SandboxCircuitApiTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun tanCommandTest() {
+        /**
+         * 'tee' allows to test the SMS/e-mail command execution
+         * because it relates to STDIN and the first command line argument
+         * in the same way the SMS/e-mail command is expected to.
+         */
+        val tanLocation = File("/tmp/libeufin-tan-cmd-test.txt")
+        val tanContent = "libeufin"
+        if (tanLocation.exists()) tanLocation.delete()
+        runTanCommand(
+            command = "tee",
+            address = tanLocation.path,
+            message = tanContent
+        )
+        val maybeTan = tanLocation.readText()
+        assert(maybeTan == tanContent)
     }
 }
