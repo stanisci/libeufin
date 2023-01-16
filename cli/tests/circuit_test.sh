@@ -55,7 +55,7 @@ echo -n Create a cash-out operation...
 CASHOUT_RESP=$(./libeufin-cli \
   sandbox --sandbox-url http://localhost:5000/ \
   demobank \
-  circuit-cashout --amount-debit=EUR:1 --amount-credit=CHF:0.95)
+  circuit-cashout --tan-channel file --amount-debit=EUR:1 --amount-credit=CHF:0.95)
 echo DONE
 echo -n Extract the cash-out UUID...
 CASHOUT_UUID=$(echo ${CASHOUT_RESP} | jq --raw-output '.uuid')
@@ -85,7 +85,7 @@ echo -n Create another cash-out operation...
 CASHOUT_RESP=$(./libeufin-cli \
   sandbox --sandbox-url http://localhost:5000/ \
   demobank \
-  circuit-cashout --amount-debit=EUR:1 --amount-credit=CHF:0.95)
+  circuit-cashout --tan-channel file --amount-debit=EUR:1 --amount-credit=CHF:0.95)
 CASHOUT_UUID=$(echo ${CASHOUT_RESP} | jq --raw-output '.uuid')
 echo DONE
 echo -n Confirm the last cash-out operation...

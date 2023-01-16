@@ -108,7 +108,8 @@ class SandboxCircuitApiTest {
                     basicAuth("shop", "secret")
                     setBody("""{
                         "amount_debit": "TESTKUDOS:20",
-                        "amount_credit": "KUDOS:19"
+                        "amount_credit": "KUDOS:19",
+                        "tan_channel": "file"
                     }""".trimIndent())
                 }
                 assert(R.status.value == HttpStatusCode.Accepted.value)
@@ -146,7 +147,8 @@ class SandboxCircuitApiTest {
                     basicAuth("shop", "secret")
                     setBody("""{
                         "amount_debit": "TESTKUDOS:20",
-                        "amount_credit": "KUDOS:19"
+                        "amount_credit": "KUDOS:19",
+                        "tan_channel": "file"
                     }""".trimIndent())
                 }
                 assert(R.status.value == HttpStatusCode.Accepted.value)

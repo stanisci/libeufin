@@ -515,7 +515,7 @@ val sandboxApp: Application.() -> Unit = {
         }
         // Not necessarily the bank's fault.
         exception<SandboxError> { call, cause ->
-            logger.debug("Exception while handling '${call.request.uri}', ${cause.reason}")
+            logger.error("Exception while handling '${call.request.uri}', ${cause.reason}")
             call.respond(
                 cause.statusCode,
                 SandboxErrorJson(
@@ -528,7 +528,7 @@ val sandboxApp: Application.() -> Unit = {
         }
         // Not necessarily the bank's fault.
         exception<UtilError> { call, cause ->
-            logger.debug("Exception while handling '${call.request.uri}', ${cause.reason}")
+            logger.error("Exception while handling '${call.request.uri}', ${cause.reason}")
             call.respond(
                 cause.statusCode,
                 SandboxErrorJson(
@@ -557,7 +557,7 @@ val sandboxApp: Application.() -> Unit = {
                     "Did not find bad request details."
                 )
             }
-            logger.debug(errorMessage)
+            logger.error(errorMessage)
             call.respond(
                 HttpStatusCode.BadRequest,
                 SandboxErrorJson(
