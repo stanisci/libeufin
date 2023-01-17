@@ -20,11 +20,6 @@ if (!JavaVersion.current().isJava11Compatible()){
         "or later (your version is java ${JavaVersion.current()})")
 }
 
-java {
-    withJavadocJar()
-    withSourcesJar()
-}
-
 allprojects {
     ext.set("ktor_version", "2.2.1")
     ext.set("ktor_auth_version", "1.6.8")
@@ -41,7 +36,6 @@ idea {
         excludeDirs += file("frontend")
     }
 }
-
 
 task versionFile() {
     new File("${projectDir}/util/src/main/resources", "version.txt").text = getRootProject().version
@@ -68,7 +62,7 @@ task dist(type: Zip) {
     subprojects.each {
         if (it.name == "nexus" || it.name == "sandbox") {
             Task t = it.tasks.getByName("installShadowDist")
-            dependsOn(t)
+            dependsOn(t) // invokes the task 't'
         }
     }
     from("nexus/build/install/nexus-shadow") {
@@ -86,12 +80,28 @@ task dist(type: Zip) {
     into(topDir)
 }
 
+task libeufinSrcJar(type: Jar) {
+    archiveClassifier = "sources"
+    from project("sandbox").sourceSets.main.java.srcDirs
+    from project("nexus").sourceSets.main.java.srcDirs
+    from("sandbox") {
+        include("build.gradle")
+        into("sandbox")
+    }
+    from("nexus") {
+        include("build.gradle")
+        into("nexus")
+    }
+    from "build.gradle"
+    from "settings.gradle"
+}
 
 publishing {
     publications {
         mavenJava(MavenPublication) {
             artifactId = 'libeufin'
-            from components.java
+            // from components.java
+            artifact libeufinSrcJar
             versionMapping {
                 usage('java-api') {
                     fromResolutionOf('runtimeClasspath')
