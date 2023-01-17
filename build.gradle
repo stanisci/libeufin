@@ -1,15 +1,28 @@
+// This file is in the public domain.
+
 import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
     // id 'org.jetbrains.kotlin.jvm' version '1.5.30'
     id 'org.jetbrains.kotlin.jvm' version '1.7.22'
     id 'idea'
+    id 'java-library'
+    id 'maven-publish'
+    // id 'signing'
 }
+
+group = 'tech.libeufin'
+version = '0.9.1'
 
 if (!JavaVersion.current().isJava11Compatible()){
     throw new GradleException(
         "This build must be run with java 11 " +
         "or later (your version is java ${JavaVersion.current()})")
+}
+
+java {
+    withJavadocJar()
+    withSourcesJar()
 }
 
 allprojects {
@@ -29,7 +42,6 @@ idea {
     }
 }
 
-setVersion("0.0.1-dev.3")
 
 task versionFile() {
     new File("${projectDir}/util/src/main/resources", "version.txt").text = getRootProject().version
@@ -72,4 +84,57 @@ task dist(type: Zip) {
       rename { "bin/libeufin-cli" }
     }
     into(topDir)
+}
+
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = 'libeufin'
+            from components.java
+            versionMapping {
+                usage('java-api') {
+                    fromResolutionOf('runtimeClasspath')
+                }
+                usage('java-runtime') {
+                    fromResolutionResult()
+                }
+            }
+            pom {
+                name = 'libeufin'
+                description = 'Implementation of EBICS'
+                url = 'https://libeufin.tech/'
+                licenses {
+                    license {
+                        name = 'GNU Affero General Public License, Version 3.0+'
+                        url = 'https://www.gnu.org/licenses/agpl-3.0.txt'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://git.taler.net/libeufin.git'
+                    developerConnection = 'scm:git:ssh://git.taler.net/libeufin.git'
+                    url = 'https://git.taler.net/libeufin.git/'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            // change URLs to point to your repos, e.g. http://my.org/repo
+            def releasesRepoUrl = layout.buildDirectory.dir('repos/releases')
+            def snapshotsRepoUrl = layout.buildDirectory.dir('repos/snapshots')
+            url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+        }
+    }
+}
+
+//signing {
+//    sign publishing.publications.mavenJava
+//}
+
+
+javadoc {
+    if(JavaVersion.current().isJava9Compatible()) {
+        options.addBooleanOption('html5', true)
+    }
 }
