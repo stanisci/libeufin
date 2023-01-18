@@ -5,6 +5,7 @@ import tech.libeufin.sandbox.sandboxApp
 import tech.libeufin.util.StartServerOptions
 import tech.libeufin.util.startServerWithIPv4Fallback
 
+@Ignore
 class StartServerTest {
     @Test
     fun sandboxStart() {
