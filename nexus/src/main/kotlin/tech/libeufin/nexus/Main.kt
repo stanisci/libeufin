@@ -24,7 +24,6 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.nexus.server.serverMain
 import tech.libeufin.util.CryptoUtil.hashpw
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.github.ajalt.clikt.parameters.types.int
@@ -82,7 +81,15 @@ class Serve : CliktCommand("Run nexus HTTP server") {
             )
             exitProcess(0)
         }
-        serverMain(port, localhostOnly, ipv4Only)
+        logger.info("Starting Nexus on port ${this.port}")
+        startServerWithIPv4Fallback(
+            options = StartServerOptions(
+                ipv4OnlyOpt = this.ipv4Only,
+                localhostOnlyOpt = this.localhostOnly,
+                portOpt = this.port
+            ),
+            app = nexusApp
+        )
     }
 }
 

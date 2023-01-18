@@ -60,7 +60,6 @@ import org.w3c.dom.Document
 import startServer
 import tech.libeufin.util.*
 import java.math.BigDecimal
-import java.net.BindException
 import java.net.URL
 import java.security.interfaces.RSAPublicKey
 import javax.xml.bind.JAXBContext
@@ -355,8 +354,11 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         WITH_AUTH = auth
         setLogLevel(logLevel)
         if (WITH_AUTH && adminPassword == null) {
-            System.err.println("Error: auth is enabled, but env LIBEUFIN_SANDBOX_ADMIN_PASSWORD is not."
-            + " (Option --no-auth exists for tests)")
+            System.err.println(
+                "Error: auth is enabled, but env " +
+                        "LIBEUFIN_SANDBOX_ADMIN_PASSWORD is not."
+                        + " (Option --no-auth exists for tests)"
+            )
             exitProcess(1)
         }
         execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)) }
@@ -376,7 +378,16 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         }
         SMS_TAN_CMD = smsTan
         EMAIL_TAN_CMD = emailTan
-        serverMain(port, localhostOnly, ipv4Only)
+
+        logger.info("Starting Sandbox on port ${this.port}")
+        startServerWithIPv4Fallback(
+            options = StartServerOptions(
+                ipv4OnlyOpt = this.ipv4Only,
+                localhostOnlyOpt = this.localhostOnly,
+                portOpt = this.port
+            ),
+            app = sandboxApp
+        )
     }
 }
 
@@ -1605,35 +1616,5 @@ val sandboxApp: Application.() -> Unit = {
                 }
             }
         }
-    }
-}
-
-fun serverMain(port: Int, localhostOnly: Boolean, ipv4Only: Boolean) {
-    val server = embeddedServer(
-        Netty,
-        environment = applicationEngineEnvironment{
-            connector {
-                this.port = port
-                this.host = if (localhostOnly) "127.0.0.1" else "0.0.0.0"
-            }
-            if (!ipv4Only) connector {
-                this.port = port
-                this.host = if (localhostOnly) "[::1]" else "[::]"
-            }
-            // parentCoroutineContext = Dispatchers.Main
-            module(sandboxApp)
-        },
-        configure = {
-            connectionGroupSize = 1
-            workerGroupSize = 1
-            callGroupSize = 1
-        }
-    )
-    logger.info("LibEuFin Sandbox running on port $port")
-    try {
-        server.start(wait = true)
-    } catch (e: BindException) {
-        logger.error(e.message)
-        exitProcess(1)
     }
 }

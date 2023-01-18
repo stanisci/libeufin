@@ -1048,26 +1048,3 @@ val nexusApp: Application.() -> Unit = {
         }
     }
 }
-fun serverMain(port: Int, localhostOnly: Boolean, ipv4Only: Boolean) {
-    val server = embeddedServer(
-        Netty,
-        environment = applicationEngineEnvironment {
-            connector {
-                this.port = port
-                this.host = if (localhostOnly) "127.0.0.1" else "0.0.0.0"
-            }
-            if (!ipv4Only) connector {
-                this.port = port
-                this.host = if (localhostOnly) "[::1]" else "[::]"
-            }
-            module(nexusApp)
-        }
-    )
-    logger.info("LibEuFin Nexus running on port $port")
-    try {
-        server.start(wait = true)
-    } catch (e: BindException) {
-        logger.error(e.message)
-        exitProcess(1)
-    }
-}
