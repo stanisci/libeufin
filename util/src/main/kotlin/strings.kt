@@ -186,7 +186,7 @@ fun parseUuid(maybeUuid: String): UUID {
     val uuid = try {
         UUID.fromString(maybeUuid)
     } catch (e: Exception) {
-        throw badRequest("$maybeUuid is invalid.")
+        throw badRequest("$maybeUuid is an invalid UUID.")
     }
     return uuid
 }
