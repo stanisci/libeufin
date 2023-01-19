@@ -167,6 +167,7 @@ fun sanityCheckOrThrow(credentials: Pair<String, String>) {
         LibeufinErrorCode.LIBEUFIN_EC_GENERIC_PARAMETER_MALFORMED
     )
 }
+
 /**
  * Sanity-check user's credentials.
  */
@@ -175,4 +176,17 @@ fun sanityCheckCredentials(credentials: Pair<String, String>): Boolean {
     if (!allowedChars.matches(credentials.first)) return false
     if (!allowedChars.matches(credentials.second)) return false
     return true
+}
+
+/**
+ * Parses string into java.util.UUID format or throws 400 Bad Request.
+ * The output is usually consumed in database queries.
+ */
+fun parseUuid(maybeUuid: String): UUID {
+    val uuid = try {
+        UUID.fromString(maybeUuid)
+    } catch (e: Exception) {
+        throw badRequest("$maybeUuid is invalid.")
+    }
+    return uuid
 }

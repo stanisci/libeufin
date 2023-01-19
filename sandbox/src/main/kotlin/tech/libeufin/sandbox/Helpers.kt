@@ -278,9 +278,10 @@ fun getDefaultDemobank(): DemobankConfigEntity {
 }
 
 fun getWithdrawalOperation(opId: String): TalerWithdrawalEntity {
+    val uuid = parseUuid(opId)
     return transaction {
         TalerWithdrawalEntity.find {
-            TalerWithdrawalsTable.wopid eq UUID.fromString(opId)
+            TalerWithdrawalsTable.wopid eq uuid
         }.firstOrNull() ?: throw SandboxError(
             HttpStatusCode.NotFound, "Withdrawal operation $opId not found."
         )

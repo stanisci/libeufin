@@ -37,8 +37,6 @@ import execThrowableOrTerminate
 import io.ktor.server.application.*
 import io.ktor.http.*
 import io.ktor.serialization.jackson.*
-import io.ktor.server.engine.*
-import io.ktor.server.netty.*
 import io.ktor.server.plugins.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.statuspages.*
@@ -1172,18 +1170,13 @@ val sandboxApp: Application.() -> Unit = {
                 }
                 post("/withdrawal-operation/{wopid}") {
                     val arg = ensureNonNull(call.parameters["wopid"])
-                    val maybeWithdrawalUUid = try {
-                        java.util.UUID.fromString(arg)
-                    } catch (e: Exception) {
-                        logger.debug(e.message)
-                        throw badRequest("Withdrawal operation UUID was invalid: $arg")
-                    }
+                    val withdrawalUuid = parseUuid(arg)
                     val body = call.receive<TalerWithdrawalSelection>()
                     val transferDone = transaction {
                         val wo = TalerWithdrawalEntity.find {
-                            TalerWithdrawalsTable.wopid eq maybeWithdrawalUUid
+                            TalerWithdrawalsTable.wopid eq withdrawalUuid
                         }.firstOrNull() ?: throw SandboxError(
-                            HttpStatusCode.NotFound, "Withdrawal operation $maybeWithdrawalUUid not found."
+                            HttpStatusCode.NotFound, "Withdrawal operation $withdrawalUuid not found."
                         )
                         if (wo.confirmationDone) {
                             return@transaction true
@@ -1216,12 +1209,7 @@ val sandboxApp: Application.() -> Unit = {
                 }
                 get("/withdrawal-operation/{wopid}") {
                     val arg = ensureNonNull(call.parameters["wopid"])
-                    val maybeWithdrawalUuid = try {
-                        java.util.UUID.fromString(arg)
-                    } catch (e: Exception) {
-                        logger.debug(e.message)
-                        throw badRequest("Withdrawal UUID invalid: $arg")
-                    }
+                    val maybeWithdrawalUuid = parseUuid(arg)
                     val maybeWithdrawalOp = transaction {
                         TalerWithdrawalEntity.find {
                             TalerWithdrawalsTable.wopid eq maybeWithdrawalUuid

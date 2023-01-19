@@ -28,6 +28,22 @@ class SandboxCircuitApiTest {
         }
     }
     @Test
+    fun badUuidTest() {
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                val R = client.post("/demobanks/default/circuit-api/cashouts/---invalid_UUID---/confirm") {
+                    expectSuccess = false
+                    basicAuth("foo", "foo")
+                    contentType(ContentType.Application.Json)
+                    setBody("{\"tan\":\"foo\"}")
+                }
+                assert(R.status.value == HttpStatusCode.BadRequest.value)
+            }
+        }
+    }
+    @Test
     fun contactDataValidation() {
         // Phone number.
         assert(checkPhoneNumber("+987"))

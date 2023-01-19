@@ -119,7 +119,7 @@ fun ApplicationRequest.getBaseUrl(): String {
  */
 fun ApplicationCall.getUriComponent(name: String): String {
     val ret: String? = this.parameters[name]
-    if (ret == null) throw internalServerError("Component $name not found in URI")
+    if (ret == null) throw badRequest("Component $name not found in URI")
     return ret
 }
 

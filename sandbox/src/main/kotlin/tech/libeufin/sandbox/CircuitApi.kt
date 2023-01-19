@@ -180,12 +180,7 @@ fun circuitApi(circuitRoute: Route) {
         call.request.basicAuth() // both admin and author allowed
         val arg = call.getUriComponent("uuid")
         // Parse and check the UUID.
-        val maybeUuid = try {
-            UUID.fromString(arg)
-        } catch (e: Exception) {
-            logger.error(e.message)
-            throw badRequest("The cash-out UUID is invalid: $arg") // global handler logs this.
-        }
+        val maybeUuid = parseUuid(arg)
         val maybeOperation = transaction {
             CashoutOperationEntity.find { uuid eq maybeUuid }.firstOrNull()
         }
@@ -210,10 +205,10 @@ fun circuitApi(circuitRoute: Route) {
         if (user == "admin" || user == "bank")
             throw conflict("Institutional user '$user' shouldn't confirm any cash-out.")
         // Get the operation identifier.
-        val operationUuid = call.getUriComponent("uuid")
+        val operationUuid = parseUuid(call.getUriComponent("uuid"))
         val op = transaction {
             CashoutOperationEntity.find {
-                uuid eq UUID.fromString(operationUuid)
+                uuid eq operationUuid
             }.firstOrNull()
         }
         // 404 if the operation is not found.
@@ -260,12 +255,7 @@ fun circuitApi(circuitRoute: Route) {
         call.request.basicAuth() // both admin and author
         val operationUuid = call.getUriComponent("uuid")
         // Parse and check the UUID.
-        val maybeUuid = try {
-            UUID.fromString(operationUuid)
-        } catch (e: Exception) {
-            logger.error(e.message)
-            throw badRequest("The cash-out UUID is invalid: $operationUuid")
-        }
+        val maybeUuid = parseUuid(operationUuid)
         // Get the operation from the database.
         val maybeOperation = transaction {
             CashoutOperationEntity.find { uuid eq maybeUuid }.firstOrNull()
