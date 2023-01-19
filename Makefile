@@ -1,6 +1,7 @@
 include build-system/config.mk
 
 escaped_pwd = $(shell pwd | sed 's/\//\\\//g')
+VERSION=0.9.1
 
 all: assemble
 install: install-nexus install-sandbox install-cli
@@ -15,6 +16,10 @@ dist:
 .PHONY: exec-arch
 exec-arch:
 	@./gradlew -q execArch
+
+.PHONY: tgz
+tgz:
+	git archive --prefix libeufin-$(VERSION)/ v$(VERSION) 
 
 .PHONY: deb
 deb: dist
