@@ -4,11 +4,17 @@ escaped_pwd = $(shell pwd | sed 's/\//\\\//g')
 
 all: assemble
 install: install-nexus install-sandbox install-cli
+git-archive-all = ./build-system/taler-build-scripts/archive-with-submodules/git_archive_all.py
 
 
 .PHONY: dist
 dist:
-	@./gradlew -q dist
+	@mkdir -p build/distributions
+	@$(git-archive-all) --include ./configure build/distributions/libeufin-$(shell ./gradlew -q libeufinVersion)-sources.tar.gz
+
+.PHONY: exec-arch
+exec-arch:
+	@./gradlew -q execArch
 
 .PHONY: deb
 deb: dist

@@ -26,7 +26,24 @@ Exporting a dist-file
 =====================
 
 $ ./bootstrap
-$ ./configure # prefix not relevant for dist.
 $ make dist
 
-The Zip file should be contained into the build/distributions/ folder.
+The TGZ file should be found at: build/distributions/libeufin-$VERSION-sources.tar.gz
+
+Exporting an archive with the three executables
+===============================================
+
+Such archive contains the compiled Sandbox and Nexus,
+and the CLI script.
+
+$ ./bootstrap # Needed to silence 'GNU make'
+$ make exec-arch
+
+Alternatively, the same archive is produced by:
+
+$ ./gradlew execArch
+
+The archive should be found at: build/distributions/libeufin-$VERSION.zip
+
+After extracting the compressed files, run the three
+executable found under the "bin/" folder.
