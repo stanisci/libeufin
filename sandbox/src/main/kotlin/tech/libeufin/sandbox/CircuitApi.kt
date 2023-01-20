@@ -1,5 +1,6 @@
 package tech.libeufin.sandbox
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.server.application.*
 import io.ktor.http.*
 import io.ktor.server.request.*
@@ -262,7 +263,32 @@ fun circuitApi(circuitRoute: Route) {
         }
         if (maybeOperation == null)
             throw notFound("Cash-out operation $operationUuid not found.")
-        call.respond(object { val status = maybeOperation.state })
+        call.respond(object {
+            val status = maybeOperation.state
+            val amount_credit = maybeOperation.amountCredit
+            val amount_debit = maybeOperation.amountDebit
+            val subject = maybeOperation.subject
+            val creation_time = maybeOperation.creationTime.toString()
+            val cashout_address = maybeOperation.tanChannel
+            val account = maybeOperation.account
+        })
+        return@get
+    }
+    // Gets the list of all the cash-out operations.
+    circuitRoute.get("/cashouts") {
+        call.request.basicAuth(onlyAdmin = true)
+        val node = jacksonObjectMapper().createObjectNode()
+        val maybeArray = node.putArray("cashouts")
+        transaction {
+            CashoutOperationEntity.all().forEach {
+                maybeArray.add(it.uuid.toString())
+            }
+        }
+        if (maybeArray.size() == 0) {
+            call.respond(HttpStatusCode.NoContent)
+            return@get
+        }
+        call.respond(node)
         return@get
     }
     // Create a cash-out operation.
@@ -325,8 +351,9 @@ fun circuitApi(circuitRoute: Route) {
         val op = transaction {
             CashoutOperationEntity.new {
                 this.amountDebit = req.amount_debit
+                this.amountCredit = req.amount_credit
                 this.subject = cashoutSubject
-                this.creationTime = getUTCnow().toInstant().epochSecond
+                this.creationTime = getUTCnow().toInstant().toEpochMilli()
                 this.tanChannel = tanChannel
                 this.account = user
                 this.tan = getRandomString(5)
@@ -395,6 +422,11 @@ fun circuitApi(circuitRoute: Route) {
         throwIfInstitutionalName(resourceName)
         allowOwnerOrAdmin(username, resourceName)
         val customer = getCustomer(resourceName)
+        /** FIXME: the following query can 404, but should 500.
+         * The reason is that that's the bank's fault if an existing
+         * customer misses the bank account.  Check other calls too,
+         * for the same error.
+         */
         val bankAccount = getBankAccountFromLabel(resourceName)
         /**
          * Throwing when name or cash-out address aren't found ensures
@@ -420,6 +452,13 @@ fun circuitApi(circuitRoute: Route) {
         val customers = mutableListOf<Any>()
         transaction {
             DemobankCustomerEntity.all().forEach {
+                if (it.cashout_address == null) {
+                    logger.debug("Not listing account '${it.username}', as that" +
+                            " misses the cash-out address " +
+                            "and therefore doesn't belong to the Circuit API"
+                    )
+                    return@forEach
+                }
                 customers.add(object {
                     val username = it.username
                     val name = it.name
