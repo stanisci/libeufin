@@ -431,7 +431,7 @@ class BankAccountStatementEntity(id: EntityID<Int>) : IntEntity(id) {
     var balanceClbd by BankAccountStatementsTable.balanceClbd
 }
 
-enum class CashoutOperationState { CONFIRMED, PENDING }
+enum class CashoutOperationStatus { CONFIRMED, PENDING }
 object CashoutOperationsTable : LongIdTable() {
     val uuid = uuid("uuid").autoGenerate()
     /**
@@ -447,7 +447,7 @@ object CashoutOperationsTable : LongIdTable() {
     val tanChannel = enumeration("tanChannel", SupportedTanChannels::class)
     val account = text("account")
     val tan = text("tan")
-    val state = enumeration("state", CashoutOperationState::class).default(CashoutOperationState.PENDING)
+    val status = enumeration("status", CashoutOperationStatus::class).default(CashoutOperationStatus.PENDING)
 }
 
 class CashoutOperationEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -461,7 +461,7 @@ class CashoutOperationEntity(id: EntityID<Long>) : LongEntity(id) {
     var tanChannel by CashoutOperationsTable.tanChannel
     var account by CashoutOperationsTable.account
     var tan by CashoutOperationsTable.tan
-    var state by CashoutOperationsTable.state
+    var status by CashoutOperationsTable.status
 }
 object TalerWithdrawalsTable : LongIdTable() {
     val wopid = uuid("wopid").autoGenerate()

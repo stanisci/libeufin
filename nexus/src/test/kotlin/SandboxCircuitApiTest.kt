@@ -1,15 +1,11 @@
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.ktor.client.plugins.*
-import io.ktor.client.plugins.auth.*
-import io.ktor.client.plugins.auth.providers.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import io.ktor.util.*
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.sandbox.*
 import java.io.File
@@ -101,7 +97,7 @@ class SandboxCircuitApiTest {
                         creationTime = 0L
                         tanChannel = SupportedTanChannels.FILE // change type to enum?
                         account = "unused"
-                        state = CashoutOperationState.PENDING
+                        status = CashoutOperationStatus.PENDING
                     }
                 }
                 R = client.get("/demobanks/default/circuit-api/cashouts") {

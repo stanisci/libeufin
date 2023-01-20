@@ -6,7 +6,6 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.netty.handler.codec.http.HttpResponseStatus
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.sandbox.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
@@ -87,7 +86,7 @@ data class CircuitAccountInfo(
 )
 
 data class CashoutOperationInfo(
-    val state: CashoutOperationState,
+    val status: CashoutOperationStatus,
     val amount_credit: String,
     val amount_debit: String,
     val subject: String,
@@ -198,13 +197,13 @@ fun circuitApi(circuitRoute: Route) {
         }
         if (maybeOperation == null)
             throw notFound("Cash-out operation $uuid not found.")
-        if (maybeOperation.state == CashoutOperationState.CONFIRMED)
+        if (maybeOperation.status == CashoutOperationStatus.CONFIRMED)
             throw SandboxError(
                 HttpStatusCode.PreconditionFailed,
                 "Cash-out operation '$uuid' was confirmed already."
             )
-        if (maybeOperation.state != CashoutOperationState.PENDING)
-            throw internalServerError("Found an unsupported cash-out operation state: ${maybeOperation.state}")
+        if (maybeOperation.status != CashoutOperationStatus.PENDING)
+            throw internalServerError("Found an unsupported cash-out operation state: ${maybeOperation.status}")
         // Operation found and pending: delete from the database.
         transaction { maybeOperation.delete() }
         call.respond(HttpStatusCode.NoContent)
@@ -227,7 +226,7 @@ fun circuitApi(circuitRoute: Route) {
         if (op == null)
             throw notFound("Cash-out operation $operationUuid not found")
         // 412 if the operation got already confirmed.
-        if (op.state == CashoutOperationState.CONFIRMED)
+        if (op.status == CashoutOperationStatus.CONFIRMED)
             throw SandboxError(
                 HttpStatusCode.PreconditionFailed,
                 "Cash-out operation $operationUuid was already confirmed."
@@ -259,7 +258,7 @@ fun circuitApi(circuitRoute: Route) {
                 subject = op.subject,
                 amount = op.amountDebit
             )
-            op.state = CashoutOperationState.CONFIRMED
+            op.status = CashoutOperationStatus.CONFIRMED
             op.confirmationTime = getUTCnow().toInstant().toEpochMilli()
         }
         call.respond(HttpStatusCode.NoContent)
@@ -281,7 +280,7 @@ fun circuitApi(circuitRoute: Route) {
             amount_credit = maybeOperation.amountCredit,
             amount_debit = maybeOperation.amountDebit,
             subject = maybeOperation.subject,
-            state = maybeOperation.state,
+            status = maybeOperation.status,
             creation_time = maybeOperation.creationTime,
             confirmation_time = maybeOperation.confirmationTime,
             tan_channel = maybeOperation.tanChannel,
