@@ -1928,4 +1928,29 @@ def circuit_accounts(obj):
     check_response_status(resp)
     tell_user(resp)
 
+
+@sandbox_demobank.command(
+  "circuit-cashouts",
+  help="Gets the list of all the pending and confirmed cash-out operations."
+)
+@click.pass_obj
+def circuit_cashouts(obj):
+    # Check admin is requesting.
+    if (obj.username != "admin"):
+        print("Not running as 'admin'.  Won't request", file=sys.stderr)
+        exit(1)
+    cashouts_endpoint = obj.circuit_api_url(f"cashouts")
+    try:
+        resp = get(
+            cashouts_endpoint,
+            **maybe_auth(obj)
+        )
+    except Exception as e:
+        print(e)
+        print("Could not reach the bank at " + cashouts_endpoint)
+        exit(1)
+
+    check_response_status(resp)
+    tell_user(resp)
+
 cli()
