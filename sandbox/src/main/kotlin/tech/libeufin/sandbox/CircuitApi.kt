@@ -6,6 +6,7 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.netty.handler.codec.http.HttpResponseStatus
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.sandbox.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
@@ -437,22 +438,25 @@ fun circuitApi(circuitRoute: Route) {
         throwIfInstitutionalName(resourceName)
         allowOwnerOrAdmin(username, resourceName)
         val customer = getCustomer(resourceName)
-        /** FIXME: the following query can 404, but should 500.
-         * The reason is that that's the bank's fault if an existing
-         * customer misses the bank account.  Check other calls too,
-         * for the same error.
+        /**
+         * CUSTOMER AND BANK ACCOUNT INVARIANT.
+         *
+         * After having found a 'customer' associated with the resourceName
+         * - see previous line -, the bank must ensure that a 'bank account'
+         * exist under the same resourceName.  If that fails, the bank broke the
+         * invariant and should respond 500.
          */
-        val bankAccount = getBankAccountFromLabel(resourceName)
+        val bankAccount = getBankAccountFromLabel(resourceName, withBankFault = true)
         /**
          * Throwing when name or cash-out address aren't found ensures
          * that the customer was indeed added via the Circuit API, as opposed
          * to the Access API.
          */
-        val potentialError = "$resourceName not managed by the Circuit API."
+        val maybeError = "$resourceName not managed by the Circuit API."
         call.respond(CircuitAccountInfo(
             username = customer.username,
-            name = customer.name ?: throw notFound(potentialError),
-            cashout_address = customer.cashout_address ?: throw notFound(potentialError),
+            name = customer.name ?: throw notFound(maybeError),
+            cashout_address = customer.cashout_address ?: throw notFound(maybeError),
             contact_data = CircuitContactData(
                 email = customer.email,
                 phone = customer.phone
@@ -479,6 +483,10 @@ fun circuitApi(circuitRoute: Route) {
                     val name = it.name
                 })
             }
+        }
+        if (customers.size == 0) {
+            call.respond(HttpStatusCode.NoContent)
+            return@get
         }
         call.respond(object {val customers = customers})
         return@get
@@ -597,8 +605,11 @@ fun circuitApi(circuitRoute: Route) {
         call.request.basicAuth(onlyAdmin = true)
         val resourceName = call.getUriComponent("resourceName")
         throwIfInstitutionalName(resourceName)
-        val bankAccount = getBankAccountFromLabel(resourceName)
         val customer = getCustomer(resourceName)
+        val bankAccount = getBankAccountFromLabel(
+            resourceName,
+            withBankFault = true // See comment "CUSTOMER AND BANK ACCOUNT INVARIANT".
+        )
         val balance = getBalance(bankAccount)
         if (balance != BigDecimal.ZERO)
             throw SandboxError(

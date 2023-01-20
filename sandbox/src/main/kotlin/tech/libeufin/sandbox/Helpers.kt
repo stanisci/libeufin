@@ -302,7 +302,18 @@ fun getBankAccountFromIban(iban: String): BankAccountEntity {
     )
 }
 
-fun getBankAccountFromLabel(label: String, demobank: String = "default"): BankAccountEntity {
+/**
+ * The argument 'withBankFault' represents the case where
+ * _the bank_ must ensure that a resource (in this case a bank
+ * account) exists.  For example, every 'customer' should have
+ * a 'bank account', and if a customer is found without a bank
+ * account, then the bank broke such condition.
+ */
+fun getBankAccountFromLabel(
+    label: String,
+    demobank: String = "default",
+    withBankFault: Boolean = false
+): BankAccountEntity {
     val maybeDemobank = getDemobank(demobank)
     if (maybeDemobank == null) {
         logger.error("Demobank '$demobank' not found")
@@ -311,21 +322,33 @@ fun getBankAccountFromLabel(label: String, demobank: String = "default"): BankAc
             "Demobank '$demobank' not found"
         )
     }
-    return getBankAccountFromLabel(label, maybeDemobank)
+    return getBankAccountFromLabel(
+        label,
+        maybeDemobank,
+        withBankFault
+    )
 }
-fun getBankAccountFromLabel(label: String,
-                            demobank: DemobankConfigEntity
+fun getBankAccountFromLabel(
+    label: String,
+    demobank: DemobankConfigEntity,
+    withBankFault: Boolean = false
 ): BankAccountEntity {
-    return transaction {
+    val maybeBankAccount = transaction {
         BankAccountEntity.find(
             BankAccountsTable.label eq label and (
                     BankAccountsTable.demoBank eq demobank.id
                     )
-        ).firstOrNull() ?: throw SandboxError(
-            HttpStatusCode.NotFound,
-            "Did not find a bank account for label $label"
-        )
+        ).firstOrNull()
     }
+    if (maybeBankAccount == null && withBankFault)
+        throw internalServerError(
+            "Bank account $label was not found, but it should."
+        )
+    if (maybeBankAccount == null)
+        throw notFound(
+            "Bank account $label was not found."
+        )
+    return maybeBankAccount
 }
 
 fun getBankAccountFromSubscriber(subscriber: EbicsSubscriberEntity): BankAccountEntity {
