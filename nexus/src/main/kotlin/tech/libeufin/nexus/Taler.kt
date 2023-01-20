@@ -288,7 +288,6 @@ fun talerFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDetails)
     }
 
     if (!CryptoUtil.checkValidEddsaPublicKey(reservePub)) {
-        // FIXME: send back!
         logger.info("invalid public key detected")
         isInvalid = true
     }
@@ -316,23 +315,34 @@ fun maybeTalerRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
                 " after last seen transaction id: $lastSeenId"
     )
     transaction {
-        TalerInvalidIncomingPaymentsTable.innerJoin(NexusBankTransactionsTable,
-            { NexusBankTransactionsTable.id }, { TalerInvalidIncomingPaymentsTable.payment }).select {
+        TalerInvalidIncomingPaymentsTable.innerJoin(
+            NexusBankTransactionsTable,
+            { NexusBankTransactionsTable.id },
+            { TalerInvalidIncomingPaymentsTable.payment }
+        ).select {
+            /**
+             * Finds Taler-invalid incoming payments that weren't refunded
+             * yet and are newer than those processed along the last round.
+             */
             TalerInvalidIncomingPaymentsTable.refunded eq false and
                     (NexusBankTransactionsTable.bankAccount eq bankAccount.id.value) and
                     (NexusBankTransactionsTable.id greater lastSeenId)
-
         }.forEach {
+            // For each of them, extracts the wire details to reuse in the refund.
             val paymentData = jacksonObjectMapper().readValue(
                 it[NexusBankTransactionsTable.transactionJson],
                 CamtBankAccountEntry::class.java
             )
             if (paymentData.batches == null) {
                 logger.error(
-                    "A singleton batched payment was expected to be refunded," +
-                            " but none was found (in transaction (AcctSvcrRef): ${paymentData.accountServicerRef})"
+                    "Empty wire details encountered in transaction with" +
+                            " AcctSvcrRef: ${paymentData.accountServicerRef}." +
+                            " Taler can't refund."
                 )
-                throw NexusError(HttpStatusCode.InternalServerError, "Unexpected void payment, cannot refund")
+                throw NexusError(
+                    HttpStatusCode.InternalServerError,
+                    "Unexpected void payment, cannot refund"
+                )
             }
             val debtorAccount = paymentData.batches[0].batchTransactions[0].details.debtorAccount
             if (debtorAccount?.iban == null) {

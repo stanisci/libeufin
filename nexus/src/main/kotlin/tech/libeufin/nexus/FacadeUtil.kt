@@ -81,10 +81,13 @@ fun ingestFacadeTransactions(
         }
         try {
             if (refundCb != null) {
-                refundCb(bankAccount, facadeState.highestSeenMessageSerialId)
+                refundCb(
+                    bankAccount,
+                    facadeState.highestSeenMessageSerialId
+                )
             }
         } catch (e: Exception) {
-            logger.warn("sending refund payment failed", e);
+            logger.warn("sending refund payment failed", e)
         }
         facadeState.highestSeenMessageSerialId = lastId
     }
