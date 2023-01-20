@@ -424,10 +424,7 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
         }
     }
     if (history.outgoing_transactions.size == 0) {
-        call.respondBytes(
-            bytes = ByteArray(0),
-            status = HttpStatusCode.NoContent
-        )
+        call.respond(HttpStatusCode.NoContent)
         return
     }
     call.respond(
@@ -476,10 +473,7 @@ private suspend fun historyIncoming(call: ApplicationCall) {
         }
     }
     if (history.incoming_transactions.size == 0) {
-        call.respondBytes(
-            bytes = ByteArray(0),
-            status = HttpStatusCode.NoContent
-        )
+        call.respond(HttpStatusCode.NoContent)
         return
     }
     return call.respond(
