@@ -390,10 +390,15 @@ fun circuitApi(circuitRoute: Route) {
                         message = op.tan
                     )
                 } catch (e: Exception) {
-                    throw internalServerError("E-mail TAN command threw exception: ${e.message}")
+                    throw internalServerError(
+                        "Sending the e-mail TAN failed for ${customer.email}." +
+                                "  The command threw this exception: ${e.message}"
+                    )
                 }
                 if (!isSuccessful)
-                    throw internalServerError("E-mail TAN command failed.")
+                    throw internalServerError(
+                        "E-mail TAN command failed for ${customer.email}."
+                    )
             }
             SupportedTanChannels.SMS.name -> {
                 val isSuccessful = try {
@@ -411,10 +416,14 @@ fun circuitApi(circuitRoute: Route) {
                     )
 
                 } catch (e: Exception) {
-                    throw internalServerError("SMS TAN command threw exception: ${e.message}")
+                    throw internalServerError(
+                        "Sending the SMS TAN failed for ${customer.phone}." +
+                                " The command threw this exception: ${e.message}"
+                    )
                 }
                 if (!isSuccessful)
-                    throw internalServerError("SMS TAN command failed.")
+                    throw internalServerError(
+                        "SMS TAN command failed for ${customer.phone}.")
             }
             SupportedTanChannels.FILE.name -> {
                 try {
@@ -425,7 +434,7 @@ fun circuitApi(circuitRoute: Route) {
                 }
             }
             else ->
-                throw internalServerError("The bank didn't catch a unsupported TAN channel: $tanChannel.")
+                throw internalServerError("The bank tried an unsupported TAN channel: $tanChannel.")
         }
         call.respond(HttpStatusCode.Accepted, object {val uuid = op.uuid})
         return@post
