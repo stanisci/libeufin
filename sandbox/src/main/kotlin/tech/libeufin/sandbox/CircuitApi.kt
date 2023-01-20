@@ -402,7 +402,7 @@ fun circuitApi(circuitRoute: Route) {
                             "SMS TAN supported but the command" +
                                     " was not found.  See the --sms-tan option from 'serve'"
                         ),
-                        address = customer.email ?: throw internalServerError(
+                        address = customer.phone ?: throw internalServerError(
                         "Customer has no phone number, but previous check should" +
                                 " have detected it!"
 
