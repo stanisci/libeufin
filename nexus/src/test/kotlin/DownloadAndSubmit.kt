@@ -10,7 +10,6 @@ import io.ktor.server.routing.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.junit.Ignore
 import org.junit.Test
 import org.w3c.dom.Document
 import tech.libeufin.nexus.*
@@ -87,11 +86,6 @@ fun getCustomEbicsServer(r: EbicsResponses, endpoint: String = "/ebicsweb"): App
     return ret
 }
 
-/**
- * Remove @Ignore, after having put asserts along tests,
- * and having had access to runTask and TaskSchedule, that
- * are now 'private'.
- */
 class DownloadAndSubmit {
     /**
      * Download a C52 report from the bank.

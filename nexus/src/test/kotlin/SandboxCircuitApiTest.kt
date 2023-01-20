@@ -12,6 +12,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.*
 import java.io.File
+import java.util.*
 
 class SandboxCircuitApiTest {
     // Get /config, fails if != 200.
@@ -24,6 +25,26 @@ class SandboxCircuitApiTest {
                     val r= client.get("/demobanks/default/circuit-api/config")
                     println(r.bodyAsText())
                 }
+            }
+        }
+    }
+    // Tests that only account with a cash-out address are returned.
+    @Test
+    fun listAccountsTest() {
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                var R = client.get("/demobanks/default/circuit-api/accounts") {
+                    expectSuccess = false
+                    basicAuth("admin", "foo")
+                }
+                println(R.bodyAsText())
+                R = client.get("/demobanks/default/circuit-api/accounts/baz") {
+                    expectSuccess = false
+                    basicAuth("admin", "foo")
+                }
+                println(R.bodyAsText())
             }
         }
     }
@@ -60,7 +81,53 @@ class SandboxCircuitApiTest {
         assert(!checkEmailAddress("foo+bar@example.com"))
     }
 
-    // Test the creation and confirmation of a cash-out operation.
+    @Test
+    fun listCashouts() {
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                var R = client.get("/demobanks/default/circuit-api/cashouts") {
+                    expectSuccess = true
+                    basicAuth("admin", "foo")
+                }
+                assert(R.status.value == HttpStatusCode.NoContent.value)
+                transaction {
+                    CashoutOperationEntity.new {
+                        tan = "unused"
+                        uuid = UUID.randomUUID()
+                        amountDebit = "unused"
+                        amountCredit = "unused"
+                        subject = "unused"
+                        creationTime = 0L
+                        tanChannel = "UNUSED" // change type to enum?
+                        account = "unused"
+                        state = CashoutOperationState.PENDING
+                    }
+                }
+                R = client.get("/demobanks/default/circuit-api/cashouts") {
+                    expectSuccess = true
+                    basicAuth("admin", "foo")
+                }
+                assert(R.status.value == HttpStatusCode.OK.value)
+                // Extract the UUID and check it.
+                val mapper = ObjectMapper()
+                var respJson = mapper.readTree(R.bodyAsText())
+                val uuid = respJson.get("cashouts").get(0).asText()
+                R = client.get("/demobanks/default/circuit-api/cashouts/$uuid") {
+                    expectSuccess = true
+                    basicAuth("admin", "foo")
+                }
+                assert(R.status.value == HttpStatusCode.OK.value)
+                respJson = mapper.readTree(R.bodyAsText())
+                val status = respJson.get("status").asText()
+                assert(status.uppercase() == "PENDING")
+                println(R.bodyAsText())
+            }
+        }
+    }
+
+    // Tests the creation and confirmation of a cash-out operation.
     @Test
     fun cashout() {
         withTestDatabase {

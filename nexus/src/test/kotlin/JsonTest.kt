@@ -42,7 +42,8 @@ class JsonTest {
 
     /**
      * Ignored because this test was only used to check
-     * the logs, as opposed to assert over values.
+     * the logs, as opposed to assert over values.  Consider
+     * to remove the Ignore
      */
     @Ignore
     @Test
