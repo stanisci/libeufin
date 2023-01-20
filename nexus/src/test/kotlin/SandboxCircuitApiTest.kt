@@ -9,6 +9,7 @@ import io.ktor.server.testing.*
 import io.ktor.util.*
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.sandbox.*
 import java.io.File
@@ -28,7 +29,8 @@ class SandboxCircuitApiTest {
             }
         }
     }
-    // Tests that only account with a cash-out address are returned.
+
+    // Only tests that the calls get a 2xx status code.
     @Test
     fun listAccountsTest() {
         withTestDatabase {
@@ -36,15 +38,12 @@ class SandboxCircuitApiTest {
             testApplication {
                 application(sandboxApp)
                 var R = client.get("/demobanks/default/circuit-api/accounts") {
-                    expectSuccess = false
                     basicAuth("admin", "foo")
                 }
                 println(R.bodyAsText())
-                R = client.get("/demobanks/default/circuit-api/accounts/baz") {
-                    expectSuccess = false
+                client.get("/demobanks/default/circuit-api/accounts/baz") {
                     basicAuth("admin", "foo")
                 }
-                println(R.bodyAsText())
             }
         }
     }
@@ -100,7 +99,7 @@ class SandboxCircuitApiTest {
                         amountCredit = "unused"
                         subject = "unused"
                         creationTime = 0L
-                        tanChannel = "UNUSED" // change type to enum?
+                        tanChannel = SupportedTanChannels.FILE // change type to enum?
                         account = "unused"
                         state = CashoutOperationState.PENDING
                     }
