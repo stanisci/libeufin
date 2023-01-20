@@ -442,8 +442,9 @@ object CashoutOperationsTable : LongIdTable() {
     val amountDebit = text("amountDebit")
     val amountCredit = text("amountCredit")
     val subject = text("subject")
-    val creationTime = long("creationTime") // in seconds.
-    val tanChannel = text("tanChannel")
+    val creationTime = long("creationTime") // in milliseconds.
+    val confirmationTime = long("confirmationTime").nullable() // in milliseconds.
+    val tanChannel = enumeration("tanChannel", SupportedTanChannels::class)
     val account = text("account")
     val tan = text("tan")
     val state = enumeration("state", CashoutOperationState::class).default(CashoutOperationState.PENDING)
@@ -456,6 +457,7 @@ class CashoutOperationEntity(id: EntityID<Long>) : LongEntity(id) {
     var amountCredit by CashoutOperationsTable.amountCredit
     var subject by CashoutOperationsTable.subject
     var creationTime by CashoutOperationsTable.creationTime
+    var confirmationTime by CashoutOperationsTable.confirmationTime
     var tanChannel by CashoutOperationsTable.tanChannel
     var account by CashoutOperationsTable.account
     var tan by CashoutOperationsTable.tan

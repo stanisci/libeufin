@@ -13,7 +13,6 @@ import java.io.File
 import java.io.InputStreamReader
 import java.math.BigDecimal
 import java.math.MathContext
-import java.util.*
 import java.util.concurrent.TimeUnit
 import kotlin.text.toByteArray
 
@@ -84,6 +83,17 @@ data class CircuitAccountInfo(
     val contact_data: CircuitContactData,
     val name: String,
     val cashout_address: String
+)
+
+data class CashoutOperationInfo(
+    val state: CashoutOperationState,
+    val amount_credit: String,
+    val amount_debit: String,
+    val subject: String,
+    val creation_time: Long, // milliseconds
+    val confirmation_time: Long?, // milliseconds
+    val tan_channel: SupportedTanChannels,
+    val account: String
 )
 
 data class CashoutConfirmation(val tan: String)
@@ -241,13 +251,16 @@ fun circuitApi(circuitRoute: Route) {
          * NOTE: the funds availability got already checked when this operation
          * was created.  On top of that, the 'wireTransfer()' helper does also
          * check for funds availability.  */
-        wireTransfer(
-            debitAccount = op.account,
-            creditAccount = "admin",
-            subject = op.subject,
-            amount = op.amountDebit
-        )
-        transaction { op.state = CashoutOperationState.CONFIRMED }
+        transaction {
+            wireTransfer(
+                debitAccount = op.account,
+                creditAccount = "admin",
+                subject = op.subject,
+                amount = op.amountDebit
+            )
+            op.state = CashoutOperationState.CONFIRMED
+            op.confirmationTime = getUTCnow().toInstant().toEpochMilli()
+        }
         call.respond(HttpStatusCode.NoContent)
         return@post
     }
@@ -263,15 +276,17 @@ fun circuitApi(circuitRoute: Route) {
         }
         if (maybeOperation == null)
             throw notFound("Cash-out operation $operationUuid not found.")
-        call.respond(object {
-            val status = maybeOperation.state
-            val amount_credit = maybeOperation.amountCredit
-            val amount_debit = maybeOperation.amountDebit
-            val subject = maybeOperation.subject
-            val creation_time = maybeOperation.creationTime.toString()
-            val cashout_address = maybeOperation.tanChannel
-            val account = maybeOperation.account
-        })
+        val ret = CashoutOperationInfo(
+            amount_credit = maybeOperation.amountCredit,
+            amount_debit = maybeOperation.amountDebit,
+            subject = maybeOperation.subject,
+            state = maybeOperation.state,
+            creation_time = maybeOperation.creationTime,
+            confirmation_time = maybeOperation.confirmationTime,
+            tan_channel = maybeOperation.tanChannel,
+            account = maybeOperation.account
+        )
+        call.respond(ret)
         return@get
     }
     // Gets the list of all the cash-out operations.
@@ -354,7 +369,7 @@ fun circuitApi(circuitRoute: Route) {
                 this.amountCredit = req.amount_credit
                 this.subject = cashoutSubject
                 this.creationTime = getUTCnow().toInstant().toEpochMilli()
-                this.tanChannel = tanChannel
+                this.tanChannel = SupportedTanChannels.valueOf(tanChannel)
                 this.account = user
                 this.tan = getRandomString(5)
             }
