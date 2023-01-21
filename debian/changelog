@@ -1,3 +1,9 @@
+libeufin (0.9.1) unstable; urgency=medium
+
+  * Prepare for first proper release.
+
+ -- Christian Grothoff <grothoff@gnu.org>  Sat, 21 Jan 2023 14:46:04 +0200
+
 libeufin (0.0.1-12) unstable; urgency=medium
 
   * Fix key letter generation.

@@ -6,17 +6,14 @@ SHELL := sh -e
 
 export JAVA_HOME = /usr/lib/jvm/default-java
 LIBEUFIN_HOME = /usr/share/libeufin
-DEV = -dev.3
+DEV =
 FULLVER = $(DEB_VERSION_UPSTREAM)$(DEV)
-
 
 %:
 	dh ${@}
 
-
 clean:
 	rm -rf libeufin-$(FULLVER)
-
 
 # Override the build step, because we current need to do it manually
 # outside the regular Debian package build.
@@ -26,7 +23,6 @@ override_dh_auto_test:
 	true
 override_dh_auto_configure:
 	true
-
 override_dh_auto_install:
 	unzip build/distributions/libeufin-$(FULLVER).zip
 	dh_install libeufin-$(FULLVER)/lib/nexus-$(FULLVER)-all.jar $(LIBEUFIN_HOME)/lib
@@ -38,18 +34,15 @@ override_dh_auto_install:
 	dh_link $(LIBEUFIN_HOME)/bin/libeufin-nexus /usr/bin/libeufin-nexus
 	dh_link $(LIBEUFIN_HOME)/bin/libeufin-sandbox /usr/bin/libeufin-sandbox
 
-
 # Override this step because it's very slow and likely
 # unnecessary for us.
 override_dh_strip_nondeterminism:
 	true
 
-
 override_dh_install:
 	dh_install
 # Needs to be called manually for debhelper-compat < 13
 	dh_installtmpfiles
-
 
 override_dh_installsystemd:
 	# Need to specify units manually, since we have multiple
@@ -58,7 +51,6 @@ override_dh_installsystemd:
 	dh_installsystemd -plibeufin --name=libeufin-sandbox --no-start --no-enable
 	# final invocation to generate daemon reload
 	dh_installsystemd
-
 
 get-orig-source:
 	uscan --force-download --rename
