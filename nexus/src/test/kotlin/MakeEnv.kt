@@ -1,9 +1,13 @@
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.transactions.transactionManager
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.dbCreateTables
 import tech.libeufin.nexus.dbDropTables
+import tech.libeufin.nexus.server.FetchLevel
+import tech.libeufin.nexus.server.FetchSpecAllJson
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.EbicsInitState
@@ -59,11 +63,10 @@ fun withTestDatabase(f: () -> Unit) {
         }
     }
     Database.connect("jdbc:sqlite:$TEST_DB_FILE")
+    // ).transactionManager.defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
     dbDropTables(TEST_DB_CONN)
     tech.libeufin.sandbox.dbDropTables(TEST_DB_CONN)
-    try {
-        f()
-    }
+    try { f() }
     finally {
         File(TEST_DB_FILE).also {
             if (it.exists()) {
@@ -73,13 +76,22 @@ fun withTestDatabase(f: () -> Unit) {
     }
 }
 
+val reportSpec: String = jacksonObjectMapper().
+writerWithDefaultPrettyPrinter().
+writeValueAsString(
+    FetchSpecAllJson(
+        level = FetchLevel.REPORT,
+        "foo"
+    )
+)
+
 fun prepNexusDb() {
     dbCreateTables(TEST_DB_CONN)
     transaction {
         val u = NexusUserEntity.new {
             username = "foo"
-            passwordHash = "foo"
-            superuser = false
+            passwordHash = CryptoUtil.hashpw("foo")
+            superuser = true
         }
         val c = NexusBankConnectionEntity.new {
             connectionId = "foo"
@@ -117,6 +129,36 @@ fun prepNexusDb() {
             defaultBankConnection = c
             highestSeenBankMessageSerialId = 0
             accountHolder = "bar"
+        }
+        NexusScheduledTaskEntity.new {
+            resourceType = "bank-account"
+            resourceId = "foo"
+            this.taskCronspec = "* * *" // Every second.
+            this.taskName = "read-report"
+            this.taskType = "fetch"
+            this.taskParams = reportSpec
+        }
+        NexusScheduledTaskEntity.new {
+            resourceType = "bank-account"
+            resourceId = "foo"
+            this.taskCronspec = "* * *" // Every second.
+            this.taskName = "send-payment"
+            this.taskType = "submit"
+            this.taskParams = "{}"
+        }
+        // Giving 'foo' a Taler facade.
+        val f = FacadeEntity.new {
+            facadeName = "taler"
+            type = "taler-wire-gateway"
+            creator = u
+        }
+        FacadeStateEntity.new {
+            bankAccount = "foo"
+            bankConnection = "foo"
+            currency = "TESTKUDOS"
+            reserveTransferLevel = "report"
+            facade = f
+            highestSeenMessageSerialId = 0
         }
     }
 }
