@@ -46,6 +46,7 @@ import io.ktor.server.routing.*
 import io.ktor.util.*
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.event.Level
 import tech.libeufin.nexus.*
@@ -211,13 +212,24 @@ val nexusApp: Application.() -> Unit = {
                 )
             )
         }
-        exception<BadRequestException> { call, cause ->
-            logger.error("Exception while handling '${call.request.uri}', ${cause.message}")
+        exception<BadRequestException> { call, wrapper ->
+            var rootCause = wrapper.cause
+            while (rootCause?.cause != null) rootCause = rootCause.cause
+            val errorMessage: String? = rootCause?.message ?: wrapper.message
+            if (errorMessage == null) {
+                logger.error("The bank didn't detect the cause of a bad request, fail.")
+                logger.error(wrapper.stackTraceToString())
+                throw NexusError(
+                    HttpStatusCode.InternalServerError,
+                    "Did not find bad request details."
+                )
+            }
+            logger.error(errorMessage)
             call.respond(
                 HttpStatusCode.BadRequest,
                 ErrorResponse(
                     code = TalerErrorCode.TALER_EC_LIBEUFIN_NEXUS_GENERIC_ERROR.code,
-                    detail = cause.message ?: "Bad request but did not find exact cause.",
+                    detail = errorMessage,
                     hint = "Malformed request or unacceptable values"
                 )
             )
@@ -953,32 +965,27 @@ val nexusApp: Application.() -> Unit = {
                     HttpStatusCode.NotImplemented,
                     "Facade type '${body.type}' is not implemented"
                 )
-            val newFacade = try {
+            try {
                 transaction {
                     val user = authenticateRequest(call.request)
-                    FacadeEntity.new {
+                    val newFacade = FacadeEntity.new {
                         facadeName = body.name
                         type = body.type
                         creator = user
                     }
+                    FacadeStateEntity.new {
+                        bankAccount = body.config.bankAccount
+                        bankConnection = body.config.bankConnection
+                        reserveTransferLevel = body.config.reserveTransferLevel
+                        facade = newFacade
+                        currency = body.config.currency
+                    }
                 }
-            } catch (e: ExposedSQLException) {
-                logger.error("Could not persist facade name/type/creator: $e")
-                throw NexusError(
-                    HttpStatusCode.BadRequest,
-                    "Server could not persist data, possibly due to unavailable facade name"
-                )
+            } catch (e: Exception) {
+                logger.error(e.stackTraceToString())
+                throw internalServerError("Could not create facade")
             }
-            transaction {
-                FacadeStateEntity.new {
-                    bankAccount = body.config.bankAccount
-                    bankConnection = body.config.bankConnection
-                    reserveTransferLevel = body.config.reserveTransferLevel
-                    facade = newFacade
-                    currency = body.config.currency
-                }
-            }
-            call.respondText("Facade created")
+            call.respond(HttpStatusCode.OK)
             return@post
         }
 

@@ -571,7 +571,7 @@ val sandboxApp: Application.() -> Unit = {
                 HttpStatusCode.BadRequest,
                 SandboxErrorJson(
                     error = SandboxErrorDetailJson(
-                        type = "util-error",
+                        type = "sandbox-error",
                         description = errorMessage
                     )
                 )
