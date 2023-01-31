@@ -380,9 +380,7 @@ object FacadesTable : LongIdTable() {
     val facadeName = text("facadeName")
     val type = text("type")
     val creator = reference("creator", NexusUsersTable)
-    init {
-        uniqueIndex(facadeName)
-    }
+    init { uniqueIndex(facadeName) }
 }
 
 class FacadeEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -402,9 +400,7 @@ object FacadeStateTable : LongIdTable() {
     val bankConnection = text("bankConnection")
     val currency = text("currency")
 
-    /**
-     *  "statement", "report", "notification"
-     **/
+    // "statement", "report", "notification"
     val reserveTransferLevel = text("reserveTransferLevel")
     val facade = reference("facade", FacadesTable)
 

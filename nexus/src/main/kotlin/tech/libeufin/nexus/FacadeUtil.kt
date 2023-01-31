@@ -72,7 +72,10 @@ fun ingestFacadeTransactions(
             when (tx.creditDebitIndicator) {
                 CreditDebitIndicator.CRDT -> {
                     if (incomingFilterCb != null) {
-                        incomingFilterCb(it, details)
+                        incomingFilterCb(
+                            it, // payment DB object
+                            details // wire transfer details
+                        )
                     }
                 }
                 else -> Unit

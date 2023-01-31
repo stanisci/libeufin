@@ -237,7 +237,10 @@ private suspend fun talerTransfer(call: ApplicationCall) {
     )
 }
 
-fun talerFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDetails) {
+fun talerFilter(
+    payment: NexusBankTransactionEntity,
+    txDtls: TransactionDetails
+) {
     var isInvalid = false // True when pub is invalid or duplicate.
     val subject = txDtls.unstructuredRemittanceInformation
     val debtorName = txDtls.debtor?.name
@@ -366,8 +369,7 @@ fun maybeTalerRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
                         it[NexusBankTransactionsTable.bankAccount] == bankAccount.id,
                 "Cannot refund a _outgoing_ payment!"
             )
-            // FIXME: the amount to refund should be reduced, according to the bounce fee
-            // see bug #7116.
+            // FIXME #7116
             addPaymentInitiation(
                 Pain001Data(
                     creditorIban = debtorAccount.iban,
