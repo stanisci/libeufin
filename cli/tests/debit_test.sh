@@ -50,7 +50,7 @@ echo -n "Try to surpass the debit threshold (user pays admin)..."
   --amount MANA:99999 &> /dev/null || true
 echo DONE
 
-echo -n Check the amount is zero...
+echo -n Check the amount is still the initial zero...
 RESP=$(libeufin-cli sandbox --sandbox-url http://localhost:5000/ demobank info --bank-account www)
 BALANCE=$(echo $RESP | jq -r '.balance.amount')
 if [ "$BALANCE" != "MANA:0" ]; then
@@ -67,7 +67,7 @@ libeufin-sandbox \
   MANA:9999 "Go debit again."  &> /dev/null || true
 echo DONE
 
-echo -n Check the amount is again zero...
+echo -n Check the amount is still the initial zero...
 RESP=$(libeufin-cli sandbox --sandbox-url http://localhost:5000/ demobank info --bank-account www)
 BALANCE=$(echo $RESP | jq -r '.balance.amount')
 if [ "$BALANCE" != "MANA:0" ]; then
