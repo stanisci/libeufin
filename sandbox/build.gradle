@@ -45,7 +45,7 @@ sourceSets {
 dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1-native-mt'
     implementation "com.hubspot.jinjava:jinjava:2.5.9"
-    implementation 'ch.qos.logback:logback-classic:1.2.5'
+    implementation 'ch.qos.logback:logback-classic:1.4.5'
     implementation project(":util")
 
     // XML:

@@ -51,7 +51,7 @@ dependencies {
     implementation project(":util")
 
     // Logging
-    implementation 'ch.qos.logback:logback-classic:1.2.5'
+    implementation 'ch.qos.logback:logback-classic:1.4.5'
 
     // XML parsing/binding and encryption
     implementation "javax.xml.bind:jaxb-api:2.3.0"
