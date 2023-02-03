@@ -1,6 +1,7 @@
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.transactions.transactionManager
 import tech.libeufin.nexus.*
@@ -63,7 +64,7 @@ fun withTestDatabase(f: () -> Unit) {
         }
     }
     Database.connect("jdbc:sqlite:$TEST_DB_FILE")
-    // ).transactionManager.defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
+    TransactionManager.manager.defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
     dbDropTables(TEST_DB_CONN)
     tech.libeufin.sandbox.dbDropTables(TEST_DB_CONN)
     try { f() }
