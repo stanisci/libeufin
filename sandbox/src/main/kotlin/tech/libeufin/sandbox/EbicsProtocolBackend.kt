@@ -1426,6 +1426,7 @@ suspend fun ApplicationCall.ebicsweb() {
             )
             respondText(strResp, ContentType.Application.Xml, HttpStatusCode.OK)
         }
+        // FIXME: should check subscriber state?
         "ebicsNoPubKeyDigestsRequest" -> {
             val requestObject = requestDocument.toObject<EbicsNpkdRequest>()
             val hostInfo = ensureEbicsHost(requestObject.header.static.hostID)
@@ -1434,6 +1435,7 @@ suspend fun ApplicationCall.ebicsweb() {
                 else -> throw EbicsInvalidXmlError()
             }
         }
+        // FIXME: must check subscriber state.
         "ebicsRequest" -> {
             val requestObject = requestDocument.toObject<EbicsRequest>()
             val responseXmlStr = transaction(Connection.TRANSACTION_SERIALIZABLE, repetitionAttempts = 10) {
