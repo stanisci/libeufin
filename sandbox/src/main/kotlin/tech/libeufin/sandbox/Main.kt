@@ -132,11 +132,11 @@ class Config : CliktCommand("Insert one configuration (a.k.a. demobank) into the
     private val usersDebtLimitOption by option("--users-debt-limit").int().default(1000)
     private val allowRegistrationsOption by option(
         "--with-registrations",
-        help = "(default: true)" /* mentioning here as help message did not.  */
+        help = "(defaults to allow registrations)" /* mentioning here as help message did not.  */
     ).flag("--without-registrations", default = true)
     private val withSignupBonusOption by option(
         "--with-signup-bonus",
-        help = "Award new customers with 100 units of currency! (default: false)"
+        help = "Award new customers with 100 units of currency! (defaults to NO bonus)"
     ).flag("--without-signup-bonus", default = false)
 
     override fun run() {
@@ -937,13 +937,16 @@ val sandboxApp: Application.() -> Unit = {
             call.request.basicAuth(onlyAdmin = true)
             val body = call.receive<EbicsSubscriberObsoleteApi>()
             transaction {
+                // Check the host ID exists.
+                val maybeHostId = EbicsHostEntity.find {
+                    EbicsHostsTable.hostID eq body.hostID
+                }.firstOrNull() ?: throw notFound("Host ID ${body.hostID} not found.")
                 // Check it exists first.
                 val maybeSubscriber = EbicsSubscriberEntity.find {
                     EbicsSubscribersTable.userId eq body.userID and (
                             EbicsSubscribersTable.partnerId eq body.partnerID
-                            ) and (
-                            EbicsSubscribersTable.systemId eq body.systemID
-                                    )
+                            ) and (EbicsSubscribersTable.systemId eq body.systemID) and
+                            (EbicsSubscribersTable.hostId eq body.hostID)
                 }.firstOrNull()
                 if (maybeSubscriber != null) throw conflict("EBICS subscriber exists already")
                 EbicsSubscriberEntity.new {
@@ -1581,6 +1584,10 @@ val sandboxApp: Application.() -> Unit = {
                     val body = call.receive<EbicsSubscriberInfo>()
                     // Create or get the Ebics subscriber that is found.
                     transaction {
+                        // Check that host ID exists
+                        EbicsHostEntity.find {
+                            EbicsHostsTable.hostID eq body.hostID
+                        }.firstOrNull() ?: throw notFound("Host ID ${body.hostID} not found.")
                         val subscriber: EbicsSubscriberEntity = EbicsSubscriberEntity.find {
                             (EbicsSubscribersTable.partnerId eq body.partnerID).and(
                                 EbicsSubscribersTable.userId eq body.userID
