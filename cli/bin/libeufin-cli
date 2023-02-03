@@ -1164,7 +1164,8 @@ def sandbox_ebicsbankaccount(ctx):
 
 
 @sandbox_ebicsbankaccount.command(
-    "create", help="Create a bank account for a EBICS subscriber."
+    "create",
+    help="Create a bank account for an existing EBICS subscriber.  This operation is deprecated because it doesn't associate any user profile to the bank account being created."
 )
 @click.option("--iban", help="IBAN", required=True)
 @click.option("--bic", help="BIC", required=True)
@@ -1376,7 +1377,7 @@ def sandbox_demobank_register(obj, public, name, iban):
     check_response_status(resp)
 
 @sandbox_demobank.command("new-ebicssubscriber",
-    help="Associate a new Ebics subscriber to a existing bank account."
+    help="Associate a new Ebics subscriber to an existing bank account."
 )
 @click.option("--host-id", help="Ebics host ID", required=True)
 @click.option("--partner-id", help="Ebics partner ID", required=True)
