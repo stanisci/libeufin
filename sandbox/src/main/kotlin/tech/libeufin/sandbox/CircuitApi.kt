@@ -66,7 +66,8 @@ data class CircuitContactData(
 
 data class CircuitAccountReconfiguration(
     val contact_data: CircuitContactData,
-    val cashout_address: String
+    val cashout_address: String,
+    val name: String? = null
 )
 
 data class AccountPasswordChange(
@@ -530,6 +531,10 @@ fun circuitApi(circuitRoute: Route) {
         allowOwnerOrAdmin(username, resourceName)
         // account found and authentication succeeded
         val req = call.receive<CircuitAccountReconfiguration>()
+        // Only admin's allowed to change the legal name
+        if (req.name != null && username != "admin") throw forbidden(
+            "Only admin can change the user legal name"
+        )
         if ((req.contact_data.email != null) && (!checkEmailAddress(req.contact_data.email)))
             throw badRequest("Invalid e-mail address: ${req.contact_data.email}")
         if ((req.contact_data.phone != null) && (!checkPhoneNumber(req.contact_data.phone)))
