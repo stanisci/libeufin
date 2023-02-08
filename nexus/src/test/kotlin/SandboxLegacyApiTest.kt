@@ -37,7 +37,7 @@ class SandboxLegacyApiTest {
                      * and conflict detection.
                      */
                     var body = mapper.writeValueAsString(object {
-                        val hostID = "foo"
+                        val hostID = "eufinSandbox"
                         val userID = "foo"
                         val systemID = "foo"
                         val partnerID = "foo"
