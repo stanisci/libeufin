@@ -122,6 +122,41 @@ class SandboxCircuitApiTest {
         }
     }
 
+    // Testing that only the admin can change an account legal name.
+    @Test
+    fun patchPerm() {
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                val R =client.patch("/demobanks/default/circuit-api/accounts/foo") {
+                    contentType(ContentType.Application.Json)
+                    basicAuth("foo", "foo")
+                    expectSuccess = false
+                    setBody("""
+                        {
+                          "name": "new name",
+                          "contact_data": {},
+                          "cashout_address": "payto://iban/OUTSIDE"
+                        }
+                    """.trimIndent())
+                }
+                assert(R.status.value == HttpStatusCode.Forbidden.value)
+                client.patch("/demobanks/default/circuit-api/accounts/foo") {
+                    contentType(ContentType.Application.Json)
+                    basicAuth("admin", "foo")
+                    expectSuccess = true
+                    setBody("""
+                        {
+                          "name": "new name",
+                          "contact_data": {},
+                          "cashout_address": "payto://iban/OUTSIDE"
+                        }
+                    """.trimIndent())
+                }
+            }
+        }
+    }
     // Tests the creation and confirmation of a cash-out operation.
     @Test
     fun cashout() {
