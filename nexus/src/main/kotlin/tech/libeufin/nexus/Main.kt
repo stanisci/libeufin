@@ -30,6 +30,10 @@ import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.options.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.newSingleThreadContext
 import startServer
 import tech.libeufin.nexus.iso20022.parseCamtMessage
 import tech.libeufin.nexus.server.client
@@ -70,10 +74,8 @@ class Serve : CliktCommand("Run nexus HTTP server") {
     private val logLevel by option()
     override fun run() {
         setLogLevel(logLevel)
-        execThrowableOrTerminate {
-            dbCreateTables(getDbConnFromEnv(NEXUS_DB_ENV_VAR_NAME))
-        }
-        startOperationScheduler(client)
+        execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(NEXUS_DB_ENV_VAR_NAME)) }
+        CoroutineScope(Dispatchers.IO).launch(fallback) { startOperationScheduler(client) }
         if (withUnixSocket != null) {
             startServer(
                 withUnixSocket!!,
