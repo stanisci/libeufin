@@ -290,14 +290,43 @@ fun circuitApi(circuitRoute: Route) {
         call.respond(ret)
         return@get
     }
-    // Gets the list of all the cash-out operations.
+    // Gets the list of all the cash-out operations,
+    // or those belonging to the account given as a parameter.
     circuitRoute.get("/cashouts") {
-        call.request.basicAuth(onlyAdmin = true)
+        val user = call.request.basicAuth()
+        val whichAccount = call.request.queryParameters["account"]
+        /**
+         * Only admin's allowed to omit the target account (= get
+         * all the accounts) or to check other customers cash-out
+         * operations.
+         */
+        if (user != "admin" && whichAccount != user) throw forbidden(
+            "Ordinary users can only request their own account"
+        )
+        /**
+         * At this point, the client has the rights over the account(s)
+         * whose operations are to be returned.  Double-checking that
+         * Admin doesn't ask its own cash-outs, since that's not supported.
+         */
+        if (whichAccount == "admin") throw badRequest("Cash-out for admin is not supported")
+
+        // Preparing the response.
         val node = jacksonObjectMapper().createObjectNode()
         val maybeArray = node.putArray("cashouts")
-        transaction {
-            CashoutOperationEntity.all().forEach {
-                maybeArray.add(it.uuid.toString())
+
+        if (whichAccount == null) { // no target account, return all the cash-outs
+            transaction {
+                CashoutOperationEntity.all().forEach {
+                    maybeArray.add(it.uuid.toString())
+                }
+            }
+        } else { // do filter on the target account.
+            transaction {
+                CashoutOperationEntity.find {
+                    CashoutOperationsTable.account eq whichAccount
+                }.forEach {
+                    maybeArray.add(it.uuid.toString())
+                }
             }
         }
         if (maybeArray.size() == 0) {
@@ -445,7 +474,9 @@ fun circuitApi(circuitRoute: Route) {
         val username = call.request.basicAuth()
         val resourceName = call.getUriComponent("resourceName")
         throwIfInstitutionalName(resourceName)
-        allowOwnerOrAdmin(username, resourceName)
+        if (!allowOwnerOrAdmin(username, resourceName)) throw forbidden(
+            "User $username has no rights over $resourceName"
+        )
         val customer = getCustomer(resourceName)
         /**
          * CUSTOMER AND BANK ACCOUNT INVARIANT.
@@ -506,7 +537,9 @@ fun circuitApi(circuitRoute: Route) {
         val username = call.request.basicAuth()
         val customerUsername = call.getUriComponent("customerUsername")
         throwIfInstitutionalName(customerUsername)
-        allowOwnerOrAdmin(username, customerUsername)
+        if (!allowOwnerOrAdmin(username, customerUsername)) throw forbidden(
+            "User $username has no rights over $customerUsername"
+        )
         // Flow here means admin or username have the rights for this operation.
         val req = call.receive<AccountPasswordChange>()
         /**
@@ -528,7 +561,9 @@ fun circuitApi(circuitRoute: Route) {
             throw internalServerError("Authentication disabled, don't have a default for this request.")
         val resourceName = call.getUriComponent("resourceName")
         throwIfInstitutionalName(resourceName)
-        allowOwnerOrAdmin(username, resourceName)
+        if(!allowOwnerOrAdmin(username, resourceName)) throw forbidden(
+            "User $username has no rights over $resourceName"
+        )
         // account found and authentication succeeded
         val req = call.receive<CircuitAccountReconfiguration>()
         // Only admin's allowed to change the legal name

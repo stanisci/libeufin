@@ -26,6 +26,24 @@ class SandboxCircuitApiTest {
         }
     }
 
+    @Test
+    fun accessAccountsTest() {
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                val R = client.get("/demobanks/default/circuit-api/accounts/bar") {
+                    basicAuth("foo", "foo")
+                    expectSuccess = false
+                }
+                assert(R.status.value == HttpStatusCode.Forbidden.value)
+                client.get("/demobanks/default/circuit-api/accounts/bar") {
+                    basicAuth("admin", "foo")
+                    expectSuccess = true
+                }
+            }
+        }
+    }
     // Only tests that the calls get a 2xx status code.
     @Test
     fun listAccountsTest() {
@@ -96,7 +114,7 @@ class SandboxCircuitApiTest {
                         subject = "unused"
                         creationTime = 0L
                         tanChannel = SupportedTanChannels.FILE // change type to enum?
-                        account = "unused"
+                        account = "foo"
                         status = CashoutOperationStatus.PENDING
                     }
                 }
@@ -118,6 +136,18 @@ class SandboxCircuitApiTest {
                 val status = respJson.get("status").asText()
                 assert(status.uppercase() == "PENDING")
                 println(R.bodyAsText())
+                // Check that bar doesn't get foo's cash-out
+                R = client.get("/demobanks/default/circuit-api/cashouts?account=foo") {
+                    expectSuccess = false
+                    basicAuth("bar", "bar")
+                }
+                assert(R.status.value == HttpStatusCode.Forbidden.value)
+                // Check that foo can get its own
+                R = client.get("/demobanks/default/circuit-api/cashouts?account=foo") {
+                    expectSuccess = false
+                    basicAuth("foo", "foo")
+                }
+                assert(R.status.value == HttpStatusCode.OK.value)
             }
         }
     }

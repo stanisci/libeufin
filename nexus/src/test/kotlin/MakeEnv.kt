@@ -246,6 +246,7 @@ fun prepSandboxDb() {
             username = "bar"
             passwordHash = CryptoUtil.hashpw("bar")
             name = "Bar"
+            cashout_address = "payto://iban/FIAT"
         }
         DemobankCustomerEntity.new {
             username = "baz"
