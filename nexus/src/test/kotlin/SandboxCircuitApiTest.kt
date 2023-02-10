@@ -5,7 +5,9 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.sandbox.*
 import java.io.File
@@ -423,6 +425,23 @@ class SandboxCircuitApiTest {
                     }
                     assert(R.status.value == HttpStatusCode.NotFound.value)
                 }
+            }
+        }
+    }
+
+    // Tests the database RegEx filter on customer names.
+    @Ignore // Since no assert takes place.
+    @Test
+    fun customerFilter() {
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                val R = client.get("/demobanks/default/circuit-api/accounts?filter=b") {
+                    basicAuth("admin", "foo")
+                    expectSuccess = true
+                }
+                println(R.bodyAsText())
             }
         }
     }

@@ -6,6 +6,8 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.jetbrains.exposed.sql.deleteAll
+import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.sandbox.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
@@ -505,12 +507,24 @@ fun circuitApi(circuitRoute: Route) {
         ))
         return@get
     }
+
     // Get summary of all the accounts.
     circuitRoute.get("/accounts") {
         call.request.basicAuth(onlyAdmin = true)
+        val maybeFilter: String? = call.request.queryParameters["filter"]
+        /**
+         * Equip the given filter with left and right catch-all wildcards,
+         * otherwise use one catch-all wildcard.
+         */
+        val filter = if (maybeFilter != null) {
+            "%${maybeFilter}%"
+        } else "%"
         val customers = mutableListOf<Any>()
         transaction {
-            DemobankCustomerEntity.all().forEach {
+            DemobankCustomerEntity.find{
+                // like() is case insensitive.
+                DemobankCustomersTable.name.like(filter)
+            }.forEach {
                 if (it.cashout_address == null) {
                     logger.debug("Not listing account '${it.username}', as that" +
                             " misses the cash-out address " +

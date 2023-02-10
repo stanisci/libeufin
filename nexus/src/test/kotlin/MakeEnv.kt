@@ -22,6 +22,8 @@ data class EbicsKeys(
 )
 const val TEST_DB_FILE = "/tmp/nexus-test.sqlite3"
 const val TEST_DB_CONN = "jdbc:sqlite:$TEST_DB_FILE"
+// Convenience DB connection to switch to Postgresql:
+// const val TEST_DB_CONN = "jdbc:postgresql://localhost:5432/talercheck?user="
 val BANK_IBAN = getIban()
 val FOO_USER_IBAN = getIban()
 val BAR_USER_IBAN = getIban()
@@ -63,7 +65,7 @@ fun withTestDatabase(f: () -> Unit) {
             it.delete()
         }
     }
-    Database.connect("jdbc:sqlite:$TEST_DB_FILE")
+    Database.connect(TEST_DB_CONN)
     TransactionManager.manager.defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
     dbDropTables(TEST_DB_CONN)
     tech.libeufin.sandbox.dbDropTables(TEST_DB_CONN)
