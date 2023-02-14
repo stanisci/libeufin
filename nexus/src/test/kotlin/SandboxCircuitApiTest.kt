@@ -118,6 +118,11 @@ class SandboxCircuitApiTest {
                         tanChannel = SupportedTanChannels.FILE // change type to enum?
                         account = "foo"
                         status = CashoutOperationStatus.PENDING
+                        cashoutAddress = "not used"
+                        buyAtRatio = "not used"
+                        buyInFee = "not used"
+                        sellAtRatio = "not used"
+                        sellOutFee = "not used"
                     }
                 }
                 R = client.get("/demobanks/default/circuit-api/cashouts") {

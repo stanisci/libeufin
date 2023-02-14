@@ -96,7 +96,12 @@ data class CashoutOperationInfo(
     val creation_time: Long, // milliseconds
     val confirmation_time: Long?, // milliseconds
     val tan_channel: SupportedTanChannels,
-    val account: String
+    val account: String,
+    val cashout_address: String,
+    val buy_in_fee: String,
+    val buy_at_ratio: String,
+    val sell_out_fee: String,
+    val sell_at_ratio: String
 )
 
 data class CashoutConfirmation(val tan: String)
@@ -287,7 +292,13 @@ fun circuitApi(circuitRoute: Route) {
             creation_time = maybeOperation.creationTime,
             confirmation_time = maybeOperation.confirmationTime,
             tan_channel = maybeOperation.tanChannel,
-            account = maybeOperation.account
+            account = maybeOperation.account,
+            cashout_address = maybeOperation.cashoutAddress,
+            buy_at_ratio = maybeOperation.buyAtRatio,
+            buy_in_fee = maybeOperation.buyInFee,
+            sell_at_ratio = maybeOperation.sellAtRatio,
+            sell_out_fee = maybeOperation.sellOutFee
+
         )
         call.respond(ret)
         return@get
@@ -365,7 +376,14 @@ fun circuitApi(circuitRoute: Route) {
                 "TAN channel '$tanChannel' not supported."
             )
         // check if the user contact data would allow the TAN channel.
-        val customer = getCustomer(username = user)
+        val customer: DemobankCustomerEntity? = maybeGetCustomer(username = user)
+        if (customer == null) throw internalServerError(
+            "Customer profile '$user' not found after authenticating it."
+        )
+        if (customer.cashout_address == null) throw SandboxError(
+            HttpStatusCode.PreconditionFailed,
+            "Cash-out address not found.  Did the user register via Circuit API?"
+        )
         if ((tanChannel == SupportedTanChannels.EMAIL.name) && (customer.email == null))
             throw conflict("E-mail address not found for '$user'.  Can't send the TAN")
         if ((tanChannel == SupportedTanChannels.SMS.name) && (customer.phone == null))
@@ -399,11 +417,18 @@ fun circuitApi(circuitRoute: Route) {
             CashoutOperationEntity.new {
                 this.amountDebit = req.amount_debit
                 this.amountCredit = req.amount_credit
+                this.buyAtRatio = ratiosAndFees.buy_at_ratio.toString()
+                this.buyInFee = ratiosAndFees.buy_in_fee.toString()
+                this.sellAtRatio = ratiosAndFees.sell_at_ratio.toString()
+                this.sellOutFee = ratiosAndFees.sell_out_fee.toString()
                 this.subject = cashoutSubject
                 this.creationTime = getUTCnow().toInstant().toEpochMilli()
                 this.tanChannel = SupportedTanChannels.valueOf(tanChannel)
                 this.account = user
                 this.tan = getRandomString(5)
+                this.cashoutAddress = customer.cashout_address ?: throw internalServerError(
+                    "Cash-out address for '$user' not found, after previous check succeeded"
+                )
             }
         }
         // Send the TAN.

@@ -236,11 +236,14 @@ fun getHistoryElementFromTransactionRow(
  * customer to own multiple bank accounts.
  */
 fun getCustomer(username: String): DemobankCustomerEntity {
+    return maybeGetCustomer(username) ?: throw notFound("Customer '${username}' not found")
+}
+fun maybeGetCustomer(username: String): DemobankCustomerEntity? {
     return transaction {
         DemobankCustomerEntity.find {
             DemobankCustomersTable.username eq username
         }.firstOrNull()
-    } ?: throw notFound("Customer '${username}' not found")
+    }
 }
 
 /**

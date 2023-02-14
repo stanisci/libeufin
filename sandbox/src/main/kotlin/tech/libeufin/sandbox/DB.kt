@@ -441,11 +441,16 @@ object CashoutOperationsTable : LongIdTable() {
      */
     val amountDebit = text("amountDebit")
     val amountCredit = text("amountCredit")
+    val buyAtRatio = text("buyAtRatio")
+    val buyInFee = text("buyInFee")
+    val sellAtRatio = text("sellAtRatio")
+    val sellOutFee = text("sellOutFee")
     val subject = text("subject")
     val creationTime = long("creationTime") // in milliseconds.
     val confirmationTime = long("confirmationTime").nullable() // in milliseconds.
     val tanChannel = enumeration("tanChannel", SupportedTanChannels::class)
     val account = text("account")
+    val cashoutAddress = text("cashoutAddress")
     val tan = text("tan")
     val status = enumeration("status", CashoutOperationStatus::class).default(CashoutOperationStatus.PENDING)
 }
@@ -455,11 +460,16 @@ class CashoutOperationEntity(id: EntityID<Long>) : LongEntity(id) {
     var uuid by CashoutOperationsTable.uuid
     var amountDebit by CashoutOperationsTable.amountDebit
     var amountCredit by CashoutOperationsTable.amountCredit
+    var buyAtRatio by CashoutOperationsTable.buyAtRatio
+    var buyInFee by CashoutOperationsTable.buyInFee
+    var sellAtRatio by CashoutOperationsTable.sellAtRatio
+    var sellOutFee by CashoutOperationsTable.sellOutFee
     var subject by CashoutOperationsTable.subject
     var creationTime by CashoutOperationsTable.creationTime
     var confirmationTime by CashoutOperationsTable.confirmationTime
     var tanChannel by CashoutOperationsTable.tanChannel
     var account by CashoutOperationsTable.account
+    var cashoutAddress by CashoutOperationsTable.cashoutAddress
     var tan by CashoutOperationsTable.tan
     var status by CashoutOperationsTable.status
 }
