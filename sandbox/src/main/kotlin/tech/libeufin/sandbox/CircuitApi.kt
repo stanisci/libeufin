@@ -233,12 +233,6 @@ fun circuitApi(circuitRoute: Route) {
         // 404 if the operation is not found.
         if (op == null)
             throw notFound("Cash-out operation $operationUuid not found")
-        // 412 if the operation got already confirmed.
-        if (op.status == CashoutOperationStatus.CONFIRMED)
-            throw SandboxError(
-                HttpStatusCode.PreconditionFailed,
-                "Cash-out operation $operationUuid was already confirmed."
-            )
         /**
          * Check the TAN.  Give precedence to the TAN found
          * in the environment, for testing purposes.  If that's
@@ -259,7 +253,20 @@ fun circuitApi(circuitRoute: Route) {
          * NOTE: the funds availability got already checked when this operation
          * was created.  On top of that, the 'wireTransfer()' helper does also
          * check for funds availability.  */
+        val customer = maybeGetCustomer(user ?: throw SandboxError(
+            HttpStatusCode.ServiceUnavailable,
+            "This endpoint isn't served when the authentication is disabled."
+        ))
         transaction {
+            if (op.cashoutAddress != customer?.cashout_address) throw conflict(
+                "Inconsistent cash-out address: ${op.cashoutAddress} vs ${customer?.cashout_address}"
+            )
+            // 412 if the operation got already confirmed.
+            if (op.status == CashoutOperationStatus.CONFIRMED)
+                throw SandboxError(
+                    HttpStatusCode.PreconditionFailed,
+                    "Cash-out operation $operationUuid was already confirmed."
+                )
             wireTransfer(
                 debitAccount = op.account,
                 creditAccount = "admin",
