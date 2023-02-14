@@ -98,10 +98,7 @@ data class CashoutOperationInfo(
     val tan_channel: SupportedTanChannels,
     val account: String,
     val cashout_address: String,
-    val buy_in_fee: String,
-    val buy_at_ratio: String,
-    val sell_out_fee: String,
-    val sell_at_ratio: String
+    val ratios_and_fees: RatioAndFees
 )
 
 data class CashoutConfirmation(val tan: String)
@@ -301,11 +298,12 @@ fun circuitApi(circuitRoute: Route) {
             tan_channel = maybeOperation.tanChannel,
             account = maybeOperation.account,
             cashout_address = maybeOperation.cashoutAddress,
-            buy_at_ratio = maybeOperation.buyAtRatio,
-            buy_in_fee = maybeOperation.buyInFee,
-            sell_at_ratio = maybeOperation.sellAtRatio,
-            sell_out_fee = maybeOperation.sellOutFee
-
+            ratios_and_fees = RatioAndFees(
+                buy_in_fee = maybeOperation.buyInFee.toFloat(),
+                buy_at_ratio = maybeOperation.buyAtRatio.toFloat(),
+                sell_out_fee = maybeOperation.sellOutFee.toFloat(),
+                sell_at_ratio = maybeOperation.sellAtRatio.toFloat()
+            )
         )
         call.respond(ret)
         return@get

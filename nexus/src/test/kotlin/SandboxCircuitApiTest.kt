@@ -119,10 +119,10 @@ class SandboxCircuitApiTest {
                         account = "foo"
                         status = CashoutOperationStatus.PENDING
                         cashoutAddress = "not used"
-                        buyAtRatio = "not used"
-                        buyInFee = "not used"
-                        sellAtRatio = "not used"
-                        sellOutFee = "not used"
+                        buyAtRatio = "1"
+                        buyInFee = "1"
+                        sellAtRatio = "1"
+                        sellOutFee = "1"
                     }
                 }
                 R = client.get("/demobanks/default/circuit-api/cashouts") {
