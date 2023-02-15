@@ -89,8 +89,8 @@ class EbicsDownloadBankErrorResult(
 ) : EbicsDownloadResult()
 
 /**
- * Do an EBICS download transaction.  This includes the initialization phase, transaction phase
- * and receipt phase.
+ * Do an EBICS download transaction.  This includes
+ * the initialization phase, transaction phase and receipt phase.
  */
 suspend fun doEbicsDownloadTransaction(
     client: HttpClient,
@@ -105,55 +105,71 @@ suspend fun doEbicsDownloadTransaction(
     val initResponseStr = client.postToBank(subscriberDetails.ebicsUrl, initDownloadRequestStr)
     val initResponse = parseAndValidateEbicsResponse(subscriberDetails, initResponseStr)
 
+    val transactionID =
+        initResponse.transactionID ?: throw NexusError(
+            HttpStatusCode.BadGateway,
+            "Initial response must contain transaction ID, $orderType did not!"
+        )
+
+    // Checking for EBICS communication problems.
     when (initResponse.technicalReturnCode) {
         EbicsReturnCode.EBICS_OK -> {
-            // Success, nothing to do!
+            /**
+             * The EBICS communication succeeded, but business problems
+             * may be reported along the 'bank technical' code; this check
+             * takes place later.
+             */
         }
         else -> {
-            /**
-             * The bank gave a valid response that contains however
-             * an error.  Hence Nexus sent not processable instructions. */
-
+            // The bank gave a valid XML response but EBICS had problems.
             throw EbicsProtocolError(
                 HttpStatusCode.UnprocessableEntity,
-                "unexpected return code ${initResponse.technicalReturnCode}",
+                "Unexpected return code ${initResponse.technicalReturnCode}," +
+                        " for order type $orderType and transaction ID $transactionID," +
+                        " at init phase.",
                 initResponse.technicalReturnCode
             )
         }
     }
 
+    // Checking the 'bank technical' code.
     when (initResponse.bankReturnCode) {
         EbicsReturnCode.EBICS_OK -> {
             // Success, nothing to do!
         }
         else -> {
-            logger.warn("Bank return code was: ${initResponse.bankReturnCode}")
+            logger.error(
+                "Bank return code at init phase was: ${initResponse.bankReturnCode}, for" +
+                        " order type $orderType and transaction ID $transactionID."
+            )
             return EbicsDownloadBankErrorResult(initResponse.bankReturnCode)
         }
     }
 
-    val transactionID =
-        initResponse.transactionID ?: throw NexusError(
-            HttpStatusCode.BadGateway,
-            "Initial response must contain transaction ID"
-        )
-    logger.debug("Bank acknowledges EBICS download initialization.  Transaction ID: $transactionID.")
+    logger.debug("Bank acknowledges EBICS download initialization." +
+            "  Transaction ID: $transactionID.")
     val encryptionInfo = initResponse.dataEncryptionInfo
         ?: throw NexusError(
             HttpStatusCode.BadGateway,
-            "initial response did not contain encryption info"
+            "initial response did not contain encryption info.  " +
+                    "Order type $orderType, transaction ID $transactionID"
         )
 
     val initOrderDataEncChunk = initResponse.orderDataEncChunk
         ?: throw NexusError(
             HttpStatusCode.BadGateway,
-            "initial response for download transaction does not contain data transfer"
+            "initial response for download transaction does not " +
+                    "contain data transfer.  Order type $orderType, transaction ID $transactionID."
         )
 
     payloadChunks.add(initOrderDataEncChunk)
 
     val numSegments = initResponse.numSegments
-        ?: throw NexusError(HttpStatusCode.FailedDependency, "missing segment number in EBICS download init response")
+        ?: throw NexusError(
+            HttpStatusCode.FailedDependency,
+            "missing segment number in EBICS download init response." +
+                    "  Order type $orderType, transaction ID $transactionID"
+        )
 
     // Transfer phase
     for (x in 2 .. numSegments) {
@@ -169,7 +185,9 @@ suspend fun doEbicsDownloadTransaction(
             else -> {
                 throw NexusError(
                     HttpStatusCode.FailedDependency,
-                    "unexpected technical return code ${transferResponse.technicalReturnCode}"
+                    "unexpected EBICS technical return code at transfer phase: " +
+                            "${transferResponse.technicalReturnCode}." +
+                            "  Order type $orderType, transaction ID $transactionID"
                 )
             }
         }
@@ -178,14 +196,17 @@ suspend fun doEbicsDownloadTransaction(
                 // Success, nothing to do!
             }
             else -> {
-                logger.warn("Bank return code was: ${transferResponse.bankReturnCode}")
+                logger.error("Bank return code " +
+                        "at transfer phase was: ${transferResponse.bankReturnCode}." +
+                        "  Order type $orderType, transaction ID $transactionID")
                 return EbicsDownloadBankErrorResult(transferResponse.bankReturnCode)
             }
         }
         val transferOrderDataEncChunk = transferResponse.orderDataEncChunk
             ?: throw NexusError(
                 HttpStatusCode.BadGateway,
-                "transfer response for download transaction does not contain data transfer"
+                "transfer response for download transaction " +
+                        "does not contain data transfer.  Order type $orderType, transaction ID $transactionID"
             )
         payloadChunks.add(transferOrderDataEncChunk)
         logger.debug("Download transfer phase of ${transactionID}: bank acknowledges $x")
@@ -194,7 +215,6 @@ suspend fun doEbicsDownloadTransaction(
     val respPayload = decryptAndDecompressResponse(subscriberDetails, encryptionInfo, payloadChunks)
 
     // Acknowledgement phase
-
     val ackRequest = createEbicsRequestForDownloadReceipt(subscriberDetails, transactionID)
     val ackResponseStr = client.postToBank(
         subscriberDetails.ebicsUrl,
@@ -207,7 +227,9 @@ suspend fun doEbicsDownloadTransaction(
         else -> {
             throw NexusError(
                 HttpStatusCode.InternalServerError,
-                "unexpected return code: ${ackResponse.technicalReturnCode.name}"
+                "Unexpected EBICS return code" +
+                        " at acknowledgement phase: ${ackResponse.technicalReturnCode.name}." +
+                        "  Order type $orderType, transaction ID $transactionID"
             )
         }
     }
