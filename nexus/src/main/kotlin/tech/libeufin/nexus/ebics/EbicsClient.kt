@@ -260,16 +260,25 @@ suspend fun doEbicsUploadTransaction(
     if (initResponse.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
         throw NexusError(
             HttpStatusCode.InternalServerError,
-            reason = "unexpected return code"
+            reason = "EBICS-technical error at init phase:" +
+                    " ${initResponse.technicalReturnCode} ${initResponse.reportText}"
         )
     }
     // The bank did NOT indicate any error, but the response
     // lacks required information, blame the bank.
     val transactionID = initResponse.transactionID ?: throw NexusError(
             HttpStatusCode.BadGateway,
-            "init response must have transaction ID"
+            "Init response must have transaction ID"
         )
-    logger.debug("Bank acknowledges EBICS upload initialization.  Transaction ID: $transactionID.")
+    if (initResponse.bankReturnCode != EbicsReturnCode.EBICS_OK) {
+        throw NexusError(
+            HttpStatusCode.InternalServerError,
+            reason = "Bank-technical error at init phase:" +
+                    " ${initResponse.technicalReturnCode}"
+        )
+    }
+    logger.debug("Bank acknowledges EBICS upload initialization. " +
+            " Transaction ID: $transactionID.")
 
     /* now send actual payload */
     val ebicsPayload = createEbicsRequestForUploadTransferPhase(
@@ -284,18 +293,26 @@ suspend fun doEbicsUploadTransaction(
     )
     val txResp = parseAndValidateEbicsResponse(subscriberDetails, txRespStr)
     when (txResp.technicalReturnCode) {
-        EbicsReturnCode.EBICS_OK -> {
-        }
+        EbicsReturnCode.EBICS_OK -> {/* do nothing */}
         else -> {
+            // EBICS failed, blame Nexus.
             throw EbicsProtocolError(
-                /**
-                 * The communication was valid, but the content may have
-                 * caused a problem in the bank.  Nexus MAY but it's not required
-                 * to check all possible business conditions before requesting
-                 * to the bank. */
-                httpStatusCode = HttpStatusCode.UnprocessableEntity,
+                httpStatusCode = HttpStatusCode.InternalServerError,
                 reason = txResp.reportText,
                 ebicsTechnicalCode = txResp.technicalReturnCode
+            )
+        }
+    }
+    when (txResp.bankReturnCode) {
+        EbicsReturnCode.EBICS_OK -> {/* do nothing */}
+        else -> {
+            /**
+             * Although EBICS went fine, the bank complained about
+             * the communication content.
+             */
+            throw EbicsProtocolError(
+                httpStatusCode = HttpStatusCode.UnprocessableEntity,
+                reason = "bank-technical error: ${txResp.reportText}"
             )
         }
     }
