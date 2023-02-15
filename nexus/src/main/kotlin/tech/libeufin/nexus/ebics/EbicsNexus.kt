@@ -427,8 +427,15 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 }
             }
         }
+        /**
+         * Will be filled with fetch instructions, according
+         * to the parameters received from the client.
+         */
         val specs = mutableListOf<EbicsFetchSpec>()
-
+        /**
+         * 'level' indicates whether to fetch statements and/or reports,
+         * whereas 'p' usually carries a date range.
+         */
         fun addForLevel(l: FetchLevel, p: EbicsOrderParams) {
             when (l) {
                 FetchLevel.ALL -> {
@@ -443,7 +450,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 }
             }
         }
-
+        // Figuring out what time range to put in the fetch instructions.
         when (fetchSpec) {
             is FetchSpecLatestJson -> {
                 val p = EbicsStandardOrderParams()
@@ -458,6 +465,11 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 )
                 addForLevel(fetchSpec.level, p)
             }
+            /**
+             * This branch differentiates the last date of reports and
+             * statements and builds the fetch instructions for each of
+             * them.
+             */
             is FetchSpecSinceLastJson -> {
                 val pRep = EbicsStandardOrderParams(
                     EbicsDateRange(
@@ -476,6 +488,11 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                     )
                 )
                 when (fetchSpec.level) {
+                    /**
+                     * This branch doesn't call the "addForLevel()" helper because
+                     * that takes only ONE time range and would use it for both
+                     * statements and reports.
+                     */
                     FetchLevel.ALL -> {
                         specs.add(EbicsFetchSpec("C52", pRep))
                         specs.add(EbicsFetchSpec("C53", pStmt))
@@ -489,17 +506,20 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 }
             }
         }
-        /**
-         * Downloads and stores the bank message into the database.  No ingestion.
-         */
-        for (spec in specs)
-            fetchEbicsC5x(
-                spec.orderType,
-                client,
-                bankConnectionId,
-                spec.orderParams,
-                subscriberDetails
-            )
+        // Downloads and stores the bank message into the database.  No ingestion.
+        for (spec in specs) {
+            try {
+                fetchEbicsC5x(
+                    spec.orderType,
+                    client,
+                    bankConnectionId,
+                    spec.orderParams,
+                    subscriberDetails
+                )
+            } catch (e: Exception) {
+                logger.warn("Fetching transactions (${spec.orderType}) excepted: ${e.message}.")
+            }
+        }
     }
     /**
      * Submit one Pain.001 for one payment initiations.

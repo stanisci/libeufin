@@ -423,7 +423,8 @@ suspend fun fetchBankAccountTransactions(
     }
     /**
      * Collects transactions from the bank and stores the (camt)
-     * document into the database.
+     * document into the database.  This function tries to download
+     * both reports AND statements even if the first one fails.
      */
     getConnectionPlugin(res.connectionType).fetchTransactions(
         fetchSpec,

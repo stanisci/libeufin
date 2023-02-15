@@ -27,7 +27,7 @@ echo -n Delete previous data...
 rm -f $DB_PATH
 echo DONE
 echo -n Configure the default demobank with MANA...
-libeufin-sandbox config --currency MANA default
+libeufin-sandbox config --with-signup-bonus --currency MANA default
 echo DONE
 echo -n Start the bank...
 export LIBEUFIN_SANDBOX_ADMIN_PASSWORD=foo
@@ -99,5 +99,8 @@ libeufin-cli facades \
   new-taler-wire-gateway-facade \
   --currency TESTKUDOS --facade-name test-facade \
   wwwconn www-nexus
+echo OK
+echo -n "Ticking, to let statements be generated..."
+libeufin-sandbox camt053tick
 echo OK
 read -p "Press Enter to terminate..."
