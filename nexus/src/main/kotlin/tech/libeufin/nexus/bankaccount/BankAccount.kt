@@ -153,7 +153,15 @@ data class CamtTransactionsCount(
      * Total number of transactions that were included in a report
      * or a statement.
      */
-    val downloadedTransactions: Int
+    val downloadedTransactions: Int,
+    /**
+     * Exceptions occurred while fetching transactions.  Fetching
+     * transactions can be done via multiple EBICS messages, therefore
+     * a failing one should not prevent other messages to be sent.
+     * This list collects all the exceptions that happened during the
+     * execution of a batch of messages.
+     */
+    var errors: List<Exception>? = null
 )
 
 /**
@@ -426,7 +434,7 @@ suspend fun fetchBankAccountTransactions(
      * document into the database.  This function tries to download
      * both reports AND statements even if the first one fails.
      */
-    getConnectionPlugin(res.connectionType).fetchTransactions(
+    val errors: List<Exception>? = getConnectionPlugin(res.connectionType).fetchTransactions(
         fetchSpec,
         client,
         res.connectionName,
@@ -437,6 +445,7 @@ suspend fun fetchBankAccountTransactions(
     ingestFacadeTransactions(accountId, "taler-wire-gateway", ::talerFilter, ::maybeTalerRefunds)
     ingestFacadeTransactions(accountId, "anastasis", ::anastasisFilter, null)
 
+    ingestionResult.errors = errors
     return ingestionResult
 }
 

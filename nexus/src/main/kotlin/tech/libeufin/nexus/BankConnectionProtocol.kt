@@ -58,14 +58,22 @@ interface BankConnectionProtocol {
     // Send to the bank a previously prepared payment instruction.
     suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long)
 
-    // Downloads transactions from the bank, according to the specification
-    // given in the arguments.
+    /**
+     * Downloads transactions from the bank, according to the specification
+     * given in the arguments.
+     *
+     * This function returns a possibly empty list of exceptions.
+     * That helps not to stop fetching if ONE operation fails.  Notably,
+     * C52 and C53 may be asked along one invocation of this function,
+     * therefore storing the exception on C52 allows the C53 to still
+     * take place.  The caller then decides how to handle the exceptions.
+     */
     suspend fun fetchTransactions(
         fetchSpec: FetchSpecJson,
         client: HttpClient,
         bankConnectionId: String,
         accountId: String
-    )
+    ): List<Exception>?
 }
 
 fun getConnectionPlugin(connId: String): BankConnectionProtocol {

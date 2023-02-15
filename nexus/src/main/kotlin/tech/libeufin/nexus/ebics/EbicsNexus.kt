@@ -402,13 +402,20 @@ fun formatHex(ba: ByteArray): String {
     return out
 }
 
+/**
+ * This function returns a possibly empty list of Exception.
+ * That helps not to stop fetching if ONE operation fails.  Notably,
+ * C52 and C53 may be asked along one invocation of this function,
+ * therefore storing the exception on C52 allows the C53 to still
+ * take place.  The caller then decides how to handle the exceptions.
+ */
 class EbicsBankConnectionProtocol: BankConnectionProtocol {
     override suspend fun fetchTransactions(
         fetchSpec: FetchSpecJson,
         client: HttpClient,
         bankConnectionId: String,
         accountId: String
-    ) {
+    ): List<Exception>? {
         val subscriberDetails = transaction { getEbicsSubscriberDetails(bankConnectionId) }
         val lastTimes = transaction {
             val acct = NexusBankAccountEntity.findByName(accountId)
@@ -507,6 +514,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             }
         }
         // Downloads and stores the bank message into the database.  No ingestion.
+        val errors = mutableListOf<Exception>()
         for (spec in specs) {
             try {
                 fetchEbicsC5x(
@@ -518,8 +526,12 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 )
             } catch (e: Exception) {
                 logger.warn("Fetching transactions (${spec.orderType}) excepted: ${e.message}.")
+                errors.add(e)
             }
         }
+        if (errors.size > 0)
+            return errors
+        return null
     }
     /**
      * Submit one Pain.001 for one payment initiations.

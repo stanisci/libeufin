@@ -239,9 +239,7 @@ suspend fun doEbicsDownloadTransaction(
     return EbicsDownloadSuccessResult(respPayload)
 }
 
-/**
- * Currently only 1-segment requests.
- */
+// Currently only 1-segment requests.
 suspend fun doEbicsUploadTransaction(
     client: HttpClient,
     subscriberDetails: EbicsClientSubscriberDetails,

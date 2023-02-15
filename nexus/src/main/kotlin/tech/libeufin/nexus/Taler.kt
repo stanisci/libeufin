@@ -502,7 +502,6 @@ private suspend fun historyIncoming(call: ApplicationCall) {
  * In the future, a dedicate "add-incoming" facade should
  * be provided, offering the mean to store the credentials
  * at configuration time.
- *
  */
 private suspend fun addIncoming(call: ApplicationCall) {
     val facadeId = ensureNonNull(call.parameters["fcid"])

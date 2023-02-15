@@ -729,7 +729,25 @@ val nexusApp: Application.() -> Unit = {
                 )
             }
             val ingestionResult = fetchBankAccountTransactions(client, fetchSpec, accountid)
-            call.respond(ingestionResult)
+            var statusCode = HttpStatusCode.OK
+            /**
+             * Client errors are unlikely here, because authentication
+             * and JSON validity fail earlier.  Hence either Nexus or the
+             * bank had a problem.  NOTE: because this handler triggers multiple
+             * fetches, it is ALSO possible that although one error is reported,
+             * SOME transactions made it to the database!
+             */
+            if (ingestionResult.errors != null)
+            /**
+             * 500 is intentionally generic, because multiple errors
+             * may suggest different statuses.  The response body however
+             * informs the client about what failed.
+             */
+            statusCode = HttpStatusCode.InternalServerError
+            call.respond(
+                status = statusCode,
+                ingestionResult
+            )
             return@post
         }
 
