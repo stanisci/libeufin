@@ -490,6 +490,7 @@ val sandboxApp: Application.() -> Unit = {
         allowHeader(HttpHeaders.Authorization)
         allowHeader(HttpHeaders.ContentType)
         allowMethod(HttpMethod.Options)
+        allowMethod(HttpMethod.Patch)
         allowCredentials = true
     }
     install(IgnoreTrailingSlash)
