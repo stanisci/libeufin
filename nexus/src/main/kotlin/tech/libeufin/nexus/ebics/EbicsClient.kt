@@ -105,12 +105,7 @@ suspend fun doEbicsDownloadTransaction(
     val initResponseStr = client.postToBank(subscriberDetails.ebicsUrl, initDownloadRequestStr)
     val initResponse = parseAndValidateEbicsResponse(subscriberDetails, initResponseStr)
 
-    val transactionID =
-        initResponse.transactionID ?: throw NexusError(
-            HttpStatusCode.BadGateway,
-            "Initial response must contain transaction ID, $orderType did not!"
-        )
-
+    val transactionID: String? = initResponse.transactionID
     // Checking for EBICS communication problems.
     when (initResponse.technicalReturnCode) {
         EbicsReturnCode.EBICS_OK -> {
@@ -125,13 +120,21 @@ suspend fun doEbicsDownloadTransaction(
             throw EbicsProtocolError(
                 HttpStatusCode.UnprocessableEntity,
                 "Unexpected return code ${initResponse.technicalReturnCode}," +
-                        " for order type $orderType and transaction ID $transactionID," +
+                        " for order type $orderType and transaction ID: $transactionID," +
                         " at init phase.",
                 initResponse.technicalReturnCode
             )
         }
     }
-
+    /**
+     * At this point, the EBICS init phase went through,
+     * therefore the message should carry a transaction ID!
+     */
+    if (transactionID == null) throw NexusError(
+        HttpStatusCode.BadGateway,
+        "EBICS-correct init response should contain" +
+                " a transaction ID, $orderType did not!"
+    )
     // Checking the 'bank technical' code.
     when (initResponse.bankReturnCode) {
         EbicsReturnCode.EBICS_OK -> {
@@ -145,7 +148,6 @@ suspend fun doEbicsDownloadTransaction(
             return EbicsDownloadBankErrorResult(initResponse.bankReturnCode)
         }
     }
-
     logger.debug("Bank acknowledges EBICS download initialization." +
             "  Transaction ID: $transactionID.")
     val encryptionInfo = initResponse.dataEncryptionInfo
@@ -248,7 +250,9 @@ suspend fun doEbicsUploadTransaction(
     orderParams: EbicsOrderParams
 ) {
     if (subscriberDetails.bankEncPub == null) {
-        throw NexusError(HttpStatusCode.BadRequest, "bank encryption key unknown, request HPB first")
+        throw NexusError(HttpStatusCode.BadRequest,
+            "bank encryption key unknown, request HPB first"
+        )
     }
     val preparedUploadData = prepareUploadPayload(subscriberDetails, payload)
     val req = createEbicsRequestForUploadInitialization(subscriberDetails, orderType, orderParams, preparedUploadData)
