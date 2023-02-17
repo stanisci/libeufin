@@ -38,7 +38,8 @@ data class CircuitCashoutRequest(
 data class ConfigResp(
     val name: String = "circuit",
     val version: String = SANDBOX_VERSION,
-    val ratios_and_fees: RatioAndFees
+    val ratios_and_fees: RatioAndFees,
+    val fiat_currency: String = "CHF" // FIXME: make configurable.
 )
 
 // After fixing #7527, the values held by this
