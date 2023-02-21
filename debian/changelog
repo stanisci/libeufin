@@ -1,3 +1,9 @@
+libeufin (0.9.2) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Christian Grothoff <grothoff@gnu.org>  Tue, 21 Feb 2023 14:46:04 +0200
+
 libeufin (0.9.1) unstable; urgency=medium
 
   * Prepare for first proper release.
