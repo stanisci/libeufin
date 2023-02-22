@@ -17,7 +17,7 @@ exec-arch:
 	@./gradlew -q execArch
 
 .PHONY: deb
-deb: dist
+deb: exec-arch
 	@dpkg-buildpackage -rfakeroot -b -uc -us
 
 
