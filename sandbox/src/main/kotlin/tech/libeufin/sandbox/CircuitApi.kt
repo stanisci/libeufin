@@ -33,13 +33,13 @@ data class CircuitCashoutRequest(
      */
     val tan_channel: String?
 )
-
+const val FIAT_CURRENCY = "CHF" // FIXME: make configurable.
 // Configuration response:
 data class ConfigResp(
     val name: String = "circuit",
     val version: String = SANDBOX_VERSION,
     val ratios_and_fees: RatioAndFees,
-    val fiat_currency: String = "CHF" // FIXME: make configurable.
+    val fiat_currency: String = FIAT_CURRENCY
 )
 
 // After fixing #7527, the values held by this
@@ -370,10 +370,16 @@ fun circuitApi(circuitRoute: Route) {
         val amountDebit = parseAmount(req.amount_debit) // amount before rates.
         val amountCredit = parseAmount(req.amount_credit) // amount after rates, as expected by the client
         val demobank = ensureDemobank(call)
+        // Currency check of the cash-out's circuit part.
         if (amountDebit.currency != demobank.currency)
-            throw badRequest("The '${req::amount_debit.name}' field has the wrong currency")
-        if (amountCredit.currency == demobank.currency)
-            throw badRequest("The '${req::amount_credit.name}' field didn't change the currency.")
+            throw badRequest("'${req::amount_debit.name}' (${req.amount_debit})" +
+                    " doesn't match the regional currency (${demobank.currency})"
+            )
+        // Currency check of the cash-out's fiat part.
+        if (amountCredit.currency != FIAT_CURRENCY)
+            throw badRequest("'${req::amount_credit.name}' (${req.amount_credit})" +
+                    " doesn't match the fiat currency ($FIAT_CURRENCY)."
+            )
         // check if TAN is supported.  Default to SMS, if that's missing.
         val tanChannel = req.tan_channel?.uppercase() ?: SupportedTanChannels.SMS.name
         if (!isTanChannelSupported(tanChannel))
