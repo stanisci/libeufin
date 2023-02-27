@@ -440,7 +440,7 @@ class CurrencyAmountSerializer(jc: Class<CurrencyAmount> = CurrencyAmount::class
 @JsonSerialize(using = CurrencyAmountSerializer::class)
 data class CurrencyAmount(
     val currency: String,
-    val value: String // allows calculations
+    val value: String
 )
 fun CurrencyAmount.toPlainString(): String {
     return "${this.currency}:${this.value}"

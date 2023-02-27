@@ -71,5 +71,7 @@ enum class LibeufinErrorCode(val code: Int) {
      * A request is using a unsupported currency.  Usually returned
      * along 400 Bad Request
      */
-    LIBEUFIN_EC_BAD_CURRENCY(7)
+    LIBEUFIN_EC_BAD_CURRENCY(7),
+
+    LIBEUFIN_EC_TIMEOUT_EXPIRED(8)
 }

@@ -27,9 +27,7 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.w3c.dom.Document
 import tech.libeufin.nexus.*
-import tech.libeufin.nexus.iso20022.CamtParsingError
-import tech.libeufin.nexus.iso20022.CreditDebitIndicator
-import tech.libeufin.nexus.iso20022.parseCamtMessage
+import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.FetchSpecJson
 import tech.libeufin.nexus.server.Pain001Data
 import tech.libeufin.nexus.server.requireBankConnection
@@ -232,7 +230,7 @@ fun processCamtMessage(
                 }
             }
         }
-        val entries = res.reports.map { it.entries }.flatten()
+        val entries: List<CamtBankAccountEntry> = res.reports.map { it.entries }.flatten()
         var newPaymentsLog = ""
         downloadedTransactions = entries.size
         txloop@ for (entry in entries) {
