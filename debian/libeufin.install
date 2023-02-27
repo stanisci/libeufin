@@ -1,1 +1,3 @@
 debian/etc/* etc/
+# Only used to install the SPA + JS config:
+debian/usr/share/libeufin/* usr/share/libeufin/
