@@ -1,67 +1,31 @@
 package tech.libeufin.nexus
 
+import kotlinx.coroutines.*
+import org.jetbrains.exposed.dao.flushCache
 import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.statements.api.ExposedConnection
+import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.transactions.transactionManager
 import org.junit.Test
+import org.postgresql.PGConnection
+import org.postgresql.jdbc.PgConnection
+import tech.libeufin.util.PostgresListenNotify
 import withTestDatabase
-import java.io.File
-
-object MyTable : Table() {
-    val col1 = text("col1")
-    val col2 = text("col2")
-    override val primaryKey = PrimaryKey(col1, col2)
-}
+import java.sql.Connection
+import java.sql.DriverManager
 
 class DBTest {
-    @Test(expected = ExposedSQLException::class)
-    fun sqlDslTest() {
-        withTestDatabase {
-            transaction {
-                addLogger(StdOutSqlLogger)
-                SchemaUtils.create(MyTable)
-                MyTable.insert {
-                    it[col1] = "foo"
-                    it[col2] = "bar"
-                }
-                // should throw ExposedSQLException
-                MyTable.insert {
-                    it[col1] = "foo"
-                    it[col2] = "bar"
-                }
-                MyTable.insert {  } // shouldn't it fail for non-NULL constraint violation?
-            }
-        }
-    }
 
+    // Testing database notifications (only postgresql)
     @Test
-    fun facadeConfigTest() {
-        withTestDatabase {
-            transaction {
-                addLogger(StdOutSqlLogger)
-                SchemaUtils.create(
-                    FacadesTable,
-                    FacadeStateTable,
-                    NexusUsersTable
-                )
-                val user = NexusUserEntity.new {
-                    username = "testuser"
-                    passwordHash = "x"
-                    superuser = true
-                }
-                val facade = FacadeEntity.new {
-                    facadeName = "testfacade"
-                    type = "any"
-                    creator = user
-                }
-                FacadeStateEntity.new {
-                    bankAccount = "b"
-                    bankConnection = "b"
-                    reserveTransferLevel = "any"
-                    this.facade = facade
-                    currency = "UNUSED"
-                }
-            }
-        }
+    fun notifications() {
+        val genCon = DriverManager.getConnection("jdbc:postgresql://localhost:5432/talercheck?user=job")
+        val pgCon = genCon.unwrap(org.postgresql.jdbc.PgConnection::class.java)
+        val ln = PostgresListenNotify(pgCon, "x")
+        ln.postrgesListen()
+        ln.postgresNotify()
+        runBlocking { ln.postgresWaitNotification(2000L) }
     }
 }

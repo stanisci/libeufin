@@ -11,6 +11,7 @@ import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.sandbox.*
 import java.io.File
+import java.math.BigDecimal
 import java.util.*
 
 class SandboxCircuitApiTest {
@@ -28,6 +29,10 @@ class SandboxCircuitApiTest {
         }
     }
 
+    /**
+     * Checking that the ordinary user foo doesn't get to access bar's
+     * data, but admin does.
+     */
     @Test
     fun accessAccountsTest() {
         withTestDatabase {
@@ -258,12 +263,12 @@ class SandboxCircuitApiTest {
                     basicAuth("shop", "secret")
                     setBody("""{
                         "amount_debit": "TESTKUDOS:20",
-                        "amount_credit": "KUDOS:19",
+                        "amount_credit": "CHF:19",
                         "tan_channel": "file"
                     }""".trimIndent())
                 }
                 assert(R.status.value == HttpStatusCode.Accepted.value)
-                var operationUuid = mapper.readTree(R.readBytes()).get("uuid").asText()
+                val operationUuid = mapper.readTree(R.readBytes()).get("uuid").asText()
                 // Check that the operation is found by the bank.
                 R = client.get("/demobanks/default/circuit-api/cashouts/${operationUuid}") {
                     // Asking as the Admin but for the 'shop' account.
@@ -290,14 +295,37 @@ class SandboxCircuitApiTest {
                 }
                 respJson = mapper.readTree(R.bodyAsText())
                 assert(respJson.get("balance").get("amount").asText() == balanceAfterCashout)
-
+                // Attempt to cash-out with wrong regional currency.
+                R = client.post("/demobanks/default/circuit-api/cashouts") {
+                    contentType(ContentType.Application.Json)
+                    basicAuth("shop", "secret")
+                    setBody("""{
+                        "amount_debit": "NOTFOUND:20",
+                        "amount_credit": "CHF:19",
+                        "tan_channel": "file"
+                    }""".trimIndent())
+                    expectSuccess = false
+                }
+                assert(R.status.value == HttpStatusCode.BadRequest.value)
+                // Attempt to cash-out with wrong fiat currency.
+                R = client.post("/demobanks/default/circuit-api/cashouts") {
+                    contentType(ContentType.Application.Json)
+                    basicAuth("shop", "secret")
+                    setBody("""{
+                        "amount_debit": "TESTKUDOS:20",
+                        "amount_credit": "NOTFOUND:19",
+                        "tan_channel": "file"
+                    }""".trimIndent())
+                    expectSuccess = false
+                }
+                assert(R.status.value == HttpStatusCode.BadRequest.value)
                 // Create a new cash-out and delete it.
                 R = client.post("/demobanks/default/circuit-api/cashouts") {
                     contentType(ContentType.Application.Json)
                     basicAuth("shop", "secret")
                     setBody("""{
                         "amount_debit": "TESTKUDOS:20",
-                        "amount_credit": "KUDOS:19",
+                        "amount_credit": "CHF:19",
                         "tan_channel": "file"
                     }""".trimIndent())
                 }
@@ -447,6 +475,46 @@ class SandboxCircuitApiTest {
                     expectSuccess = true
                 }
                 println(R.bodyAsText())
+            }
+        }
+    }
+
+    /**
+     * Testing that deleting a user doesn't cause a _different_ user
+     * to lose data.
+     */
+    @Test
+    fun deletionIsolation() {
+        withTestDatabase {
+            prepSandboxDb()
+            transaction {
+                // Admin makes sure foo has balance 100.
+                wireTransfer(
+                    "admin",
+                    "foo",
+                    subject = "set to 100",
+                    amount = "TESTKUDOS:100"
+                )
+                val fooBalance = getBalance("foo")
+                assert(fooBalance == BigDecimal("100"))
+                // Foo pays 3 to bar.
+                wireTransfer(
+                    "foo",
+                    "bar",
+                    subject = "donation",
+                    amount = "TESTKUDOS:3"
+                )
+                val barBalance = getBalance("bar")
+                assert(barBalance == BigDecimal("3"))
+                // Deleting foo from the system.
+                transaction {
+                    val uBankAccount = getBankAccountFromLabel("foo")
+                    val uCustomerProfile = getCustomer("foo")
+                    uBankAccount.delete()
+                    uCustomerProfile.delete()
+                }
+                val barBalanceUpdate = getBalance("bar")
+                assert(barBalance == BigDecimal("3"))
             }
         }
     }

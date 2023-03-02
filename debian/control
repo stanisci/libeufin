@@ -17,6 +17,7 @@ Depends: openjdk-11-jdk-headless | openjdk-11-jdk | openjdk-12-jdk-headless | op
          python3 (>= 3.7),
          python3-click,
          python3-requests,
+         apache2 | nginx | httpd,
          ${misc:Depends}
 Recommends:
 Description: Software package to access FinTS/EBICS based

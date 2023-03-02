@@ -5,19 +5,26 @@ escaped_pwd = $(shell pwd | sed 's/\//\\\//g')
 all: assemble
 install: install-nexus install-sandbox install-cli
 git-archive-all = ./build-system/taler-build-scripts/archive-with-submodules/git_archive_all.py
-
+git_tag=$(shell git describe --tags)
+gradle_version=$(shell ./gradlew -q libeufinVersion)
+define versions_check =
+  if test $(git_tag) != "v$(gradle_version)"; \
+    then echo WARNING: Project version from Gradle: $(gradle_version) differs from current Git tag: $(git_tag); fi
+endef
 
 .PHONY: dist
 dist:
+	@$(call versions_check)
 	@mkdir -p build/distributions
 	@$(git-archive-all) --include ./configure build/distributions/libeufin-$(shell ./gradlew -q libeufinVersion)-sources.tar.gz
 
 .PHONY: exec-arch
 exec-arch:
+	@$(call versions_check)
 	@./gradlew -q execArch
 
 .PHONY: deb
-deb: dist
+deb: exec-arch
 	@dpkg-buildpackage -rfakeroot -b -uc -us
 
 

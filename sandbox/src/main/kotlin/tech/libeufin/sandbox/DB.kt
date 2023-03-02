@@ -182,7 +182,11 @@ object EbicsSubscribersTable : IntIdTable() {
     val authenticationKey = reference("authorizationKey", EbicsSubscriberPublicKeysTable).nullable()
     val nextOrderID = integer("nextOrderID")
     val state = enumeration("state", SubscriberState::class)
-    val bankAccount = reference("bankAccount", BankAccountsTable).nullable()
+    val bankAccount = reference(
+        "bankAccount",
+        BankAccountsTable,
+        onDelete = ReferenceOption.CASCADE
+    ).nullable()
 }
 
 class EbicsSubscriberEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -297,7 +301,11 @@ class EbicsUploadTransactionChunkEntity(id: EntityID<String>) : Entity<String>(i
  * to the main ledger.
  */
 object BankAccountFreshTransactionsTable : LongIdTable() {
-    val transactionRef = reference("transaction", BankAccountTransactionsTable)
+    val transactionRef = reference(
+        "transaction",
+        BankAccountTransactionsTable,
+        onDelete = ReferenceOption.CASCADE
+    )
 }
 class BankAccountFreshTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<BankAccountFreshTransactionEntity>(BankAccountFreshTransactionsTable)
@@ -331,7 +339,10 @@ object BankAccountTransactionsTable : LongIdTable() {
      * Bank account of the party whose 'direction' refers.  This version allows
      * only both parties to be registered at the running Sandbox.
      */
-    val account = reference("account", BankAccountsTable)
+    val account = reference(
+        "account", BankAccountsTable,
+        onDelete = ReferenceOption.CASCADE
+    )
     // Redundantly storing the demobank for query convenience.
     val demobank = reference("demobank", DemobankConfigsTable)
 }

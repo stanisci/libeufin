@@ -7,6 +7,8 @@ import org.jetbrains.exposed.sql.transactions.transactionManager
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.dbCreateTables
 import tech.libeufin.nexus.dbDropTables
+import tech.libeufin.nexus.iso20022.*
+import tech.libeufin.nexus.server.CurrencyAmount
 import tech.libeufin.nexus.server.FetchLevel
 import tech.libeufin.nexus.server.FetchSpecAllJson
 import tech.libeufin.sandbox.*
@@ -21,9 +23,9 @@ data class EbicsKeys(
     val sig: CryptoUtil.RsaCrtKeyPair
 )
 const val TEST_DB_FILE = "/tmp/nexus-test.sqlite3"
-const val TEST_DB_CONN = "jdbc:sqlite:$TEST_DB_FILE"
+// const val TEST_DB_CONN = "jdbc:sqlite:$TEST_DB_FILE"
 // Convenience DB connection to switch to Postgresql:
-// const val TEST_DB_CONN = "jdbc:postgresql://localhost:5432/talercheck?user="
+const val TEST_DB_CONN = "jdbc:postgresql://localhost:5432/talercheck?user=job"
 val BANK_IBAN = getIban()
 val FOO_USER_IBAN = getIban()
 val BAR_USER_IBAN = getIban()
@@ -293,3 +295,79 @@ fun withSandboxTestDatabase(f: () -> Unit) {
         f()
     }
 }
+
+fun talerIncomingForFoo(currency: String, value: String, subject: String) {
+    transaction {
+        val inc = NexusBankTransactionEntity.new {
+            bankAccount = NexusBankAccountEntity.findByName("foo")!!
+            accountTransactionId = "mock"
+            creditDebitIndicator = "CRDT"
+            this.currency = currency
+            this.amount = value
+            status = EntryStatus.BOOK
+            transactionJson = jacksonObjectMapper(
+            ).writerWithDefaultPrettyPrinter(
+            ).writeValueAsString(
+                genNexusIncomingPayment(
+                    amount = CurrencyAmount(currency,value),
+                    subject = subject
+                )
+            )
+        }
+        TalerIncomingPaymentEntity.new {
+            payment = inc
+            reservePublicKey = "mock"
+            timestampMs = 0L
+            debtorPaytoUri = "mock"
+        }
+    }
+}
+
+
+fun genNexusIncomingPayment(
+    amount: CurrencyAmount,
+    subject: String,
+): CamtBankAccountEntry =
+    CamtBankAccountEntry(
+        amount = amount,
+        creditDebitIndicator = CreditDebitIndicator.CRDT,
+        status = EntryStatus.BOOK,
+        bankTransactionCode = "mock",
+        valueDate = null,
+        bookingDate = null,
+        accountServicerRef = null,
+        entryRef = null,
+        currencyExchange = null,
+        counterValueAmount = null,
+        instructedAmount = null,
+        batches = listOf(
+            Batch(
+                paymentInformationId = null,
+                messageId = null,
+                batchTransactions = listOf(
+                    BatchTransaction(
+                        amount = amount,
+                        creditDebitIndicator = CreditDebitIndicator.CRDT,
+                        details = TransactionDetails(
+                            unstructuredRemittanceInformation = subject,
+                            debtor = null,
+                            debtorAccount = null,
+                            debtorAgent = null,
+                            creditor = null,
+                            creditorAccount = null,
+                            creditorAgent = null,
+                            ultimateCreditor = null,
+                            ultimateDebtor = null,
+                            purpose = null,
+                            proprietaryPurpose = null,
+                            currencyExchange = null,
+                            instructedAmount = null,
+                            counterValueAmount = null,
+                            interBankSettlementAmount = null,
+                            returnInfo = null
+                        )
+                    )
+                )
+            )
+        )
+    )

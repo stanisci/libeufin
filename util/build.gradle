@@ -45,6 +45,8 @@ dependencies {
     // https://mvnrepository.com/artifact/org.jetbrains.kotlin/kotlin-reflect
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-reflect', version: '1.5.21'
 
+    // Database helper
+    implementation group: 'org.postgresql', name: 'postgresql', version: '42.5.4'
     implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
     implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
     implementation "io.netty:netty-all:$netty_version"
