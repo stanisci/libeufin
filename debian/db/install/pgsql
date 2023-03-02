@@ -1,0 +1,34 @@
+#!/bin/bash
+
+set -eu
+
+libeufindb_secretconf=/etc/libeufin-db.secret.conf
+
+# Get database settings from dbconfig-common and write Taler configuration files.
+if [ -f /etc/dbconfig-common/taler-libeufin.conf ]; then
+  . /etc/dbconfig-common/taler-libeufin.conf
+  case "$dbc_dbtype" in
+  pgsql)
+    # We assume ident auth here.  We might support password auth later.
+    echo -e "[libeufin-postgres]\nCONFIG=postgres:///${dbc_dbname}\n\n" > \
+      $libeufindb_secretconf
+
+    # Allow the libeufin-sandbox/nexus user to create schemas, needed by dbinit
+    echo "GRANT CREATE ON DATABASE \"${dbc_dbtype}\" TO \"libeufin-nexus\";" | sudo -u postgres psql -f -
+    echo "GRANT CREATE ON DATABASE \"${dbc_dbtype}\" TO \"libeufin-sandbox\";" | sudo -u postgres psql -f -
+    ;;
+  sqlite3)
+    # Later: use something like:
+    # sqlite:///$DATA_DIR/libeufin.db
+    # But for now, sqlite is unsupported:
+    echo "Unsupported database type $dbc_type."
+    exit 1
+    ;;
+  "") ;;
+
+  *)
+    echo "Unsupported database type $dbc_type."
+    exit 1
+    ;;
+  esac
+fi

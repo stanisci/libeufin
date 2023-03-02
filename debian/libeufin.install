@@ -1,1 +1,4 @@
 debian/etc/* etc/
+
+# Files needed by dbconf
+debian/db/install/* usr/share/dbconfig-common/scripts/libeufin/install/
