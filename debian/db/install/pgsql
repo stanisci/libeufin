@@ -2,16 +2,17 @@
 
 set -eu
 
-libeufindb_secretconf=/etc/libeufin-db.secret.conf
-
 # Get database settings from dbconfig-common and write Taler configuration files.
 if [ -f /etc/dbconfig-common/taler-libeufin.conf ]; then
   . /etc/dbconfig-common/taler-libeufin.conf
   case "$dbc_dbtype" in
   pgsql)
     # We assume ident auth here.  We might support password auth later.
-    echo -e "[libeufin-postgres]\nCONFIG=postgres:///${dbc_dbname}\n\n" > \
-      $libeufindb_secretconf
+    echo -e "LIBEUFIN_NEXUS_DB_CONNECTION=jdbc:postgres:///${dbc_dbname}\n\n" >> \
+	 /etc/libeufin/nexus.env
+    echo -e "LIBEUFIN_SANDBOX_DB_CONNECTION=jdbc:postgres:///${dbc_dbname}\n\n" >> \
+	 /etc/libeufin/sandbox.env
+   
 
     # Allow the libeufin-sandbox/nexus user to create schemas, needed by dbinit
     echo "GRANT CREATE ON DATABASE \"${dbc_dbtype}\" TO \"libeufin-nexus\";" | sudo -u postgres psql -f -
