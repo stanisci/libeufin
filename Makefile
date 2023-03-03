@@ -23,8 +23,16 @@ exec-arch:
 	@$(call versions_check)
 	@./gradlew -q execArch
 
+.PHONY: clean-spa
+clean-spa:
+	@rm -fr debian/usr/share/libeufin/demobank-ui/index.*
+
+.PHONY: get-spa
+get-spa:
+	@./contrib/get_spa.sh
+
 .PHONY: deb
-deb: exec-arch
+deb: exec-arch get-spa
 	@dpkg-buildpackage -rfakeroot -b -uc -us
 
 
