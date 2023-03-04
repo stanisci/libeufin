@@ -63,6 +63,11 @@ override_dh_install:
 	mkdir -p debian/libeufin-sandbox/usr/share/libeufin/bin/
 	mv debian/libeufin/usr/share/libeufin/bin/libeufin-sandbox \
            debian/libeufin-sandbox/usr/share/libeufin/bin/
+
+	mkdir -p debian/libeufin-common/usr/share/libeufin/bin/
+	mv debian/libeufin/usr/share/libeufin/bin/libeufin-cli \
+           debian/libeufin-common/usr/share/libeufin/bin/
+
 	rm -rf debian/libeufin/
 
 override_dh_installsystemd:
