@@ -1,3 +1,9 @@
+libeufin (0.9.2-1) unstable; urgency=medium
+
+  * Add SPA.
+
+ -- Christian Grothoff <grothoff@gnu.org>  Sat, 4 Mar 2023 14:46:04 +0200
+
 libeufin (0.9.2) unstable; urgency=medium
 
   * New upstream release.
