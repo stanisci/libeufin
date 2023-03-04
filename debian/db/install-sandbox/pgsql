@@ -3,8 +3,8 @@
 set -eu
 
 # Get database settings from dbconfig-common and write libeufin configuration files.
-if [ -f /etc/dbconfig-common/taler-libeufin.conf ]; then
-  . /etc/dbconfig-common/taler-libeufin.conf
+if [ -f /etc/dbconfig-common/libeufin-sandbox.conf ]; then
+  . /etc/dbconfig-common/libeufin-sandbox.conf
   case "$dbc_dbtype" in
   pgsql)
     # We assume ident auth here.  We might support password auth later.
