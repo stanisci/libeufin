@@ -7,22 +7,17 @@ if [ -d /run/systemd/system ]; then
 fi
 if [ "$1" = "remove" ]; then
         if [ -x "/usr/bin/deb-systemd-helper" ]; then
-                deb-systemd-helper mask 'libeufin-nexus.service' >/dev/null || true
                 deb-systemd-helper mask 'libeufin-sandbox.service' >/dev/null || true
         fi
 fi
 
 if [ "$1" = "purge" ]; then
         if [ -x "/usr/bin/deb-systemd-helper" ]; then
-                deb-systemd-helper purge 'libeufin-nexus.service' >/dev/null || true
                 deb-systemd-helper purge 'libeufin-sandbox.service' >/dev/null || true
-                deb-systemd-helper unmask 'libeufin-nexus.service' >/dev/null || true
                 deb-systemd-helper unmask 'libeufin-sandbox.service' >/dev/null || true
         fi
 fi
-nexus_user=libeufin-nexus
 sandbox_user=libeufin-sandbox
-nexus_group=libeufin-nexus
 sandbox_group=libeufin-sandbox
 libeufin_home=/var/lib/libeufin
 
@@ -37,17 +32,8 @@ dbc_first_version="0.9.2"
 case "${1}" in
   configure)
 
-    if ! getent group $nexus_group >/dev/null; then
-      addgroup --quiet --system $nexus_group
-    fi
-
     if ! getent group $sandbox_group >/dev/null; then
       addgroup --quiet --system $sandbox_group
-    fi
-
-    # Create users if needed
-    if ! getent passwd $nexus_user >/dev/null; then
-      adduser --quiet --system --no-create-home --ingroup $nexus_group --home $libeufin_home $nexus_user
     fi
 
     # Create users if needed
@@ -59,7 +45,6 @@ case "${1}" in
     if [ -f /usr/share/dbconfig-common/dpkg/postinst.pgsql ]; then
       . /usr/share/dbconfig-common/dpkg/postinst.pgsql
       dbc_pgsql_createdb_encoding="UTF8"
-      dbc_go libeufin-nexus "$@"
       dbc_go libeufin-sandbox "$@"
     fi
 

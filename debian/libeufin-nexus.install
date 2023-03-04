@@ -1,0 +1,2 @@
+# Files needed by dbconf
+debian/db/install-nexus/* usr/share/dbconfig-common/scripts/libeufin-nexus/install/

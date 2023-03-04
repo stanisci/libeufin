@@ -7,11 +7,8 @@ if [ -f /etc/dbconfig-common/taler-libeufin.conf ]; then
   . /etc/dbconfig-common/taler-libeufin.conf
   case "$dbc_dbtype" in
   pgsql)
-      # We assume ident auth here.  We might support password auth later.
-      echo -e "LIBEUFIN_NEXUS_PORT=5017" >> \
-         /etc/libeufin/nexus.env
-    echo -e "LIBEUFIN_NEXUS_DB_CONNECTION=jdbc:postgres:///${dbc_dbname}\n\n" >> \
-	 /etc/libeufin/nexus.env
+    # We assume ident auth here.  We might support password auth later.
+    mkdir -p /etc/libeufin/
     echo -e "LIBEUFIN_SANDBOX_PORT=5016" >> \
          /etc/libeufin/sandbox.env
     echo -e "LIBEUFIN_SANDBOX_DB_CONNECTION=jdbc:postgres:///${dbc_dbname}\n\n" >> \
@@ -20,7 +17,7 @@ if [ -f /etc/dbconfig-common/taler-libeufin.conf ]; then
 
     # Allow the libeufin-sandbox/nexus user to create schemas.
     # Note: user name and DB name must match here.
-    echo "GRANT CREATE ON DATABASE \"${dbc_dbname}\" TO \"${dbc_dbname}\";" | sudo -u postgres psql -f -
+    echo "GRANT CREATE ON DATABASE \"${dbc_dbname}\" TO \"libeufin-sandbox\";" | sudo -u postgres psql -f -
     ;;
   sqlite3)
     # Later: use something like:

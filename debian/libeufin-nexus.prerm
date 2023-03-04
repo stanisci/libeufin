@@ -4,7 +4,6 @@ set -e
 
 if [ -d /run/systemd/system ] && [ "$1" = remove ]; then
         deb-systemd-invoke stop 'libeufin-nexus.service' >/dev/null || true
-        deb-systemd-invoke stop 'libeufin-sandbox.service' >/dev/null || true
 fi
 
 if [ -f /usr/share/debconf/confmodule ]; then
@@ -15,7 +14,6 @@ fi
 if [ -f /usr/share/dbconfig-common/dpkg/prerm.pgsql ]; then
     . /usr/share/dbconfig-common/dpkg/prerm.pgsql
     dbc_go libeufin-nexus "$@"
-    dbc_go libeufin-sandbox "$@"
 fi
 
 

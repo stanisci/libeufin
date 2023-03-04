@@ -1,0 +1,34 @@
+#!/bin/bash
+
+set -eu
+
+# Get database settings from dbconfig-common and write libeufin configuration files.
+if [ -f /etc/dbconfig-common/taler-libeufin.conf ]; then
+  . /etc/dbconfig-common/taler-libeufin.conf
+  case "$dbc_dbtype" in
+  pgsql)
+    # We assume ident auth here.  We might support password auth later.
+    mkdir -p /etc/libeufin/
+    echo -e "LIBEUFIN_NEXUS_PORT=5017" >> \
+         /etc/libeufin/nexus.env
+    echo -e "LIBEUFIN_NEXUS_DB_CONNECTION=jdbc:postgres:///${dbc_dbname}\n\n" >> \
+	 /etc/libeufin/nexus.env
+
+    # Allow the libeufin-sandbox/nexus user to create schemas.
+    echo "GRANT CREATE ON DATABASE \"${dbc_dbname}\" TO \"libeufin-nexus\";" | sudo -u postgres psql -f -
+    ;;
+  sqlite3)
+    # Later: use something like:
+    # sqlite:///$DATA_DIR/libeufin.db
+    # But for now, sqlite is unsupported:
+    echo "Unsupported database type $dbc_type."
+    exit 1
+    ;;
+  "") ;;
+
+  *)
+    echo "Unsupported database type $dbc_type."
+    exit 1
+    ;;
+  esac
+fi
