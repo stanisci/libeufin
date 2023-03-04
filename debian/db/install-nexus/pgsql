@@ -11,7 +11,7 @@ if [ -f /etc/dbconfig-common/libeufin-nexus.conf ]; then
     mkdir -p /etc/libeufin/
     echo -e "LIBEUFIN_NEXUS_PORT=5017" > \
          /etc/libeufin/nexus.env
-    echo -e "LIBEUFIN_NEXUS_DB_CONNECTION=\"jdbc:postgres:///${dbc_dbserver}/${dbc_dbname}?user=${dbc_dbuser}&password=${dbc_dbpass}\"\n\n" >> \
+    echo -e "LIBEUFIN_NEXUS_DB_CONNECTION=\"jdbc:postgresql://${dbc_dbserver}/${dbc_dbname}?user=${dbc_dbuser}&password=${dbc_dbpass}\"\n\n" >> \
 	 /etc/libeufin/nexus.env
 
     # Allow the libeufin-sandbox/nexus user to create schemas.
