@@ -8,7 +8,8 @@ fi
 
 if [ -f /usr/share/dbconfig-common/dpkg/postrm.pgsql ]; then
     . /usr/share/dbconfig-common/dpkg/postrm.pgsql
-    dbc_go libeufin "$@"
+    dbc_go libeufin-nexus "$@"
+    dbc_go libeufin-sandbox "$@"
 fi
 
 case "${1}" in

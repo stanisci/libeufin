@@ -14,7 +14,8 @@ fi
 
 if [ -f /usr/share/dbconfig-common/dpkg/prerm.pgsql ]; then
     . /usr/share/dbconfig-common/dpkg/prerm.pgsql
-    dbc_go libeufin "$@"
+    dbc_go libeufin-nexus "$@"
+    dbc_go libeufin-sandbox "$@"
 fi
 
 

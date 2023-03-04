@@ -1,3 +1,9 @@
+libeufin (0.9.2-2) unstable; urgency=medium
+
+  * Try to fix DB setup rules.
+
+ -- Christian Grothoff <grothoff@gnu.org>  Sat, 4 Mar 2023 14:47:04 +0200
+
 libeufin (0.9.2-1) unstable; urgency=medium
 
   * Add SPA.

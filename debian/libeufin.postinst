@@ -30,6 +30,7 @@ libeufin_home=/var/lib/libeufin
 # (for when we support sqlite3 in the future)
 dbc_dbfile_owner="${_USERNAME}:${_GROUPNAME}"
 dbc_dbfile_perms="0600"
+dbc_first_version="0.9.2"
 
 . /usr/share/debconf/confmodule
 
@@ -58,7 +59,8 @@ case "${1}" in
     if [ -f /usr/share/dbconfig-common/dpkg/postinst.pgsql ]; then
       . /usr/share/dbconfig-common/dpkg/postinst.pgsql
       dbc_pgsql_createdb_encoding="UTF8"
-      dbc_go libeufin "$@"
+      dbc_go libeufin-nexus "$@"
+      dbc_go libeufin-sandbox "$@"
     fi
 
     ;;
