@@ -9,7 +9,7 @@ if [ -f /etc/dbconfig-common/libeufin-sandbox.conf ]; then
   pgsql)
     # We assume ident auth here.  We might support password auth later.
     mkdir -p /etc/libeufin/
-    echo -e "LIBEUFIN_SANDBOX_PORT=5016" >> \
+    echo -e "LIBEUFIN_SANDBOX_PORT=5016" > \
          /etc/libeufin/sandbox.env
     echo -e "LIBEUFIN_SANDBOX_DB_CONNECTION=jdbc:postgres://${dbc_dbserver}/${dbc_dbname}?user=${dbc_dbuser}&password=${dbc_dbpass}\n\n" >> \
 	 /etc/libeufin/sandbox.env
