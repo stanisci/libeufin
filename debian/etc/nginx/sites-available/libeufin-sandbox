@@ -31,7 +31,7 @@ server {
   # FRONTEND
   location / {
     # This location has both the SPA HTML and the
-    # JavaScript configuration demobank-ui-settings.js 
+    # JavaScript configuration demobank-ui-settings.js
     index index.html;
     alias /usr/share/libeufin/demobank-ui/;
   }
