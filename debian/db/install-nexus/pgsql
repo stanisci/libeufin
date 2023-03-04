@@ -4,14 +4,15 @@ set -eu
 
 # Get database settings from dbconfig-common and write libeufin configuration files.
 if [ -f /etc/dbconfig-common/libeufin-nexus.conf ]; then
-  . /etc/dbconfig-common/libeufin-nexus.conf
+    . /etc/dbconfig-common/libeufin-nexus
+    .conf
   case "$dbc_dbtype" in
   pgsql)
     # We assume ident auth here.  We might support password auth later.
     mkdir -p /etc/libeufin/
     echo -e "LIBEUFIN_NEXUS_PORT=5017" >> \
          /etc/libeufin/nexus.env
-    echo -e "LIBEUFIN_NEXUS_DB_CONNECTION=jdbc:postgres:///${dbc_dbname}\n\n" >> \
+    echo -e "LIBEUFIN_NEXUS_DB_CONNECTION=jdbc:postgres:///${dbc_dbserver}/${dbc_dbname}?user=${dbc_dbuser}&password=${dbc_dbpass}\n\n" >> \
 	 /etc/libeufin/nexus.env
 
     # Allow the libeufin-sandbox/nexus user to create schemas.
