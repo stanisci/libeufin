@@ -25,7 +25,7 @@ server {
     proxy_set_header X-Forwarded-Proto "$scheme";
     proxy_set_header X-Forwarded-Host "localhost";
     proxy_set_header X-Forwarded-Prefix /;
-    proxy_pass http://localhost:5000;
+    proxy_pass http://localhost:5016;
   }
   # rewrite ^/$ /index.html;
   # FRONTEND
