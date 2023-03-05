@@ -14,6 +14,9 @@ server {
   # - replace with your actual server name.
   server_name localhost;
 
+  access_log /var/log/nginx/libeufin-sandbox.log;
+  error_log /var/log/nginx/libeufin-sandbox.err;
+
   # Doesn't take requests away from the backend,
   # because that expects always a "/demobanks/default"
   # prefix.
