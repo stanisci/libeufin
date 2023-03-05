@@ -36,4 +36,8 @@ server {
     alias /usr/share/libeufin/demobank-ui/;
   }
 
+  location = /demobank-ui-settings.js {
+    alias /etc/libeufin/demobank-ui-settings.js;
+  }
+
 }
