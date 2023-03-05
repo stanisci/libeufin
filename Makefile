@@ -25,7 +25,7 @@ exec-arch:
 
 .PHONY: clean-spa
 clean-spa:
-	@rm -fr debian/usr/share/libeufin/demobank-ui/index.*
+	@rm -fr debian/usr/share/libeufin/demobank-ui/index.* debian/usr/share/libeufin/demobank-ui/*.svg
 
 .PHONY: get-spa
 get-spa:

@@ -4,3 +4,6 @@
 [submodule "parsing-tests/samples"]
 	path = parsing-tests/samples
 	url = git://git.taler.net/libeufin-tests
+[submodule "contrib/wallet-core"]
+	path = contrib/wallet-core
+	url = git://git.taler.net/wallet-core

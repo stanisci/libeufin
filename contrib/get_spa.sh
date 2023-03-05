@@ -18,4 +18,4 @@ if ! wget --version &> /dev/null; then
   exit 1
 fi
 
-wget --content-disposition "https://git.taler.net/wallet-core.git/plain/demobank/index"{.css,.js,.html}"?h=prebuilt" -P debian/usr/share/libeufin/demobank-ui/
+cp contrib/wallet-core/demobank/* debian/usr/share/libeufin/demobank-ui/

@@ -22,3 +22,7 @@ __pycache__
 .DS_Store
 *.mk
 util/src/main/resources/version.txt
+debian/usr/share/libeufin/demobank-ui/index.js
+debian/usr/share/libeufin/demobank-ui/*.html
+debian/usr/share/libeufin/demobank-ui/*.css
+debian/usr/share/libeufin/demobank-ui/*.svg
