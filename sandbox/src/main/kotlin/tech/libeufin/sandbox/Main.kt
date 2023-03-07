@@ -1430,6 +1430,9 @@ val sandboxApp: Application.() -> Unit = {
                             )
                         )
                         val iban = bankAccount.iban
+                        // The Elvis operator helps the --no-auth case,
+                        // where username would be empty
+                        val debitThreshold = getMaxDebitForUser(username ?: "admin").toString()
                     })
                     return@get
                 }
@@ -1559,16 +1562,14 @@ val sandboxApp: Application.() -> Unit = {
                     )
                     val balance = getBalance(newAccount.bankAccount, withPending = true)
                     call.respond(object {
-                        val balance = object {
-                            val amount = "${demobank.currency}:${balance.abs()}"
-                            val credit_debit_indicator = if (balance < BigDecimal.ZERO) "DBIT" else "CRDT"
-                        }
+                        val balance = getBalanceForJson(balance, demobank.currency)
                         val paytoUri = buildIbanPaytoUri(
                             iban = newAccount.bankAccount.iban,
                             bic = newAccount.bankAccount.bic,
                             receiverName = getPersonNameFromCustomer(req.username)
                         )
                         val iban = newAccount.bankAccount.iban
+                        val debitThreshold = getMaxDebitForUser(req.username).toString()
                     })
                     return@post
                 }

@@ -32,6 +32,22 @@ fun maybeDebit(
     return false
 }
 
+fun getMaxDebitForUser(username: String): Int {
+    val bank = getDefaultDemobank()
+    if (username == "admin") return bank.bankDebtLimit
+    return bank.usersDebtLimit
+
+
+}
+
+fun getBalanceForJson(value: BigDecimal, currency: String): BalanceJson {
+    return BalanceJson(
+        amount = "${currency}:${value.abs()}",
+        credit_debit_indicator = if (value < BigDecimal.ZERO) "DBIT" else "CRDT"
+    )
+
+}
+
 /**
  * The last balance is the one mentioned in the bank account's
  * last statement.  If the bank account does not have any statement

@@ -562,16 +562,14 @@ fun circuitApi(circuitRoute: Route) {
                 // like() is case insensitive.
                 DemobankCustomersTable.name.like(filter)
             }.forEach {
-                if (it.cashout_address == null) {
-                    logger.debug("Not listing account '${it.username}', as that" +
-                            " misses the cash-out address " +
-                            "and therefore doesn't belong to the Circuit API"
-                    )
-                    return@forEach
-                }
                 customers.add(object {
                     val username = it.username
                     val name = it.name
+                    val balance = getBalanceForJson(
+                        getBalance(it.username),
+                        getDefaultDemobank().currency
+                    )
+                    val debitThreshold = getMaxDebitForUser(it.username)
                 })
             }
         }

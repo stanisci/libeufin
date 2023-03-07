@@ -29,7 +29,10 @@ data class WithdrawalRequest(
      */
     val amount: String // $CURRENCY:X.Y
 )
-
+data class BalanceJson(
+    val amount: String,
+    val credit_debit_indicator: String
+)
 data class Demobank(
     val currency: String,
     val name: String,
