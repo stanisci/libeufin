@@ -1325,24 +1325,28 @@ val sandboxApp: Application.() -> Unit = {
                             -1
                         )
                         host = "withdraw"
-                        this.appendPathSegments(
-                            listOf(
-                                /**
-                                 * encodes the hostname(+port) of the actual
-                                 * bank that will serve the withdrawal request.
-                                 */
-                                baseUrl.host.plus(
-                                    if (baseUrl.port != -1)
-                                        ":${baseUrl.port}"
-                                    else ""
-                                ),
-                                baseUrl.path, // has x-forwarded-prefix, or single slash.
-                                "demobanks",
-                                demobank.name,
-                                "integration-api",
-                                wo.wopid.toString()
+                        val pathSegments = mutableListOf(
+                            /**
+                             * encodes the hostname(+port) of the actual
+                             * bank that will serve the withdrawal request.
+                             */
+                            baseUrl.host.plus(
+                                if (baseUrl.port != -1)
+                                    ":${baseUrl.port}"
+                                else ""
                             )
                         )
+                        /**
+                         * Slashes can only be intermediate and single,
+                         * any other combination results in badly formed URIs.
+                         * The following loop ensure this for the current URI path.
+                         * This might even come from X-Forwarded-Prefix.
+                         */
+                        baseUrl.path.split("/").forEach {
+                            if (it.isNotEmpty()) pathSegments.add(it)
+                        }
+                        pathSegments.add("demobanks/${demobank.name}/integration-api/${wo.wopid}")
+                        this.appendPathSegments(pathSegments)
                     }
                     call.respond(object {
                         val withdrawal_id = wo.wopid.toString()
