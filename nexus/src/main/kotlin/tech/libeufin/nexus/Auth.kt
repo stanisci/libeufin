@@ -60,13 +60,13 @@ fun findPermission(p: Permission): NexusPermissionEntity? {
  * Require that the authenticated user has at least one of the listed permissions.
  *
  * Throws a NexusError if the authenticated user for the request doesn't have any of
- * listed the permissions.
+ * listed the permissions.  It returns the username of the authorized user.
  */
-fun ApplicationRequest.requirePermission(vararg perms: PermissionQuery) {
-    transaction {
+fun ApplicationRequest.requirePermission(vararg perms: PermissionQuery): String {
+    val username = transaction {
         val user = authenticateRequest(this@requirePermission)
         if (user.superuser) {
-            return@transaction
+            return@transaction user.username
         }
         var foundPermission = false
         for (pr in perms) {
@@ -82,8 +82,10 @@ fun ApplicationRequest.requirePermission(vararg perms: PermissionQuery) {
                 perms.joinToString(" | ") { "${it.resourceId} ${it.resourceType} ${it.permissionName}" }
             throw NexusError(
                 HttpStatusCode.Forbidden,
-                "User ${user.id.value} has insufficient permissions (needs $possiblePerms."
+                "User ${user.username} has insufficient permissions (needs $possiblePerms)."
             )
         }
+        user.username
     }
+    return username
 }

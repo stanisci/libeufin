@@ -29,6 +29,7 @@ import tech.libeufin.nexus.iso20022.EntryStatus
 import tech.libeufin.util.EbicsInitState
 import java.sql.Connection
 
+
 /**
  * This table holds the values that exchange gave to issue a payment,
  * plus a reference to the prepared pain.001 version of.  Note that
@@ -100,7 +101,6 @@ object TalerIncomingPaymentsTable : LongIdTable() {
     val timestampMs = long("timestampMs")
     val debtorPaytoUri = text("incomingPaytoUri")
 }
-
 
 class TalerIncomingPaymentEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<TalerIncomingPaymentEntity>(TalerIncomingPaymentsTable)
@@ -343,7 +343,6 @@ class EbicsSubscriberEntity(id: EntityID<Long>) : LongEntity(id) {
 }
 
 object NexusUsersTable : LongIdTable() {
-
     val username = text("username")
     val passwordHash = text("password")
     val superuser = bool("superuser")

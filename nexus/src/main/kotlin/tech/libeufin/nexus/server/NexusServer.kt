@@ -57,7 +57,6 @@ import tech.libeufin.util.*
 import java.net.BindException
 import java.net.URLEncoder
 import kotlin.system.exitProcess
-
 /**
  * Return facade state depending on the type.
  */
