@@ -3,7 +3,7 @@ Installing LibEuFin
 
 $ ./bootstrap
 $ ./configure --prefix=$PFX
-$ make install # Note: This may require Java=18; Java=17 had errors, Java>=19 is unsupported by gradle
+$ make install
 
 If the previous step succeeded, libeufin-nexus and a command line
 client (libeufin-cli) should be found under $PFX/bin.  Additionally,
