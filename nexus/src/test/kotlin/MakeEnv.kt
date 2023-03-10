@@ -25,7 +25,8 @@ data class EbicsKeys(
 const val TEST_DB_FILE = "/tmp/nexus-test.sqlite3"
 // const val TEST_DB_CONN = "jdbc:sqlite:$TEST_DB_FILE"
 // Convenience DB connection to switch to Postgresql:
-const val TEST_DB_CONN = "jdbc:postgresql://localhost:5432/talercheck?user=job"
+val currentUser = System.getProperty("user.name")
+val TEST_DB_CONN = "jdbc:postgresql://localhost:5432/libeufincheck?user=$currentUser"
 val BANK_IBAN = getIban()
 val FOO_USER_IBAN = getIban()
 val BAR_USER_IBAN = getIban()
@@ -296,7 +297,7 @@ fun withSandboxTestDatabase(f: () -> Unit) {
     }
 }
 
-fun talerIncomingForFoo(currency: String, value: String, subject: String) {
+fun newNexusBankTransaction(currency: String, value: String, subject: String) {
     transaction {
         val inc = NexusBankTransactionEntity.new {
             bankAccount = NexusBankAccountEntity.findByName("foo")!!
@@ -314,12 +315,12 @@ fun talerIncomingForFoo(currency: String, value: String, subject: String) {
                 )
             )
         }
-        TalerIncomingPaymentEntity.new {
+        /*TalerIncomingPaymentEntity.new {
             payment = inc
             reservePublicKey = "mock"
             timestampMs = 0L
             debtorPaytoUri = "mock"
-        }
+        }*/
     }
 }
 
@@ -350,9 +351,30 @@ fun genNexusIncomingPayment(
                         creditDebitIndicator = CreditDebitIndicator.CRDT,
                         details = TransactionDetails(
                             unstructuredRemittanceInformation = subject,
-                            debtor = null,
-                            debtorAccount = null,
-                            debtorAgent = null,
+                            debtor = PartyIdentification(
+                                name = "Mock Payer",
+                                countryOfResidence = null,
+                                privateId = null,
+                                organizationId = null,
+                                postalAddress = null,
+                                otherId = null
+                            ),
+                            debtorAccount = CashAccount(
+                                iban = "MOCK-IBAN",
+                                name = null,
+                                currency = null,
+                                otherId = null
+                            ),
+                            debtorAgent = AgentIdentification(
+                                bic = "MOCK-BIC",
+                                lei = null,
+                                clearingSystemMemberId = null,
+                                clearingSystemCode = null,
+                                proprietaryClearingSystemCode = null,
+                                postalAddress = null,
+                                otherId = null,
+                                name = null
+                            ),
                             creditor = null,
                             creditorAccount = null,
                             creditorAgent = null,

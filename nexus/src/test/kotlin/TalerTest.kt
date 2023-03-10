@@ -1,45 +1,57 @@
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.databind.ObjectMapper
+import io.ktor.client.call.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.future.future
-import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
 import org.junit.Test
-import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
-import tech.libeufin.nexus.iso20022.EntryStatus
+import tech.libeufin.nexus.ingestFacadeTransactions
+import tech.libeufin.nexus.maybeTalerRefunds
 import tech.libeufin.nexus.server.*
+import tech.libeufin.nexus.talerFilter
 import tech.libeufin.sandbox.sandboxApp
 import tech.libeufin.sandbox.wireTransfer
+import tech.libeufin.util.NotificationsChannelDomains
 
 // This class tests the features related to the Taler facade.
 class TalerTest {
+    val mapper = ObjectMapper()
 
-    /**
-     * Tests that a client (normally represented by the wire-watch)
-     * gets incoming transactions.
-     */
+    // Checking that a correct wire transfer (with Taler-compatible subject)
+    // is responded by the Taler facade.
     @Test
     fun historyIncomingTest() {
+        val reservePub = "GX5H5RME193FDRCM1HZKERXXQ2K21KH7788CKQM8X6MYKYRBP8F0"
         withNexusAndSandboxUser {
             testApplication {
                 application(nexusApp)
                 runBlocking {
-                    val future = async {
-                        client.get(
-                            "/facades/taler/taler-wire-gateway/history/incoming?delta=5"
-                        ) {
-                            expectSuccess = true
+                    launch {
+                        val r = client.get("/facades/taler/taler-wire-gateway/history/incoming?delta=5") {
+                            expectSuccess = false
                             contentType(ContentType.Application.Json)
                             basicAuth("foo", "foo")
                         }
+                        val j = mapper.readTree(r.readBytes())
+                        val reservePubFromTwg = j.get("incoming_transactions").get(0).get("reserve_pub").asText()
+                        assert(reservePubFromTwg == reservePub)
                     }
-                    talerIncomingForFoo("KUDOS", "10", "Invalid")
+                    newNexusBankTransaction(
+                        "KUDOS",
+                        "10",
+                        reservePub
+                    )
+                    ingestFacadeTransactions(
+                        "foo", // bank account local to Nexus.
+                        "taler-wire-gateway",
+                        ::talerFilter,
+                        ::maybeTalerRefunds
+                    )
                 }
             }
         }
