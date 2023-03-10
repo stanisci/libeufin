@@ -88,7 +88,7 @@ fun ApplicationRequest.getBaseUrl(): String {
         logger.info("Building X-Forwarded- base URL")
 
         // FIXME: should tolerate a missing X-Forwarded-Prefix.
-        var prefix: String = this.headers.get("X-Forwarded-Prefix")
+        var prefix: String = this.headers["X-Forwarded-Prefix"]
             ?: throw internalServerError("Reverse proxy did not define X-Forwarded-Prefix")
         if (!prefix.endsWith("/"))
             prefix += "/"
