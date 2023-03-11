@@ -190,7 +190,7 @@ val nexusApp: Application.() -> Unit = {
             )
         }
         exception<UtilError> { call, cause ->
-            logger.error("Exception while handling '${call.request.uri}'", cause.message)
+            logger.error("Exception while handling '${call.request.uri}': ${cause.message}")
             call.respond(
                 cause.statusCode,
                 message = ErrorResponse(

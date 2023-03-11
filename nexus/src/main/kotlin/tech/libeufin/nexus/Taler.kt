@@ -131,11 +131,14 @@ fun getComparisonOperator(delta: Int, start: Long, table: IdTable<Long>): Op<Boo
     }
 }
 
-fun expectLong(param: String?): Long {
+fun expectLong(param: String?, allowNegative: Boolean = false): Long {
     if (param == null) throw badRequest("'$param' is not Long")
-    return try { param.toLong() } catch (e: Exception) {
+    val maybeLong = try { param.toLong() } catch (e: Exception) {
         throw badRequest("'$param' is not Long")
     }
+    if (!allowNegative && maybeLong < 0)
+        throw badRequest("Not expecting a negative: $param")
+    return maybeLong
 }
 
 // Helper handling 'start' being optional and its dependence on 'delta'.
