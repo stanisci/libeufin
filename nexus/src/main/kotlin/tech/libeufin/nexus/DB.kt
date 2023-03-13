@@ -387,7 +387,6 @@ class FacadeEntity(id: EntityID<Long>) : LongEntity(id) {
             return find { FacadesTable.facadeName eq name}.firstOrNull()
         }
     }
-
     var facadeName by FacadesTable.facadeName
     var type by FacadesTable.type
     var creator by NexusUserEntity referencedOn FacadesTable.creator

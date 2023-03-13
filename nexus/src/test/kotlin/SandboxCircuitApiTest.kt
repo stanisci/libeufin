@@ -5,6 +5,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
@@ -221,8 +222,15 @@ class SandboxCircuitApiTest {
                         """.trimIndent())
                 }
                 // Give initial balance to the new account.
-                val demobank = getDefaultDemobank()
-                transaction { demobank.usersDebtLimit = 0 }
+                // Forcing different debt limit:
+                transaction {
+                    val configRaw = DemobankConfigPairEntity.find {
+                        DemobankConfigPairsTable.demobankName eq "default" and(
+                                DemobankConfigPairsTable.configKey eq "usersDebtLimit"
+                                )
+                    }.first()
+                    configRaw.configValue = 0.toString()
+                }
                 val initialBalance = "TESTKUDOS:50.00"
                 val balanceAfterCashout = "TESTKUDOS:30.00"
                 wireTransfer(
@@ -514,7 +522,7 @@ class SandboxCircuitApiTest {
                     uCustomerProfile.delete()
                 }
                 val barBalanceUpdate = getBalance("bar")
-                assert(barBalance == BigDecimal("3"))
+                assert(barBalanceUpdate == BigDecimal("3"))
             }
         }
     }

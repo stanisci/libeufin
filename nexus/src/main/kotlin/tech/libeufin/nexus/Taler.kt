@@ -483,7 +483,7 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
 // Handle a /taler-wire-gateway/history/incoming request.
 private suspend fun historyIncoming(call: ApplicationCall) {
     val facadeId = expectNonNull(call.parameters["fcid"])
-    val username = call.request.requirePermission(
+    call.request.requirePermission(
         PermissionQuery(
             "facade",
             facadeId,

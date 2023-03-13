@@ -32,11 +32,12 @@ class TalerTest {
                 application(nexusApp)
                 runBlocking {
                     launch {
-                        val r = client.get("/facades/taler/taler-wire-gateway/history/incoming?delta=5&start=3") {
+                        val r = client.get("/facades/taler/taler-wire-gateway/history/incoming?delta=5&start=0&long_poll_ms=3000") {
                             expectSuccess = false
                             contentType(ContentType.Application.Json)
                             basicAuth("foo", "foo")
                         }
+                        println("maybe response body: ${r.bodyAsText()}")
                         assert(r.status.value == HttpStatusCode.OK.value)
                         val j = mapper.readTree(r.readBytes())
                         val reservePubFromTwg = j.get("incoming_transactions").get(0).get("reserve_pub").asText()

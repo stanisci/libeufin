@@ -5,6 +5,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.*
@@ -66,11 +67,9 @@ class SandboxAccessApiTest {
     @Test
     fun highAmountWithdraw() {
         withTestDatabase {
-            prepSandboxDb()
-            val b = getDefaultDemobank()
+            prepSandboxDb(usersDebtLimit = 900000000)
             testApplication {
                 application(sandboxApp)
-                transaction { b.usersDebtLimit = 900000000 }
                 // Create the operation.
                 val r = client.post("/demobanks/default/access-api/accounts/foo/withdrawals") {
                     expectSuccess = true

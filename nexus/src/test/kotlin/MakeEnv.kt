@@ -22,8 +22,6 @@ data class EbicsKeys(
     val enc: CryptoUtil.RsaCrtKeyPair,
     val sig: CryptoUtil.RsaCrtKeyPair
 )
-const val TEST_DB_FILE = "/tmp/nexus-test.sqlite3"
-// const val TEST_DB_CONN = "jdbc:sqlite:$TEST_DB_FILE"
 // Convenience DB connection to switch to Postgresql:
 val currentUser = System.getProperty("user.name")
 val TEST_DB_CONN = "jdbc:postgresql://localhost:5432/libeufincheck?user=$currentUser"
@@ -63,23 +61,11 @@ inline fun <reified ExceptionType> assertException(
  * Cleans up the DB file afterwards.
  */
 fun withTestDatabase(f: () -> Unit) {
-    File(TEST_DB_FILE).also {
-        if (it.exists()) {
-            it.delete()
-        }
-    }
     Database.connect(TEST_DB_CONN)
     TransactionManager.manager.defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
     dbDropTables(TEST_DB_CONN)
     tech.libeufin.sandbox.dbDropTables(TEST_DB_CONN)
-    try { f() }
-    finally {
-        File(TEST_DB_FILE).also {
-            if (it.exists()) {
-                it.delete()
-            }
-        }
-    }
+    f()
 }
 
 val reportSpec: String = jacksonObjectMapper().
@@ -169,19 +155,21 @@ fun prepNexusDb() {
     }
 }
 
-fun prepSandboxDb() {
+fun prepSandboxDb(usersDebtLimit: Int = 1000) {
     tech.libeufin.sandbox.dbCreateTables(TEST_DB_CONN)
     transaction {
-        val demoBank = DemobankConfigEntity.new {
-            currency = "TESTKUDOS"
-            bankDebtLimit = 10000
-            usersDebtLimit = 1000
-            allowRegistrations = true
-            name = "default"
-            this.withSignupBonus = false
-            captchaUrl = "http://example.com/" // unused
+        val config = DemobankConfig(
+            currency = "TESTKUDOS",
+            bankDebtLimit = 10000,
+            usersDebtLimit = usersDebtLimit,
+            allowRegistrations = true,
+            demobankName = "default",
+            withSignupBonus = false,
+            captchaUrl = "http://example.com/",
             suggestedExchangePayto = "payto://iban/${BAR_USER_IBAN}"
-        }
+        )
+        insertConfigPairs(config)
+        val demoBank = DemobankConfigEntity.new { name = "default" }
         BankAccountEntity.new {
             iban = BANK_IBAN
             label = "admin" // used by the wire helper
@@ -275,15 +263,17 @@ fun withSandboxTestDatabase(f: () -> Unit) {
     withTestDatabase {
         tech.libeufin.sandbox.dbCreateTables(TEST_DB_CONN)
         transaction {
-            val d = DemobankConfigEntity.new {
-                currency = "TESTKUDOS"
-                bankDebtLimit = 10000
-                usersDebtLimit = 1000
-                allowRegistrations = true
-                name = "default"
-                this.withSignupBonus = false
+            val config = DemobankConfig(
+                currency = "TESTKUDOS",
+                bankDebtLimit = 10000,
+                usersDebtLimit = 1000,
+                allowRegistrations = true,
+                demobankName = "default",
+                withSignupBonus = false,
                 captchaUrl = "http://example.com/" // unused
-            }
+            )
+            insertConfigPairs(config)
+            val d = DemobankConfigEntity.new { name = "default" }
             // admin's bank account.
             BankAccountEntity.new {
                 iban = BANK_IBAN
@@ -299,7 +289,7 @@ fun withSandboxTestDatabase(f: () -> Unit) {
 
 fun newNexusBankTransaction(currency: String, value: String, subject: String) {
     transaction {
-        val inc = NexusBankTransactionEntity.new {
+        NexusBankTransactionEntity.new {
             bankAccount = NexusBankAccountEntity.findByName("foo")!!
             accountTransactionId = "mock"
             creditDebitIndicator = "CRDT"
