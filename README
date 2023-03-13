@@ -47,3 +47,17 @@ The archive should be found at: build/distributions/libeufin-$VERSION.zip
 
 After extracting the compressed files, run the three
 executable found under the "bin/" folder.
+
+User interface
+==============
+
+This repository does not ship any UI, rather it downloads
+one from the following project along the "make deb" target:
+https://git.taler.net/wallet-core.git/tree/packages/demobank-ui
+
+This way, the libeufin-sandbox Debian package provides one
+self-contained solution including Nginx, LibEuFin Sandbox,
+and the UI.
+
+Note: the UI an independent Web app that could even be served
+from a different host than the one running the backend.
