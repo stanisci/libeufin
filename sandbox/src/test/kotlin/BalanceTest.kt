@@ -8,24 +8,21 @@ import java.math.BigDecimal
 import java.time.LocalDateTime
 
 class BalanceTest {
-
     @Test
     fun balanceTest() {
+        val config = DemobankConfig(
+            currency = "EUR",
+            bankDebtLimit = 1000000,
+            usersDebtLimit = 10000,
+            allowRegistrations = true,
+            demobankName = "default",
+            withSignupBonus = false
+        )
         withTestDatabase {
             transaction {
-                SchemaUtils.create(
-                    BankAccountsTable,
-                    BankAccountTransactionsTable,
-                    BankAccountFreshTransactionsTable,
-                    BankAccountStatementsTable
-                )
+                insertConfigPairs(config)
                 val demobank = DemobankConfigEntity.new {
-                    currency = "EUR"
-                    bankDebtLimit = 1000000
-                    usersDebtLimit = 10000
-                    allowRegistrations = true
                     name = "default"
-                    withSignupBonus = false
                 }
                 val one = BankAccountEntity.new {
                     iban = "IBAN 1"

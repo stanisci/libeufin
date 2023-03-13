@@ -30,47 +30,72 @@ import java.time.LocalDateTime
  * Cleans up the DB file afterwards.
  */
 fun withTestDatabase(f: () -> Unit) {
-    val dbfile = "jdbc:sqlite:/tmp/nexus-test.sqlite3"
-    File(dbfile).also {
+    val dbFile = "/tmp/sandbox-test.sqlite3"
+    val dbConn = "jdbc:sqlite:${dbFile}"
+    File(dbFile).also {
         if (it.exists()) {
             it.delete()
         }
     }
-    Database.connect("$dbfile")
-    dbDropTables(dbfile)
-    try {
-        f()
-    }
+    Database.connect(dbConn)
+    dbDropTables(dbConn)
+    dbCreateTables(dbConn)
+    try { f() }
     finally {
-        File(dbfile).also {
-            if (it.exists()) {
+        File(dbFile).also {
+            if (it.exists())
                 it.delete()
-            }
         }
     }
 }
 
 class DBTest {
+    private var config = DemobankConfig(
+        currency = "EUR",
+        bankDebtLimit = 1000000,
+        usersDebtLimit = 10000,
+        allowRegistrations = true,
+        demobankName = "default",
+        withSignupBonus = false,
+    )
+
+    /**
+     * Storing configuration values into the database,
+     * then extract them and check that they equal the
+     * configuration model object.
+     */
     @Test
-    fun exist() {
-        println("x")
+    fun insertPairsTest() {
+        withTestDatabase {
+            // Config model.
+            val config = DemobankConfig(
+                currency = "EUR",
+                bankDebtLimit = 1,
+                usersDebtLimit = 2,
+                allowRegistrations = true,
+                demobankName = "default",
+                withSignupBonus = true
+            )
+            transaction {
+                DemobankConfigEntity.new { name = "default" }
+                insertConfigPairs(config)
+                val db = getDefaultDemobank()
+                /**
+                 * db.config extracts config values from the database
+                 * and puts them in a fresh config model object.
+                 */
+                assert(config.hashCode() == db.config.hashCode())
+            }
+        }
     }
 
     @Test
     fun betweenDates() {
         withTestDatabase {
             transaction {
-                SchemaUtils.create(
-                    BankAccountTransactionsTable,
-                    BankAccountFreshTransactionsTable
-                )
+                insertConfigPairs(config)
                 val demobank = DemobankConfigEntity.new {
-                    currency = "EUR"
-                    bankDebtLimit = 1000000
-                    usersDebtLimit = 10000
-                    allowRegistrations = true
                     name = "default"
-                    withSignupBonus = false
                 }
                 val bankAccount = BankAccountEntity.new {
                     iban = "iban"
