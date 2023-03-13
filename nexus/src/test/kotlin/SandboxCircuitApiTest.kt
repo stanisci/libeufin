@@ -40,12 +40,12 @@ class SandboxCircuitApiTest {
             prepSandboxDb()
             testApplication {
                 application(sandboxApp)
-                val R = client.get("/demobanks/default/circuit-api/accounts/bar") {
+                var R = client.get("/demobanks/default/circuit-api/accounts/bar") {
                     basicAuth("foo", "foo")
                     expectSuccess = false
                 }
                 assert(R.status.value == HttpStatusCode.Forbidden.value)
-                client.get("/demobanks/default/circuit-api/accounts/bar") {
+                R = client.get("/demobanks/default/circuit-api/accounts/bar") {
                     basicAuth("admin", "foo")
                     expectSuccess = true
                 }

@@ -210,6 +210,33 @@ class SandboxAccessApiTest {
         }
     }
 
+    // Checks that the debit threshold belongs to the balance response.
+    @Test
+    fun debitInfoCheck() {
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                var r = client.get("/demobanks/default/access-api/accounts/foo") {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                // Checking that the response holds the debit threshold.
+                val mapper = ObjectMapper()
+                var respJson = mapper.readTree(r.bodyAsText())
+                var debitThreshold = respJson.get("debitThreshold").asText()
+                assert(debitThreshold == "1000")
+                r = client.get("/demobanks/default/access-api/accounts/admin") {
+                    expectSuccess = true
+                    basicAuth("admin", "foo")
+                }
+                respJson = mapper.readTree(r.bodyAsText())
+                debitThreshold = respJson.get("debitThreshold").asText()
+                assert(debitThreshold == "10000")
+            }
+        }
+    }
+
     @Test
     fun registerTest() {
         // Test IBAN conflict detection.
