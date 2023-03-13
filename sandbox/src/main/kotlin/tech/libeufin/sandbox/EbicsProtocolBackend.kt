@@ -300,7 +300,7 @@ fun buildCamtString(
     val zonedDateTime = camtCreationTime.toZonedString()
     val creationTimeMillis = camtCreationTime.toInstant().toEpochMilli()
     val messageId = "sandbox-${creationTimeMillis / 1000}-${getRandomString(10)}"
-    val currency = getDefaultDemobank().currency
+    val currency = getDefaultDemobank().config.currency
 
     val camtMessage = constructXml(indent = true) {
         root("Document") {
@@ -741,7 +741,7 @@ private fun handleCct(paymentRequest: String,
             return@transaction
         }
         val bankAccount = getBankAccountFromIban(parseResult.debtorIban)
-        if (parseResult.currency != bankAccount.demoBank.currency) throw EbicsRequestError(
+        if (parseResult.currency != bankAccount.demoBank.config.currency) throw EbicsRequestError(
             "[EBICS_PROCESSING_ERROR] Currency (${parseResult.currency}) not supported.",
             "091116"
         )
@@ -1034,7 +1034,7 @@ private fun makePartnerInfo(subscriber: EbicsSubscriberEntity): EbicsTypes.Partn
                         this.value = bankAccount.iban
                     }
                 )
-                this.currency = bankAccount.demoBank.currency
+                this.currency = bankAccount.demoBank.config.currency
                 this.description = "Ordinary Bank Account"
                 this.bankCodeList = listOf(
                     EbicsTypes.GeneralBankCode().apply {

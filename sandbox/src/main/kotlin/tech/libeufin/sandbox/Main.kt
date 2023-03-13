@@ -61,6 +61,10 @@ import java.math.BigDecimal
 import java.net.URL
 import java.security.interfaces.RSAPublicKey
 import javax.xml.bind.JAXBContext
+import kotlin.reflect.KProperty0
+import kotlin.reflect.KProperty1
+import kotlin.reflect.full.declaredMemberProperties
+import kotlin.reflect.full.declaredMembers
 import kotlin.system.exitProcess
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
@@ -81,11 +85,7 @@ data class SandboxErrorJson(val error: SandboxErrorDetailJson)
 data class SandboxErrorDetailJson(val type: String, val description: String)
 
 class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.") {
-    init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
-    }
+    init { context { helpFormatter = CliktHelpFormatter(showDefaultValues = true) } }
     private val exchangeBaseUrl by argument("EXCHANGE-BASEURL", "base URL of the default exchange")
     private val exchangePayto by argument("EXCHANGE-PAYTO", "default exchange's payto-address")
     private val demobank by option("--demobank", help = "Which demobank defaults to EXCHANGE").default("default")
@@ -102,20 +102,40 @@ class DefaultExchange : CliktCommand("Set default Taler exchange for a demobank.
                     System.err.println("Error, demobank $demobank not found.")
                     exitProcess(1)
                 }
-                maybeDemobank.suggestedExchangeBaseUrl = exchangeBaseUrl
-                maybeDemobank.suggestedExchangePayto = exchangePayto
+                val config = maybeDemobank.config
+                /**
+                 * Iterating over the config object's field that hold the exchange
+                 * base URL and Payto.  The iteration is only used to retrieve the
+                 * correct names of the DB column 'configKey', because this is named
+                 * after such fields.
+                 */
+                listOf(
+                    Pair(config::suggestedExchangeBaseUrl, exchangeBaseUrl),
+                    Pair(config::suggestedExchangePayto, exchangePayto)
+                ).forEach {
+                    val maybeConfigPair = DemobankConfigPairEntity.find {
+                        DemobankConfigPairsTable.demobankName eq demobank and(
+                                DemobankConfigPairsTable.configKey eq it.first.name)
+                    }.firstOrNull()
+                    /**
+                     * The DB doesn't contain any column to hold the exchange URL
+                     * or Payto, fail.  That should never happen, because the DB row
+                     * are created _after_ the DemobankConfig object that _does_ contain
+                     * such fields.
+                     */
+                    if (maybeConfigPair == null) {
+                        System.err.println("Config key '${it.first.name}' for demobank '$demobank' not found in DB.")
+                        exitProcess(1)
+                    }
+                    maybeConfigPair.configValue = it.second
+                }
             }
         }
     }
 }
 
 class Config : CliktCommand("Insert one configuration (a.k.a. demobank) into the database.") {
-    init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
-    }
-
+    init { context { helpFormatter = CliktHelpFormatter(showDefaultValues = true) } }
     private val nameArgument by argument(
         "NAME", help = "Name of this configuration.  Currently, only 'default' is admitted."
     )
@@ -147,40 +167,40 @@ class Config : CliktCommand("Insert one configuration (a.k.a. demobank) into the
         }
         execThrowableOrTerminate {
             dbCreateTables(dbConnString)
-            transaction {
-                val maybeDemobank = BankAccountEntity.find(
-                    BankAccountsTable.label eq "admin"
-                ).firstOrNull()
-                if (showOption) {
-                    if (maybeDemobank != null) {
-                        val ret = ObjectMapper()
-                        ret.configure(SerializationFeature.INDENT_OUTPUT, true)
-                        println(
-                            ret.writeValueAsString(object {
-                                val currency = maybeDemobank.demoBank.currency
-                                val bankDebtLimit = maybeDemobank.demoBank.bankDebtLimit
-                                val usersDebtLimit = maybeDemobank.demoBank.usersDebtLimit
-                                val allowRegistrations = maybeDemobank.demoBank.allowRegistrations
-                                val name = maybeDemobank.demoBank.name // always 'default'
-                                val withSignupBonus = maybeDemobank.demoBank.withSignupBonus
-                                val captchaUrl = maybeDemobank.demoBank.captchaUrl
-                            })
-                        )
-                        return@transaction
-                    }
-                    println("Nothing to show.")
-                    return@transaction
+            val maybeDemobank = transaction { getDemobank(nameArgument) }
+            if (showOption) {
+                if (maybeDemobank != null) {
+                    printConfig(maybeDemobank)
+                } else {
+                    println("Demobank: $nameArgument not found.")
+                    System.exit(1)
                 }
-                if (maybeDemobank == null) {
-                    val demoBank = DemobankConfigEntity.new {
-                        currency = currencyOption
-                        bankDebtLimit = bankDebtLimitOption
-                        usersDebtLimit = usersDebtLimitOption
-                        allowRegistrations = allowRegistrationsOption
-                        name = nameArgument
-                        this.withSignupBonus = withSignupBonusOption
-                        captchaUrl = captchaUrlOption
-                    }
+                return@execThrowableOrTerminate
+            }
+            if (bankDebtLimitOption < 0 || usersDebtLimitOption < 0) {
+                System.err.println("Debt numbers can't be negative.")
+                exitProcess(1)
+            }
+            // The user asks to _set_ values, regardless of overriding or creating.
+            val config = DemobankConfig(
+                currency = currencyOption,
+                bankDebtLimit = bankDebtLimitOption,
+                usersDebtLimit = usersDebtLimitOption,
+                allowRegistrations = allowRegistrationsOption,
+                demobankName = nameArgument,
+                withSignupBonus = withSignupBonusOption,
+                captchaUrl = captchaUrlOption
+            )
+            /**
+             * The demobank didn't exist.  Now:
+             *   1, Store the config values in the database.
+             *   2, Store the demobank name in the database.
+             *   3, Create the admin bank account under this demobank.
+             */
+            if (maybeDemobank == null) {
+                transaction {
+                    insertConfigPairs(config)
+                    val demoBank = DemobankConfigEntity.new { this.name = nameArgument }
                     BankAccountEntity.new {
                         iban = getIban()
                         label = "admin"
@@ -188,16 +208,10 @@ class Config : CliktCommand("Insert one configuration (a.k.a. demobank) into the
                         // For now, the model assumes always one demobank
                         this.demoBank = demoBank
                     }
-                    return@transaction
                 }
-                maybeDemobank.demoBank.currency = currencyOption
-                maybeDemobank.demoBank.bankDebtLimit = bankDebtLimitOption
-                maybeDemobank.demoBank.usersDebtLimit = usersDebtLimitOption
-                maybeDemobank.demoBank.allowRegistrations = allowRegistrationsOption
-                maybeDemobank.demoBank.withSignupBonus = withSignupBonusOption
-                maybeDemobank.demoBank.name = nameArgument
-                maybeDemobank.demoBank.captchaUrl = captchaUrlOption
             }
+            // Demobank exists: update its config values in the database.
+            else transaction { insertConfigPairs(config, override = true) }
         }
     }
 }
@@ -391,10 +405,10 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
 
 private fun getJsonFromDemobankConfig(fromDb: DemobankConfigEntity): Demobank {
     return Demobank(
-        currency = fromDb.currency,
-        userDebtLimit = fromDb.usersDebtLimit,
-        bankDebtLimit = fromDb.bankDebtLimit,
-        allowRegistrations = fromDb.allowRegistrations,
+        currency = fromDb.config.currency,
+        userDebtLimit = fromDb.config.usersDebtLimit,
+        bankDebtLimit = fromDb.config.bankDebtLimit,
+        allowRegistrations = fromDb.config.allowRegistrations,
         name = fromDb.name
     )
 }
@@ -710,7 +724,7 @@ val sandboxApp: Application.() -> Unit = {
                     throw unauthorized("'${username}' has no rights over '$label'")
                 val balance = getBalance(bankAccount, withPending = true)
                 object {
-                    val balance = "${bankAccount.demoBank.currency}:${balance}"
+                    val balance = "${bankAccount.demoBank.config.currency}:${balance}"
                     val iban = bankAccount.iban
                     val bic = bankAccount.bic
                     val label = bankAccount.label
@@ -755,7 +769,7 @@ val sandboxApp: Application.() -> Unit = {
                     this.account = account
                     direction = "CRDT"
                     this.demobank = demobank
-                    this.currency = demobank.currency
+                    this.currency = demobank.config.currency
                 }
             }
             call.respond(object {})
@@ -901,7 +915,7 @@ val sandboxApp: Application.() -> Unit = {
                         this.account = account
                         direction = "CRDT"
                         this.demobank = demobank
-                        currency = demobank.currency
+                        currency = demobank.config.currency
                     }
                 }
 
@@ -922,7 +936,7 @@ val sandboxApp: Application.() -> Unit = {
                         this.account = account
                         direction = "DBIT"
                         this.demobank = demobank
-                        currency = demobank.currency
+                        currency = demobank.config.currency
                     }
                 }
             }
@@ -939,7 +953,7 @@ val sandboxApp: Application.() -> Unit = {
             val body = call.receive<EbicsSubscriberObsoleteApi>()
             transaction {
                 // Check the host ID exists.
-                val maybeHostId = EbicsHostEntity.find {
+                EbicsHostEntity.find {
                     EbicsHostsTable.hostID eq body.hostID
                 }.firstOrNull() ?: throw notFound("Host ID ${body.hostID} not found.")
                 // Check it exists first.
@@ -1086,6 +1100,7 @@ val sandboxApp: Application.() -> Unit = {
                 throw e
             }
             catch (e: Exception) {
+                logger.error(e.stackTraceToString())
                 throw EbicsProcessingError("Could not map error to EBICS code: $e")
             }
             return@post
@@ -1168,7 +1183,7 @@ val sandboxApp: Application.() -> Unit = {
                     call.respond(SandboxConfig(
                         name = "taler-bank-integration",
                         version = SANDBOX_VERSION,
-                        currency = demobank.currency
+                        currency = demobank.config.currency
                     ))
                     return@get
                 }
@@ -1223,13 +1238,13 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     val demobank = ensureDemobank(call)
-                    var captcha_page = demobank.captchaUrl
+                    var captcha_page = demobank.config.captchaUrl
                     if (captcha_page == null) logger.warn("CAPTCHA URL not found")
                     val ret = TalerWithdrawalStatus(
                         selection_done = maybeWithdrawalOp.selectionDone,
                         transfer_done = maybeWithdrawalOp.confirmationDone,
                         amount = maybeWithdrawalOp.amount,
-                        suggested_exchange = demobank.suggestedExchangeBaseUrl,
+                        suggested_exchange = demobank.config.suggestedExchangeBaseUrl,
                         aborted = maybeWithdrawalOp.aborted,
                         confirm_transfer_url = captcha_page
                     )
@@ -1305,8 +1320,8 @@ val sandboxApp: Application.() -> Unit = {
                     val req = call.receive<WithdrawalRequest>()
                     // Check for currency consistency
                     val amount = parseAmount(req.amount)
-                    if (amount.currency != demobank.currency)
-                        throw badRequest("Currency ${amount.currency} differs from Demobank's: ${demobank.currency}")
+                    if (amount.currency != demobank.config.currency)
+                        throw badRequest("Currency ${amount.currency} differs from Demobank's: ${demobank.config.currency}")
                     // Check funds are sufficient.
                     if (maybeDebit(maybeOwnedAccount.label, BigDecimal(amount.amount))) {
                         logger.error("Account ${maybeOwnedAccount.label} would surpass debit threshold.  Not withdrawing")
@@ -1373,7 +1388,7 @@ val sandboxApp: Application.() -> Unit = {
                          */
                         val demobank = ensureDemobank(call)
                         if (wo.selectedExchangePayto == null) {
-                            wo.selectedExchangePayto = demobank.suggestedExchangePayto
+                            wo.selectedExchangePayto = demobank.config.suggestedExchangePayto
                         }
                         val exchangeBankAccount = getBankAccountFromPayto(
                             wo.selectedExchangePayto ?: throw internalServerError(
@@ -1422,7 +1437,7 @@ val sandboxApp: Application.() -> Unit = {
                     val balance = getBalance(bankAccount, withPending = true)
                     call.respond(object {
                         val balance = object {
-                            val amount = "${demobank.currency}:${balance.abs(). toPlainString()}"
+                            val amount = "${demobank.config.currency}:${balance.abs(). toPlainString()}"
                             val credit_debit_indicator = if (balance < BigDecimal.ZERO) "debit" else "credit"
                         }
                         val paytoUri = buildIbanPaytoUri(
@@ -1524,7 +1539,7 @@ val sandboxApp: Application.() -> Unit = {
                             val balanceIter = getBalance(it, withPending = true)
                             ret.publicAccounts.add(
                                 PublicAccountInfo(
-                                    balance = "${demobank.currency}:$balanceIter",
+                                    balance = "${demobank.config.currency}:$balanceIter",
                                     iban = it.iban,
                                     accountLabel = it.label
                                 )
@@ -1550,7 +1565,7 @@ val sandboxApp: Application.() -> Unit = {
                 post("/testing/register") {
                     // Check demobank was created.
                     val demobank = ensureDemobank(call)
-                    if (!demobank.allowRegistrations) {
+                    if (!demobank.config.allowRegistrations) {
                         throw SandboxError(
                             HttpStatusCode.UnprocessableEntity,
                             "The bank doesn't allow new registrations at the moment."
@@ -1566,7 +1581,7 @@ val sandboxApp: Application.() -> Unit = {
                     )
                     val balance = getBalance(newAccount.bankAccount, withPending = true)
                     call.respond(object {
-                        val balance = getBalanceForJson(balance, demobank.currency)
+                        val balance = getBalanceForJson(balance, demobank.config.currency)
                         val paytoUri = buildIbanPaytoUri(
                             iban = newAccount.bankAccount.iban,
                             bic = newAccount.bankAccount.bic,

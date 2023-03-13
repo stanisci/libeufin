@@ -21,8 +21,8 @@ fun maybeDebit(
     )
     val balance = getBalance(accountLabel, withPending = true)
     val maxDebt = if (accountLabel == "admin") {
-        demobank.bankDebtLimit
-    } else demobank.usersDebtLimit
+        demobank.config.bankDebtLimit
+    } else demobank.config.usersDebtLimit
     val balanceCheck = balance - requestedAmount
     if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal.valueOf(maxDebt.toLong())) {
         logger.warn("User '$accountLabel' would surpass the debit" +
@@ -34,10 +34,8 @@ fun maybeDebit(
 
 fun getMaxDebitForUser(username: String): Int {
     val bank = getDefaultDemobank()
-    if (username == "admin") return bank.bankDebtLimit
-    return bank.usersDebtLimit
-
-
+    if (username == "admin") return bank.config.bankDebtLimit
+    return bank.config.usersDebtLimit
 }
 
 fun getBalanceForJson(value: BigDecimal, currency: String): BalanceJson {
@@ -45,7 +43,6 @@ fun getBalanceForJson(value: BigDecimal, currency: String): BalanceJson {
         amount = "${currency}:${value.abs()}",
         credit_debit_indicator = if (value < BigDecimal.ZERO) "DBIT" else "CRDT"
     )
-
 }
 
 /**
@@ -147,10 +144,10 @@ fun wireTransfer(
     val amountAsNumber = BigDecimal(parsedAmount.amount)
     if (amountAsNumber == BigDecimal.ZERO)
         throw badRequest("Wire transfers of zero not possible.")
-    if (parsedAmount.currency != demobank.currency)
+    if (parsedAmount.currency != demobank.config.currency)
         throw badRequest(
             "Won't wire transfer with currency: ${parsedAmount.currency}." +
-                    "  Only ${demobank.currency} allowed."
+                    "  Only ${demobank.config.currency} allowed."
         )
     // Check funds are sufficient.
     if (maybeDebit(debitAccount.label, amountAsNumber)) {
@@ -169,7 +166,7 @@ fun wireTransfer(
             debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
             this.amount = parsedAmount.amount
-            this.currency = demobank.currency
+            this.currency = demobank.config.currency
             date = timeStamp
             accountServicerReference = transactionRef
             account = creditAccount
@@ -186,7 +183,7 @@ fun wireTransfer(
             debtorName = getPersonNameFromCustomer(debitAccount.owner)
             this.subject = subject
             this.amount = parsedAmount.amount
-            this.currency = demobank.currency
+            this.currency = demobank.config.currency
             date = timeStamp
             accountServicerReference = transactionRef
             account = debitAccount

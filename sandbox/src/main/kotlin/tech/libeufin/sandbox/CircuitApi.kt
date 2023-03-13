@@ -371,9 +371,9 @@ fun circuitApi(circuitRoute: Route) {
         val amountCredit = parseAmount(req.amount_credit) // amount after rates, as expected by the client
         val demobank = ensureDemobank(call)
         // Currency check of the cash-out's circuit part.
-        if (amountDebit.currency != demobank.currency)
+        if (amountDebit.currency != demobank.config.currency)
             throw badRequest("'${req::amount_debit.name}' (${req.amount_debit})" +
-                    " doesn't match the regional currency (${demobank.currency})"
+                    " doesn't match the regional currency (${demobank.config.currency})"
             )
         // Currency check of the cash-out's fiat part.
         if (amountCredit.currency != FIAT_CURRENCY)
@@ -415,7 +415,7 @@ fun circuitApi(circuitRoute: Route) {
         // check that the balance is sufficient
         val balance = getBalance(user, withPending = true)
         val balanceCheck = balance - amountDebitAsNumber
-        if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal(demobank.usersDebtLimit))
+        if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal(demobank.config.usersDebtLimit))
             throw SandboxError(
                 HttpStatusCode.PreconditionFailed,
                 "Cash-out not possible due to insufficient funds.  Balance ${balance.toPlainString()} would reach ${balanceCheck.toPlainString()}"
@@ -567,7 +567,7 @@ fun circuitApi(circuitRoute: Route) {
                     val name = it.name
                     val balance = getBalanceForJson(
                         getBalance(it.username),
-                        getDefaultDemobank().currency
+                        getDefaultDemobank().config.currency
                     )
                     val debitThreshold = getMaxDebitForUser(it.username)
                 })
