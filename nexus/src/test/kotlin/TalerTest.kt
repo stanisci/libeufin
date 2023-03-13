@@ -10,6 +10,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
+import tech.libeufin.nexus.bankaccount.submitAllPaymentInitiations
 import tech.libeufin.nexus.ingestFacadeTransactions
 import tech.libeufin.nexus.maybeTalerRefunds
 import tech.libeufin.nexus.server.*
@@ -21,6 +22,68 @@ import tech.libeufin.util.NotificationsChannelDomains
 // This class tests the features related to the Taler facade.
 class TalerTest {
     val mapper = ObjectMapper()
+
+    // Checking that a call to POST /transfer results in
+    // an outgoing payment in GET /history/outgoing.
+    @Test
+    fun historyOutgoingTest() {
+        withNexusAndSandboxUser {
+            testApplication {
+                application(nexusApp)
+                client.post("/facades/taler/taler-wire-gateway/transfer") {
+                    contentType(ContentType.Application.Json)
+                    basicAuth("foo", "foo") // exchange's credentials
+                    expectSuccess = true
+                    setBody("""
+                        { "request_uid": "twg_transfer_0",
+                          "amount": "TESTKUDOS:3",
+                          "exchange_base_url": "http://exchange.example.com/",
+                          "wtid": "T0",
+                          "credit_account": "payto://iban/${BAR_USER_IBAN}?receiver-name=Bar"
+                        
+                        }
+                    """.trimIndent())
+                }
+            }
+            /* The EBICS layer sends the payment instruction to the bank here.
+             *  and the reconciliation mechanism in Nexus should detect that one
+             *  outgoing payment was indeed the one instructed via the TWG.  The
+             *  reconciliation will make the outgoing payment visible via /history/outgoing.
+             *  The following block achieve this by starting Sandbox and sending all
+             *  the prepared payments to it.
+             */
+            testApplication {
+                application(sandboxApp)
+                submitAllPaymentInitiations(client, "foo")
+                /* Now downloads transactions from the bank, where the payment
+                   submitted in the previous block is expected to appear as outgoing.
+                 */
+                fetchBankAccountTransactions(
+                    client,
+                    fetchSpec = FetchSpecAllJson(
+                        level = FetchLevel.REPORT,
+                        "foo"
+                    ),
+                    "foo"
+                )
+            }
+            /**
+             * Now Nexus starts again, in order to serve /history/outgoing
+             * along the TWG.
+             */
+            testApplication {
+                application(nexusApp)
+                val r = client.get("/facades/taler/taler-wire-gateway/history/outgoing?delta=5") {
+                    expectSuccess = true
+                    contentType(ContentType.Application.Json)
+                    basicAuth("foo", "foo")
+                }
+                val j = mapper.readTree(r.readBytes())
+                val wtidFromTwg = j.get("outgoing_transactions").get(0).get("wtid").asText()
+                assert(wtidFromTwg == "T0")
+            }
+        }
+    }
 
     // Checking that a correct wire transfer (with Taler-compatible subject)
     // is responded by the Taler facade.

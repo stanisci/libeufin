@@ -464,7 +464,7 @@ private suspend fun historyOutgoing(call: ApplicationCall) {
                             subscriberBankAccount.bankCode,
                             subscriberBankAccount.accountHolder,
                         ),
-                        exchange_base_url = "FIXME-to-request-along-subscriber-registration"
+                        exchange_base_url = it.exchangeBaseUrl
                     )
                 )
             }
