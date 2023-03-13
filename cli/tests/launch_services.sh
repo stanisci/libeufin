@@ -23,12 +23,21 @@ jq --version &> /dev/null || (echo "'jq' command not found"; exit 77)
 curl --version &> /dev/null || (echo "'curl' command not found"; exit 77)
 
 SQLITE_FILE_PATH=/tmp/libeufin-cli-test.sqlite3
-DB_CONN=jdbc:postgresql://localhost:5432/taler?user=$(whoami)
-# export LIBEUFIN_SANDBOX_DB_CONNECTION=jdbc:sqlite:$SQLITE_FILE_PATH
+getDbConn () {
+  if test withPostgres == "${1:-}"; then
+    echo "jdbc:postgresql://localhost:5432/taler?user=$(whoami)"
+    return
+  fi
+  echo "jdbc:sqlite:${SQLITE_FILE_PATH}"
+}
+
+DB_CONN=`getDbConn`
 export LIBEUFIN_SANDBOX_DB_CONNECTION=$DB_CONN
+export LIBEUFIN_NEXUS_DB_CONNECTION=$DB_CONN
 
 echo -n Delete previous data...
-rm -f $SQLITE_FILE_PATH
+libeufin-sandbox reset-tables
+libeufin-nexus reset-tables
 echo DONE
 echo -n Configure the default demobank with MANA...
 libeufin-sandbox config --with-signup-bonus --currency MANA default
@@ -48,7 +57,6 @@ echo -n Wait for the bank...
 curl --max-time 2 --retry-connrefused --retry-delay 1 --retry 10 http://localhost:5000/ &> /dev/null
 echo DONE
 echo -n Make one superuser at Nexus...
-export LIBEUFIN_NEXUS_DB_CONNECTION=$DB_CONN
 libeufin-nexus superuser test-user --password x
 echo DONE
 echo -n Launching Nexus...
