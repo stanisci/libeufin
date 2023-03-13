@@ -19,6 +19,7 @@
 
 package tech.libeufin.sandbox
 
+import io.ktor.http.*
 import org.jetbrains.exposed.dao.Entity
 import org.jetbrains.exposed.dao.EntityClass
 import org.jetbrains.exposed.dao.IntEntity
@@ -32,7 +33,10 @@ import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
+import tech.libeufin.util.internalServerError
 import java.sql.Connection
+import kotlin.reflect.*
+import kotlin.reflect.full.*
 
 /**
  * All the states to give a subscriber.
@@ -87,29 +91,122 @@ enum class KeyState {
     RELEASED
 }
 
+/**
+ * Stores one config object to the database.  Each field
+ * name and value populate respectively the configKey and
+ * configValue columns.  Rows are defined in the following way:
+ * demobankName | configKey | configValue
+ */
+fun insertConfigPairs(config: DemobankConfig, override: Boolean = false) {
+    // Fill the config key-value pairs in the DB.
+    config::class.declaredMemberProperties.forEach { configField ->
+        val maybeValue = configField.getter.call(config)
+        if (override) {
+            val maybeConfigPair = DemobankConfigPairEntity.find {
+                DemobankConfigPairsTable.configKey eq configField.name
+            }.firstOrNull()
+            if (maybeConfigPair == null)
+                throw internalServerError("Cannot override config value '${configField.name}' not found.")
+            maybeConfigPair.configValue = maybeValue?.toString()
+            return@forEach
+        }
+        DemobankConfigPairEntity.new {
+            this.demobankName = config.demobankName
+            this.configKey = configField.name
+            this.configValue = maybeValue?.toString()
+        }
+    }
+}
+
+object DemobankConfigPairsTable : LongIdTable() {
+    val demobankName = text("demobankName")
+    val configKey = text("configKey")
+    val configValue = text("configValue").nullable()
+}
+
+class DemobankConfigPairEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<DemobankConfigPairEntity>(DemobankConfigPairsTable)
+    var demobankName by DemobankConfigPairsTable.demobankName
+    var configKey by DemobankConfigPairsTable.configKey
+    var configValue by DemobankConfigPairsTable.configValue
+}
+
 object DemobankConfigsTable : LongIdTable() {
-    val currency = text("currency")
-    val allowRegistrations = bool("allowRegistrations")
-    val withSignupBonus = bool("withSignupBonus")
-    val bankDebtLimit = integer("bankDebtLimit")
-    val usersDebtLimit = integer("usersDebtLimit")
     val name = text("hostname")
-    val suggestedExchangeBaseUrl = text("suggestedExchangeBaseUrl").nullable()
-    val suggestedExchangePayto = text("suggestedExchangePayto").nullable()
-    val captchaUrl = text("captchaUrl").nullable()
+}
+
+// Helpers for handling config values in memory.
+typealias DemobankConfigKey = String
+typealias DemobankConfigValue = String?
+fun Pair<DemobankConfigKey, DemobankConfigValue>.expectValue(): String {
+    if (this.second == null) throw internalServerError("Config value for '${this.first}' is null in the database.")
+    return this.second as String
 }
 
 class DemobankConfigEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<DemobankConfigEntity>(DemobankConfigsTable)
-    var currency by DemobankConfigsTable.currency
-    var allowRegistrations by DemobankConfigsTable.allowRegistrations
-    var withSignupBonus by DemobankConfigsTable.withSignupBonus
-    var bankDebtLimit by DemobankConfigsTable.bankDebtLimit
-    var usersDebtLimit by DemobankConfigsTable.usersDebtLimit
     var name by DemobankConfigsTable.name
-    var captchaUrl by DemobankConfigsTable.captchaUrl
-    var suggestedExchangeBaseUrl by DemobankConfigsTable.suggestedExchangeBaseUrl
-    var suggestedExchangePayto by DemobankConfigsTable.suggestedExchangePayto
+    /**
+     * This object gets defined by parsing all the configuration
+     * values found in the DB for one demobank.  Those values are
+     * retrieved from _another_ table.
+     */
+    val config: DemobankConfig by lazy {
+        // Getting all the values for this demobank.
+        val configPairs: List<Pair<DemobankConfigKey, DemobankConfigValue>> = transaction {
+            val maybeConfigPairs = DemobankConfigPairEntity.find {
+                DemobankConfigPairsTable.demobankName.eq(name)
+            }
+            if (maybeConfigPairs.empty()) throw SandboxError(
+                HttpStatusCode.InternalServerError,
+                "No config values of $name were found in the database"
+            )
+            // Copying results to a DB-agnostic list, to later operate out of "transaction {}"
+            maybeConfigPairs.map { Pair(it.configKey, it.configValue) }
+        }
+        // Building the args to instantiate a DemobankConfig (non-Exposed) object.
+        val args = mutableMapOf<KParameter, Any?>()
+        // For each constructor parameter name, find the same-named database entry.
+        val configClass = DemobankConfig::class
+        if (configClass.primaryConstructor == null) {
+            throw SandboxError(
+                HttpStatusCode.InternalServerError,
+                "${configClass.simpleName} primaryConstructor is null."
+            )
+        }
+        if (configClass.primaryConstructor?.parameters == null) {
+            throw SandboxError(
+                HttpStatusCode.InternalServerError,
+                "${configClass.simpleName} primaryConstructor" +
+                        " arguments is null.  Cannot set any config value."
+            )
+        }
+        // For each field in the config object, find the respective DB row.
+        configClass.primaryConstructor?.parameters?.forEach { par: KParameter ->
+            val configPairFromDb: Pair<DemobankConfigKey, DemobankConfigValue>?
+            = configPairs.firstOrNull {
+                    configPair: Pair<DemobankConfigKey, DemobankConfigValue> ->
+                configPair.first == par.name
+            }
+            if (configPairFromDb == null) {
+                throw SandboxError(
+                    HttpStatusCode.InternalServerError,
+                    "Config key '${par.name}' not found in the database."
+                )
+            }
+            when(par.type) {
+                // non-nullable
+                typeOf<Boolean>() -> { args[par] = configPairFromDb.expectValue().toBoolean() }
+                typeOf<Int>() -> { args[par] = configPairFromDb.expectValue().toInt() }
+                // nullable
+                typeOf<Boolean?>() -> { args[par] = configPairFromDb.second?.toBoolean() }
+                typeOf<Int?>() -> { args[par] = configPairFromDb.second?.toInt() }
+                else -> args[par] = configPairFromDb.second
+            }
+        }
+        // Proceeding now to instantiate the config class, and make it a field of this type.
+        configClass.primaryConstructor!!.callBy(args)
+    }
 }
 
 /**
@@ -538,6 +635,7 @@ fun dbDropTables(dbConnectionString: String) {
             BankAccountReportsTable,
             BankAccountStatementsTable,
             DemobankConfigsTable,
+            DemobankConfigPairsTable,
             TalerWithdrawalsTable,
             DemobankCustomersTable,
             CashoutOperationsTable
@@ -551,6 +649,7 @@ fun dbCreateTables(dbConnectionString: String) {
     transaction {
         SchemaUtils.create(
             DemobankConfigsTable,
+            DemobankConfigPairsTable,
             EbicsSubscribersTable,
             EbicsHostsTable,
             EbicsDownloadTransactionsTable,

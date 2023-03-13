@@ -19,6 +19,8 @@
 
 package tech.libeufin.sandbox
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.SerializationFeature
 import io.ktor.server.application.*
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.*
@@ -29,6 +31,20 @@ import tech.libeufin.util.*
 import java.security.interfaces.RSAPublicKey
 import java.util.*
 import java.util.zip.DeflaterInputStream
+
+data class DemobankConfig(
+    val allowRegistrations: Boolean,
+    val currency: String,
+    val bankDebtLimit: Int,
+    val usersDebtLimit: Int,
+    val withSignupBonus: Boolean,
+    val demobankName: String, // demobank name.
+    val captchaUrl: String? = null,
+    val smsTan: String? = null, // fixme: move the config subcommand
+    val emailTan: String? = null, // fixme: same as above.
+    val suggestedExchangeBaseUrl: String? = null,
+    val suggestedExchangePayto: String? = null
+)
 
 /**
  * Helps to communicate Camt values without having
@@ -120,8 +136,8 @@ fun insertNewAccount(username: String,
             this.demoBank = demobankFromDb
             this.isPublic = isPublic
         }
-        if (demobankFromDb.withSignupBonus)
-            newBankAccount.bonus("${demobankFromDb.currency}:100")
+        if (demobankFromDb.config.withSignupBonus)
+            newBankAccount.bonus("${demobankFromDb.config.currency}:100")
         AccountPair(customer = newCustomer, bankAccount = newBankAccount)
     }
 }
@@ -217,6 +233,24 @@ fun getHistoryElementFromTransactionRow(dbRow: BankAccountTransactionEntity): Ra
         uid = dbRow.accountServicerReference,
         direction = dbRow.direction,
         pmtInfId = dbRow.pmtInfId
+    )
+}
+
+fun printConfig(demobank: DemobankConfigEntity) {
+    val ret = ObjectMapper()
+    ret.configure(SerializationFeature.INDENT_OUTPUT, true)
+    println(
+        ret.writeValueAsString(object {
+            val currency = demobank.config.currency
+            val bankDebtLimit = demobank.config.bankDebtLimit
+            val usersDebtLimit = demobank.config.usersDebtLimit
+            val allowRegistrations = demobank.config.allowRegistrations
+            val name = demobank.name // always 'default'
+            val withSignupBonus = demobank.config.withSignupBonus
+            val captchaUrl = demobank.config.captchaUrl
+            val suggestedExchangeBaseUrl = demobank.config.suggestedExchangeBaseUrl
+            val suggestedExchangePayto = demobank.config.suggestedExchangePayto
+        })
     )
 }
 
