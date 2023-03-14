@@ -27,12 +27,12 @@ exec-arch:
 clean-spa:
 	@rm -fr debian/usr/share/libeufin/demobank-ui/index.* debian/usr/share/libeufin/demobank-ui/*.svg
 
-.PHONY: get-spa
+.PHONY: copy-spa
 get-spa:
-	@./contrib/get_spa.sh
+	@./contrib/copy_spa.sh
 
 .PHONY: deb
-deb: exec-arch get-spa
+deb: exec-arch copy-spa
 	@dpkg-buildpackage -rfakeroot -b -uc -us
 
 
