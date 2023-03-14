@@ -1445,9 +1445,7 @@ val sandboxApp: Application.() -> Unit = {
                             iban = bankAccount.iban,
                             bic = bankAccount.bic,
                             // username 'null' should only happen when auth is disabled.
-                            receiverName = getPersonNameFromCustomer(
-                                username ?: "Not given."
-                            )
+                            receiverName = getPersonNameFromCustomer(bankAccount.owner)
                         )
                         val iban = bankAccount.iban
                         // The Elvis operator helps the --no-auth case,
