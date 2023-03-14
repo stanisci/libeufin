@@ -3,7 +3,7 @@ Installing LibEuFin
 
 $ ./bootstrap
 $ ./configure --prefix=$PFX
-$ make install
+$ make install # this operation can be 'slow'.
 
 If the previous step succeeded, libeufin-nexus and a command line
 client (libeufin-cli) should be found under $PFX/bin.  Additionally,
