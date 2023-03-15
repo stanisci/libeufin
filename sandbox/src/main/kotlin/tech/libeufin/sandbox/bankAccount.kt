@@ -41,7 +41,7 @@ fun getMaxDebitForUser(username: String): Int {
 fun getBalanceForJson(value: BigDecimal, currency: String): BalanceJson {
     return BalanceJson(
         amount = "${currency}:${value.abs()}",
-        credit_debit_indicator = if (value < BigDecimal.ZERO) "DBIT" else "CRDT"
+        credit_debit_indicator = if (value < BigDecimal.ZERO) "debit" else "credit"
     )
 }
 
