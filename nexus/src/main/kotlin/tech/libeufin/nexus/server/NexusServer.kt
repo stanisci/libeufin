@@ -738,9 +738,9 @@ val nexusApp: Application.() -> Unit = {
              */
             if (ingestionResult.errors != null)
             /**
-             * 500 is intentionally generic, because multiple errors
-             * may suggest different statuses.  The response body however
-             * informs the client about what failed.
+             * Nexus could not handle the error (regardless of it being generated
+             * here or gotten from the bank).  The response body should inform the
+             * client about what failed.
              */
             statusCode = HttpStatusCode.InternalServerError
             call.respond(
