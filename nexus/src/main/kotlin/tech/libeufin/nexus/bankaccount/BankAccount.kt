@@ -465,11 +465,10 @@ fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexus
                     if (this.iban != offeredAccount[OfferedBankAccountsTable.iban]) {
                         throw NexusError(
                             HttpStatusCode.Conflict,
-                            // different accounts == different IBANs
-                            "Cannot import two different accounts under one label: $nexusBankAccountId"
+                            "$nexusBankAccountId exists already and its IBAN is different from $offeredBankAccountId"
                         )
                     }
-                    // a imported bank account already exists and
+                    // an imported bank account already exists and
                     // the user tried to import the same IBAN to it.  Do nothing
                     this
                 }

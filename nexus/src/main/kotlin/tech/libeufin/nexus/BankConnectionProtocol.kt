@@ -41,7 +41,7 @@ interface BankConnectionProtocol {
     // Create a new connection from backup data.
     fun createConnectionFromBackup(connId: String, user: NexusUserEntity, passphrase: String?, backup: JsonNode)
 
-    // Create a new connection from a HTTP request.
+    // Create a new connection from an HTTP request.
     fun createConnection(connId: String, user: NexusUserEntity, data: JsonNode)
 
     // Merely a formatter of connection details coming from

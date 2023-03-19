@@ -11,6 +11,22 @@ import tech.libeufin.nexus.server.nexusApp
  */
 class NexusApiTest {
 
+    // Testing basic operations on facades.
+    @Test
+    fun facades() {
+        // Deletes the facade (created previously by MakeEnv.kt)
+        withTestDatabase {
+            prepNexusDb()
+            testApplication {
+                application(nexusApp)
+                client.delete("/facades/taler") {
+                    basicAuth("foo", "foo")
+                    expectSuccess = true
+                }
+            }
+        }
+    }
+
     // Testing the creation of scheduled tasks.
     @Test
     fun schedule() {

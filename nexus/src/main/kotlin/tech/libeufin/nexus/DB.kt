@@ -399,7 +399,7 @@ object FacadeStateTable : LongIdTable() {
 
     // "statement", "report", "notification"
     val reserveTransferLevel = text("reserveTransferLevel")
-    val facade = reference("facade", FacadesTable)
+    val facade = reference("facade", FacadesTable, onDelete = ReferenceOption.CASCADE)
 
     /**
      * Highest ID seen in the raw transactions table.

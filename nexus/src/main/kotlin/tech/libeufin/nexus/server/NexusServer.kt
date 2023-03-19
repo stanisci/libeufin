@@ -57,23 +57,29 @@ import tech.libeufin.util.*
 import java.net.BindException
 import java.net.URLEncoder
 import kotlin.system.exitProcess
-/**
- * Return facade state depending on the type.
- */
+
+// Return facade state depending on the type.
 fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
     return transaction {
         when (type) {
-            "taler-wire-gateway", "anastasis" -> {
+            "taler-wire-gateway",
+            "anastasis" -> {
                 val state = FacadeStateEntity.find {
                     FacadeStateTable.facade eq facade.id
                 }.firstOrNull()
-                if (state == null) throw NexusError(HttpStatusCode.NotFound, "State of facade ${facade.id} not found")
+                if (state == null) throw NexusError(
+                    HttpStatusCode.NotFound,
+                    "State of facade ${facade.id} not found"
+                )
                 val node = jacksonObjectMapper().createObjectNode()
                 node.put("bankConnection", state.bankConnection)
                 node.put("bankAccount", state.bankAccount)
                 node
             }
-            else -> throw NexusError(HttpStatusCode.NotFound, "Facade type $type not supported")
+            else -> throw NexusError(
+                HttpStatusCode.NotFound,
+                "Facade type $type not supported"
+            )
         }
     }
 }
@@ -783,6 +789,7 @@ val nexusApp: Application.() -> Unit = {
                     NexusBankConnectionEntity.find { NexusBankConnectionsTable.connectionId eq body.name }
                         .firstOrNull()
                 if (existingConn != null) {
+                    // FIXME: make idempotent.
                     throw NexusError(HttpStatusCode.Conflict, "connection '${body.name}' exists already")
                 }
                 when (body) {
@@ -884,9 +891,9 @@ val nexusApp: Application.() -> Unit = {
                 NexusBankMessageEntity.find { NexusBankMessagesTable.bankConnection eq conn.id }.map {
                     list.bankMessages.add(
                         BankMessageInfo(
-                            it.messageId,
-                            it.code,
-                            it.message.bytes.size.toLong()
+                            messageId = it.messageId,
+                            code = it.code,
+                            length = it.message.bytes.size.toLong()
                         )
                     )
                 }
@@ -965,7 +972,8 @@ val nexusApp: Application.() -> Unit = {
             val fcid = ensureNonNull(call.parameters["fcid"])
             transaction {
                 val f = FacadeEntity.findByName(fcid) ?: throw NexusError(
-                    HttpStatusCode.NotFound, "Facade $fcid does not exist"
+                    HttpStatusCode.NotFound,
+                    "Facade $fcid does not exist"
                 )
                 f.delete()
             }
