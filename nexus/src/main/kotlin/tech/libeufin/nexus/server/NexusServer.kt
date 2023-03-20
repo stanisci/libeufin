@@ -409,7 +409,7 @@ val nexusApp: Application.() -> Unit = {
             requireSuperuser(call.request)
             call.respond(
                 HttpStatusCode.OK,
-                BankProtocolsResponse(listOf("ebics", "loopback"))
+                BankProtocolsResponse(listOf("ebics"))
             )
             return@get
         }

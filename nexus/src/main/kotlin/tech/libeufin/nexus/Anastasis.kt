@@ -66,11 +66,15 @@ fun anastasisFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDeta
 // Handle a /taler-wire-gateway/history/incoming request.
 private suspend fun historyIncoming(call: ApplicationCall) {
     val facadeId = expectNonNull(call.parameters["fcid"])
-    call.request.requirePermission(PermissionQuery("facade", facadeId, "facade.anastasis.history"))
+    call.request.requirePermission(
+        PermissionQuery(
+            "facade",
+            facadeId,
+            "facade.anastasis.history"
+        )
+    )
     val param = call.expectUrlParameter("delta")
-    val delta: Int = try {
-        param.toInt()
-    } catch (e: Exception) {
+    val delta: Int = try { param.toInt() } catch (e: Exception) {
         throw EbicsProtocolError(HttpStatusCode.BadRequest, "'${param}' is not Int")
     }
     val start: Long = handleStartArgument(call.request.queryParameters["start"], delta)
