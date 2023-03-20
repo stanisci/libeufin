@@ -11,6 +11,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.sandbox.*
+import tech.libeufin.util.parseAmount
 import java.io.File
 import java.math.BigDecimal
 import java.util.*
@@ -30,6 +31,30 @@ class SandboxCircuitApiTest {
         }
     }
 
+    // Tests the application of cash-out ratio and fee.
+    @Test
+    fun estimationTest() {
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                val R = client.get(
+                    "/demobanks/default/circuit-api/cashouts/estimates?amount_debit=TESTKUDOS:2"
+                ) {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                println(R.bodyAsText())
+                val mapper = ObjectMapper()
+                val respJson = mapper.readTree(R.bodyAsText())
+                val creditAmount = respJson.get("amount_credit").asText()
+                // sell ratio and fee are the following constants: 0.95 and 0.
+                // expected credit amount = 2 * 0.95 - 0 = 1.90
+                assert("CHF:1.90" == creditAmount)
+            }
+        }
+    }
+
     /**
      * Checking that the ordinary user foo doesn't get to access bar's
      * data, but admin does.
@@ -45,7 +70,7 @@ class SandboxCircuitApiTest {
                     expectSuccess = false
                 }
                 assert(R.status.value == HttpStatusCode.Forbidden.value)
-                R = client.get("/demobanks/default/circuit-api/accounts/bar") {
+                client.get("/demobanks/default/circuit-api/accounts/bar") {
                     basicAuth("admin", "foo")
                     expectSuccess = true
                 }
