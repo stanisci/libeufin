@@ -389,7 +389,9 @@ fun circuitApi(circuitRoute: Route) {
             amountDebit.amount.toBigDecimal()
         } catch (e: Exception) { throw badRequest("POSTed debit amount has invalid number.") }
         val estimate = applyCashoutRatioAndFee(amountDebitValue, ratiosAndFees)
-        call.respond(object { val amount_credit = "$FIAT_CURRENCY:$estimate" })
+        val twoDigitsRounding = MathContext(2)
+        val estimateRounded = estimate.round(twoDigitsRounding)
+        call.respond(object { val amount_credit = "$FIAT_CURRENCY:$estimateRounded" })
     }
     // Create a cash-out operation.
     circuitRoute.post("/cashouts") {

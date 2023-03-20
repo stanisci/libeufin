@@ -50,7 +50,7 @@ class SandboxCircuitApiTest {
                 val creditAmount = respJson.get("amount_credit").asText()
                 // sell ratio and fee are the following constants: 0.95 and 0.
                 // expected credit amount = 2 * 0.95 - 0 = 1.90
-                assert("CHF:1.90" == creditAmount)
+                assert("CHF:1.90" == creditAmount || "CHF:1.9" == creditAmount)
             }
         }
     }
