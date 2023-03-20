@@ -557,7 +557,9 @@ val nexusApp: Application.() -> Unit = {
                             (NexusScheduledTasksTable.resourceId eq accountId)
 
                 }.firstOrNull()
-                oldSchedTask?.delete()
+                if (oldSchedTask == null)
+                    throw notFound("Task $taskId is not found.")
+                oldSchedTask.delete()
             }
             call.respond(object {})
         }
