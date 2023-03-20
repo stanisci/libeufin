@@ -6,8 +6,6 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.jetbrains.exposed.sql.deleteAll
-import org.jetbrains.exposed.sql.lowerCase
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.sandbox.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
@@ -19,6 +17,18 @@ import java.util.concurrent.TimeUnit
 import kotlin.text.toByteArray
 
 // CIRCUIT API TYPES
+/**
+ * This type is used by clients to ask the bank a cash-out
+ * estimate to show to the customer before they confirm the
+ * cash-out creation.
+ */
+data class CircuitCashoutEstimateRequest(
+    /**
+     * This is the amount that the customer will get deducted
+     * from their regio bank account to fuel the cash-out operation.
+     */
+    val amount_debit: String
+)
 data class CircuitCashoutRequest(
     val subject: String?,
     val amount_debit: String, // As specified by the user via the SPA.
@@ -134,6 +144,18 @@ fun generateCashoutSubject(
     return "Cash-out of ${amountDebit.currency}:${amountDebit.amount}" +
             " to ${amountCredit.currency}:${amountCredit.amount}"
 }
+
+/* Takes one amount value as input, applies cash-out rates
+* and fees to it, and returns the result.  Typically, the input
+* comes from a regional currency amount and the output will be
+* the fiat currency amount that the customer will get in their
+* fiat bank account. */
+fun applyCashoutRatioAndFee(
+    regioAmount: BigDecimal,
+    ratiosAndFees: RatioAndFees
+): BigDecimal =
+    (regioAmount * ratiosAndFees.sell_at_ratio.toBigDecimal()) -
+            ratiosAndFees.sell_out_fee.toBigDecimal()
 
 /**
  * NOTE: future versions take the supported TAN method from
@@ -355,6 +377,20 @@ fun circuitApi(circuitRoute: Route) {
         call.respond(node)
         return@get
     }
+    circuitRoute.get("/cashouts/estimates") {
+        call.request.basicAuth()
+        val maybeAmountDebit: String? = call.request.queryParameters["amount_debit"]
+        if (maybeAmountDebit == null) throw badRequest("Missing 'amount_debit' URI parameter.")
+        val amountDebit = parseAmount(maybeAmountDebit)
+        val demobank = ensureDemobank(call)
+        if (amountDebit.currency != demobank.config.currency)
+            throw badRequest("POSTed debit amount has wrong currency (${amountDebit.currency}).  Give '${demobank.config.currency}' instead.")
+        val amountDebitValue = try {
+            amountDebit.amount.toBigDecimal()
+        } catch (e: Exception) { throw badRequest("POSTed debit amount has invalid number.") }
+        val estimate = applyCashoutRatioAndFee(amountDebitValue, ratiosAndFees)
+        call.respond(object { val amount_credit = "$FIAT_CURRENCY:$estimate" })
+    }
     // Create a cash-out operation.
     circuitRoute.post("/cashouts") {
         val user = call.request.basicAuth()
@@ -401,10 +437,8 @@ fun circuitApi(circuitRoute: Route) {
         if ((tanChannel == SupportedTanChannels.SMS.name) && (customer.phone == null))
             throw conflict("Phone number not found for '$user'.  Can't send the TAN")
         // check rates correctness
-        val sellRatio = BigDecimal(ratiosAndFees.sell_at_ratio.toString())
-        val sellFee = BigDecimal(ratiosAndFees.sell_out_fee.toString())
         val amountDebitAsNumber = BigDecimal(amountDebit.amount)
-        val expectedAmountCredit = (amountDebitAsNumber * sellRatio) - sellFee
+        val expectedAmountCredit = applyCashoutRatioAndFee(amountDebitAsNumber, ratiosAndFees)
         val commonRounding = MathContext(2) // ensures both amounts end with ".XY"
         val amountCreditAsNumber = BigDecimal(amountCredit.amount)
         if (expectedAmountCredit.round(commonRounding) != amountCreditAsNumber.round(commonRounding)) {
