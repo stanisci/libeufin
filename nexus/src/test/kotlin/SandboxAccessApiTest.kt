@@ -1,3 +1,4 @@
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -59,6 +60,78 @@ class SandboxAccessApiTest {
                     }
                     assert(R.status.value == HttpStatusCode.BadRequest.value)
                 }
+            }
+        }
+    }
+
+    // Tests the time range filter of Access API's GET /transactions
+    @Test
+    fun timeRangedTransactions() {
+        fun getTxs(respJson: String): JsonNode {
+            val mapper = ObjectMapper()
+            return mapper.readTree(respJson).get("transactions")
+        }
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                var R = client.get("/demobanks/default/access-api/accounts/foo/transactions") {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                assert(getTxs(R.bodyAsText()).size() == 0) // Checking that no transactions exist.
+                wireTransfer(
+                    "admin",
+                    "foo",
+                    "default",
+                    "#0",
+                    "TESTKUDOS:2"
+                )
+                R = client.get("/demobanks/default/access-api/accounts/foo/transactions") {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                assert(getTxs(R.bodyAsText()).size() == 1) // Checking that #0 shows up.
+                // Asking up to a point in the past, where no txs should exist.
+                R = client.get("/demobanks/default/access-api/accounts/foo/transactions?until_ms=3000") {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                assert(getTxs(R.bodyAsText()).size() == 0) // Not expecting any transaction.
+                // Moving the transaction back in the past
+                transaction {
+                    val tx_0 = BankAccountTransactionEntity.find {
+                        BankAccountTransactionsTable.subject eq "#0" and
+                                (BankAccountTransactionsTable.direction eq "CRDT")
+                    }.first()
+                    tx_0.date = 10000
+                }
+                // Picking the past transaction from one including time range,
+                // therefore expecting one entry in the result
+                R = client.get("/demobanks/default/access-api/accounts/foo/transactions?from_ms=9000&until_ms=11000") {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                assert(getTxs(R.bodyAsText()).size() == 1)
+                // Not enough txs to fill the second page, expecting no txs therefore.
+                R = client.get("/demobanks/default/access-api/accounts/foo/transactions?page=2&size=1") {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                assert(getTxs(R.bodyAsText()).size() == 0)
+                // Creating one more tx and asking the second 1-sized page, expecting therefore one result.
+                wireTransfer(
+                    "admin",
+                    "foo",
+                    "default",
+                    "#1",
+                    "TESTKUDOS:2"
+                )
+                R = client.get("/demobanks/default/access-api/accounts/foo/transactions?page=2&size=1") {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                assert(getTxs(R.bodyAsText()).size() == 1)
             }
         }
     }

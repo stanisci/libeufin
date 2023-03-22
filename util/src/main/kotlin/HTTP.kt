@@ -186,3 +186,18 @@ fun extractUserAndPassword(authorizationHeader: String): Pair<String, String> {
     }
     return Pair(username, password)
 }
+
+fun expectInt(uriParam: String): Int {
+    return try { Integer.decode(uriParam) }
+    catch (e: Exception) {
+        logger.error(e.message)
+        throw badRequest("'$uriParam' is not Int")
+    }
+}
+fun expectLong(uriParam: String): Long {
+    return try { uriParam.toLong() }
+    catch (e: Exception) {
+        logger.error(e.message)
+        throw badRequest("'$uriParam' is not Long")
+    }
+}
