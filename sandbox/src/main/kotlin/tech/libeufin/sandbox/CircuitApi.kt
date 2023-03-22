@@ -217,7 +217,7 @@ fun circuitApi(circuitRoute: Route) {
     // Abort a cash-out operation.
     circuitRoute.post("/cashouts/{uuid}/abort") {
         call.request.basicAuth() // both admin and author allowed
-        val arg = call.getUriComponent("uuid")
+        val arg = call.expectUriComponent("uuid")
         // Parse and check the UUID.
         val maybeUuid = parseUuid(arg)
         val maybeOperation = transaction {
@@ -244,7 +244,7 @@ fun circuitApi(circuitRoute: Route) {
         if (user == "admin" || user == "bank")
             throw conflict("Institutional user '$user' shouldn't confirm any cash-out.")
         // Get the operation identifier.
-        val operationUuid = parseUuid(call.getUriComponent("uuid"))
+        val operationUuid = parseUuid(call.expectUriComponent("uuid"))
         val op = transaction {
             CashoutOperationEntity.find {
                 uuid eq operationUuid
@@ -302,7 +302,7 @@ fun circuitApi(circuitRoute: Route) {
     // Retrieve the status of a cash-out operation.
     circuitRoute.get("/cashouts/{uuid}") {
         call.request.basicAuth() // both admin and author
-        val operationUuid = call.getUriComponent("uuid")
+        val operationUuid = call.expectUriComponent("uuid")
         // Parse and check the UUID.
         val maybeUuid = parseUuid(operationUuid)
         // Get the operation from the database.
@@ -449,7 +449,11 @@ fun circuitApi(circuitRoute: Route) {
                     " but ${amountCredit.amount} was specified.")
         }
         // check that the balance is sufficient
-        val balance = getBalance(user, withPending = true)
+        val balance = getBalance(
+            user,
+            demobank.name,
+            withPending = true
+        )
         val balanceCheck = balance - amountDebitAsNumber
         if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal(demobank.config.usersDebtLimit))
             throw SandboxError(
@@ -547,7 +551,7 @@ fun circuitApi(circuitRoute: Route) {
     // Get Circuit-relevant account data.
     circuitRoute.get("/accounts/{resourceName}") {
         val username = call.request.basicAuth()
-        val resourceName = call.getUriComponent("resourceName")
+        val resourceName = call.expectUriComponent("resourceName")
         throwIfInstitutionalName(resourceName)
         if (!allowOwnerOrAdmin(username, resourceName)) throw forbidden(
             "User $username has no rights over $resourceName"
@@ -593,6 +597,7 @@ fun circuitApi(circuitRoute: Route) {
             "%${maybeFilter}%"
         } else "%"
         val customers = mutableListOf<Any>()
+        val demobank = ensureDemobank(call)
         transaction {
             DemobankCustomerEntity.find{
                 // like() is case insensitive.
@@ -602,10 +607,13 @@ fun circuitApi(circuitRoute: Route) {
                     val username = it.username
                     val name = it.name
                     val balance = getBalanceForJson(
-                        getBalance(it.username),
-                        getDefaultDemobank().config.currency
+                        getBalance(it.username, demobank.name),
+                        demobank.config.currency
                     )
-                    val debitThreshold = getMaxDebitForUser(it.username)
+                    val debitThreshold = getMaxDebitForUser(
+                        it.username,
+                        demobank.name
+                    )
                 })
             }
         }
@@ -620,7 +628,7 @@ fun circuitApi(circuitRoute: Route) {
     // Change password.
     circuitRoute.patch("/accounts/{customerUsername}/auth") {
         val username = call.request.basicAuth()
-        val customerUsername = call.getUriComponent("customerUsername")
+        val customerUsername = call.expectUriComponent("customerUsername")
         throwIfInstitutionalName(customerUsername)
         if (!allowOwnerOrAdmin(username, customerUsername)) throw forbidden(
             "User $username has no rights over $customerUsername"
@@ -644,7 +652,7 @@ fun circuitApi(circuitRoute: Route) {
         val username = call.request.basicAuth()
         if (username == null)
             throw internalServerError("Authentication disabled, don't have a default for this request.")
-        val resourceName = call.getUriComponent("resourceName")
+        val resourceName = call.expectUriComponent("resourceName")
         throwIfInstitutionalName(resourceName)
         if(!allowOwnerOrAdmin(username, resourceName)) throw forbidden(
             "User $username has no rights over $resourceName"
@@ -719,7 +727,8 @@ fun circuitApi(circuitRoute: Route) {
                 username = req.username,
                 password = req.password,
                 name = req.name,
-                iban = req.internal_iban
+                iban = req.internal_iban,
+                demobank = ensureDemobank(call).name
             )
             newAccount.customer.phone = req.contact_data.phone
             newAccount.customer.email = req.contact_data.email
@@ -736,7 +745,7 @@ fun circuitApi(circuitRoute: Route) {
     // Only Admin and only when balance is zero.
     circuitRoute.delete("/accounts/{resourceName}") {
         call.request.basicAuth(onlyAdmin = true)
-        val resourceName = call.getUriComponent("resourceName")
+        val resourceName = call.expectUriComponent("resourceName")
         throwIfInstitutionalName(resourceName)
         val customer = getCustomer(resourceName)
         val bankAccount = getBankAccountFromLabel(

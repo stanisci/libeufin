@@ -48,7 +48,6 @@ import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.util.date.*
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.Logger
@@ -61,10 +60,6 @@ import java.math.BigDecimal
 import java.net.URL
 import java.security.interfaces.RSAPublicKey
 import javax.xml.bind.JAXBContext
-import kotlin.reflect.KProperty0
-import kotlin.reflect.KProperty1
-import kotlin.reflect.full.declaredMemberProperties
-import kotlin.reflect.full.declaredMembers
 import kotlin.system.exitProcess
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
@@ -269,7 +264,8 @@ class Camt053Tick : CliktCommand(
                     accountIter.iban,
                     newStatements[accountIter.label]!!,
                     balanceClbd = balanceClbd,
-                    balancePrcd = lastBalance
+                    balancePrcd = lastBalance,
+                    currency = accountIter.demoBank.config.currency
                 )
                 BankAccountStatementEntity.new {
                     statementId = camtData.messageId
@@ -717,7 +713,7 @@ val sandboxApp: Application.() -> Unit = {
         // Information about one bank account.
         get("/admin/bank-accounts/{label}") {
             val username = call.request.basicAuth()
-            val label = call.getUriComponent("label")
+            val label = call.expectUriComponent("label")
             val ret = transaction {
                 val demobank = getDefaultDemobank()
                 val bankAccount = getBankAccountFromLabel(label, demobank)
@@ -1069,9 +1065,7 @@ val sandboxApp: Application.() -> Unit = {
         }
         // Process one EBICS request
         post("/ebicsweb") {
-            try {
-                call.ebicsweb()
-            }
+            try { call.ebicsweb() }
             /**
              * The catch blocks try to extract a EBICS error message from the
              * exception type being handled.  NOT logging under each catch block
@@ -1139,17 +1133,13 @@ val sandboxApp: Application.() -> Unit = {
             // NOTE: TWG assumes that username == bank account label.
             route("/taler-wire-gateway") {
                 post("/{exchangeUsername}/admin/add-incoming") {
-                    val username = call.getUriComponent("exchangeUsername")
+                    val username = call.expectUriComponent("exchangeUsername")
                     val usernameAuth = call.request.basicAuth()
-                    if (username != usernameAuth) {
-                        throw forbidden(
-                            "Bank account name and username differ: $username vs $usernameAuth"
-                        )
-                    }
+                    if (username != usernameAuth)
+                        throw forbidden("Bank account name and username differ: $username vs $usernameAuth")
                     logger.debug("TWG add-incoming passed authentication")
-                    val body = try {
-                        call.receive<TWGAdminAddIncoming>()
-                    } catch (e: Exception) {
+                    val body = try { call.receive<TWGAdminAddIncoming>() }
+                    catch (e: Exception) {
                         logger.error("/admin/add-incoming failed at parsing the request body")
                         throw SandboxError(
                             HttpStatusCode.BadRequest,
@@ -1239,7 +1229,7 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     val demobank = ensureDemobank(call)
-                    var captcha_page = demobank.config.captchaUrl
+                    val captcha_page = demobank.config.captchaUrl
                     if (captcha_page == null) logger.warn("CAPTCHA URL not found")
                     val ret = TalerWithdrawalStatus(
                         selection_done = maybeWithdrawalOp.selectionDone,
@@ -1259,7 +1249,16 @@ val sandboxApp: Application.() -> Unit = {
             // Talk to Web UI.
             route("/access-api") {
                 post("/accounts/{account_name}/transactions") {
-                    val bankAccount = getBankAccountWithAuth(call)
+                    val username = call.request.basicAuth()
+                    val demobank = ensureDemobank(call)
+                    val bankAccount = getBankAccountFromLabel(
+                        call.expectUriComponent("account_name"),
+                        demobank
+                    )
+                    // note: admin has no rights to create transactions on non-admin accounts.
+                    val authGranted: Boolean = !WITH_AUTH
+                    if (!authGranted && username != bankAccount.label)
+                        throw unauthorized("Username '$username' has no rights over bank account ${bankAccount.label}")
                     val req = call.receive<NewTransactionReq>()
                     val payto = parsePayto(req.paytoUri)
                     val amount: String? = payto.amount ?: req.amount
@@ -1283,8 +1282,7 @@ val sandboxApp: Application.() -> Unit = {
                 }
                 // Information about one withdrawal.
                 get("/accounts/{account_name}/withdrawals/{withdrawal_id}") {
-                    val op = getWithdrawalOperation(call.getUriComponent("withdrawal_id"))
-                    ensureDemobank(call)
+                    val op = getWithdrawalOperation(call.expectUriComponent("withdrawal_id"))
                     if (!op.selectionDone && op.reservePub != null) throw internalServerError(
                         "Unselected withdrawal has a reserve public key",
                         LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE
@@ -1302,29 +1300,30 @@ val sandboxApp: Application.() -> Unit = {
                 // Create a new withdrawal operation.
                 post("/accounts/{account_name}/withdrawals") {
                     var username = call.request.basicAuth()
-                    if (username == null && (!WITH_AUTH)) {
-                        logger.info("Authentication is disabled to facilitate tests, defaulting to 'admin' username")
-                        username = "admin"
-                    }
                     val demobank = ensureDemobank(call)
                     /**
                      * Check here if the user has the right over the claimed bank account.  After
                      * this check, the withdrawal operation will be allowed only by providing its
                      * UID. */
                     val maybeOwnedAccount = getBankAccountFromLabel(
-                        call.getUriComponent("account_name"),
+                        call.expectUriComponent("account_name"),
                         demobank
                     )
-                    if (maybeOwnedAccount.owner != username && WITH_AUTH) throw unauthorized(
-                        "Customer '$username' has no rights over bank account '${maybeOwnedAccount.label}'"
-                    )
+                    val authGranted = !WITH_AUTH // note: admin not allowed on non-admin accounts
+                    if (!authGranted && maybeOwnedAccount.owner != username)
+                        throw unauthorized("Customer '$username' has no rights over bank account '${maybeOwnedAccount.label}'")
                     val req = call.receive<WithdrawalRequest>()
                     // Check for currency consistency
                     val amount = parseAmount(req.amount)
                     if (amount.currency != demobank.config.currency)
                         throw badRequest("Currency ${amount.currency} differs from Demobank's: ${demobank.config.currency}")
                     // Check funds are sufficient.
-                    if (maybeDebit(maybeOwnedAccount.label, BigDecimal(amount.amount))) {
+                    if (
+                        maybeDebit(
+                            maybeOwnedAccount.label,
+                            BigDecimal(amount.amount),
+                            transaction { maybeOwnedAccount.demoBank.name }
+                        )) {
                         logger.error("Account ${maybeOwnedAccount.label} would surpass debit threshold.  Not withdrawing")
                         throw SandboxError(HttpStatusCode.Forbidden, "Insufficient funds")
                     }
@@ -1372,7 +1371,7 @@ val sandboxApp: Application.() -> Unit = {
                 }
                 // Confirm a withdrawal: no basic auth, because the ID should be unguessable.
                 post("/accounts/{account_name}/withdrawals/{withdrawal_id}/confirm") {
-                    val withdrawalId = call.getUriComponent("withdrawal_id")
+                    val withdrawalId = call.expectUriComponent("withdrawal_id")
                     transaction {
                         val wo = getWithdrawalOperation(withdrawalId)
                         if (wo.aborted) throw SandboxError(
@@ -1415,7 +1414,7 @@ val sandboxApp: Application.() -> Unit = {
                     return@post
                 }
                 post("/accounts/{account_name}/withdrawals/{withdrawal_id}/abort") {
-                    val withdrawalId = call.getUriComponent("withdrawal_id")
+                    val withdrawalId = call.expectUriComponent("withdrawal_id")
                     val operation = getWithdrawalOperation(withdrawalId)
                     if (operation.confirmationDone) throw conflict("Cannot abort paid withdrawal.")
                     transaction { operation.aborted = true }
@@ -1425,16 +1424,12 @@ val sandboxApp: Application.() -> Unit = {
                 // Bank account basic information.
                 get("/accounts/{account_name}") {
                     val username = call.request.basicAuth()
-                    val accountAccessed = call.getUriComponent("account_name")
+                    val accountAccessed = call.expectUriComponent("account_name")
                     val demobank = ensureDemobank(call)
                     val bankAccount = getBankAccountFromLabel(accountAccessed, demobank)
-                    // Check rights.
-                    if (
-                        WITH_AUTH
-                        && (bankAccount.owner != username && username != "admin")
-                    ) throw forbidden(
-                            "Customer '$username' cannot access bank account '$accountAccessed'"
-                        )
+                    val authGranted = !WITH_AUTH || bankAccount.isPublic || username == "admin"
+                    if (!authGranted && bankAccount.owner != username)
+                        throw forbidden("Customer '$username' cannot access bank account '$accountAccessed'")
                     val balance = getBalance(bankAccount, withPending = true)
                     call.respond(object {
                         val balance = object {
@@ -1450,21 +1445,23 @@ val sandboxApp: Application.() -> Unit = {
                         val iban = bankAccount.iban
                         // The Elvis operator helps the --no-auth case,
                         // where username would be empty
-                        val debitThreshold = getMaxDebitForUser(username ?: "admin").toString()
+                        val debitThreshold = getMaxDebitForUser(
+                            username = username ?: "admin",
+                            demobankName = demobank.name
+                        ).toString()
                     })
                     return@get
                 }
                 get("/accounts/{account_name}/transactions/{tId}") {
+                    val username = call.request.basicAuth()
                     val demobank = ensureDemobank(call)
                     val bankAccount = getBankAccountFromLabel(
-                        call.getUriComponent("account_name"),
+                        call.expectUriComponent("account_name"),
                         demobank
                     )
-                    val authOk: Boolean = bankAccount.isPublic || (!WITH_AUTH)
-                    if (!authOk && (call.request.basicAuth() != bankAccount.owner)) throw forbidden(
-                        "Cannot access bank account ${bankAccount.label}"
-                    )
-                    // Flow here == Right on the bank account.
+                    val authGranted: Boolean = bankAccount.isPublic || !WITH_AUTH || username == "admin"
+                    if (!authGranted && username != bankAccount.owner)
+                        throw forbidden("Cannot access bank account ${bankAccount.label}")
                     val tId = call.parameters["tId"] ?: throw badRequest("URI didn't contain the transaction ID")
                     val tx: BankAccountTransactionEntity? = transaction {
                         BankAccountTransactionEntity.find {
@@ -1476,16 +1473,15 @@ val sandboxApp: Application.() -> Unit = {
                     return@get
                 }
                 get("/accounts/{account_name}/transactions") {
+                    val username = call.request.basicAuth()
                     val demobank = ensureDemobank(call)
                     val bankAccount = getBankAccountFromLabel(
-                        call.getUriComponent("account_name"),
+                        call.expectUriComponent("account_name"),
                         demobank
                     )
-                    val authOk: Boolean = bankAccount.isPublic || (!WITH_AUTH)
-                    if (!authOk && (call.request.basicAuth() != bankAccount.owner)) throw forbidden(
-                        "Cannot access bank account ${bankAccount.label}"
-                    )
-
+                    val authGranted: Boolean = bankAccount.isPublic || !WITH_AUTH || username == "admin"
+                    if (!authGranted && bankAccount.owner != username)
+                        throw forbidden("Cannot access bank account ${bankAccount.label}")
                     val page: Int = Integer.decode(call.request.queryParameters["page"] ?: "0")
                     val size: Int = Integer.decode(call.request.queryParameters["size"] ?: "5")
 
@@ -1535,7 +1531,10 @@ val sandboxApp: Application.() -> Unit = {
                                     BankAccountsTable.demoBank eq demobank.id
                             )
                         }.forEach {
-                            val balanceIter = getBalance(it, withPending = true)
+                            val balanceIter = getBalance(
+                                it,
+                                withPending = true,
+                            )
                             ret.publicAccounts.add(
                                 PublicAccountInfo(
                                     balance = "${demobank.config.currency}:$balanceIter",
@@ -1549,10 +1548,21 @@ val sandboxApp: Application.() -> Unit = {
                     return@get
                 }
                 delete("accounts/{account_name}") {
-                    // Check demobank was created.
-                    ensureDemobank(call)
+                    val username = call.request.basicAuth()
+                    val demobank = ensureDemobank(call)
+                    val authGranted = !WITH_AUTH || username == "admin"
+                    val bankAccountLabel = call.expectUriComponent("account_name")
+                    /**
+                     * This helper fails if the demobank that is mentioned in the URI
+                     * is not hosting the account to be deleted.
+                     */
+                    val bankAccount = getBankAccountFromLabel(
+                        bankAccountLabel,
+                        demobank
+                    )
+                    if (!authGranted && username != bankAccount.owner)
+                        throw unauthorized("User '$username' has no rights to delete bank account '$bankAccountLabel'")
                     transaction {
-                        val bankAccount = getBankAccountWithAuth(call)
                         val customerAccount = getCustomer(bankAccount.owner)
                         bankAccount.delete()
                         customerAccount.delete()
@@ -1572,11 +1582,12 @@ val sandboxApp: Application.() -> Unit = {
                     }
                     val req = call.receive<CustomerRegistration>()
                     val newAccount = insertNewAccount(
-                            req.username,
-                            req.password,
-                            name = req.name,
-                            iban = req.iban,
-                            isPublic = req.isPublic
+                        req.username,
+                        req.password,
+                        name = req.name,
+                        iban = req.iban,
+                        demobank = demobank.name,
+                        isPublic = req.isPublic
                     )
                     val balance = getBalance(newAccount.bankAccount, withPending = true)
                     call.respond(object {
@@ -1587,7 +1598,10 @@ val sandboxApp: Application.() -> Unit = {
                             receiverName = getPersonNameFromCustomer(req.username)
                         )
                         val iban = newAccount.bankAccount.iban
-                        val debitThreshold = getMaxDebitForUser(req.username).toString()
+                        val debitThreshold = getMaxDebitForUser(
+                            req.username,
+                            demobank.name
+                        ).toString()
                     })
                     return@post
                 }

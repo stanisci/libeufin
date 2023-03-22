@@ -25,7 +25,7 @@ class SandboxBankAccountTest {
              * the payment is still pending (= not booked), the pending
              * transactions must be included in the calculation.
              */
-            var bankBalance = getBalance("admin", true)
+            var bankBalance = getBalance("admin")
             assert(bankBalance == parseDecimal("-1"))
             wireTransfer(
                 "foo",
@@ -34,7 +34,7 @@ class SandboxBankAccountTest {
                 "Show up in logging!",
                 "TESTKUDOS:5"
             )
-            bankBalance = getBalance("admin", true)
+            bankBalance = getBalance("admin")
             assert(bankBalance == parseDecimal("4"))
             // Trigger Insufficient funds case for users.
             try {
@@ -63,9 +63,9 @@ class SandboxBankAccountTest {
                 assert(e.statusCode == HttpStatusCode.PreconditionFailed)
             }
             // Check balance didn't change for both parties.
-            bankBalance = getBalance("admin", true)
+            bankBalance = getBalance("admin")
             assert(bankBalance == parseDecimal("4"))
-            val fooBalance = getBalance("foo", true)
+            val fooBalance = getBalance("foo")
             assert(fooBalance == parseDecimal("-4"))
         }
     }

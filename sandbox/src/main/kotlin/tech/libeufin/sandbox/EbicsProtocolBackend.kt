@@ -281,7 +281,8 @@ fun buildCamtString(
     subscriberIban: String,
     history: MutableList<RawPayment>,
     balancePrcd: BigDecimal, // Balance up to freshHistory (excluded).
-    balanceClbd: BigDecimal
+    balanceClbd: BigDecimal,
+    currency: String
 ): SandboxCamt {
     /**
      * ID types required:
@@ -300,7 +301,6 @@ fun buildCamtString(
     val zonedDateTime = camtCreationTime.toZonedString()
     val creationTimeMillis = camtCreationTime.toInstant().toEpochMilli()
     val messageId = "sandbox-${creationTimeMillis / 1000}-${getRandomString(10)}"
-    val currency = getDefaultDemobank().config.currency
 
     val camtMessage = constructXml(indent = true) {
         root("Document") {
@@ -561,7 +561,8 @@ private fun constructCamtResponse(
             bankAccount.iban,
             history,
             balancePrcd = prcdBalance,
-            balanceClbd = clbdBalance
+            balanceClbd = clbdBalance,
+            bankAccount.demoBank.config.currency
         )
         val paymentsList: String = if (logger.isDebugEnabled) {
             var ret = " It includes the payments:"
@@ -713,8 +714,9 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
  * payments outside of the running Sandbox and (2) may ease
  * tests where the preparation logic can skip creating also
  * the receiver account.  */
-private fun handleCct(paymentRequest: String,
-                      requestingSubscriber: EbicsSubscriberEntity
+private fun handleCct(
+    paymentRequest: String,
+    requestingSubscriber: EbicsSubscriberEntity
 ) {
     val parseResult = parsePain001(paymentRequest)
     logger.debug("Handling Pain.001: ${parseResult.pmtInfId}, " +
@@ -752,7 +754,7 @@ private fun handleCct(paymentRequest: String,
             logger.warn("Although PAIN validated, BigDecimal didn't parse its amount (${parseResult.amount})!")
             throw EbicsProcessingError("The CCT request contains an invalid amount: ${parseResult.amount}")
         }
-        if (maybeDebit(bankAccount.label, maybeAmount))
+        if (maybeDebit(bankAccount.label, maybeAmount, bankAccount.demoBank.name))
             throw EbicsAmountCheckError("The requested amount (${parseResult.amount}) would exceed the debit threshold")
 
         // Get the two parties.

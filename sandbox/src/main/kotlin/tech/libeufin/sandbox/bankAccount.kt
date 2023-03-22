@@ -19,7 +19,7 @@ fun maybeDebit(
         "Demobank '${demobankName}' not found when trying to check the debit threshold" +
                 " for user $accountLabel"
     )
-    val balance = getBalance(accountLabel, withPending = true)
+    val balance = getBalance(accountLabel, demobankName, withPending = true)
     val maxDebt = if (accountLabel == "admin") {
         demobank.config.bankDebtLimit
     } else demobank.config.usersDebtLimit
@@ -32,8 +32,13 @@ fun maybeDebit(
     return false
 }
 
-fun getMaxDebitForUser(username: String): Int {
-    val bank = getDefaultDemobank()
+fun getMaxDebitForUser(
+    username: String,
+    demobankName: String = "default"
+): Int {
+    val bank = getDemobank(demobankName) ?: throw internalServerError(
+        "demobank $demobankName not found"
+    )
     if (username == "admin") return bank.config.bankDebtLimit
     return bank.config.usersDebtLimit
 }
@@ -50,6 +55,9 @@ fun getBalanceForJson(value: BigDecimal, currency: String): BalanceJson {
  * last statement.  If the bank account does not have any statement
  * yet, then zero is returned.  When 'withPending' is true, it adds
  * the pending transactions to it.
+ *
+ * Note: because transactions are searched after the bank accounts
+ * (numeric) id, the research in the database is not ambiguous.
  */
 fun getBalance(
     bankAccount: BankAccountEntity,
@@ -92,10 +100,16 @@ fun getBalance(
     return lastBalance
 }
 
-// Wrapper offering to get bank accounts from a string.
-fun getBalance(accountLabel: String, withPending: Boolean = true): BigDecimal {
-    val defaultDemobank = getDefaultDemobank()
-    val account = getBankAccountFromLabel(accountLabel, defaultDemobank)
+// Gets the balance of 'accountLabel', which is hosted at 'demobankName'.
+fun getBalance(accountLabel: String,
+               demobankName: String = "default",
+               withPending: Boolean = true
+): BigDecimal {
+    val demobank = getDemobank(demobankName) ?: throw SandboxError(
+        HttpStatusCode.InternalServerError,
+        "Demobank '$demobankName' not found"
+    )
+    val account = getBankAccountFromLabel(accountLabel, demobank)
     return getBalance(account, withPending)
 }
 
@@ -150,7 +164,12 @@ fun wireTransfer(
                     "  Only ${demobank.config.currency} allowed."
         )
     // Check funds are sufficient.
-    if (maybeDebit(debitAccount.label, amountAsNumber)) {
+    if (
+        maybeDebit(
+            debitAccount.label,
+            amountAsNumber,
+            demobank.name
+    )) {
         logger.error("Account ${debitAccount.label} would surpass debit threshold.  Rollback wire transfer")
         throw SandboxError(HttpStatusCode.PreconditionFailed, "Insufficient funds")
     }

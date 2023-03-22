@@ -82,8 +82,8 @@ fun insertNewAccount(username: String,
                      password: String,
                      name: String? = null, // tests do not usually give one.
                      iban: String? = null,
-                     isPublic: Boolean = false,
-                     demobank: String = "default"): AccountPair {
+                     demobank: String = "default",
+                     isPublic: Boolean = false): AccountPair {
     requireValidResourceName(username)
     // Forbid institutional usernames.
     if (username == "bank" || username == "admin") {
@@ -163,7 +163,7 @@ fun allowOwnerOrAdmin(username: String?, bankAccountLabel: String): Boolean {
  *
  * Return:
  * - null if the authentication is disabled (during tests, for example).
- *   This facilitates tests because allows requests to lack entirely a
+ *   This facilitates tests because allows requests to lack entirely an
  *   Authorization header.
  * - the username of the authenticated user
  * - throw exception when the authentication fails
@@ -365,10 +365,12 @@ fun getBankAccountFromLabel(
         withBankFault
     )
 }
+
+// Get bank account DAO, given its name and demobank.
 fun getBankAccountFromLabel(
     label: String,
     demobank: DemobankConfigEntity,
-    withBankFault: Boolean = false
+    withBankFault: Boolean = false // documented along the other same-named function.
 ): BankAccountEntity {
     val maybeBankAccount = transaction {
         BankAccountEntity.find(
@@ -408,7 +410,7 @@ fun BankAccountEntity.bonus(amount: String) {
 }
 
 fun ensureDemobank(call: ApplicationCall): DemobankConfigEntity {
-    return ensureDemobank(call.getUriComponent("demobankid"))
+    return ensureDemobank(call.expectUriComponent("demobankid"))
 }
 
 fun ensureDemobank(name: String): DemobankConfigEntity {
@@ -441,22 +443,6 @@ fun getEbicsSubscriberFromDetails(userID: String, partnerID: String, hostID: Str
             "Ebics subscriber (${userID}, ${partnerID}, ${hostID}) not found"
         )
     }
-}
-
-/**
- * This helper tries to:
- * 1.  Authenticate the client.
- * 2.  Extract the bank account's label from the request's path
- * 3.  Return the bank account DB object if the client has access to it.
- */
-fun getBankAccountWithAuth(call: ApplicationCall): BankAccountEntity {
-    val username = call.request.basicAuth()
-    val accountAccessed = call.getUriComponent("account_name")
-    val demobank = ensureDemobank(call)
-    val bankAccount = getBankAccountFromLabel(accountAccessed, demobank)
-    if (WITH_AUTH && (bankAccount.owner != username && username != "admin"))
-        throw forbidden("Customer '$username' cannot access bank account '$accountAccessed'")
-    return bankAccount
 }
 
 /**

@@ -44,7 +44,6 @@ class SandboxCircuitApiTest {
                     expectSuccess = true
                     basicAuth("foo", "foo")
                 }
-                println(R.bodyAsText())
                 val mapper = ObjectMapper()
                 val respJson = mapper.readTree(R.bodyAsText())
                 val creditAmount = respJson.get("amount_credit").asText()
