@@ -1484,10 +1484,14 @@ val sandboxApp: Application.() -> Unit = {
                         throw forbidden("Cannot access bank account ${bankAccount.label}")
                     // Paging values.
                     val page: Int = expectInt(call.request.queryParameters["page"] ?: "1")
+                    if (page < 1) throw badRequest("'page' param is less than 1")
                     val size: Int = expectInt(call.request.queryParameters["size"] ?: "5")
+                    if (size < 1) throw badRequest("'size' param is less than 1")
                     // Time range filter values
                     val fromMs = expectLong(call.request.queryParameters["from_ms"] ?: "0")
+                    if (fromMs < 0) throw badRequest("'from_ms' param is less than 0")
                     val untilMs = expectLong(call.request.queryParameters["until_ms"] ?: Long.MAX_VALUE.toString())
+                    if (untilMs < 0) throw badRequest("'until_ms' param is less than 0")
                     val ret = mutableListOf<RawPayment>()
                     /**
                      * Case where page number wasn't given,
