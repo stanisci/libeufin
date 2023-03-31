@@ -110,14 +110,17 @@ class PostgresListenHandle(val channelName: String) {
         val maybeNotifications = this.conn.getNotifications(timeoutMs.toInt())
         if (maybeNotifications == null || maybeNotifications.isEmpty()) {
             logger.debug("DB notification channel $channelName was found empty.")
+            conn.close()
             return false
         }
         for (n in maybeNotifications) {
             if (n.name.lowercase() != channelName.lowercase()) {
+                conn.close()
                 throw internalServerError("Channel $channelName got notified from ${n.name}!")
             }
         }
         logger.debug("Found DB notifications on channel $channelName")
+        conn.close()
         return true
     }
 }
