@@ -38,18 +38,40 @@ class SandboxCircuitApiTest {
             prepSandboxDb()
             testApplication {
                 application(sandboxApp)
-                val R = client.get(
+                var R = client.get(
                     "/demobanks/default/circuit-api/cashouts/estimates?amount_debit=TESTKUDOS:2"
                 ) {
                     expectSuccess = true
                     basicAuth("foo", "foo")
                 }
                 val mapper = ObjectMapper()
-                val respJson = mapper.readTree(R.bodyAsText())
+                var respJson = mapper.readTree(R.bodyAsText())
                 val creditAmount = respJson.get("amount_credit").asText()
                 // sell ratio and fee are the following constants: 0.95 and 0.
                 // expected credit amount = 2 * 0.95 - 0 = 1.90
                 assert("CHF:1.90" == creditAmount || "CHF:1.9" == creditAmount)
+                R = client.get(
+                    "/demobanks/default/circuit-api/cashouts/estimates?amount_credit=CHF:1.9"
+                ) {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                }
+                respJson = mapper.readTree(R.bodyAsText())
+                val debitAmount = respJson.get("amount_debit").asText()
+                assertWithPrint(
+                    "TESTKUDOS:2" == debitAmount || "TESTKUDOS:2.0" == debitAmount,
+                    "'debit_amount' was $debitAmount for a 'credit_amount' of CHF:1.9"
+                )
+                R = client.get(
+                    "/demobanks/default/circuit-api/cashouts/estimates?amount_credit=CHF:1&amount_debit=TESTKUDOS=1"
+                ) {
+                    expectSuccess = false
+                    basicAuth("foo", "foo")
+                }
+                assertWithPrint(
+                    R.status.value == HttpStatusCode.BadRequest.value,
+                    "Expected status code was 400, but got '${R.status.value}' instead."
+                )
             }
         }
     }

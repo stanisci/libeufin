@@ -114,9 +114,9 @@ class DownloadAndSubmit {
                         client,
                         fetchSpec = FetchSpecAllJson(
                             level = FetchLevel.REPORT,
-                            "foo"
+                            bankConnection = "foo"
                         ),
-                        "foo"
+                        accountId = "foo"
                     )
                 }
                 transaction {
@@ -223,7 +223,7 @@ class DownloadAndSubmit {
     }
 
     /**
-     * Submit one payment instruction with a invalid Pain.001
+     * Submit one payment instruction with an invalid Pain.001
      * document, and check that it was marked as invalid.  Hence,
      * the error is expected only by the first submission, since
      * the second won't pick the invalid payment.
@@ -238,7 +238,7 @@ class DownloadAndSubmit {
                     addPaymentInitiation(
                         Pain001Data(
                             creditorIban = getIban(),
-                            creditorBic = "not-a-BIC",
+                            creditorBic = "not-a-BIC", // this value causes the expected error.
                             creditorName = "Tester",
                             subject = "test payment",
                             sum = "1",

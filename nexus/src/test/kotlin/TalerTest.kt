@@ -30,7 +30,7 @@ class TalerTest {
         withNexusAndSandboxUser {
             testApplication {
                 application(nexusApp)
-                client.post("/facades/taler/taler-wire-gateway/transfer") {
+                client.post("/facades/foo-facade/taler-wire-gateway/transfer") {
                     contentType(ContentType.Application.Json)
                     basicAuth("foo", "foo") // exchange's credentials
                     expectSuccess = true
@@ -73,7 +73,7 @@ class TalerTest {
              */
             testApplication {
                 application(nexusApp)
-                val r = client.get("/facades/taler/taler-wire-gateway/history/outgoing?delta=5") {
+                val r = client.get("/facades/foo-facade/taler-wire-gateway/history/outgoing?delta=5") {
                     expectSuccess = true
                     contentType(ContentType.Application.Json)
                     basicAuth("foo", "foo")
@@ -85,38 +85,102 @@ class TalerTest {
         }
     }
 
-    // Checking that a correct wire transfer (with Taler-compatible subject)
-    // is responded by the Taler facade.
+    // Tests that incoming Taler txs arrive via EBICS.
     @Test
-    fun historyIncomingTest() {
+    fun historyIncomingTestEbics() {
+        historyIncomingTest(
+            testedAccount = "foo",
+            connType = BankConnectionType.EBICS
+        )
+    }
+
+    // Tests that incoming Taler txs arrive via x-libeufin-bank.
+    @Test
+    fun historyIncomingTestXLibeufinBank() {
+        historyIncomingTest(
+            testedAccount = "bar",
+            connType = BankConnectionType.X_LIBEUFIN_BANK
+        )
+    }
+
+    // Tests that even if one call is long-polling, other calls
+    @Test
+    fun servingTest() {
+        withTestDatabase {
+            prepNexusDb()
+            testApplication {
+                application(nexusApp)
+                // This call blocks for 90 seconds
+                val currentTime = System.currentTimeMillis()
+                runBlocking {
+                    launch {
+                        val r = client.get("/facades/foo-facade/taler-wire-gateway/history/incoming?delta=5&start=0&long_poll_ms=5000") {
+                            expectSuccess = true
+                            contentType(ContentType.Application.Json)
+                            basicAuth("foo", "foo") // user & pw always equal.
+                        }
+                        assert(r.status.value == HttpStatusCode.NoContent.value)
+                    }
+                    val R = client.get("/") {
+                        expectSuccess = true
+                    }
+                    val latestTime = System.currentTimeMillis()
+                    assert(R.status.value == HttpStatusCode.OK.value
+                            && (latestTime - currentTime) < 2000
+                    )
+                }
+            }
+        }
+    }
+
+    // Downloads Taler txs via the default connection of 'testedAccount'.
+    // This allows to test the Taler logic on different connection types.
+    fun historyIncomingTest(testedAccount: String, connType: BankConnectionType) {
         val reservePub = "GX5H5RME193FDRCM1HZKERXXQ2K21KH7788CKQM8X6MYKYRBP8F0"
         withNexusAndSandboxUser {
             testApplication {
                 application(nexusApp)
                 runBlocking {
+                    /**
+                     * This block issues the request by long-polling and
+                     * lets the execution proceed where the actions to unblock
+                     * the polling are taken.
+                     */
                     launch {
-                        val r = client.get("/facades/taler/taler-wire-gateway/history/incoming?delta=5&start=0&long_poll_ms=3000") {
-                            expectSuccess = false
+                        val r = client.get("/facades/${testedAccount}-facade/taler-wire-gateway/history/incoming?delta=5&start=0&long_poll_ms=30000") {
+                            expectSuccess = true
                             contentType(ContentType.Application.Json)
-                            basicAuth("foo", "foo")
+                            basicAuth(testedAccount, testedAccount) // user & pw always equal.
                         }
-                        println("maybe response body: ${r.bodyAsText()}")
-                        assert(r.status.value == HttpStatusCode.OK.value)
+                        assertWithPrint(
+                            r.status.value == HttpStatusCode.OK.value,
+                            "Long-polling history had status: ${r.status.value} and" +
+                                    " body: ${r.bodyAsText()}"
+                        )
                         val j = mapper.readTree(r.readBytes())
                         val reservePubFromTwg = j.get("incoming_transactions").get(0).get("reserve_pub").asText()
                         assert(reservePubFromTwg == reservePub)
                     }
-                    newNexusBankTransaction(
-                        "KUDOS",
-                        "10",
-                        reservePub
-                    )
-                    ingestFacadeTransactions(
-                        "foo", // bank account local to Nexus.
-                        "taler-wire-gateway",
-                        ::talerFilter,
-                        ::maybeTalerRefunds
-                    )
+                    launch {
+                        delay(500)
+                        /**
+                         * FIXME: this test never gets the server to wait notifications from the DBMS.
+                         * Somehow, the wire transfer arrives always before the blocking await on the DBMS.
+                         */
+                        newNexusBankTransaction(
+                            currency = "KUDOS",
+                            value = "10",
+                            subject = reservePub,
+                            creditorAcct = testedAccount,
+                            connType = connType
+                        )
+                        ingestFacadeTransactions(
+                            bankAccountId = testedAccount, // bank account local to Nexus.
+                            facadeType = NexusFacadeType.TALER,
+                            incomingFilterCb = ::talerFilter,
+                            refundCb = ::maybeTalerRefunds
+                        )
+                    }
                 }
             }
         }

@@ -4,13 +4,13 @@ import io.ktor.http.*
 import io.ktor.server.testing.*
 import org.junit.Test
 import tech.libeufin.nexus.server.nexusApp
+import tech.libeufin.sandbox.sandboxApp
 
 /**
  * This class tests the API offered by Nexus,
  * documented here: https://docs.taler.net/libeufin/api-nexus.html
  */
 class NexusApiTest {
-
     // Testing basic operations on facades.
     @Test
     fun facades() {
@@ -19,7 +19,7 @@ class NexusApiTest {
             prepNexusDb()
             testApplication {
                 application(nexusApp)
-                client.delete("/facades/taler") {
+                client.delete("/facades/foo-facade") {
                     basicAuth("foo", "foo")
                     expectSuccess = true
                 }

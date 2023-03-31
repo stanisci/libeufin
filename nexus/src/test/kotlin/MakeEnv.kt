@@ -3,19 +3,16 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.transactions.transactionManager
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.dbCreateTables
 import tech.libeufin.nexus.dbDropTables
 import tech.libeufin.nexus.iso20022.*
+import tech.libeufin.nexus.server.BankConnectionType
 import tech.libeufin.nexus.server.CurrencyAmount
 import tech.libeufin.nexus.server.FetchLevel
 import tech.libeufin.nexus.server.FetchSpecAllJson
 import tech.libeufin.sandbox.*
-import tech.libeufin.util.CryptoUtil
-import tech.libeufin.util.EbicsInitState
-import java.io.File
-import tech.libeufin.util.getIban
+import tech.libeufin.util.*
 
 data class EbicsKeys(
     val auth: CryptoUtil.RsaCrtKeyPair,
@@ -39,6 +36,15 @@ val userKeys = EbicsKeys(
     enc = CryptoUtil.generateRsaKeyPair(2048),
     sig = CryptoUtil.generateRsaKeyPair(2048)
 )
+
+fun assertWithPrint(cond: Boolean, msg: String) {
+    try {
+        assert(cond)
+    } catch (e: AssertionError) {
+        System.err.println(msg)
+        throw e
+    }
+}
 
 // New versions of JUnit provide this!
 inline fun <reified ExceptionType> assertException(
@@ -85,10 +91,27 @@ fun prepNexusDb() {
             passwordHash = CryptoUtil.hashpw("foo")
             superuser = true
         }
+        val b = NexusUserEntity.new {
+            username = "bar"
+            passwordHash = CryptoUtil.hashpw("bar")
+            superuser = true
+        }
         val c = NexusBankConnectionEntity.new {
+            connectionId = "bar"
+            owner = b
+            type = "x-libeufin-bank"
+        }
+        val d = NexusBankConnectionEntity.new {
             connectionId = "foo"
-            owner = u
+            owner = b
             type = "ebics"
+        }
+        XLibeufinBankUserEntity.new {
+            username = "bar"
+            password = "bar"
+            // Only addressing mild cases where ONE slash ends the base URL.
+            baseUrl = "http://localhost/demobanks/default/access-api"
+            nexusBankConnection = c
         }
         tech.libeufin.nexus.EbicsSubscriberEntity.new {
             // ebicsURL = "http://localhost:5000/ebicsweb"
@@ -100,7 +123,7 @@ fun prepNexusDb() {
             signaturePrivateKey = ExposedBlob(userKeys.sig.private.encoded)
             encryptionPrivateKey = ExposedBlob(userKeys.enc.private.encoded)
             authenticationPrivateKey = ExposedBlob(userKeys.auth.private.encoded)
-            nexusBankConnection = c
+            nexusBankConnection = d
             ebicsIniState = EbicsInitState.NOT_SENT
             ebicsHiaState = EbicsInitState.NOT_SENT
             bankEncryptionPublicKey = ExposedBlob(bankKeys.enc.public.encoded)
@@ -110,7 +133,7 @@ fun prepNexusDb() {
             bankAccountName = "foo"
             iban = FOO_USER_IBAN
             bankCode = "SANDBOXX"
-            defaultBankConnection = c
+            defaultBankConnection = d
             highestSeenBankMessageSerialId = 0
             accountHolder = "foo"
         }
@@ -140,7 +163,7 @@ fun prepNexusDb() {
         }
         // Giving 'foo' a Taler facade.
         val f = FacadeEntity.new {
-            facadeName = "taler"
+            facadeName = "foo-facade"
             type = "taler-wire-gateway"
             creator = u
         }
@@ -150,6 +173,20 @@ fun prepNexusDb() {
             currency = "TESTKUDOS"
             reserveTransferLevel = "report"
             facade = f
+            highestSeenMessageSerialId = 0
+        }
+        // Giving 'bar' a Taler facade
+        val g = FacadeEntity.new {
+            facadeName = "bar-facade"
+            type = "taler-wire-gateway"
+            creator = b
+        }
+        FacadeStateEntity.new {
+            bankAccount = "bar"
+            bankConnection = "bar" // uses x-libeufin-bank connection.
+            currency = "TESTKUDOS"
+            reserveTransferLevel = "report"
+            facade = g
             highestSeenMessageSerialId = 0
         }
     }
@@ -287,35 +324,82 @@ fun withSandboxTestDatabase(f: () -> Unit) {
     }
 }
 
-fun newNexusBankTransaction(currency: String, value: String, subject: String) {
-    transaction {
-        NexusBankTransactionEntity.new {
-            bankAccount = NexusBankAccountEntity.findByName("foo")!!
-            accountTransactionId = "mock"
-            creditDebitIndicator = "CRDT"
-            this.currency = currency
-            this.amount = value
-            status = EntryStatus.BOOK
-            transactionJson = jacksonObjectMapper(
+fun newNexusBankTransaction(
+    currency: String,
+    value: String,
+    subject: String,
+    creditorAcct: String = "foo",
+    connType: BankConnectionType = BankConnectionType.EBICS
+) {
+    val jDetails: String = when(connType) {
+        BankConnectionType.EBICS -> {
+            jacksonObjectMapper(
             ).writerWithDefaultPrettyPrinter(
             ).writeValueAsString(
-                genNexusIncomingPayment(
+                genNexusIncomingCamt(
                     amount = CurrencyAmount(currency,value),
                     subject = subject
                 )
             )
         }
-        /*TalerIncomingPaymentEntity.new {
-            payment = inc
-            reservePublicKey = "mock"
-            timestampMs = 0L
-            debtorPaytoUri = "mock"
-        }*/
+        /**
+         * Note: x-libeufin-bank ALSO stores the transactions in the
+         * CaMt representation, hence this branch should be removed.
+         */
+        BankConnectionType.X_LIBEUFIN_BANK -> {
+            jacksonObjectMapper(
+            ).writerWithDefaultPrettyPrinter(
+            ).writeValueAsString(genNexusIncomingCamt(
+                amount = CurrencyAmount(currency, value),
+                subject = subject
+            ))
+        }
+        else -> throw Exception("Unsupported connection type: ${connType.typeName}")
+    }
+    transaction {
+        NexusBankTransactionEntity.new {
+            bankAccount = NexusBankAccountEntity.findByName(creditorAcct)!!
+            accountTransactionId = "mock"
+            creditDebitIndicator = "CRDT"
+            this.currency = currency
+            this.amount = value
+            status = EntryStatus.BOOK
+            transactionJson = jDetails
+        }
     }
 }
 
-
-fun genNexusIncomingPayment(
+/**
+ * This function generates the Nexus JSON model of one transaction
+ * as if it got downloaded via one x-libeufin-bank connection.  The
+ * non given values are either resorted from other sources by Nexus,
+ * or actually not useful so far.
+ */
+private fun genNexusIncomingXLibeufinBank(
+    amount: CurrencyAmount,
+    subject: String
+): XLibeufinBankTransaction =
+    XLibeufinBankTransaction(
+        creditorIban = "NOTUSED",
+        creditorBic =  null,
+        creditorName = "Not Used",
+        debtorIban =  "NOTUSED",
+        debtorBic = null,
+        debtorName = "Not Used",
+        amount = amount.value,
+        currency =  amount.currency,
+        subject =  subject,
+        date = "0",
+        uid =  "not-used",
+        direction = XLibeufinBankDirection.CREDIT
+    )
+/**
+ * This function generates the Nexus JSON model of one transaction
+ * as if it got downloaded via one Ebics connection.  The non given
+ * values are either resorted from other sources by Nexus, or actually
+ * not useful so far.
+ */
+private fun genNexusIncomingCamt(
     amount: CurrencyAmount,
     subject: String,
 ): CamtBankAccountEntry =

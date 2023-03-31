@@ -4,8 +4,8 @@
 # EBICS pair, in order to try CLI commands.
 set -eu
 
-WITH_TASKS=1
-# WITH_TASKS=0
+# WITH_TASKS=1
+WITH_TASKS=0
 function exit_cleanup()
 {
   echo "Running exit-cleanup"
@@ -25,13 +25,13 @@ curl --version &> /dev/null || (echo "'curl' command not found"; exit 77)
 SQLITE_FILE_PATH=/tmp/libeufin-cli-test.sqlite3
 getDbConn () {
   if test withPostgres == "${1:-}"; then
-    echo "jdbc:postgresql://localhost:5432/taler?user=$(whoami)"
+    echo "jdbc:postgresql://localhost:5432/libeufincheck?user=$(whoami)"
     return
   fi
   echo "jdbc:sqlite:${SQLITE_FILE_PATH}"
 }
 
-DB_CONN=`getDbConn`
+DB_CONN=`getDbConn withPostgres`
 export LIBEUFIN_SANDBOX_DB_CONNECTION=$DB_CONN
 export LIBEUFIN_NEXUS_DB_CONNECTION=$DB_CONN
 
@@ -139,6 +139,9 @@ if test 1 = $WITH_TASKS; then
     www-nexus || true
   echo OK
 else
-  echo NOT creating backound tasks!
+  echo NOT creating background tasks!
 fi
+echo "Requesting Taler history with 90 seconds timeout..."
+curl -u test-user:x "http://localhost:5001/facades/test-facade/taler-wire-gateway/history/incoming?delta=5&long_poll_ms=90000"
+
 read -p "Press Enter to terminate..."
