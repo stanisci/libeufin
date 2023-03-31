@@ -145,17 +145,33 @@ fun generateCashoutSubject(
             " to ${amountCredit.currency}:${amountCredit.amount}"
 }
 
-/* Takes one amount value as input, applies cash-out rates
-* and fees to it, and returns the result.  Typically, the input
-* comes from a regional currency amount and the output will be
-* the fiat currency amount that the customer will get in their
-* fiat bank account. */
+fun BigDecimal.roundToTwoDigits(): BigDecimal {
+    val twoDigitsRounding = MathContext(2)
+    return this.round(twoDigitsRounding)
+}
+
+/**
+ * By default, it takes the amount in the regional currency
+ * and applies ratio and fees to convert it to fiat.  If the
+ * 'fromCredit' parameter is true, then it does the inverse
+ * operation: returns the regional amount that would lead to
+ * such fiat amount given in the 'amount' parameter.
+ */
 fun applyCashoutRatioAndFee(
-    regioAmount: BigDecimal,
-    ratiosAndFees: RatioAndFees
-): BigDecimal =
-    (regioAmount * ratiosAndFees.sell_at_ratio.toBigDecimal()) -
-            ratiosAndFees.sell_out_fee.toBigDecimal()
+    amount: BigDecimal,
+    ratiosAndFees: RatioAndFees,
+    fromCredit: Boolean = false
+): BigDecimal {
+    // Normal case, when the calculation starts from the regional amount.
+    if (!fromCredit) {
+        return ((amount * ratiosAndFees.sell_at_ratio.toBigDecimal()) -
+                ratiosAndFees.sell_out_fee.toBigDecimal()).roundToTwoDigits()
+    }
+    // UI convenient case, when the calculation start from the
+    // desired fiat amount that the user wants eventually be paid.
+    return ((amount + ratiosAndFees.sell_out_fee.toBigDecimal()) /
+            ratiosAndFees.sell_at_ratio.toBigDecimal()).roundToTwoDigits()
+}
 
 /**
  * NOTE: future versions take the supported TAN method from
@@ -379,20 +395,56 @@ fun circuitApi(circuitRoute: Route) {
     }
     circuitRoute.get("/cashouts/estimates") {
         call.request.basicAuth()
-        val maybeAmountDebit: String? = call.request.queryParameters["amount_debit"]
-        if (maybeAmountDebit == null) throw badRequest("Missing 'amount_debit' URI parameter.")
-        val amountDebit = parseAmount(maybeAmountDebit)
         val demobank = ensureDemobank(call)
-        if (amountDebit.currency != demobank.config.currency)
-            throw badRequest("POSTed debit amount has wrong currency (${amountDebit.currency}).  Give '${demobank.config.currency}' instead.")
-        val amountDebitValue = try {
-            amountDebit.amount.toBigDecimal()
-        } catch (e: Exception) { throw badRequest("POSTed debit amount has invalid number.") }
-        val estimate = applyCashoutRatioAndFee(amountDebitValue, ratiosAndFees)
-        val twoDigitsRounding = MathContext(2)
-        val estimateRounded = estimate.round(twoDigitsRounding)
-        call.respond(object { val amount_credit = "$FIAT_CURRENCY:$estimateRounded" })
+        // Optionally parsing param 'amount_debit' into number and checking its currency
+        val maybeAmountDebit: String? = call.request.queryParameters["amount_debit"]
+        val amountDebit: BigDecimal? = if (maybeAmountDebit != null) {
+            val amount = parseAmount(maybeAmountDebit)
+            if (amount.currency != demobank.config.currency) throw badRequest(
+                "parameter 'amount_debit' has the wrong currency: ${amount.currency}"
+            )
+            try { amount.amount.toBigDecimal() } catch (e: Exception) {
+                throw badRequest("Cannot extract a number from 'amount_debit'")
+            }
+        } else null
+        // Optionally parsing param 'amount_credit' into number and checking its currency
+        val maybeAmountCredit: String? = call.request.queryParameters["amount_credit"]
+        val amountCredit: BigDecimal? = if (maybeAmountCredit != null) {
+            val amount = parseAmount(maybeAmountCredit)
+            if (amount.currency != FIAT_CURRENCY) throw badRequest(
+                "parameter 'amount_credit' has the wrong currency: ${amount.currency}"
+            )
+            try { amount.amount.toBigDecimal() } catch (e: Exception) {
+                throw badRequest("Cannot extract a number from 'amount_credit'")
+            }
+        } else null
+        val respAmountCredit = if (amountDebit != null) {
+            val estimate = applyCashoutRatioAndFee(amountDebit, ratiosAndFees)
+            if (amountCredit != null && estimate != amountCredit) throw badRequest(
+                "Wrong calculation found in 'amount_credit', bank estimates: $estimate"
+            )
+            estimate
+        } else null
+        if (amountDebit == null && amountCredit == null) throw badRequest(
+            "Both 'amount_credit' and 'amount_debit' are missing"
+        )
+        val respAmountDebit = if (amountCredit != null) {
+            val estimate = applyCashoutRatioAndFee(
+                amountCredit,
+                ratiosAndFees,
+                fromCredit = true
+            )
+            if (amountDebit != null && estimate != amountDebit) throw badRequest(
+                "Wrong calculation found in 'amount_credit', bank estimates: $estimate"
+            )
+            estimate
+        } else null
+        call.respond(object {
+            val amount_credit = "$FIAT_CURRENCY:$respAmountCredit"
+            val amount_debit = "${demobank.config.currency}:$respAmountDebit"
+        })
     }
+
     // Create a cash-out operation.
     circuitRoute.post("/cashouts") {
         val user = call.request.basicAuth()
@@ -441,9 +493,8 @@ fun circuitApi(circuitRoute: Route) {
         // check rates correctness
         val amountDebitAsNumber = BigDecimal(amountDebit.amount)
         val expectedAmountCredit = applyCashoutRatioAndFee(amountDebitAsNumber, ratiosAndFees)
-        val commonRounding = MathContext(2) // ensures both amounts end with ".XY"
-        val amountCreditAsNumber = BigDecimal(amountCredit.amount)
-        if (expectedAmountCredit.round(commonRounding) != amountCreditAsNumber.round(commonRounding)) {
+        val amountCreditAsNumber = BigDecimal(amountCredit.amount).roundToTwoDigits()
+        if (expectedAmountCredit != amountCreditAsNumber) {
             throw badRequest("Rates application are incorrect." +
                     "  The expected amount to credit is: ${expectedAmountCredit}," +
                     " but ${amountCredit.amount} was specified.")
