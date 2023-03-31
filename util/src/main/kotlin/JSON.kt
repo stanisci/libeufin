@@ -19,14 +19,40 @@
 
 package tech.libeufin.util
 
-/**
- * (Very) generic information about one payment.  Can be
- * derived from a CAMT response, or from a prepared PAIN
- * document.
- *
- * Note:
- */
-data class RawPayment(
+enum class XLibeufinBankDirection(val direction: String) {
+    DEBIT("debit"),
+    CREDIT("credit");
+    companion object {
+        fun parseXLibeufinDirection(direction: String): XLibeufinBankDirection {
+            return when(direction) {
+                "credit" -> CREDIT
+                "debit" -> DEBIT
+                else -> throw internalServerError(
+                    "Cannot extract ${this::class.java.typeName}' instance from value: $direction'"
+                )
+            }
+        }
+
+        /**
+         * Sandbox uses _some_ CaMt terminology even for its internal
+         * data model.  This function helps to bridge such CaMt terminology
+         * to the Sandbox simplified JSON format (XLibeufinBankTransaction).
+         *
+         * Ideally, the terminology should be made more abstract to serve
+         * both (and probably more) data formats.
+         */
+        fun convertCamtDirectionToXLibeufin(camtDirection: String): XLibeufinBankDirection {
+            return when(camtDirection) {
+                "CRDT" -> CREDIT
+                "DBIT" -> DEBIT
+                else -> throw internalServerError(
+                    "Cannot extract ${this::class.java.typeName}' instance from value: $camtDirection'"
+                )
+            }
+        }
+    }
+}
+data class XLibeufinBankTransaction(
     val creditorIban: String,
     val creditorBic: String?,
     val creditorName: String,
@@ -36,17 +62,16 @@ data class RawPayment(
     val amount: String,
     val currency: String,
     val subject: String,
+    // Milliseconds since the Epoch.
     val date: String,
-    val uid: String, // FIXME: explain this value.
-    val direction: String, // FIXME: this following value should be restricted to only DBIT/CRDT.
-
+    val uid: String,
+    val direction: XLibeufinBankDirection,
     // The following two values are rather CAMT/PAIN
     // specific, therefore do not need to be returned
     // along every API call using this object.
     val pmtInfId: String? = null,
     val msgId: String? = null
 )
-
 data class IncomingPaymentInfo(
     val debtorIban: String,
     val debtorBic: String?,

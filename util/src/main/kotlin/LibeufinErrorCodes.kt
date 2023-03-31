@@ -51,7 +51,7 @@ enum class LibeufinErrorCode(val code: Int) {
     LIBEUFIN_EC_INCONSISTENT_STATE(3),
 
     /**
-     * An access was forbidden due to wrong credentials.
+     * Access was forbidden due to wrong credentials.
      */
     LIBEUFIN_EC_AUTHENTICATION_FAILED(4),
 
