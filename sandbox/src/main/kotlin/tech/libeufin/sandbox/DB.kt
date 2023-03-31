@@ -423,6 +423,7 @@ object BankAccountTransactionsTable : LongIdTable() {
     // Amount is a BigDecimal in String form.
     val amount = text("amount")
     val currency = text("currency")
+    // Milliseconds since the Epoch.
     val date = long("date")
     // Unique ID for this payment within the bank account.
     val accountServicerReference = text("accountServicerReference")

@@ -235,7 +235,7 @@ fun <T> expectNonNull(x: T?): T {
     return x;
 }
 
-private fun getRelatedParty(branch: XmlElementBuilder, payment: RawPayment) {
+private fun getRelatedParty(branch: XmlElementBuilder, payment: XLibeufinBankTransaction) {
     val otherParty = object {
         var ibanPath = "CdtrAcct/Id/IBAN"
         var namePath = "Cdtr/Nm"
@@ -244,7 +244,7 @@ private fun getRelatedParty(branch: XmlElementBuilder, payment: RawPayment) {
         var bicPath = "CdtrAgt/FinInstnId/BIC"
         var bic = payment.creditorBic
     }
-    if (payment.direction == "CRDT") {
+    if (payment.direction == XLibeufinBankDirection.CREDIT) {
         otherParty.iban = payment.debtorIban
         otherParty.ibanPath = "DbtrAcct/Id/IBAN"
         otherParty.namePath = "Dbtr/Nm"
@@ -279,7 +279,7 @@ private fun getCreditDebitInd(balance: BigDecimal): String {
 fun buildCamtString(
     type: Int,
     subscriberIban: String,
-    history: MutableList<RawPayment>,
+    history: MutableList<XLibeufinBankTransaction>,
     balancePrcd: BigDecimal, // Balance up to freshHistory (excluded).
     balanceClbd: BigDecimal,
     currency: String
@@ -521,7 +521,7 @@ private fun constructCamtResponse(
     if (type == 52) {
         if (dateRange != null)
             throw EbicsOrderParamsIgnored("C52 does not support date ranges.")
-        val history = mutableListOf<RawPayment>()
+        val history = mutableListOf<XLibeufinBankTransaction>()
         transaction {
             BankAccountFreshTransactionEntity.all().forEach {
                 if (it.transactionRef.account.label == bankAccount.label) {
@@ -545,8 +545,8 @@ private fun constructCamtResponse(
             var base = prcdBalance
             history.forEach { tx ->
                 when (tx.direction) {
-                    "DBIT" -> base -= parseDecimal(tx.amount)
-                    "CRDT" -> base += parseDecimal(tx.amount)
+                    XLibeufinBankDirection.DEBIT -> base -= parseDecimal(tx.amount)
+                    XLibeufinBankDirection.CREDIT -> base += parseDecimal(tx.amount)
                     else -> {
                         logger.error("Transaction with subject '${tx.subject}' is " +
                                 "inconsistent: neither DBIT nor CRDT")

@@ -225,7 +225,7 @@ class Camt053Tick : CliktCommand(
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         Database.connect(dbConnString)
         dbCreateTables(dbConnString)
-        val newStatements = mutableMapOf<String, MutableList<RawPayment>>()
+        val newStatements = mutableMapOf<String, MutableList<XLibeufinBankTransaction>>()
         /**
          * For each bank account, extract the latest statement and
          * include all the later transactions in a new statement.
@@ -1336,8 +1336,8 @@ val sandboxApp: Application.() -> Unit = {
                     val baseUrl = URL(call.request.getBaseUrl())
                     val withdrawUri = url {
                         protocol = URLProtocol(
-                            "taler".plus(if (baseUrl.protocol.lowercase() == "http") "+http" else ""),
-                            -1
+                            name = "taler".plus(if (baseUrl.protocol.lowercase() == "http") "+http" else ""),
+                            defaultPort = -1
                         )
                         host = "withdraw"
                         val pathSegments = mutableListOf(
@@ -1492,7 +1492,7 @@ val sandboxApp: Application.() -> Unit = {
                     if (fromMs < 0) throw badRequest("'from_ms' param is less than 0")
                     val untilMs = expectLong(call.request.queryParameters["until_ms"] ?: Long.MAX_VALUE.toString())
                     if (untilMs < 0) throw badRequest("'until_ms' param is less than 0")
-                    val ret = mutableListOf<RawPayment>()
+                    val ret = mutableListOf<XLibeufinBankTransaction>()
                     /**
                      * Case where page number wasn't given,
                      * therefore the results starts from the last transaction.

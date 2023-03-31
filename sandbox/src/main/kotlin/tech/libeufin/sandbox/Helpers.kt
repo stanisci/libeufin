@@ -215,8 +215,8 @@ fun getOrderTypeFromTransactionId(transactionID: String): String {
     return uploadTransaction.orderType
 }
 
-fun getHistoryElementFromTransactionRow(dbRow: BankAccountTransactionEntity): RawPayment {
-    return RawPayment(
+fun getHistoryElementFromTransactionRow(dbRow: BankAccountTransactionEntity): XLibeufinBankTransaction {
+    return XLibeufinBankTransaction(
         subject = dbRow.subject,
         creditorIban = dbRow.creditorIban,
         creditorBic = dbRow.creditorBic,
@@ -231,7 +231,8 @@ fun getHistoryElementFromTransactionRow(dbRow: BankAccountTransactionEntity): Ra
         // and dbRow makes the document invalid!
         // uid = "${dbRow.pmtInfId}-${it.msgId}"
         uid = dbRow.accountServicerReference,
-        direction = dbRow.direction,
+        // Eventually, the _database_ should contain the direction enum:
+        direction = XLibeufinBankDirection.convertCamtDirectionToXLibeufin(dbRow.direction),
         pmtInfId = dbRow.pmtInfId
     )
 }
@@ -256,7 +257,7 @@ fun printConfig(demobank: DemobankConfigEntity) {
 
 fun getHistoryElementFromTransactionRow(
     dbRow: BankAccountFreshTransactionEntity
-): RawPayment {
+): XLibeufinBankTransaction {
     return getHistoryElementFromTransactionRow(dbRow.transactionRef)
 }
 
