@@ -9,6 +9,13 @@ import tech.libeufin.nexus.server.Permission
 import tech.libeufin.nexus.server.PermissionQuery
 import tech.libeufin.util.*
 
+fun getNexusUser(username: String): NexusUserEntity =
+    transaction {
+        NexusUserEntity.find {
+            NexusUsersTable.username eq username
+        }.firstOrNull() ?: throw notFound("User $username not found.")
+    }
+
 /**
  * HTTP basic auth.  Throws error if password is wrong,
  * and makes sure that the user exists in the system.

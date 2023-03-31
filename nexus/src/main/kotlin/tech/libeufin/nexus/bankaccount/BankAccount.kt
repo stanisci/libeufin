@@ -24,20 +24,37 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.client.HttpClient
 import io.ktor.http.HttpStatusCode
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.w3c.dom.Document
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.iso20022.*
-import tech.libeufin.nexus.server.FetchSpecJson
-import tech.libeufin.nexus.server.Pain001Data
-import tech.libeufin.nexus.server.requireBankConnection
-import tech.libeufin.nexus.server.toPlainString
+import tech.libeufin.nexus.server.*
+import tech.libeufin.nexus.xlibeufinbank.processXLibeufinBankMessage
 import tech.libeufin.util.XMLUtil
+import tech.libeufin.util.internalServerError
 import java.time.Instant
+import java.time.ZoneOffset
 import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 
 private val keepBankMessages: String? = System.getenv("LIBEUFIN_NEXUS_KEEP_BANK_MESSAGES")
+
+/**
+ * Gets a prepared payment starting from its 'payment information id'.
+ * Note: although the terminology comes from CaMt, a 'payment information id'
+ * is indeed any UID that identifies the payment.  For this reason, also
+ * the x-libeufin-bank logic uses this helper.
+ *
+ * Returns the prepared payment, or null if that's not found.  Not throwing
+ * any exception because the null case is common: not every transaction being
+ * processed by Neuxs was prepared/initiated here; incoming transactions are
+ * one example.
+ */
+fun getPaymentInitiation(pmtInfId: String): PaymentInitiationEntity? =
+    transaction {
+        PaymentInitiationEntity.find(
+            PaymentInitiationsTable.paymentInformationId.eq(pmtInfId)
+        ).firstOrNull()
+    }
 fun requireBankAccount(call: ApplicationCall, parameterKey: String): NexusBankAccountEntity {
     val name = call.parameters[parameterKey]
     if (name == null)
@@ -63,6 +80,7 @@ suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId:
             val submitted = paymentInitiation.submitted
         }
     }
+    // Skips, if the payment was sent once already.
     if (r.submitted) {
         return
     }
@@ -75,10 +93,11 @@ suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId:
 /**
  * Submit all pending prepared payments.
  */
-suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: String) {
-    data class Submission(
-        val id: Long
-    )
+suspend fun submitAllPaymentInitiations(
+    httpClient: HttpClient,
+    accountid: String
+) {
+    data class Submission(val id: Long)
     val workQueue = mutableListOf<Submission>()
     transaction {
         val account = NexusBankAccountEntity.findByName(accountid) ?: throw NexusError(
@@ -120,24 +139,10 @@ suspend fun submitAllPaymentInitiations(httpClient: HttpClient, accountid: Strin
 }
 
 /**
- * Check if the transaction is already found in the database.
- */
-private fun findDuplicate(bankAccountId: String, acctSvcrRef: String): NexusBankTransactionEntity? {
-    // FIXME: make this generic depending on transaction identification scheme
-    val ati = "AcctSvcrRef:$acctSvcrRef"
-    return transaction {
-        val account = NexusBankAccountEntity.findByName((bankAccountId)) ?: return@transaction null
-        NexusBankTransactionEntity.find {
-            (NexusBankTransactionsTable.accountTransactionId eq ati) and (NexusBankTransactionsTable.bankAccount eq account.id)
-        }.firstOrNull()
-    }
-}
-
-/**
  * NOTE: this type can be used BOTH for one Camt document OR
  * for a set of those.
  */
-data class CamtTransactionsCount(
+data class IngestedTransactionsCount(
     /**
      * Number of transactions that are new to the database.
      * Note that transaction T can be downloaded multiple times;
@@ -155,154 +160,31 @@ data class CamtTransactionsCount(
     /**
      * Exceptions occurred while fetching transactions.  Fetching
      * transactions can be done via multiple EBICS messages, therefore
-     * a failing one should not prevent other messages to be sent.
-     * This list collects all the exceptions that happened during the
-     * execution of a batch of messages.
+     * a failing one should not prevent other messages to be fetched.
+     * This list collects all the exceptions that happened while fetching
+     * multiple messages.
      */
     var errors: List<Exception>? = null
 )
 
 /**
- * Get the Camt parsed by a helper function, discards duplicates
- * and stores new transactions.
- */
-fun processCamtMessage(
-    bankAccountId: String, camtDoc: Document, code: String
-): CamtTransactionsCount {
-    var newTransactions = 0
-    var downloadedTransactions = 0
-    transaction {
-        val acct = NexusBankAccountEntity.findByName(bankAccountId)
-        if (acct == null) {
-            throw NexusError(HttpStatusCode.NotFound, "user not found")
-        }
-        val res = try {
-            parseCamtMessage(camtDoc)
-        } catch (e: CamtParsingError) {
-            logger.warn("Invalid CAMT received from bank: $e")
-            newTransactions = -1
-            return@transaction
-        }
-        res.reports.forEach {
-            NexusAssert(
-                it.account.iban == acct.iban,
-                "Nexus hit a report or statement of a wrong IBAN!"
-            )
-            it.balances.forEach { b ->
-                if (b.type == "CLBD") {
-                    val lastBalance = NexusBankBalanceEntity.all().lastOrNull()
-                    /**
-                     * Store balances different from the one that came from the bank,
-                     * or the very first balance.  This approach has the following inconvenience:
-                     * the 'balance' held at Nexus does not differentiate between one
-                     * coming from a statement and one coming from a report.  As a consequence,
-                     * the two types of balances may override each other without notice.
-                     */
-                    if ((lastBalance == null) ||
-                        (b.amount.toPlainString() != lastBalance.balance)) {
-                        NexusBankBalanceEntity.new {
-                            bankAccount = acct
-                            balance = b.amount.toPlainString()
-                            creditDebitIndicator = b.creditDebitIndicator.name
-                            date = b.date
-                        }
-                    }
-                }
-            }
-        }
-        /**
-         * Why is the report/statement creation timestamp important,
-         * rather than each individual payment identification value?
-         */
-        val stamp =
-            ZonedDateTime.parse(res.creationDateTime, DateTimeFormatter.ISO_DATE_TIME).toInstant().toEpochMilli()
-        when (code) {
-            "C52" -> {
-                val s = acct.lastReportCreationTimestamp
-                if (s != null && stamp > s) {
-                    acct.lastReportCreationTimestamp = stamp
-                }
-            }
-            "C53" -> {
-                val s = acct.lastStatementCreationTimestamp
-                if (s != null && stamp > s) {
-                    acct.lastStatementCreationTimestamp = stamp
-                }
-            }
-        }
-        val entries: List<CamtBankAccountEntry> = res.reports.map { it.entries }.flatten()
-        var newPaymentsLog = ""
-        downloadedTransactions = entries.size
-        txloop@ for (entry in entries) {
-            val singletonBatchedTransaction = entry.batches?.get(0)?.batchTransactions?.get(0)
-                ?: throw NexusError(
-                    HttpStatusCode.InternalServerError,
-                    "Singleton money movements policy wasn't respected"
-                )
-            val acctSvcrRef = entry.accountServicerRef
-            if (acctSvcrRef == null) {
-                // FIXME(dold): Report this!
-                logger.error("missing account servicer reference in transaction")
-                continue
-            }
-            val duplicate = findDuplicate(bankAccountId, acctSvcrRef)
-            if (duplicate != null) {
-                logger.info("Found a duplicate (acctSvcrRef): $acctSvcrRef")
-                // FIXME(dold): See if an old transaction needs to be superseded by this one
-                // https://bugs.gnunet.org/view.php?id=6381
-                continue@txloop
-            }
-            val rawEntity = NexusBankTransactionEntity.new {
-                bankAccount = acct
-                accountTransactionId = "AcctSvcrRef:$acctSvcrRef"
-                amount = singletonBatchedTransaction.amount.value
-                currency = singletonBatchedTransaction.amount.currency
-                transactionJson = jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(entry)
-                creditDebitIndicator = singletonBatchedTransaction.creditDebitIndicator.name
-                status = entry.status
-            }
-            rawEntity.flush()
-            newTransactions++
-            newPaymentsLog += "\n- " + entry.batches[0].batchTransactions[0].details.unstructuredRemittanceInformation
-            // This block tries to acknowledge a former outgoing payment as booked.
-            if (singletonBatchedTransaction.creditDebitIndicator == CreditDebitIndicator.DBIT) {
-                val t0 = singletonBatchedTransaction.details
-                val pmtInfId = t0.paymentInformationId
-                if (pmtInfId != null) {
-                    val paymentInitiation = PaymentInitiationEntity.find {
-                        PaymentInitiationsTable.bankAccount eq acct.id and (
-                                PaymentInitiationsTable.paymentInformationId eq pmtInfId)
-
-                    }.firstOrNull()
-                    if (paymentInitiation != null) {
-                        logger.info("Could confirm one initiated payment: $pmtInfId")
-                        paymentInitiation.confirmationTransaction = rawEntity
-                    }
-                }
-            }
-        }
-        if (newTransactions > 0)
-            logger.debug("Camt $code '${res.messageId}' has new payments:${newPaymentsLog}")
-    }
-    return CamtTransactionsCount(
-        newTransactions = newTransactions,
-        downloadedTransactions = downloadedTransactions
-    )
-}
-
-/**
- * Create new transactions for an account based on bank messages it
- * did not see before.
+ * Causes new Nexus transactions to be stored into the database.  Note:
+ * this function does NOT parse itself the banking data but relies on the
+ * dedicated helpers.  This function is mostly responsible for _iterating_
+ * over the new downloaded messages and update the local bank account about
+ * the new data.
  */
 fun ingestBankMessagesIntoAccount(
     bankConnectionId: String,
     bankAccountId: String
-): CamtTransactionsCount {
+): IngestedTransactionsCount {
     var totalNew = 0
     var downloadedTransactions = 0
     transaction {
         val conn =
-            NexusBankConnectionEntity.find { NexusBankConnectionsTable.connectionId eq bankConnectionId }.firstOrNull()
+            NexusBankConnectionEntity.find {
+                NexusBankConnectionsTable.connectionId eq bankConnectionId
+            }.firstOrNull()
         if (conn == null) {
             throw NexusError(HttpStatusCode.InternalServerError, "connection not found")
         }
@@ -311,15 +193,55 @@ fun ingestBankMessagesIntoAccount(
             throw NexusError(HttpStatusCode.InternalServerError, "account not found")
         }
         var lastId = acct.highestSeenBankMessageSerialId
+        /**
+         * This block picks all the new messages that were downloaded
+         * from the bank and passes them to the deeper banking data handlers
+         * according to the connection type.  Such handlers are then responsible
+         * to extract the interesting values and insert them into the database.
+         */
         NexusBankMessageEntity.find {
             (NexusBankMessagesTable.bankConnection eq conn.id) and
                     (NexusBankMessagesTable.id greater acct.highestSeenBankMessageSerialId) and
-                    // Wrong messages got already skipped by the
-                    // index check above.  Below is a extra check.
                     not(NexusBankMessagesTable.errors)
-        }.orderBy(Pair(NexusBankMessagesTable.id, SortOrder.ASC)).forEach {
-            val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
-            val processingResult = processCamtMessage(bankAccountId, doc, it.code)
+        }.orderBy(
+            Pair(NexusBankMessagesTable.id, SortOrder.ASC)
+        ).forEach {
+            val processingResult: IngestedTransactionsCount = when(BankConnectionType.parseBankConnectionType(conn.type)) {
+                BankConnectionType.EBICS -> {
+                    val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
+                    /**
+                     * Calling the CaMt handler.  After its return, all the Neuxs-meaningful
+                     * payment data got stored into the database and is ready to being further
+                     * processed by any facade OR simply be communicated to the CLI via JSON.
+                     */
+                    processCamtMessage(
+                        bankAccountId,
+                        doc,
+                        it.code ?: throw internalServerError(
+                            "Bank message with ID ${it.id.value} in DB table" +
+                                    " NexusBankMessagesTable has no code, but one is expected."
+                        )
+                    )
+                }
+                BankConnectionType.X_LIBEUFIN_BANK -> {
+                    val jMessage = try { jacksonObjectMapper().readTree(it.message.bytes) }
+                    catch (e: Exception) {
+                        logger.error("Bank message ${it.id}/${it.messageId} could not" +
+                                " be parsed into JSON by the x-libeufin-bank ingestion.")
+                        throw internalServerError("Could not ingest x-libeufin-bank messages.")
+                    }
+                    processXLibeufinBankMessage(
+                        bankAccountId,
+                        jMessage
+                    )
+                }
+            }
+            /**
+             * Checking for errors.  Note: errors do NOT stop this loop as
+             * they mean that ONE message has errors.  Erroneous messages gets
+             * (1) flagged, (2) skipped when this function will run again, and (3)
+             * NEVER deleted from the database.
+             */
             if (processingResult.newTransactions == -1) {
                 it.errors = true
                 lastId = it.id.value
@@ -336,12 +258,18 @@ fun ingestBankMessagesIntoAccount(
                 it.delete()
                 return@forEach
             }
+            /**
+             * Updating the highest seen message ID with the serial ID of
+             * the row that's being currently iterated over.  Note: this
+             * number is ever-growing REGARDLESS of the row being kept into
+             * the database.
+             */
             lastId = it.id.value
         }
+        // Causing the lastId to be stored into the database:
         acct.highestSeenBankMessageSerialId = lastId
     }
-    // return totalNew
-    return CamtTransactionsCount(
+    return IngestedTransactionsCount(
         newTransactions = totalNew,
         downloadedTransactions = downloadedTransactions
     )
@@ -356,6 +284,31 @@ fun getPaymentInitiation(uuid: Long): PaymentInitiationEntity {
     } ?: throw NexusError(
         HttpStatusCode.NotFound,
         "Payment '$uuid' not found"
+    )
+}
+
+data class LastMessagesTimes(
+    val lastStatement: ZonedDateTime?,
+    val lastReport: ZonedDateTime?
+)
+/**
+ * Get the last timestamps where a report and
+ * a statement were received for the bank account
+ * given as argument.
+ */
+fun getLastMessagesTimes(bankAccountId: String): LastMessagesTimes {
+    val acct = getBankAccount(bankAccountId)
+    return getLastMessagesTimes(acct)
+}
+
+fun getLastMessagesTimes(acct: NexusBankAccountEntity): LastMessagesTimes {
+    return LastMessagesTimes(
+        lastReport = acct.lastReportCreationTimestamp?.let {
+            ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
+        },
+        lastStatement = acct.lastStatementCreationTimestamp?.let {
+            ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
+        }
     )
 }
 fun getBankAccount(label: String): NexusBankAccountEntity {
@@ -405,9 +358,11 @@ fun addPaymentInitiation(paymentData: Pain001Data, debtorAccount: NexusBankAccou
 }
 
 suspend fun fetchBankAccountTransactions(
-    client: HttpClient, fetchSpec: FetchSpecJson, accountId: String
-): CamtTransactionsCount {
-    val res = transaction {
+    client: HttpClient,
+    fetchSpec: FetchSpecJson,
+    accountId: String
+): IngestedTransactionsCount {
+    val connectionDetails = transaction {
         val acct = NexusBankAccountEntity.findByName(accountId)
         if (acct == null) {
             throw NexusError(
@@ -423,7 +378,12 @@ suspend fun fetchBankAccountTransactions(
             )
         }
         return@transaction object {
-            val connectionType = conn.type
+            /**
+             * The connection type _as enum_ should eventually come
+             * directly from the database, instead of being parsed by
+             * parseBankConnectionType().
+             */
+            val connectionType = BankConnectionType.parseBankConnectionType(conn.type)
             val connectionName = conn.connectionId
         }
     }
@@ -432,16 +392,39 @@ suspend fun fetchBankAccountTransactions(
      * document into the database.  This function tries to download
      * both reports AND statements even if the first one fails.
      */
-    val errors: List<Exception>? = getConnectionPlugin(res.connectionType).fetchTransactions(
+    val errors: List<Exception>? = getConnectionPlugin(connectionDetails.connectionType).fetchTransactions(
         fetchSpec,
         client,
-        res.connectionName,
+        connectionDetails.connectionName,
         accountId
     )
 
-    val ingestionResult = ingestBankMessagesIntoAccount(res.connectionName, accountId)
-    ingestFacadeTransactions(accountId, "taler-wire-gateway", ::talerFilter, ::maybeTalerRefunds)
-    ingestFacadeTransactions(accountId, "anastasis", ::anastasisFilter, null)
+    /**
+     * This block causes new NexusBankAccountTransactions rows to be
+     * INSERTed into the database, according to the banking data that
+     * was recently downloaded.
+     */
+    val ingestionResult: IngestedTransactionsCount = ingestBankMessagesIntoAccount(
+        connectionDetails.connectionName,
+        accountId
+    )
+    /**
+     * The following two functions further processe the banking data
+     * that was recently downloaded, according to the particular facade
+     * being honored.
+     */
+    ingestFacadeTransactions(
+        bankAccountId = accountId,
+        facadeType = NexusFacadeType.TALER,
+        incomingFilterCb = ::talerFilter,
+        refundCb = ::maybeTalerRefunds
+    )
+    ingestFacadeTransactions(
+        bankAccountId = accountId,
+        facadeType = NexusFacadeType.ANASTASIS,
+        incomingFilterCb = ::anastasisFilter,
+        refundCb = null
+    )
 
     ingestionResult.errors = errors
     return ingestionResult
@@ -497,5 +480,30 @@ fun importBankAccount(call: ApplicationCall, offeredBankAccountId: String, nexus
                 it[imported] = importedAccount.id
             }
         }
+    }
+}
+
+
+/**
+ * Check if the transaction is already found in the database.
+ * This function works as long as the caller provides the appropriate
+ * 'uid' parameter.  For CaMt messages this value is carried along
+ * the AcctSvcrRef node, whereas for x-libeufin-bank connections
+ * that's the 'uid' field of the XLibeufinBankTransaction type.
+ *
+ * Returns the transaction that's already in the database, in case
+ * the 'uid' is from a duplicate.
+ */
+fun findDuplicate(
+    bankAccountId: String,
+    uid: String
+): NexusBankTransactionEntity? {
+    return transaction {
+        val account = NexusBankAccountEntity.findByName((bankAccountId)) ?:
+        return@transaction null
+        NexusBankTransactionEntity.find {
+            (NexusBankTransactionsTable.accountTransactionId eq uid) and
+                    (NexusBankTransactionsTable.bankAccount eq account.id)
+        }.firstOrNull()
     }
 }

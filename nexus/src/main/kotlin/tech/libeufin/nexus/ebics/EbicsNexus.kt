@@ -44,9 +44,9 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
-import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
+import tech.libeufin.nexus.bankaccount.getLastMessagesTimes
 import tech.libeufin.nexus.bankaccount.getPaymentInitiation
 import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
 import tech.libeufin.nexus.iso20022.createPain001document
@@ -149,6 +149,10 @@ private suspend fun fetchEbicsC5x(
     }
 }
 
+/**
+ * Prepares key material and other EBICS details and
+ * returns them along a convenient object.
+ */
 private fun getEbicsSubscriberDetailsInternal(subscriber: EbicsSubscriberEntity): EbicsClientSubscriberDetails {
     var bankAuthPubValue: RSAPublicKey? = null
     if (subscriber.bankAuthenticationPublicKey != null) {
@@ -178,18 +182,19 @@ private fun getEbicsSubscriberDetailsInternal(subscriber: EbicsSubscriberEntity)
         ebicsHiaState = subscriber.ebicsHiaState
     )
 }
-
+private fun getSubscriberFromConnection(connectionEntity: NexusBankConnectionEntity): EbicsSubscriberEntity =
+    transaction {
+        EbicsSubscriberEntity.find {
+            NexusEbicsSubscribersTable.nexusBankConnection eq connectionEntity.id
+        }.firstOrNull() ?: throw internalServerError("ebics bank connection '${connectionEntity.connectionId}' has no subscriber.")
+    }
 /**
  * Retrieve Ebics subscriber details given a bank connection.
  */
 fun getEbicsSubscriberDetails(bankConnectionId: String): EbicsClientSubscriberDetails {
-    val transport = NexusBankConnectionEntity.findByName(bankConnectionId)
-    if (transport == null) {
-        throw NexusError(HttpStatusCode.NotFound, "transport not found")
-    }
-    val subscriber = EbicsSubscriberEntity.find {
-        NexusEbicsSubscribersTable.nexusBankConnection eq transport.id
-    }.first()
+    val transport = getBankConnection(bankConnectionId)
+    val subscriber = getSubscriberFromConnection(transport)
+
     // transport exists and belongs to caller.
     return getEbicsSubscriberDetailsInternal(subscriber)
 }
@@ -417,23 +422,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         accountId: String
     ): List<Exception>? {
         val subscriberDetails = transaction { getEbicsSubscriberDetails(bankConnectionId) }
-        val lastTimes = transaction {
-            val acct = NexusBankAccountEntity.findByName(accountId)
-            if (acct == null) {
-                throw NexusError(
-                    HttpStatusCode.NotFound,
-                    "Account '$accountId' not found"
-                )
-            }
-            object {
-                val lastStatement = acct.lastStatementCreationTimestamp?.let {
-                    ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
-                }
-                val lastReport = acct.lastReportCreationTimestamp?.let {
-                    ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
-                }
-            }
-        }
+        val lastTimes = getLastMessagesTimes(accountId)
         /**
          * Will be filled with fetch instructions, according
          * to the parameters received from the client.
@@ -533,61 +522,53 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             return errors
         return null
     }
-    /**
-     * Submit one Pain.001 for one payment initiations.
-     */
+    // Submit one Pain.001 for one payment initiations.
     override suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
-        val r = transaction {
-            val paymentInitiation = PaymentInitiationEntity.findById(paymentInitiationId)
-                ?: throw NexusError(HttpStatusCode.NotFound, "payment initiation not found")
-            val conn = paymentInitiation.bankAccount.defaultBankConnection
-                ?: throw NexusError(HttpStatusCode.NotFound, "no default bank connection available for submission")
+        val dbData = transaction {
+            val preparedPayment = getPaymentInitiation(paymentInitiationId)
+            val conn = preparedPayment.bankAccount.defaultBankConnection ?: throw NexusError(HttpStatusCode.NotFound, "no default bank connection available for submission")
             val subscriberDetails = getEbicsSubscriberDetails(conn.connectionId)
             val painMessage = createPain001document(
                 NexusPaymentInitiationData(
-                    debtorIban = paymentInitiation.bankAccount.iban,
-                    debtorBic = paymentInitiation.bankAccount.bankCode,
-                    debtorName = paymentInitiation.bankAccount.accountHolder,
-                    currency = paymentInitiation.currency,
-                    amount = paymentInitiation.sum.toString(),
-                    creditorIban = paymentInitiation.creditorIban,
-                    creditorName = paymentInitiation.creditorName,
-                    creditorBic = paymentInitiation.creditorBic,
-                    paymentInformationId = paymentInitiation.paymentInformationId,
-                    preparationTimestamp = paymentInitiation.preparationDate,
-                    subject = paymentInitiation.subject,
-                    instructionId = paymentInitiation.instructionId,
-                    endToEndId = paymentInitiation.endToEndId,
-                    messageId = paymentInitiation.messageId
+                    debtorIban = preparedPayment.bankAccount.iban,
+                    debtorBic = preparedPayment.bankAccount.bankCode,
+                    debtorName = preparedPayment.bankAccount.accountHolder,
+                    currency = preparedPayment.currency,
+                    amount = preparedPayment.sum,
+                    creditorIban = preparedPayment.creditorIban,
+                    creditorName = preparedPayment.creditorName,
+                    creditorBic = preparedPayment.creditorBic,
+                    paymentInformationId = preparedPayment.paymentInformationId,
+                    preparationTimestamp = preparedPayment.preparationDate,
+                    subject = preparedPayment.subject,
+                    instructionId = preparedPayment.instructionId,
+                    endToEndId = preparedPayment.endToEndId,
+                    messageId = preparedPayment.messageId
                 )
             )
-            logger.debug("Sending Pain.001: ${paymentInitiation.paymentInformationId}," +
-                    " for payment: '${paymentInitiation.subject}'")
-            if (!XMLUtil.validateFromString(painMessage)) {
-                logger.error("Pain.001 ${paymentInitiation.paymentInformationId}" +
-                        " is invalid, not submitting it and flag as invalid.")
-                val payment = getPaymentInitiation(paymentInitiationId)
-                payment.invalid = true
-                // The following commit prevents the thrown error
-                // to lose the database transaction data.
-                TransactionManager.current().commit()
-                throw NexusError(
-                    HttpStatusCode.InternalServerError,
-                    "Attempted Pain.001 (${paymentInitiation.paymentInformationId})" +
-                            " message is invalid.  Not sent to the bank.",
-                    LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE
-                )
-            }
             object {
+                val painXml = painMessage
                 val subscriberDetails = subscriberDetails
-                val painMessage = painMessage
             }
+        }
+        if (!XMLUtil.validateFromString(dbData.painXml)) {
+            val pmtInfId = transaction {
+                val payment = getPaymentInitiation(paymentInitiationId)
+                logger.error("Pain.001 ${payment.paymentInformationId}" +
+                        " is invalid, not submitting it and flag as invalid.")
+                payment.invalid = true
+            }
+            throw NexusError(
+                HttpStatusCode.InternalServerError,
+                "pain document: $pmtInfId document is invalid.  Not sent to the bank.",
+                LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE
+            )
         }
         doEbicsUploadTransaction(
             httpClient,
-            r.subscriberDetails,
+            dbData.subscriberDetails,
             "CCT",
-            r.painMessage.toByteArray(Charsets.UTF_8),
+            dbData.painXml.toByteArray(Charsets.UTF_8),
             EbicsStandardOrderParams()
         )
         transaction {

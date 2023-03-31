@@ -23,11 +23,12 @@ import com.fasterxml.jackson.databind.JsonNode
 import io.ktor.client.HttpClient
 import io.ktor.http.HttpStatusCode
 import tech.libeufin.nexus.ebics.*
+import tech.libeufin.nexus.server.BankConnectionType
 import tech.libeufin.nexus.server.FetchSpecJson
 
 // 'const' allows only primitive types.
-val bankConnectionRegistry: Map<String, BankConnectionProtocol> = mapOf(
-    "ebics" to EbicsBankConnectionProtocol()
+val bankConnectionRegistry: Map<BankConnectionType, BankConnectionProtocol> = mapOf(
+    BankConnectionType.EBICS to EbicsBankConnectionProtocol()
 )
 
 interface BankConnectionProtocol {
@@ -64,9 +65,13 @@ interface BankConnectionProtocol {
      *
      * This function returns a possibly empty list of exceptions.
      * That helps not to stop fetching if ONE operation fails.  Notably,
-     * C52 and C53 may be asked along one invocation of this function,
+     * C52 _and_ C53 may be asked along one invocation of this function,
      * therefore storing the exception on C52 allows the C53 to still
      * take place.  The caller then decides how to handle the exceptions.
+     *
+     * More on multi requests: C52 and C53, or more generally 'reports'
+     * and 'statements' are tried to be downloaded together when the fetch
+     * level is set to ALL.
      */
     suspend fun fetchTransactions(
         fetchSpec: FetchSpecJson,
@@ -76,9 +81,18 @@ interface BankConnectionProtocol {
     ): List<Exception>?
 }
 
-fun getConnectionPlugin(connId: String): BankConnectionProtocol {
-    return bankConnectionRegistry.get(connId) ?: throw NexusError(
+fun getConnectionPlugin(connType: BankConnectionType): BankConnectionProtocol {
+    return bankConnectionRegistry[connType] ?: throw NexusError(
         HttpStatusCode.NotFound,
-        "Connection type '${connId}' not available"
+        "Connection type '${connType}' not available"
     )
+}
+
+/**
+ * Adaptor helper to keep until all the connection type mentions will
+ * be passed as BankConnectionType instead of arbitrary easy-to-break
+ * string.
+ */
+fun getConnectionPlugin(connType: String): BankConnectionProtocol {
+    return getConnectionPlugin(BankConnectionType.parseBankConnectionType(connType))
 }

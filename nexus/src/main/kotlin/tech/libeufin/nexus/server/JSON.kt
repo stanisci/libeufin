@@ -32,10 +32,9 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
+import tech.libeufin.nexus.EntryStatus
 import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
-import tech.libeufin.nexus.iso20022.EntryStatus
 import tech.libeufin.util.*
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -251,6 +250,17 @@ data class EbicsNewTransport(
     val systemID: String?
 )
 
+/**
+ * Credentials and URL to access Sandbox and talk JSON to it.
+ * See https://docs.taler.net/design-documents/038-demobanks-protocol-suppliers.html#static-x-libeufin-bank-with-dynamic-demobank
+ * for an introduction on x-libeufin-bank.
+ */
+data class XLibeufinBankTransport(
+    val username: String,
+    val password: String,
+    val baseUrl: String
+)
+
 /** Response type of "GET /prepared-payments/{uuid}" */
 data class PaymentStatus(
     val paymentInitiationId: String,
@@ -262,10 +272,6 @@ data class PaymentStatus(
     val subject: String,
     val submissionDate: String?,
     val preparationDate: String,
-    // null when the payment was never acknowledged by
-    // the bank.  For example, it was submitted but never
-    // seen in any report; or only created and not even
-    // submitted.
     val status: EntryStatus?
 )
 
@@ -346,8 +352,9 @@ data class BankMessageList(
 )
 
 data class BankMessageInfo(
-    val messageId: String,
-    val code: String,
+    // x-libeufin-bank messages do not have any ID or code.
+    val messageId: String?,
+    val code: String?,
     val length: Long
 )
 

@@ -19,16 +19,27 @@
 
 package tech.libeufin.nexus
 
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.jetbrains.exposed.dao.*
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.nexus.iso20022.EntryStatus
 import tech.libeufin.util.EbicsInitState
 import java.sql.Connection
+import kotlin.reflect.typeOf
 
+
+enum class EntryStatus {
+    // Booked
+    BOOK,
+    // Pending
+    PDNG,
+    // Informational
+    INFO,
+}
 
 /**
  * This table holds the values that exchange gave to issue a payment,
@@ -134,15 +145,36 @@ class NexusBankBalanceEntity(id: EntityID<Long>) : LongEntity(id) {
     var date by NexusBankBalancesTable.date
 }
 
+// This table holds the data to talk to Sandbox
+// via the x-libeufin-bank protocol supplier.
+object XLibeufinBankUsersTable : LongIdTable() {
+    val username = text("username")
+    val password = text("password")
+    val baseUrl = text("baseUrl")
+    val nexusBankConnection = reference("nexusBankConnection", NexusBankConnectionsTable)
+}
+
+class XLibeufinBankUserEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<XLibeufinBankUserEntity>(XLibeufinBankUsersTable)
+    var username by XLibeufinBankUsersTable.username
+    var password by XLibeufinBankUsersTable.password
+    var baseUrl by XLibeufinBankUsersTable.baseUrl
+    var nexusBankConnection by NexusBankConnectionEntity referencedOn XLibeufinBankUsersTable.nexusBankConnection
+}
+
 /**
  * Table that stores all messages we receive from the bank.
+ * The nullable fields were introduced along the x-libeufin-bank
+ * connection, as those messages are plain JSON object unlike
+ * the more structured CaMt.
  */
 object NexusBankMessagesTable : LongIdTable() {
     val bankConnection = reference("bankConnection", NexusBankConnectionsTable)
-    val messageId = text("messageId")
-    val code = text("code")
     val message = blob("message")
-    val errors = bool("errors").default(false) // true when the parser could not ingest one message.
+    val messageId = text("messageId").nullable()
+    val code = text("code").nullable()
+    // true when the parser could not ingest one message:
+    val errors = bool("errors").default(false)
 }
 
 class NexusBankMessageEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -188,6 +220,21 @@ class NexusBankTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
     var transactionJson by NexusBankTransactionsTable.transactionJson
     var accountTransactionId by NexusBankTransactionsTable.accountTransactionId
     val updatedBy by NexusBankTransactionEntity optionalReferencedOn NexusBankTransactionsTable.updatedBy
+
+    /**
+     * It is responsibility of the caller to insert only valid
+     * JSON into the database, and therefore provide error management
+     * when calling the two helpers below.
+     */
+
+    inline fun <reified T> parseDetailsIntoObject(): T {
+        val mapper = jacksonObjectMapper()
+        return mapper.readValue(this.transactionJson, T::class.java)
+    }
+    fun parseDetailsIntoObject(): JsonNode {
+        val mapper = jacksonObjectMapper()
+        return mapper.readTree(this.transactionJson)
+    }
 }
 
 /**
@@ -459,9 +506,7 @@ object NexusPermissionsTable : LongIdTable() {
     val subjectId = text("subjectName")
     val permissionName = text("permissionName")
 
-    init {
-        uniqueIndex(resourceType, resourceId, subjectType, subjectId, permissionName)
-    }
+    init { uniqueIndex(resourceType, resourceId, subjectType, subjectId, permissionName) }
 }
 
 class NexusPermissionEntity(id: EntityID<Long>) : LongEntity(id) {
@@ -479,6 +524,7 @@ fun dbDropTables(dbConnectionString: String) {
     transaction {
         SchemaUtils.drop(
             NexusUsersTable,
+            XLibeufinBankUsersTable,
             PaymentInitiationsTable,
             NexusEbicsSubscribersTable,
             NexusBankAccountsTable,
@@ -504,6 +550,7 @@ fun dbCreateTables(dbConnectionString: String) {
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         SchemaUtils.create(
+            XLibeufinBankUsersTable,
             NexusScheduledTasksTable,
             NexusUsersTable,
             PaymentInitiationsTable,

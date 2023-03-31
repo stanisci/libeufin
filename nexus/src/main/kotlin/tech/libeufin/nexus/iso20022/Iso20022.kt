@@ -22,15 +22,21 @@
  */
 package tech.libeufin.nexus.iso20022
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonValue
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.http.*
+import io.ktor.util.reflect.*
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.w3c.dom.Document
-import tech.libeufin.nexus.NexusAssert
-import tech.libeufin.nexus.NexusError
+import tech.libeufin.nexus.*
+import tech.libeufin.nexus.bankaccount.IngestedTransactionsCount
+import tech.libeufin.nexus.bankaccount.findDuplicate
 import tech.libeufin.nexus.server.CurrencyAmount
+import tech.libeufin.nexus.server.toPlainString
 import tech.libeufin.util.*
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -38,23 +44,6 @@ import java.time.format.DateTimeFormatter
 
 enum class CreditDebitIndicator {
     DBIT, CRDT
-}
-
-enum class EntryStatus {
-    /**
-     * Booked
-     */
-    BOOK,
-
-    /**
-     * Pending
-     */
-    PDNG,
-
-    /**
-     * Informational
-     */
-    INFO,
 }
 
 enum class CashManagementResponseType(@get:JsonValue val jsonName: String) {
@@ -268,7 +257,7 @@ data class ReturnInfo(
 )
 
 data class BatchTransaction(
-    val amount: CurrencyAmount,
+    val amount: CurrencyAmount, // Fuels Taler withdrawal amount.
     val creditDebitIndicator: CreditDebitIndicator,
     val details: TransactionDetails
 )
@@ -329,7 +318,53 @@ data class CamtBankAccountEntry(
 
     // list of sub-transactions participating in this money movement.
     val batches: List<Batch>?
-)
+) {
+    /**
+     * This function returns the subject of the unique transaction
+     * accounted in this object.  If the transaction is not unique,
+     * it throws an exception.  NOTE: the caller has the responsibility
+     * of not passing an empty report; those usually should be discarded
+     * and never participate in the application logic.
+     */
+    @JsonIgnore
+    fun getSingletonSubject(): String {
+        // Checks that the given list contains only one element and returns it.
+        fun <T>checkAndGetSingleton(maybeTxs: List<T>?): T {
+            if (maybeTxs == null || maybeTxs.size > 1) throw internalServerError(
+                "Only a singleton transaction is " +
+                        "allowed inside ${this.javaClass}."
+            )
+            return maybeTxs[0]
+        }
+        /**
+         * Types breakdown until the last payment information is reached.
+         *
+         * CamtBankAccountEntry contains:
+         * - Batch 0
+         * - Batch 1
+         * - Batch N
+         *
+         * Batch X contains:
+         * - BatchTransaction 0
+         * - BatchTransaction 1
+         * - BatchTransaction N
+         *
+         * BatchTransaction X contains:
+         * - TransactionDetails
+         *
+         * TransactionDetails contains the involved parties
+         * and the payment subject but MAY NOT contain the amount.
+         * In this model, the amount is held in the BatchTransaction
+         * type, that is also -- so far -- required to be a singleton
+         * inside Batch.
+         */
+        checkAndGetSingleton<Batch>(this.batches)
+        val batchTransactions = this.batches?.get(0)?.batchTransactions
+        val tx = checkAndGetSingleton<BatchTransaction>(batchTransactions)
+        val details: TransactionDetails = tx.details
+        return details.unstructuredRemittanceInformation
+    }
+}
 
 class CamtParsingError(msg: String) : Exception(msg)
 
@@ -861,7 +896,10 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
             instructedAmount = instructedAmount,
             creditDebitIndicator = creditDebitIndicator,
             bankTransactionCode = btc,
-            batches = extractBatches(amount, creditDebitIndicator, acctSvcrRef ?: "AcctSvcrRef not given/found"),
+            batches = extractBatches(
+                amount,
+                creditDebitIndicator,
+                acctSvcrRef ?: "AcctSvcrRef not given/found"),
             bookingDate = maybeUniqueChildNamed("BookgDt") { extractDateOrDateTime() },
             valueDate = maybeUniqueChildNamed("ValDt") { extractDateOrDateTime() },
             accountServicerRef = acctSvcrRef,
@@ -935,4 +973,156 @@ fun parseCamtMessage(doc: Document): CamtParseResult {
             )
         }
     }
+}
+
+/**
+ * Given that every CaMt is a collection of reports/statements
+ * where each of them carries the bank account balance and a list
+ * of transactions, this function:
+ *
+ * - extracts the balance (storing a NexusBankBalanceEntity)
+ * - updates timestamps in NexusBankAccountEntity to the last seen
+ *   report/statement.
+ * - finds which transactions were already downloaded.
+ * - stores a new NexusBankTransactionEntity for each new tx
+accounted in the report/statement.
+ * - tries to link the new transaction with a submitted one, in
+ *   case of DBIT transaction.
+ * - returns a IngestedTransactionCount object.
+ */
+fun processCamtMessage(
+    bankAccountId: String,
+    camtDoc: Document,
+    /**
+     * FIXME: should NOT be C52/C53 but "report" or "statement".
+     * The reason is that C52/C53 are NOT CaMt, they are EBICS names.
+     */
+    code: String
+): IngestedTransactionsCount {
+    var newTransactions = 0
+    var downloadedTransactions = 0
+    transaction {
+        val acct = NexusBankAccountEntity.findByName(bankAccountId)
+        if (acct == null) {
+            throw NexusError(HttpStatusCode.NotFound, "user not found")
+        }
+        val res = try { parseCamtMessage(camtDoc) } catch (e: CamtParsingError) {
+            logger.warn("Invalid CAMT received from bank: $e")
+            newTransactions = -1
+            return@transaction
+        }
+        res.reports.forEach {
+            NexusAssert(
+                it.account.iban == acct.iban,
+                "Nexus hit a report or statement of a wrong IBAN!"
+            )
+            it.balances.forEach { b ->
+                if (b.type == "CLBD") {
+                    val lastBalance = NexusBankBalanceEntity.all().lastOrNull()
+                    /**
+                     * Store balances different from the one that came from the bank,
+                     * or the very first balance.  This approach has the following inconvenience:
+                     * the 'balance' held at Nexus does not differentiate between one
+                     * coming from a statement and one coming from a report.  As a consequence,
+                     * the two types of balances may override each other without notice.
+                     */
+                    if ((lastBalance == null) ||
+                        (b.amount.toPlainString() != lastBalance.balance)) {
+                        NexusBankBalanceEntity.new {
+                            bankAccount = acct
+                            balance = b.amount.toPlainString()
+                            creditDebitIndicator = b.creditDebitIndicator.name
+                            date = b.date
+                        }
+                    }
+                }
+            }
+        }
+        // Updating the local bank account state timestamps according to the current document.
+        val stamp = ZonedDateTime.parse(
+            res.creationDateTime,
+            DateTimeFormatter.ISO_DATE_TIME
+        ).toInstant().toEpochMilli()
+        when (code) {
+            "C52" -> {
+                val s = acct.lastReportCreationTimestamp
+                /**
+                 * FIXME.
+                 * The following check seems broken, as it ONLY sets the value when
+                 * s is non-null BUT s gets never set; not even with a default value.
+                 * That didn't break so far because the timestamp gets only used when
+                 * the fetch specification has "since-last" for the time range.  Never
+                 * used.
+                 */
+                if (s != null && stamp > s) {
+                    acct.lastReportCreationTimestamp = stamp
+                }
+            }
+            "C53" -> {
+                val s = acct.lastStatementCreationTimestamp
+                if (s != null && stamp > s) {
+                    acct.lastStatementCreationTimestamp = stamp
+                }
+            }
+        }
+        val entries: List<CamtBankAccountEntry> = res.reports.map { it.entries }.flatten()
+        var newPaymentsLog = ""
+        downloadedTransactions = entries.size
+        txloop@ for (entry: CamtBankAccountEntry in entries) {
+            val singletonBatchedTransaction: BatchTransaction = entry.batches?.get(0)?.batchTransactions?.get(0)
+                ?: throw NexusError(
+                    HttpStatusCode.InternalServerError,
+                    "Singleton money movements policy wasn't respected"
+                )
+            val acctSvcrRef = entry.accountServicerRef
+            if (acctSvcrRef == null) {
+                // FIXME(dold): Report this!
+                logger.error("missing account servicer reference in transaction")
+                continue
+            }
+            val duplicate = findDuplicate(bankAccountId, acctSvcrRef)
+            if (duplicate != null) {
+                logger.info("Found a duplicate (acctSvcrRef): $acctSvcrRef")
+                // FIXME(dold): See if an old transaction needs to be superseded by this one
+                // https://bugs.gnunet.org/view.php?id=6381
+                continue@txloop
+            }
+            val rawEntity = NexusBankTransactionEntity.new {
+                bankAccount = acct
+                accountTransactionId = acctSvcrRef
+                amount = singletonBatchedTransaction.amount.value
+                currency = singletonBatchedTransaction.amount.currency
+                transactionJson = jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(entry)
+                creditDebitIndicator = singletonBatchedTransaction.creditDebitIndicator.name
+                status = entry.status
+            }
+            rawEntity.flush()
+            newTransactions++
+            newPaymentsLog += "\n- " + entry.batches[0].batchTransactions[0].details.unstructuredRemittanceInformation
+            // This block tries to acknowledge a former outgoing payment as booked.
+            if (singletonBatchedTransaction.creditDebitIndicator == CreditDebitIndicator.DBIT) {
+                val t0 = singletonBatchedTransaction.details
+                val pmtInfId = t0.paymentInformationId
+                if (pmtInfId != null) {
+                    val paymentInitiation = PaymentInitiationEntity.find {
+                        PaymentInitiationsTable.bankAccount eq acct.id and (
+                                // pmtInfId is a value that the payment submitter
+                                // asked the bank to associate with the payment to be made.
+                                PaymentInitiationsTable.paymentInformationId eq pmtInfId)
+
+                    }.firstOrNull()
+                    if (paymentInitiation != null) {
+                        logger.info("Could confirm one initiated payment: $pmtInfId")
+                        paymentInitiation.confirmationTransaction = rawEntity
+                    }
+                }
+            }
+        }
+        if (newTransactions > 0)
+            logger.debug("Camt $code '${res.messageId}' has new payments:${newPaymentsLog}")
+    }
+    return IngestedTransactionsCount(
+        newTransactions = newTransactions,
+        downloadedTransactions = downloadedTransactions
+    )
 }

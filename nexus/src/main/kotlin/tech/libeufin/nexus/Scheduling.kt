@@ -59,7 +59,15 @@ private suspend fun runTask(client: HttpClient, sched: TaskSchedule) {
                     "fetch" -> {
                         @Suppress("BlockingMethodInNonBlockingContext")
                         val fetchSpec = jacksonObjectMapper().readValue(sched.params, FetchSpecJson::class.java)
-                        fetchBankAccountTransactions(client, fetchSpec, sched.resourceId)
+                        val outcome = fetchBankAccountTransactions(client, fetchSpec, sched.resourceId)
+                        if (outcome.errors != null && outcome.errors!!.isNotEmpty()) {
+                            /**
+                             * Communication with the bank had at least one error.  All of
+                             * them get logged when this 'outcome.errors' list was defined,
+                             * so not logged twice here.  Failing to bring the problem(s) up.
+                             */
+                            exitProcess(1)
+                        }
                     }
                     /**
                      * Submits the payment preparations that are found in the database.
