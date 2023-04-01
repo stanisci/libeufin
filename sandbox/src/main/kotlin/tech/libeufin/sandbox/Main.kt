@@ -1259,7 +1259,7 @@ val sandboxApp: Application.() -> Unit = {
                     val authGranted: Boolean = !WITH_AUTH
                     if (!authGranted && username != bankAccount.label)
                         throw unauthorized("Username '$username' has no rights over bank account ${bankAccount.label}")
-                    val req = call.receive<NewTransactionReq>()
+                    val req = call.receive<XLibeufinBankPaytoReq>()
                     val payto = parsePayto(req.paytoUri)
                     val amount: String? = payto.amount ?: req.amount
                     if (amount == null) throw badRequest("Amount is missing")
@@ -1274,7 +1274,8 @@ val sandboxApp: Application.() -> Unit = {
                             subject = payto.message ?: throw badRequest(
                                 "'message' query parameter missing in Payto address"
                             ),
-                            amount = amount
+                            amount = amount,
+                            pmtInfId = req.pmtInfId
                         )
                     }
                     call.respond(object {})

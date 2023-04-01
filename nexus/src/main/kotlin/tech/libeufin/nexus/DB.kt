@@ -237,9 +237,7 @@ class NexusBankTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
     }
 }
 
-/**
- * Represents a prepared payment.
- */
+// Represents a prepared payment.
 object PaymentInitiationsTable : LongIdTable() {
     /**
      * Bank account that wants to initiate the payment.
@@ -259,7 +257,6 @@ object PaymentInitiationsTable : LongIdTable() {
     val submitted = bool("submitted").default(false)
     var invalid = bool("invalid").nullable()
     val messageId = text("messageId")
-
     /**
      * Points at the raw transaction witnessing that this
      * initiated payment was successfully performed.

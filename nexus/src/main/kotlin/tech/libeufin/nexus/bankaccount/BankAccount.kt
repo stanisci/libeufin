@@ -125,17 +125,15 @@ suspend fun submitAllPaymentInitiations(
                         "(pointed by bank account '${it.bankAccount.bankAccountName}')" +
                         " not found in the database."
             )
-            // Filter out non EBICS.
-            if (bankConnection.type != "ebics") {
+            try { BankConnectionType.parseBankConnectionType(bankConnection.type) }
+            catch (e: Exception) {
                 logger.info("Skipping non-implemented bank connection '${bankConnection.type}'")
                 return@forEach
             }
             workQueue.add(Submission(it.id.value))
         }
     }
-    workQueue.forEach {
-        submitPaymentInitiation(httpClient, it.id)
-    }
+    workQueue.forEach { submitPaymentInitiation(httpClient, it.id) }
 }
 
 /**

@@ -15,10 +15,7 @@ import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.*
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
-import tech.libeufin.util.XLibeufinBankDirection
-import tech.libeufin.util.XLibeufinBankTransaction
-import tech.libeufin.util.badRequest
-import tech.libeufin.util.internalServerError
+import tech.libeufin.util.*
 import java.net.MalformedURLException
 import java.net.URL
 
@@ -46,7 +43,16 @@ fun getXLibeufinBankCredentials(connId: String): XLibeufinBankTransport {
 
 class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
     override suspend fun connect(client: HttpClient, connId: String) {
-        TODO("Not yet implemented")
+        // Only checking that the credentials + bank URL are correct.
+        val conn = getBankConnection(connId)
+        val credentials = getXLibeufinBankCredentials(conn)
+        // Defining the URL to request the bank account balance.
+        val url = credentials.baseUrl + "/accounts/${credentials.username}"
+        // Error handling expected by the caller.
+        client.get(url) {
+            expectSuccess = true
+            basicAuth(credentials.username, credentials.password)
+        }
     }
 
     override suspend fun fetchAccounts(client: HttpClient, connId: String) {
@@ -66,7 +72,6 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
         connId: String,
         user: NexusUserEntity,
         data: JsonNode) {
-
         val bankConn = transaction {
             NexusBankConnectionEntity.new {
                 this.connectionId = connId
@@ -105,8 +110,67 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
         throw NotImplementedError("x-libeufin-bank does not need analog details")
     }
 
-    override suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
-        TODO("Not yet implemented")
+    override suspend fun submitPaymentInitiation(
+        httpClient: HttpClient,
+        paymentInitiationId: Long
+    ) {
+        /**
+         * Main steps.
+         *
+         * 1) Get prep from the DB.
+         * 2) Collect credentials.
+         * 3) Create the format to POST.
+         * 4) POST the transaction.
+         * 5) Mark the prep as submitted.
+         * */
+        // 1
+        val preparedPayment = getPaymentInitiation(paymentInitiationId)
+        // 2
+        val conn = transaction { preparedPayment.bankAccount.defaultBankConnection } ?: throw
+                internalServerError("Default connection not found for bank account: ${preparedPayment.bankAccount.bankAccountName}")
+        val credentials: XLibeufinBankTransport = getXLibeufinBankCredentials(conn)
+        // 3
+        val paytoUri = buildIbanPaytoUri(
+            iban = preparedPayment.creditorIban,
+            bic = preparedPayment.creditorBic ?: "SANDBOXX",
+            receiverName = preparedPayment.creditorName,
+            message = preparedPayment.subject
+        )
+        val req = jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(
+            XLibeufinBankPaytoReq(
+                paytoUri = paytoUri,
+                amount = "${preparedPayment.currency}:${preparedPayment.sum}",
+                pmtInfId = preparedPayment.paymentInformationId
+            )
+        )
+        // 4
+        val url = credentials.baseUrl + "/accounts/${credentials.username}/transactions"
+        logger.debug("POSTing transactions to x-libeufin-bank at: $url")
+        val r = httpClient.post(url) {
+            expectSuccess = false
+            contentType(ContentType.Application.Json)
+            basicAuth(credentials.username, credentials.password)
+            setBody(req)
+        }
+        if (r.status.value.toString().startsWith("5")) {
+            throw NexusError(
+                HttpStatusCode.BadGateway,
+                "The bank failed: ${r.bodyAsText()}"
+            )
+        }
+        if (!r.status.value.toString().startsWith("2")) {
+            throw NexusError(
+                /**
+                 * Echoing whichever status code the bank gave.  That
+                 * however masks client errors where - for example - a
+                 * request detail causes 404 where Nexus has no power.
+                 */
+                HttpStatusCode(r.status.value, r.status.description),
+                r.bodyAsText()
+            )
+        }
+        // 5
+        transaction { preparedPayment.submitted = true }
     }
 
     override suspend fun fetchTransactions(
@@ -132,7 +196,7 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
         /**
          * Now builds the URL to ask the transactions, according to the
          * FetchSpec gotten in the args.  Level 'statement' and time range
-         * 'previous-dayes' are NOT implemented.
+         * 'previous-days' are NOT implemented.
          */
         val baseUrl = URL(credentials.baseUrl)
         val fetchUrl = url {
@@ -237,9 +301,7 @@ fun processXLibeufinBankMessage(
         }
         // Searching for duplicates.
         if (findDuplicate(bankAccountId, it.uid) != null) {
-            logger.debug(
-                "x-libeufin-bank ingestion: transaction ${it.uid} is a duplicate, skipping."
-            )
+            logger.debug("x-libeufin-bank ingestion: transaction ${it.uid} is a duplicate, skipping.")
             return@forEach
         }
         val direction = if (it.debtorIban == bankAccount.iban)
@@ -268,7 +330,7 @@ fun processXLibeufinBankMessage(
              * (outgoing) payment with the one being iterated over.
              */
             if (direction == XLibeufinBankDirection.DEBIT) {
-                val maybePrepared = getPaymentInitiation(pmtInfId = it.uid)
+                val maybePrepared = it.pmtInfId?.let { it1 -> getPaymentInitiation(pmtInfId = it1) }
                 if (maybePrepared != null) maybePrepared.confirmationTransaction = localTx
             }
             // x-libeufin-bank transactions are ALWAYS modeled as reports

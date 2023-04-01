@@ -247,7 +247,6 @@ fun talerFilter(
     payment: NexusBankTransactionEntity,
     txDtls: TransactionDetails
 ) {
-    val channelsToNotify = mutableListOf<String>()
     var isInvalid = false // True when pub is invalid or duplicate.
     val subject = txDtls.unstructuredRemittanceInformation
     val debtorName = txDtls.debtor?.name

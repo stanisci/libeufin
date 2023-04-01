@@ -5,10 +5,9 @@ import io.ktor.http.*
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
+import javax.security.auth.Subject
 
-/**
- * Payto information.
- */
+// Payto information.
 data class Payto(
     // represent query param "sender-name" or "receiver-name".
     val receiverName: String?,
@@ -78,9 +77,15 @@ fun parsePayto(payto: String): Payto {
 
 fun buildIbanPaytoUri(
     iban: String,
-    bic: String?,
+    bic: String,
     receiverName: String,
+    message: String? = null
 ): String {
     val nameUrlEnc = URLEncoder.encode(receiverName, "utf-8")
-    return "payto://iban/${if (bic != null) "$bic/" else ""}$iban?receiver-name=$nameUrlEnc"
+    val ret = "payto://iban/$bic/$iban?receiver-name=$nameUrlEnc"
+    if (message != null) {
+        val messageUrlEnc = URLEncoder.encode(receiverName, "utf-8")
+        return "$ret&message=$messageUrlEnc"
+    }
+    return ret
 }

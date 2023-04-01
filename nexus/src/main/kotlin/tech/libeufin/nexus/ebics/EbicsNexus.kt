@@ -125,10 +125,8 @@ private suspend fun fetchEbicsC5x(
     }
 
     when (historyType) {
-        "C52" -> {
-        }
-        "C53" -> {
-        }
+        "C52" -> {}
+        "C53" -> {}
         else -> {
             throw NexusError(HttpStatusCode.BadRequest, "history type '$historyType' not supported")
         }
@@ -526,7 +524,10 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
     override suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
         val dbData = transaction {
             val preparedPayment = getPaymentInitiation(paymentInitiationId)
-            val conn = preparedPayment.bankAccount.defaultBankConnection ?: throw NexusError(HttpStatusCode.NotFound, "no default bank connection available for submission")
+            val conn = preparedPayment.bankAccount.defaultBankConnection ?: throw NexusError(
+                HttpStatusCode.NotFound,
+                "no default bank connection available for submission"
+            )
             val subscriberDetails = getEbicsSubscriberDetails(conn.connectionId)
             val painMessage = createPain001document(
                 NexusPaymentInitiationData(

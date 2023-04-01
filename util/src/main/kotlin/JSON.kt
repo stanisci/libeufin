@@ -52,6 +52,22 @@ enum class XLibeufinBankDirection(val direction: String) {
         }
     }
 }
+
+data class XLibeufinBankPaytoReq(
+    /**
+     * This Payto address MUST contain the wire transfer
+     * subject among its query parameters -- 'message' parameter.
+     */
+    val paytoUri: String,
+    // $currency:X.Y format
+    val amount: String?,
+    /**
+     * This value MAY be specified by the payment submitter to
+     * help reconcile the payment when they later download new
+     * transactions.  The name is only borrowed from CaMt terminology.
+     */
+    val pmtInfId: String?
+)
 data class XLibeufinBankTransaction(
     val creditorIban: String,
     val creditorBic: String?,
@@ -66,9 +82,11 @@ data class XLibeufinBankTransaction(
     val date: String,
     val uid: String,
     val direction: XLibeufinBankDirection,
-    // The following two values are rather CAMT/PAIN
-    // specific, therefore do not need to be returned
-    // along every API call using this object.
+    /**
+     * The following two values are rather CAMT/PAIN
+     * specific, therefore do not need to be returned
+     * along every API call using this object.
+     */
     val pmtInfId: String? = null,
     val msgId: String? = null
 )

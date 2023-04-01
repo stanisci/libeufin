@@ -3,17 +3,18 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.server.testing.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
-import tech.libeufin.nexus.BankConnectionProtocol
-import tech.libeufin.nexus.NexusBankTransactionEntity
-import tech.libeufin.nexus.NexusBankTransactionsTable
+import tech.libeufin.nexus.*
+import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.ingestBankMessagesIntoAccount
-import tech.libeufin.nexus.getNexusUser
 import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.nexus.server.*
 import tech.libeufin.nexus.xlibeufinbank.XlibeufinBankConnectionProtocol
+import tech.libeufin.sandbox.BankAccountTransactionEntity
+import tech.libeufin.sandbox.BankAccountTransactionsTable
 import tech.libeufin.sandbox.sandboxApp
 import tech.libeufin.sandbox.wireTransfer
 import tech.libeufin.util.XLibeufinBankTransaction
+import tech.libeufin.util.getIban
 import java.net.URL
 
 // Testing the x-libeufin-bank communication
@@ -34,9 +35,37 @@ class XLibeufinBankTest {
      */
     @Test
     fun submitTransaction() {
-
+        withTestDatabase {
+            prepSandboxDb()
+            prepNexusDb()
+            testApplication {
+                application(sandboxApp)
+                val pId = addPaymentInitiation(
+                    Pain001Data(
+                        creditorIban = FOO_USER_IBAN,
+                        creditorBic = "SANDBOXX",
+                        creditorName = "Tester",
+                        subject = "test payment",
+                        sum = "1",
+                        currency = "TESTKUDOS"
+                    ),
+                    transaction {
+                        NexusBankAccountEntity.findByName("bar") ?:
+                        throw Exception("Test failed, env didn't provide Nexus bank account 'bar'")
+                    }
+                )
+                val conn = XlibeufinBankConnectionProtocol()
+                conn.submitPaymentInitiation(this.client, pId.id.value)
+                val maybeArrivedPayment = transaction {
+                    BankAccountTransactionEntity.find {
+                        BankAccountTransactionsTable.pmtInfId eq pId.paymentInformationId
+                    }.firstOrNull()
+                }
+                // Now look for the payment in the database.
+                assert(maybeArrivedPayment != null)
+            }
+        }
     }
-
     /**
      * Testing that Nexus downloads one transaction from
      * Sandbox via the x-libeufin-bank protocol supplier

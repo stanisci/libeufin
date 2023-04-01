@@ -498,6 +498,45 @@ def restore_backup(obj, backup_file, passphrase, connection_name):
     check_response_status(resp)
 
 
+@connections.command(help="make a new x-libeufin-bank connection")
+@click.option(
+    "--bank-url",
+    help="Bank base URL, typically ending with '../demobanks/default/access-api'",
+    required=True
+)
+@click.option(
+    "--username",
+    help="Username at the bank, that this connection impersonates.",
+    required=True
+)
+@click.password_option()
+@click.argument("connection-name")
+@click.pass_obj
+def new_xlibeufinbank_connection(obj, bank_url, username, password, connection_name):
+    url = urljoin_nodrop(obj.nexus_base_url, "/bank-connections")
+    body = dict(
+        name=connection_name,
+        source="new",
+        type="x-libeufin-bank",
+        data=dict(
+            baseUrl=bank_url,
+            username=username,
+            password=password
+        ),
+    )
+    try:
+        resp = post(
+            url,
+            json=body,
+            auth=auth.HTTPBasicAuth(obj.username, obj.password)
+        )
+    except Exception as e:
+        print(e)
+        print(f"Could not reach nexus at {url}")
+        exit(1)
+
+    check_response_status(resp)
+
 @connections.command(help="make new EBICS bank connection")
 @click.option("--ebics-url", help="EBICS URL", required=True)
 @click.option("--host-id", help="Host ID", required=True)

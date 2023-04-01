@@ -25,10 +25,13 @@ import io.ktor.http.HttpStatusCode
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.server.BankConnectionType
 import tech.libeufin.nexus.server.FetchSpecJson
+import tech.libeufin.nexus.server.XLibeufinBankTransport
+import tech.libeufin.nexus.xlibeufinbank.XlibeufinBankConnectionProtocol
 
 // 'const' allows only primitive types.
 val bankConnectionRegistry: Map<BankConnectionType, BankConnectionProtocol> = mapOf(
-    BankConnectionType.EBICS to EbicsBankConnectionProtocol()
+    BankConnectionType.EBICS to EbicsBankConnectionProtocol(),
+    BankConnectionType.X_LIBEUFIN_BANK to XlibeufinBankConnectionProtocol()
 )
 
 interface BankConnectionProtocol {

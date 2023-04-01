@@ -19,7 +19,6 @@
 
 package tech.libeufin.sandbox
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import tech.libeufin.util.PaymentInfo
 
 data class WithdrawalRequest(
@@ -146,16 +145,6 @@ data class TalerWithdrawalStatus(
 data class TalerWithdrawalSelection(
     val reserve_pub: String,
     val selected_exchange: String?
-)
-
-data class NewTransactionReq(
-    /**
-     * This Payto address must contain the wire transfer
-     * subject among its query parameters -- 'message' parameter.
-     */
-    val paytoUri: String,
-    // $currency:X.Y format
-    val amount: String?
 )
 
 data class SandboxConfig(

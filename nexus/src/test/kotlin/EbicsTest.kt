@@ -1,7 +1,4 @@
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.server.application.*
-import io.ktor.client.*
-import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.request.*
@@ -23,14 +20,17 @@ import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
 import tech.libeufin.nexus.iso20022.createPain001document
 import tech.libeufin.nexus.server.FetchLevel
 import tech.libeufin.nexus.server.FetchSpecAllJson
-import tech.libeufin.nexus.server.FetchSpecJson
 import tech.libeufin.nexus.server.Pain001Data
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsRequest
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
-import kotlin.reflect.full.isSubclassOf
+
+/**
+ * These test cases run EBICS CCT and C52, mixing ordinary operations
+ * and some error cases.
+ */
 
 /**
  * Data to make the test server return for EBICS
@@ -87,9 +87,7 @@ fun getCustomEbicsServer(r: EbicsResponses, endpoint: String = "/ebicsweb"): App
 }
 
 class DownloadAndSubmit {
-    /**
-     * Download a C52 report from the bank.
-     */
+    // Downloads a C52 report from the bank.
     @Test
     fun download() {
         withNexusAndSandboxUser {
@@ -129,9 +127,8 @@ class DownloadAndSubmit {
             }
         }
     }
-    /**
-     * Upload one payment instruction to the bank.
-     */
+
+    // Uploads one payment instruction to the bank.
     @Test
     fun upload() {
         withNexusAndSandboxUser {
@@ -223,8 +220,8 @@ class DownloadAndSubmit {
     }
 
     /**
-     * Submit one payment instruction with an invalid Pain.001
-     * document, and check that it was marked as invalid.  Hence,
+     * Submits one payment instruction with an invalid Pain.001
+     * document, and checks that it was marked as invalid.  Hence,
      * the error is expected only by the first submission, since
      * the second won't pick the invalid payment.
      */
@@ -264,6 +261,10 @@ class DownloadAndSubmit {
         }
     }
 
+    /**
+     * Submits one pain.001 document with the wrong currency and checks
+     * that the bank responded with EBICS_PROCESSING_ERROR.
+     */
     @Test
     fun unsupportedCurrency() {
         withNexusAndSandboxUser {
@@ -278,7 +279,7 @@ class DownloadAndSubmit {
                             creditorName = "Tester",
                             subject = "test payment",
                             sum = "1",
-                            currency = "EUR"
+                            currency = "EUR" // EUR not supported.
                         ),
                         transaction {
                             NexusBankAccountEntity.findByName("foo") ?: throw Exception("Test failed")
