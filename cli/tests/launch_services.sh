@@ -4,8 +4,8 @@
 # EBICS pair, in order to try CLI commands.
 set -eu
 
-# WITH_TASKS=1
-WITH_TASKS=0
+WITH_TASKS=1
+# WITH_TASKS=0
 function exit_cleanup()
 {
   echo "Running exit-cleanup"
@@ -141,7 +141,5 @@ if test 1 = $WITH_TASKS; then
 else
   echo NOT creating background tasks!
 fi
-echo "Requesting Taler history with 90 seconds timeout..."
-curl -u test-user:x "http://localhost:5001/facades/test-facade/taler-wire-gateway/history/incoming?delta=5&long_poll_ms=90000"
 
 read -p "Press Enter to terminate..."
