@@ -1,5 +1,8 @@
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import io.ktor.client.plugins.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.server.testing.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
@@ -134,6 +137,23 @@ class XLibeufinBankTest {
                     val tx = maybeTx.first().parseDetailsIntoObject<CamtBankAccountEntry>()
                     assert(tx.getSingletonSubject() == "x-libeufin-bank test transaction")
                 }
+            }
+        }
+    }
+
+    // Testing that Nexus responds with correct connection details.
+    // Currently only testing that the request doesn't throw any error.
+    @Test
+    fun connectionDetails() {
+        withTestDatabase {
+            prepNexusDb()
+            testApplication {
+                application(nexusApp)
+                val r = client.get("/bank-connections/bar") {
+                    basicAuth("bar", "bar")
+                    expectSuccess = true
+                }
+                println(r.bodyAsText())
             }
         }
     }

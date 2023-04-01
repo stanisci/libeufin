@@ -1,6 +1,7 @@
 package tech.libeufin.nexus.xlibeufinbank
 
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.client.*
 import io.ktor.client.plugins.*
@@ -99,7 +100,16 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
     }
 
     override fun getConnectionDetails(conn: NexusBankConnectionEntity): JsonNode {
-        TODO("Not yet implemented")
+        val credentials = getXLibeufinBankCredentials(conn)
+        val mapper = ObjectMapper()
+        val details = mapper.createObjectNode()
+        details.put("baseUrl", credentials.baseUrl)
+        details.put("username", credentials.username)
+        val node = mapper.createObjectNode()
+        node.put("type", conn.type)
+        node.put("owner", conn.owner.username)
+        node.set<JsonNode>("details", details)
+        return node
     }
 
     override fun exportBackup(bankConnectionId: String, passphrase: String): JsonNode {
