@@ -84,7 +84,7 @@ fun buildIbanPaytoUri(
     val nameUrlEnc = URLEncoder.encode(receiverName, "utf-8")
     val ret = "payto://iban/$bic/$iban?receiver-name=$nameUrlEnc"
     if (message != null) {
-        val messageUrlEnc = URLEncoder.encode(receiverName, "utf-8")
+        val messageUrlEnc = URLEncoder.encode(message, "utf-8")
         return "$ret&message=$messageUrlEnc"
     }
     return ret
