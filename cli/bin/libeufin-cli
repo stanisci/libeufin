@@ -584,7 +584,6 @@ def connect(obj, connection_name):
         exit(1)
 
     check_response_status(resp)
-    tell_user(resp)
 
 @connections.command(help="Import one bank account, chosen from the downloaded ones.")
 @click.option(
