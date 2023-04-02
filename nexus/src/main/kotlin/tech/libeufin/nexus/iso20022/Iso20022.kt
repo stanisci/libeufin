@@ -43,7 +43,8 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 enum class CreditDebitIndicator {
-    DBIT, CRDT
+    DBIT,
+    CRDT
 }
 
 enum class CashManagementResponseType(@get:JsonValue val jsonName: String) {

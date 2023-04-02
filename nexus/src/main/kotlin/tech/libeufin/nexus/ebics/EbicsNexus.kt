@@ -800,12 +800,13 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                             HttpStatusCode.NotFound,
                             "bank connection not found"
                         )
-
+                        // Avoiding to store twice one downloaded bank account.
                         val isDuplicate = OfferedBankAccountsTable.select {
                             OfferedBankAccountsTable.bankConnection eq conn.id and (
                                     OfferedBankAccountsTable.offeredAccountId eq accountInfo.id)
                         }.firstOrNull()
                         if (isDuplicate != null) return@forEach
+                        // Storing every new bank account.
                         OfferedBankAccountsTable.insert { newRow ->
                             newRow[accountHolder] = accountInfo.accountHolder ?: "NOT GIVEN"
                             newRow[iban] =

@@ -391,7 +391,7 @@ fun maybeTalerRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
             NexusAssert(
                 it[NexusBankTransactionsTable.creditDebitIndicator] == "CRDT" &&
                         it[NexusBankTransactionsTable.bankAccount] == bankAccount.id,
-                "Cannot refund a _outgoing_ payment!"
+                "Cannot refund an _outgoing_ payment!"
             )
             // FIXME #7116
             addPaymentInitiation(

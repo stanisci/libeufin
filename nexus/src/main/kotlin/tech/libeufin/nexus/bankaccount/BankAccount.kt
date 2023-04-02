@@ -396,6 +396,11 @@ suspend fun fetchBankAccountTransactions(
         connectionDetails.connectionName,
         accountId
     )
+    /**
+     * Here it MIGHT just return in case of errors, but sometimes the
+     * fetcher asks for multiple results (e.g. C52 and C53), and what
+     * went through SHOULD be ingested.
+     */
 
     /**
      * This block causes new NexusBankAccountTransactions rows to be

@@ -1,10 +1,19 @@
 package tech.libeufin.nexus.server
 
+import io.ktor.http.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.NexusBankConnectionEntity
 import tech.libeufin.nexus.NexusBankConnectionsTable
+import tech.libeufin.nexus.NexusError
 import tech.libeufin.util.internalServerError
 import tech.libeufin.util.notFound
+
+fun unknownBankAccount(bankAccountLabel: String): NexusError {
+    return NexusError(
+        HttpStatusCode.NotFound,
+        "Bank account $bankAccountLabel was not found"
+    )
+}
 
 /**
  * FIXME:

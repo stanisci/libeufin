@@ -456,7 +456,7 @@ val nexusApp: Application.() -> Unit = {
             resp.set<JsonNode>("schedule", ops)
             transaction {
                 NexusBankAccountEntity.findByName(accountId)
-                    ?: throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
+                    ?: throw unknownBankAccount(accountId)
                 NexusScheduledTaskEntity.find {
                     (NexusScheduledTasksTable.resourceType eq "bank-account") and
                             (NexusScheduledTasksTable.resourceId eq accountId)
@@ -479,7 +479,7 @@ val nexusApp: Application.() -> Unit = {
             val accountId = ensureNonNull(call.parameters["accountId"])
             transaction {
                 NexusBankAccountEntity.findByName(accountId)
-                    ?: throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
+                    ?: throw unknownBankAccount(accountId)
                 try {
                     NexusCron.parser.parse(schedSpec.cronspec)
                 } catch (e: IllegalArgumentException) {
@@ -550,7 +550,7 @@ val nexusApp: Application.() -> Unit = {
             transaction {
                 val bankAccount = NexusBankAccountEntity.findByName(accountId)
                 if (bankAccount == null) {
-                    throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
+                    throw unknownBankAccount(accountId)
                 }
                 val oldSchedTask = NexusScheduledTaskEntity.find {
                     (NexusScheduledTasksTable.taskName eq taskId) and
@@ -571,7 +571,7 @@ val nexusApp: Application.() -> Unit = {
             val res = transaction {
                 val bankAccount = NexusBankAccountEntity.findByName(accountId)
                 if (bankAccount == null) {
-                    throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
+                    throw unknownBankAccount(accountId)
                 }
                 val holderEnc = URLEncoder.encode(bankAccount.accountHolder, Charsets.UTF_8)
                 val lastSeenBalance = NexusBankBalanceEntity.find {
@@ -693,7 +693,7 @@ val nexusApp: Application.() -> Unit = {
             val res = transaction {
                 val bankAccount = NexusBankAccountEntity.findByName(accountId)
                 if (bankAccount == null) {
-                    throw NexusError(HttpStatusCode.NotFound, "unknown bank account ($accountId)")
+                    throw unknownBankAccount(accountId)
                 }
                 val amount = parseAmount(body.amount)
                 val paymentEntity = addPaymentInitiation(
@@ -767,7 +767,7 @@ val nexusApp: Application.() -> Unit = {
             transaction {
                 val bankAccount = NexusBankAccountEntity.findByName(bankAccountId)
                 if (bankAccount == null) {
-                    throw NexusError(HttpStatusCode.NotFound, "unknown bank account")
+                    throw unknownBankAccount(bankAccountId)
                 }
                 NexusBankTransactionEntity.find { NexusBankTransactionsTable.bankAccount eq bankAccount.id }.map {
                     val tx = jacksonObjectMapper().readValue(
