@@ -32,6 +32,7 @@ import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
 import tech.libeufin.nexus.bankaccount.submitAllPaymentInitiations
 import tech.libeufin.nexus.server.FetchSpecJson
 import java.lang.IllegalArgumentException
+import java.net.ConnectException
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
@@ -53,25 +54,19 @@ private suspend fun runTask(client: HttpClient, sched: TaskSchedule) {
         when (sched.resourceType) {
             "bank-account" -> {
                 when (sched.type) {
-                    /**
-                     * Downloads and ingests the payment records from the bank.
-                     */
+                    // Downloads and ingests the payment records from the bank.
                     "fetch" -> {
                         @Suppress("BlockingMethodInNonBlockingContext")
                         val fetchSpec = jacksonObjectMapper().readValue(sched.params, FetchSpecJson::class.java)
-                        val outcome = fetchBankAccountTransactions(client, fetchSpec, sched.resourceId)
-                        if (outcome.errors != null && outcome.errors!!.isNotEmpty()) {
-                            /**
-                             * Communication with the bank had at least one error.  All of
-                             * them get logged when this 'outcome.errors' list was defined,
-                             * so not logged twice here.  Failing to bring the problem(s) up.
-                             */
-                            exitProcess(1)
-                        }
+                        fetchBankAccountTransactions(client, fetchSpec, sched.resourceId)
+                        /**
+                         * NOTE: the previous operation COULD have had problems but that
+                         * is tolerated because the communication with the backend CAN be
+                         * unreliable.  As of logging: not doing it here twice, since every
+                         * error should already have been logged when it originated.
+                         */
                     }
-                    /**
-                     * Submits the payment preparations that are found in the database.
-                     */
+                    // Submits the payment preparations that are found in the database.
                     "submit" -> {
                         submitAllPaymentInitiations(client, sched.resourceId)
                     }
@@ -82,9 +77,15 @@ private suspend fun runTask(client: HttpClient, sched: TaskSchedule) {
             }
             else -> logger.error("task on resource ${sched.resourceType} not supported")
         }
-    } catch (e: Exception) {
-        logger.error("Exception during task $sched", e)
-    } catch (so: StackOverflowError) {
+    }
+    catch (e: Exception) {
+        logger.error("Exception during task $sched: ${e.message})")
+        /**
+         *  Not exiting the process since the error can be temporary:
+         *  name resolution problem, Nexus connectivity problem, ...
+         */
+    }
+    catch (so: StackOverflowError) {
         logger.error(so.stackTraceToString())
         exitProcess(1)
     }
@@ -105,7 +106,7 @@ object NexusCron {
     }
 }
 
-// Fails whenever a unmanaged Throwable reaches the root coroutine.
+// Fails whenever an unmanaged Throwable reaches the root coroutine.
 val fallback = CoroutineExceptionHandler { _, err ->
     logger.error(err.stackTraceToString())
     exitProcess(1)
