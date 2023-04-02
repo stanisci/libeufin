@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Convenience script to setup and run a Sandbox + Nexus
-# EBICS pair, in order to try CLI commands.
+# Convenience script to setup and run a Sandbox & Nexus
+# connected through x-libeufin-bank.
 set -eu
 
 WITH_TASKS=1
@@ -22,16 +22,7 @@ echo RUNNING SANDBOX-NEXUS EBICS PAIR
 jq --version &> /dev/null || (echo "'jq' command not found"; exit 77)
 curl --version &> /dev/null || (echo "'curl' command not found"; exit 77)
 
-SQLITE_FILE_PATH=/tmp/libeufin-cli-test.sqlite3
-getDbConn () {
-  if test withPostgres == "${1:-}"; then
-    echo "jdbc:postgresql://localhost:5432/libeufincheck?user=$(whoami)"
-    return
-  fi
-  echo "jdbc:sqlite:${SQLITE_FILE_PATH}"
-}
-
-DB_CONN=`getDbConn withPostgres`
+DB_CONN="jdbc:postgresql://localhost:5432/libeufincheck?user=$(whoami)"
 export LIBEUFIN_SANDBOX_DB_CONNECTION=$DB_CONN
 export LIBEUFIN_NEXUS_DB_CONNECTION=$DB_CONN
 
@@ -75,69 +66,51 @@ libeufin-cli \
   demobank \
   register
 echo DONE
-export LIBEUFIN_SANDBOX_USERNAME=admin
-export LIBEUFIN_SANDBOX_PASSWORD=foo
-echo -n "Create EBICS host at Sandbox..."
-libeufin-cli sandbox \
-  --sandbox-url http://localhost:5000 \
-  ebicshost create --host-id wwwebics
-echo OK
-echo -n "Create 'www' EBICS subscriber at Sandbox..."
-libeufin-cli sandbox \
-  --sandbox-url http://localhost:5000 \
-  demobank new-ebicssubscriber --host-id wwwebics \
-  --user-id wwwebics --partner-id wwwpartner \
-  --bank-account www # that's a username _and_ a bank account name
-echo OK
+echo -n Creating the x-libeufin-bank connection at Nexus...
 export LIBEUFIN_NEXUS_USERNAME=test-user
 export LIBEUFIN_NEXUS_PASSWORD=x
 export LIBEUFIN_NEXUS_URL=http://localhost:5001
-echo -n Creating the EBICS connection at Nexus...
-libeufin-cli connections new-ebics-connection \
-  --ebics-url "http://localhost:5000/ebicsweb" \
-  --host-id wwwebics \
-  --partner-id wwwpartner \
-  --ebics-user-id wwwebics \
+# echoing the password to STDIN, as that is a "prompt" option.
+libeufin-cli connections new-xlibeufinbank-connection \
+  --bank-url "http://localhost:5000/demobanks/default/access-api" \
+  --username www \
+  --password foo \
   wwwconn
 echo DONE
-echo -n Setup EBICS keying...
-libeufin-cli connections connect wwwconn > /dev/null
-echo OK
-echo -n Download bank account name from Sandbox...
-libeufin-cli connections download-bank-accounts wwwconn
-echo OK
-echo -n Importing bank account info into Nexus...
+echo -n Connecting the x-libeufin-bank connection...
+libeufin-cli connections connect wwwconn
+echo DONE
+# Importing the bank account under a local name at Nexus.
+echo -n Importing the x-libeufin-bank account locally..
 libeufin-cli connections import-bank-account \
   --offered-account-id www \
-  --nexus-bank-account-id www-nexus \
-  wwwconn
-echo OK
+  --nexus-bank-account-id foo-at-nexus wwwconn
+echo DONE
 echo -n Create the Taler facade at Nexus...
 libeufin-cli facades \
   new-taler-wire-gateway-facade \
   --currency TESTKUDOS --facade-name test-facade \
-  wwwconn www-nexus
-echo OK
-
+  wwwconn foo-at-nexus
+echo DONE
 if test 1 = $WITH_TASKS; then
   echo -n Creating submit transactions task..
   libeufin-cli accounts task-schedule \
     --task-type submit \
     --task-name www-payments \
     --task-cronspec "* * *" \
-    www-nexus || true
+    foo-at-nexus || true
   # Tries every second.  Ask C52
-  echo OK
+  echo DONE
   echo -n Creating fetch transactions task..
   # Not idempotent, FIXME #7739
   libeufin-cli accounts task-schedule \
     --task-type fetch \
     --task-name www-history \
     --task-cronspec "* * *" \
-    --task-param-level report \
-    --task-param-range-type latest \
-    www-nexus || true
-  echo OK
+    --task-param-level statement \
+    --task-param-range-type since-last \
+    foo-at-nexus || true
+  echo DONE
 else
   echo NOT creating background tasks!
 fi
