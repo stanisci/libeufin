@@ -10,6 +10,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.util.*
 import io.ktor.util.*
+import io.ktor.util.date.*
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
@@ -39,25 +40,67 @@ fun getXLibeufinBankCredentials(conn: NexusBankConnectionEntity): XLibeufinBankT
 fun getXLibeufinBankCredentials(connId: String): XLibeufinBankTransport {
     val conn = getBankConnection(connId)
     return getXLibeufinBankCredentials(conn)
-
 }
 
 class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
+    /**
+     * Together with checking the credentials, this method downloads
+     * additional details from the bank, and stores them in the table
+     * that holds offered bank accounts.  That saves one call to the
+     * "import" method by recycling the information obtained here.
+     */
     override suspend fun connect(client: HttpClient, connId: String) {
-        // Only checking that the credentials + bank URL are correct.
         val conn = getBankConnection(connId)
-        val credentials = getXLibeufinBankCredentials(conn)
+        val connDetails = getXLibeufinBankCredentials(conn)
         // Defining the URL to request the bank account balance.
-        val url = credentials.baseUrl + "/accounts/${credentials.username}"
+        val url = connDetails.baseUrl + "/accounts/${connDetails.username}"
         // Error handling expected by the caller.
-        client.get(url) {
+        val details = client.get(url) {
             expectSuccess = true
-            basicAuth(credentials.username, credentials.password)
+            basicAuth(connDetails.username, connDetails.password)
+        }
+        val txtDetails = details.bodyAsText()
+        val jDetails = jacksonObjectMapper().readTree(txtDetails)
+        val paytoUri: String = try { jDetails.get("paytoUri").asText() }
+        catch (e: Exception) {
+            logger.error("Did not find 'paytoUri' along the connection" +
+                    " operation from x-libeufin-bank connection $connId." +
+                    "  Bank says: $txtDetails"
+            )
+            throw badGateway("Bank missed basic account information ('paytoUri' field)")
+        }
+        val paytoObj = parsePayto(payto = paytoUri)
+        val maybeOfferedAccount = transaction {
+            OfferedBankAccountEntity.find {
+                // Sandbox reliably names the bank account with the owner's username
+                OfferedBankAccountsTable.offeredAccountId eq connDetails.username
+            }.firstOrNull()
+        }
+        // Bank account already imported.
+        if (maybeOfferedAccount != null)
+            return
+        // Import it.
+        transaction {
+            OfferedBankAccountEntity.new {
+                offeredAccountId = connDetails.username
+                bankConnection = conn
+                accountHolder = paytoObj.receiverName ?: "Not given by the bank"
+                bankCode = paytoObj.bic ?: "SANDBOXX"
+                iban = paytoObj.iban
+            }
         }
     }
 
+    /**
+     * This operation is carried along connect(), because as a side
+     * effect of checking the credentials it ALSO gets all the offered
+     * bank account information that this function WOULD have obtained.
+     *
+     * Therefore, this method throws error when called, in order to raise
+     * the clients' awareness not to rely on it.
+     */
     override suspend fun fetchAccounts(client: HttpClient, connId: String) {
-        throw NotImplementedError("x-libeufin-bank does not need to fetch accounts")
+        throw NotImplementedError("Please skip this method when using x-libeufin-bank.")
     }
 
     override fun createConnectionFromBackup(
@@ -72,7 +115,8 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
     override fun createConnection(
         connId: String,
         user: NexusUserEntity,
-        data: JsonNode) {
+        data: JsonNode
+    ) {
         val bankConn = transaction {
             NexusBankConnectionEntity.new {
                 this.connectionId = connId
@@ -211,6 +255,7 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
         val baseUrl = URL(credentials.baseUrl)
         val fetchUrl = url {
             protocol = URLProtocol(name = baseUrl.protocol, defaultPort = -1)
+            port = baseUrl.port
             appendPathSegments(
                 baseUrl.path.dropLastWhile { it == '/' },
                 "accounts/${credentials.username}/transactions")
@@ -223,10 +268,10 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
                  * timestamp that was seen in this connection */
                 is FetchSpecSinceLastJson -> {
                     val localBankAccount = getBankAccount(accountId)
-                    val lastMessagesTimes = getLastMessagesTimes(localBankAccount)
-                    // Sandbox doesn't have report vs. statement, defaulting to report time
+                    // Sandbox doesn't have report vs. statement, defaulting to statement time
                     // and so does the ingestion routine when storing the last message time.
-                    this.parameters["from_ms"] = "${lastMessagesTimes.lastStatement ?: 0}"
+                    // The sought time must be incremented by one because the filter is _inclusive_.
+                    this.parameters["from_ms"] = "${localBankAccount.lastStatementCreationTimestamp?.plus(1) ?: 0}"
                 }
                 // This wants ALL the transactions, hence it sets the from_ms to zero.
                 is FetchSpecAllJson -> {
@@ -331,7 +376,7 @@ fun processXLibeufinBankMessage(
                 this.accountTransactionId = it.uid
                 this.transactionJson = jacksonObjectMapper(
                 ).writeValueAsString(it.exportAsCamtModel())
-                this.creditDebitIndicator = direction.direction
+                this.creditDebitIndicator = direction.exportAsCamtDirection()
                 newTxs++
                 logger.debug("x-libeufin-bank transaction with subject '${it.subject}' ingested.")
             }
