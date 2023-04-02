@@ -51,6 +51,11 @@ enum class XLibeufinBankDirection(val direction: String) {
             }
         }
     }
+    fun exportAsCamtDirection(): String =
+        when(this) {
+            CREDIT -> "CRDT"
+            DEBIT -> "DBIT"
+        }
 }
 
 data class XLibeufinBankPaytoReq(

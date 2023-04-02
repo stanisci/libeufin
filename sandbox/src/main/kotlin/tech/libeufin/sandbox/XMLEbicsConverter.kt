@@ -54,7 +54,7 @@ class XMLEbicsConverter : ContentConverter {
             XMLUtil.convertJaxbToString(value)
         } catch (e: Exception) {
             /**
-             * Not always a error: the content negotiation might have
+             * Not always an error: the content negotiation might have
              * only checked if this handler could convert the response.
              */
             return null

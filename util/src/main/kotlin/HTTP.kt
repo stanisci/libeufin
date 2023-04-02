@@ -26,6 +26,14 @@ fun notFound(msg: String): UtilError {
     )
 }
 
+fun badGateway(msg: String): UtilError {
+    return UtilError(
+        HttpStatusCode.BadGateway,
+        msg,
+        LibeufinErrorCode.LIBEUFIN_EC_NONE
+    )
+}
+
 /**
  * Returns the token (including the 'secret-token:' prefix)
  * from a Authorization header.  Throws exception on malformations
