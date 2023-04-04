@@ -2,6 +2,7 @@ package tech.libeufin.util
 
 import UtilError
 import io.ktor.http.*
+import java.math.BigDecimal
 
 /*
  * This file is part of LibEuFin.
@@ -36,4 +37,12 @@ fun parseAmount(amount: String): AmountWithCurrency {
         throw UtilError(HttpStatusCode.BadRequest, "invalid amount: $amount")
     val (currency, number) = match.destructured
     return AmountWithCurrency(currency = currency, amount = number)
+}
+
+fun isAmountZero(a: BigDecimal): Boolean {
+    a.abs().toPlainString().forEach {
+        if (it != '0' && it != '.')
+            return false
+    }
+    return true
 }

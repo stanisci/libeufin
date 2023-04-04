@@ -804,8 +804,8 @@ fun circuitApi(circuitRoute: Route) {
             resourceName,
             withBankFault = true // See comment "CUSTOMER AND BANK ACCOUNT INVARIANT".
         )
-        val balance = getBalance(bankAccount)
-        if (balance != BigDecimal.ZERO) {
+        val balance: BigDecimal = getBalance(bankAccount)
+        if (!isAmountZero(balance)) {
             logger.error("Account $resourceName has $balance balance.  Won't delete it")
             throw SandboxError(
                 HttpStatusCode.PreconditionFailed,

@@ -1,6 +1,11 @@
+import io.ktor.util.reflect.*
 import org.junit.Test
+import tech.libeufin.sandbox.roundToTwoDigits
+import tech.libeufin.util.isAmountZero
 import tech.libeufin.util.parseAmount
 import tech.libeufin.util.validatePlainAmount
+import java.math.BigDecimal
+import kotlin.reflect.typeOf
 
 inline fun <reified ExceptionType> assertException(block: () -> Unit) {
     try {
@@ -12,6 +17,12 @@ inline fun <reified ExceptionType> assertException(block: () -> Unit) {
     return assert(false)
 }
 class AmountTest {
+    @Test
+    fun equalTest() {
+        val z = BigDecimal("-0000000000.0000000000")
+        assert(isAmountZero(z))
+    }
+
     @Test
     fun parse() {
         var res = parseAmount("KUDOS:5.5")
