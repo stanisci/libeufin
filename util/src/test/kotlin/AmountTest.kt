@@ -19,8 +19,12 @@ inline fun <reified ExceptionType> assertException(block: () -> Unit) {
 class AmountTest {
     @Test
     fun equalTest() {
-        val z = BigDecimal("-0000000000.0000000000")
-        assert(isAmountZero(z))
+        assert(isAmountZero(BigDecimal("-0000000000.0000000000")))
+        assert(!isAmountZero(BigDecimal("1")))
+        assert(isAmountZero(BigDecimal("0.00")))
+        assert(isAmountZero(BigDecimal("0")))
+        assert(!isAmountZero(BigDecimal("00000000000001")))
+        assert(!isAmountZero(BigDecimal("-1.00000000")))
     }
 
     @Test
