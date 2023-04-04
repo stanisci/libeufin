@@ -443,6 +443,7 @@ fun circuitApi(circuitRoute: Route) {
             val amount_credit = "$FIAT_CURRENCY:$respAmountCredit"
             val amount_debit = "${demobank.config.currency}:$respAmountDebit"
         })
+        return@get
     }
 
     // Create a cash-out operation.
@@ -804,11 +805,13 @@ fun circuitApi(circuitRoute: Route) {
             withBankFault = true // See comment "CUSTOMER AND BANK ACCOUNT INVARIANT".
         )
         val balance = getBalance(bankAccount)
-        if (balance != BigDecimal.ZERO)
+        if (balance != BigDecimal.ZERO) {
+            logger.error("Account $resourceName has $balance balance.  Won't delete it")
             throw SandboxError(
                 HttpStatusCode.PreconditionFailed,
                 "Account $resourceName doesn't have zero balance.  Won't delete it"
             )
+        }
         transaction {
             bankAccount.delete()
             customer.delete()
