@@ -5,14 +5,86 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import io.ktor.util.*
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
+import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.sandbox.*
 
 class SandboxAccessApiTest {
     val mapper = ObjectMapper()
+
+    /**
+     * Testing that ..access-api/withdrawals/{wopid} and
+     * ..access-api/accounts/{account_name}/withdrawals/{wopid}
+     * are handled in the same way.
+     */
+    @Test
+    fun doubleUriStyle() {
+        // Creating one withdrawal operation.
+        withTestDatabase {
+            prepSandboxDb()
+            val wo: TalerWithdrawalEntity = transaction {
+                TalerWithdrawalEntity.new {
+                    this.amount = "TESTKUDOS:3.3"
+                    walletBankAccount = getBankAccountFromLabel("foo")
+                    selectedExchangePayto = "payto://iban/SANDBOXX/${BAR_USER_IBAN}"
+                    reservePub = "not used"
+                    selectionDone = true
+                }
+            }
+            testApplication {
+                application(sandboxApp)
+                // Showing withdrawal info.
+                val get_with_account = client.get("/demobanks/default/access-api/accounts/foo/withdrawals/${wo.wopid}") {
+                    expectSuccess = true
+                }
+                val get_without_account = client.get("/demobanks/default/access-api/withdrawals/${wo.wopid}") {
+                    expectSuccess = true
+                }
+                assert(get_without_account.bodyAsText() == get_with_account.bodyAsText())
+                assert(get_with_account.bodyAsText() == get_without_account.bodyAsText())
+                // Confirming a withdrawal.
+                val confirm_with_account = client.post("/demobanks/default/access-api/accounts/foo/withdrawals/${wo.wopid}/confirm") {
+                    expectSuccess = true
+                }
+                val confirm_without_account = client.post("/demobanks/default/access-api/withdrawals/${wo.wopid}/confirm") {
+                    expectSuccess = true
+                }
+                assert(confirm_with_account.status.value == confirm_without_account.status.value)
+                assert(confirm_with_account.bodyAsText() == confirm_without_account.bodyAsText())
+                // Aborting one withdrawal.
+                var wo_to_abort = transaction {
+                    TalerWithdrawalEntity.new {
+                        this.amount = "TESTKUDOS:3.3"
+                        walletBankAccount = getBankAccountFromLabel("foo")
+                        selectedExchangePayto = "payto://iban/SANDBOXX/${BAR_USER_IBAN}"
+                        reservePub = "not used"
+                        selectionDone = true
+                    }
+                }
+                val abort_with_account = client.post("/demobanks/default/access-api/accounts/foo/withdrawals/${wo_to_abort.wopid}/abort") {
+                    expectSuccess = true
+                }
+                wo_to_abort = transaction {
+                    TalerWithdrawalEntity.new {
+                        this.amount = "TESTKUDOS:3.3"
+                        walletBankAccount = getBankAccountFromLabel("foo")
+                        selectedExchangePayto = "payto://iban/SANDBOXX/${BAR_USER_IBAN}"
+                        reservePub = "not used"
+                        selectionDone = true
+                    }
+                }
+                val abort_without_account = client.post("/demobanks/default/access-api/withdrawals/${wo_to_abort.wopid}/abort") {
+                    expectSuccess = true
+                }
+                assert(abort_with_account.status.value == abort_without_account.status.value)
+                // Not checking the content as they abort two different operations.
+            }
+        }
+    }
 
     // Move funds between accounts.
     @Test

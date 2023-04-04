@@ -487,6 +487,73 @@ fun setJsonHandler(ctx: ObjectMapper) {
     )
 }
 
+private suspend fun getWithdrawal(call: ApplicationCall) {
+    val op = getWithdrawalOperation(call.expectUriComponent("withdrawal_id"))
+    if (!op.selectionDone && op.reservePub != null) throw internalServerError(
+        "Unselected withdrawal has a reserve public key",
+        LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE
+    )
+    call.respond(object {
+        val amount = op.amount
+        val aborted = op.aborted
+        val confirmation_done = op.confirmationDone
+        val selection_done = op.selectionDone
+        val selected_reserve_pub = op.reservePub
+        val selected_exchange_account = op.selectedExchangePayto
+    })
+}
+
+private suspend fun confirmWithdrawal(call: ApplicationCall) {
+    val withdrawalId = call.expectUriComponent("withdrawal_id")
+    transaction {
+        val wo = getWithdrawalOperation(withdrawalId)
+        if (wo.aborted) throw SandboxError(
+            HttpStatusCode.Conflict,
+            "Cannot confirm an aborted withdrawal."
+        )
+        if (!wo.selectionDone) throw SandboxError(
+            HttpStatusCode.UnprocessableEntity,
+            "Cannot confirm a unselected withdrawal: " +
+                    "specify exchange and reserve public key via Integration API first."
+        )
+        /**
+         * The wallet chose not to select any exchange, use the default.
+         */
+        val demobank = ensureDemobank(call)
+        if (wo.selectedExchangePayto == null) {
+            wo.selectedExchangePayto = demobank.config.suggestedExchangePayto
+        }
+        val exchangeBankAccount = getBankAccountFromPayto(
+            wo.selectedExchangePayto ?: throw internalServerError(
+                "Cannot withdraw without an exchange."
+            )
+        )
+        if (!wo.confirmationDone) {
+            wireTransfer(
+                debitAccount = wo.walletBankAccount,
+                creditAccount = exchangeBankAccount,
+                amount = wo.amount,
+                subject = wo.reservePub ?: throw internalServerError(
+                    "Cannot transfer funds without reserve public key."
+                ),
+                // provide the currency.
+                demobank = ensureDemobank(call)
+            )
+            wo.confirmationDone = true
+        }
+        wo.confirmationDone
+    }
+    call.respond(object {})
+}
+
+private suspend fun abortWithdrawal(call: ApplicationCall) {
+    val withdrawalId = call.expectUriComponent("withdrawal_id")
+    val operation = getWithdrawalOperation(withdrawalId)
+    if (operation.confirmationDone) throw conflict("Cannot abort paid withdrawal.")
+    transaction { operation.aborted = true }
+    call.respond(object {})
+}
+
 val sandboxApp: Application.() -> Unit = {
     install(CallLogging) {
         this.level = Level.DEBUG
@@ -1283,19 +1350,12 @@ val sandboxApp: Application.() -> Unit = {
                 }
                 // Information about one withdrawal.
                 get("/accounts/{account_name}/withdrawals/{withdrawal_id}") {
-                    val op = getWithdrawalOperation(call.expectUriComponent("withdrawal_id"))
-                    if (!op.selectionDone && op.reservePub != null) throw internalServerError(
-                        "Unselected withdrawal has a reserve public key",
-                        LibeufinErrorCode.LIBEUFIN_EC_INCONSISTENT_STATE
-                    )
-                    call.respond(object {
-                        val amount = op.amount
-                        val aborted = op.aborted
-                        val confirmation_done = op.confirmationDone
-                        val selection_done = op.selectionDone
-                        val selected_reserve_pub = op.reservePub
-                        val selected_exchange_account = op.selectedExchangePayto
-                    })
+                    getWithdrawal(call)
+                    return@get
+                }
+                // account-less style:
+                get("/withdrawals/{withdrawal_id}") {
+                    getWithdrawal(call)
                     return@get
                 }
                 // Create a new withdrawal operation.
@@ -1372,54 +1432,22 @@ val sandboxApp: Application.() -> Unit = {
                 }
                 // Confirm a withdrawal: no basic auth, because the ID should be unguessable.
                 post("/accounts/{account_name}/withdrawals/{withdrawal_id}/confirm") {
-                    val withdrawalId = call.expectUriComponent("withdrawal_id")
-                    transaction {
-                        val wo = getWithdrawalOperation(withdrawalId)
-                        if (wo.aborted) throw SandboxError(
-                            HttpStatusCode.Conflict,
-                            "Cannot confirm an aborted withdrawal."
-                        )
-                        if (!wo.selectionDone) throw SandboxError(
-                            HttpStatusCode.UnprocessableEntity,
-                            "Cannot confirm a unselected withdrawal: " +
-                                    "specify exchange and reserve public key via Integration API first."
-                        )
-                        /**
-                         * The wallet chose not to select any exchange, use the default.
-                         */
-                        val demobank = ensureDemobank(call)
-                        if (wo.selectedExchangePayto == null) {
-                            wo.selectedExchangePayto = demobank.config.suggestedExchangePayto
-                        }
-                        val exchangeBankAccount = getBankAccountFromPayto(
-                            wo.selectedExchangePayto ?: throw internalServerError(
-                                "Cannot withdraw without an exchange."
-                            )
-                        )
-                        if (!wo.confirmationDone) {
-                            wireTransfer(
-                                debitAccount = wo.walletBankAccount,
-                                creditAccount = exchangeBankAccount,
-                                amount = wo.amount,
-                                subject = wo.reservePub ?: throw internalServerError(
-                                    "Cannot transfer funds without reserve public key."
-                                ),
-                                // provide the currency.
-                                demobank = ensureDemobank(call)
-                            )
-                            wo.confirmationDone = true
-                        }
-                        wo.confirmationDone
-                    }
-                    call.respond(object {})
+                    confirmWithdrawal(call)
                     return@post
                 }
+                // account-less style:
+                post("/withdrawals/{withdrawal_id}/confirm") {
+                    confirmWithdrawal(call)
+                    return@post
+                }
+                // Aborting withdrawals:
                 post("/accounts/{account_name}/withdrawals/{withdrawal_id}/abort") {
-                    val withdrawalId = call.expectUriComponent("withdrawal_id")
-                    val operation = getWithdrawalOperation(withdrawalId)
-                    if (operation.confirmationDone) throw conflict("Cannot abort paid withdrawal.")
-                    transaction { operation.aborted = true }
-                    call.respond(object {})
+                    abortWithdrawal(call)
+                    return@post
+                }
+                // account-less style:
+                post("/withdrawals/{withdrawal_id}/abort") {
+                    abortWithdrawal(call)
                     return@post
                 }
                 // Bank account basic information.
