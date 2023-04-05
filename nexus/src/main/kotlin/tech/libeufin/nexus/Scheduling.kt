@@ -25,18 +25,15 @@ import com.cronutils.parser.CronParser
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.*
-import kotlinx.coroutines.GlobalScope.coroutineContext
 import kotlinx.coroutines.time.delay
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
 import tech.libeufin.nexus.bankaccount.submitAllPaymentInitiations
 import tech.libeufin.nexus.server.FetchSpecJson
 import java.lang.IllegalArgumentException
-import java.net.ConnectException
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
-import kotlin.coroutines.coroutineContext
 import kotlin.system.exitProcess
 
 private data class TaskSchedule(
@@ -118,15 +115,14 @@ suspend fun startOperationScheduler(httpClient: HttpClient) {
             NexusScheduledTaskEntity.find {
                 NexusScheduledTasksTable.nextScheduledExecutionSec.isNull()
             }.forEach {
-                val cron = try {
-                    NexusCron.parser.parse(it.taskCronspec)
-                } catch (e: IllegalArgumentException) {
+                val cron = try { NexusCron.parser.parse(it.taskCronspec) }
+                catch (e: IllegalArgumentException) {
                     logger.error("invalid cronspec in schedule ${it.resourceType}/${it.resourceId}/${it.taskName}")
                     return@forEach
                 }
                 val zonedNow = ZonedDateTime.now()
-                val et = ExecutionTime.forCron(cron)
-                val next = et.nextExecution(zonedNow)
+                val parsedCron = ExecutionTime.forCron(cron)
+                val next = parsedCron.nextExecution(zonedNow)
                 logger.info("scheduling task ${it.taskName} at $next (now is $zonedNow)")
                 it.nextScheduledExecutionSec = next.get().toEpochSecond()
             }
@@ -139,7 +135,7 @@ suspend fun startOperationScheduler(httpClient: HttpClient) {
             }.map {
                 TaskSchedule(it.id.value, it.taskName, it.taskType, it.resourceType, it.resourceId, it.taskParams)
             }
-        } // Execute those due tasks
+        } // Execute those due tasks and reset to null the next execution time.
         dueTasks.forEach {
             runTask(httpClient, it)
             transaction {
