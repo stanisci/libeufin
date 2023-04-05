@@ -176,6 +176,14 @@ class Config : CliktCommand("Insert one configuration (a.k.a. demobank) into the
                 System.err.println("Debt numbers can't be negative.")
                 exitProcess(1)
             }
+            /*
+               Warning if the CAPTCHA URL does not include the {wopid} placeholder.
+               Not a reason to fail because the bank may be run WITHOUT providing Taler.
+             */
+            if (!hasWopidPlaceholder(captchaUrlOption))
+                logger.warn("CAPTCHA URL doesn't have the WOPID placeholder." +
+                        "  Taler withdrawals decrease usability")
+
             // The user asks to _set_ values, regardless of overriding or creating.
             val config = DemobankConfig(
                 currency = currencyOption,
@@ -1296,15 +1304,16 @@ val sandboxApp: Application.() -> Unit = {
                         )
                     }
                     val demobank = ensureDemobank(call)
-                    if (demobank.config.captchaUrl == null) logger.warn("CAPTCHA URL not found")
-                    val captcha_page = if (arg == null) demobank.config.captchaUrl else demobank.config.captchaUrl?.replace("{wopid}",arg)
+                    val captchaPage: String? = demobank.config.captchaUrl?.replace("{wopid}",arg)
+                    if (captchaPage == null)
+                        throw internalServerError("demobank ${demobank.name} lacks the CAPTCHA URL from the configuration.")
                     val ret = TalerWithdrawalStatus(
                         selection_done = maybeWithdrawalOp.selectionDone,
                         transfer_done = maybeWithdrawalOp.confirmationDone,
                         amount = maybeWithdrawalOp.amount,
                         suggested_exchange = demobank.config.suggestedExchangeBaseUrl,
                         aborted = maybeWithdrawalOp.aborted,
-                        confirm_transfer_url = captcha_page
+                        confirm_transfer_url = captchaPage
                     )
                     call.respond(ret)
                     return@get

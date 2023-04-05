@@ -190,3 +190,9 @@ fun parseUuid(maybeUuid: String): UUID {
     }
     return uuid
 }
+
+fun hasWopidPlaceholder(captchaUrl: String): Boolean {
+    if (captchaUrl.contains("{wopid}", ignoreCase = true))
+        return true
+    return false
+}
