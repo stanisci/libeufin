@@ -551,10 +551,11 @@ fun circuitApi(circuitRoute: Route) {
                         message = op.tan
                     )
                 } catch (e: Exception) {
-                    throw internalServerError(
+                    logger.error(
                         "Sending the e-mail TAN failed for ${customer.email}." +
                                 "  The command threw this exception: ${e.message}"
                     )
+                    false
                 }
                 if (!isSuccessful)
                     throw internalServerError(
@@ -582,12 +583,9 @@ fun circuitApi(circuitRoute: Route) {
                                 " The command threw this exception: ${e.message}"
                     )
                 }
-                if (!isSuccessful) {
-                    logger.error("Cashout ${op.uuid} failed, deleting it.")
-                    transaction { op.delete() }
+                if (!isSuccessful)
                     throw internalServerError(
                         "SMS TAN command failed for ${customer.phone}.")
-                }
             }
             SupportedTanChannels.FILE.name -> {
                 try {
