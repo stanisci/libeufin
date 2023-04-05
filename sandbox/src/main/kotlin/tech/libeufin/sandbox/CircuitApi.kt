@@ -193,6 +193,13 @@ fun isTanChannelSupported(tanChannel: String): Boolean {
 var EMAIL_TAN_CMD: String? = null
 var SMS_TAN_CMD: String? = null
 
+// Convenience class to collect TAN data.
+private data class TanData(
+    val cmd: String,
+    val address: String,
+    val msg: String
+)
+
 /**
  * Runs the command and returns True/False if that succeeded/failed.
  * A failed command causes "500 Internal Server Error" to be responded
@@ -535,7 +542,13 @@ fun circuitApi(circuitRoute: Route) {
                 )
             }
         }
-        // Send the TAN.
+        fun failCashout(
+            msg: String,
+            op: CashoutOperationEntity,
+            keep: Boolean = true
+        ) {
+
+        }
         when (tanChannel) {
             SupportedTanChannels.EMAIL.name -> {
                 val isSuccessful = try {
@@ -551,15 +564,12 @@ fun circuitApi(circuitRoute: Route) {
                         message = op.tan
                     )
                 } catch (e: Exception) {
-                    throw internalServerError(
-                        "Sending the e-mail TAN failed for ${customer.email}." +
-                                "  The command threw this exception: ${e.message}"
-                    )
+                    logger.error("Sending the e-mail TAN to ${customer.email} was impossible." +
+                            "  Reason: ${e.message}")
+                    throw internalServerError("Could not send the e-mail TAN.")
                 }
                 if (!isSuccessful)
-                    throw internalServerError(
-                        "E-mail TAN command failed for ${customer.email}."
-                    )
+                    throw internalServerError("E-mail TAN command failed.")
             }
             SupportedTanChannels.SMS.name -> {
                 val isSuccessful = try {
@@ -577,21 +587,19 @@ fun circuitApi(circuitRoute: Route) {
                     )
 
                 } catch (e: Exception) {
-                    throw internalServerError(
-                        "Sending the SMS TAN failed for ${customer.phone}." +
-                                " The command threw this exception: ${e.message}"
-                    )
+                    logger.error("Sending the SMS TAN to ${customer.phone} was impossible." +
+                            "  Reason: ${e.message}")
+                    throw internalServerError("Could not send the SMS TAN.")
                 }
                 if (!isSuccessful)
-                    throw internalServerError(
-                        "SMS TAN command failed for ${customer.phone}.")
+                    throw internalServerError("SMS TAN command failed.")
             }
             SupportedTanChannels.FILE.name -> {
                 try {
                     File(LIBEUFIN_TAN_TMP_FILE).writeText(op.tan)
                 } catch (e: Exception) {
-                    logger.error(e.message)
-                    throw internalServerError("File TAN failed: could not write to $LIBEUFIN_TAN_TMP_FILE")
+                    logger.error("Could not write to $LIBEUFIN_TAN_TMP_FILE.  Reason: ${e.message}")
+                    throw internalServerError("File TAN failed.")
                 }
             }
             else ->
