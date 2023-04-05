@@ -551,11 +551,10 @@ fun circuitApi(circuitRoute: Route) {
                         message = op.tan
                     )
                 } catch (e: Exception) {
-                    logger.error(
+                    throw internalServerError(
                         "Sending the e-mail TAN failed for ${customer.email}." +
                                 "  The command threw this exception: ${e.message}"
                     )
-                    false
                 }
                 if (!isSuccessful)
                     throw internalServerError(
