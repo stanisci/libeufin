@@ -34,6 +34,8 @@ import java.lang.IllegalArgumentException
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 private data class TaskSchedule(
@@ -53,7 +55,6 @@ private suspend fun runTask(client: HttpClient, sched: TaskSchedule) {
                 when (sched.type) {
                     // Downloads and ingests the payment records from the bank.
                     "fetch" -> {
-                        @Suppress("BlockingMethodInNonBlockingContext")
                         val fetchSpec = jacksonObjectMapper().readValue(sched.params, FetchSpecJson::class.java)
                         fetchBankAccountTransactions(client, fetchSpec, sched.resourceId)
                         /**
@@ -108,45 +109,51 @@ val fallback = CoroutineExceptionHandler { _, err ->
     logger.error(err.stackTraceToString())
     exitProcess(1)
 }
-suspend fun startOperationScheduler(httpClient: HttpClient) {
-    while (true) {
-        // First, assign next execution time stamps to all tasks that need them
+
+// Internal routine ultimately scheduling the tasks.
+private suspend fun operationScheduler(httpClient: HttpClient) {
+    // First, assign next execution time stamps to all tasks that need them
+    transaction {
+        NexusScheduledTaskEntity.find {
+            NexusScheduledTasksTable.nextScheduledExecutionSec.isNull()
+        }.forEach {
+            val cron = try { NexusCron.parser.parse(it.taskCronspec) }
+            catch (e: IllegalArgumentException) {
+                logger.error("invalid cronspec in schedule ${it.resourceType}/${it.resourceId}/${it.taskName}")
+                return@forEach
+            }
+            val zonedNow = ZonedDateTime.now()
+            val parsedCron = ExecutionTime.forCron(cron)
+            val next = parsedCron.nextExecution(zonedNow)
+            logger.info("Scheduling task ${it.taskName} at $next (now is $zonedNow).")
+            it.nextScheduledExecutionSec = next.get().toEpochSecond()
+        }
+    }
+    val nowSec = Instant.now().epochSecond
+    // Second, find tasks that are due
+    val dueTasks = transaction {
+        NexusScheduledTaskEntity.find {
+            NexusScheduledTasksTable.nextScheduledExecutionSec lessEq nowSec
+        }.map {
+            TaskSchedule(it.id.value, it.taskName, it.taskType, it.resourceType, it.resourceId, it.taskParams)
+        }
+    } // Execute those due tasks and reset to null the next execution time.
+    dueTasks.forEach {
+        runTask(httpClient, it)
         transaction {
-            NexusScheduledTaskEntity.find {
-                NexusScheduledTasksTable.nextScheduledExecutionSec.isNull()
-            }.forEach {
-                val cron = try { NexusCron.parser.parse(it.taskCronspec) }
-                catch (e: IllegalArgumentException) {
-                    logger.error("invalid cronspec in schedule ${it.resourceType}/${it.resourceId}/${it.taskName}")
-                    return@forEach
-                }
-                val zonedNow = ZonedDateTime.now()
-                val parsedCron = ExecutionTime.forCron(cron)
-                val next = parsedCron.nextExecution(zonedNow)
-                logger.info("scheduling task ${it.taskName} at $next (now is $zonedNow)")
-                it.nextScheduledExecutionSec = next.get().toEpochSecond()
+            val t = NexusScheduledTaskEntity.findById(it.taskId)
+            if (t != null) {
+                // Reset next scheduled execution
+                t.nextScheduledExecutionSec = null
+                t.prevScheduledExecutionSec = nowSec
             }
         }
-        val nowSec = Instant.now().epochSecond
-        // Second, find tasks that are due
-        val dueTasks = transaction {
-            NexusScheduledTaskEntity.find {
-                NexusScheduledTasksTable.nextScheduledExecutionSec lessEq nowSec
-            }.map {
-                TaskSchedule(it.id.value, it.taskName, it.taskType, it.resourceType, it.resourceId, it.taskParams)
-            }
-        } // Execute those due tasks and reset to null the next execution time.
-        dueTasks.forEach {
-            runTask(httpClient, it)
-            transaction {
-                val t = NexusScheduledTaskEntity.findById(it.taskId)
-                if (t != null) {
-                    // Reset next scheduled execution
-                    t.nextScheduledExecutionSec = null
-                    t.prevScheduledExecutionSec = nowSec
-                }
-            }
-        }
+    }
+
+}
+suspend fun whileTrueOperationScheduler(httpClient: HttpClient) {
+    while (true) {
+        operationScheduler(httpClient)
         // Wait a bit
         delay(Duration.ofSeconds(1))
     }
