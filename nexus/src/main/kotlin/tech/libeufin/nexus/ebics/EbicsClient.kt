@@ -56,7 +56,7 @@ private suspend inline fun HttpClient.postToBank(url: String, body: String): Str
         )
     }
     catch (e: Exception) {
-        logger.error("Exception during request", e)
+        logger.error("Exception during request ${e.message}")
         throw NexusError(
             HttpStatusCode.BadGateway,
             e.message ?: "Could not reach the bank"
