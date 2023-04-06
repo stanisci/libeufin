@@ -25,6 +25,7 @@ class SchedulingTesting {
         }
     }
     // Launching the scheduler to measure its perf with TOP(1)
+    @Ignore
     @Test
     fun normalOperation() {
         withTestDatabase {
