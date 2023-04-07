@@ -11,12 +11,78 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.sandbox.*
+import tech.libeufin.util.getIban
 import tech.libeufin.util.parseAmount
 import java.io.File
 import java.math.BigDecimal
 import java.util.*
 
 class SandboxCircuitApiTest {
+
+    /**
+     * Testing that the admin is able to conduct ordinary
+     * account operations even on non-circuit accounts.  Recall:
+     * such accounts are just those without the cash-out address.
+     */
+    @Test
+    fun opOnNonCircuitAccounts() {
+        withTestDatabase {
+            testApplication {
+                prepSandboxDb()
+                testApplication {
+                    application(sandboxApp)
+                    // Only testing that this doesn't except.
+                    client.get("/demobanks/default/circuit-api/accounts") {
+                        expectSuccess = true
+                        basicAuth("admin", "foo")
+                    }
+                    // Trying to PATCH non circuit account
+                    client.patch("/demobanks/default/circuit-api/accounts/exchange-0") {
+                        expectSuccess = true
+                        basicAuth("admin", "foo")
+                        contentType(ContentType.Application.Json)
+                        setBody("""
+                            {"name": "Exchange 0",
+                             "contact_data": {},
+                             "cashout_address": "payto://iban/SANDBOXX/${getIban()}"
+                             }
+                        """.trimIndent())
+                    }
+                    // PATCH it again passing a null name and cashout-address.
+                    client.patch("/demobanks/default/circuit-api/accounts/exchange-0") {
+                        expectSuccess = true
+                        basicAuth("admin", "foo")
+                        contentType(ContentType.Application.Json)
+                        setBody("{ \"contact_data\": {} }")
+                    }
+                    // PATCH the password.
+                    client.patch("/demobanks/default/circuit-api/accounts/exchange-0/auth") {
+                        expectSuccess = true
+                        basicAuth("admin", "foo")
+                        contentType(ContentType.Application.Json)
+                        setBody("{ \"new_password\": \"secret\" }")
+                    }
+                    // Check that PATCHing worked.
+                    client.get("/demobanks/default/access-api/accounts/exchange-0") {
+                        expectSuccess = true
+                        basicAuth("exchange-0", "secret")
+                        contentType(ContentType.Application.Json)
+                    }
+                    // Deleting the account.
+                    client.delete("/demobanks/default/circuit-api/accounts/exchange-0") {
+                        expectSuccess = true
+                        basicAuth("admin", "foo")
+                    }
+                    // Checking actual deletion.
+                    val R = client.get("/demobanks/default/circuit-api/accounts/exchange-0") {
+                        expectSuccess = false
+                        basicAuth("admin", "foo")
+                    }
+                    assert(R.status.value == HttpStatusCode.NotFound.value)
+                }
+            }
+        }
+    }
     // Get /config, fails if != 200.
     @Test
     fun config() {

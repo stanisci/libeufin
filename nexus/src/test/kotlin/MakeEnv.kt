@@ -278,11 +278,23 @@ fun prepSandboxDb(usersDebtLimit: Int = 1000) {
             name = "Bar"
             cashout_address = "payto://iban/FIAT"
         }
+        // Note: exchange doesn't have the cash-out address.
         DemobankCustomerEntity.new {
-            username = "baz"
+            username = "exchange-0"
             passwordHash = CryptoUtil.hashpw("foo")
-            name = "Baz"
-            cashout_address = "payto://iban/OTHERBANK"
+            name = "Exchange"
+        }
+        BankAccountEntity.new {
+            iban = "AT561936082973364859"
+            /**
+             * For now, keep same semantics of Pybank: a username
+             * is AS WELL a bank account label.  In other words, it
+             * identifies a customer AND a bank account.
+             */
+            label = "exchange-0"
+            owner = "exchange-0"
+            this.demoBank = demoBank
+            isPublic = false
         }
     }
 }

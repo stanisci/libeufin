@@ -112,7 +112,6 @@ class SandboxLegacyApiTest {
                     })
                     client.post("/admin/ebics/bank-accounts") {
                         expectSuccess = true
-                        expectSuccess = true
                         contentType(ContentType.Application.Json)
                         basicAuth("admin", "foo")
                         setBody(body)

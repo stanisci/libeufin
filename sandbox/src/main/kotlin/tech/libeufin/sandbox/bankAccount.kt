@@ -111,7 +111,19 @@ fun getBalance(accountLabel: String,
         HttpStatusCode.InternalServerError,
         "Demobank '$demobankName' not found"
     )
-    val account = getBankAccountFromLabel(accountLabel, demobank)
+
+    /**
+     * Setting withBankFault to true for the following reason:
+     * when asking for a balance, the bank should have made sure
+     * that the user has a bank account (together with a customer profile).
+     * If that's not the case, it's bank's fault, since it didn't check
+     * earlier.
+     */
+    val account = getBankAccountFromLabel(
+        accountLabel,
+        demobank,
+        withBankFault = true
+    )
     return getBalance(account, withPending)
 }
 

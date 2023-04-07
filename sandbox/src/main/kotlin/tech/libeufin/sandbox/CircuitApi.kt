@@ -6,6 +6,8 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.sandbox.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
@@ -79,7 +81,7 @@ data class CircuitContactData(
 
 data class CircuitAccountReconfiguration(
     val contact_data: CircuitContactData,
-    val cashout_address: String,
+    val cashout_address: String?,
     val name: String? = null
 )
 
@@ -96,7 +98,7 @@ data class CircuitAccountInfo(
     val iban: String,
     val contact_data: CircuitContactData,
     val name: String,
-    val cashout_address: String
+    val cashout_address: String?
 )
 
 data class CashoutOperationInfo(
@@ -631,11 +633,12 @@ fun circuitApi(circuitRoute: Route) {
          * that the customer was indeed added via the Circuit API, as opposed
          * to the Access API.
          */
-        val maybeError = "$resourceName not managed by the Circuit API."
         call.respond(CircuitAccountInfo(
             username = customer.username,
-            name = customer.name ?: throw notFound(maybeError),
-            cashout_address = customer.cashout_address ?: throw notFound(maybeError),
+            name = customer.name ?: throw internalServerError(
+                "Account '$resourceName' was found without owner's name."
+            ),
+            cashout_address = customer.cashout_address,
             contact_data = CircuitContactData(
                 email = customer.email,
                 phone = customer.phone
@@ -659,10 +662,22 @@ fun circuitApi(circuitRoute: Route) {
         val customers = mutableListOf<Any>()
         val demobank = ensureDemobank(call)
         transaction {
-            DemobankCustomerEntity.find{
-                // like() is case insensitive.
-                DemobankCustomersTable.name.like(filter)
-            }.forEach {
+            /**
+             * This block builds the DB query so that IF the %-wildcard was
+             * given, then BOTH name and name-less accounts are returned.
+             */
+            val query: Op<Boolean> = SqlExpressionBuilder.run {
+                val like = DemobankCustomersTable.name.like(filter)
+                /**
+                 * This IF statement is needed because Postgres would NOT
+                 * match a null column even with the %-wildcard.
+                 */
+                if (filter == "%") {
+                    return@run like.or(DemobankCustomersTable.name.isNull())
+                }
+                return@run like
+            }
+            DemobankCustomerEntity.find { query }.forEach {
                 customers.add(object {
                     val username = it.username
                     val name = it.name
@@ -676,6 +691,7 @@ fun circuitApi(circuitRoute: Route) {
                     )
                 })
             }
+            StdOutSqlLogger
         }
         if (customers.size == 0) {
             call.respond(HttpStatusCode.NoContent)
@@ -727,7 +743,7 @@ fun circuitApi(circuitRoute: Route) {
             throw badRequest("Invalid e-mail address: ${req.contact_data.email}")
         if ((req.contact_data.phone != null) && (!checkPhoneNumber(req.contact_data.phone)))
             throw badRequest("Invalid phone number: ${req.contact_data.phone}")
-        try { parsePayto(req.cashout_address) }
+        try { if (req.cashout_address != null) parsePayto(req.cashout_address) }
         catch (e: InvalidPaytoError) {
             throw badRequest("Invalid cash-out address: ${req.cashout_address}")
         }

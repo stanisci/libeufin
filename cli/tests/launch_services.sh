@@ -4,8 +4,8 @@
 # connected through x-libeufin-bank.
 set -eu
 
-WITH_TASKS=1
-# WITH_TASKS=0
+# WITH_TASKS=1
+WITH_TASKS=0
 function exit_cleanup()
 {
   echo "Running exit-cleanup"
@@ -41,7 +41,7 @@ libeufin-sandbox \
 echo DONE
 echo -n Start the bank...
 export LIBEUFIN_SANDBOX_ADMIN_PASSWORD=foo
-libeufin-sandbox serve &> sandbox.log &
+libeufin-sandbox serve > sandbox.log 2>&1 &
 SANDBOX_PID=$!
 echo DONE
 echo -n Wait for the bank...

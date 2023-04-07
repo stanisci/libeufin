@@ -80,7 +80,7 @@ data class AccountPair(
 )
 fun insertNewAccount(username: String,
                      password: String,
-                     name: String? = null, // tests do not usually give one.
+                     name: String? = null, // tests and access API may not give one.
                      iban: String? = null,
                      demobank: String = "default",
                      isPublic: Boolean = false): AccountPair {
