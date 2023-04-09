@@ -21,6 +21,17 @@ import kotlin.text.get
  * give the chance to monitor the CPU usage with TOP(1)
  */
 
+/**
+ * It emerged that whether asking transactions via EBICS or x-libeufin-bank
+ * is NOT performance relevant!  For example, asking for a bank account
+ * balance - via the plain Access API - brings the CPU usage to > 10%.  Asking
+ * for /config - via Integration API - used to oscillate the CPU usage
+ * between 3 and 10%.
+ *
+ * The scheduler's loop style is not relevant either: a while-true & delay(1000)
+ * or a Java Timer did NOT change the perf.
+ */
+
 // This class focuses on the perf. of Nexus scheduling.
 class SchedulingTest {
     // Launching the scheduler to measure its perf with TOP(1)
