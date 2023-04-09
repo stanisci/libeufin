@@ -34,8 +34,9 @@ import java.lang.IllegalArgumentException
 import java.time.Duration
 import java.time.Instant
 import java.time.ZonedDateTime
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
+import java.util.*
+import kotlin.concurrent.schedule
+import kotlin.coroutines.coroutineContext
 import kotlin.system.exitProcess
 
 private data class TaskSchedule(
@@ -151,10 +152,23 @@ private suspend fun operationScheduler(httpClient: HttpClient) {
     }
 
 }
+
+// Alternative scheduler based on Java Timer, but same perf. as the while-true one.
+/*
+private val javaTimer = Timer()
+suspend fun javaTimerOperationScheduler(httpClient: HttpClient) {
+    operationScheduler(httpClient)
+    javaTimer.schedule(
+        delay = 1000L,
+        action =  { runBlocking { javaTimerOperationScheduler(httpClient) } }
+    )
+}
+*/
+
 suspend fun whileTrueOperationScheduler(httpClient: HttpClient) {
     while (true) {
         operationScheduler(httpClient)
         // Wait a bit
-        delay(Duration.ofSeconds(1))
+        delay(Duration.ofSeconds(5))
     }
 }
