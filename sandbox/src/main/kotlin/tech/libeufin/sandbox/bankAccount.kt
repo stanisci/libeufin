@@ -227,3 +227,47 @@ fun wireTransfer(
     }
     return transactionRef
 }
+
+/**
+ * Helper that constructs a transactions history page
+ * according to the URI parameters passed to Access API's
+ * GET /transactions.
+ */
+data class HistoryParams(
+    val pageNumber: Int,
+    val pageSize: Int,
+    val fromMs: Long,
+    val untilMs: Long,
+    val bankAccount: BankAccountEntity
+)
+fun extractTxHistory(params: HistoryParams): List<XLibeufinBankTransaction> {
+    val ret = mutableListOf<XLibeufinBankTransaction>()
+    /**
+     * Helper that gets transactions earlier than the 'firstElementId'
+     * transaction AND that match the URI parameters.
+     */
+    fun getPage(firstElementId: Long): Iterable<BankAccountTransactionEntity> {
+        return BankAccountTransactionEntity.find {
+            (BankAccountTransactionsTable.id lessEq firstElementId) and
+                    (BankAccountTransactionsTable.account eq params.bankAccount.id) and
+                    (BankAccountTransactionsTable.date.between(params.fromMs, params.untilMs))
+        }.sortedByDescending { it.id.value }.take(params.pageSize)
+    }
+    // Gets a pointer to the last transaction of this bank account.
+    val lastTransaction: BankAccountTransactionEntity? = params.bankAccount.lastTransaction
+    if (lastTransaction == null) return ret
+    var nextPageIdUpperLimit: Long = lastTransaction.id.value
+
+    // This loop fetches (and discards) pages until the desired one is found.
+    for (i in 1..(params.pageNumber)) {
+        val pageBuf = getPage(nextPageIdUpperLimit)
+        logger.debug("pageBuf #$i follows.  Request wants #${params.pageNumber}:")
+        pageBuf.forEach { logger.debug("ID: ${it.id}, subject: ${it.subject}, amount: ${it.currency}:${it.amount}") }
+        if (pageBuf.none()) return ret
+        nextPageIdUpperLimit = pageBuf.last().id.value - 1
+        if (i == params.pageNumber) pageBuf.forEach {
+            ret.add(getHistoryElementFromTransactionRow(it))
+        }
+    }
+    return ret
+}

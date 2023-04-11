@@ -1530,39 +1530,16 @@ val sandboxApp: Application.() -> Unit = {
                     if (fromMs < 0) throw badRequest("'from_ms' param is less than 0")
                     val untilMs = expectLong(call.request.queryParameters["until_ms"] ?: Long.MAX_VALUE.toString())
                     if (untilMs < 0) throw badRequest("'until_ms' param is less than 0")
-                    val ret = mutableListOf<XLibeufinBankTransaction>()
-                    /**
-                     * Case where page number wasn't given,
-                     * therefore the results starts from the last transaction.
-                     */
-                    transaction {
-                        /**
-                         * Get a history page - from the calling bank account - having
-                         * 'firstElementId' as the latest transaction in it.  */
-                        fun getPage(firstElementId: Long): Iterable<BankAccountTransactionEntity> {
-                            logger.debug("Trying to build pageBuf from ID: $firstElementId," +
-                                    " including $size txs in the past."
+                    val ret: List<XLibeufinBankTransaction> = transaction {
+                        extractTxHistory(
+                            HistoryParams(
+                                pageNumber = page,
+                                pageSize = size,
+                                bankAccount = bankAccount,
+                                fromMs = fromMs,
+                                untilMs = untilMs
                             )
-                            return BankAccountTransactionEntity.find {
-                                (BankAccountTransactionsTable.id lessEq firstElementId) and
-                                        (BankAccountTransactionsTable.account eq bankAccount.id) and
-                                        (BankAccountTransactionsTable.date.between(fromMs, untilMs))
-                            }.sortedByDescending { it.id.value }.take(size)
-                        }
-                        val lt: BankAccountTransactionEntity? = bankAccount.lastTransaction
-                        if (lt == null) return@transaction
-                        var nextPageIdUpperLimit: Long = lt.id.value
-                        // This loop fetches (and discards) pages until the desired one is found.
-                        for (i in 1..(page)) {
-                            val pageBuf = getPage(nextPageIdUpperLimit)
-                            logger.debug("pageBuf #$i follows.  Request wants #$page:")
-                            pageBuf.forEach { logger.debug("ID: ${it.id}, subject: ${it.subject}, amount: ${it.currency}:${it.amount}") }
-                            if (pageBuf.none()) return@transaction
-                            nextPageIdUpperLimit = pageBuf.last().id.value - 1
-                            if (i == page) pageBuf.forEach {
-                                ret.add(getHistoryElementFromTransactionRow(it))
-                            }
-                        }
+                        )
                     }
                     call.respond(object {val transactions = ret})
                     return@get
