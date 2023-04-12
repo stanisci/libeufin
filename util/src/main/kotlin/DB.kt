@@ -40,6 +40,12 @@ fun isPostgres(): Boolean {
 }
 
 // Check GANA (https://docs.gnunet.org/gana/index.html) for numbers allowance.
+/**
+ * Note: every domain is ALWAYS meant to be salted with
+ * a unique identifier that points to the user waiting for
+ * a notification.  The reference function for salting is:
+ * "buildChannelName()", in this file.
+ */
 enum class NotificationsChannelDomains(val value: Int) {
     // When payments with well-formed Taler subject arrive.
     LIBEUFIN_TALER_INCOMING(3000),
@@ -50,10 +56,12 @@ enum class NotificationsChannelDomains(val value: Int) {
     // Happens when a customer wants to withdraw Taler coins in the
     // regional currency.
     LIBEUFIN_SANDBOX_FIAT_INCOMING(3002),
-    // When Nexus discovers a new transactions from the bank it
-    // is connected to.  This even may wake up a client who is waiting
-    // on Nexus' GET /transactions.
-    LIBEUFIN_NEXUS_FIAT_INCOMING(3003)
+    // When Nexus has ingested a new transactions from the bank it
+    // is connected to.  This event carries incoming and outgoing
+    // payments, and it specifies that in its payload.  The direction
+    // codename is the same as CaMt (DBIT, CRDT), as that is also
+    // used in the database.
+    LIBEUFIN_NEXUS_TX(3003)
 }
 
 /**
@@ -77,6 +85,7 @@ fun Transaction.postgresNotify(
     channel: String,
     payload: String? = null
     ) {
+    logger.debug("Sending NOTIFY on channel '$channel' with payload '$payload'")
     if (payload != null) {
         val argEnc = Base32Crockford.encode(payload.toByteArray())
         if (payload.toByteArray().size > 8000)

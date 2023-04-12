@@ -273,7 +273,6 @@ data class Batch(
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class CamtBankAccountEntry(
     val amount: CurrencyAmount,
-
     /**
      * Is this entry debiting or crediting the account
      * it is reported for?

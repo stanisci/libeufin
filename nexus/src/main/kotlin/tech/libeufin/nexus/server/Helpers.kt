@@ -1,12 +1,45 @@
 package tech.libeufin.nexus.server
 
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ObjectNode
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.http.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.nexus.NexusBankConnectionEntity
-import tech.libeufin.nexus.NexusBankConnectionsTable
-import tech.libeufin.nexus.NexusError
+import tech.libeufin.nexus.*
+import tech.libeufin.nexus.bankaccount.getBankAccount
+import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.util.internalServerError
 import tech.libeufin.util.notFound
+
+// Type holding parameters of GET /transactions.
+data class GetTransactionsParams(
+    val bankAccountId: String,
+    val startIndex: Long,
+    val resultSize: Long
+)
+
+/**
+ * Queries the database according to the GET /transactions
+ * parameters.
+ */
+fun getIngestedTransactions(params: GetTransactionsParams): List<JsonNode> =
+    transaction {
+        val bankAccount = getBankAccount(params.bankAccountId)
+        val maybeResult = NexusBankTransactionEntity.find {
+            NexusBankTransactionsTable.bankAccount eq bankAccount.id.value and (
+                    NexusBankTransactionsTable.id greaterEq params.startIndex
+                    )
+        }.sortedBy { it.id.value }.take(params.resultSize.toInt()) // Smallest index (= earliest transaction) first
+        // Converting the result to the HTTP response type.
+        maybeResult.map {
+            val element: ObjectNode = jacksonObjectMapper().readTree(it.transactionJson) as ObjectNode
+            element.put("index", it.id.value.toString())
+            return@map element
+        }
+    }
 
 fun unknownBankAccount(bankAccountLabel: String): NexusError {
     return NexusError(

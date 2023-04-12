@@ -762,21 +762,42 @@ val nexusApp: Application.() -> Unit = {
         // Asks list of transactions ALREADY downloaded from the bank.
         get("/bank-accounts/{accountid}/transactions") {
             requireSuperuser(call.request)
-            val bankAccountId = expectNonNull(call.parameters["accountid"])
-            val ret = Transactions()
-            transaction {
-                val bankAccount = NexusBankAccountEntity.findByName(bankAccountId)
-                if (bankAccount == null) {
-                    throw unknownBankAccount(bankAccountId)
-                }
-                NexusBankTransactionEntity.find { NexusBankTransactionsTable.bankAccount eq bankAccount.id }.map {
-                    val tx = jacksonObjectMapper().readValue(
-                        it.transactionJson, CamtBankAccountEntry::class.java
-                    )
-                    ret.transactions.add(tx)
-                }
+            val accountLabel = expectNonNull(call.parameters["accountid"])
+            // Getting the URI parameters.
+            val maybeStart = call.maybeLong("start") // Earliest TX in the result.
+            val maybeSize = call.maybeLong("size") // How many TXs at most.
+            val maybeLongPoll = call.maybeLong("long_poll_ms")
+
+            // Ask for a DB event (before the actual query),
+            // in case the DB is Postgres and the client wants.
+            val listenHandle = if (isPostgres() && maybeLongPoll != null) {
+                val channelName = buildChannelName(
+                    NotificationsChannelDomains.LIBEUFIN_NEXUS_TX,
+                    accountLabel
+                )
+                val listenHandle = PostgresListenHandle(channelName)
+                listenHandle.postgresListen()
+                listenHandle
+            } else null
+
+            // Try getting results, and UNLISTEN in case they exist.
+            val queryParam = GetTransactionsParams(
+                bankAccountId = accountLabel,
+                resultSize = maybeSize ?: 5,
+                startIndex = maybeStart ?: 1
+            )
+            var ret = getIngestedTransactions(queryParam)
+            if (ret.isNotEmpty() && listenHandle != null)
+                listenHandle.postgresUnlisten() // closes the PG connection too.
+
+            // No results and a DB event is pending: wait.
+            if (ret.isEmpty() && listenHandle != null && maybeLongPoll != null) {
+                val isNotificationArrived = listenHandle.waitOnIODispatchers(maybeLongPoll)
+                // The event happened, query again.
+                if (isNotificationArrived)
+                    ret = getIngestedTransactions(queryParam)
             }
-            call.respond(ret)
+            call.respond(object {val transactions = ret})
             return@get
         }
 

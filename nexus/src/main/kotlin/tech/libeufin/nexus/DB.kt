@@ -27,7 +27,7 @@ import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.util.EbicsInitState
+import tech.libeufin.util.*
 import java.sql.Connection
 import kotlin.reflect.typeOf
 
@@ -210,8 +210,19 @@ object NexusBankTransactionsTable : LongIdTable() {
 }
 
 class NexusBankTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
-    companion object : LongEntityClass<NexusBankTransactionEntity>(NexusBankTransactionsTable)
-
+    companion object : LongEntityClass<NexusBankTransactionEntity>(NexusBankTransactionsTable) {
+        override fun new(init: NexusBankTransactionEntity.() -> Unit): NexusBankTransactionEntity {
+            val ret = super.new(init)
+            if (isPostgres()) {
+                val channelName = buildChannelName(
+                    NotificationsChannelDomains.LIBEUFIN_NEXUS_TX,
+                    ret.bankAccount.bankAccountName
+                )
+                TransactionManager.current().postgresNotify(channelName, ret.creditDebitIndicator)
+            }
+            return ret
+        }
+    }
     var currency by NexusBankTransactionsTable.currency
     var amount by NexusBankTransactionsTable.amount
     var status by NexusBankTransactionsTable.status
