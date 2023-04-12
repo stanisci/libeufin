@@ -6,15 +6,24 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import io.ktor.util.*
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.time.delay
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.sandbox.*
+import java.util.*
+import kotlin.concurrent.schedule
 
 class SandboxAccessApiTest {
     val mapper = ObjectMapper()
+    private fun getTxs(respJson: String): JsonNode {
+        val mapper = ObjectMapper()
+        return mapper.readTree(respJson).get("transactions")
+    }
 
     /**
      * Testing that ..access-api/withdrawals/{wopid} and
@@ -139,10 +148,6 @@ class SandboxAccessApiTest {
     // Tests the time range filter of Access API's GET /transactions
     @Test
     fun timeRangedTransactions() {
-        fun getTxs(respJson: String): JsonNode {
-            val mapper = ObjectMapper()
-            return mapper.readTree(respJson).get("transactions")
-        }
         withTestDatabase {
             prepSandboxDb()
             testApplication {
@@ -426,6 +431,56 @@ class SandboxAccessApiTest {
                 }
             }
 
+        }
+    }
+
+    /**
+     * This test checks that the bank hangs before responding with the list
+     * of transactions, in case there is none to return.  The timing checks
+     * that the server hangs for as long as the unblocking payment takes place
+     * but NOT as long as the long_poll_ms parameter would suggest.  This last
+     * check ensures that the response can only contain the artificial unblocking
+     * payment (that happens after a certain timeout).
+     */
+    @Test
+    fun longPolledTransactions() {
+        val unblockingTxTimer = Timer()
+        val testStartTime = System.currentTimeMillis()
+        withTestDatabase {
+            prepSandboxDb()
+            testApplication {
+                application(sandboxApp)
+                runBlocking {
+                    launch {
+                        // long polls at most 50 seconds.
+                        val R = client.get("/demobanks/default/access-api/accounts/foo/transactions?long_poll_ms=50000") {
+                            expectSuccess = true
+                            basicAuth("foo", "foo")
+                        }
+                        assert(getTxs(R.bodyAsText()).size() == 1)
+                        val testEndTime = System.currentTimeMillis()
+                        val timeDiff = (testEndTime - testStartTime) / 1000L
+                        /**
+                         * Now checking that the server responded after the unblocking tx
+                         * took place and before the long poll timeout would occur.
+                         */
+                        println(timeDiff)
+                        assert(timeDiff in 4 .. 39)
+                    }
+                    unblockingTxTimer.schedule(
+                        delay = 4000L, // unblocks the server in (at least) 4 seconds.
+                        action = {
+                            wireTransfer(
+                                "admin",
+                                "foo",
+                                "default",
+                                "#9",
+                                "TESTKUDOS:2"
+                            )
+                        }
+                    )
+                }
+            }
         }
     }
 }

@@ -118,7 +118,6 @@ class TalerTest {
             prepNexusDb()
             testApplication {
                 application(nexusApp)
-                // This call blocks for 90 seconds
                 val currentTime = System.currentTimeMillis()
                 runBlocking {
                     launch {
@@ -133,6 +132,7 @@ class TalerTest {
                         expectSuccess = true
                     }
                     val latestTime = System.currentTimeMillis()
+                    // Checks that the call didn't hang for the whole long_poll_ms.
                     assert(R.status.value == HttpStatusCode.OK.value
                             && (latestTime - currentTime) < 2000
                     )
