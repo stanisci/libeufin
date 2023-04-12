@@ -320,6 +320,7 @@ fun circuitApi(circuitRoute: Route) {
             )
             op.status = CashoutOperationStatus.CONFIRMED
             op.confirmationTime = getUTCnow().toInstant().toEpochMilli()
+            // TODO(signal this payment over LIBEUFIN_REGIO_INCOMING)
         }
         call.respond(HttpStatusCode.NoContent)
         return@post

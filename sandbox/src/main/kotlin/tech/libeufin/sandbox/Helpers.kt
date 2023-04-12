@@ -460,5 +460,4 @@ fun prepareEbicsPayload(
     }
     val enc = CryptoUtil.encryptEbicsE002(compressedResponse, pub)
     return Pair(Base64.getEncoder().encodeToString(enc.encryptedData), enc)
-
 }

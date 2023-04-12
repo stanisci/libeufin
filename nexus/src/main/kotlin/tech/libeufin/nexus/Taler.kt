@@ -506,15 +506,17 @@ private suspend fun historyIncoming(call: ApplicationCall) {
 
     /**
      * NOTE: the LISTEN command MAY also go inside this transaction,
-     * but that uses a connection other than the one provided by the
+     * but LISTEN uses a connection other than the one provided by the
      * transaction block.  More facts on the consequences are needed.
      */
     var result: List<TalerIncomingPaymentEntity> = transaction {
         TalerIncomingPaymentEntity.find { startCmpOp }.orderTaler(delta)
     }
+    // The request was lucky, unlisten then.
     if (result.isNotEmpty() && listenHandle != null)
         listenHandle.postgresUnlisten()
 
+    // The request was NOT lucky, wait now.
     if (result.isEmpty() && listenHandle != null && longPollTimeout != null) {
         logger.debug("Waiting for NOTIFY on channel ${listenHandle.channelName}," +
                 " with timeout: $longPollTimeoutPar ms")
