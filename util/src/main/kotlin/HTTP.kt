@@ -9,6 +9,7 @@ import io.ktor.server.util.*
 import io.ktor.util.*
 import logger
 import java.net.URLDecoder
+import kotlin.reflect.typeOf
 
 fun unauthorized(msg: String): UtilError {
     return UtilError(
@@ -207,5 +208,15 @@ fun expectLong(uriParam: String): Long {
     catch (e: Exception) {
         logger.error(e.message)
         throw badRequest("'$uriParam' is not Long")
+    }
+}
+
+// Returns null, or tries to convert the parameter to type T.
+// Throws Bad Request, if the conversion could not be done.
+fun ApplicationCall.maybeLong(uriParamName: String): Long? {
+    val maybeParam = this.parameters[uriParamName] ?: return null
+    return try { maybeParam.toLong() }
+    catch (e: Exception) {
+        throw badRequest("Could not convert '$uriParamName' to Long")
     }
 }
