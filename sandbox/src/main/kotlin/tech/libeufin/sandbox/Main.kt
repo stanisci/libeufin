@@ -47,6 +47,7 @@ import io.ktor.server.util.*
 import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.util.date.*
+import org.jetbrains.exposed.dao.flushCache
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -1530,16 +1531,50 @@ val sandboxApp: Application.() -> Unit = {
                     if (fromMs < 0) throw badRequest("'from_ms' param is less than 0")
                     val untilMs = expectLong(call.request.queryParameters["until_ms"] ?: Long.MAX_VALUE.toString())
                     if (untilMs < 0) throw badRequest("'until_ms' param is less than 0")
-                    val ret: List<XLibeufinBankTransaction> = transaction {
-                        extractTxHistory(
-                            HistoryParams(
-                                pageNumber = page,
-                                pageSize = size,
-                                bankAccount = bankAccount,
-                                fromMs = fromMs,
-                                untilMs = untilMs
-                            )
+                    val longPollMs: Long? = call.maybeLong("long_poll_ms")
+                    // LISTEN, if Postgres.
+                    val listenHandle = if (isPostgres() && longPollMs != null) {
+                        val channelName = buildChannelName(
+                            NotificationsChannelDomains.LIBEUFIN_REGIO_TX,
+                            call.expectUriComponent("account_name")
                         )
+                        val listenHandle = PostgresListenHandle(channelName)
+                        // Can't LISTEN on the same DB TX that checks for data, as Exposed
+                        // closes that connection and the notification getter would fail.
+                        // Can't invoke the notification getter in the same DB TX either,
+                        // as it would block the DB.
+                        listenHandle.postgresListen()
+                        listenHandle
+                    } else null
+                    val historyParams = HistoryParams(
+                        pageNumber = page,
+                        pageSize = size,
+                        bankAccount = bankAccount,
+                        fromMs = fromMs,
+                        untilMs = untilMs
+                    )
+                    var ret: List<XLibeufinBankTransaction> = transaction {
+                        extractTxHistory(historyParams)
+                    }
+                    // Data was found already, UNLISTEN and respond.
+                    if (listenHandle != null && ret.isNotEmpty()) {
+                        listenHandle.postgresUnlisten()
+                        call.respond(object {val transactions = ret})
+                        return@get
+                    }
+                    // No data was found, sleep until the timeout or getting woken up.
+                    // Third condition only silences the compiler.
+                    if (listenHandle != null && ret.isEmpty() && longPollMs != null) {
+                        val notificationArrived = listenHandle.waitOnIODispatchers(longPollMs)
+                        // Only if the awaited event fired, query again the DB.
+                        if (notificationArrived)
+                        {
+                            ret = transaction {
+                                // Refreshing to update the index to the very last transaction.
+                                historyParams.bankAccount.refresh()
+                                extractTxHistory(historyParams)
+                            }
+                        }
                     }
                     call.respond(object {val transactions = ret})
                     return@get

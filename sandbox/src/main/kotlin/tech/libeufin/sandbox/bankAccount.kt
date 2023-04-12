@@ -224,6 +224,19 @@ fun wireTransfer(
             this.demobank = demobank
             this.pmtInfId = pmtInfId
         }
+        // Signaling this wire transfer's event.
+        if (this.isPostgres()) {
+            val creditChannel = buildChannelName(
+                NotificationsChannelDomains.LIBEUFIN_REGIO_TX,
+                creditAccount.label
+            )
+            this.postgresNotify(creditChannel, "CRDT")
+            val debitChannel = buildChannelName(
+                NotificationsChannelDomains.LIBEUFIN_REGIO_TX,
+                debitAccount.label
+            )
+            this.postgresNotify(debitChannel, "DBIT")
+        }
     }
     return transactionRef
 }
