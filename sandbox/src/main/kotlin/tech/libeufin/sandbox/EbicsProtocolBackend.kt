@@ -1021,15 +1021,12 @@ fun receiveEbicsXmlInternal(xmlData: String): Document {
 
 private fun makePartnerInfo(subscriber: EbicsSubscriberEntity): EbicsTypes.PartnerInfo {
     val bankAccount = getBankAccountFromSubscriber(subscriber)
+    val customerProfile = getCustomer(bankAccount.label)
     return EbicsTypes.PartnerInfo().apply {
         this.accountInfoList = listOf(
             EbicsTypes.AccountInfo().apply {
                 this.id = bankAccount.label
-                /**
-                 * FIXME:
-                 * This value waits to be extracted from the DemobankCustomer type.
-                 */
-                this.accountHolder = "Account Holder"
+                this.accountHolder = customerProfile.name ?: "Never Given"
                 this.accountNumberList = listOf(
                     EbicsTypes.GeneralAccountNumber().apply {
                         this.international = true
