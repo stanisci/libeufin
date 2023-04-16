@@ -59,7 +59,7 @@ fun ingestFacadeTransactions(
 ) {
     fun ingest(bankAccount: NexusBankAccountEntity, facade: FacadeEntity) {
         logger.debug(
-            "Ingesting transactions for Taler facade ${facade.id.value}," +
+            "Ingesting transactions for $facadeType facade ${facade.id.value}," +
                     " and bank account: ${bankAccount.bankAccountName}"
         )
         val facadeState = getFacadeState(facade.facadeName)
