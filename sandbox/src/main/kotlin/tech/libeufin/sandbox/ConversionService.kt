@@ -6,7 +6,6 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.sql.and
@@ -103,22 +102,23 @@ private fun getUnsubmittedTransactions(bankAccountLabel: String): List<BankAccou
 
 /**
  * This function listens for regio-incoming events (LIBEUFIN_REGIO_TX)
- * and submits the related cash-out payment to Nexus.  The fiat payment will
- * then take place ENTIRELY on Nexus' responsibility.
+ * on the 'watchedBankAccount' and submits the related cash-out payment
+ * to Nexus.  The fiat payment will then take place ENTIRELY on Nexus'
+ * responsibility.
  */
 suspend fun cashoutMonitor(
     httpClient: HttpClient,
-    bankAccountLabel: String = "admin",
+    watchedBankAccount: String = "admin",
     demobankName: String = "default" // used to get config values.
 ) {
     // Register for a REGIO_TX event.
     val eventChannel = buildChannelName(
         NotificationsChannelDomains.LIBEUFIN_REGIO_TX,
-        bankAccountLabel
+        watchedBankAccount
     )
     val objectMapper = jacksonObjectMapper()
     val demobank = getDemobank(demobankName)
-    val bankAccount = getBankAccountFromLabel(bankAccountLabel)
+    val bankAccount = getBankAccountFromLabel(watchedBankAccount)
     val config = demobank?.config ?: throw internalServerError(
         "Demobank '$demobankName' has no configuration."
     )
@@ -146,7 +146,7 @@ suspend fun cashoutMonitor(
         listenHandle.postgresListen()
         // but optimistically check for data, case some
         // arrived _before_ the LISTEN.
-        var newTxs = getUnsubmittedTransactions(bankAccountLabel)
+        var newTxs = getUnsubmittedTransactions(watchedBankAccount)
         // Data found, UNLISTEN.
         if (newTxs.isNotEmpty())
             listenHandle.postgresUnlisten()
@@ -158,7 +158,7 @@ suspend fun cashoutMonitor(
             // HTTP server.
             val isNotificationArrived = listenHandle.postgresGetNotifications(waitTimeout)
             if (isNotificationArrived && listenHandle.receivedPayload == "CRDT")
-                newTxs = getUnsubmittedTransactions(bankAccountLabel)
+                newTxs = getUnsubmittedTransactions(watchedBankAccount)
         }
         if (newTxs.isEmpty())
             continue
