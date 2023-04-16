@@ -203,7 +203,11 @@ fun prepSandboxDb(usersDebtLimit: Int = 1000) {
             demobankName = "default",
             withSignupBonus = false,
             captchaUrl = "http://example.com/",
-            suggestedExchangePayto = "payto://iban/${BAR_USER_IBAN}"
+            suggestedExchangePayto = "payto://iban/${BAR_USER_IBAN}",
+            nexusBaseUrl = "http://localhost/",
+            usernameAtNexus = "foo",
+            passwordAtNexus = "foo",
+            enableConversionService = true
         )
         insertConfigPairs(config)
         val demoBank = DemobankConfigEntity.new { name = "default" }

@@ -9,7 +9,6 @@ import io.ktor.server.util.*
 import io.ktor.util.*
 import logger
 import java.net.URLDecoder
-import kotlin.reflect.typeOf
 
 fun unauthorized(msg: String): UtilError {
     return UtilError(
@@ -62,6 +61,12 @@ fun forbidden(msg: String): UtilError {
     )
 }
 
+fun nullConfigValueError(
+    configKey: String,
+    demobankName: String = "default"
+): Throwable {
+    return internalServerError("Configuration value for '$configKey' at demobank '$demobankName' is null.")
+}
 fun internalServerError(
     reason: String,
     libeufinErrorCode: LibeufinErrorCode? = LibeufinErrorCode.LIBEUFIN_EC_NONE

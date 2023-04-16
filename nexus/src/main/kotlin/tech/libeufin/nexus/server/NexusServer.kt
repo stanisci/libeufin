@@ -690,11 +690,41 @@ val nexusApp: Application.() -> Unit = {
             if (!validateBic(body.bic)) {
                 throw NexusError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
             }
-            val res = transaction {
-                val bankAccount = NexusBankAccountEntity.findByName(accountId)
-                if (bankAccount == null) {
-                    throw unknownBankAccount(accountId)
+            // Handle first idempotence.
+            if (body.uid != null) {
+                val maybeExists: PaymentInitiationEntity? = transaction {
+                    PaymentInitiationEntity.find {
+                        PaymentInitiationsTable.paymentInformationId eq body.uid
+                    }.firstOrNull()
                 }
+                // If submitted payment looks exactly the same as the one
+                // found in the database, then respond 200 OK.  Otherwise,
+                // it's 409 Conflict.
+                if (maybeExists != null &&
+                    maybeExists.creditorIban == body.iban &&
+                    maybeExists.creditorName == body.name &&
+                    maybeExists.subject == body.subject &&
+                    maybeExists.creditorBic == body.bic &&
+                    "${maybeExists.currency}:${maybeExists.sum}" == body.amount
+                ) {
+                    call.respond(
+                        HttpStatusCode.OK,
+                        PaymentInitiationResponse(uuid = maybeExists.id.value.toString())
+                    )
+                    return@post
+                }
+                // The payment was found, but it didn't fulfill the previous check,
+                // conflict.
+                if (maybeExists != null)
+                    throw conflict(
+                        "Payment initiation with UID '${body.uid}' " +
+                                "was found already, with different details."
+                    )
+                // If the flow reaches here, then the payment wasn't found
+                // => proceed to create one.
+            }
+            val res = transaction {
+                val bankAccount = getBankAccount(accountId)
                 val amount = parseAmount(body.amount)
                 val paymentEntity = addPaymentInitiation(
                     Pain001Data(
@@ -703,7 +733,8 @@ val nexusApp: Application.() -> Unit = {
                         creditorName = body.name,
                         sum = amount.amount,
                         currency = amount.currency,
-                        subject = body.subject
+                        subject = body.subject,
+                        pmtInfId = body.uid
                     ),
                     bankAccount
                 )

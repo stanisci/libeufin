@@ -31,6 +31,7 @@ import tech.libeufin.util.*
 import java.security.interfaces.RSAPublicKey
 import java.util.*
 import java.util.zip.DeflaterInputStream
+import kotlin.reflect.KProperty
 
 data class DemobankConfig(
     val allowRegistrations: Boolean,
@@ -43,8 +44,16 @@ data class DemobankConfig(
     val smsTan: String? = null, // fixme: move the config subcommand
     val emailTan: String? = null, // fixme: same as above.
     val suggestedExchangeBaseUrl: String? = null,
-    val suggestedExchangePayto: String? = null
+    val suggestedExchangePayto: String? = null,
+    val nexusBaseUrl: String? = null,
+    val usernameAtNexus: String? = null,
+    val passwordAtNexus: String? = null,
+    val enableConversionService: Boolean = false
 )
+
+fun <T>getConfigValueOrThrow(configKey: KProperty<T?>): T {
+    return configKey.getter.call() ?: throw nullConfigValueError(configKey.name)
+}
 
 /**
  * Helps to communicate Camt values without having

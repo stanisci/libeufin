@@ -331,7 +331,10 @@ fun addPaymentInitiation(paymentData: Pain001Data, debtorAccount: String): Payme
  * it will be the account whose money will pay the wire transfer being defined
  * by this pain document.
  */
-fun addPaymentInitiation(paymentData: Pain001Data, debtorAccount: NexusBankAccountEntity): PaymentInitiationEntity {
+fun addPaymentInitiation(
+    paymentData: Pain001Data,
+    debtorAccount: NexusBankAccountEntity
+): PaymentInitiationEntity {
     return transaction {
         val now = Instant.now().toEpochMilli()
         val nowHex = now.toString(16)
@@ -349,7 +352,7 @@ fun addPaymentInitiation(paymentData: Pain001Data, debtorAccount: NexusBankAccou
             preparationDate = now
             endToEndId = "leuf-e-$nowHex-$painHex-$acctHex"
             messageId = "leuf-mp1-$nowHex-$painHex-$acctHex"
-            paymentInformationId = "leuf-p-$nowHex-$painHex-$acctHex"
+            paymentInformationId = paymentData.pmtInfId ?: "leuf-p-$nowHex-$painHex-$acctHex"
             instructionId = "leuf-i-$nowHex-$painHex-$acctHex"
         }
     }

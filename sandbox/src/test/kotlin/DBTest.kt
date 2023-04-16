@@ -24,6 +24,7 @@ import tech.libeufin.sandbox.*
 import tech.libeufin.util.millis
 import java.io.File
 import java.time.LocalDateTime
+import kotlin.reflect.KProperty
 
 /**
  * Run a block after connecting to the test database.

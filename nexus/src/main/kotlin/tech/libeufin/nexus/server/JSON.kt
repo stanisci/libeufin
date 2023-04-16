@@ -289,7 +289,9 @@ data class CreatePaymentInitiationRequest(
     val bic: String,
     val name: String,
     val amount: String,
-    val subject: String
+    val subject: String,
+    // When it's null, the client doesn't expect/need idempotence.
+    val uid: String? = null
 )
 
 /** Response type of "POST /prepared-payments" */
@@ -390,7 +392,8 @@ data class Pain001Data(
     val creditorName: String,
     val sum: String,
     val currency: String,
-    val subject: String
+    val subject: String,
+    val pmtInfId: String? = null
 )
 
 data class AccountTask(

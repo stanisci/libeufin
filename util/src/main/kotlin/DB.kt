@@ -157,7 +157,7 @@ class PostgresListenHandle(val channelName: String) {
                 "'$channelName' for $timeoutMs millis.")
         val maybeNotifications = this.conn.getNotifications(timeoutMs.toInt())
         if (maybeNotifications == null || maybeNotifications.isEmpty()) {
-            logger.debug("DB notification channel $channelName was found empty.")
+            logger.debug("DB notifications not found on channel $channelName.")
             this.likelyCloseConnection()
             return false
         }

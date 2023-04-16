@@ -1,14 +1,18 @@
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import io.netty.handler.codec.http.HttpResponseStatus
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
+import tech.libeufin.nexus.PaymentInitiationEntity
 import tech.libeufin.nexus.server.nexusApp
 
 /**
@@ -16,6 +20,7 @@ import tech.libeufin.nexus.server.nexusApp
  * documented here: https://docs.taler.net/libeufin/api-nexus.html
  */
 class NexusApiTest {
+    private val jMapper = ObjectMapper()
     // Testing long-polling on GET /transactions
     @Test
     fun getTransactions() {
@@ -99,6 +104,61 @@ class NexusApiTest {
                         "params": null
                     }""".trimIndent())
                 }
+            }
+        }
+    }
+    /**
+     * Testing the idempotence of payment submissions.  That
+     * helps Sandbox not to create multiple payment initiations
+     * in case it fails at keeping track of what it submitted
+     * already.
+     */
+    @Test
+    fun paymentInitIdempotence() {
+        withTestDatabase {
+            prepNexusDb()
+            testApplication {
+                application(nexusApp)
+                // Check no pay. ini. exist.
+                transaction { PaymentInitiationEntity.all().count() == 0L }
+                // Create one.
+                fun f(futureThis: HttpRequestBuilder, subject: String = "idempotence pay. init. test") {
+                    futureThis.basicAuth("foo", "foo")
+                    futureThis.expectSuccess = true
+                    futureThis.contentType(ContentType.Application.Json)
+                    futureThis.setBody("""
+                        {"iban": "TESTIBAN",
+                         "bic": "SANDBOXX",
+                         "name": "TEST NAME",
+                         "amount": "TESTKUDOS:3",
+                         "subject": "$subject",
+                         "uid": "salt"
+                         }
+                    """.trimIndent())
+                }
+                val R = client.post("/bank-accounts/foo/payment-initiations") { f(this) }
+                println(jMapper.readTree(R.bodyAsText()).get("uuid"))
+                // Submit again
+                client.post("/bank-accounts/foo/payment-initiations") { f(this) }
+                // Checking that Nexus serves it.
+                client.get("/bank-accounts/foo/payment-initiations/1") {
+                    basicAuth("foo", "foo")
+                    expectSuccess = true
+                }
+                // Checking that the database has only one, despite the double submission.
+                transaction {
+                    assert(PaymentInitiationEntity.all().count() == 1L)
+                }
+                /**
+                 * Causing a conflict by changing one payment detail
+                 * (the subject in this case) but not the "uid".
+                 */
+                val maybeConflict = client.post("/bank-accounts/foo/payment-initiations") {
+                    f(this, "different-subject")
+                    expectSuccess = false
+                }
+                assert(maybeConflict.status.value == HttpStatusCode.Conflict.value)
+
             }
         }
     }

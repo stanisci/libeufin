@@ -508,6 +508,13 @@ object BankAccountsTable : IntIdTable() {
      * history results that start from / depend on the last transaction.
      */
     val lastTransaction = reference("lastTransaction", BankAccountTransactionsTable).nullable()
+
+    /**
+     * Points to the transaction that was last submitted by the conversion
+     * service to Nexus, in order to initiate a fiat payment related to a
+     * cash-out operation.
+     */
+    val lastFiatSubmission = reference("lastFiatSubmission", BankAccountTransactionsTable).nullable()
 }
 
 class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -520,6 +527,7 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     var isPublic by BankAccountsTable.isPublic
     var demoBank by DemobankConfigEntity referencedOn BankAccountsTable.demoBank
     var lastTransaction by BankAccountTransactionEntity optionalReferencedOn BankAccountsTable.lastTransaction
+    var lastFiatSubmission by BankAccountTransactionEntity optionalReferencedOn BankAccountsTable.lastFiatSubmission
 }
 
 object BankAccountStatementsTable : IntIdTable() {
@@ -620,10 +628,36 @@ object BankAccountReportsTable : IntIdTable() {
     val bankAccount = reference("bankAccount", BankAccountsTable)
 }
 
+/**
+ * This table tracks the submissions of fiat payment instructions
+ * that Sandbox sends to Nexus.  Every fiat payment instruction is
+ * related to a confirmed cash-out operation.  The cash-out confirmation
+ * is effective once the customer sends a local wire transfer to the
+ * "admin" bank account.  Such wire transfer is tracked by the 'localTransaction'
+ * column.
+ */
+object CashoutSubmissionsTable: LongIdTable() {
+    val localTransaction = reference("localTransaction", BankAccountTransactionsTable).uniqueIndex()
+    val isSubmitted = bool("isSubmitted").default(false)
+    val hasErrors = bool("hasErrors")
+    val maybeNexusResponse = text("maybeNexusResponse").nullable()
+    val submissionTime = long("submissionTime").nullable() // failed don't have it.
+}
+
+class CashoutSubmissionEntity(id: EntityID<Long>) : LongEntity(id) {
+    companion object : LongEntityClass<CashoutSubmissionEntity>(CashoutSubmissionsTable)
+    var localTransaction by CashoutSubmissionsTable.localTransaction
+    var isSubmitted by CashoutSubmissionsTable.isSubmitted
+    var hasErrors by CashoutSubmissionsTable.hasErrors
+    var maybeNexusResposnse by CashoutSubmissionsTable.maybeNexusResponse
+    var submissionTime by CashoutSubmissionsTable.submissionTime
+}
+
 fun dbDropTables(dbConnectionString: String) {
     Database.connect(dbConnectionString)
     transaction {
         SchemaUtils.drop(
+            CashoutSubmissionsTable,
             EbicsSubscribersTable,
             EbicsHostsTable,
             EbicsDownloadTransactionsTable,
@@ -649,6 +683,7 @@ fun dbCreateTables(dbConnectionString: String) {
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         SchemaUtils.create(
+            CashoutSubmissionsTable,
             DemobankConfigsTable,
             DemobankConfigPairsTable,
             EbicsSubscribersTable,
