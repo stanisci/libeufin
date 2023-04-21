@@ -1,6 +1,5 @@
 import org.junit.Test
-
-import tech.libeufin.nexus.extractReservePubFromSubject
+import tech.libeufin.util.extractReservePubFromSubject
 
 class SubjectNormalization {
 

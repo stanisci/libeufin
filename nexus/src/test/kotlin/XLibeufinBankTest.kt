@@ -9,7 +9,6 @@ import org.junit.Test
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.ingestBankMessagesIntoAccount
-import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.nexus.server.*
 import tech.libeufin.nexus.xlibeufinbank.XlibeufinBankConnectionProtocol
 import tech.libeufin.sandbox.BankAccountTransactionEntity

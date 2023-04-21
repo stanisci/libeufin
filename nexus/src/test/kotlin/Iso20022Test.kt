@@ -1,4 +1,5 @@
 package tech.libeufin.nexus
+import CamtBankAccountEntry
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.junit.Ignore
 import org.junit.Test
@@ -74,7 +75,6 @@ class Iso20022Test {
         )
 
         // Third Entry
-
         // Make sure that round-tripping of entry CamtBankAccountEntry JSON works
         for (entry in r.reports.flatMap { it.entries }) {
             val txStr = jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(entry)

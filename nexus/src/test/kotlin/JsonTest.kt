@@ -1,15 +1,15 @@
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.Test
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import io.ktor.client.plugins.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import io.ktor.utils.io.jvm.javaio.*
 import org.junit.Ignore
 import tech.libeufin.nexus.server.CreateBankConnectionFromBackupRequestJson
 import tech.libeufin.nexus.server.CreateBankConnectionFromNewRequestJson
+import tech.libeufin.sandbox.NexusTransactions
 import tech.libeufin.sandbox.sandboxApp
 
 enum class EnumTest { TEST }
@@ -37,7 +37,7 @@ class JsonTest {
     fun enumTest() {
         val m = jacksonObjectMapper()
          m.readValue<EnumWrapper>("{\"enum_test\":\"TEST\"}")
-        m.readValue<EnumTest>("\"TEST\"")
+         m.readValue<EnumTest>("\"TEST\"")
     }
 
     /**
@@ -56,5 +56,54 @@ class JsonTest {
                 setBody("{}")
             }
         }
+    }
+
+    data class CamtEntryWrapper(
+        val unusedValue: String,
+        val camtData: CamtBankAccountEntry
+    )
+
+    // Testing whether generating and parsing a CaMt JSON mapping works.
+    @Test
+    fun testCamtRoundTrip() {
+        val obj = genNexusIncomingCamt(
+            CurrencyAmount(value = "2", currency = "EUR"),
+            subject = "round trip test"
+        )
+        val str = jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(obj)
+        val map = jacksonObjectMapper().readValue(str, CamtBankAccountEntry::class.java)
+        assert(str == jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(map))
+    }
+
+    @Test
+    fun parseRawJson() {
+        val camtModel = """
+            {
+              "amount" : "TESTKUDOS:22",
+              "creditDebitIndicator" : "CRDT",
+              "status" : "BOOK",
+              "bankTransactionCode" : "mock",
+              "batches" : [ {
+                "batchTransactions" : [ {
+                  "amount" : "TESTKUDOS:22",
+                  "creditDebitIndicator" : "CRDT",
+                  "details" : {
+                    "debtor" : {
+                      "name" : "Mock Payer"
+                    },
+                    "debtorAccount" : {
+                      "iban" : "MOCK-IBAN"
+                    },
+                    "debtorAgent" : {
+                      "bic" : "MOCK-BIC"
+                    },
+                    "unstructuredRemittanceInformation" : "raw"
+                  }
+                } ]
+              } ]
+            }
+        """.trimIndent()
+        val obj = jacksonObjectMapper().readValue(camtModel, CamtBankAccountEntry::class.java)
+        assert(obj.getSingletonSubject() == "raw")
     }
 }

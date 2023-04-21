@@ -8,7 +8,6 @@ import tech.libeufin.nexus.dbCreateTables
 import tech.libeufin.nexus.dbDropTables
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.BankConnectionType
-import tech.libeufin.nexus.server.CurrencyAmount
 import tech.libeufin.nexus.server.FetchLevel
 import tech.libeufin.nexus.server.FetchSpecAllJson
 import tech.libeufin.sandbox.*
@@ -192,11 +191,11 @@ fun prepNexusDb() {
     }
 }
 
-fun prepSandboxDb(usersDebtLimit: Int = 1000) {
+fun prepSandboxDb(usersDebtLimit: Int = 1000, currency: String = "TESTKUDOS") {
     tech.libeufin.sandbox.dbCreateTables(TEST_DB_CONN)
     transaction {
         val config = DemobankConfig(
-            currency = "TESTKUDOS",
+            currency = currency,
             bankDebtLimit = 10000,
             usersDebtLimit = usersDebtLimit,
             allowRegistrations = true,
@@ -415,7 +414,7 @@ private fun genNexusIncomingXLibeufinBank(
  * values are either resorted from other sources by Nexus, or actually
  * not useful so far.
  */
-private fun genNexusIncomingCamt(
+fun genNexusIncomingCamt(
     amount: CurrencyAmount,
     subject: String,
 ): CamtBankAccountEntry =
