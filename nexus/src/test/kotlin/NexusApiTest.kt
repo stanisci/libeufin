@@ -67,6 +67,53 @@ class NexusApiTest {
             }
         }
     }
+    @Test
+    fun facadeIdempotence() {
+        val facadeData = """{
+          "name": "foo-facade",
+          "type": "taler-wire-gateway",
+          "config": {
+            "bankAccount": "foo",
+            "bankConnection": "foo",
+            "reserveTransferLevel": "report",
+            "currency": "TESTKUDOS"
+          }
+        }""".trimIndent()
+        withTestDatabase {
+            prepNexusDb()
+            testApplication {
+                application(nexusApp)
+                client.post("/facades") {
+                    expectSuccess = true
+                    basicAuth("foo", "foo")
+                    contentType(ContentType.Application.Json)
+                    setBody(facadeData)
+                }
+                // Changing one detail, and expecting 409 Conflict.
+                var resp = client.post("/facades") {
+                    expectSuccess = false
+                    basicAuth("foo", "foo")
+                    contentType(ContentType.Application.Json)
+                    setBody(facadeData.replace(
+                        "taler-wire-gateway",
+                        "anastasis"
+                    ))
+                }
+                assert(resp.status.value == HttpStatusCode.Conflict.value)
+                // Changing a value deeper in the request object.
+                resp = client.post("/facades") {
+                    expectSuccess = false
+                    basicAuth("foo", "foo")
+                    contentType(ContentType.Application.Json)
+                    setBody(facadeData.replace(
+                        "report",
+                        "statement"
+                    ))
+                }
+                assert(resp.status.value == HttpStatusCode.Conflict.value)
+            }
+        }
+    }
     // Testing basic operations on facades.
     @Test
     fun facades() {

@@ -1036,7 +1036,7 @@ val nexusApp: Application.() -> Unit = {
         }
 
         post("/facades") {
-            requireSuperuser(call.request)
+            val user = requireSuperuser(call.request)
             val body = call.receive<FacadeInfo>()
             requireValidResourceName(body.name)
             if (!listOf("taler-wire-gateway", "anastasis").contains(body.type))
@@ -1044,9 +1044,29 @@ val nexusApp: Application.() -> Unit = {
                     HttpStatusCode.NotImplemented,
                     "Facade type '${body.type}' is not implemented"
                 )
-            try {
+            // Check if the facade exists already.
+            val createNewFacade = transaction {
+                val maybeFacade = FacadeEntity.findByName(body.name)
+                // Facade exists, check all the values for idempotence.
+                if (maybeFacade != null) {
+                    // First get the associated config.
+                    val facadeConfig = getFacadeState(maybeFacade.facadeName)
+                    if (maybeFacade.type != body.type
+                        || maybeFacade.creator.username != user.username
+                        || facadeConfig.bankAccount != body.config.bankAccount
+                        || facadeConfig.bankConnection != body.config.bankConnection
+                        || facadeConfig.reserveTransferLevel != body.config.reserveTransferLevel
+                        || facadeConfig.currency != body.config.currency) {
+                        throw conflict("Facade ${body.name} exists but its state differs from the request.")
+                    }
+                    // Facade exists and has exact same values, inhibit creation.
+                    else return@transaction false
+                }
+                // Facade does not exist, trigger creation.
+                true
+            }
+            if (createNewFacade) {
                 transaction {
-                    val user = authenticateRequest(call.request)
                     val newFacade = FacadeEntity.new {
                         facadeName = body.name
                         type = body.type
@@ -1060,9 +1080,6 @@ val nexusApp: Application.() -> Unit = {
                         currency = body.config.currency
                     }
                 }
-            } catch (e: Exception) {
-                logger.error(e.stackTraceToString())
-                throw internalServerError("Could not create facade")
             }
             call.respond(HttpStatusCode.OK)
             return@post
