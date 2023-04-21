@@ -515,6 +515,16 @@ object BankAccountsTable : IntIdTable() {
      * cash-out operation.
      */
     val lastFiatSubmission = reference("lastFiatSubmission", BankAccountTransactionsTable).nullable()
+
+    /**
+     * Tracks the last fiat payment that was read from Nexus.  This tracker
+     * gets updated ONLY IF the exchange gets successfully paid with the related
+     * amount in the regional currency.  NOTE: in case of disputes, the customer
+     * will provide the date of a problematic withdrawal, and the regional currency
+     * administrator should check into the "admin" (regional) outgoing history by
+     * using such date as filter.
+     */
+    val lastFiatFetch = text("lastFiatFetch").default("0")
 }
 
 class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
@@ -528,6 +538,7 @@ class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     var demoBank by DemobankConfigEntity referencedOn BankAccountsTable.demoBank
     var lastTransaction by BankAccountTransactionEntity optionalReferencedOn BankAccountsTable.lastTransaction
     var lastFiatSubmission by BankAccountTransactionEntity optionalReferencedOn BankAccountsTable.lastFiatSubmission
+    var lastFiatFetch by BankAccountsTable.lastFiatFetch
 }
 
 object BankAccountStatementsTable : IntIdTable() {
