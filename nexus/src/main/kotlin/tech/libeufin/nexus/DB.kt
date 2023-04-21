@@ -19,6 +19,7 @@
 
 package tech.libeufin.nexus
 
+import EntryStatus
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import org.jetbrains.exposed.dao.*
@@ -30,16 +31,6 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.util.*
 import java.sql.Connection
 import kotlin.reflect.typeOf
-
-
-enum class EntryStatus {
-    // Booked
-    BOOK,
-    // Pending
-    PDNG,
-    // Informational
-    INFO,
-}
 
 /**
  * This table holds the values that exchange gave to issue a payment,

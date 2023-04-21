@@ -1,9 +1,9 @@
 package tech.libeufin.nexus
 
+import TransactionDetails
 import io.ktor.client.*
 import io.ktor.http.*
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.nexus.iso20022.TransactionDetails
 import tech.libeufin.nexus.server.PermissionQuery
 import tech.libeufin.nexus.server.expectNonNull
 import tech.libeufin.nexus.server.expectUrlParameter
@@ -49,7 +49,13 @@ fun anastasisFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDeta
         logger.warn("missing debtor agent")
         return
     }
-    if (debtorAgent.bic == null) {
+    /**
+     * This block either assigns a non-null BIC to the 'bic'
+     * variable, or causes this function (anastasisFilter())
+     * to return.  This last action ensures that the payment
+     * being processed won't show up in the Anastasis facade.
+     */
+    val bic: String = debtorAgent.bic ?: run {
         logger.warn("Not allowing transactions missing the BIC.  IBAN and name: ${debtorIban}, $debtorName")
         return
     }
@@ -58,7 +64,9 @@ fun anastasisFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDeta
         subject = txDtls.unstructuredRemittanceInformation
         timestampMs = System.currentTimeMillis()
         debtorPaytoUri = buildIbanPaytoUri(
-            debtorIban, debtorAgent.bic, debtorName,
+            debtorIban,
+            bic,
+            debtorName,
         )
     }
 }

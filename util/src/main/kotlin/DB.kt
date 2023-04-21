@@ -150,7 +150,7 @@ class PostgresListenHandle(val channelName: String) {
         keepConnectionOpen: Boolean = false
         ): Boolean {
         if (timeoutMs == 0L)
-            logger.warn("Database notification checker has timeout == 0," +
+            logger.info("Database notification checker has timeout == 0," +
                     " that waits FOREVER until a notification arrives."
             )
         logger.debug("Waiting Postgres notifications on channel " +

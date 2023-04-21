@@ -1,6 +1,8 @@
 package tech.libeufin.nexus.server
 
+import CamtBankAccountEntry
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.http.*
@@ -10,7 +12,6 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.getBankAccount
-import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.util.internalServerError
 import tech.libeufin.util.notFound
 
@@ -35,8 +36,10 @@ fun getIngestedTransactions(params: GetTransactionsParams): List<JsonNode> =
         }.sortedBy { it.id.value }.take(params.resultSize.toInt()) // Smallest index (= earliest transaction) first
         // Converting the result to the HTTP response type.
         maybeResult.map {
-            val element: ObjectNode = jacksonObjectMapper().readTree(it.transactionJson) as ObjectNode
+            val element: ObjectNode = jacksonObjectMapper().createObjectNode()
             element.put("index", it.id.value.toString())
+            val txObj: JsonNode = jacksonObjectMapper().readTree(it.transactionJson)
+            element.set<JsonNode>("camtData", txObj)
             return@map element
         }
     }

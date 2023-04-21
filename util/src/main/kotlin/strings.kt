@@ -196,3 +196,10 @@ fun hasWopidPlaceholder(captchaUrl: String): Boolean {
         return true
     return false
 }
+
+// Tries to extract a valid reserve public key from the raw subject line
+fun extractReservePubFromSubject(rawSubject: String): String? {
+    val re = "\\b[a-z0-9A-Z]{52}\\b".toRegex()
+    val result = re.find(rawSubject.replace("[\n]+".toRegex(), "")) ?: return null
+    return result.value.uppercase()
+}

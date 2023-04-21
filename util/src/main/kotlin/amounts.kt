@@ -27,6 +27,9 @@ const val plainAmountRe = "^([0-9]+(\\.[0-9][0-9]?)?)$"
 const val plainAmountReWithSign = "^-?([0-9]+(\\.[0-9][0-9]?)?)$"
 const val amountWithCurrencyRe = "^([A-Z]+):([0-9]+(\\.[0-9][0-9]?)?)$"
 
+// Ensures that the number part of one amount matches the allowed format.
+// Currently, at most two fractional digits are allowed.  It returns true
+// in the matching case, false otherwise.
 fun validatePlainAmount(plainAmount: String, withSign: Boolean = false): Boolean {
     if (withSign) return Regex(plainAmountReWithSign).matches(plainAmount)
     return Regex(plainAmountRe).matches(plainAmount)

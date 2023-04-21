@@ -18,6 +18,7 @@
  */
 
 package tech.libeufin.nexus.iso20022
+import CreditDebitIndicator
 
 /**
  * Extra rules for German Banking Industry Committee (GBIC) for ISO 20022.

@@ -19,21 +19,14 @@
 
 package tech.libeufin.nexus.server
 
+import CamtBankAccountEntry
+import CurrencyAmount
+import EntryStatus
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.annotation.JsonTypeName
 import com.fasterxml.jackson.annotation.JsonValue
-import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.DeserializationContext
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.SerializerProvider
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize
-import com.fasterxml.jackson.databind.annotation.JsonSerialize
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer
-import com.fasterxml.jackson.databind.ser.std.StdSerializer
-import tech.libeufin.nexus.EntryStatus
-import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.util.*
 import java.time.Instant
 import java.time.ZoneId
@@ -92,7 +85,7 @@ class EbicsStandardOrderParamsDateJson(
     private val end: String
 ) : EbicsOrderParamsJson() {
     override fun toOrderParams(): EbicsOrderParams {
-        val dateRange: EbicsDateRange? =
+        val dateRange =
             EbicsDateRange(
                 ZonedDateTime.parse(this.start, EbicsDateFormat.fmt),
                 ZonedDateTime.parse(this.end, EbicsDateFormat.fmt)
@@ -418,43 +411,6 @@ data class ImportBankAccount(
     val offeredAccountId: String,
     val nexusBankAccountId: String
 )
-
-
-class CurrencyAmountDeserializer(jc: Class<*> = CurrencyAmount::class.java) : StdDeserializer<CurrencyAmount>(jc) {
-    override fun deserialize(p: JsonParser?, ctxt: DeserializationContext?): CurrencyAmount {
-        if (p == null) {
-            throw UnsupportedOperationException();
-        }
-        val s = p.valueAsString
-        val components = s.split(":")
-        // FIXME: error handling!
-        return CurrencyAmount(components[0], components[1])
-    }
-}
-
-class CurrencyAmountSerializer(jc: Class<CurrencyAmount> = CurrencyAmount::class.java) : StdSerializer<CurrencyAmount>(jc) {
-    override fun serialize(value: CurrencyAmount?, gen: JsonGenerator?, provider: SerializerProvider?) {
-        if (gen == null) {
-            throw UnsupportedOperationException()
-        }
-        if (value == null) {
-            gen.writeNull()
-        } else {
-            gen.writeString("${value.currency}:${value.value}")
-        }
-    }
-}
-
-// FIXME: this type duplicates AmountWithCurrency.
-@JsonDeserialize(using = CurrencyAmountDeserializer::class)
-@JsonSerialize(using = CurrencyAmountSerializer::class)
-data class CurrencyAmount(
-    val currency: String,
-    val value: String
-)
-fun CurrencyAmount.toPlainString(): String {
-    return "${this.currency}:${this.value}"
-}
 
 data class InitiatedPayments(
     val initiatedPayments: MutableList<PaymentStatus> = mutableListOf()

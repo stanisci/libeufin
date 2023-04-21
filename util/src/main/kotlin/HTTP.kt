@@ -225,3 +225,7 @@ fun ApplicationCall.maybeLong(uriParamName: String): Long? {
         throw badRequest("Could not convert '$uriParamName' to Long")
     }
 }
+
+// Join base URL and path ensuring one (and only one) slash in between.
+fun joinUrl(baseUrl: String, path: String): String =
+    baseUrl.dropLastWhile { it == '/' } + '/' + path.dropWhile { it == '/' }

@@ -19,6 +19,8 @@
 
 package tech.libeufin.nexus
 
+import CamtBankAccountEntry
+import TransactionDetails
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
@@ -36,7 +38,6 @@ import io.ktor.server.util.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
 import org.jetbrains.exposed.dao.Entity
 import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.*
@@ -44,7 +45,6 @@ import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
-import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
 import tech.libeufin.util.*
@@ -159,15 +159,6 @@ fun customConverter(body: Any): String {
     return jacksonObjectMapper().writeValueAsString(body)
 }
 
-/**
- * Tries to extract a valid reserve public key from the raw subject line
- */
-fun extractReservePubFromSubject(rawSubject: String): String? {
-    val re = "\\b[a-z0-9A-Z]{52}\\b".toRegex()
-    val result = re.find(rawSubject.replace("[\n]+".toRegex(), "")) ?: return null
-    return result.value.uppercase()
-}
-
 // Handle a Taler Wire Gateway /transfer request.
 private suspend fun talerTransfer(call: ApplicationCall) {
     val transferRequest = call.receive<TalerTransferRequest>()
@@ -266,13 +257,8 @@ fun talerFilter(
         logger.warn("non-iban debtor account")
         return
     }
-    val debtorAgent = txDtls.debtorAgent
-    if (debtorAgent == null) {
-        // FIXME: Report payment, we can't even send it back
-        logger.warn("missing debtor agent")
-        return
-    }
-    if (debtorAgent.bic == null) {
+    val debtorBic = txDtls.debtorAgent?.bic
+    if (debtorBic == null) {
         logger.warn("Not allowing transactions missing the BIC.  IBAN and name: ${debtorIban}, $debtorName")
         return
     }
@@ -314,7 +300,7 @@ fun talerFilter(
         timestampMs = System.currentTimeMillis()
         debtorPaytoUri = buildIbanPaytoUri(
             debtorIban,
-            debtorAgent.bic,
+            debtorBic,
             debtorName
         )
     }
@@ -360,7 +346,8 @@ fun maybeTalerRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
                 it[NexusBankTransactionsTable.transactionJson],
                 CamtBankAccountEntry::class.java
             )
-            if (paymentData.batches == null) {
+            val batches = paymentData.batches
+            if (batches == null) {
                 logger.error(
                     "Empty wire details encountered in transaction with" +
                             " AcctSvcrRef: ${paymentData.accountServicerRef}." +
@@ -371,23 +358,23 @@ fun maybeTalerRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
                     "Unexpected void payment, cannot refund"
                 )
             }
-            val debtorAccount = paymentData.batches[0].batchTransactions[0].details.debtorAccount
-            if (debtorAccount?.iban == null) {
+            val debtorIban = batches[0].batchTransactions[0].details.debtorAccount?.iban
+            if (debtorIban == null) {
                 logger.error("Could not find a IBAN to refund in transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
                 throw NexusError(HttpStatusCode.InternalServerError, "IBAN to refund not found")
             }
-            val debtorAgent = paymentData.batches[0].batchTransactions[0].details.debtorAgent
+            val debtorAgent = batches[0].batchTransactions[0].details.debtorAgent
             if (debtorAgent?.bic == null) {
                 logger.error("Could not find the BIC of refundable IBAN at transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
                 throw NexusError(HttpStatusCode.InternalServerError, "BIC to refund not found")
             }
-            val debtorPerson = paymentData.batches[0].batchTransactions[0].details.debtor
-            if (debtorPerson?.name == null) {
+            val debtorName = batches[0].batchTransactions[0].details.debtor?.name
+            if (debtorName == null) {
                 logger.error("Could not find the owner's name of refundable IBAN at transaction (AcctSvcrRef): ${paymentData.accountServicerRef}, aborting refund")
                 throw NexusError(HttpStatusCode.InternalServerError, "Name to refund not found")
             }
             // FIXME: investigate this amount!
-            val amount = paymentData.batches[0].batchTransactions[0].amount
+            val amount = batches[0].batchTransactions[0].amount
             NexusAssert(
                 it[NexusBankTransactionsTable.creditDebitIndicator] == "CRDT" &&
                         it[NexusBankTransactionsTable.bankAccount] == bankAccount.id,
@@ -396,10 +383,10 @@ fun maybeTalerRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
             // FIXME #7116
             addPaymentInitiation(
                 Pain001Data(
-                    creditorIban = debtorAccount.iban,
+                    creditorIban = debtorIban,
                     creditorBic = debtorAgent.bic,
-                    creditorName = debtorPerson.name,
-                    subject = "Taler refund of: ${paymentData.batches[0].batchTransactions[0].details.unstructuredRemittanceInformation}",
+                    creditorName = debtorName,
+                    subject = "Taler refund of: ${batches[0].batchTransactions[0].details.unstructuredRemittanceInformation}",
                     sum = amount.value,
                     currency = amount.currency
                 ),

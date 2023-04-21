@@ -1,5 +1,14 @@
 package tech.libeufin.nexus.xlibeufinbank
 
+import AgentIdentification
+import Batch
+import BatchTransaction
+import CamtBankAccountEntry
+import CashAccount
+import CreditDebitIndicator
+import CurrencyAmount
+import PartyIdentification
+import TransactionDetails
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -234,12 +243,6 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
         accountId: String
     ): List<Exception>? {
         val conn = getBankConnection(bankConnectionId)
-        /**
-         * Note: fetchSpec.level is ignored because Sandbox does not
-         * differentiate between booked and non-booked transactions.
-         * Just logging if the unaware client specified non-REPORT for
-         * the level.  FIXME: docs have to mention this.
-         */
         if (fetchSpec.level == FetchLevel.REPORT || fetchSpec.level == FetchLevel.ALL)
             throw badRequest("level '${fetchSpec.level}' on x-libeufin-bank" +
                     "connection (${conn.connectionId}) is not supported:" +

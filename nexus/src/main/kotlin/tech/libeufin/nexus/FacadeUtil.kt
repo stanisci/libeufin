@@ -1,5 +1,8 @@
 package tech.libeufin.nexus
 
+import CamtBankAccountEntry
+import EntryStatus
+import TransactionDetails
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.http.*
 import org.jetbrains.exposed.dao.flushCache
@@ -7,9 +10,6 @@ import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
-import tech.libeufin.nexus.iso20022.CreditDebitIndicator
-import tech.libeufin.nexus.iso20022.TransactionDetails
 import tech.libeufin.nexus.server.NexusFacadeType
 
 // Mainly used to resort the last processed transaction ID.

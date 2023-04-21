@@ -52,7 +52,6 @@ import org.slf4j.event.Level
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.*
 import tech.libeufin.nexus.ebics.*
-import tech.libeufin.nexus.iso20022.CamtBankAccountEntry
 import tech.libeufin.nexus.iso20022.processCamtMessage
 import tech.libeufin.util.*
 import java.net.BindException
