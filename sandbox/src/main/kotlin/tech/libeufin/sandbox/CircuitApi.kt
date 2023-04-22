@@ -545,13 +545,6 @@ fun circuitApi(circuitRoute: Route) {
                 )
             }
         }
-        fun failCashout(
-            msg: String,
-            op: CashoutOperationEntity,
-            keep: Boolean = true
-        ) {
-
-        }
         when (tanChannel) {
             SupportedTanChannels.EMAIL.name -> {
                 val isSuccessful = try {

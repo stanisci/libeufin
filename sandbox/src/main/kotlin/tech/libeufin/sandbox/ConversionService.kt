@@ -95,7 +95,7 @@ fun downloadLoop(block: () -> Unit) {
  */
 private fun applyBuyinRatioAndFees(
     amount: BigDecimal,
-    ratioAndFees: RatioAndFees
+    ratiosAndFees: RatioAndFees
 ): BigDecimal =
     ((amount * ratiosAndFees.buy_at_ratio.toBigDecimal())
             - ratiosAndFees.buy_in_fee.toBigDecimal()).roundToTwoDigits()
