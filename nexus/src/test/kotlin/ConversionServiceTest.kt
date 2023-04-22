@@ -10,9 +10,6 @@ import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.sandbox.*
 
 class ConversionServiceTest {
-    // Without this, "launch {}" never returns.
-    val doNothingHandler = CoroutineExceptionHandler { _, _ -> }
-
     /**
      * Testing the buy-in monitor in the normal case: Nexus
      * communicates a new incoming fiat transaction and the
@@ -44,15 +41,24 @@ class ConversionServiceTest {
             testApplication {
                 application(nexusApp)
                 // Start the buy-in monitor to let it download the fiat transaction.
-                val job = CoroutineScope(Dispatchers.IO).launch(doNothingHandler) {
-                    buyinMonitor(
-                        demobankName = "default",
-                        accountToCredit = "exchange-0",
-                        client = client
-                    )
+                runBlocking {
+                    val job = launch {
+                        /**
+                         * The runInterruptible wrapper lets code without suspension
+                         * points be cancel()'d.  Without it, such code would ignore
+                         * any call to cancel() and the test never return.
+                         */
+                        runInterruptible {
+                            buyinMonitor(
+                                demobankName = "default",
+                                accountToCredit = "exchange-0",
+                                client = client
+                            )
+                        }
+                    }
+                    delay(1000L) // Lets the DB persist.
+                    job.cancelAndJoin()
                 }
-                delay(1000L)
-                job.cancel()
             }
             // Checking that exchange got the converted amount.
             transaction {
@@ -95,14 +101,33 @@ class ConversionServiceTest {
             )
             testApplication {
                 application(nexusApp)
-                CoroutineScope(Dispatchers.IO).launch(doNothingHandler) {
-                    cashoutMonitor(client)
+                runBlocking {
+                    val job = launch {
+                        /**
+                         * The runInterruptible wrapper lets code without suspension
+                         * points be cancel()'d.  Without it, such code would ignore
+                         * any call to cancel() and the test never return.
+                         */
+                        runInterruptible {
+                            /**
+                             * Without the runBlocking wrapper, cashoutMonitor doesn't
+                             * compile.  That's because it is a 'suspend' function and
+                             * it needs a coroutine environment to execute; runInterruptible
+                             * does NOT provide one.  Furthermore, replacing runBlocking
+                             * with "launch {}" would nullify runInterruptible, due to other
+                             * jobs that cashoutMonitor internally launches and would escape
+                             * the interruptible policy.
+                             */
+                            runBlocking { cashoutMonitor(client) }
+                        }
+                    }
+                    delay(1000L) // Lets DB persist the information.
+                    job.cancelAndJoin()
                 }
-                delay(1000L) // Lets DB persist the information.
-                transaction {
-                    assert(CashoutSubmissionEntity.all().count() == 1L)
-                    assert(CashoutSubmissionEntity.all().first().isSubmitted)
-                }
+            }
+            transaction {
+                assert(CashoutSubmissionEntity.all().count() == 1L)
+                assert(CashoutSubmissionEntity.all().first().isSubmitted)
             }
         }
     }
