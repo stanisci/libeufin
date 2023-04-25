@@ -168,7 +168,7 @@ suspend fun javaTimerOperationScheduler(httpClient: HttpClient) {
 suspend fun whileTrueOperationScheduler(httpClient: HttpClient) {
     while (true) {
         operationScheduler(httpClient)
-        // Wait a bit
-        delay(Duration.ofSeconds(5))
+        // Wait the shortest period that the cron spec would allow.
+        delay(Duration.ofSeconds(1))
     }
 }
