@@ -569,7 +569,7 @@ private suspend fun historyIncoming(call: ApplicationCall) {
  * which is the service keeping the transactions ledger.
  * The credentials are ASSUMED to be exchange/x (user/pass).
  *
- * In the future, a dedicate "add-incoming" facade should
+ * In the future, a dedicated "add-incoming" facade should
  * be provided, offering the mean to store the credentials
  * at configuration time.
  */

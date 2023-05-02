@@ -3,12 +3,21 @@ Installing LibEuFin
 
 $ ./bootstrap
 $ ./configure --prefix=$PFX
-$ make install # this operation can be 'slow'.
+$ make install
 
 If the previous step succeeded, libeufin-nexus and a command line
 client (libeufin-cli) should be found under $PFX/bin.  Additionally,
 the libeufin-sandbox command used for testing should be found under
 $PFX/bin as well.
+
+Testing LibEuFin
+================
+
+If the installation succeeded, all the tests can be run
+with the following command, from this (repository top level)
+directory.
+
+$ make check
 
 Launching LibEuFin
 ==================
