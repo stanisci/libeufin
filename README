@@ -10,14 +10,28 @@ client (libeufin-cli) should be found under $PFX/bin.  Additionally,
 the libeufin-sandbox command used for testing should be found under
 $PFX/bin as well.
 
-Testing LibEuFin
-================
+Running tests
+=============
 
-If the installation succeeded, all the tests can be run
-with the following command, from this (repository top level)
-directory.
+Tests need a PostgreSQL database called "libeufincheck" that can
+be accessed without credentials over TCP/IPv4.
+Edit /etc/postgresql/$PG_VERSION/main/pg_hba.conf so that it will
+contain one line in the following format:
 
-$ make check
+  host libeufincheck all 127.0.0.1/32 trust
+
+In case IPv6 is used, then replace "127.0.0.1/32" with "::1/128".
+Note: these instructions were tested with $PG_VERSION set to "14".
+
+Restart the database:
+  
+  $ systemctl restart postgresql
+
+If the previous steps succeeded _and_ libeufin is correctly installed,
+then tests can be run in the following way, from this (repository
+top level directory):
+
+  $ make check
 
 Launching LibEuFin
 ==================
