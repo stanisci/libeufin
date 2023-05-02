@@ -1,6 +1,9 @@
 Installing LibEuFin
 ===================
 
+Although different versions of Java may support this project,
+the following steps were verified with Java 17.0.6.
+
 $ ./bootstrap
 $ ./configure --prefix=$PFX
 $ make install
