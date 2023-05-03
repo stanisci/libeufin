@@ -354,7 +354,9 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
         "--ipv4-only",
         help = "Bind only to ipv4"
     ).flag(default = false)
-    private val logLevel by option()
+    private val logLevel by option(
+        help = "Set the log level to: 'off', 'error', 'warn', 'info', 'debug', 'trace', 'all'"
+    )
     private val port by option().int().default(5000)
     private val withUnixSocket by option(
         help = "Bind the Sandbox to the Unix domain socket at PATH.  Overrides" +

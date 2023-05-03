@@ -2,7 +2,6 @@ package tech.libeufin.util
 
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.LoggerContext
-import ch.qos.logback.classic.util.ContextInitializer
 import ch.qos.logback.core.util.Loader
 import io.ktor.server.application.*
 import io.ktor.util.*
@@ -32,13 +31,13 @@ fun getVersion(): String {
  * _and_ found under the calling classpath (= obeying to the same logback.xml)
  */
 fun setLogLevel(logLevel: String?) {
-    when (val immutable = logLevel) {
+    when (logLevel) {
         is String -> {
             val ctx = LoggerFactory.getILoggerFactory() as LoggerContext
             val loggers: List<ch.qos.logback.classic.Logger> = ctx.loggerList
             loggers.forEach {
                 if (it.name.contains("libeufin")) {
-                    it.level = Level.toLevel(immutable)
+                    it.level = Level.toLevel(logLevel)
                 }
             }
         }

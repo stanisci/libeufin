@@ -95,7 +95,9 @@ class Serve : CliktCommand("Run nexus HTTP server") {
 }
 
 class ParseCamt : CliktCommand("Parse CAMT file, outputs JSON in libEufin internal representation.") {
-    private val logLevel by option()
+    private val logLevel by option(
+        help = "Set the log level to: 'off', 'error', 'warn', 'info', 'debug', 'trace', 'all'"
+    )
     private val filename by argument("FILENAME", "File in CAMT format")
     override fun run() {
         setLogLevel(logLevel)
