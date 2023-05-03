@@ -4,6 +4,15 @@ Installing LibEuFin
 Although different versions of Java may support this project,
 the following steps were verified with Java 17.0.6.
 
+The following dependencies (names match Debian packages) should
+be available before trying the installation:
+
+- make
+- python3-venv
+- openjdk-17-jre
+
+Run the following steps to install LibEuFin:
+
 $ ./bootstrap
 $ ./configure --prefix=$PFX
 $ make install
