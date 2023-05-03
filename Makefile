@@ -56,8 +56,12 @@ assemble:
 .PHONY: check
 check:
 	@./gradlew check
+
+.PHONY: check-cli
+check-cli:
 	@cd ./cli/tests && ./circuit_test.sh
 	@cd ./cli/tests && ./debit_test.sh
+
 
 # .PHONY: parse
 # parse:
