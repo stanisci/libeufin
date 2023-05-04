@@ -683,6 +683,33 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         details.put("ebicsHostId", ebicsSubscriber.hostId)
         details.put("partnerId", ebicsSubscriber.partnerId)
         details.put("userId", ebicsSubscriber.userId)
+
+        details.put(
+            "customerAuthKeyHash",
+            CryptoUtil.getEbicsPublicKeyHash(
+                CryptoUtil.getRsaPublicFromPrivate(ebicsSubscriber.customerAuthPriv)
+            ).toHexString()
+        )
+        details.put(
+            "customerEncKeyHash",
+            CryptoUtil.getEbicsPublicKeyHash(
+                CryptoUtil.getRsaPublicFromPrivate(ebicsSubscriber.customerEncPriv)
+            ).toHexString()
+        )
+        val bankAuthPubImmutable = ebicsSubscriber.bankAuthPub
+        if (bankAuthPubImmutable != null) {
+            details.put(
+                "bankAuthKeyHash",
+                CryptoUtil.getEbicsPublicKeyHash(bankAuthPubImmutable).toHexString()
+            )
+        }
+        val bankEncPubImmutable = ebicsSubscriber.bankEncPub
+        if (bankEncPubImmutable != null) {
+            details.put(
+                "bankEncKeyHash",
+                CryptoUtil.getEbicsPublicKeyHash(bankEncPubImmutable).toHexString()
+            )
+        }
         val node = mapper.createObjectNode()
         node.put("type", conn.type)
         node.put("owner", conn.owner.username)
