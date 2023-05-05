@@ -75,3 +75,5 @@ fun getDbConnFromEnv(varName: String): String {
     }
     return dbConnStr
 }
+
+fun getCurrentUser(): String = System.getProperty("user.name")

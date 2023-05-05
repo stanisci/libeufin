@@ -519,7 +519,7 @@ class NexusPermissionEntity(id: EntityID<Long>) : LongEntity(id) {
 }
 
 fun dbDropTables(dbConnectionString: String) {
-    Database.connect(dbConnectionString)
+    Database.connect(dbConnectionString, user = getCurrentUser())
     transaction {
         SchemaUtils.drop(
             NexusUsersTable,
@@ -545,7 +545,7 @@ fun dbDropTables(dbConnectionString: String) {
 }
 
 fun dbCreateTables(dbConnectionString: String) {
-    Database.connect(dbConnectionString)
+    Database.connect(dbConnectionString, user = getCurrentUser())
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         SchemaUtils.create(

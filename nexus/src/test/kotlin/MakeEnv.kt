@@ -20,10 +20,14 @@ data class EbicsKeys(
 )
 // Convenience DB connection to switch to Postgresql:
 val currentUser = System.getProperty("user.name")
-val TEST_DB_CONN = "jdbc:postgresql://localhost:5432/libeufincheck?user=$currentUser"
+
 val BANK_IBAN = getIban()
 val FOO_USER_IBAN = getIban()
 val BAR_USER_IBAN = getIban()
+val TCP_POSTGRES_CONN="jdbc:postgresql://localhost:5432/libeufincheck?user=$currentUser"
+val UNIX_SOCKET_CONN= "jdbc:postgresql://localhost/libeufincheck?socketFactory=org.newsclub.net.unix." +
+        "AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/var/run/postgresql/.s.PGSQL.5432"
+val TEST_DB_CONN = UNIX_SOCKET_CONN
 
 val bankKeys = EbicsKeys(
     auth = CryptoUtil.generateRsaKeyPair(2048),
@@ -66,7 +70,7 @@ inline fun <reified ExceptionType> assertException(
  * Cleans up the DB file afterwards.
  */
 fun withTestDatabase(f: () -> Unit) {
-    Database.connect(TEST_DB_CONN)
+    Database.connect(TEST_DB_CONN, user = currentUser)
     TransactionManager.manager.defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
     dbDropTables(TEST_DB_CONN)
     tech.libeufin.sandbox.dbDropTables(TEST_DB_CONN)

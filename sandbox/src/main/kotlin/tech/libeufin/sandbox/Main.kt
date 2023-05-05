@@ -232,7 +232,7 @@ class Camt053Tick : CliktCommand(
 ) {
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
-        Database.connect(dbConnString)
+        Database.connect(dbConnString, user = getCurrentUser())
         dbCreateTables(dbConnString)
         val newStatements = mutableMapOf<String, MutableList<XLibeufinBankTransaction>>()
         /**
@@ -301,7 +301,7 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
 
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
-        Database.connect(dbConnString)
+        Database.connect(dbConnString, user = getCurrentUser())
         // Refuse to operate without a default demobank.
         val demobank = getDemobank("default")
         if (demobank == null) {

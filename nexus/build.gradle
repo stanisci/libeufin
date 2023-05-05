@@ -79,6 +79,7 @@ dependencies {
     implementation "io.ktor:ktor-client-apache:$ktor_version"
     implementation "io.ktor:ktor-client-auth:$ktor_version"
     implementation "io.ktor:ktor-server-netty:$ktor_version"
+
     // Brings the call-logging library too.
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
     implementation "io.ktor:ktor-auth:$ktor_auth_version"
@@ -90,6 +91,9 @@ dependencies {
     // Cron syntax
     implementation 'com.cronutils:cron-utils:9.1.5'
 
+    // UNIX domain sockets support (used to connect to PostgreSQL)
+    implementation 'com.kohlschutter.junixsocket:junixsocket-core:2.6.2'
+
     // Unit testing
     // testImplementation 'junit:junit:4.13.2'
     // From https://docs.gradle.org/current/userguide/java_testing.html#sec:java_testing_basics:
@@ -97,6 +101,7 @@ dependencies {
     testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
     testImplementation 'io.ktor:ktor-client-mock:2.2.4'
+    testImplementation 'com.kohlschutter.junixsocket:junixsocket-core:2.6.2'
     testImplementation project(":sandbox")
 }
 

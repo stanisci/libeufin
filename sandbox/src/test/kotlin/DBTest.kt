@@ -21,6 +21,7 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.*
+import tech.libeufin.util.getCurrentUser
 import tech.libeufin.util.millis
 import java.io.File
 import java.time.LocalDateTime
@@ -38,7 +39,7 @@ fun withTestDatabase(f: () -> Unit) {
             it.delete()
         }
     }
-    Database.connect(dbConn)
+    Database.connect(dbConn, user = getCurrentUser())
     dbDropTables(dbConn)
     dbCreateTables(dbConn)
     try { f() }

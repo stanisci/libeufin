@@ -33,6 +33,7 @@ import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
+import tech.libeufin.util.getCurrentUser
 import tech.libeufin.util.internalServerError
 import java.sql.Connection
 import kotlin.reflect.*
@@ -665,7 +666,7 @@ class CashoutSubmissionEntity(id: EntityID<Long>) : LongEntity(id) {
 }
 
 fun dbDropTables(dbConnectionString: String) {
-    Database.connect(dbConnectionString)
+    Database.connect(dbConnectionString, user = getCurrentUser())
     transaction {
         SchemaUtils.drop(
             CashoutSubmissionsTable,
@@ -690,7 +691,7 @@ fun dbDropTables(dbConnectionString: String) {
 }
 
 fun dbCreateTables(dbConnectionString: String) {
-    Database.connect(dbConnectionString)
+    Database.connect(dbConnectionString, user = getCurrentUser())
     TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
     transaction {
         SchemaUtils.create(
