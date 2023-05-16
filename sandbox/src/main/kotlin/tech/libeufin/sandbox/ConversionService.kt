@@ -249,6 +249,19 @@ suspend fun cashoutMonitor(
     val config = demobank?.config ?: throw internalServerError(
         "Demobank '$demobankName' has no configuration."
     )
+    /**
+     * The monitor needs the cash-out currency to correctly POST
+     * payment initiations at Nexus.  Recall: Nexus bank accounts
+     * do not mandate any particular currency, as they serve as mere
+     * bridges to the backing bank.  And: a backing bank may have
+     * multiple currencies, or the backing bank may not explicitly
+     * specify any currencies to be _the_ currency of the backed
+     * bank account.
+     */
+    if (config.cashoutCurrency == null) {
+        logger.error("Config lacks cash-out currency.")
+        exitProcess(1)
+    }
     val nexusBaseUrl = getConfigValueOrThrow(config::nexusBaseUrl)
     val usernameAtNexus = getConfigValueOrThrow(config::usernameAtNexus)
     val passwordAtNexus = getConfigValueOrThrow(config::passwordAtNexus)
@@ -292,8 +305,8 @@ suspend fun cashoutMonitor(
                  */
                 val uid = it.accountServicerReference
                 val iban = it.creditorIban
-                val bic = it.debtorBic
-                val amount = "${it.currency}:${it.amount}"
+                val bic = it.creditorBic
+                val amount = "${config.cashoutCurrency}:${it.amount}" // FIXME: need fiat currency here.
                 val subject = it.subject
                 val name = it.creditorName
             }
@@ -328,20 +341,6 @@ suspend fun cashoutMonitor(
             if (resp.status.value != HttpStatusCode.OK.value) {
                 logger.error("Cash-out monitor, unhandled response status: ${resp.status.value}.  Fail Sandbox")
                 exitProcess(1)
-
-                // Previous versions use to store the faulty transaction
-                // and continue the execution.  The block below shows how
-                // to do that.
-
-                /*transaction {
-                  CashoutSubmissionEntity.new {
-                    localTransaction = it.id
-                    this.hasErrors = true
-                    if (maybeResponseBody.isNotEmpty())
-                      this.maybeNexusResposnse = maybeResponseBody
-                    }
-                  bankAccount.lastFiatSubmission = it
-                }*/
             }
             // Successful case, mark the wire transfer as submitted,
             // and advance the pointer to the last submitted payment.
@@ -352,10 +351,11 @@ suspend fun cashoutMonitor(
                     hasErrors = false
                     submissionTime = resp.responseTime.timestamp
                     isSubmitted = true
-                    // Expectedly is > 0 and contains the submission
-                    // unique identifier _as assigned by Nexus_.  Not
-                    // currently used by Sandbox, but may help to resolve
-                    // disputes.
+                    /**
+                     * The following block associates the submitted payment
+                     * to the UID that Nexus assigned to it.  It is currently not
+                     * used in Sandbox, but might help for reconciliation.
+                     */
                     if (responseBody.isNotEmpty())
                         maybeNexusResposnse = responseBody
                 }
