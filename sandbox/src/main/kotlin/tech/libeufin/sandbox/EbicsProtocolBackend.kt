@@ -61,6 +61,7 @@ data class PainParseResult(
     val amount: String,
     val currency: String,
     val pmtInfId: String,
+    val endToEndId: String,
     val msgId: String
 )
 
@@ -121,8 +122,9 @@ private class EbicsUnsupportedOrderType : EbicsRequestError(
  * Used here also for "Internal server error".  For example, when the
  * sandbox itself generates a invalid XML response.
  */
-class EbicsProcessingError(detail: String) : EbicsRequestError(
-    "[EBICS_PROCESSING_ERROR] $detail",
+class EbicsProcessingError(detail: String?) : EbicsRequestError(
+    // a missing detail is already the bank's fault.
+    "[EBICS_PROCESSING_ERROR] " + (detail ?: "bank internal error"),
     "091116"
 )
 
@@ -457,7 +459,7 @@ fun buildCamtString(
                                         text(it.pmtInfId ?: "NOTPROVIDED")
                                     }
                                     element("EndToEndId") {
-                                        text("NOTPROVIDED")
+                                        text(it.endToEndId ?: "NOTPROVIDED")
                                     }
                                 }
                                 element("AmtDtls/TxAmt/Amt") {
@@ -675,7 +677,9 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
                             val subject = requireUniqueChildNamed("RmtInf") {
                                 requireUniqueChildNamed("Ustrd") { focusElement.textContent }
                             }
-
+                            val endToEndId = requireUniqueChildNamed("PmtId") {
+                                requireUniqueChildNamed("EndToEndId") { focusElement.textContent }
+                            }
                         }
                     }
                     /**
@@ -699,6 +703,7 @@ private fun parsePain001(paymentRequest: String): PainParseResult {
                         creditorIban = txDetails.creditorIban,
                         creditorBic = txDetails.creditorBic,
                         pmtInfId = pmtInfId,
+                        endToEndId = txDetails.endToEndId,
                         msgId = msgId
                     )
                 }
@@ -772,6 +777,7 @@ private fun handleCct(
             currency = parseResult.currency
             date = getUTCnow().toInstant().toEpochMilli()
             pmtInfId = parseResult.pmtInfId
+            endToEndId = parseResult.endToEndId
             accountServicerReference = "sandboxref-${getRandomString(16)}"
             direction = "DBIT"
         }

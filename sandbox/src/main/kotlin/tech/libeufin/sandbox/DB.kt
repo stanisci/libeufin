@@ -426,13 +426,19 @@ object BankAccountTransactionsTable : LongIdTable() {
     val currency = text("currency")
     // Milliseconds since the Epoch.
     val date = long("date")
-    // Unique ID for this payment within the bank account.
+
+    /**
+     * UID assigned to the payment by Sandbox.  Despite the camt-looking
+     * name, this UID is always given, even when no EBICS or camt are being
+     * served.
+     */
     val accountServicerReference = text("accountServicerReference")
     /**
-     * Payment information ID, which is a reference to the payment initiation
-     * that triggered this transaction.  Typically, only available with outgoing transactions.
+     * The following two values are pain.001 specific.  Sandbox stores
+     * them when it serves EBICS connections.
      */
     val pmtInfId = text("pmtInfId").nullable()
+    val endToEndId = text("EndToEndId").nullable()
     val direction = text("direction")
     /**
      * Bank account of the party whose 'direction' refers.  This version allows
@@ -479,6 +485,7 @@ class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
     var date by BankAccountTransactionsTable.date
     var accountServicerReference by BankAccountTransactionsTable.accountServicerReference
     var pmtInfId by BankAccountTransactionsTable.pmtInfId
+    var endToEndId by BankAccountTransactionsTable.endToEndId
     var direction by BankAccountTransactionsTable.direction
     var account by BankAccountEntity referencedOn BankAccountTransactionsTable.account
     var demobank by DemobankConfigEntity referencedOn BankAccountTransactionsTable.demobank

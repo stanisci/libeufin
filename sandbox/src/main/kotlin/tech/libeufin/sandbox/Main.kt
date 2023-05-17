@@ -1174,7 +1174,7 @@ val sandboxApp: Application.() -> Unit = {
             }
             catch (e: Exception) {
                 logger.error(e.stackTraceToString())
-                throw EbicsProcessingError("Could not map error to EBICS code: $e")
+                throw EbicsProcessingError(e.message)
             }
             return@post
         }

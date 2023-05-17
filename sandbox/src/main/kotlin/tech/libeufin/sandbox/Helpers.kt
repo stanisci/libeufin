@@ -36,6 +36,7 @@ import kotlin.reflect.KProperty
 data class DemobankConfig(
     val allowRegistrations: Boolean,
     val currency: String,
+    val cashoutCurrency: String? = null,
     val bankDebtLimit: Int,
     val usersDebtLimit: Int,
     val withSignupBonus: Boolean,
@@ -236,13 +237,12 @@ fun getHistoryElementFromTransactionRow(dbRow: BankAccountTransactionEntity): XL
         date = dbRow.date.toString(),
         amount = dbRow.amount,
         currency = dbRow.currency,
-        // The line below produces a value too long (>35 chars),
-        // and dbRow makes the document invalid!
-        // uid = "${dbRow.pmtInfId}-${it.msgId}"
+        // UID assigned by the bank itself.
         uid = dbRow.accountServicerReference,
-        // Eventually, the _database_ should contain the direction enum:
         direction = XLibeufinBankDirection.convertCamtDirectionToXLibeufin(dbRow.direction),
-        pmtInfId = dbRow.pmtInfId
+        // UIDs as gotten from a pain.001 (from EBICS connections.)
+        pmtInfId = dbRow.pmtInfId,
+        endToEndId = dbRow.endToEndId
     )
 }
 
