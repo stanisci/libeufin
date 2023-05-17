@@ -111,10 +111,6 @@ test {
     testLogging.showStandardStreams = false
     environment.put("LIBEUFIN_SANDBOX_ADMIN_PASSWORD", "foo")
     environment.put("LIBEUFIN_CASHOUT_TEST_TAN", "foo")
-    environment.put(
-            "LIBEUFIN_NEXUS_DB_CONNECTION",
-            "jdbc:postgresql://localhost:5432/libeufincheck?user=${System.properties["user.name"]}"
-    )
 }
 
 application {
