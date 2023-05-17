@@ -312,7 +312,7 @@ suspend fun cashoutMonitor(
             }
             val resp = try {
                 httpClient.post(paymentInitEndpoint) {
-                    expectSuccess = false // Avoid excepting on !2xx
+                    expectSuccess = false // Avoids excepting on !2xx
                     basicAuth(usernameAtNexus, passwordAtNexus)
                     contentType(ContentType.Application.Json)
                     setBody(objectMapper.writeValueAsString(body))

@@ -25,23 +25,9 @@ $PFX/bin as well.
 Running tests
 =============
 
-Tests need a PostgreSQL database called "libeufincheck" that can
-be accessed without credentials over TCP/IPv4.
-Edit /etc/postgresql/$PG_VERSION/main/pg_hba.conf so that it will
-contain one line in the following format:
-
-  host libeufincheck all 127.0.0.1/32 trust
-
-In case IPv6 is used, then replace "127.0.0.1/32" with "::1/128".
-Note: these instructions were tested with $PG_VERSION set to "14".
-
-Restart the database:
-  
-  $ systemctl restart postgresql
-
-If the previous steps succeeded _and_ libeufin is correctly installed,
-then tests can be run in the following way, from this (repository
-top level directory):
+Tests need a PostgreSQL database called "libeufincheck".
+If the database setup is correct and LibEuFin is installed,
+the following command runs all the test cases:
 
   $ make check
 
@@ -50,7 +36,7 @@ Launching LibEuFin
 
 Launch Nexus:
 
-$ libeufin-nexus serve --with-db=jdbc:postgres://localhost:5433?user=foo&password=bar
+$ libeufin-nexus serve --with-db=jdbc:postgres://localhost:5433/$DB_NAME?user=foo&password=bar
 
 More instructions about configuring and setting Libeufin
 are available at this link:
