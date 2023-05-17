@@ -28,6 +28,7 @@ import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
+import tech.libeufin.nexus.server.FetchLevel
 import tech.libeufin.util.*
 import java.sql.Connection
 import kotlin.reflect.typeOf
@@ -163,7 +164,7 @@ object NexusBankMessagesTable : LongIdTable() {
     val bankConnection = reference("bankConnection", NexusBankConnectionsTable)
     val message = blob("message")
     val messageId = text("messageId").nullable()
-    val code = text("code").nullable()
+    val fetchLevel = enumerationByName("fetchLevel", 16, FetchLevel::class)
     // true when the parser could not ingest one message:
     val errors = bool("errors").default(false)
 }
@@ -172,7 +173,7 @@ class NexusBankMessageEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<NexusBankMessageEntity>(NexusBankMessagesTable)
     var bankConnection by NexusBankConnectionEntity referencedOn NexusBankMessagesTable.bankConnection
     var messageId by NexusBankMessagesTable.messageId
-    var code by NexusBankMessagesTable.code
+    var fetchLevel by NexusBankMessagesTable.fetchLevel
     var message by NexusBankMessagesTable.message
     var errors by NexusBankMessagesTable.errors
 }
@@ -405,6 +406,7 @@ class NexusUserEntity(id: EntityID<Long>) : LongEntity(id) {
 object NexusBankConnectionsTable : LongIdTable() {
     val connectionId = text("connectionId")
     val type = text("type")
+    val dialect = text("dialect").nullable()
     val owner = reference("user", NexusUsersTable)
 }
 
@@ -417,6 +419,7 @@ class NexusBankConnectionEntity(id: EntityID<Long>) : LongEntity(id) {
 
     var connectionId by NexusBankConnectionsTable.connectionId
     var type by NexusBankConnectionsTable.type
+    var dialect by NexusBankConnectionsTable.dialect
     var owner by NexusUserEntity referencedOn NexusBankConnectionsTable.owner
 }
 

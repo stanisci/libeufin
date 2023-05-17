@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
+import org.jetbrains.exposed.sql.Transaction
 import tech.libeufin.util.internalServerError
 
 enum class CreditDebitIndicator {
@@ -184,6 +185,7 @@ data class TransactionDetails(
     val endToEndId: String? = null,
     val paymentInformationId: String? = null,
     val messageId: String? = null,
+    val accountServicerRef: String? = null,
 
     val purpose: String?,
     val proprietaryPurpose: String?,
@@ -214,11 +216,8 @@ data class TransactionDetails(
      */
     val interBankSettlementAmount: CurrencyAmount?,
 
-    /**
-     * Unstructured remittance information (=subject line) of the transaction,
-     * or the empty string if missing.
-     */
-    val unstructuredRemittanceInformation: String,
+    // PoFi shown entries lacking it.
+    val unstructuredRemittanceInformation: String?,
     val returnInfo: ReturnInfo?
 )
 
@@ -286,23 +285,15 @@ data class CamtBankAccountEntry(
     // list of sub-transactions participating in this money movement.
     val batches: List<Batch>?
 ) {
-    /**
-     * This function returns the subject of the unique transaction
-     * accounted in this object.  If the transaction is not unique,
-     * it throws an exception.  NOTE: the caller has the responsibility
-     * of not passing an empty report; those usually should be discarded
-     * and never participate in the application logic.
-     */
-    @JsonIgnore
-    fun getSingletonSubject(): String {
-        // Checks that the given list contains only one element and returns it.
-        fun <T>checkAndGetSingleton(maybeTxs: List<T>?): T {
-            if (maybeTxs == null || maybeTxs.size > 1) throw internalServerError(
-                "Only a singleton transaction is " +
-                        "allowed inside ${this.javaClass}."
-            )
-            return maybeTxs[0]
-        }
+    // Checks that the given list contains only one element and returns it.
+    private fun <T>checkAndGetSingleton(maybeTxs: List<T>?): T {
+        if (maybeTxs == null || maybeTxs.size > 1) throw internalServerError(
+            "Only a singleton transaction is " +
+                    "allowed inside ${this.javaClass}."
+        )
+        return maybeTxs[0]
+    }
+    private fun getSingletonTxDtls(): TransactionDetails {
         /**
          * Types breakdown until the meaningful payment information is reached.
          *
@@ -329,6 +320,28 @@ data class CamtBankAccountEntry(
         val batchTransactions = batch.batchTransactions
         val tx: BatchTransaction = checkAndGetSingleton(batchTransactions)
         val details: TransactionDetails = tx.details
-        return details.unstructuredRemittanceInformation
+        return details
+    }
+    /**
+     * This function returns the subject of the unique transaction
+     * accounted in this object.  If the transaction is not unique,
+     * it throws an exception.  NOTE: the caller has the responsibility
+     * of not passing an empty report; those usually should be discarded
+     * and never participate in the application logic.
+     */
+    @JsonIgnore
+    fun getSingletonSubject(): String {
+        val maybeSubject = getSingletonTxDtls().unstructuredRemittanceInformation
+        if (maybeSubject == null) {
+            throw internalServerError(
+                "The parser let in a transaction without subject" +
+                        ", acctSvcrRef: ${this.getSingletonAcctSvcrRef()}."
+            )
+        }
+        return maybeSubject
+    }
+    @JsonIgnore
+    fun getSingletonAcctSvcrRef(): String? {
+        return getSingletonTxDtls().accountServicerRef
     }
 }

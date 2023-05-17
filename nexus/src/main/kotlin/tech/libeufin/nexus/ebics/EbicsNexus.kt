@@ -72,10 +72,32 @@ private data class EbicsFetchSpec(
     val orderParams: EbicsOrderParams
 )
 
-fun storeCamt(bankConnectionId: String, camt: String, historyType: String) {
+/**
+ * Maps EBICS specific history types to their camt
+ * counterparts.  That allows the database to store
+ * camt types per-se, without any reference to the
+ * EBICS message that brought them.  For example, a
+ * EBICS "Z52" and "C52" will both bring a camt.052.
+ * Such camt.052 is associated with the more generic
+ * type of FetchLevel.REPORT.
+ */
+private fun getFetchLevelFromEbicsOrder(ebicsHistoryType: String): FetchLevel {
+    return when(ebicsHistoryType) {
+        "C52", "Z52" -> FetchLevel.REPORT
+        "C53", "Z53" -> FetchLevel.STATEMENT
+        "C54", "Z54" -> FetchLevel.NOTIFICATION
+        else -> throw internalServerError("EBICS history type '$ebicsHistoryType' not supported")
+    }
+}
+
+fun storeCamt(
+    bankConnectionId: String,
+    camt: String,
+    fetchLevel: FetchLevel
+) {
     val camt53doc = XMLUtil.parseStringIntoDom(camt)
     val msgId = camt53doc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
-    logger.info("Camt document '$msgId' received via $historyType.")
+    logger.info("Camt document '$msgId' received via $fetchLevel.")
     transaction {
         val conn = NexusBankConnectionEntity.findByName(bankConnectionId)
         if (conn == null) {
@@ -85,13 +107,12 @@ fun storeCamt(bankConnectionId: String, camt: String, historyType: String) {
         if (oldMsg == null) {
             NexusBankMessageEntity.new {
                 this.bankConnection = conn
-                this.code = historyType
+                this.fetchLevel = fetchLevel
                 this.messageId = msgId
                 this.message = ExposedBlob(camt.toByteArray(Charsets.UTF_8))
             }
         }
     }
-
 }
 
 /**
@@ -125,17 +146,29 @@ private suspend fun fetchEbicsC5x(
     }
 
     when (historyType) {
+        // default dialect
         "C52" -> {}
         "C53" -> {}
+        // 'pf' dialect
+        "Z52" -> {}
+        "Z53" -> {}
+        "Z54" -> {}
         else -> {
-            throw NexusError(HttpStatusCode.BadRequest, "history type '$historyType' not supported")
+            throw NexusError(
+                HttpStatusCode.BadRequest,
+                "history type '$historyType' not supported"
+            )
         }
     }
     when (response) {
         is EbicsDownloadSuccessResult -> {
             response.orderData.unzipWithLambda {
                 // logger.debug("Camt entry (filename (in the Zip archive): ${it.first}): ${it.second}")
-                storeCamt(bankConnectionId, it.second, historyType)
+                storeCamt(
+                    bankConnectionId,
+                    it.second,
+                    getFetchLevelFromEbicsOrder(historyType)
+                )
             }
         }
         is EbicsDownloadBankErrorResult -> {
@@ -143,6 +176,9 @@ private suspend fun fetchEbicsC5x(
                 HttpStatusCode.BadGateway,
                 response.returnCode.errorCode
             )
+        }
+        is EbicsDownloadEmptyResult -> {
+            // no-op
         }
     }
 }
@@ -194,7 +230,10 @@ fun getEbicsSubscriberDetails(bankConnectionId: String): EbicsClientSubscriberDe
     val subscriber = getSubscriberFromConnection(transport)
 
     // transport exists and belongs to caller.
-    return getEbicsSubscriberDetailsInternal(subscriber)
+    val ret = getEbicsSubscriberDetailsInternal(subscriber)
+    if (transport.dialect != null)
+        ret.dialect = transport.dialect
+    return ret
 }
 
 fun Route.ebicsBankProtocolRoutes(client: HttpClient) {
@@ -283,6 +322,10 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
             client, subscriberDetails, "HTD", EbicsStandardOrderParams()
         )
         when (response) {
+            is EbicsDownloadEmptyResult -> {
+                // no-op
+                logger.warn("HTD response was empty.")
+            }
             is EbicsDownloadBankErrorResult -> {
                 throw NexusError(
                     HttpStatusCode.BadGateway,
@@ -325,7 +368,7 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
         if (orderType.length != 3) {
             throw NexusError(HttpStatusCode.BadRequest, "ebics order type must be three characters")
         }
-        val paramsJson = call.receiveNullable<EbicsStandardOrderParamsDateJson>()
+        val paramsJson = call.receiveNullable<EbicsStandardOrderParamsEmptyJson>()
         val orderParams = paramsJson?.toOrderParams() ?: EbicsStandardOrderParams()
         val subscriberDetails = transaction {
             val conn = requireBankConnection(call, "connid")
@@ -341,6 +384,9 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
             orderParams
         )
         when (response) {
+            is EbicsDownloadEmptyResult -> {
+                logger.info(orderType + " response was empty.") // no op
+            }
             is EbicsDownloadSuccessResult -> {
                 call.respondText(
                     response.orderData.toString(Charsets.UTF_8),
@@ -405,6 +451,34 @@ fun formatHex(ba: ByteArray): String {
     return out
 }
 
+private fun getSubmissionTypeAfterDialect(dialect: String? = null): String {
+    return when (dialect) {
+        "pf" -> "XE2"
+        else -> "CCT"
+    }
+}
+private fun getReportTypeAfterDialect(dialect: String? = null): String {
+    return when (dialect) {
+        "pf" -> "Z52"
+        else -> "C52"
+    }
+}
+private fun getStatementTypeAfterDialect(dialect: String? = null): String {
+    return when (dialect) {
+        "pf" -> "Z53"
+        else -> "C53"
+    }
+}
+
+private fun getNotificationTypeAfterDialect(dialect: String? = null): String {
+    return when (dialect) {
+        "pf" -> "Z54"
+        else -> throw NotImplementedError(
+            "Notifications not implemented in the 'default' EBICS dialect"
+        )
+    }
+}
+
 /**
  * This function returns a possibly empty list of Exception.
  * That helps not to stop fetching if ONE operation fails.  Notably,
@@ -433,14 +507,17 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         fun addForLevel(l: FetchLevel, p: EbicsOrderParams) {
             when (l) {
                 FetchLevel.ALL -> {
-                    specs.add(EbicsFetchSpec("C52", p))
-                    specs.add(EbicsFetchSpec("C53", p))
+                    specs.add(EbicsFetchSpec(getReportTypeAfterDialect(subscriberDetails.dialect), p))
+                    specs.add(EbicsFetchSpec(getStatementTypeAfterDialect(subscriberDetails.dialect), p))
                 }
                 FetchLevel.REPORT -> {
-                    specs.add(EbicsFetchSpec("C52", p))
+                    specs.add(EbicsFetchSpec(getReportTypeAfterDialect(subscriberDetails.dialect), p))
                 }
                 FetchLevel.STATEMENT -> {
-                    specs.add(EbicsFetchSpec("C53", p))
+                    specs.add(EbicsFetchSpec(getStatementTypeAfterDialect(subscriberDetails.dialect), p))
+                }
+                FetchLevel.NOTIFICATION -> {
+                    specs.add(EbicsFetchSpec(getNotificationTypeAfterDialect(subscriberDetails.dialect), p))
                 }
             }
         }
@@ -462,7 +539,9 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             /**
              * This branch differentiates the last date of reports and
              * statements and builds the fetch instructions for each of
-             * them.
+             * them.  For this reason, it does not use the "addForLevel()"
+             * helper, since that uses the same date for all the messages
+             * falling in the ALL level.
              */
             is FetchSpecSinceLastJson -> {
                 val pRep = EbicsStandardOrderParams(
@@ -481,21 +560,42 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                         ), ZonedDateTime.now(ZoneOffset.UTC)
                     )
                 )
+                val pNtfn = EbicsStandardOrderParams(
+                    EbicsDateRange(
+                        lastTimes.lastNotification ?: ZonedDateTime.ofInstant(
+                            Instant.EPOCH,
+                            ZoneOffset.UTC
+                        ), ZonedDateTime.now(ZoneOffset.UTC)
+                    )
+                )
                 when (fetchSpec.level) {
-                    /**
-                     * This branch doesn't call the "addForLevel()" helper because
-                     * that takes only ONE time range and would use it for both
-                     * statements and reports.
-                     */
                     FetchLevel.ALL -> {
-                        specs.add(EbicsFetchSpec("C52", pRep))
-                        specs.add(EbicsFetchSpec("C53", pStmt))
+                        specs.add(EbicsFetchSpec(
+                            orderType = getReportTypeAfterDialect(dialect = subscriberDetails.dialect),
+                            orderParams = pRep
+                        ))
+                        specs.add(EbicsFetchSpec(
+                            orderType = getStatementTypeAfterDialect(dialect = subscriberDetails.dialect),
+                            orderParams = pStmt
+                        ))
                     }
                     FetchLevel.REPORT -> {
-                        specs.add(EbicsFetchSpec("C52", pRep))
+                        specs.add(EbicsFetchSpec(
+                            orderType = getReportTypeAfterDialect(dialect = subscriberDetails.dialect),
+                            orderParams = pRep
+                        ))
                     }
                     FetchLevel.STATEMENT -> {
-                        specs.add(EbicsFetchSpec("C53", pStmt))
+                        specs.add(EbicsFetchSpec(
+                            orderType = getStatementTypeAfterDialect(dialect = subscriberDetails.dialect),
+                            orderParams = pStmt
+                        ))
+                    }
+                    FetchLevel.NOTIFICATION -> {
+                        specs.add(EbicsFetchSpec(
+                            orderType = getNotificationTypeAfterDialect(dialect = subscriberDetails.dialect),
+                            orderParams = pNtfn
+                        ))
                     }
                 }
             }
@@ -520,6 +620,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             return errors
         return null
     }
+
     // Submit one Pain.001 for one payment initiations.
     override suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
         val dbData = transaction {
@@ -545,7 +646,8 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                     instructionId = preparedPayment.instructionId,
                     endToEndId = preparedPayment.endToEndId,
                     messageId = preparedPayment.messageId
-                )
+                ),
+                dialect = subscriberDetails.dialect
             )
             object {
                 val painXml = painMessage
@@ -568,7 +670,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         doEbicsUploadTransaction(
             httpClient,
             dbData.subscriberDetails,
-            "CCT",
+            getSubmissionTypeAfterDialect(dbData.subscriberDetails.dialect),
             dbData.painXml.toByteArray(Charsets.UTF_8),
             EbicsStandardOrderParams()
         )
@@ -648,6 +750,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         val subscriber = transaction { getEbicsSubscriberDetails(bankConnectionId) }
         val ret = EbicsKeysBackupJson(
             type = "ebics",
+            dialect = subscriber.dialect,
             userID = subscriber.userId,
             hostID = subscriber.hostId,
             partnerID = subscriber.partnerId,
@@ -669,7 +772,19 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                     subscriber.customerSignPriv.encoded,
                     passphrase
                 )
-            )
+            ),
+            bankAuthBlob = run {
+                val maybeBankAuthPub = subscriber.bankAuthPub
+                if (maybeBankAuthPub != null)
+                    return@run bytesToBase64(maybeBankAuthPub.encoded)
+                null
+            },
+            bankEncBlob = run {
+                val maybeBankEncPub = subscriber.bankEncPub
+                if (maybeBankEncPub != null)
+                    return@run bytesToBase64(maybeBankEncPub.encoded)
+                null
+            }
         )
         val mapper = ObjectMapper()
         return mapper.valueToTree(ret)
@@ -683,7 +798,6 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         details.put("ebicsHostId", ebicsSubscriber.hostId)
         details.put("partnerId", ebicsSubscriber.partnerId)
         details.put("userId", ebicsSubscriber.userId)
-
         details.put(
             "customerAuthKeyHash",
             CryptoUtil.getEbicsPublicKeyHash(
@@ -717,16 +831,22 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         node.set<JsonNode>("details", details)
         return node
     }
-    override fun createConnection(connId: String, user: NexusUserEntity, data: JsonNode) {
+    override fun createConnection(
+        connId: String,
+        user: NexusUserEntity,
+        data: JsonNode
+    ) {
+        val newTransportData = jacksonObjectMapper()
+            .treeToValue(data, EbicsNewTransport::class.java) ?: throw NexusError(
+            HttpStatusCode.BadRequest,
+            "Ebics details not found in request"
+        )
         val bankConn = NexusBankConnectionEntity.new {
             this.connectionId = connId
             owner = user
             type = "ebics"
+            this.dialect = newTransportData.dialect
         }
-        val newTransportData = jacksonObjectMapper(
-        ).treeToValue(data, EbicsNewTransport::class.java) ?: throw NexusError(
-            HttpStatusCode.BadRequest, "Ebics details not found in request"
-        )
         val pairA = CryptoUtil.generateRsaKeyPair(2048)
         val pairB = CryptoUtil.generateRsaKeyPair(2048)
         val pairC = CryptoUtil.generateRsaKeyPair(2048)
@@ -752,14 +872,18 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         backup: JsonNode
     ) {
         if (passphrase === null) {
-            throw NexusError(HttpStatusCode.BadRequest, "EBICS backup needs passphrase")
+            throw NexusError(
+                HttpStatusCode.BadRequest,
+                "EBICS backup needs passphrase"
+            )
         }
+        val ebicsBackup = jacksonObjectMapper().treeToValue(backup, EbicsKeysBackupJson::class.java)
         val bankConn = NexusBankConnectionEntity.new {
             connectionId = connId
             owner = user
             type = "ebics"
+            this.dialect = ebicsBackup.dialect
         }
-        val ebicsBackup = jacksonObjectMapper().treeToValue(backup, EbicsKeysBackupJson::class.java)
         val (authKey, encKey, sigKey) = try {
             Triple(
                 CryptoUtil.decryptKey(
@@ -795,7 +919,31 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 nexusBankConnection = bankConn
                 ebicsIniState = EbicsInitState.UNKNOWN
                 ebicsHiaState = EbicsInitState.UNKNOWN
-            }
+                if (ebicsBackup.bankAuthBlob != null) {
+                    val keyBlob = base64ToBytes(ebicsBackup.bankAuthBlob)
+                    try { CryptoUtil.loadRsaPublicKey(keyBlob) }
+                    catch (e: Exception) {
+                        logger.error("Could not restore bank's auth public key")
+                        throw NexusError(
+                            HttpStatusCode.BadRequest,
+                            "Bad bank's auth pub"
+                        )
+                    }
+                    bankAuthenticationPublicKey = ExposedBlob(keyBlob)
+                }
+                if (ebicsBackup.bankEncBlob != null) {
+                    val keyBlob = base64ToBytes(ebicsBackup.bankEncBlob)
+                    try { CryptoUtil.loadRsaPublicKey(keyBlob) }
+                    catch (e: Exception) {
+                        logger.error("Could not restore bank's enc public key")
+                        throw NexusError(
+                            HttpStatusCode.BadRequest,
+                            "Bad bank's enc pub"
+                        )
+                    }
+                    bankEncryptionPublicKey = ExposedBlob(keyBlob)
+                }
+             }
         } catch (e: Exception) {
             throw NexusError(
                 HttpStatusCode.BadRequest,
@@ -811,6 +959,10 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             client, subscriberDetails, "HTD", EbicsStandardOrderParams()
         )
         when (response) {
+            is EbicsDownloadEmptyResult -> {
+                // no-op
+                logger.warn("HTD response was empty.")
+            }
             is EbicsDownloadBankErrorResult -> {
                 throw NexusError(
                     HttpStatusCode.BadGateway,

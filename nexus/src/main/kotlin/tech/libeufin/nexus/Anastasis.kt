@@ -15,6 +15,7 @@ import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import tech.libeufin.util.buildIbanPaytoUri
+import tech.libeufin.util.internalServerError
 
 data class AnastasisIncomingBankTransaction(
     val row_id: Long,
@@ -59,9 +60,13 @@ fun anastasisFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDeta
         logger.warn("Not allowing transactions missing the BIC.  IBAN and name: ${debtorIban}, $debtorName")
         return
     }
+    val paymentSubject = txDtls.unstructuredRemittanceInformation
+    if (paymentSubject == null) {
+        throw internalServerError("Nexus payment '${payment.accountTransactionId}' has no subject.")
+    }
     AnastasisIncomingPaymentEntity.new {
         this.payment = payment
-        subject = txDtls.unstructuredRemittanceInformation
+        subject = paymentSubject
         timestampMs = System.currentTimeMillis()
         debtorPaytoUri = buildIbanPaytoUri(
             debtorIban,

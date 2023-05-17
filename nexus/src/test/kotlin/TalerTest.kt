@@ -86,6 +86,7 @@ class TalerTest {
                     contentType(ContentType.Application.Json)
                     basicAuth(testedAccount, testedAccount)
                 }
+                assert(r.status.value == HttpStatusCode.OK.value)
                 val j = mapper.readTree(r.readBytes())
                 val wtidFromTwg = j.get("outgoing_transactions").get(0).get("wtid").asText()
                 assert(wtidFromTwg == "T0")

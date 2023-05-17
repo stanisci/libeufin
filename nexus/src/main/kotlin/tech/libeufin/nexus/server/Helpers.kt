@@ -58,10 +58,35 @@ fun unknownBankAccount(bankAccountLabel: String): NexusError {
  * strings.
  */
 
+enum class EbicsDialects(val dialectName: String) {
+    POSTFINANCE("pf")
+}
+
+/**
+ * Nexus needs to uniquely identify a payment, in order
+ * to spot the same payment to be ingested more than once.
+ * For example, payment X may have been already ingested
+ * (and possibly led to a Taler withdrawal) via a EBICS C52
+ * order, and might be later again downloaded via another
+ * EBICS order (e.g. C53).  The second time this payment
+ * reaches Nexus, it must NOT be considered new, therefore
+ * Nexus needs a UID to check its database for the presence
+ * of known payments.  Every bank assigns UIDs in a different
+ * fashion, sometimes even differentiating between incoming and
+ * outgoing payments; Nexus therefore classifies those UIDs
+ * by assigning them one of the names defined in the following
+ * enum class.  This way, Nexus has more control when it tries
+ * to locally reconcile payments.
+ */
+enum class PaymentUidQualifiers(qualifierName: String) {
+    BANK_GIVEN("bank_given"),
+    NEXUS_GIVEN("nexus_given")
+}
+
 // Valid connection types.
 enum class BankConnectionType(val typeName: String) {
     EBICS("ebics"),
-    X_LIBEUFIN_BANK("x-taler-bank");
+    X_LIBEUFIN_BANK("x-libeufin-bank");
     companion object {
         /**
          * This method takes legacy bank connection type names as input

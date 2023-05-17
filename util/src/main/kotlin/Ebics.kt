@@ -87,7 +87,8 @@ data class EbicsClientSubscriberDetails(
     val customerAuthPriv: RSAPrivateCrtKey,
     val customerSignPriv: RSAPrivateCrtKey,
     val ebicsIniState: EbicsInitState,
-    val ebicsHiaState: EbicsInitState
+    val ebicsHiaState: EbicsInitState,
+    var dialect: String? = null
 )
 
 /**
@@ -158,9 +159,12 @@ private fun signOrder(
 
 fun createEbicsRequestForDownloadReceipt(
     subscriberDetails: EbicsClientSubscriberDetails,
-    transactionID: String
+    transactionID: String?
 ): String {
-    val req = EbicsRequest.createForDownloadReceiptPhase(transactionID, subscriberDetails.hostId)
+    val req = EbicsRequest.createForDownloadReceiptPhase(
+        transactionID,
+        subscriberDetails.hostId
+    )
     val doc = XMLUtil.convertJaxbToDocument(req)
     XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv)
     return XMLUtil.convertDomToString(doc)
@@ -300,7 +304,7 @@ fun createEbicsRequestForDownloadInitialization(
 
 fun createEbicsRequestForDownloadTransferPhase(
     subscriberDetails: EbicsClientSubscriberDetails,
-    transactionID: String,
+    transactionID: String?,
     segmentNumber: Int,
     numSegments: Int
 ): String {
@@ -317,7 +321,7 @@ fun createEbicsRequestForDownloadTransferPhase(
 
 fun createEbicsRequestForUploadTransferPhase(
     subscriberDetails: EbicsClientSubscriberDetails,
-    transactionID: String,
+    transactionID: String?,
     preparedUploadData: PreparedUploadData,
     chunkIndex: Int
 ): String {
@@ -363,10 +367,12 @@ enum class EbicsReturnCode(val errorCode: String) {
     EBICS_DOWNLOAD_POSTPROCESS_DONE("011000"),
     EBICS_DOWNLOAD_POSTPROCESS_SKIPPED("011001"),
     EBICS_TX_SEGMENT_NUMBER_UNDERRUN("011101"),
+    EBICS_AUTHENTICATION_FAILED ("061001"),
     EBICS_INVALID_USER_OR_USER_STATE("091002"),
     EBICS_PROCESSING_ERROR("091116"),
     EBICS_ACCOUNT_AUTHORISATION_FAILED("091302"),
     EBICS_AMOUNT_CHECK_FAILED("091303"),
+    EBICS_EBICS_AUTHORISATION_ORDER_IDENTIFIER_FAILED("090003"),
     EBICS_NO_DOWNLOAD_DATA_AVAILABLE("090005");
 
     companion object {

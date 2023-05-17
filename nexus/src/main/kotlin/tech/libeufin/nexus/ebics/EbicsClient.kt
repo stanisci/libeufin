@@ -81,6 +81,11 @@ class EbicsDownloadSuccessResult(
     val orderData: ByteArray
 ) : EbicsDownloadResult()
 
+class EbicsDownloadEmptyResult(
+    val orderData: ByteArray = ByteArray(0)
+) : EbicsDownloadResult()
+
+
 /**
  * A bank-technical error occurred.
  */
@@ -126,19 +131,15 @@ suspend fun doEbicsDownloadTransaction(
             )
         }
     }
-    /**
-     * At this point, the EBICS init phase went through,
-     * therefore the message should carry a transaction ID!
-     */
-    if (transactionID == null) throw NexusError(
-        HttpStatusCode.BadGateway,
-        "EBICS-correct init response should contain" +
-                " a transaction ID, $orderType did not!"
-    )
     // Checking the 'bank technical' code.
     when (initResponse.bankReturnCode) {
         EbicsReturnCode.EBICS_OK -> {
             // Success, nothing to do!
+        }
+        EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE -> {
+            // The 'pf' dialect might respond this value here (at init phase),
+            // in contrast to what the default dialect does (waiting the transfer phase)
+            return EbicsDownloadEmptyResult()
         }
         else -> {
             logger.error(
@@ -175,7 +176,12 @@ suspend fun doEbicsDownloadTransaction(
     // Transfer phase
     for (x in 2 .. numSegments) {
         val transferReqStr =
-            createEbicsRequestForDownloadTransferPhase(subscriberDetails, transactionID, x, numSegments)
+            createEbicsRequestForDownloadTransferPhase(
+                subscriberDetails,
+                transactionID,
+                x,
+                numSegments
+            )
         logger.debug("EBICS download transfer phase of ${transactionID}: sending segment $x")
         val transferResponseStr = client.postToBank(subscriberDetails.ebicsUrl, transferReqStr)
         val transferResponse = parseAndValidateEbicsResponse(subscriberDetails, transferResponseStr)
@@ -216,7 +222,10 @@ suspend fun doEbicsDownloadTransaction(
     val respPayload = decryptAndDecompressResponse(subscriberDetails, encryptionInfo, payloadChunks)
 
     // Acknowledgement phase
-    val ackRequest = createEbicsRequestForDownloadReceipt(subscriberDetails, transactionID)
+    val ackRequest = createEbicsRequestForDownloadReceipt(
+        subscriberDetails,
+        transactionID
+    )
     val ackResponseStr = client.postToBank(
         subscriberDetails.ebicsUrl,
         ackRequest
@@ -253,6 +262,7 @@ suspend fun doEbicsUploadTransaction(
     }
     val preparedUploadData = prepareUploadPayload(subscriberDetails, payload)
     val req = createEbicsRequestForUploadInitialization(subscriberDetails, orderType, orderParams, preparedUploadData)
+    logger.debug("EBICS upload message to: ${subscriberDetails.ebicsUrl}")
     val responseStr = client.postToBank(subscriberDetails.ebicsUrl, req)
 
     val initResponse = parseAndValidateEbicsResponse(subscriberDetails, responseStr)
@@ -266,15 +276,12 @@ suspend fun doEbicsUploadTransaction(
     }
     // The bank did NOT indicate any error, but the response
     // lacks required information, blame the bank.
-    val transactionID = initResponse.transactionID ?: throw NexusError(
-            HttpStatusCode.BadGateway,
-            "Init response must have transaction ID"
-        )
+    val transactionID = initResponse.transactionID
     if (initResponse.bankReturnCode != EbicsReturnCode.EBICS_OK) {
         throw NexusError(
             HttpStatusCode.InternalServerError,
             reason = "Bank-technical error at init phase:" +
-                    " ${initResponse.technicalReturnCode}"
+                    " ${initResponse.bankReturnCode}"
         )
     }
     logger.debug("Bank acknowledges EBICS upload initialization. " +

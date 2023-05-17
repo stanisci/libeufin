@@ -20,7 +20,6 @@
 package tech.libeufin.nexus.server
 
 import CamtBankAccountEntry
-import CurrencyAmount
 import EntryStatus
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
@@ -143,7 +142,10 @@ data class EbicsKeysBackupJson(
     val ebicsURL: String,
     val authBlob: String,
     val encBlob: String,
-    val sigBlob: String
+    val sigBlob: String,
+    val bankAuthBlob: String?,
+    val bankEncBlob: String?,
+    val dialect: String? = null
 )
 
 enum class PermissionChangeAction(@get:JsonValue val jsonName: String) {
@@ -170,7 +172,10 @@ data class ChangePermissionsRequest(
 )
 
 enum class FetchLevel(@get:JsonValue val jsonName: String) {
-    REPORT("report"), STATEMENT("statement"), ALL("all");
+    REPORT("report"),
+    STATEMENT("statement"),
+    NOTIFICATION("notification"),
+    ALL("all");
 }
 
 /**
@@ -232,6 +237,7 @@ class CreateBankConnectionFromBackupRequestJson(
 class CreateBankConnectionFromNewRequestJson(
     name: String,
     val type: String,
+    val dialect: String? = null,
     val data: JsonNode
 ) : CreateBankConnectionRequestJson(name)
 
@@ -240,7 +246,8 @@ data class EbicsNewTransport(
     val partnerID: String,
     val hostID: String,
     val ebicsURL: String,
-    val systemID: String?
+    val systemID: String?,
+    val dialect: String? = null
 )
 
 /**
@@ -386,7 +393,7 @@ data class Pain001Data(
     val sum: String,
     val currency: String,
     val subject: String,
-    val pmtInfId: String? = null
+    val endToEndId: String? = null
 )
 
 data class AccountTask(

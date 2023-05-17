@@ -303,6 +303,7 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
             NexusBankMessageEntity.new {
                 bankConnection = conn
                 message = ExposedBlob(respBlob)
+                fetchLevel = fetchSpec.level
             }
         }
         return null

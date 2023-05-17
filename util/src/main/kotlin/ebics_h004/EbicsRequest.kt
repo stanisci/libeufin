@@ -289,7 +289,7 @@ class EbicsRequest {
     companion object {
 
         fun createForDownloadReceiptPhase(
-            transactionId: String,
+            transactionId: String?,
             hostId: String
 
         ): EbicsRequest {
@@ -444,7 +444,7 @@ class EbicsRequest {
 
         fun createForUploadTransferPhase(
             hostId: String,
-            transactionId: String,
+            transactionId: String?,
             segNumber: BigInteger,
             encryptedData: String
         ): EbicsRequest {
@@ -477,7 +477,7 @@ class EbicsRequest {
 
         fun createForDownloadTransferPhase(
             hostID: String,
-            transactionID: String,
+            transactionID: String?,
             segmentNumber: Int,
             numSegments: Int
         ): EbicsRequest {

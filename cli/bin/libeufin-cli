@@ -542,10 +542,15 @@ def new_xlibeufinbank_connection(obj, bank_url, username, password, connection_n
 @click.option("--host-id", help="Host ID", required=True)
 @click.option("--partner-id", help="Partner ID", required=True)
 @click.option("--ebics-user-id", help="Ebics user ID", required=True)
+@click.option(
+  "--dialect",
+  help="EBICS dialect of this connection",
+  required=False
+)
 @click.argument("connection-name")
 @click.pass_obj
 def new_ebics_connection(
-    obj, connection_name, ebics_url, host_id, partner_id, ebics_user_id
+    obj, connection_name, ebics_url, host_id, partner_id, ebics_user_id, dialect
 ):
     url = urljoin_nodrop(obj.nexus_base_url, "/bank-connections")
     body = dict(
@@ -557,6 +562,7 @@ def new_ebics_connection(
             hostID=host_id,
             partnerID=partner_id,
             userID=ebics_user_id,
+            dialect=dialect
         ),
     )
     try:

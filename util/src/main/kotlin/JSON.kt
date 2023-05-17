@@ -93,7 +93,8 @@ data class XLibeufinBankTransaction(
      * along every API call using this object.
      */
     val pmtInfId: String? = null,
-    val msgId: String? = null
+    val msgId: String? = null,
+    val endToEndId: String? = null
 )
 data class IncomingPaymentInfo(
     val debtorIban: String,

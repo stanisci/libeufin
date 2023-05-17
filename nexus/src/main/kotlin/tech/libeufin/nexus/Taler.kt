@@ -239,7 +239,8 @@ fun talerFilter(
     txDtls: TransactionDetails
 ) {
     var isInvalid = false // True when pub is invalid or duplicate.
-    val subject = txDtls.unstructuredRemittanceInformation
+    val subject = txDtls.unstructuredRemittanceInformation ?: throw
+            internalServerError("Payment '${payment.accountTransactionId}' has no subject, can't extract reserve pub.")
     val debtorName = txDtls.debtor?.name
     if (debtorName == null) {
         logger.warn("empty debtor name")
@@ -380,6 +381,7 @@ fun maybeTalerRefunds(bankAccount: NexusBankAccountEntity, lastSeenId: Long) {
                         it[NexusBankTransactionsTable.bankAccount] == bankAccount.id,
                 "Cannot refund an _outgoing_ payment!"
             )
+
             // FIXME #7116
             addPaymentInitiation(
                 Pain001Data(

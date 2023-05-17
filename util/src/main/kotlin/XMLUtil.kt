@@ -231,7 +231,8 @@ class XMLUtil private constructor() {
                 "xsd/camt.052.001.02.xsd",
                 "xsd/camt.053.001.02.xsd",
                 "xsd/camt.054.001.02.xsd",
-                "xsd/pain.001.001.03.xsd"
+                "xsd/pain.001.001.03.xsd",
+                "xsd/pain.001.001.03.ch.02.xsd"
             ).map {
                 val stream =
                     classLoader.getResourceAsStream(it) ?: throw FileNotFoundException("Schema file $it not found.")

@@ -206,20 +206,26 @@ fun ingestBankMessagesIntoAccount(
         ).forEach {
             val processingResult: IngestedTransactionsCount = when(BankConnectionType.parseBankConnectionType(conn.type)) {
                 BankConnectionType.EBICS -> {
-                    val doc = XMLUtil.parseStringIntoDom(it.message.bytes.toString(Charsets.UTF_8))
+                    val camtString = it.message.bytes.toString(Charsets.UTF_8)
+                    val doc = XMLUtil.parseStringIntoDom(camtString)
                     /**
                      * Calling the CaMt handler.  After its return, all the Neuxs-meaningful
                      * payment data got stored into the database and is ready to being further
                      * processed by any facade OR simply be communicated to the CLI via JSON.
                      */
-                    processCamtMessage(
-                        bankAccountId,
-                        doc,
-                        it.code ?: throw internalServerError(
-                            "Bank message with ID ${it.id.value} in DB table" +
-                                    " NexusBankMessagesTable has no code, but one is expected."
+                    try {
+                        processCamtMessage(
+                            bankAccountId,
+                            doc,
+                            it.fetchLevel,
+                            conn.dialect
                         )
-                    )
+                    }
+                    catch (e: Exception) {
+                        logger.error("Could not parse the following camt document:\n${camtString}")
+                        // rethrowing. Here just to log the failing document
+                        throw e
+                    }
                 }
                 BankConnectionType.X_LIBEUFIN_BANK -> {
                     val jMessage = try { jacksonObjectMapper().readTree(it.message.bytes) }
@@ -287,7 +293,8 @@ fun getPaymentInitiation(uuid: Long): PaymentInitiationEntity {
 
 data class LastMessagesTimes(
     val lastStatement: ZonedDateTime?,
-    val lastReport: ZonedDateTime?
+    val lastReport: ZonedDateTime?,
+    val lastNotification: ZonedDateTime?
 )
 /**
  * Get the last timestamps where a report and
@@ -305,6 +312,9 @@ fun getLastMessagesTimes(acct: NexusBankAccountEntity): LastMessagesTimes {
             ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
         },
         lastStatement = acct.lastStatementCreationTimestamp?.let {
+            ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
+        },
+        lastNotification = acct.lastNotificationCreationTimestamp?.let {
             ZonedDateTime.ofInstant(Instant.ofEpochMilli(it), ZoneOffset.UTC)
         }
     )
@@ -336,11 +346,13 @@ fun addPaymentInitiation(
     debtorAccount: NexusBankAccountEntity
 ): PaymentInitiationEntity {
     return transaction {
+
         val now = Instant.now().toEpochMilli()
         val nowHex = now.toString(16)
         val painCounter = debtorAccount.pain001Counter++
         val painHex = painCounter.toString(16)
         val acctHex = debtorAccount.id.value.toString(16)
+
         PaymentInitiationEntity.new {
             currency = paymentData.currency
             bankAccount = debtorAccount
@@ -350,9 +362,9 @@ fun addPaymentInitiation(
             creditorBic = paymentData.creditorBic
             creditorIban = paymentData.creditorIban
             preparationDate = now
-            endToEndId = "leuf-e-$nowHex-$painHex-$acctHex"
+            endToEndId = paymentData.endToEndId ?: "leuf-e-$nowHex-$painHex-$acctHex"
             messageId = "leuf-mp1-$nowHex-$painHex-$acctHex"
-            paymentInformationId = paymentData.pmtInfId ?: "leuf-p-$nowHex-$painHex-$acctHex"
+            paymentInformationId = "leuf-p-$nowHex-$painHex-$acctHex"
             instructionId = "leuf-i-$nowHex-$painHex-$acctHex"
         }
     }

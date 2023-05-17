@@ -25,28 +25,20 @@ import io.ktor.server.plugins.contentnegotiation.*
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.SerializationFeature
-import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.module.kotlin.*
 import io.ktor.client.*
 import io.ktor.http.*
-import io.ktor.network.sockets.*
 import io.ktor.server.application.*
-import io.ktor.server.engine.*
-import io.ktor.server.netty.*
 import io.ktor.server.plugins.*
 import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.util.*
-import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.and
-import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.event.Level
 import tech.libeufin.nexus.*
@@ -54,9 +46,7 @@ import tech.libeufin.nexus.bankaccount.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.iso20022.processCamtMessage
 import tech.libeufin.util.*
-import java.net.BindException
 import java.net.URLEncoder
-import kotlin.system.exitProcess
 
 // Return facade state depending on the type.
 fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
@@ -439,10 +429,24 @@ val nexusApp: Application.() -> Unit = {
         }
         post("/bank-accounts/{accountId}/test-camt-ingestion/{type}") {
             requireSuperuser(call.request)
+            val accountId = ensureNonNull(call.parameters["accountId"])
+            val bankAccount = getBankAccount(accountId)
+            val connId = transaction { bankAccount.defaultBankConnection?.connectionId }
+            val dialect = if (connId != null) {
+                val defaultConn = getBankConnection(connId)
+                defaultConn.dialect
+            } else null
+            val msgType = ensureNonNull(call.parameters["type"])
             processCamtMessage(
-                ensureNonNull(call.parameters["accountId"]),
+                ensureNonNull(accountId),
                 XMLUtil.parseStringIntoDom(call.receiveText()),
-                ensureNonNull(call.parameters["type"])
+                when(msgType) {
+                    "C52", "Z52" -> { FetchLevel.REPORT }
+                    "C53", "Z53" -> { FetchLevel.STATEMENT }
+                    "C54", "Z54" -> { FetchLevel.NOTIFICATION }
+                    else -> throw badRequest("Message type: '$msgType', not supported")
+                },
+                dialect = dialect
             )
             call.respond(object {})
             return@post
@@ -693,7 +697,7 @@ val nexusApp: Application.() -> Unit = {
             if (body.uid != null) {
                 val maybeExists: PaymentInitiationEntity? = transaction {
                     PaymentInitiationEntity.find {
-                        PaymentInitiationsTable.paymentInformationId eq body.uid
+                        PaymentInitiationsTable.endToEndId eq body.uid
                     }.firstOrNull()
                 }
                 // If submitted payment looks exactly the same as the one
@@ -733,7 +737,7 @@ val nexusApp: Application.() -> Unit = {
                         sum = amount.amount,
                         currency = amount.currency,
                         subject = body.subject,
-                        pmtInfId = body.uid
+                        endToEndId = body.uid
                     ),
                     bankAccount
                 )
@@ -850,14 +854,26 @@ val nexusApp: Application.() -> Unit = {
                     is CreateBankConnectionFromBackupRequestJson -> {
                         val type = body.data.get("type")
                         if (type == null || !type.isTextual) {
-                            throw NexusError(HttpStatusCode.BadRequest, "backup needs type")
+                            throw NexusError(
+                                HttpStatusCode.BadRequest,
+                                "backup needs type"
+                            )
                         }
                         val plugin = getConnectionPlugin(type.textValue())
-                        plugin.createConnectionFromBackup(body.name, user, body.passphrase, body.data)
+                        plugin.createConnectionFromBackup(
+                            body.name,
+                            user,
+                            body.passphrase,
+                            body.data
+                        )
                     }
                     is CreateBankConnectionFromNewRequestJson -> {
                         val plugin = getConnectionPlugin(body.type)
-                        plugin.createConnection(body.name, user, body.data)
+                        plugin.createConnection(
+                            body.name,
+                            user,
+                            body.data
+                        )
                     }
                 }
             }
@@ -946,7 +962,7 @@ val nexusApp: Application.() -> Unit = {
                     list.bankMessages.add(
                         BankMessageInfo(
                             messageId = it.messageId,
-                            code = it.code,
+                            code = it.fetchLevel.jsonName,
                             length = it.message.bytes.size.toLong()
                         )
                     )

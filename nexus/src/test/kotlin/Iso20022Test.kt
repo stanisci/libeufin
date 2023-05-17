@@ -1,14 +1,33 @@
 package tech.libeufin.nexus
 import CamtBankAccountEntry
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.server.testing.*
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
 import org.junit.Test
 import org.w3c.dom.Document
+import poFiCamt052
+import poFiCamt054
+import prepNexusDb
+import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.nexus.iso20022.*
+import tech.libeufin.nexus.server.EbicsDialects
+import tech.libeufin.nexus.server.FetchLevel
+import tech.libeufin.nexus.server.getBankConnection
+import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.util.DestructionError
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.destructXml
+import withTestDatabase
 import java.math.BigDecimal
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.TimeZone
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -84,5 +103,64 @@ class Iso20022Test {
         }
 
         println(jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(r))
+    }
+
+    /**
+     * PoFi timestamps aren't zoned, therefore the usual ZonedDateTime
+     * doesn't cover it.  They must switch to (java.time.)LocalDateTime.
+     */
+    @Test
+    fun parsePostFinanceDate() {
+        // 2011-12-03T10:15:30 from Java Doc as ISO_LOCAL_DATE_TIME.
+        // 2023-05-09T11:04:09 from PoFi
+
+        getTimestampInMillis(
+            "2011-12-03T10:15:30",
+            EbicsDialects.POSTFINANCE.dialectName
+        )
+        getTimestampInMillis(
+            "2011-12-03T10:15:30Z" // ! with timezone
+        )
+    }
+
+    @Test
+    fun parsePoFiCamt054() {
+        val doc = XMLUtil.parseStringIntoDom(poFiCamt054)
+        parseCamtMessage(doc)
+    }
+
+    @Test
+    fun ingestPoFiCamt054() {
+        val doc = XMLUtil.parseStringIntoDom(poFiCamt054)
+        withTestDatabase { prepNexusDb()
+            processCamtMessage(
+                "foo",
+                doc,
+                FetchLevel.NOTIFICATION,
+                dialect = "pf"
+            )
+        }
+    }
+
+    @Test
+    fun parsePostFinanceCamt052() {
+        withTestDatabase {
+            prepNexusDb()
+            // Adjusting the MakeEnv.kt values to PoFi
+            val fooBankAccount = getBankAccount("foo")
+            val fooConnection = getBankConnection("foo")
+            transaction {
+                fooBankAccount.iban = "CH9789144829733648596"
+                fooConnection.dialect = "pf"
+            }
+            testApplication {
+                application(nexusApp)
+                client.post("/bank-accounts/foo/test-camt-ingestion/C52") {
+                    basicAuth("foo", "foo")
+                    contentType(ContentType.Application.Xml)
+                    setBody(poFiCamt052)
+                }
+            }
+        }
     }
 }

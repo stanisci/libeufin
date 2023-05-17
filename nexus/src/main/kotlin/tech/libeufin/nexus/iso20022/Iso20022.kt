@@ -37,7 +37,6 @@ import PostalAddress
 import PrivateIdentification
 import ReturnInfo
 import TransactionDetails
-import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonValue
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -49,16 +48,22 @@ import org.w3c.dom.Document
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.IngestedTransactionsCount
 import tech.libeufin.nexus.bankaccount.findDuplicate
+import tech.libeufin.nexus.server.EbicsDialects
+import tech.libeufin.nexus.server.FetchLevel
+import tech.libeufin.nexus.server.PaymentUidQualifiers
 import tech.libeufin.util.*
 import toPlainString
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 
 enum class CashManagementResponseType(@get:JsonValue val jsonName: String) {
-    Report("report"), Statement("statement"), Notification("notification")
+    Report("report"),
+    Statement("statement"),
+    Notification("notification")
 }
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -124,30 +129,40 @@ data class NexusPaymentInitiationData(
     val instructionId: String? = null
 )
 
+data class Pain001Namespaces(
+    val fullNamespace: String,
+    val xsdFilename: String
+)
+
 /**
  * Create a PAIN.001 XML document according to the input data.
  * Needs to be called within a transaction block.
  */
-fun createPain001document(paymentData: NexusPaymentInitiationData): String {
-    // Every PAIN.001 document contains at least three IDs:
-    //
-    // 1) MsgId: a unique id for the message itself
-    // 2) PmtInfId: the unique id for the payment's set of information
-    // 3) EndToEndId: a unique id to be shared between the debtor and
-    //    creditor that uniquely identifies the transaction
-    //
-    // For now and for simplicity, since every PAIN entry in the database
-    // has a unique ID, and the three values aren't required to be mutually different,
-    // we'll assign the SAME id (= the row id) to all the three aforementioned
-    // PAIN id types.
+fun createPain001document(
+    paymentData: NexusPaymentInitiationData,
+    dialect: String? = null
+): String {
+
+    val namespace: Pain001Namespaces = if (dialect == "pf")
+        Pain001Namespaces(
+            fullNamespace = "http://www.six-interbank-clearing.com/de/pain.001.001.03.ch.02.xsd",
+            xsdFilename = "pain.001.001.03.ch.02.xsd"
+        )
+    else Pain001Namespaces(
+        fullNamespace = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.03",
+        xsdFilename = "pain.001.001.03.xsd"
+    )
+
+    val paymentMethod = if (dialect == "pf")
+        "SDVA" else "SEPA"
 
     val s = constructXml(indent = true) {
         root("Document") {
-            attribute("xmlns", "urn:iso:std:iso:20022:tech:xsd:pain.001.001.03")
+            attribute("xmlns", namespace.fullNamespace)
             attribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
             attribute(
                 "xsi:schemaLocation",
-                "urn:iso:std:iso:20022:tech:xsd:pain.001.001.03 pain.001.001.03.xsd"
+                "${namespace.fullNamespace} ${namespace.xsdFilename}"
             )
             element("CstmrCdtTrfInitn") {
                 element("GrpHdr") {
@@ -188,7 +203,7 @@ fun createPain001document(paymentData: NexusPaymentInitiationData): String {
                         text(paymentData.amount)
                     }
                     element("PmtTpInf/SvcLvl/Cd") {
-                        text("SEPA")
+                        text(paymentMethod)
                     }
                     element("ReqdExctnDt") {
                         val dateMillis = paymentData.preparationTimestamp
@@ -484,13 +499,15 @@ private fun XmlElementDestructor.extractTransactionDetails(
             maybeUniqueChildNamed("CntrValAmt") { extractCurrencyAmount() }
         },
         currencyExchange = currencyExchange,
-        // FIXME: implement
         interBankSettlementAmount = null,
         endToEndId = maybeUniqueChildNamed("Refs") {
             maybeUniqueChildNamed("EndToEndId") { focusElement.textContent }
         },
         paymentInformationId = maybeUniqueChildNamed("Refs") {
             maybeUniqueChildNamed("PmtInfId") { focusElement.textContent }
+        },
+        accountServicerRef = maybeUniqueChildNamed("Refs") {
+            maybeUniqueChildNamed("AcctSvcrRef") { focusElement.textContent }
         },
         unstructuredRemittanceInformation = maybeUniqueChildNamed("RmtInf") {
             val chunks = mapEachChildNamed("Ustrd") { focusElement.textContent }
@@ -499,7 +516,7 @@ private fun XmlElementDestructor.extractTransactionDetails(
             } else {
                 chunks.joinToString(separator = "")
             }
-        } ?: "",
+        },
         creditorAgent = maybeUniqueChildNamed("RltdAgts") { maybeUniqueChildNamed("CdtrAgt") { extractAgent() } },
         debtorAgent = maybeUniqueChildNamed("RltdAgts") { maybeUniqueChildNamed("DbtrAgt") { extractAgent() } },
         debtorAccount = maybeUniqueChildNamed("RltdPties") { maybeUniqueChildNamed("DbtrAcct") { extractAccount() } },
@@ -676,6 +693,11 @@ fun parseCamtMessage(doc: Document): CamtParseResult {
                             extractInnerTransactions()
                         }
                     }
+                    "BkToCstmrDbtCdtNtfctn" -> {
+                        mapEachChildNamed("Ntfctn") {
+                            extractInnerTransactions()
+                        }
+                    }
                     else -> {
                         throw CamtParsingError("expected statement or report")
                     }
@@ -695,6 +717,7 @@ fun parseCamtMessage(doc: Document): CamtParseResult {
                 when (focusElement.localName) {
                     "BkToCstmrAcctRpt" -> CashManagementResponseType.Report
                     "BkToCstmrStmt" -> CashManagementResponseType.Statement
+                    "BkToCstmrDbtCdtNtfctn" -> CashManagementResponseType.Notification
                     else -> {
                         throw CamtParsingError("expected statement or report")
                     }
@@ -710,6 +733,104 @@ fun parseCamtMessage(doc: Document): CamtParseResult {
     }
 }
 
+// Get timestamp in milliseconds, according to the EBICS+camt dialect.
+fun getTimestampInMillis(
+    dateTimeFromCamt: String,
+    dialect: String? = null
+): Long {
+    return when(dialect) {
+        EbicsDialects.POSTFINANCE.dialectName -> {
+            val withoutTimezone = LocalDateTime.parse(
+                dateTimeFromCamt,
+                DateTimeFormatter.ISO_LOCAL_DATE_TIME
+            )
+            ZonedDateTime.of(
+                withoutTimezone,
+                ZoneId.of("Europe/Zurich")).toInstant().toEpochMilli()
+        }
+        else -> {
+            ZonedDateTime.parse(
+                dateTimeFromCamt,
+                DateTimeFormatter.ISO_DATE_TIME
+            ).toInstant().toEpochMilli()
+        }
+    }
+}
+
+/**
+ * Extracts the UID from the payment, according to dialect
+ * and direction.  It returns the _qualified_ string from such
+ * ID.  A qualified string has the format "$qualifier:$extracted_id".
+ * $qualifier is a constant that gives more context about the
+ * actual $extracted_id;  for example, it may indicate that the
+ * ID was assigned by the bank, or by Nexus when it uploaded
+ * the payment initiation in the first place.
+ *
+ * NOTE: this version _still_ expect only singleton transactions
+ * in the input.  That means _only one_ element is expected at the
+ * lowest level of the camt.05x report.  This may/should change in
+ * future versions.
+ */
+fun extractPaymentUidFromSingleton(
+    ntry: CamtBankAccountEntry,
+    camtMessageId: String, // used to print errors.
+    dialect: String?
+    ): String {
+    // First check if the input is a singleton.
+    val batchTransactions: List<BatchTransaction>? = ntry.batches?.get(0)?.batchTransactions
+    val tx: BatchTransaction = if (ntry.batches?.size != 1 || batchTransactions?.size != 1) {
+        logger.error("camt message ${camtMessageId} has non singleton transactions.")
+        throw internalServerError("Dialect $dialect sent camt with non singleton transactions.")
+    } else
+        batchTransactions[0]
+
+    when(dialect) {
+        EbicsDialects.POSTFINANCE.dialectName -> {
+            if (tx.creditDebitIndicator == CreditDebitIndicator.DBIT) {
+                val expectedEndToEndId = tx.details.endToEndId
+                /**
+                 * Because this is an outgoing transaction, and because
+                 * Nexus should have included the EndToEndId in the original
+                 * pain.001, this transaction must have it (recall: EndToEndId
+                 * is mandatory in the pain.001).  A null value means therefore
+                 * that the payment was done via another mean than pain.001.
+                 */
+                if (expectedEndToEndId == null) {
+                    logger.error("Camt '$camtMessageId' shows outgoing payment _without_ the EndToEndId." +
+                            "  This likely wasn't initiated via pain.001"
+                    )
+                    throw internalServerError("Internal reconciliation error (no EndToEndId)")
+                }
+                return "${PaymentUidQualifiers.NEXUS_GIVEN}:$expectedEndToEndId"
+            }
+            // Didn't return/throw before, it must be an incoming payment.
+            val maybeAcctSvcrRef = tx.details.accountServicerRef
+            // Expecting this value to be at the lowest level, as observed on the test platform.
+            val expectedAcctSvcrRef = tx.details.accountServicerRef
+            if (expectedAcctSvcrRef == null) {
+                logger.error("AcctSvcrRef was expected at the lowest tx level for dialect: $dialect, but wasn't found")
+                throw internalServerError("Internal reconciliation error (no AcctSvcrRef at lowest tx level)")
+            }
+            return "${PaymentUidQualifiers.BANK_GIVEN}:$expectedAcctSvcrRef"
+        }
+        // This is the default dialect, the one tested with GLS.
+        null -> {
+            /**
+             * This dialect has shown the AcctSvcrRef to be always given
+             * at the level that _contains_ the (singleton) transaction(s).
+             * This occurs _regardless_ of the payment direction.
+             */
+            val expectedAcctSvcrRef = ntry.accountServicerRef
+            if (expectedAcctSvcrRef == null) {
+                logger.error("AcctSvcrRef was expected at the outer tx level for dialect: GLS, but wasn't found.")
+                throw internalServerError("Internal reconciliation error: AcctSvcrRef not found at outer level.")
+            }
+            return "${PaymentUidQualifiers.BANK_GIVEN}:$expectedAcctSvcrRef"
+        }
+        else -> throw internalServerError("Dialect $dialect is not supported.")
+    }
+}
+
 /**
  * Given that every CaMt is a collection of reports/statements
  * where each of them carries the bank account balance and a list
@@ -720,7 +841,7 @@ fun parseCamtMessage(doc: Document): CamtParseResult {
  *   report/statement.
  * - finds which transactions were already downloaded.
  * - stores a new NexusBankTransactionEntity for each new tx
-accounted in the report/statement.
+ *   accounted in the report/statement.
  * - tries to link the new transaction with a submitted one, in
  *   case of DBIT transaction.
  * - returns a IngestedTransactionCount object.
@@ -728,12 +849,16 @@ accounted in the report/statement.
 fun processCamtMessage(
     bankAccountId: String,
     camtDoc: Document,
-    /**
-     * FIXME: should NOT be C52/C53 but "report" or "statement".
-     * The reason is that C52/C53 are NOT CaMt, they are EBICS names.
-     */
-    code: String
+    fetchLevel: FetchLevel,
+    dialect: String? = null
 ): IngestedTransactionsCount {
+    /**
+     * Ensure that the level is not ALL, as the parser expects
+     * the exact type for the one message being parsed.
+     */
+    if (fetchLevel == FetchLevel.ALL)
+        throw internalServerError("Parser needs exact camt type (ALL not permitted).")
+
     var newTransactions = 0
     var downloadedTransactions = 0
     transaction {
@@ -742,7 +867,7 @@ fun processCamtMessage(
             throw NexusError(HttpStatusCode.NotFound, "user not found")
         }
         val res = try { parseCamtMessage(camtDoc) } catch (e: CamtParsingError) {
-            logger.warn("Invalid CAMT received from bank: $e")
+            logger.warn("Invalid CAMT received from bank: ${e.message}")
             newTransactions = -1
             return@transaction
         }
@@ -774,31 +899,28 @@ fun processCamtMessage(
             }
         }
         // Updating the local bank account state timestamps according to the current document.
-        val stamp = ZonedDateTime.parse(
-            res.creationDateTime,
-            DateTimeFormatter.ISO_DATE_TIME
-        ).toInstant().toEpochMilli()
-        when (code) {
-            "C52" -> {
+        val stamp = getTimestampInMillis(res.creationDateTime, dialect = dialect)
+        when (fetchLevel) {
+            FetchLevel.REPORT -> {
                 val s = acct.lastReportCreationTimestamp
-                /**
-                 * FIXME.
-                 * The following check seems broken, as it ONLY sets the value when
-                 * s is non-null BUT s gets never set; not even with a default value.
-                 * That didn't break so far because the timestamp gets only used when
-                 * the fetch specification has "since-last" for the time range.  Never
-                 * used.
-                 */
-                if (s != null && stamp > s) {
+                if (s == null || stamp > s) {
                     acct.lastReportCreationTimestamp = stamp
                 }
             }
-            "C53" -> {
+            FetchLevel.STATEMENT -> {
                 val s = acct.lastStatementCreationTimestamp
-                if (s != null && stamp > s) {
+                if (s == null || stamp > s) {
                     acct.lastStatementCreationTimestamp = stamp
                 }
             }
+            FetchLevel.NOTIFICATION -> {
+                val s = acct.lastNotificationCreationTimestamp
+                if (s == null || stamp > s) {
+                    acct.lastNotificationCreationTimestamp = stamp
+                }
+            }
+            // Silencing the compiler: the 'ALL' case was checked at the top of this function.
+            else -> {}
         }
         val entries: List<CamtBankAccountEntry> = res.reports.map { it.entries }.flatten()
         var newPaymentsLog = ""
@@ -809,22 +931,26 @@ fun processCamtMessage(
                     HttpStatusCode.InternalServerError,
                     "Singleton money movements policy wasn't respected"
                 )
-            val acctSvcrRef = entry.accountServicerRef
-            if (acctSvcrRef == null) {
-                // FIXME(dold): Report this!
-                logger.error("missing account servicer reference in transaction")
+            if (entry.status != EntryStatus.BOOK) {
+                logger.info("camt message '${res.messageId}' has a " +
+                        "non-BOOK transaction, ignoring it."
+                )
                 continue
             }
-            val duplicate = findDuplicate(bankAccountId, acctSvcrRef)
+            val paymentUid = extractPaymentUidFromSingleton(
+                ntry = entry,
+                camtMessageId = res.messageId,
+                dialect = dialect
+            )
+            val duplicate = findDuplicate(bankAccountId, paymentUid)
             if (duplicate != null) {
-                logger.info("Found a duplicate (acctSvcrRef): $acctSvcrRef")
-                // FIXME(dold): See if an old transaction needs to be superseded by this one
+                logger.info("Found a duplicate, UID is $paymentUid")
                 // https://bugs.gnunet.org/view.php?id=6381
                 continue@txloop
             }
             val rawEntity = NexusBankTransactionEntity.new {
                 bankAccount = acct
-                accountTransactionId = acctSvcrRef
+                accountTransactionId = paymentUid
                 amount = singletonBatchedTransaction.amount.value
                 currency = singletonBatchedTransaction.amount.currency
                 transactionJson = jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(entry)
@@ -833,29 +959,35 @@ fun processCamtMessage(
             }
             rawEntity.flush()
             newTransactions++
-            newPaymentsLog += "\n- " + entry.getSingletonSubject()
+            newPaymentsLog += "\n- ${entry.getSingletonSubject()}"
+
             // This block tries to acknowledge a former outgoing payment as booked.
             if (singletonBatchedTransaction.creditDebitIndicator == CreditDebitIndicator.DBIT) {
                 val t0 = singletonBatchedTransaction.details
-                val pmtInfId = t0.paymentInformationId
-                if (pmtInfId != null) {
+                val endToEndId = t0.endToEndId
+                if (endToEndId != null) {
+                    logger.debug("Reconciling outgoing payment with EndToEndId: $endToEndId")
                     val paymentInitiation = PaymentInitiationEntity.find {
                         PaymentInitiationsTable.bankAccount eq acct.id and (
                                 // pmtInfId is a value that the payment submitter
                                 // asked the bank to associate with the payment to be made.
-                                PaymentInitiationsTable.paymentInformationId eq pmtInfId)
+                                PaymentInitiationsTable.endToEndId eq endToEndId)
 
                     }.firstOrNull()
                     if (paymentInitiation != null) {
-                        logger.info("Could confirm one initiated payment: $pmtInfId")
+                        logger.info("Could confirm one initiated payment: $endToEndId")
                         paymentInitiation.confirmationTransaction = rawEntity
                     }
                 }
+                // Every payment initiated by Nexus has EndToEndId.  Warn if not found.
+                else
+                    logger.warn("Camt ${res.messageId} has outgoing payment without EndToEndId..")
             }
         }
         if (newTransactions > 0)
-            logger.debug("Camt $code '${res.messageId}' has new payments:${newPaymentsLog}")
+            logger.debug("Camt $fetchLevel '${res.messageId}' has new payments:${newPaymentsLog}")
     }
+
     return IngestedTransactionsCount(
         newTransactions = newTransactions,
         downloadedTransactions = downloadedTransactions

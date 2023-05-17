@@ -34,6 +34,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import startServer
+import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
+import tech.libeufin.nexus.iso20022.createPain001document
 import tech.libeufin.nexus.iso20022.parseCamtMessage
 import tech.libeufin.nexus.server.client
 import tech.libeufin.nexus.server.nexusApp
@@ -94,10 +96,51 @@ class Serve : CliktCommand("Run nexus HTTP server") {
     }
 }
 
-class ParseCamt : CliktCommand("Parse CAMT file, outputs JSON in libEufin internal representation.") {
+/**
+ * This command purpose is to let the user then _manually_
+ * tune the pain.001, to upload it to online verifiers.
+ */
+class GenPain : CliktCommand(
+    "Generate random pain.001 document for 'pf' dialect, printing to STDOUT."
+) {
     private val logLevel by option(
         help = "Set the log level to: 'off', 'error', 'warn', 'info', 'debug', 'trace', 'all'"
     )
+    private val dialect by option(
+        help = "EBICS dialect using the pain.001 being generated.  Defaults to 'pf' (PostFinance)",
+    ).default("pf")
+    override fun run() {
+        setLogLevel(logLevel)
+        val pain001 = createPain001document(
+            NexusPaymentInitiationData(
+                debtorIban = "CH0889144371988976754",
+                debtorBic = "POFICHBEXXX",
+                debtorName = "Sample Debtor Name",
+                currency = "CHF",
+                amount = "5.00",
+                creditorIban = "CH9789144829733648596",
+                creditorName = "Sample Creditor Name",
+                creditorBic = "POFICHBEXXX",
+                paymentInformationId = "8aae7a2ded2f",
+                preparationTimestamp = getNow().toInstant().toEpochMilli(),
+                subject = "Unstructured remittance information",
+                instructionId = "InstructionId",
+                endToEndId = "71cfbdaf901f",
+                messageId = "2a16b35ed69c"
+            ),
+            dialect = this.dialect
+        )
+        println(pain001)
+    }
+}
+class ParseCamt : CliktCommand("Parse camt.05x file, outputs JSON in libEufin internal representation.") {
+    private val logLevel by option(
+        help = "Set the log level to: 'off', 'error', 'warn', 'info', 'debug', 'trace', 'all'"
+    )
+    private val withC54 by option(
+        help = "Treats the input as camt.054.  Without this option, the" +
+                " parser expects a camt.052 or camt.053 and handles them equally."
+    ).flag(default = false)
     private val filename by argument("FILENAME", "File in CAMT format")
     override fun run() {
         setLogLevel(logLevel)
@@ -151,6 +194,6 @@ class Superuser : CliktCommand("Add superuser or change pw") {
 
 fun main(args: Array<String>) {
     NexusCommand()
-        .subcommands(Serve(), Superuser(), ParseCamt(), ResetTables())
+        .subcommands(Serve(), Superuser(), ParseCamt(), ResetTables(), GenPain())
         .main(args)
 }
