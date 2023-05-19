@@ -1,13 +1,9 @@
 package tech.libeufin.nexus.server
 
-import CamtBankAccountEntry
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.http.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.greaterEq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
@@ -78,9 +74,9 @@ enum class EbicsDialects(val dialectName: String) {
  * enum class.  This way, Nexus has more control when it tries
  * to locally reconcile payments.
  */
-enum class PaymentUidQualifiers(qualifierName: String) {
-    BANK_GIVEN("bank_given"),
-    NEXUS_GIVEN("nexus_given")
+enum class PaymentUidQualifiers {
+    BANK_GIVEN,
+    USER_GIVEN
 }
 
 // Valid connection types.

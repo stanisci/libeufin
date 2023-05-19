@@ -359,7 +359,7 @@ fun processXLibeufinBankMessage(
             )
         }
         // Searching for duplicates.
-        if (findDuplicate(bankAccountId, it.uid) != null) {
+        if (findDuplicate(bankAccountId, "${PaymentUidQualifiers.BANK_GIVEN}:${it.uid}") != null) {
             logger.debug("x-libeufin-bank ingestion: transaction ${it.uid} is a duplicate, skipping.")
             return@forEach
         }
@@ -377,7 +377,7 @@ fun processXLibeufinBankMessage(
                  * state.
                  */
                 this.status = EntryStatus.BOOK
-                this.accountTransactionId = it.uid
+                this.accountTransactionId = "${PaymentUidQualifiers.BANK_GIVEN}:${it.uid}"
                 this.transactionJson = jacksonObjectMapper(
                 ).writeValueAsString(it.exportAsCamtModel())
                 this.creditDebitIndicator = direction.exportAsCamtDirection()

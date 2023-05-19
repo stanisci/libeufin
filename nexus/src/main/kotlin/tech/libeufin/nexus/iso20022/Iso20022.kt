@@ -801,7 +801,7 @@ fun extractPaymentUidFromSingleton(
                     )
                     throw internalServerError("Internal reconciliation error (no EndToEndId)")
                 }
-                return "${PaymentUidQualifiers.NEXUS_GIVEN}:$expectedEndToEndId"
+                return "${PaymentUidQualifiers.USER_GIVEN}:$expectedEndToEndId"
             }
             // Didn't return/throw before, it must be an incoming payment.
             val maybeAcctSvcrRef = tx.details.accountServicerRef
