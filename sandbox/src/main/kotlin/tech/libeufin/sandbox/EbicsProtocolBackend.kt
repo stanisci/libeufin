@@ -1017,8 +1017,8 @@ private fun ensureEbicsHost(requestHostID: String): EbicsHostPublicInfo {
 }
 fun receiveEbicsXmlInternal(xmlData: String): Document {
     // logger.debug("Data received: $xmlData")
-    val requestDocument: Document? = XMLUtil.parseStringIntoDom(xmlData)
-    if (requestDocument == null || (!XMLUtil.validateFromDom(requestDocument))) {
+    val requestDocument: Document = XMLUtil.parseStringIntoDom(xmlData)
+    if (!XMLUtil.validateFromDom(requestDocument)) {
         println("Problematic document was: $requestDocument")
         throw EbicsInvalidXmlError()
     }

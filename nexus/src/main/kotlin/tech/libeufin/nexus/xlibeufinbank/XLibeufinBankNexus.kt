@@ -19,12 +19,10 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.util.*
 import io.ktor.util.*
-import io.ktor.util.date.*
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.*
-import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
 import tech.libeufin.util.*
 import java.net.MalformedURLException
@@ -328,7 +326,7 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
  * status, since Sandbox has only one (unnamed) transaction state and
  * all transactions are asked as reports.
  */
-fun processXLibeufinBankMessage(
+fun ingestXLibeufinBankMessage(
     bankAccountId: String,
     data: JsonNode
 ): IngestedTransactionsCount {

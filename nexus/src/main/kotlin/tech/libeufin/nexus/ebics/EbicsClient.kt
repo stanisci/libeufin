@@ -78,7 +78,14 @@ private suspend inline fun HttpClient.postToBank(url: String, body: String): Str
 sealed class EbicsDownloadResult
 
 class EbicsDownloadSuccessResult(
-    val orderData: ByteArray
+    val orderData: ByteArray,
+    /**
+     * This value points at the EBICS transaction that carried
+     * the order data contained in this structure.  That makes
+     * possible to log the EBICS transaction that carried one
+     * invalid order data, for example.
+     */
+    val transactionID: String? = null
 ) : EbicsDownloadResult()
 
 class EbicsDownloadEmptyResult(
@@ -244,7 +251,7 @@ suspend fun doEbicsDownloadTransaction(
         }
     }
     logger.debug("Bank acknowledges EBICS download receipt.  Transaction ID: $transactionID.")
-    return EbicsDownloadSuccessResult(respPayload)
+    return EbicsDownloadSuccessResult(respPayload, transactionID)
 }
 
 // Currently only 1-segment requests.

@@ -44,7 +44,7 @@ import org.slf4j.event.Level
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.*
 import tech.libeufin.nexus.ebics.*
-import tech.libeufin.nexus.iso20022.processCamtMessage
+import tech.libeufin.nexus.iso20022.ingestCamtMessageIntoAccount
 import tech.libeufin.util.*
 import java.net.URLEncoder
 
@@ -437,7 +437,7 @@ val nexusApp: Application.() -> Unit = {
                 defaultConn.dialect
             } else null
             val msgType = ensureNonNull(call.parameters["type"])
-            processCamtMessage(
+            ingestCamtMessageIntoAccount(
                 ensureNonNull(accountId),
                 XMLUtil.parseStringIntoDom(call.receiveText()),
                 when(msgType) {

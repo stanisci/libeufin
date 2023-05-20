@@ -37,6 +37,7 @@ import startServer
 import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
 import tech.libeufin.nexus.iso20022.createPain001document
 import tech.libeufin.nexus.iso20022.parseCamtMessage
+import tech.libeufin.nexus.server.EbicsDialects
 import tech.libeufin.nexus.server.client
 import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.util.*
@@ -137,15 +138,15 @@ class ParseCamt : CliktCommand("Parse camt.05x file, outputs JSON in libEufin in
     private val logLevel by option(
         help = "Set the log level to: 'off', 'error', 'warn', 'info', 'debug', 'trace', 'all'"
     )
-    private val withC54 by option(
-        help = "Treats the input as camt.054.  Without this option, the" +
-                " parser expects a camt.052 or camt.053 and handles them equally."
+    private val withPfDialect by option(
+        help = "Set the dialect to 'pf' (PostFinance).  If not given, it defaults to GLS."
     ).flag(default = false)
     private val filename by argument("FILENAME", "File in CAMT format")
     override fun run() {
         setLogLevel(logLevel)
         val camtText = File(filename).readText(Charsets.UTF_8)
-        val res = parseCamtMessage(XMLUtil.parseStringIntoDom(camtText))
+        val dialect = if (withPfDialect) EbicsDialects.POSTFINANCE.dialectName else null
+        val res = parseCamtMessage(XMLUtil.parseStringIntoDom(camtText), dialect)
         println(jacksonObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(res))
     }
 }

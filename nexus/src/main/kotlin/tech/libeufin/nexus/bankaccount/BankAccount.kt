@@ -29,7 +29,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
-import tech.libeufin.nexus.xlibeufinbank.processXLibeufinBankMessage
+import tech.libeufin.nexus.xlibeufinbank.ingestXLibeufinBankMessage
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.internalServerError
 import java.time.Instant
@@ -204,9 +204,13 @@ fun ingestBankMessagesIntoAccount(
         }.orderBy(
             Pair(NexusBankMessagesTable.id, SortOrder.ASC)
         ).forEach {
-            val processingResult: IngestedTransactionsCount = when(BankConnectionType.parseBankConnectionType(conn.type)) {
+            val ingestionResult: IngestedTransactionsCount = when(BankConnectionType.parseBankConnectionType(conn.type)) {
                 BankConnectionType.EBICS -> {
                     val camtString = it.message.bytes.toString(Charsets.UTF_8)
+                    /**
+                     * NOT validating _again_ the camt document because it was
+                     * already validate before being stored into the database.
+                     */
                     val doc = XMLUtil.parseStringIntoDom(camtString)
                     /**
                      * Calling the CaMt handler.  After its return, all the Neuxs-meaningful
@@ -214,7 +218,7 @@ fun ingestBankMessagesIntoAccount(
                      * processed by any facade OR simply be communicated to the CLI via JSON.
                      */
                     try {
-                        processCamtMessage(
+                        ingestCamtMessageIntoAccount(
                             bankAccountId,
                             doc,
                             it.fetchLevel,
@@ -234,7 +238,7 @@ fun ingestBankMessagesIntoAccount(
                                 " be parsed into JSON by the x-libeufin-bank ingestion.")
                         throw internalServerError("Could not ingest x-libeufin-bank messages.")
                     }
-                    processXLibeufinBankMessage(
+                    ingestXLibeufinBankMessage(
                         bankAccountId,
                         jMessage
                     )
@@ -246,13 +250,13 @@ fun ingestBankMessagesIntoAccount(
              * (1) flagged, (2) skipped when this function will run again, and (3)
              * NEVER deleted from the database.
              */
-            if (processingResult.newTransactions == -1) {
+            if (ingestionResult.newTransactions == -1) {
                 it.errors = true
                 lastId = it.id.value
                 return@forEach
             }
-            totalNew += processingResult.newTransactions
-            downloadedTransactions += processingResult.downloadedTransactions
+            totalNew += ingestionResult.newTransactions
+            downloadedTransactions += ingestionResult.downloadedTransactions
             /**
              * Disk-space conservative check: only store if "yes" was
              * explicitly set into the environment variable.  Any other

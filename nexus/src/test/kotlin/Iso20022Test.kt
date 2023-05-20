@@ -9,7 +9,7 @@ import org.junit.Ignore
 import org.junit.Test
 import org.w3c.dom.Document
 import poFiCamt052
-import poFiCamt054
+import poFiCamt054_2019
 import prepNexusDb
 import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.nexus.iso20022.*
@@ -21,13 +21,6 @@ import tech.libeufin.util.DestructionError
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.destructXml
 import withTestDatabase
-import java.math.BigDecimal
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
-import java.util.TimeZone
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -125,15 +118,15 @@ class Iso20022Test {
 
     @Test
     fun parsePoFiCamt054() {
-        val doc = XMLUtil.parseStringIntoDom(poFiCamt054)
-        parseCamtMessage(doc)
+        val doc = XMLUtil.parseStringIntoDom(poFiCamt054_2019)
+        parseCamtMessage(doc, dialect = "pf")
     }
 
     @Test
     fun ingestPoFiCamt054() {
-        val doc = XMLUtil.parseStringIntoDom(poFiCamt054)
+        val doc = XMLUtil.parseStringIntoDom(poFiCamt054_2019)
         withTestDatabase { prepNexusDb()
-            processCamtMessage(
+            ingestCamtMessageIntoAccount(
                 "foo",
                 doc,
                 FetchLevel.NOTIFICATION,

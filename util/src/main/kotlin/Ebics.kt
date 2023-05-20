@@ -264,7 +264,6 @@ fun createEbicsRequestForUploadInitialization(
     return XMLUtil.convertDomToString(doc)
 }
 
-
 fun createEbicsRequestForDownloadInitialization(
     subscriberDetails: EbicsClientSubscriberDetails,
     orderType: String,

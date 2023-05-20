@@ -225,6 +225,8 @@ class XMLUtil private constructor() {
                     }
                 }
             }
+
+            // FIXME: need here the "2019" Swiss versions of camt and pain.
             val schemaInputs: Array<Source> = listOf(
                 "xsd/ebics_H004.xsd",
                 "xsd/ebics_hev.xsd",
@@ -232,7 +234,7 @@ class XMLUtil private constructor() {
                 "xsd/camt.053.001.02.xsd",
                 "xsd/camt.054.001.02.xsd",
                 "xsd/pain.001.001.03.xsd",
-                "xsd/pain.001.001.03.ch.02.xsd"
+                "xsd/pain.001.001.03.ch.02.xsd" // Swiss 2013 version.
             ).map {
                 val stream =
                     classLoader.getResourceAsStream(it) ?: throw FileNotFoundException("Schema file $it not found.")

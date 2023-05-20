@@ -30,6 +30,7 @@ import CashAccount
 import CreditDebitIndicator
 import CurrencyAmount
 import CurrencyExchange
+import EntryStatus
 import GenericId
 import OrganizationIdentification
 import PartyIdentification
@@ -581,7 +582,7 @@ private fun XmlElementDestructor.extractInnerBkTxCd(creditDebitIndicator: Credit
     return "XTND-NTAV-NTAV"
 }
 
-private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
+private fun XmlElementDestructor.extractInnerTransactions(dialect: String? = null): CamtReport {
     val account = requireUniqueChildNamed("Acct") { extractAccount() }
 
     val balances = mapEachChildNamed("Bal") {
@@ -613,8 +614,16 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
     // multiple money transactions *within* one Ntry element.
     val entries = mapEachChildNamed("Ntry") {
         val amount = extractCurrencyAmount()
-        val status = requireUniqueChildNamed("Sts") { focusElement.textContent }.let {
-            EntryStatus.valueOf(it)
+        val status = requireUniqueChildNamed("Sts") {
+            val textContent = if (dialect == EbicsDialects.POSTFINANCE.dialectName) {
+                requireUniqueChildNamed("Cd") {
+                    focusElement.textContent
+                }
+            } else
+                focusElement.textContent
+            textContent.let {
+                EntryStatus.valueOf(it)
+            }
         }
         val creditDebitIndicator = requireUniqueChildNamed("CdtDbtInd") { focusElement.textContent }.let {
             CreditDebitIndicator.valueOf(it)
@@ -677,7 +686,7 @@ private fun XmlElementDestructor.extractInnerTransactions(): CamtReport {
  * Extract a list of transactions from
  * an ISO20022 camt.052 / camt.053 message.
  */
-fun parseCamtMessage(doc: Document): CamtParseResult {
+fun parseCamtMessage(doc: Document, dialect: String? = null): CamtParseResult {
     return destructXml(doc) {
         requireRootElement("Document") {
             // Either bank to customer statement or report
@@ -685,17 +694,17 @@ fun parseCamtMessage(doc: Document): CamtParseResult {
                 when (focusElement.localName) {
                     "BkToCstmrAcctRpt" -> {
                         mapEachChildNamed("Rpt") {
-                            extractInnerTransactions()
+                            extractInnerTransactions(dialect)
                         }
                     }
                     "BkToCstmrStmt" -> {
                         mapEachChildNamed("Stmt") {
-                            extractInnerTransactions()
+                            extractInnerTransactions(dialect)
                         }
                     }
                     "BkToCstmrDbtCdtNtfctn" -> {
                         mapEachChildNamed("Ntfctn") {
-                            extractInnerTransactions()
+                            extractInnerTransactions(dialect)
                         }
                     }
                     else -> {
@@ -846,7 +855,7 @@ fun extractPaymentUidFromSingleton(
  *   case of DBIT transaction.
  * - returns a IngestedTransactionCount object.
  */
-fun processCamtMessage(
+fun ingestCamtMessageIntoAccount(
     bankAccountId: String,
     camtDoc: Document,
     fetchLevel: FetchLevel,
@@ -866,7 +875,7 @@ fun processCamtMessage(
         if (acct == null) {
             throw NexusError(HttpStatusCode.NotFound, "user not found")
         }
-        val res = try { parseCamtMessage(camtDoc) } catch (e: CamtParsingError) {
+        val res = try { parseCamtMessage(camtDoc, dialect) } catch (e: CamtParsingError) {
             logger.warn("Invalid CAMT received from bank: ${e.message}")
             newTransactions = -1
             return@transaction

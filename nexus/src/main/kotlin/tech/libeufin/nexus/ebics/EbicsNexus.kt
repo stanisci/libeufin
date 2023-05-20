@@ -90,18 +90,31 @@ private fun getFetchLevelFromEbicsOrder(ebicsHistoryType: String): FetchLevel {
     }
 }
 
-fun storeCamt(
+// Validate and store the received document for later ingestion.
+private fun validateAndStoreCamt(
     bankConnectionId: String,
     camt: String,
-    fetchLevel: FetchLevel
+    fetchLevel: FetchLevel,
+    transactionID: String? = null // the EBICS transaction that carried this camt.
 ) {
-    val camt53doc = XMLUtil.parseStringIntoDom(camt)
-    val msgId = camt53doc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
+    val camtDoc = try {
+        XMLUtil.parseStringIntoDom(camt)
+    }
+    catch (e: Exception) {
+        throw badGateway("Could not parse camt document from EBICS transaction $transactionID")
+    }
+    if (!XMLUtil.validateFromDom(camtDoc))
+        throw badGateway("Camt document from EBICS transaction $transactionID is invalid")
+
+    val msgId = camtDoc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
     logger.info("Camt document '$msgId' received via $fetchLevel.")
     transaction {
         val conn = NexusBankConnectionEntity.findByName(bankConnectionId)
         if (conn == null) {
-            throw NexusError(HttpStatusCode.InternalServerError, "bank connection missing")
+            throw NexusError(
+                HttpStatusCode.InternalServerError,
+                "bank connection missing"
+            )
         }
         val oldMsg = NexusBankMessageEntity.find { NexusBankMessagesTable.messageId eq msgId }.firstOrNull()
         if (oldMsg == null) {
@@ -164,10 +177,11 @@ private suspend fun fetchEbicsC5x(
         is EbicsDownloadSuccessResult -> {
             response.orderData.unzipWithLambda {
                 // logger.debug("Camt entry (filename (in the Zip archive): ${it.first}): ${it.second}")
-                storeCamt(
+                validateAndStoreCamt(
                     bankConnectionId,
                     it.second,
-                    getFetchLevelFromEbicsOrder(historyType)
+                    getFetchLevelFromEbicsOrder(historyType),
+                    transactionID = response.transactionID
                 )
             }
         }
