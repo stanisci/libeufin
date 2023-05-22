@@ -1,35 +1,47 @@
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.client.*
+import io.ktor.client.engine.cio.*
 import io.ktor.client.engine.mock.*
-import io.ktor.client.plugins.*
 import io.ktor.client.request.*
-import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.*
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.junit.Ignore
 import org.junit.Test
-import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.sandbox.*
-import tech.libeufin.util.internalServerError
 import tech.libeufin.util.parseAmount
 
 class ConversionServiceTest {
+    private fun CoroutineScope.launchBuyinMonitor(httpClient: HttpClient): Job {
+        val job = launch {
+            /**
+             * The runInterruptible wrapper lets code without suspension
+             * points be cancel()'d.  Without it, such code would ignore
+             * any call to cancel() and the test never return.
+             */
+            runInterruptible {
+                buyinMonitor(
+                    demobankName = "default",
+                    accountToCredit = "exchange-0",
+                    client = httpClient
+                )
+            }
+        }
+        return job
+    }
     /**
-     * Testing the buy-in monitor in the normal case: Nexus
-     * communicates a new incoming fiat transaction and the
-     * monitor wires funds to the exchange.
+     * Testing the buy-in monitor in all the HTTP scenarios,
+     * successful case, client's and server's error cases.
      */
     @Test
     fun buyinTest() {
-        // First create an incoming fiat payment _at Nexus_.
-        // This payment is addressed to the Nexus user whose
-        // (Nexus) credentials will be used by Sandbox to fetch
-        // new incoming fiat payments.
+        // 1, testing the successful case.
+        /* First create an incoming fiat payment _at Nexus_.
+          This payment is addressed to the Nexus user whose
+          (Nexus) credentials will be used by Sandbox to fetch
+          new incoming fiat payments. */
         withTestDatabase {
             prepSandboxDb(currency = "REGIO")
             prepNexusDb()
@@ -48,23 +60,13 @@ class ConversionServiceTest {
             )
             // Start Nexus, to let it serve the fiat transaction.
             testApplication {
+                val client = this.createClient {
+                    followRedirects = false
+                }
                 application(nexusApp)
                 // Start the buy-in monitor to let it download the fiat transaction.
                 runBlocking {
-                    val job = launch {
-                        /**
-                         * The runInterruptible wrapper lets code without suspension
-                         * points be cancel()'d.  Without it, such code would ignore
-                         * any call to cancel() and the test never return.
-                         */
-                        runInterruptible {
-                            buyinMonitor(
-                                demobankName = "default",
-                                accountToCredit = "exchange-0",
-                                client = client
-                            )
-                        }
-                    }
+                    val job = launchBuyinMonitor(client)
                     delay(1000L) // Lets the DB persist.
                     job.cancelAndJoin()
                 }
@@ -93,6 +95,48 @@ class ConversionServiceTest {
                 // and the regional currency.
                 assert(boughtIn.subject == reservePub && boughtIn.currency == "REGIO")
             }
+            // 2, testing the client side error case.
+            assertException<BuyinClientError>(
+                {
+                    runBlocking {
+                        /**
+                         * As soon as the buy-in monitor requests again the history
+                         * to Nexus, it'll get 400 from the mock client.
+                         */
+                        launchBuyinMonitor(getMockedClient { respondBadRequest() })
+                    }
+                }
+            )
+            /**
+             * 3, testing the server side error case.  Here the monitor should
+             * NOT throw any error and instead keep operating normally.  This allows
+             * Sandbox to tolerate server errors and retry the requests.
+             */
+            runBlocking {
+                /**
+                 * As soon as the buy-in monitor requests again the history
+                 * to Nexus, it'll get 500 from the mock client.
+                 */
+                val job = launchBuyinMonitor(getMockedClient { respondError(HttpStatusCode.InternalServerError) })
+                delay(1000L)
+                // Getting here means no exceptions.  Can now cancel the service.
+                job.cancelAndJoin()
+            }
+            /**
+             * 4, testing the unhandled error case.  This case is treated
+             * as a client error, to signal the calling logic to intervene.
+             */
+            assertException<BuyinClientError>(
+                {
+                    runBlocking {
+                        /**
+                         * As soon as the buy-in monitor requests again the history
+                         * to Nexus, it'll get 307 from the mock client.
+                         */
+                        launchBuyinMonitor(getMockedClient { respondRedirect() })
+                    }
+                }
+            )
         }
     }
     private fun CoroutineScope.launchCashoutMonitor(httpClient: HttpClient): Job {
@@ -119,7 +163,7 @@ class ConversionServiceTest {
     }
 
     // This function mocks a 500 response to a cash-out request.
-    private fun MockRequestHandleScope.mock500Response(request: HttpRequestData): HttpResponseData {
+    private fun MockRequestHandleScope.mock500Response(): HttpResponseData {
         return respondError(HttpStatusCode.InternalServerError)
     }
     // This function implements a mock server that checks the currency in the cash-out request.
@@ -137,8 +181,10 @@ class ConversionServiceTest {
         }
     }
 
-    private fun getMockClient(handler: MockRequestHandleScope.(HttpRequestData) -> HttpResponseData): HttpClient {
+    // Abstracts the mock handler installation.
+    private fun getMockedClient(handler: MockRequestHandleScope.(HttpRequestData) -> HttpResponseData): HttpClient {
         return HttpClient(MockEngine) {
+            followRedirects = false
             engine {
                 addHandler {
                         request -> handler(request)
@@ -146,7 +192,6 @@ class ConversionServiceTest {
             }
         }
     }
-
     /**
      * Checks that the cash-out monitor reacts after
      * a CRDT transaction arrives at the designated account.
@@ -160,9 +205,13 @@ class ConversionServiceTest {
             )
             prepNexusDb()
             testApplication {
+                val client = this.createClient {
+                    followRedirects = false
+                }
                 application(nexusApp)
                 // Mock server to intercept and inspect the cash-out request.
                 val checkCurrencyClient = HttpClient(MockEngine) {
+                    followRedirects = false
                     engine {
                         addHandler { 
                             request -> inspectCashoutCurrency(request)
@@ -202,9 +251,10 @@ class ConversionServiceTest {
                      */
                     job.cancelAndJoin()
                     val error500Client = HttpClient(MockEngine) {
+                        followRedirects = false
                         engine {
                             addHandler {
-                                    request -> mock500Response(request)
+                                    request -> mock500Response()
                             }
                         }
                     }
@@ -224,7 +274,7 @@ class ConversionServiceTest {
                         assert(bankaccount.lastFiatSubmission?.id?.value == 1L)
                     }
                     /* Removing now the mocked 500 response and checking that
-                     * indeed the cash-out does get sent.  */
+                     * the problematic cash-out get then sent.  */
                     job = launchCashoutMonitor(client) // Should find the non cashed-out wire transfer and react.
                     delay(1000L) // Lets the reaction complete.
                     job.cancelAndJoin()
@@ -234,61 +284,63 @@ class ConversionServiceTest {
                         assert(bankaccount.lastFiatSubmission?.subject == "fiat #1")
                     }
                     /**
-                     * 3, the client error case, where the conversion service is
-                     * supposed to exit the whole process.
+                     * 3, testing the client error case, where
+                     * the conversion service is supposed to throw exception.
                      */
-                    job = launchCashoutMonitor(
-                        getMockClient {
-                            /**
-                             * This causes the cash-out request sent to Nexus to
-                             * respond with 400.
-                             */
-                            respondBadRequest()
-                        }
-                    ) // Should find the non cashed-out wire transfer and react.
-                    // Triggering now a cash-out operation via a new wire transfer to admin.
-                    wireTransfer(
-                        debitAccount = "foo",
-                        creditAccount = "admin",
-                        subject = "fiat #2",
-                        amount = "REGIO:22"
-                    )
-                    delay(1000L) // Lets the reaction complete.
-                    job.cancelAndJoin()
-                    // Checking that the cash-out counter did NOT update.
-                    transaction {
-                        val bankaccount = getBankAccountFromLabel("admin")
-                        // Checks that the once failing cash-out did go through.
-                        assert(bankaccount.lastFiatSubmission?.subject == "fiat #1")
-                    }
+                    assertException<CashoutClientError>({
+                        runBlocking {
+                            launchCashoutMonitor(
+                                httpClient = getMockedClient {
+                                    tech.libeufin.sandbox.logger.debug("MOCK 400")
+                                    /**
+                                     * This causes the cash-out request sent to Nexus to
+                                     * respond with 400.
+                                     */
+                                    respondBadRequest()
+                                }
+                            )
+                            // Triggering now a cash-out operation via a new wire transfer to admin.
+                            wireTransfer(
+                                debitAccount = "foo",
+                                creditAccount = "admin",
+                                subject = "fiat #2",
+                                amount = "REGIO:22"
+                            )
+                        }})
                     /**
                      * 4, checking a redirect response.  Because this is an unhandled
                      * error case, it is treated as a client error.  No need to wire a
-                     * new cash-out to trigger a cash-out request, since the last failing
+                     * new cash-out to trigger a cash-out request, since the last failed
                      * one will be retried.
                      */
-                    job = launchCashoutMonitor(
-                        getMockClient {
-                            /**
-                             * This causes the cash-out request sent to Nexus to
-                             * respond with 307 Temporary Redirect.
-                             */
-                            respondRedirect()
+                    assertException<CashoutClientError>({
+                        runBlocking {
+                            launchCashoutMonitor(
+                                getMockedClient {
+                                    /**
+                                     * This causes the cash-out request sent to Nexus to
+                                     * respond with 307 Temporary Redirect.
+                                     */
+                                    respondRedirect()
+                                }
+                            )
                         }
-                    )
-                    assert(job.isActive)
-                    delay(1000L) // Lets the reaction complete.
-                    // Checking that the service stopped because of the client-side error.
-                    assert(!job.isActive)
-                    // 5, Mocking a network error.  The previous failed cash-out
-                    // will again trigger the service to POST at Nexus.
+                    })
+                    /* 5, Mocking a network error.  The previous failed cash-out
+                       will again trigger the service to POST to Nexus.  Here the
+                       monitor tolerates the failure, as it's not due to its state
+                       and should be temporary.
+                     */
+                    var requestMade = false
                     job = launchCashoutMonitor(
-                        getMockClient {
+                        getMockedClient {
+                            requestMade = true
                             throw Exception("Network Issue.")
                         }
                     )
-                    delay(1000L) // Lets the reaction complete.
-                    assert(job.isActive) // asserting that the service is still running.
+                    delay(2000L) // Lets the reaction complete.
+                    // asserting that the service is still running after the failed request.
+                    assert(requestMade && job.isActive)
                     job.cancelAndJoin()
                 }
             }
