@@ -648,17 +648,13 @@ object BankAccountReportsTable : IntIdTable() {
 }
 
 /**
- * This table tracks the submissions of fiat payment instructions
- * that Sandbox sends to Nexus.  Every fiat payment instruction is
- * related to a confirmed cash-out operation.  The cash-out confirmation
- * is effective once the customer sends a local wire transfer to the
- * "admin" bank account.  Such wire transfer is tracked by the 'localTransaction'
- * column.
+ * This table tracks the cash-out requests that Sandbox sends to Nexus.
+ * Only successful requests make it to this table.  Failed request would
+ * either _stop_ the conversion service (for client-side errors) or get retried
+ * at a later time (for server-side errors.)
  */
 object CashoutSubmissionsTable: LongIdTable() {
     val localTransaction = reference("localTransaction", BankAccountTransactionsTable).uniqueIndex()
-    val isSubmitted = bool("isSubmitted").default(false)
-    val hasErrors = bool("hasErrors")
     val maybeNexusResponse = text("maybeNexusResponse").nullable()
     val submissionTime = long("submissionTime").nullable() // failed don't have it.
 }
@@ -666,8 +662,6 @@ object CashoutSubmissionsTable: LongIdTable() {
 class CashoutSubmissionEntity(id: EntityID<Long>) : LongEntity(id) {
     companion object : LongEntityClass<CashoutSubmissionEntity>(CashoutSubmissionsTable)
     var localTransaction by CashoutSubmissionsTable.localTransaction
-    var isSubmitted by CashoutSubmissionsTable.isSubmitted
-    var hasErrors by CashoutSubmissionsTable.hasErrors
     var maybeNexusResposnse by CashoutSubmissionsTable.maybeNexusResponse
     var submissionTime by CashoutSubmissionsTable.submissionTime
 }
