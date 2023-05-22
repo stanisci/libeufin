@@ -12,8 +12,10 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
 import org.junit.Test
+import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.sandbox.*
+import tech.libeufin.util.internalServerError
 import tech.libeufin.util.parseAmount
 
 class ConversionServiceTest {
@@ -93,6 +95,57 @@ class ConversionServiceTest {
             }
         }
     }
+    private fun CoroutineScope.launchCashoutMonitor(httpClient: HttpClient): Job {
+        val job = launch {
+            /**
+             * The runInterruptible wrapper lets code without suspension
+             * points be cancel()'d.  Without it, such code would ignore
+             * any call to cancel() and the test never return.
+             */
+            runInterruptible {
+                /**
+                 * Without the runBlocking wrapper, cashoutMonitor doesn't
+                 * compile.  That's because it is a 'suspend' function and
+                 * it needs a coroutine environment to execute; runInterruptible
+                 * does NOT provide one.  Furthermore, replacing runBlocking
+                 * with "launch {}" would nullify runInterruptible, due to other
+                 * jobs that cashoutMonitor internally launches and would escape
+                 * the interruptible policy.
+                 */
+                runBlocking { cashoutMonitor(httpClient) }
+            }
+        }
+        return job
+    }
+
+    // This function mocks a 500 response to a cash-out request.
+    private fun MockRequestHandleScope.mock500Response(request: HttpRequestData): HttpResponseData {
+        return respondError(HttpStatusCode.InternalServerError)
+    }
+    // This function implements a mock server that checks the currency in the cash-out request.
+    private suspend fun MockRequestHandleScope.inspectCashoutCurrency(request: HttpRequestData): HttpResponseData {
+        // Asserting that the currency is indeed the FIAT.
+        return if (request.url.encodedPath == "/bank-accounts/foo/payment-initiations" && request.method == HttpMethod.Post) {
+            val body = jacksonObjectMapper().readTree(request.body.toByteArray())
+            val postedAmount = body.get("amount").asText()
+            assert(parseAmount(postedAmount).currency == "FIAT")
+            respondOk("cash-out-nonce")
+        } else {
+            println("Cash-out monitor wrongly requested to: ${request.url}")
+            // This is a minimal Web server that support only the above endpoint.
+            respondError(status = HttpStatusCode.NotImplemented)
+        }
+    }
+
+    private fun getMockClient(handler: MockRequestHandleScope.(HttpRequestData) -> HttpResponseData): HttpClient {
+        return HttpClient(MockEngine) {
+            engine {
+                addHandler {
+                        request -> handler(request)
+                }
+            }
+        }
+    }
 
     /**
      * Checks that the cash-out monitor reacts after
@@ -106,59 +159,33 @@ class ConversionServiceTest {
                 cashoutCurrency = "FIAT"
             )
             prepNexusDb()
-            wireTransfer(
-                debitAccount = "foo",
-                creditAccount = "admin",
-                subject = "fiat #0",
-                amount = "REGIO:3"
-            )
             testApplication {
                 application(nexusApp)
-                /**
-                 * This construct allows to capture the HTTP request that the cash-out
-                 * monitor (that runs in Sandbox) does to Nexus letting check that the
-                 * currency mentioned in the fiat payment initiations is indeed the fiat
-                 * currency.
-                 */
+                // Mock server to intercept and inspect the cash-out request.
                 val checkCurrencyClient = HttpClient(MockEngine) {
                     engine {
                         addHandler { 
-                            request ->
-                            if (request.url.encodedPath == "/bank-accounts/foo/payment-initiations" && request.method == HttpMethod.Post) {
-                                val body = jacksonObjectMapper().readTree(request.body.toByteArray())
-                                val postedAmount = body.get("amount").asText()
-                                assert(parseAmount(postedAmount).currency == "FIAT")
-                                respondOk("cash-out-nonce")
-                            } else {
-                                println("Cash-out monitor wrongly requested to: ${request.url}")
-                                // This is a minimal Web server that support only the above endpoint.
-                                respondError(status = HttpStatusCode.NotImplemented)
-                            }
+                            request -> inspectCashoutCurrency(request)
                         }
                     }
                 }
+                // Starting the cash-out monitor with the mocked client.
                 runBlocking {
-                    val job = launch {
-                        /**
-                         * The runInterruptible wrapper lets code without suspension
-                         * points be cancel()'d.  Without it, such code would ignore
-                         * any call to cancel() and the test never return.
-                         */
-                        runInterruptible {
-                            /**
-                             * Without the runBlocking wrapper, cashoutMonitor doesn't
-                             * compile.  That's because it is a 'suspend' function and
-                             * it needs a coroutine environment to execute; runInterruptible
-                             * does NOT provide one.  Furthermore, replacing runBlocking
-                             * with "launch {}" would nullify runInterruptible, due to other
-                             * jobs that cashoutMonitor internally launches and would escape
-                             * the interruptible policy.
-                             */
-                            runBlocking { cashoutMonitor(checkCurrencyClient) }
-                        }
-                    }
+                    var job = launchCashoutMonitor(checkCurrencyClient)
+                    // Following are various cases of a cash-out scenario.
+
+                    /**
+                     * 1, Ordinary/successful case.  We test that the conversion
+                     * service sent indeed one request to Nexus and that the currency
+                     * is correct.
+                     */
+                    wireTransfer(
+                        debitAccount = "foo",
+                        creditAccount = "admin",
+                        subject = "fiat #0",
+                        amount = "REGIO:3"
+                    )
                     delay(1000L) // Lets DB persist the information.
-                    job.cancelAndJoin()
                     // Checking now the Sandbox side, and namely that one
                     // cash-out operation got carried out.
                     transaction {
@@ -170,46 +197,99 @@ class ConversionServiceTest {
                          */
                         assert(op.maybeNexusResposnse == "cash-out-nonce")
                     }
-                }
-            }
-        }
-    }
-
-    /**
-     * Tests whether the conversion service is able to skip
-     * submissions that had problems and proceed to new ones.
-    ----------------------------------------------------------
-     * Ignoring the test because the new version just fails the
-     * process on client side errors.  Still however keeping the
-     * (ignored) test as a model to create faulty situations.
-     */
-    @Ignore
-    @Test
-    fun testWrongSubmissionSkip() {
-        withTestDatabase {
-            prepSandboxDb(); prepNexusDb()
-            val engine400 = MockEngine { respondBadRequest() }
-            val mockedClient = HttpClient(engine400)
-            runBlocking {
-                val monitorJob = async(Dispatchers.IO) { cashoutMonitor(mockedClient) }
-                launch {
+                    /* 2, Internal server error case.  We test that after requesting
+                     * to a failing Nexus, the last accounted cash-out did NOT increase.
+                     */
+                    job.cancelAndJoin()
+                    val error500Client = HttpClient(MockEngine) {
+                        engine {
+                            addHandler {
+                                    request -> mock500Response(request)
+                            }
+                        }
+                    }
+                    job = launchCashoutMonitor(error500Client)
+                    // Sending a new payment to trigger the conversion service.
                     wireTransfer(
                         debitAccount = "foo",
                         creditAccount = "admin",
-                        subject = "fiat",
-                        amount = "TESTKUDOS:3"
+                        subject = "fiat #1",
+                        amount = "REGIO:2"
                     )
-                    // Give enough time to let a flawed monitor submit the request twice.
-                    delay(6000)
+                    delay(1000L) // Lets the reaction complete.
+                    job.cancelAndJoin()
                     transaction {
-                        // The request was submitted only once.
-                        assert(CashoutSubmissionEntity.all().count() == 1L)
-                        // The monitor marked it as failed.
-                        assert(CashoutSubmissionEntity.all().first().hasErrors)
-                        // The submission pointer got advanced by one.
-                        assert(getBankAccountFromLabel("admin").lastFiatSubmission?.id?.value == 1L)
+                        val bankaccount = getBankAccountFromLabel("admin")
+                        // Checks that the counter did NOT increase.
+                        assert(bankaccount.lastFiatSubmission?.id?.value == 1L)
                     }
-                    monitorJob.cancel()
+                    /* Removing now the mocked 500 response and checking that
+                     * indeed the cash-out does get sent.  */
+                    job = launchCashoutMonitor(client) // Should find the non cashed-out wire transfer and react.
+                    delay(1000L) // Lets the reaction complete.
+                    job.cancelAndJoin()
+                    transaction {
+                        val bankaccount = getBankAccountFromLabel("admin")
+                        // Checks that the once failing cash-out did go through.
+                        assert(bankaccount.lastFiatSubmission?.subject == "fiat #1")
+                    }
+                    /**
+                     * 3, the client error case, where the conversion service is
+                     * supposed to exit the whole process.
+                     */
+                    job = launchCashoutMonitor(
+                        getMockClient {
+                            /**
+                             * This causes the cash-out request sent to Nexus to
+                             * respond with 400.
+                             */
+                            respondBadRequest()
+                        }
+                    ) // Should find the non cashed-out wire transfer and react.
+                    // Triggering now a cash-out operation via a new wire transfer to admin.
+                    wireTransfer(
+                        debitAccount = "foo",
+                        creditAccount = "admin",
+                        subject = "fiat #2",
+                        amount = "REGIO:22"
+                    )
+                    delay(1000L) // Lets the reaction complete.
+                    job.cancelAndJoin()
+                    // Checking that the cash-out counter did NOT update.
+                    transaction {
+                        val bankaccount = getBankAccountFromLabel("admin")
+                        // Checks that the once failing cash-out did go through.
+                        assert(bankaccount.lastFiatSubmission?.subject == "fiat #1")
+                    }
+                    /**
+                     * 4, checking a redirect response.  Because this is an unhandled
+                     * error case, it is treated as a client error.  No need to wire a
+                     * new cash-out to trigger a cash-out request, since the last failing
+                     * one will be retried.
+                     */
+                    job = launchCashoutMonitor(
+                        getMockClient {
+                            /**
+                             * This causes the cash-out request sent to Nexus to
+                             * respond with 307 Temporary Redirect.
+                             */
+                            respondRedirect()
+                        }
+                    )
+                    assert(job.isActive)
+                    delay(1000L) // Lets the reaction complete.
+                    // Checking that the service stopped because of the client-side error.
+                    assert(!job.isActive)
+                    // 5, Mocking a network error.  The previous failed cash-out
+                    // will again trigger the service to POST at Nexus.
+                    job = launchCashoutMonitor(
+                        getMockClient {
+                            throw Exception("Network Issue.")
+                        }
+                    )
+                    delay(1000L) // Lets the reaction complete.
+                    assert(job.isActive) // asserting that the service is still running.
+                    job.cancelAndJoin()
                 }
             }
         }
