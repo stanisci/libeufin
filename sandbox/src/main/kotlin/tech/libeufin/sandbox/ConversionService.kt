@@ -62,6 +62,20 @@ data class NexusTransactions(
 )
 
 /**
+ * This exception signals that the buy-in service could NOT
+ * GET the list of fiat transactions from Nexus due to a client
+ * error.  Because this is fatal (e.g. wrong credentials, URL not found..),
+ * the service should be stopped.
+ */
+class BuyinClientError : Exception()
+
+/**
+ * This exception signals that POSTing a cash-out operation
+ * to Nexus failed due to the client.  This is a fatal condition
+ * therefore the monitor should be stopped.
+ */
+class CashoutClientError : Exception()
+/**
  * Executes the 'block' function every 'loopNewReqMs' milliseconds.
  * Does not exit/fail the process upon exceptions - just logs them.
  */
@@ -71,11 +85,14 @@ fun downloadLoop(block: () -> Unit) {
     runBlocking {
         while(true) {
             try { block() }
+            catch (e: BuyinClientError) {
+                logger.error("The buy-in monitor had a client error while GETting new" +
+                        " transactions from Neuxs.  Stopping it")
+                // Rethrowing and let the caller manage it
+                throw e
+            }
+            // Tolerating any other error type that's not due to the client.
             catch (e: Exception) {
-                /**
-                 * Not exiting to tolerate network issues, or optimistically
-                 * tolerate problems not caused by Sandbox itself.
-                 */
                 logger.error("Sandbox fiat-incoming monitor excepted: ${e.message}")
             }
             delay(newIterationTimeout)
@@ -96,12 +113,21 @@ private fun applyBuyinRatioAndFees(
 ): BigDecimal =
     ((amount * ratiosAndFees.buy_at_ratio.toBigDecimal())
             - ratiosAndFees.buy_in_fee.toBigDecimal()).roundToTwoDigits()
+
+private fun ensureDisabledRedirects(client: HttpClient) {
+    client.config {
+        if (followRedirects) throw Exception(
+            "HTTP client follows redirects, please disable."
+        )
+    }
+}
 /**
  * This function downloads the incoming fiat transactions from Nexus,
  * stores them into the database and triggers the related wire transfer
- * to the Taler exchange (to be specified in 'accountToCredit').  In case
- * of errors, it pauses and retries when the server fails, but _fails_ when
- * the client does.
+ * to the Taler exchange (to be specified in 'accountToCredit').  Once
+ * started, this function is not supposed to return, except on _client
+ * side_ errors.  On server side errors it pauses and retries.  When
+ * it returns, the caller is expected to handle the error.
  */
 fun buyinMonitor(
     demobankName: String, // used to get config values.
@@ -109,38 +135,60 @@ fun buyinMonitor(
     accountToCredit: String,
     accountToDebit: String = "admin"
 ) {
+    ensureDisabledRedirects(client)
     val demobank = ensureDemobank(demobankName)
+    /**
+     * Getting the config values to send authenticated requests
+     * to Nexus.  Sandbox needs one account at Nexus before being
+     * able to use these values.
+     */
     val nexusBaseUrl = getConfigValueOrThrow(demobank.config::nexusBaseUrl)
     val usernameAtNexus = getConfigValueOrThrow(demobank.config::usernameAtNexus)
     val passwordAtNexus = getConfigValueOrThrow(demobank.config::passwordAtNexus)
+    /**
+     * This is the endpoint where Nexus serves all the transactions that
+     * have ingested from the fiat bank.
+     */
     val endpoint = "bank-accounts/$usernameAtNexus/transactions"
     val uriWithoutStart = joinUrl(nexusBaseUrl, endpoint) + "?long_poll_ms=$waitTimeout"
 
     // downloadLoop does already try-catch (without failing the process).
     downloadLoop {
+        /**
+         * This bank account will act as the debtor, once a new fiat
+         * payment is detected.  It's the debtor that pays the related
+         * regional amount to the exchange, in order to start a withdrawal
+         * operation (in regional coins).
+         */
         val debitBankAccount = getBankAccountFromLabel(accountToDebit)
+        /**
+         * Setting the 'start' URI param in the following command
+         * lets Sandbox receive only unseen payments from Nexus.
+         */
         val uriWithStart = "$uriWithoutStart&start=${debitBankAccount.lastFiatFetch}"
         runBlocking {
             // Maybe get new fiat transactions.
-            logger.debug("GETting fiat transactions from: ${uriWithStart}")
-            val resp = client.get(uriWithStart) { basicAuth(usernameAtNexus, passwordAtNexus) }
+            logger.debug("GETting fiat transactions from: $uriWithStart")
+            val resp = client.get(uriWithStart) {
+                expectSuccess = false // Avoids excepting on !2xx
+                basicAuth(usernameAtNexus, passwordAtNexus)
+            }
             // The server failed, pause and try again
             if (resp.status.value.toString().startsWith('5')) {
-                logger.error("Buy-in monitor caught a failing to Nexus.  Pause and retry.")
+                logger.error("Buy-in monitor requested to a failing Nexus.  Retry.")
                 logger.error("Nexus responded: ${resp.bodyAsText()}")
-                delay(2000L)
                 return@runBlocking
             }
             // The client failed, fail the process.
             if (resp.status.value.toString().startsWith('4')) {
-                logger.error("Buy-in monitor failed at GETting to Nexus.  Fail Sandbox.")
+                logger.error("Buy-in monitor failed at GETting to Nexus.  Stopping the buy-in monitor.")
                 logger.error("Nexus responded: ${resp.bodyAsText()}")
-                exitProcess(1)
+                throw BuyinClientError()
             }
             // Expect 200 OK.  What if 3xx?
             if (resp.status.value != HttpStatusCode.OK.value) {
                 logger.error("Unhandled response status ${resp.status.value}, failing Sandbox")
-                exitProcess(1)
+                throw BuyinClientError()
             }
             // Nexus responded 200 OK, analyzing the result.
             /**
@@ -152,21 +200,9 @@ fun buyinMonitor(
                 NexusTransactions::class.java
             ) // errors are logged by the caller (without failing).
             respObj.transactions.forEach {
-                /**
-                 * If the payment doesn't contain a reserve public key,
-                 * continue the iteration with the new payment.
-                 */
+                // Ignoring payments with an invalid reserved public key.
                 if (extractReservePubFromSubject(it.camtData.getSingletonSubject()) == null)
                     return@forEach
-                /**
-                 * The payment had a reserve public key in the subject, wire it to
-                 * the exchange.  NOTE: this ensures that all the payments that the
-                 * exchange gets will NOT trigger any reimbursement, because they have
-                 * a valid reserve public key.  Reimbursements would in fact introduce
-                 * significant friction, because they need to target _fiat_ bank accounts
-                 * (the customers'), whereas the entity that _now_ pays the exchange is
-                 * "admin", which lives in the regional circuit.
-                 */
                 // Extracts the amount and checks it's at most two fractional digits.
                 val maybeValidAmount = it.camtData.amount.value
                 if (!validatePlainAmount(maybeValidAmount)) {
@@ -227,9 +263,7 @@ private fun getUnsubmittedTransactions(bankAccountLabel: String): List<BankAccou
  * This function listens for regio-incoming events (LIBEUFIN_REGIO_TX)
  * on the 'watchedBankAccount' and submits the related cash-out payment
  * to Nexus.  The fiat payment will then take place ENTIRELY on Nexus'
- * responsibility.  NOTE: This function is NOT supposed to be stopped,
- * and if it returns, is to signal one fatal error and the caller has to
- * handle it.
+ * responsibility.
  */
 suspend fun cashoutMonitor(
     httpClient: HttpClient,
@@ -237,6 +271,7 @@ suspend fun cashoutMonitor(
     demobankName: String = "default", // used to get config values.
     dbEventTimeout: Long = 0 // 0 waits forever.
 ) {
+    ensureDisabledRedirects(httpClient)
     // Register for a REGIO_TX event.
     val eventChannel = buildChannelName(
         NotificationsChannelDomains.LIBEUFIN_REGIO_TX,
@@ -350,14 +385,14 @@ suspend fun cashoutMonitor(
             }
             // Client fault, fail Sandbox.
             if (resp.status.value.toString().startsWith('4')) {
-                logger.error("Cash-out monitor failed at POSTing to Nexus.  Returning the cash-out monitor")
+                logger.error("Cash-out monitor failed at POSTing to Nexus.")
                 logger.error("Nexus responded: ${resp.bodyAsText()}")
-                return // fatal error, the caller handles it.
+                throw CashoutClientError()
             }
             // Expecting 200 OK.  What if 3xx?
             if (resp.status.value != HttpStatusCode.OK.value) {
-                logger.error("Cash-out monitor, unhandled response status: ${resp.status.value}.  Returning the cash-out monitor")
-                return // fatal error, the caller handles it.
+                logger.error("Cash-out monitor, unhandled response status: ${resp.status.value}.")
+                throw CashoutClientError()
             }
             // Successful case, mark the wire transfer as submitted,
             // and advance the pointer to the last submitted payment.
