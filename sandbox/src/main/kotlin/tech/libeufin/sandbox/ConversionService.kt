@@ -107,7 +107,7 @@ fun downloadLoop(block: () -> Unit) {
  * that came from Nexus.  The result is the regional amount
  * that will be wired to the exchange Sandbox account.
  */
-private fun applyBuyinRatioAndFees(
+fun applyBuyinRatioAndFees(
     amount: BigDecimal,
     ratiosAndFees: RatioAndFees
 ): BigDecimal {
@@ -248,21 +248,27 @@ fun buyinMonitor(
     }
 }
 
-// DB query helper.  The List return type (instead of SizedIterable) lets
-// the caller NOT open a transaction block to access the values -- although
-// some operations _on the values_ may be forbidden.
-private fun getUnsubmittedTransactions(bankAccountLabel: String): List<BankAccountTransactionEntity> {
+/* DB query helper that fetches the latest cash-out operations that were
+  confirmed in the regional currency.  A cash-out operation is 'confirmed'
+  when the bank account pointed by the parameter 'bankAccountLabel' gets
+  one incoming payment.
+
+  The List return type (instead of SizedIterable) lets the caller NOT open
+  a transaction block to access the values -- although some operations _on
+  the values_ may be forbidden.
+*/
+fun getUnsubmittedTransactions(bankAccountLabel: String): List<BankAccountTransactionEntity> {
     return transaction {
         val bankAccount = getBankAccountFromLabel(bankAccountLabel)
         val lowerExclusiveLimit = bankAccount.lastFiatSubmission?.id?.value ?: 0
         BankAccountTransactionEntity.find {
             BankAccountTransactionsTable.id greater lowerExclusiveLimit and (
                 BankAccountTransactionsTable.direction eq "CRDT"
-            )
+            ) and (BankAccountTransactionsTable.account eq bankAccount.id)
         }.sortedBy { it.id }.map { it }
-        // The latest payment must occupy the highest index,
-        // to reliably update the bank account row with the last
-        // submitted cash-out.
+        /*  The latest payment must occupy the highest index,
+        to reliably update the 'lastFiatSubmission' column of
+        the bank account. */
     }
 }
 
