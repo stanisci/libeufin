@@ -12,8 +12,65 @@ import org.junit.Test
 import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.parseAmount
+import java.math.BigDecimal
 
 class ConversionServiceTest {
+    // Tests the helper that fetches the new cash-out's to POST to Nexus.
+    @Test
+    fun testCashoutFetcher() {
+        withTestDatabase {
+            prepSandboxDb()
+            // making a transaction that means cash-out for bar, but not for foo.
+            // That lets test the singleton and empty result sets.
+            wireTransfer(
+                debitAccount = "foo",
+                creditAccount = "bar",
+                subject = "a cash-out for bar",
+                amount = "TESTKUDOS:3"
+            )
+            // Expecting the fetcher to return an empty set.
+            val expectEmpty = getUnsubmittedTransactions("foo")
+            assert(expectEmpty.isEmpty())
+            // Expecting the fetcher to return a one-element set.
+            val expectOne = getUnsubmittedTransactions("bar")
+            assert(expectOne.size == 1)
+            // Generating a bunch of cash-out operations for "foo"
+            for (i in 1..5)
+                wireTransfer(
+                    debitAccount = "bar",
+                    creditAccount = "foo",
+                    subject = "foo #$i",
+                    amount = "TESTKUDOS:3"
+                )
+            // Expecting 5 entries for foo.
+            val expectFive = getUnsubmittedTransactions("foo")
+            assert(expectFive.size == 5)
+            /* Checking the order.  The order should ensure that
+            * later payments get higher indexes.  */
+            assert(expectFive[0].subject == "foo #1")
+            assert(expectFive[4].subject == "foo #5")
+        }
+    }
+    // Tests the helper that applies buy-in ratio and fees
+    @Test
+    fun buyinRatioTest() {
+        val highFees = RatioAndFees(
+            buy_at_ratio = 1F,
+            buy_in_fee = 10F
+        )
+        // Checks that negatives aren't let through.
+        assertException<UtilError>({
+            applyBuyinRatioAndFees(
+            BigDecimal.ONE,
+            highFees)
+        })
+        // Checks successful case.
+        val fees = RatioAndFees(
+            buy_at_ratio = 3.5F,
+            buy_in_fee = 0.33F
+        )
+        assert(applyBuyinRatioAndFees(BigDecimal.valueOf(3), fees) == BigDecimal("10.17"))
+    }
     private fun CoroutineScope.launchBuyinMonitor(httpClient: HttpClient): Job {
         val job = launch {
             /**

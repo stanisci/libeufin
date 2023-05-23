@@ -125,7 +125,7 @@ class SandboxCircuitApiTest {
                 respJson = mapper.readTree(R.bodyAsText())
                 val debitAmount = respJson.get("amount_debit").asText()
                 assertWithPrint(
-                    "TESTKUDOS:2" == debitAmount || "TESTKUDOS:2.0" == debitAmount,
+                    "TESTKUDOS:2.00" == debitAmount,
                     "'debit_amount' was $debitAmount for a 'credit_amount' of CHF:1.9"
                 )
                 R = client.get(
