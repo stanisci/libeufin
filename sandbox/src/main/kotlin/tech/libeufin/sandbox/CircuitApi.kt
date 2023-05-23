@@ -15,6 +15,7 @@ import java.io.File
 import java.io.InputStreamReader
 import java.math.BigDecimal
 import java.math.MathContext
+import java.math.RoundingMode
 import java.util.concurrent.TimeUnit
 import kotlin.text.toByteArray
 
@@ -148,8 +149,9 @@ fun generateCashoutSubject(
 }
 
 fun BigDecimal.roundToTwoDigits(): BigDecimal {
-    val twoDigitsRounding = MathContext(2)
-    return this.round(twoDigitsRounding)
+    // val twoDigitsRounding = MathContext(2)
+    // return this.round(twoDigitsRounding)
+    return this.setScale(2, RoundingMode.HALF_UP)
 }
 
 /**
