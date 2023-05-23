@@ -110,9 +110,18 @@ fun downloadLoop(block: () -> Unit) {
 private fun applyBuyinRatioAndFees(
     amount: BigDecimal,
     ratiosAndFees: RatioAndFees
-): BigDecimal =
-    ((amount * ratiosAndFees.buy_at_ratio.toBigDecimal())
+): BigDecimal {
+    val maybeBuyinAmount = ((amount * ratiosAndFees.buy_at_ratio.toBigDecimal())
             - ratiosAndFees.buy_in_fee.toBigDecimal()).roundToTwoDigits()
+    // Bank's fault, as buying in should never lead to negative.
+    if (maybeBuyinAmount < BigDecimal.ZERO) {
+        logger.error("Negative buy-in scenario: input fiat amount was '${amount}'" +
+                ", buy-in ratio was '${ratiosAndFees.buy_at_ratio}'," +
+                " buy-in fee was '${ratiosAndFees.buy_in_fee}'")
+        throw internalServerError("Applying buy-in fees yielded negative regional amount")
+    }
+    return maybeBuyinAmount
+}
 
 private fun ensureDisabledRedirects(client: HttpClient) {
     client.config {

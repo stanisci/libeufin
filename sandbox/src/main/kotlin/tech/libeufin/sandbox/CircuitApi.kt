@@ -166,10 +166,19 @@ fun applyCashoutRatioAndFee(
 ): BigDecimal {
     // Normal case, when the calculation starts from the regional amount.
     if (!fromCredit) {
-        return ((amount * ratiosAndFees.sell_at_ratio.toBigDecimal()) -
+        val maybeCashoutAmount =  ((amount * ratiosAndFees.sell_at_ratio.toBigDecimal()) -
                 ratiosAndFees.sell_out_fee.toBigDecimal()).roundToTwoDigits()
+        // throws 500, since bank should not allow to get negative fiat amounts.
+        if (maybeCashoutAmount < BigDecimal.ZERO) {
+            logger.error("Cash-out operation caused a negative fiat output." +
+                    "  Regional amount was '$amount', cash-out ratio is '${ratiosAndFees.sell_at_ratio}," +
+                    " cash-out fee is '${ratiosAndFees.sell_out_fee}''"
+            )
+            throw internalServerError("Applying cash-out fees yielded negative fiat amount.")
+        }
+        return maybeCashoutAmount
     }
-    // UI convenient case, when the calculation start from the
+    // UI convenient case, when the calculation starts from the
     // desired fiat amount that the user wants eventually be paid.
     return ((amount + ratiosAndFees.sell_out_fee.toBigDecimal()) /
             ratiosAndFees.sell_at_ratio.toBigDecimal()).roundToTwoDigits()
