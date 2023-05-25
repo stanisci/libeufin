@@ -47,7 +47,6 @@ import io.ktor.server.util.*
 import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.util.date.*
-import org.jetbrains.exposed.dao.flushCache
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -64,7 +63,7 @@ import javax.xml.bind.JAXBContext
 import kotlin.system.exitProcess
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
-const val SANDBOX_VERSION = "0:0:0"
+const val PROTOCOL_VERSION_UNIFIED = "0:0:0" // Every protocol is still using the same version.
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val adminPassword: String? = System.getenv("LIBEUFIN_SANDBOX_ADMIN_PASSWORD")
 var WITH_AUTH = true // Needed by helpers too, hence not making it private.
@@ -1251,7 +1250,7 @@ val sandboxApp: Application.() -> Unit = {
                     val demobank = ensureDemobank(call)
                     call.respond(SandboxConfig(
                         name = "taler-bank-integration",
-                        version = SANDBOX_VERSION,
+                        version = PROTOCOL_VERSION_UNIFIED,
                         currency = demobank.config.currency
                     ))
                     return@get

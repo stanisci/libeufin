@@ -255,7 +255,8 @@ val nexusApp: Application.() -> Unit = {
         get("/config") {
             call.respond(
                 makeJsonObject {
-                    prop("version", getVersion())
+                    prop("version", "0:0:0")
+                    prop("name", "nexus-native")
                 }
             )
             return@get

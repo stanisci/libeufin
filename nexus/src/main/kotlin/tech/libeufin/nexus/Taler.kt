@@ -666,7 +666,7 @@ fun talerFacadeRoutes(route: Route) {
             PermissionQuery("facade", facadeId, "facade.talerwiregateway.history")
         )
         call.respond(object {
-            val version = "0.0.0"
+            val version = "0:0:0"
             val name = "taler-wire-gateway"
             val currency = getCurrency(facadeId)
         })

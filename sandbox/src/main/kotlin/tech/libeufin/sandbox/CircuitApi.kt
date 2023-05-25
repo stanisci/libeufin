@@ -7,14 +7,12 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.like
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.sandbox.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
 import java.io.File
 import java.io.InputStreamReader
 import java.math.BigDecimal
-import java.math.MathContext
 import java.math.RoundingMode
 import java.util.concurrent.TimeUnit
 import kotlin.text.toByteArray
@@ -50,7 +48,7 @@ const val FIAT_CURRENCY = "CHF" // FIXME: make configurable.
 // Configuration response:
 data class ConfigResp(
     val name: String = "circuit",
-    val version: String = SANDBOX_VERSION,
+    val version: String = PROTOCOL_VERSION_UNIFIED,
     val ratios_and_fees: RatioAndFees,
     val fiat_currency: String = FIAT_CURRENCY
 )
