@@ -29,7 +29,7 @@ class SubjectNormalization {
         val extractedPub = extractReservePubFromSubject(validPub) // has 0s.
         assert(CryptoUtil.checkValidEddsaPublicKey(extractedPub!!))
         val extractedPubWithOs = extractReservePubFromSubject(validPub.replace('0', 'O'))
-        // The "!!" ensures that the extractor did find the reserve pub. with Os instead of zoers.
+        // The "!!" ensures that the extractor did find the reserve pub. with Os instead of zeros.
         assert(CryptoUtil.checkValidEddsaPublicKey(extractedPubWithOs!!))
     }
 }
