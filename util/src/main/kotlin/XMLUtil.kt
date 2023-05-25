@@ -226,7 +226,6 @@ class XMLUtil private constructor() {
                 }
             }
 
-            // FIXME: need here the "2019" Swiss versions of camt and pain.
             val schemaInputs: Array<Source> = listOf(
                 "xsd/ebics_H004.xsd",
                 "xsd/ebics_hev.xsd",
