@@ -208,10 +208,11 @@ class SandboxCircuitApiTest {
         assert(checkPhoneNumber("+4900"))
         // E-mail address
         assert(checkEmailAddress("test@example.com"))
-        assert(!checkEmailAddress("0@0.0"))
         assert(!checkEmailAddress("foo.bar"))
         assert(checkEmailAddress("foo.bar@example.com"))
         assert(!checkEmailAddress("foo+bar@example.com"))
+        assert(checkEmailAddress("admin@example.info"))
+        assert(checkEmailAddress("AdMiN@COM.example.INFO"))
     }
 
     @Test

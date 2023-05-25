@@ -128,7 +128,7 @@ fun checkPhoneNumber(phoneNumber: String): Boolean {
 fun checkEmailAddress(emailAddress: String): Boolean {
     // From Taler TypeScript:
     // /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
-    val regex = "^[a-z0-9\\.]+@[a-z0-9\\.]+\\.[a-z]{2,3}$"
+    val regex = "^[a-zA-Z0-9\\.]+@[a-zA-Z0-9\\.]+$"
     val R = Regex(regex)
     return R.matches(emailAddress)
 }
