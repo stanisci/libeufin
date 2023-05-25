@@ -27,6 +27,7 @@ class SubjectNormalization {
         // At this point, the decoder handles 0s and Os interchangeably.
         // Now check that the reserve pub. extractor behaves equally.
         val extractedPub = extractReservePubFromSubject(validPub) // has 0s.
+        // The "!!" ensures that the extractor found a likely reserve pub.
         assert(CryptoUtil.checkValidEddsaPublicKey(extractedPub!!))
         val extractedPubWithOs = extractReservePubFromSubject(validPub.replace('0', 'O'))
         // The "!!" ensures that the extractor did find the reserve pub. with Os instead of zeros.
