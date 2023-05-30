@@ -5,6 +5,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
 import tech.libeufin.nexus.bankaccount.getBankAccount
+import tech.libeufin.nexus.ebics.EbicsBankConnectionProtocol
 import tech.libeufin.nexus.ebics.doEbicsUploadTransaction
 import tech.libeufin.nexus.ebics.getEbicsSubscriberDetails
 import tech.libeufin.nexus.getConnectionPlugin
@@ -14,7 +15,7 @@ import tech.libeufin.util.EbicsStandardOrderParams
 import java.io.BufferedReader
 import java.io.File
 
-
+// Submits a Z54 to the bank, expecting a camt.054 back.
 private fun downloadPayment() {
     val httpClient = HttpClient()
     runBlocking {
@@ -29,7 +30,9 @@ private fun downloadPayment() {
     }
 }
 
-// Causes one CRDT payment to show up in the camt.054.
+/* Simulates one incoming payment for the test platorm's bank account.
+ * The QRR format is NOT used in Taler, it is just convenient.
+ * */
 private fun uploadQrrPayment() {
     val httpClient = HttpClient()
     val qrr = """
@@ -48,6 +51,8 @@ private fun uploadQrrPayment() {
 }
 
 /**
+ * Submits a XE2 (+ pain.001 version 2019) message to the bank.
+ *
  * Causes one DBIT payment to show up in the camt.054.  This one
  * however lacks the AcctSvcrRef, so other ways to pin it are needed.
  * Notably, EndToEndId is mandatory in pain.001 _and_ is controlled
@@ -75,19 +80,22 @@ private fun uploadPain001Payment() {
         ebicsConn.submitPaymentInitiation(httpClient, 1L)
     }
 }
+
 fun main() {
-    // Load EBICS subscriber's keys from disk.
+    // Loads EBICS subscriber's keys from disk.
     val bufferedReader: BufferedReader = File("/tmp/pofi.json").bufferedReader()
     val accessDataTxt = bufferedReader.use { it.readText() }
     val ebicsConn = getConnectionPlugin("ebics")
     val accessDataJson = jacksonObjectMapper().readTree(accessDataTxt)
+
+    // Creates a connection handle to the bank, using the loaded keys.
     withTestDatabase {
         prepNexusDb()
         transaction {
             ebicsConn.createConnectionFromBackup(
                 connId = "postfinance",
                 user = getNexusUser("foo"),
-                passphrase = "foo",
+                passphrase = "secret",
                 accessDataJson
             )
             val fooBankAccount = getBankAccount("foo")
@@ -95,6 +103,14 @@ fun main() {
             fooBankAccount.iban = "CH9789144829733648596"
         }
     }
-    // uploadPayment()
-    downloadPayment()
+    // uploadPain001Payment() // XE2
+    // downloadPayment() // Z54.
+    /*runBlocking {
+        (ebicsConn as EbicsBankConnectionProtocol).fetchPaymentReceipt(
+            FetchSpecLatestJson(FetchLevel.RECEIPT, null),
+            HttpClient(),
+            "postfinance",
+            "foo"
+        )
+    }*/
 }

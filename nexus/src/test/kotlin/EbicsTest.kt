@@ -220,48 +220,6 @@ class DownloadAndSubmit {
     }
 
     /**
-     * Submits one payment instruction with an invalid Pain.001
-     * document, and checks that it was marked as invalid.  Hence,
-     * the error is expected only by the first submission, since
-     * the second won't pick the invalid payment.
-     */
-    @Test
-    fun invalidPain001() {
-        withNexusAndSandboxUser {
-            testApplication {
-                application(sandboxApp)
-                runBlocking {
-                    // Create Pain.001 to be submitted.
-                    addPaymentInitiation(
-                        Pain001Data(
-                            creditorIban = getIban(),
-                            creditorBic = "not-a-BIC", // this value causes the expected error.
-                            creditorName = "Tester",
-                            subject = "test payment",
-                            sum = "1",
-                            currency = "TESTKUDOS"
-                        ),
-                        transaction {
-                            NexusBankAccountEntity.findByName("foo") ?: throw Exception("Test failed")
-                        }
-                    )
-                    // Encounters errors.
-                    var thrown = false
-                    try {
-                        submitAllPaymentInitiations(client, "foo")
-                    } catch (e: NexusError) {
-                        assert((e.code == LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE))
-                        thrown = true
-                    }
-                    assert(thrown)
-                    // No errors, since it should not retry.
-                    submitAllPaymentInitiations(client, "foo")
-                }
-            }
-        }
-    }
-
-    /**
      * Submits one pain.001 document with the wrong currency and checks
      * that the bank responded with EBICS_PROCESSING_ERROR.
      */

@@ -175,6 +175,15 @@ enum class FetchLevel(@get:JsonValue val jsonName: String) {
     REPORT("report"),
     STATEMENT("statement"),
     NOTIFICATION("notification"),
+    /**
+     * Although not strictly used to get camt documents - typically
+     * gets pain.002 documents, this level still participates in downloading
+     * bank account activity, so placing it here.
+     */
+    RECEIPT("receipt"),
+    /**
+     * Uses of ALL do NOT include RECEIPT, in the current version.
+     */
     ALL("all");
 }
 

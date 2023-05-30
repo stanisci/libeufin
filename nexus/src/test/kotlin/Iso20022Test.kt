@@ -20,6 +20,7 @@ import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.util.DestructionError
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.destructXml
+import tech.libeufin.util.getNow
 import withTestDatabase
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -122,10 +123,13 @@ class Iso20022Test {
         parseCamtMessage(doc, dialect = "pf")
     }
 
+    // TODO: test deduplication here.
+
     @Test
     fun ingestPoFiCamt054() {
         val doc = XMLUtil.parseStringIntoDom(poFiCamt054_2019)
-        withTestDatabase { prepNexusDb()
+        withTestDatabase {
+            prepNexusDb()
             ingestCamtMessageIntoAccount(
                 "foo",
                 doc,
@@ -133,6 +137,31 @@ class Iso20022Test {
                 dialect = "pf"
             )
         }
+    }
+    // Checks that the 2019 pain.001 version validates.
+    @Test
+    fun validatePain001() {
+        val pain001 = createPain001document(
+            NexusPaymentInitiationData(
+                debtorIban = "CH0889144371988976754",
+                debtorBic = "POFICHBEXXX",
+                debtorName = "Sample Debtor Name",
+                currency = "CHF",
+                amount = "5.00",
+                creditorIban = "CH9789144829733648596",
+                creditorName = "Sample Creditor Name",
+                creditorBic = "POFICHBEXXX",
+                paymentInformationId = "8aae7a2ded2f",
+                preparationTimestamp = getNow().toInstant().toEpochMilli(),
+                subject = "Unstructured remittance information",
+                instructionId = "InstructionId",
+                endToEndId = "71cfbdaf901f",
+                messageId = "2a16b35ed69c"
+            ),
+            dialect = "pf"
+        )
+        val doc = XMLUtil.parseStringIntoDom(pain001)
+        assert(XMLUtil.validateFromDom(doc))
     }
 
     @Test

@@ -135,6 +135,15 @@ data class Pain001Namespaces(
     val xsdFilename: String
 )
 
+fun XmlElementBuilder.setBicAfterDialect(dialect: String?, bic: String) {
+    if (dialect == EbicsDialects.POSTFINANCE.dialectName)
+        element("BICFI") {
+            text(bic)
+        }
+    else element("BIC") {
+        text(bic)
+    }
+}
 /**
  * Create a PAIN.001 XML document according to the input data.
  * Needs to be called within a transaction block.
@@ -145,9 +154,10 @@ fun createPain001document(
 ): String {
 
     val namespace: Pain001Namespaces = if (dialect == "pf")
+        // The 2019 version of pain.001.
         Pain001Namespaces(
-            fullNamespace = "http://www.six-interbank-clearing.com/de/pain.001.001.03.ch.02.xsd",
-            xsdFilename = "pain.001.001.03.ch.02.xsd"
+            fullNamespace = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09",
+            xsdFilename = "pain.001.001.09.ch.03.xsd"
         )
     else Pain001Namespaces(
         fullNamespace = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.03",
@@ -208,7 +218,12 @@ fun createPain001document(
                     }
                     element("ReqdExctnDt") {
                         val dateMillis = paymentData.preparationTimestamp
-                        text(importDateFromMillis(dateMillis).toDashedDate())
+                        if (dialect == EbicsDialects.POSTFINANCE.dialectName)
+                            element("Dt") {
+                                text(importDateFromMillis(dateMillis).toDashedDate())
+                            }
+                        else
+                            text(importDateFromMillis(dateMillis).toDashedDate())
                     }
                     element("Dbtr/Nm") {
                         text(paymentData.debtorName)
@@ -216,8 +231,8 @@ fun createPain001document(
                     element("DbtrAcct/Id/IBAN") {
                         text(paymentData.debtorIban)
                     }
-                    element("DbtrAgt/FinInstnId/BIC") {
-                        text(paymentData.debtorBic)
+                    element("DbtrAgt/FinInstnId") {
+                        setBicAfterDialect(dialect, paymentData.debtorBic)
                     }
                     element("ChrgBr") {
                         text("SLEV")
@@ -238,8 +253,8 @@ fun createPain001document(
                         }
                         val creditorBic = paymentData.creditorBic
                         if (creditorBic != null) {
-                            element("CdtrAgt/FinInstnId/BIC") {
-                                text(creditorBic)
+                            element("CdtrAgt/FinInstnId") {
+                                setBicAfterDialect(dialect, creditorBic)
                             }
                         }
                         element("Cdtr/Nm") {

@@ -501,6 +501,64 @@ private fun getNotificationTypeAfterDialect(dialect: String? = null): String {
  * take place.  The caller then decides how to handle the exceptions.
  */
 class EbicsBankConnectionProtocol: BankConnectionProtocol {
+    /**
+     * Downloads the pain.002 that informs about previous
+     * payments submissions.  Not all the banks offer this
+     * service; some may use analog channels.
+     */
+    suspend fun fetchPaymentReceipt(
+        fetchSpec: FetchSpecJson,
+        client: HttpClient,
+        bankConnectionId: String,
+        accountId: String
+    ) {
+        val subscriberDetails = transaction { getEbicsSubscriberDetails(bankConnectionId) }
+        // Typically a date range.
+        if (fetchSpec.level != FetchLevel.RECEIPT) {
+            logger.error("This method accepts only RECEIPT as the fetch level, not '${fetchSpec.level}'.")
+            throw badRequest("Invalid params to get payments receipts: use fetch level RECEIPT.")
+        }
+        val ebicsOrderInfo = when(fetchSpec) {
+            is FetchSpecLatestJson -> {
+                EbicsFetchSpec(
+                    orderType = "Z01", // PoFi specific.
+                    orderParams = EbicsStandardOrderParams()
+                )
+            }
+            else -> throw NotImplementedError("Fetch spec '${fetchSpec::class}' not supported for payment receipts.")
+        }
+        // Proceeding to download now.
+        val response = try {
+            doEbicsDownloadTransaction(
+                client,
+                subscriberDetails,
+                ebicsOrderInfo.orderType,
+                ebicsOrderInfo.orderParams
+            )
+        } catch (e: EbicsProtocolError) {
+            if (e.ebicsTechnicalCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
+                logger.debug("EBICS had no new data")
+                return
+            }
+            // re-throw in any other error case.
+            throw e
+        }
+        when(response) {
+            is EbicsDownloadEmptyResult -> {
+                // no-op
+            }
+            is EbicsDownloadBankErrorResult -> {
+                logger.error("Bank technical code: ${response.returnCode}")
+            }
+            is EbicsDownloadSuccessResult -> {
+                // Extracting the content (pain.002) and parsing it.
+                val orderData: String = response.orderData.toString()
+                logger.debug(orderData)
+                val doc = XMLUtil.parseStringIntoDom(orderData)
+
+            }
+        }
+    }
     override suspend fun fetchTransactions(
         fetchSpec: FetchSpecJson,
         client: HttpClient,
@@ -532,6 +590,10 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 }
                 FetchLevel.NOTIFICATION -> {
                     specs.add(EbicsFetchSpec(getNotificationTypeAfterDialect(subscriberDetails.dialect), p))
+                }
+                else -> {
+                    logger.error("fetch level wrong in addForLevel() helper: ${fetchSpec.level}.")
+                    throw badRequest("Fetch level ${fetchSpec.level} not supported")
                 }
             }
         }
@@ -611,6 +673,8 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                             orderParams = pNtfn
                         ))
                     }
+                    else -> throw badRequest("Fetch level ${fetchSpec.level} " +
+                            "not supported in the 'since last' EBICS time range.")
                 }
             }
         }
@@ -636,7 +700,10 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
     }
 
     // Submit one Pain.001 for one payment initiations.
-    override suspend fun submitPaymentInitiation(httpClient: HttpClient, paymentInitiationId: Long) {
+    override suspend fun submitPaymentInitiation(
+        httpClient: HttpClient,
+        paymentInitiationId: Long
+    ) {
         val dbData = transaction {
             val preparedPayment = getPaymentInitiation(paymentInitiationId)
             val conn = preparedPayment.bankAccount.defaultBankConnection ?: throw NexusError(
@@ -668,19 +735,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 val subscriberDetails = subscriberDetails
             }
         }
-        if (!XMLUtil.validateFromString(dbData.painXml)) {
-            val pmtInfId = transaction {
-                val payment = getPaymentInitiation(paymentInitiationId)
-                logger.error("Pain.001 ${payment.paymentInformationId}" +
-                        " is invalid, not submitting it and flag as invalid.")
-                payment.invalid = true
-            }
-            throw NexusError(
-                HttpStatusCode.InternalServerError,
-                "pain document: $pmtInfId document is invalid.  Not sent to the bank.",
-                LibeufinErrorCode.LIBEUFIN_EC_INVALID_STATE
-            )
-        }
+        // Used to validate here, then removed for performances reasons.
         doEbicsUploadTransaction(
             httpClient,
             dbData.subscriberDetails,
