@@ -972,6 +972,9 @@ fun ingestCamtMessageIntoAccount(
                 // https://bugs.gnunet.org/view.php?id=6381
                 continue@txloop
             }
+            /* Checking for the unstructured remittance information before
+               storing the payment in the database.  */
+            val paymentSubject = entry.getSingletonSubject() // throws if not found.
             val rawEntity = NexusBankTransactionEntity.new {
                 bankAccount = acct
                 accountTransactionId = paymentUid
@@ -983,7 +986,7 @@ fun ingestCamtMessageIntoAccount(
             }
             rawEntity.flush()
             newTransactions++
-            newPaymentsLog += "\n- ${entry.getSingletonSubject()}"
+            newPaymentsLog += "\n- $paymentSubject"
 
             // This block tries to acknowledge a former outgoing payment as booked.
             if (singletonBatchedTransaction.creditDebitIndicator == CreditDebitIndicator.DBIT) {

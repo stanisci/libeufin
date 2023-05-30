@@ -103,14 +103,6 @@ fun main() {
             fooBankAccount.iban = "CH9789144829733648596"
         }
     }
-    // uploadPain001Payment() // XE2
-    // downloadPayment() // Z54.
-    /*runBlocking {
-        (ebicsConn as EbicsBankConnectionProtocol).fetchPaymentReceipt(
-            FetchSpecLatestJson(FetchLevel.RECEIPT, null),
-            HttpClient(),
-            "postfinance",
-            "foo"
-        )
-    }*/
+    // uploadQrrPayment()
+    // downloadPayment()
 }

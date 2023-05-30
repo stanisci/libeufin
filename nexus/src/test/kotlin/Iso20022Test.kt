@@ -9,7 +9,8 @@ import org.junit.Ignore
 import org.junit.Test
 import org.w3c.dom.Document
 import poFiCamt052
-import poFiCamt054_2019
+import poFiCamt054_2019_incoming
+import poFiCamt054_2019_outgoing
 import prepNexusDb
 import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.nexus.iso20022.*
@@ -119,23 +120,63 @@ class Iso20022Test {
 
     @Test
     fun parsePoFiCamt054() {
-        val doc = XMLUtil.parseStringIntoDom(poFiCamt054_2019)
+        val doc = XMLUtil.parseStringIntoDom(poFiCamt054_2019_incoming)
         parseCamtMessage(doc, dialect = "pf")
     }
 
-    // TODO: test deduplication here.
-
+    /**
+     * Testing how outgoing payments get ingested and how their
+     * deduplication logic reacts, given that sometimes camt.054
+     * was seen without the AcctSvcrRef.
+     */
     @Test
-    fun ingestPoFiCamt054() {
-        val doc = XMLUtil.parseStringIntoDom(poFiCamt054_2019)
+    fun ingestPoFiCamt054_outgoing() {
+        val doc = XMLUtil.parseStringIntoDom(poFiCamt054_2019_outgoing)
         withTestDatabase {
             prepNexusDb()
+            transaction { assert(NexusBankTransactionEntity.all().count() == 0L) }
             ingestCamtMessageIntoAccount(
                 "foo",
                 doc,
                 FetchLevel.NOTIFICATION,
                 dialect = "pf"
             )
+            transaction { assert(NexusBankTransactionEntity.all().count() == 1L) }
+            // Checking that the payment doesn't get stored twice.
+            ingestCamtMessageIntoAccount(
+                "foo",
+                doc,
+                FetchLevel.NOTIFICATION,
+                dialect = "pf"
+            )
+            transaction { assert(NexusBankTransactionEntity.all().count() == 1L) }
+        }
+    }
+
+    @Test
+    fun ingestPoFiCamt054() {
+        val doc = XMLUtil.parseStringIntoDom(poFiCamt054_2019_incoming)
+        withTestDatabase {
+            prepNexusDb()
+            // Checking that no transactions exist already in the database.
+            transaction { assert(NexusBankTransactionEntity.all().count() == 0L) }
+            ingestCamtMessageIntoAccount(
+                "foo",
+                doc,
+                FetchLevel.NOTIFICATION,
+                dialect = "pf"
+            )
+            // Checking that now ONE transaction exist in the database.
+            transaction { assert(NexusBankTransactionEntity.all().count() == 1L) }
+            // Checking now that the same payment doesn't get ingested twice.
+            ingestCamtMessageIntoAccount(
+                "foo",
+                doc,
+                FetchLevel.NOTIFICATION,
+                dialect = "pf"
+            )
+            // The count should have stayed the same.
+            transaction { assert(NexusBankTransactionEntity.all().count() == 1L) }
         }
     }
     // Checks that the 2019 pain.001 version validates.
