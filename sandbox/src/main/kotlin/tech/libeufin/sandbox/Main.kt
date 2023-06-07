@@ -852,48 +852,25 @@ val sandboxApp: Application.() -> Unit = {
         post("/admin/ebics/bank-accounts") {
             call.request.basicAuth(onlyAdmin = true)
             val body = call.receive<EbicsBankAccountRequest>()
-            if (!validateBic(body.bic)) {
-                throw SandboxError(HttpStatusCode.BadRequest, "invalid BIC (${body.bic})")
-            }
-            transaction {
-                val subscriber = getEbicsSubscriberFromDetails(
-                    body.subscriber.userID,
-                    body.subscriber.partnerID,
-                    body.subscriber.hostID
-                )
-                if (subscriber.bankAccount != null)
-                    throw conflict("subscriber has already a bank account: ${subscriber.bankAccount?.label}")
-                val demobank = getDefaultDemobank()
-                // Forbid institutional names for bank account.
-                if (body.label == "admin" || body.label == "bank") throw forbidden(
-                    "Requested bank account label '${body.label}' not allowed."
-                )
+            val subscriber = getEbicsSubscriberFromDetails(
+                body.subscriber.userID,
+                body.subscriber.partnerID,
+                body.subscriber.hostID
+            )
+            val res = insertNewAccount(
+                username = body.label,
                 /**
-                 * Checking that the default demobank doesn't have already the
-                 * requested IBAN and bank account label.
+                 * This value makes only happy the account creator helper.
+                 * Logic using this OBSOLETE HTTP handler would NOT expect
+                 * to use this password anyway.  The reason is that such obsolete
+                 * tests access their banking data always through the EBICS
+                 * subscriber, needing therefore no HTTP basic password to operate.
                  */
-                val check = BankAccountEntity.find {
-                    BankAccountsTable.iban eq body.iban or (
-                            (BankAccountsTable.label eq body.label) and (
-                                    BankAccountsTable.demoBank eq demobank.id
-                                    )
-                            )
-                }.count()
-                if (check > 0) throw SandboxError(
-                    HttpStatusCode.BadRequest,
-                    "Either IBAN or account label were already taken; please choose fresh ones"
-                )
-                subscriber.bankAccount = BankAccountEntity.new {
-                    iban = body.iban
-                    bic = body.bic
-                    label = body.label
-                    /* Current version invariant:
-                       owner's username == bank account label. */
-                    owner = body.label
-                    demoBank = demobank
-                }
-            }
-            call.respondText("Bank account created")
+                password = "not-used",
+                iban = body.iban
+            )
+            transaction { subscriber.bankAccount = res.bankAccount }
+            call.respond({})
             return@post
         }
 
