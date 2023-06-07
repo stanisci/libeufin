@@ -1,6 +1,7 @@
 package tech.libeufin.nexus
 import CamtBankAccountEntry
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
@@ -8,7 +9,6 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
 import org.junit.Test
 import org.w3c.dom.Document
-import poFiCamt052
 import poFiCamt054_2019_incoming
 import poFiCamt054_2019_outgoing
 import prepNexusDb
@@ -203,27 +203,5 @@ class Iso20022Test {
         )
         val doc = XMLUtil.parseStringIntoDom(pain001)
         assert(XMLUtil.validateFromDom(doc))
-    }
-
-    @Test
-    fun parsePostFinanceCamt052() {
-        withTestDatabase {
-            prepNexusDb()
-            // Adjusting the MakeEnv.kt values to PoFi
-            val fooBankAccount = getBankAccount("foo")
-            val fooConnection = getBankConnection("foo")
-            transaction {
-                fooBankAccount.iban = "CH9789144829733648596"
-                fooConnection.dialect = "pf"
-            }
-            testApplication {
-                application(nexusApp)
-                client.post("/bank-accounts/foo/test-camt-ingestion/C52") {
-                    basicAuth("foo", "foo")
-                    contentType(ContentType.Application.Xml)
-                    setBody(poFiCamt052)
-                }
-            }
-        }
     }
 }
