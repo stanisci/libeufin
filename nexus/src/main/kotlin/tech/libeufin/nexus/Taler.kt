@@ -568,7 +568,7 @@ private suspend fun historyIncoming(call: ApplicationCall) {
 
 /**
  * This call proxies /admin/add/incoming to the Sandbox,
- * which is the service keeping the transactions ledger.
+ * which is the service keeping the transaction ledger.
  * The credentials are ASSUMED to be exchange/x (user/pass).
  *
  * In the future, a dedicated "add-incoming" facade should
@@ -613,16 +613,11 @@ private suspend fun addIncoming(call: ApplicationCall) {
         )
     }
     val client = HttpClient { followRedirects = true }
-    try {
-        client.post(fromDb.first) {
-            setBody(currentBody)
-            basicAuth("exchange", "x")
-            contentType(ContentType.Application.Json)
-        }
-    } catch (e: ClientRequestException) {
-        logger.error("Proxying /admin/add/incoming to the Sandbox failed: $e")
-    } catch (e: Exception) {
-        logger.error("Could not proxy /admin/add/incoming to the Sandbox: $e")
+    client.post(fromDb.first) {
+        setBody(currentBody)
+        basicAuth("exchange", "x")
+        contentType(ContentType.Application.Json)
+        expectSuccess = true
     }
     /**
      * At this point, Sandbox booked the payment.  Now the "row_id"
