@@ -672,6 +672,7 @@ fun dbDropTables(dbConnectionString: String) {
         SchemaUtils.drop(
             CashoutSubmissionsTable,
             EbicsSubscribersTable,
+            EbicsSubscriberPublicKeysTable,
             EbicsHostsTable,
             EbicsDownloadTransactionsTable,
             EbicsUploadTransactionsTable,
@@ -700,6 +701,7 @@ fun dbCreateTables(dbConnectionString: String) {
             DemobankConfigsTable,
             DemobankConfigPairsTable,
             EbicsSubscribersTable,
+            EbicsSubscriberPublicKeysTable,
             EbicsHostsTable,
             EbicsDownloadTransactionsTable,
             EbicsUploadTransactionsTable,
