@@ -379,7 +379,9 @@ class Serve : CliktCommand("Run sandbox HTTP server") {
             )
             exitProcess(1)
         }
-        execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)) }
+        execThrowableOrTerminate {
+            dbCreateTables(getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME))
+        }
         // Refuse to operate without a 'default' demobank.
         val demobank = getDemobank("default")
         if (demobank == null) {
