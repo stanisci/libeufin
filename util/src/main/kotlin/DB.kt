@@ -25,6 +25,7 @@ import logger
 import net.taler.wallet.crypto.Base32Crockford
 import org.jetbrains.exposed.sql.Transaction
 import org.jetbrains.exposed.sql.transactions.TransactionManager
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.postgresql.jdbc.PgConnection
 
 fun Transaction.isPostgres(): Boolean {
@@ -217,4 +218,15 @@ class PostgresListenHandle(val channelName: String) {
         conn.close()
         return false
     }
+}
+
+fun getDatabaseName(): String {
+    var maybe_db_name: String? = null
+    transaction {
+        this.exec("SELECT current_database() AS database_name;") { oneLineRes ->
+            if (oneLineRes.next())
+                maybe_db_name = oneLineRes.getString("database_name")
+        }
+    }
+    return maybe_db_name ?: throw internalServerError("Could not find current DB name")
 }

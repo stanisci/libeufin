@@ -1,0 +1,39 @@
+#!/bin/bash
+
+set -eu
+
+# This script indents the output of Exposed SQL logger.
+
+# Usage: ./indent.sh filename
+
+# Remove leading "^SQL: " that Exposed uses.
+crop_leading_sql () {
+  sed 's/^SQL: //'
+}
+
+# Inserts new line & two spaces before the first "("
+# and last ")", and before each comma.  Only triggers on
+# "CREATE TABLE"-lines.
+indent_create_table () {
+  sed '/^CREATE/s/, /,/g' \
+  | sed '/^CREATE/s/\(,\|)$\)/\n  \1/g' \
+  | sed '/^CREATE/s/(/\n  (/'
+}
+
+
+# Inserts new line & two spaces before each "ALTER TABLE"
+# statement
+indent_alter_table () {
+  sed 's/^ALTER TABLE \(.*\)/ALTER TABLE\n  \1/'
+}
+
+# Inserts a blank line after between each CREATE/ALTER TABLE statement.
+blank_line_after_statement () {
+  sed '/^CREATE TABLE/s/\(.*\)/\n\1/' \
+  | sed '/^ALTER TABLE/s/\(.*\)/\n\1/'
+}
+
+crop_leading_sql < $1 \
+  | indent_create_table \
+  | indent_alter_table \
+  | blank_line_after_statement

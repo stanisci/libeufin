@@ -1,0 +1,91 @@
+#!/bin/bash
+
+set -eu
+
+# The only CLI argument is 'nexus' or 'sandbox',
+# indicating which service will get its database prepared.
+
+fail () {
+  echo $1
+  exit 1
+}
+
+run_sql_file () {
+  # -q doesn't hide all the output, hence the
+  # redirection to /dev/null.
+  psql -d $DB_CONNECTION \
+    -q \
+    -f $1 \
+    --set ON_ERROR_STOP=1 > /dev/null
+}
+
+# The real check happens (by the caller)
+# by checking the returned text.
+check_patch_applied () {
+  psql -d $DB_CONNECTION \
+  -t \
+  -c "SELECT applied_by FROM _v.patches WHERE patch_name = '$1' LIMIT 1"
+}
+
+# Iterates over the .sql migration files and applies
+# the new ones.
+iterate_over_patches () {
+  if test "$1" != sandbox -a "$1" != nexus; then
+    fail "iterate_over_patches: only 'sandbox' and 'nexus' are acceptable arguments."
+  fi
+  component="$1"
+  cd $PATCHES_LOCATION
+  for patch_filename in $(ls -1 -v $component-[0-9][0-9][0-9][0-9].sql); do
+    patch_name=$(echo $patch_filename | cut -f1 -d.)
+    echo Checking patch: "$patch_name"
+    maybe_applied=$(check_patch_applied "$patch_name")
+    if test -n "$maybe_applied"; then continue; fi
+    # patch not applied, apply it.
+    echo Patch $patch_name not applied, applying it.
+    run_sql_file $patch_filename
+  done
+  cd - > /dev/null # cd to previous location.
+}
+while getopts ":d:l:h" OPTION; do
+  case "$OPTION" in 
+    d)
+      DB_CONNECTION="$OPTARG"
+      ;;
+    l)
+      PATCHES_LOCATION="$OPTARG"
+      ;;
+    s)
+      SERVICE="${OPTARG:-}"
+      ;;
+    h)
+      echo Usage: libeufin-load-sql OPTIONS
+      echo
+      echo 'Supported options:'
+      echo "  -s SERVICE  -- specify 'sandbox' or 'nexus', according to which set of tables are to be setup.  If missing both sets will be setup on the same database."
+      echo '  -d DB_CONN  -- required.  Pass DB_CONN as the postgres connection string.  Passed verbatim to Psql'
+      echo '  -l LOC      -- required.  Pass LOC as the SQL files location.  Typically $prefix/share/libeufin/sql'
+      echo '  -h           -- print this help'
+      exit 0
+      ;;
+    ?)
+      fail 'Unrecognized command line option'
+    ;;
+  esac
+done
+
+# Checking required options.
+if test -z "${PATCHES_LOCATION:-}"; then
+  # This value is substituted by GNU make at installation time.
+  PATCHES_LOCATION=__STATIC_PATCHES_LOCATION__
+fi
+if test -z "${DB_CONNECTION:-}"; then
+  fail "Required option '-d' was missing."
+fi
+
+run_sql_file "$PATCHES_LOCATION/versioning.sql"
+if test -z "${SERVICE:-}"; then # both table sets.
+  iterate_over_patches sandbox
+  iterate_over_patches nexus
+  exit 0
+fi
+iterate_over_patches $SERVICE # helper checks the argument sanity.

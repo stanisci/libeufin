@@ -3,7 +3,7 @@ include build-system/config.mk
 escaped_pwd = $(shell pwd | sed 's/\//\\\//g')
 
 all: assemble
-install: install-nexus install-sandbox install-cli
+install: install-nexus install-sandbox install-cli install-db-versioning
 git-archive-all = ./build-system/taler-build-scripts/archive-with-submodules/git_archive_all.py
 git_tag=$(shell git describe --tags)
 gradle_version=$(shell ./gradlew -q libeufinVersion)
@@ -35,7 +35,6 @@ get-spa:
 deb: exec-arch copy-spa
 	@dpkg-buildpackage -rfakeroot -b -uc -us
 
-
 .PHONY: install-sandbox
 install-sandbox:
 	@./gradlew -q -Pprefix=$(prefix) sandbox:installToPrefix; cd ..
@@ -49,6 +48,13 @@ install-cli:
 	@./gradlew -q replaceVersionCli
 	@install -D cli/bin/libeufin-cli $(prefix)/bin
 
+.PHONY: install-db-versioning
+install-db-versioning:
+	$(eval LOAD_SQL_SCRIPT_NAME := libeufin-load-sql)
+	@sed "s|__STATIC_PATCHES_LOCATION__|$(prefix)/share/libeufin/sql|" < contrib/$(LOAD_SQL_SCRIPT_NAME) > build/$(LOAD_SQL_SCRIPT_NAME)
+	@install -D database-versioning/*.sql -t $(prefix)/share/libeufin/sql
+	@install -D build/$(LOAD_SQL_SCRIPT_NAME) -t $(prefix)/bin
+
 .PHONY: assemble
 assemble:
 	@./gradlew assemble
@@ -61,8 +67,3 @@ check:
 check-cli:
 	@cd ./cli/tests && ./circuit_test.sh
 	@cd ./cli/tests && ./debit_test.sh
-
-
-# .PHONY: parse
-# parse:
-#	@cd parsing-tests; py.test -s checks.py
