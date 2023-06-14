@@ -23,6 +23,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import logger
 import net.taler.wallet.crypto.Base32Crockford
+import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.Transaction
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -229,4 +230,20 @@ fun getDatabaseName(): String {
         }
     }
     return maybe_db_name ?: throw internalServerError("Could not find current DB name")
+}
+
+/**
+ * Abstracts over the Exposed details to connect
+ * to a database and ONLY use the passed schema
+ * WHEN PostgreSQL is the DBMS.
+ */
+fun connectWithSchema(dbConn: String, schemaName: String? = null) {
+    Database.connect(
+        dbConn,
+        user = getCurrentUser(),
+        setupConnection = { conn ->
+            if (isPostgres() && schemaName != null)
+                conn.schema = schemaName
+        }
+    )
 }

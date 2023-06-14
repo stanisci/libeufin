@@ -522,7 +522,23 @@ class NexusPermissionEntity(id: EntityID<Long>) : LongEntity(id) {
 }
 
 fun dbDropTables(dbConnectionString: String) {
-    Database.connect(dbConnectionString, user = getCurrentUser())
+    connectWithSchema(dbConnectionString)
+    if (isPostgres()) {
+        val ret = execCommand(
+            listOf(
+                "libeufin-load-sql",
+                "-d",
+                getDatabaseName(),
+                "-s",
+                "nexus",
+                "-r"
+            ),
+            throwIfFails = false
+        )
+        if (ret != 0)
+            logger.warn("Dropping the nexus tables failed.  Was the DB filled before?")
+        return
+    }
     transaction {
         SchemaUtils.drop(
             NexusUsersTable,
@@ -548,8 +564,19 @@ fun dbDropTables(dbConnectionString: String) {
 }
 
 fun dbCreateTables(dbConnectionString: String) {
-    Database.connect(dbConnectionString, user = getCurrentUser())
-    TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
+    connectWithSchema(dbConnectionString)
+    val databaseName = getDatabaseName()
+    if (isPostgres()) {
+        execCommand(listOf(
+            "libeufin-load-sql",
+            "-d",
+            databaseName,
+            "-s",
+            "nexus"
+        ))
+        return
+    }
+    // Still using the legacy way for other DBMSs, like SQLite.
     transaction {
         SchemaUtils.create(
             XLibeufinBankUsersTable,

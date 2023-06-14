@@ -10,6 +10,22 @@ fail () {
   exit 1
 }
 
+usage_and_exit () {
+  echo Usage: libeufin-load-sql OPTIONS
+  echo
+  echo By default, this command creates and/or patches the LibEuFin tables.
+  echo One particular LibEuFin service could be selected via the '-s' option.
+  echo Pass '-r' to delete tables and schemas.
+  echo
+  echo 'Supported options:'
+  echo "  -s SERVICE  -- specify 'sandbox' or 'nexus', according to which set of tables are to be setup or dropped.  If missing both sets will be setup or dropped on the same database."
+  echo '  -d DB_CONN  -- required.  Pass DB_CONN as the postgres connection string.  Passed verbatim to Psql'
+  echo '  -l LOC      -- required.  Pass LOC as the SQL files location.  Typically $prefix/share/libeufin/sql'
+  echo '  -h           -- print this help'
+  echo '  -r           -- drop all the tables and schema(s)'
+  exit 0
+}
+
 run_sql_file () {
   # -q doesn't hide all the output, hence the
   # redirection to /dev/null.
@@ -17,6 +33,10 @@ run_sql_file () {
     -q \
     -f $1 \
     --set ON_ERROR_STOP=1 > /dev/null
+}
+
+get_patch_path () {
+  echo "$PATCHES_LOCATION/$1"
 }
 
 # The real check happens (by the caller)
@@ -30,13 +50,10 @@ check_patch_applied () {
 # Iterates over the .sql migration files and applies
 # the new ones.
 iterate_over_patches () {
-  if test "$1" != sandbox -a "$1" != nexus; then
-    fail "iterate_over_patches: only 'sandbox' and 'nexus' are acceptable arguments."
-  fi
   component="$1"
   cd $PATCHES_LOCATION
   for patch_filename in $(ls -1 -v $component-[0-9][0-9][0-9][0-9].sql); do
-    patch_name=$(echo $patch_filename | cut -f1 -d.)
+    patch_name=$(echo $patch_filename | cut -f1 -d.) # drops the final .sql
     echo Checking patch: "$patch_name"
     maybe_applied=$(check_patch_applied "$patch_name")
     if test -n "$maybe_applied"; then continue; fi
@@ -46,26 +63,30 @@ iterate_over_patches () {
   done
   cd - > /dev/null # cd to previous location.
 }
-while getopts ":d:l:h" OPTION; do
+
+if test $# -eq 0; then
+  usage_and_exit
+fi
+
+while getopts ":d:l:hs:r" OPTION; do
   case "$OPTION" in 
     d)
-      DB_CONNECTION="$OPTARG"
+      DB_CONNECTION="$OPTARG" # only one required.
       ;;
     l)
       PATCHES_LOCATION="$OPTARG"
       ;;
     s)
-      SERVICE="${OPTARG:-}"
+      if test "$OPTARG" != sandbox -a "$OPTARG" != nexus; then
+        fail "Invalid -s value: $OPTARG.  Please pass 'sandbox' or 'nexus'."
+      fi
+      SERVICE="$OPTARG"
+      ;;
+    r)
+      DROP="YES"
       ;;
     h)
-      echo Usage: libeufin-load-sql OPTIONS
-      echo
-      echo 'Supported options:'
-      echo "  -s SERVICE  -- specify 'sandbox' or 'nexus', according to which set of tables are to be setup.  If missing both sets will be setup on the same database."
-      echo '  -d DB_CONN  -- required.  Pass DB_CONN as the postgres connection string.  Passed verbatim to Psql'
-      echo '  -l LOC      -- required.  Pass LOC as the SQL files location.  Typically $prefix/share/libeufin/sql'
-      echo '  -h           -- print this help'
-      exit 0
+      usage_and_exit
       ;;
     ?)
       fail 'Unrecognized command line option'
@@ -82,10 +103,23 @@ if test -z "${DB_CONNECTION:-}"; then
   fail "Required option '-d' was missing."
 fi
 
-run_sql_file "$PATCHES_LOCATION/versioning.sql"
-if test -z "${SERVICE:-}"; then # both table sets.
+run_sql_file $(get_patch_path "versioning.sql")
+
+if test -z "${SERVICE:-}"; then # impact both services.
+  # Maybe drop.
+  if test "${DROP:-}" = "YES"; then
+    run_sql_file $(get_patch_path "sandbox-drop.sql")
+    run_sql_file $(get_patch_path "nexus-drop.sql")
+    exit 0
+  fi
   iterate_over_patches sandbox
   iterate_over_patches nexus
+  exit 0
+fi
+
+# Maybe drop
+if test "${DROP:-}" = "YES"; then
+  run_sql_file $(get_patch_path "${SERVICE}-drop.sql")
   exit 0
 fi
 iterate_over_patches $SERVICE # helper checks the argument sanity.

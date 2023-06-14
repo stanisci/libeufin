@@ -69,8 +69,6 @@ inline fun <reified ExceptionType> assertException(
  * Cleans up the DB file afterwards.
  */
 fun withTestDatabase(keepData: Boolean = false, f: () -> Unit) {
-    Database.connect(TEST_DB_CONN, user = currentUser)
-    TransactionManager.manager.defaultIsolationLevel = java.sql.Connection.TRANSACTION_SERIALIZABLE
     if (!keepData) {
         dbDropTables(TEST_DB_CONN)
         tech.libeufin.sandbox.dbDropTables(TEST_DB_CONN)
@@ -202,6 +200,7 @@ fun prepSandboxDb(
     cashoutCurrency: String = "EUR"
 ) {
     tech.libeufin.sandbox.dbCreateTables(TEST_DB_CONN)
+    connectWithSchema(TEST_DB_CONN)
     transaction {
         val config = DemobankConfig(
             currency = currency,

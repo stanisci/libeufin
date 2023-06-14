@@ -11,7 +11,6 @@ import tech.libeufin.util.postgresNotify
 
 
 class DbEventTest {
-
     /**
      * LISTENs to one DB channel but only wakes up
      * if the payload is how expected.

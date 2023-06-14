@@ -21,13 +21,16 @@ package tech.libeufin.util
 
 /**
  * Wrapper around the ProcessBuilder API.  It executes a
- * command and throws exception if the result is not zero.
+ * command and (by default) throws exception if the result is not zero.
+ * It returns the exit code.
  */
-fun execCommand(cmd: List<String>) {
+fun execCommand(cmd: List<String>, throwIfFails: Boolean = true): Int {
     val result: Int = ProcessBuilder(cmd)
         .redirectOutput(ProcessBuilder.Redirect.INHERIT)
         .redirectError(ProcessBuilder.Redirect.INHERIT)
         .start()
         .waitFor()
-    if (result != 0) throw internalServerError("Command '$cmd' failed.")
+    if (result != 0 && throwIfFails)
+        throw internalServerError("Command '$cmd' failed.")
+    return result
 }

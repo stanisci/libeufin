@@ -33,8 +33,8 @@ import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.util.getCurrentUser
-import tech.libeufin.util.internalServerError
+import org.jetbrains.exposed.sql.transactions.transactionManager
+import tech.libeufin.util.*
 import java.sql.Connection
 import kotlin.reflect.*
 import kotlin.reflect.full.*
@@ -667,7 +667,27 @@ class CashoutSubmissionEntity(id: EntityID<Long>) : LongEntity(id) {
 }
 
 fun dbDropTables(dbConnectionString: String) {
-    Database.connect(dbConnectionString, user = getCurrentUser())
+    connectWithSchema(dbConnectionString)
+    if (isPostgres()) {
+        val ret = execCommand(
+            listOf(
+                "libeufin-load-sql",
+                "-d",
+                getDatabaseName(),
+                "-s",
+                "sandbox",
+                "-r" // the drop option
+            ),
+            /**
+             * Tolerating a failure here helps to manage the case
+             * where an empty database is attempted to be dropped.
+             */
+            throwIfFails = false
+        )
+        if (ret != 0)
+            logger.warn("Dropping the sandbox tables failed.  Was the DB filled before?")
+        return
+    }
     transaction {
         SchemaUtils.drop(
             CashoutSubmissionsTable,
@@ -690,11 +710,23 @@ fun dbDropTables(dbConnectionString: String) {
             CashoutOperationsTable
         )
     }
+
 }
 
 fun dbCreateTables(dbConnectionString: String) {
-    Database.connect(dbConnectionString, user = getCurrentUser())
-    TransactionManager.manager.defaultIsolationLevel = Connection.TRANSACTION_SERIALIZABLE
+    connectWithSchema(dbConnectionString)
+    if (isPostgres()) {
+        val databaseName = getDatabaseName()
+        execCommand(listOf(
+            "libeufin-load-sql",
+            "-d",
+            databaseName,
+            "-s",
+            "sandbox"
+        ))
+        return
+    }
+    // Still using the legacy way for other DBMSs, like SQLite.
     transaction {
         SchemaUtils.create(
             CashoutSubmissionsTable,

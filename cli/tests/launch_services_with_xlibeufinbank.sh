@@ -22,7 +22,8 @@ echo RUNNING SANDBOX-NEXUS EBICS PAIR
 jq --version &> /dev/null || (echo "'jq' command not found"; exit 77)
 curl --version &> /dev/null || (echo "'curl' command not found"; exit 77)
 
-DB_CONN="jdbc:postgresql://localhost:5432/libeufincheck?user=$(whoami)"
+DB_CONN="jdbc:postgresql://localhost/libeufincheck?socketFactory=org.newsclub.net.unix.AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/var/run/postgresql/.s.PGSQL.5432"
+
 export LIBEUFIN_SANDBOX_DB_CONNECTION=$DB_CONN
 export LIBEUFIN_NEXUS_DB_CONNECTION=$DB_CONN
 
