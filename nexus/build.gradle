@@ -128,3 +128,8 @@ jar {
 run {
     standardInput = System.in
 }
+
+task pofi(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "PostFinanceKt"
+}

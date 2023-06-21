@@ -67,3 +67,7 @@ check:
 check-cli:
 	@cd ./cli/tests && ./circuit_test.sh
 	@cd ./cli/tests && ./debit_test.sh
+
+.PHONY: pofi
+pofi:
+	@./gradlew -q :nexus:pofi
