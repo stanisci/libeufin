@@ -716,11 +716,10 @@ fun dbDropTables(dbConnectionString: String) {
 fun dbCreateTables(dbConnectionString: String) {
     connectWithSchema(dbConnectionString)
     if (isPostgres()) {
-        val databaseName = getDatabaseName()
         execCommand(listOf(
             "libeufin-load-sql",
             "-d",
-            databaseName,
+            getDatabaseName(),
             "-s",
             "sandbox"
         ))
