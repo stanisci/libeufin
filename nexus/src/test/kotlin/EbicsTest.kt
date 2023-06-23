@@ -26,6 +26,7 @@ import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsRequest
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
+import tech.libeufin.util.ebics_h005.Ebics3Request
 
 /**
  * These test cases run EBICS CCT and C52, mixing ordinary operations
@@ -315,6 +316,42 @@ class DownloadAndSubmit {
                     )
                 }
             }
+        }
+    }
+}
+
+class EbicsTest {
+
+    /**
+     * Tests the validity of EBICS 3.0 messages.
+     */
+    @Test
+    fun genEbics3() {
+        withTestDatabase {
+            prepNexusDb()
+            val foo = transaction { getEbicsSubscriberDetails("foo") }
+            val downloadDoc = createEbicsRequestForDownloadInitialization(
+                foo,
+                orderType = null, // triggers 3.0
+                EbicsStandardOrderParams(),
+                Ebics3Request.OrderDetails.Service().apply {
+                    messageName = "camt.054"
+                    scope = "CH"
+                    serviceName = "REP"
+                }
+            )
+            assert(XMLUtil.validateFromString(downloadDoc))
+            val uploadDoc = createEbicsRequestForDownloadInitialization(
+                foo,
+                orderType = null, // triggers 3.0
+                EbicsStandardOrderParams(),
+                Ebics3Request.OrderDetails.Service().apply {
+                    messageName = "pain.001"
+                    scope = "EU"
+                    serviceName = "MCT"
+                }
+            )
+            assert(XMLUtil.validateFromString(uploadDoc))
         }
     }
 }

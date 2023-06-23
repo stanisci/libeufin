@@ -31,6 +31,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.NexusError
 import tech.libeufin.util.*
+import tech.libeufin.util.ebics_h005.Ebics3Request
 import java.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
@@ -107,12 +108,16 @@ class EbicsDownloadBankErrorResult(
 suspend fun doEbicsDownloadTransaction(
     client: HttpClient,
     subscriberDetails: EbicsClientSubscriberDetails,
-    orderType: String,
-    orderParams: EbicsOrderParams
+    fetchSpec: EbicsFetchSpec
 ): EbicsDownloadResult {
 
     // Initialization phase
-    val initDownloadRequestStr = createEbicsRequestForDownloadInitialization(subscriberDetails, orderType, orderParams)
+    val initDownloadRequestStr = createEbicsRequestForDownloadInitialization(
+        subscriberDetails,
+        fetchSpec.orderType,
+        fetchSpec.orderParams,
+        fetchSpec.ebics3Service
+    )
     val payloadChunks = LinkedList<String>()
     val initResponseStr = client.postToBank(subscriberDetails.ebicsUrl, initDownloadRequestStr)
     val initResponse = parseAndValidateEbicsResponse(subscriberDetails, initResponseStr)
@@ -133,7 +138,7 @@ suspend fun doEbicsDownloadTransaction(
                 HttpStatusCode.UnprocessableEntity,
                 "EBICS-technical error at init phase: " +
                         "${initResponse.technicalReturnCode} ${initResponse.reportText}," +
-                        " for order type $orderType and transaction ID: $transactionID.",
+                        " for fetching level ${fetchSpec.originalLevel} and transaction ID: $transactionID.",
                 initResponse.technicalReturnCode
             )
         }
@@ -151,7 +156,7 @@ suspend fun doEbicsDownloadTransaction(
         else -> {
             logger.error(
                 "Bank-technical error at init phase: ${initResponse.bankReturnCode}" +
-                        ", for order type $orderType and transaction ID $transactionID."
+                        ", for fetching level ${fetchSpec.originalLevel} and transaction ID $transactionID."
             )
             return EbicsDownloadBankErrorResult(initResponse.bankReturnCode)
         }
@@ -162,14 +167,14 @@ suspend fun doEbicsDownloadTransaction(
         ?: throw NexusError(
             HttpStatusCode.BadGateway,
             "Initial response did not contain encryption info.  " +
-                    "Order type $orderType, transaction ID $transactionID"
+                    "Fetching level ${fetchSpec.originalLevel} , transaction ID $transactionID"
         )
 
     val initOrderDataEncChunk = initResponse.orderDataEncChunk
         ?: throw NexusError(
             HttpStatusCode.BadGateway,
             "Initial response for download transaction does not " +
-                    "contain data transfer.  Order type $orderType, " +
+                    "contain data transfer.  Fetching level ${fetchSpec.originalLevel}, " +
                     "transaction ID $transactionID."
         )
     payloadChunks.add(initOrderDataEncChunk)
@@ -178,7 +183,7 @@ suspend fun doEbicsDownloadTransaction(
         ?: throw NexusError(
             HttpStatusCode.FailedDependency,
             "Missing segment number in EBICS download init response." +
-                    "  Order type $orderType, transaction ID $transactionID"
+                    "  Fetching level ${fetchSpec.originalLevel}, transaction ID $transactionID"
         )
     // Transfer phase
     for (x in 2 .. numSegments) {
@@ -201,7 +206,7 @@ suspend fun doEbicsDownloadTransaction(
                     HttpStatusCode.FailedDependency,
                     "EBICS-technical error at transfer phase: " +
                             "${transferResponse.technicalReturnCode} ${transferResponse.reportText}." +
-                            "  Order type $orderType, transaction ID $transactionID"
+                            "  Fetching level ${fetchSpec.originalLevel}, transaction ID $transactionID"
                 )
             }
         }
@@ -212,7 +217,7 @@ suspend fun doEbicsDownloadTransaction(
             else -> {
                 logger.error("Bank-technical error at transfer phase: " +
                         "${transferResponse.bankReturnCode}." +
-                        "  Order type $orderType, transaction ID $transactionID")
+                        "  Fetching level ${fetchSpec.originalLevel}, transaction ID $transactionID")
                 return EbicsDownloadBankErrorResult(transferResponse.bankReturnCode)
             }
         }
@@ -220,7 +225,7 @@ suspend fun doEbicsDownloadTransaction(
             ?: throw NexusError(
                 HttpStatusCode.BadGateway,
                 "transfer response for download transaction " +
-                        "does not contain data transfer.  Order type $orderType, transaction ID $transactionID"
+                        "does not contain data transfer.  Fetching level ${fetchSpec.originalLevel}, transaction ID $transactionID"
             )
         payloadChunks.add(transferOrderDataEncChunk)
         logger.debug("Download transfer phase of ${transactionID}: bank acknowledges $x")
@@ -246,7 +251,7 @@ suspend fun doEbicsDownloadTransaction(
                 HttpStatusCode.InternalServerError,
                 "Unexpected EBICS return code" +
                         " at acknowledgement phase: ${ackResponse.technicalReturnCode.name}." +
-                        "  Order type $orderType, transaction ID $transactionID"
+                        "  Fetching level ${fetchSpec.originalLevel}, transaction ID $transactionID"
             )
         }
     }
@@ -258,9 +263,10 @@ suspend fun doEbicsDownloadTransaction(
 suspend fun doEbicsUploadTransaction(
     client: HttpClient,
     subscriberDetails: EbicsClientSubscriberDetails,
-    orderType: String,
+    orderType: String? = null,
     payload: ByteArray,
-    orderParams: EbicsOrderParams
+    orderParams: EbicsOrderParams,
+    ebics3OrderService: Ebics3Request.OrderDetails.Service? = null
 ) {
     if (subscriberDetails.bankEncPub == null) {
         throw NexusError(HttpStatusCode.BadRequest,
@@ -268,7 +274,13 @@ suspend fun doEbicsUploadTransaction(
         )
     }
     val preparedUploadData = prepareUploadPayload(subscriberDetails, payload)
-    val req = createEbicsRequestForUploadInitialization(subscriberDetails, orderType, orderParams, preparedUploadData)
+    val req = createEbicsRequestForUploadInitialization(
+        subscriberDetails,
+        orderType,
+        orderParams,
+        preparedUploadData,
+        ebics3OrderService = ebics3OrderService
+    )
     logger.debug("EBICS upload message to: ${subscriberDetails.ebicsUrl}")
     val responseStr = client.postToBank(subscriberDetails.ebicsUrl, req)
 

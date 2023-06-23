@@ -227,6 +227,7 @@ class XMLUtil private constructor() {
             }
             val schemaInputs: Array<Source> = listOf(
                 "xsd/ebics_H004.xsd",
+                "xsd/ebics_H005.xsd",
                 "xsd/ebics_hev.xsd",
                 "xsd/camt.052.001.02.xsd",
                 "xsd/camt.053.001.02.xsd",
@@ -404,12 +405,16 @@ class XMLUtil private constructor() {
         /**
          * Sign an EBICS document with the authentication and identity signature.
          */
-        fun signEbicsDocument(doc: Document, signingPriv: PrivateKey): Unit {
+        fun signEbicsDocument(
+            doc: Document,
+            signingPriv: PrivateKey,
+            withEbics3: Boolean = false
+        ): Unit {
             val xpath = XPathFactory.newInstance().newXPath()
             xpath.namespaceContext = object : NamespaceContext {
                 override fun getNamespaceURI(p0: String?): String {
                     return when (p0) {
-                        "ebics" -> "urn:org:ebics:H004"
+                        "ebics" -> if (withEbics3) "urn:org:ebics:H005" else "urn:org:ebics:H004"
                         else -> throw IllegalArgumentException()
                     }
                 }
@@ -452,12 +457,16 @@ class XMLUtil private constructor() {
             authSigNode.removeChild(innerSig)
         }
 
-        fun verifyEbicsDocument(doc: Document, signingPub: PublicKey): Boolean {
+        fun verifyEbicsDocument(
+            doc: Document,
+            signingPub: PublicKey,
+            withEbics3: Boolean = false
+        ): Boolean {
             val xpath = XPathFactory.newInstance().newXPath()
             xpath.namespaceContext = object : NamespaceContext {
                 override fun getNamespaceURI(p0: String?): String {
                     return when (p0) {
-                        "ebics" -> "urn:org:ebics:H004"
+                        "ebics" -> if (withEbics3) "urn:org:ebics:H005" else "urn:org:ebics:H004"
                         else -> throw IllegalArgumentException()
                     }
                 }

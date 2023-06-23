@@ -1,7 +1,10 @@
-package tech.libeufin.util.ebics_h004
+package tech.libeufin.util.ebics_h005
 
 import org.apache.xml.security.binding.xmldsig.SignatureType
 import tech.libeufin.util.CryptoUtil
+import tech.libeufin.util.EbicsStandardOrderParams
+import tech.libeufin.util.EbicsOrderParams
+import tech.libeufin.util.makeEbics3DateRange
 import java.math.BigInteger
 import java.security.interfaces.RSAPublicKey
 import java.util.*
@@ -14,7 +17,7 @@ import javax.xml.datatype.XMLGregorianCalendar
 @XmlAccessorType(XmlAccessType.NONE)
 @XmlType(name = "", propOrder = ["header", "authSignature", "body"])
 @XmlRootElement(name = "ebicsRequest")
-class EbicsRequest {
+class Ebics3Request {
     @get:XmlAttribute(name = "Version", required = true)
     @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
     lateinit var version: String
@@ -98,7 +101,7 @@ class EbicsRequest {
          * Present only in the initialization phase.
          */
         @get:XmlElement(name = "Product")
-        var product: EbicsTypes.Product? = null
+        var product: Ebics3Types.Product? = null
 
         /**
          * Present only in the initialization phase.
@@ -138,38 +141,66 @@ class EbicsRequest {
     class MutableHeader {
         @get:XmlElement(name = "TransactionPhase", required = true)
         @get:XmlSchemaType(name = "token")
-        lateinit var transactionPhase: EbicsTypes.TransactionPhaseType
+        lateinit var transactionPhase: Ebics3Types.TransactionPhaseType
 
         /**
          * Number of the currently transmitted segment, if this message
          * contains order data.
          */
         @get:XmlElement(name = "SegmentNumber")
-        var segmentNumber: EbicsTypes.SegmentNumber? = null
+        var segmentNumber: Ebics3Types.SegmentNumber? = null
 
     }
 
     @XmlAccessorType(XmlAccessType.NONE)
     @XmlType(
         name = "",
-        propOrder = ["orderType", "orderID", "orderAttribute", "orderParams"]
+        propOrder = ["adminOrderType", "btdOrderParams", "btuOrderParams", "orderID", "orderParams"]
     )
     class OrderDetails {
-        @get:XmlElement(name = "OrderType", required = true)
+        @get:XmlElement(name = "AdminOrderType", required = true)
         @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
-        lateinit var orderType: String
+        lateinit var adminOrderType: String
+
+        @XmlAccessorType(XmlAccessType.NONE)
+        @XmlType(propOrder = ["serviceName", "scope", "messageName"])
+
+        class Service {
+            @get:XmlElement(name = "ServiceName", required = true)
+            @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
+            lateinit var serviceName: String
+
+            @get:XmlElement(name = "Scope", required = true)
+            @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
+            lateinit var scope: String
+
+            @get:XmlElement(name = "MsgName", required = true)
+            @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
+            lateinit var messageName: String
+        }
+
+        @XmlAccessorType(XmlAccessType.NONE)
+        class BTOrderParams {
+            @get:XmlElement(name = "Service", required = true)
+            lateinit var service: Service
+
+            @get:XmlElement(name = "DateRange", required = true)
+            var dateRange: DateRange? = null
+        }
+
+        @get:XmlElement(name = "BTUOrderParams", required = true)
+        var btuOrderParams: BTOrderParams? = null
+
+        @get:XmlElement(name = "BTDOrderParams", required = true)
+        var btdOrderParams: BTOrderParams? = null
 
         /**
-         * Only present if this ebicsRequest is a upload order
+         * Only present if this ebicsRequest is an upload order
          * relating to an already existing order.
          */
         @get:XmlElement(name = "OrderID", required = true)
         @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
         var orderID: String? = null
-
-        @get:XmlElement(name = "OrderAttribute", required = true)
-        @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
-        lateinit var orderAttribute: String
 
         /**
          * Present only in the initialization phase.
@@ -177,13 +208,14 @@ class EbicsRequest {
         @get:XmlElements(
             XmlElement(
                 name = "StandardOrderParams",
-                type = StandardOrderParams::class
+                type = StandardOrderParams::class // OrderParams inheritor
             ),
             XmlElement(
                 name = "GenericOrderParams",
-                type = GenericOrderParams::class
+                type = GenericOrderParams::class // OrderParams inheritor
             )
         )
+        // Same as the 2.5 version.
         var orderParams: OrderParams? = null
     }
 
@@ -224,7 +256,7 @@ class EbicsRequest {
     class DataTransfer {
 
         @get:XmlElement(name = "DataEncryptionInfo")
-        var dataEncryptionInfo: EbicsTypes.DataEncryptionInfo? = null
+        var dataEncryptionInfo: Ebics3Types.DataEncryptionInfo? = null
 
         @get:XmlElement(name = "SignatureData")
         var signatureData: SignatureData? = null
@@ -247,7 +279,7 @@ class EbicsRequest {
     }
 
     @XmlAccessorType(XmlAccessType.NONE)
-    abstract class OrderParams
+    abstract class  OrderParams
 
     @XmlAccessorType(XmlAccessType.NONE)
     @XmlType(name = "", propOrder = ["dateRange"])
@@ -259,8 +291,8 @@ class EbicsRequest {
     @XmlAccessorType(XmlAccessType.NONE)
     @XmlType(name = "", propOrder = ["parameterList"])
     class GenericOrderParams : OrderParams() {
-        @get:XmlElement(type = EbicsTypes.Parameter::class)
-        var parameterList: List<EbicsTypes.Parameter> = LinkedList()
+        @get:XmlElement(type = Ebics3Types.Parameter::class)
+        var parameterList: List<Ebics3Types.Parameter> = LinkedList()
     }
 
     @XmlAccessorType(XmlAccessType.NONE)
@@ -279,10 +311,10 @@ class EbicsRequest {
     @XmlType(name = "", propOrder = ["authentication", "encryption"])
     class BankPubKeyDigests {
         @get:XmlElement(name = "Authentication")
-        lateinit var authentication: EbicsTypes.PubKeyDigest
+        lateinit var authentication: Ebics3Types.PubKeyDigest
 
         @get:XmlElement(name = "Encryption")
-        lateinit var encryption: EbicsTypes.PubKeyDigest
+        lateinit var encryption: Ebics3Types.PubKeyDigest
     }
 
     companion object {
@@ -291,10 +323,10 @@ class EbicsRequest {
             transactionId: String?,
             hostId: String
 
-        ): EbicsRequest {
-            return EbicsRequest().apply {
+        ): Ebics3Request {
+            return Ebics3Request().apply {
                 header = Header().apply {
-                    version = "H004"
+                    version = "H005"
                     revision = 1
                     authenticate = true
                     static = StaticHeaderType().apply {
@@ -302,7 +334,7 @@ class EbicsRequest {
                         transactionID = transactionId
                     }
                     mutable = MutableHeader().apply {
-                        transactionPhase = EbicsTypes.TransactionPhaseType.RECEIPT
+                        transactionPhase = Ebics3Types.TransactionPhaseType.RECEIPT
                     }
                 }
                 authSignature = SignatureType()
@@ -324,11 +356,11 @@ class EbicsRequest {
             date: XMLGregorianCalendar,
             bankEncPub: RSAPublicKey,
             bankAuthPub: RSAPublicKey,
-            myOrderType: String,
-            myOrderParams: OrderParams
-        ): EbicsRequest {
-            return EbicsRequest().apply {
-                version = "H004"
+            myOrderService: OrderDetails.Service,
+            myOrderParams: EbicsOrderParams? = null
+        ): Ebics3Request {
+            return Ebics3Request().apply {
+                version = "H005"
                 revision = 1
                 authSignature = SignatureType()
                 body = Body()
@@ -342,17 +374,25 @@ class EbicsRequest {
                         timestamp = date
                         partnerID = partnerId
                         orderDetails = OrderDetails().apply {
-                            orderType = myOrderType
-                            orderAttribute = "DZHNN"
-                            orderParams = myOrderParams
+                            this.adminOrderType = "BTD"
+                            this.btdOrderParams = OrderDetails.BTOrderParams().apply {
+                                service = myOrderService
+                                // Order params only used for date ranges so far.
+                                when (myOrderParams) {
+                                    is EbicsStandardOrderParams -> {
+                                        this.dateRange = makeEbics3DateRange(myOrderParams.dateRange)
+                                    }
+                                    else -> {}
+                                }
+                            }
                         }
                         bankPubKeyDigests = BankPubKeyDigests().apply {
-                            authentication = EbicsTypes.PubKeyDigest().apply {
+                            authentication = Ebics3Types.PubKeyDigest().apply {
                                 algorithm = "http://www.w3.org/2001/04/xmlenc#sha256"
                                 version = "X002"
                                 value = CryptoUtil.getEbicsPublicKeyHash(bankAuthPub)
                             }
-                            encryption = EbicsTypes.PubKeyDigest().apply {
+                            encryption = Ebics3Types.PubKeyDigest().apply {
                                 algorithm = "http://www.w3.org/2001/04/xmlenc#sha256"
                                 version = "E002"
                                 value = CryptoUtil.getEbicsPublicKeyHash(bankEncPub)
@@ -362,7 +402,7 @@ class EbicsRequest {
                     }
                     mutable = MutableHeader().apply {
                         transactionPhase =
-                            EbicsTypes.TransactionPhaseType.INITIALISATION
+                            Ebics3Types.TransactionPhaseType.INITIALISATION
                     }
                 }
             }
@@ -379,13 +419,13 @@ class EbicsRequest {
             bankAuthPub: RSAPublicKey,
             bankEncPub: RSAPublicKey,
             segmentsNumber: BigInteger,
-            aOrderType: String,
-            aOrderParams: OrderParams
-        ): EbicsRequest {
+            aOrderService: OrderDetails.Service,
+            // aOrderParams: OrderParamsEbics? = null
+        ): Ebics3Request {
 
-            return EbicsRequest().apply {
+            return Ebics3Request().apply {
                 header = Header().apply {
-                    version = "H004"
+                    version = "H005"
                     revision = 1
                     authenticate = true
                     static = StaticHeaderType().apply {
@@ -395,17 +435,18 @@ class EbicsRequest {
                         partnerID = partnerId
                         userID = userId
                         orderDetails = OrderDetails().apply {
-                            orderType = aOrderType
-                            orderAttribute = "OZHNN"
-                            orderParams = aOrderParams
+                            this.adminOrderType = "BTU"
+                            this.btdOrderParams = OrderDetails.BTOrderParams().apply {
+                                service = aOrderService
+                            }
                         }
                         bankPubKeyDigests = BankPubKeyDigests().apply {
-                            authentication = EbicsTypes.PubKeyDigest().apply {
+                            authentication = Ebics3Types.PubKeyDigest().apply {
                                 algorithm = "http://www.w3.org/2001/04/xmlenc#sha256"
                                 version = "X002"
                                 value = CryptoUtil.getEbicsPublicKeyHash(bankAuthPub)
                             }
-                            encryption = EbicsTypes.PubKeyDigest().apply {
+                            encryption = Ebics3Types.PubKeyDigest().apply {
                                 algorithm = "http://www.w3.org/2001/04/xmlenc#sha256"
                                 version = "E002"
                                 value = CryptoUtil.getEbicsPublicKeyHash(bankEncPub)
@@ -416,7 +457,7 @@ class EbicsRequest {
                     }
                     mutable = MutableHeader().apply {
                         transactionPhase =
-                            EbicsTypes.TransactionPhaseType.INITIALISATION
+                            Ebics3Types.TransactionPhaseType.INITIALISATION
                     }
                 }
                 authSignature = SignatureType()
@@ -426,10 +467,10 @@ class EbicsRequest {
                             authenticate = true
                             value = encryptedSignatureData
                         }
-                        dataEncryptionInfo = EbicsTypes.DataEncryptionInfo().apply {
+                        dataEncryptionInfo = Ebics3Types.DataEncryptionInfo().apply {
                             transactionKey = encryptedTransactionKey
                             authenticate = true
-                            encryptionPubKeyDigest = EbicsTypes.PubKeyDigest().apply {
+                            encryptionPubKeyDigest = Ebics3Types.PubKeyDigest().apply {
                                 algorithm = "http://www.w3.org/2001/04/xmlenc#sha256"
                                 version = "E002"
                                 value = CryptoUtil.getEbicsPublicKeyHash(bankEncPub)
@@ -445,10 +486,10 @@ class EbicsRequest {
             transactionId: String?,
             segNumber: BigInteger,
             encryptedData: String
-        ): EbicsRequest {
-            return EbicsRequest().apply {
+        ): Ebics3Request {
+            return Ebics3Request().apply {
                 header = Header().apply {
-                    version = "H004"
+                    version = "H005"
                     revision = 1
                     authenticate = true
                     static = StaticHeaderType().apply {
@@ -456,8 +497,8 @@ class EbicsRequest {
                         transactionID = transactionId
                     }
                     mutable = MutableHeader().apply {
-                        transactionPhase = EbicsTypes.TransactionPhaseType.TRANSFER
-                        segmentNumber = EbicsTypes.SegmentNumber().apply {
+                        transactionPhase = Ebics3Types.TransactionPhaseType.TRANSFER
+                        segmentNumber = Ebics3Types.SegmentNumber().apply {
                             lastSegment = true
                             value = segNumber
                         }
@@ -478,9 +519,9 @@ class EbicsRequest {
             transactionID: String?,
             segmentNumber: Int,
             numSegments: Int
-        ): EbicsRequest {
-            return EbicsRequest().apply {
-                version = "H004"
+        ): Ebics3Request {
+            return Ebics3Request().apply {
+                version = "H005"
                 revision = 1
                 authSignature = SignatureType()
                 body = Body()
@@ -492,8 +533,8 @@ class EbicsRequest {
                     }
                     mutable = MutableHeader().apply {
                         transactionPhase =
-                            EbicsTypes.TransactionPhaseType.TRANSFER
-                        this.segmentNumber = EbicsTypes.SegmentNumber().apply {
+                            Ebics3Types.TransactionPhaseType.TRANSFER
+                        this.segmentNumber = Ebics3Types.SegmentNumber().apply {
                             this.value = BigInteger.valueOf(segmentNumber.toLong())
                             this.lastSegment = segmentNumber == numSegments
                         }

@@ -28,6 +28,8 @@ import io.ktor.http.HttpStatusCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.ebics_h004.*
+import tech.libeufin.util.ebics_h005.Ebics3Request
+import tech.libeufin.util.ebics_h005.Ebics3Types
 import tech.libeufin.util.ebics_hev.HEVRequest
 import tech.libeufin.util.ebics_hev.HEVResponse
 import tech.libeufin.util.ebics_s001.UserSignatureData
@@ -133,6 +135,14 @@ private fun makeOrderParams(orderParams: EbicsOrderParams): EbicsRequest.OrderPa
     }
 }
 
+fun makeEbics3DateRange(ebicsDateRange: EbicsDateRange?): Ebics3Request.DateRange? {
+    return if (ebicsDateRange != null)
+        return Ebics3Request.DateRange().apply {
+            this.start = getXmlDate(ebicsDateRange.start)
+            this.end = getXmlDate(ebicsDateRange.end)
+        }
+    else null
+}
 
 private fun signOrder(
     orderBlob: ByteArray,
@@ -231,25 +241,49 @@ fun prepareUploadPayload(subscriberDetails: EbicsClientSubscriberDetails, payloa
  */
 fun createEbicsRequestForUploadInitialization(
     subscriberDetails: EbicsClientSubscriberDetails,
-    orderType: String,
+    orderType: String? = null,
     orderParams: EbicsOrderParams,
-    preparedUploadData: PreparedUploadData
+    preparedUploadData: PreparedUploadData,
+    ebics3OrderService: Ebics3Request.OrderDetails.Service? = null
 ): String {
+    // Check if the call is consistent: (only) ONE instruction is expected.
+    if (orderType == null && ebics3OrderService == null)
+        throw internalServerError("Need exactly one upload instruction but zero was found.")
+    if (orderType != null && ebics3OrderService != null)
+        throw internalServerError("Need exactly one upload instruction but two were found")
     val nonce = getNonce(128)
-    val req = EbicsRequest.createForUploadInitializationPhase(
-        preparedUploadData.transactionKey,
-        preparedUploadData.userSignatureDataEncrypted,
-        subscriberDetails.hostId,
-        nonce,
-        subscriberDetails.partnerId,
-        subscriberDetails.userId,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
-        subscriberDetails.bankAuthPub!!,
-        subscriberDetails.bankEncPub!!,
-        BigInteger.ONE,
-        orderType,
-        makeOrderParams(orderParams)
-    )
+    val doc = if (orderType != null) {
+        val req = EbicsRequest.createForUploadInitializationPhase(
+            preparedUploadData.transactionKey,
+            preparedUploadData.userSignatureDataEncrypted,
+            subscriberDetails.hostId,
+            nonce,
+            subscriberDetails.partnerId,
+            subscriberDetails.userId,
+            DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
+            subscriberDetails.bankAuthPub!!,
+            subscriberDetails.bankEncPub!!,
+            BigInteger.ONE,
+            orderType,
+            makeOrderParams(orderParams)
+        )
+        XMLUtil.convertJaxbToDocument(req)
+    } else {
+        val req = Ebics3Request.createForUploadInitializationPhase(
+            preparedUploadData.transactionKey,
+            preparedUploadData.userSignatureDataEncrypted,
+            subscriberDetails.hostId,
+            nonce,
+            subscriberDetails.partnerId,
+            subscriberDetails.userId,
+            DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
+            subscriberDetails.bankAuthPub!!,
+            subscriberDetails.bankEncPub!!,
+            BigInteger.ONE,
+            ebics3OrderService!!
+        )
+        XMLUtil.convertJaxbToDocument(req)
+    }
     /**
      * FIXME: this log should be made by the caller.
      * That way, all the EBICS transaction steps would be logged in only one function,
@@ -259,45 +293,73 @@ fun createEbicsRequestForUploadInitialization(
      */
     logger.debug("Created EBICS $orderType document for upload initialization," +
             " nonce: ${nonce.toHexString()}")
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv)
+    XMLUtil.signEbicsDocument(
+        doc,
+        subscriberDetails.customerAuthPriv,
+        withEbics3 = ebics3OrderService != null
+    )
     return XMLUtil.convertDomToString(doc)
 }
 
 fun createEbicsRequestForDownloadInitialization(
     subscriberDetails: EbicsClientSubscriberDetails,
-    orderType: String,
-    orderParams: EbicsOrderParams
+    orderType: String? = null,
+    orderParams: EbicsOrderParams,
+    ebics3OrderService: Ebics3Request.OrderDetails.Service? = null
 ): String {
+    // Check if the call is consistent: (only) ONE instruction is expected.
+    if (orderType == null && ebics3OrderService == null)
+        throw internalServerError("Need exactly one download instruction but zero was found.")
+    if (orderType != null && ebics3OrderService != null)
+        throw internalServerError("Need exactly one download instruction but two were found")
     val nonce = getNonce(128)
-    val req = EbicsRequest.createForDownloadInitializationPhase(
-        subscriberDetails.userId,
-        subscriberDetails.partnerId,
-        subscriberDetails.hostId,
-        nonce,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
-        subscriberDetails.bankEncPub ?: throw EbicsProtocolError(
-            HttpStatusCode.BadRequest,
-            "Invalid subscriber state 'bankEncPub' missing, please send HPB first"
-        ),
-        subscriberDetails.bankAuthPub ?: throw EbicsProtocolError(
-            HttpStatusCode.BadRequest,
-            "Invalid subscriber state 'bankAuthPub' missing, please send HPB first"
-        ),
-        orderType,
-        makeOrderParams(orderParams)
-    )
-    /**
-     * FIXME: this log should be made by the caller.
-     * That way, all the EBICS transaction steps would be logged in only one function,
-     * as opposed to have them spread through the helpers here.  This function
-     * returning a string blocks now, since the caller should parse and stringify
-     * again the message, only to get its nonce.
-     */
+
+    val doc = if (orderType != null) {
+        val req = EbicsRequest.createForDownloadInitializationPhase(
+            subscriberDetails.userId,
+            subscriberDetails.partnerId,
+            subscriberDetails.hostId,
+            nonce,
+            DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
+            subscriberDetails.bankEncPub ?: throw EbicsProtocolError(
+                HttpStatusCode.BadRequest,
+                "Invalid subscriber state 'bankEncPub' missing, please send HPB first"
+            ),
+            subscriberDetails.bankAuthPub ?: throw EbicsProtocolError(
+                HttpStatusCode.BadRequest,
+                "Invalid subscriber state 'bankAuthPub' missing, please send HPB first"
+            ),
+            orderType,
+            makeOrderParams(orderParams)
+        )
+        XMLUtil.convertJaxbToDocument(req)
+    } else {
+        val req = Ebics3Request.createForDownloadInitializationPhase(
+            subscriberDetails.userId,
+            subscriberDetails.partnerId,
+            subscriberDetails.hostId,
+            nonce,
+            DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
+            subscriberDetails.bankEncPub ?: throw EbicsProtocolError(
+                HttpStatusCode.BadRequest,
+                "Invalid subscriber state 'bankEncPub' missing, please send HPB first"
+            ),
+            subscriberDetails.bankAuthPub ?: throw EbicsProtocolError(
+                HttpStatusCode.BadRequest,
+                "Invalid subscriber state 'bankAuthPub' missing, please send HPB first"
+            ),
+            ebics3OrderService!!
+        )
+        XMLUtil.convertJaxbToDocument(req)
+    }
+
     logger.debug("Created EBICS $orderType document for download initialization," +
             " nonce: ${nonce.toHexString()}")
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv)
+    XMLUtil.signEbicsDocument(
+        doc,
+        subscriberDetails.customerAuthPriv,
+        withEbics3 = ebics3OrderService != null
+    )
     return XMLUtil.convertDomToString(doc)
 }
 

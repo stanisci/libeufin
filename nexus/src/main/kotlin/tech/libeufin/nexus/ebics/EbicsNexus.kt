@@ -55,6 +55,7 @@ import tech.libeufin.nexus.server.*
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import tech.libeufin.util.ebics_h004.HTDResponseOrderData
+import tech.libeufin.util.ebics_h005.Ebics3Request
 import java.io.ByteArrayOutputStream
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
@@ -67,9 +68,17 @@ import java.util.*
 import javax.crypto.EncryptedPrivateKeyInfo
 
 
-private data class EbicsFetchSpec(
-    val orderType: String,
-    val orderParams: EbicsOrderParams
+/**
+ * This type maps the abstract fetch specifications -- as for example
+ * they were given via the Nexus JSON API -- to the specific EBICS type.
+ */
+data class EbicsFetchSpec(
+    val orderType: String? = null, // unused for 3.0
+    val orderParams: EbicsOrderParams,
+    val ebics3Service: Ebics3Request.OrderDetails.Service? = null, // unused for 2.5
+    // Not always available, for example at raw POST /download/${ebicsMessageName} calls.
+    // It helps to trace back the original level.
+    val originalLevel: FetchLevel? = null
 )
 
 /**
@@ -128,22 +137,62 @@ private fun validateAndStoreCamt(
     }
 }
 
-/**
- * Fetch EBICS C5x and store it locally, but do not update bank accounts.
- */
-private suspend fun fetchEbicsC5x(
-    historyType: String,
+private fun handleEbicsDownloadResult(
+    bankResponse: EbicsDownloadResult,
+    bankConnectionId: String,
+    fetchLevel: FetchLevel
+) {
+    when (bankResponse) {
+        is EbicsDownloadSuccessResult -> {
+            bankResponse.orderData.unzipWithLambda {
+                // logger.debug("Camt entry (filename (in the Zip archive): ${it.first}): ${it.second}")
+                validateAndStoreCamt(
+                    bankConnectionId,
+                    it.second,
+                    fetchLevel,
+                    transactionID = bankResponse.transactionID
+                )
+            }
+        }
+        is EbicsDownloadBankErrorResult -> {
+            throw NexusError(
+                HttpStatusCode.BadGateway,
+                bankResponse.returnCode.errorCode
+            )
+        }
+        is EbicsDownloadEmptyResult -> {
+            // no-op
+        }
+    }
+}
+
+// Fetch EBICS transactions according to the specifications
+// (fetchSpec) it finds in the parameters.
+private suspend fun fetchEbicsTransactions(
+    fetchSpec: EbicsFetchSpec,
     client: HttpClient,
     bankConnectionId: String,
-    orderParams: EbicsOrderParams,
-    subscriberDetails: EbicsClientSubscriberDetails
+    subscriberDetails: EbicsClientSubscriberDetails,
 ) {
-    val response = try {
+    /**
+     * In this case Nexus will not be able to associate the future
+     * EBICS response with the fetch level originally requested by
+     * the caller, and therefore refuses to continue the execution.
+     * This condition is however in some cases allowed: for example
+     * along the "POST /download/$ebicsMessageType" call, where the result
+     * is not supposed to be stored in the database and therefore doesn't
+     * need its original level.
+     */
+    if (fetchSpec.originalLevel == null) {
+        throw internalServerError(
+            "Original fetch level missing, won't download from EBICS"
+        )
+    }
+    val response: EbicsDownloadResult = try {
         doEbicsDownloadTransaction(
             client,
             subscriberDetails,
-            historyType,
-            orderParams
+            fetchSpec
         )
     } catch (e: EbicsProtocolError) {
         /**
@@ -158,43 +207,11 @@ private suspend fun fetchEbicsC5x(
         throw e
     }
 
-    when (historyType) {
-        // default dialect
-        "C52" -> {}
-        "C53" -> {}
-        // 'pf' dialect
-        "Z52" -> {}
-        "Z53" -> {}
-        "Z54" -> {}
-        else -> {
-            throw NexusError(
-                HttpStatusCode.BadRequest,
-                "history type '$historyType' not supported"
-            )
-        }
-    }
-    when (response) {
-        is EbicsDownloadSuccessResult -> {
-            response.orderData.unzipWithLambda {
-                // logger.debug("Camt entry (filename (in the Zip archive): ${it.first}): ${it.second}")
-                validateAndStoreCamt(
-                    bankConnectionId,
-                    it.second,
-                    getFetchLevelFromEbicsOrder(historyType),
-                    transactionID = response.transactionID
-                )
-            }
-        }
-        is EbicsDownloadBankErrorResult -> {
-            throw NexusError(
-                HttpStatusCode.BadGateway,
-                response.returnCode.errorCode
-            )
-        }
-        is EbicsDownloadEmptyResult -> {
-            // no-op
-        }
-    }
+    handleEbicsDownloadResult(
+        response,
+        bankConnectionId,
+        fetchSpec.originalLevel
+    )
 }
 
 /**
@@ -333,7 +350,12 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
             getEbicsSubscriberDetails(conn.connectionId)
         }
         val response = doEbicsDownloadTransaction(
-            client, subscriberDetails, "HTD", EbicsStandardOrderParams()
+            client,
+            subscriberDetails,
+            EbicsFetchSpec(
+                orderType = "HTD",
+                orderParams = EbicsStandardOrderParams()
+            )
         )
         when (response) {
             is EbicsDownloadEmptyResult -> {
@@ -394,8 +416,12 @@ fun Route.ebicsBankConnectionRoutes(client: HttpClient) {
         val response = doEbicsDownloadTransaction(
             client,
             subscriberDetails,
-            orderType,
-            orderParams
+            EbicsFetchSpec(
+                orderType = orderType,
+                orderParams = orderParams,
+                ebics3Service = null,
+                originalLevel = null
+            )
         )
         when (response) {
             is EbicsDownloadEmptyResult -> {
@@ -465,30 +491,64 @@ fun formatHex(ba: ByteArray): String {
     return out
 }
 
-private fun getSubmissionTypeAfterDialect(dialect: String? = null): String {
+// A null return value indicates that the connection uses EBICS 3.0
+private fun getSubmissionTypeAfterDialect(dialect: String? = null): String? {
     return when (dialect) {
-        "pf" -> "XE2"
+        "pf" -> null // "XE2"
         else -> "CCT"
     }
 }
-private fun getReportTypeAfterDialect(dialect: String? = null): String {
+
+private fun getStatementSpecAfterDialect(dialect: String? = null, p: EbicsOrderParams): EbicsFetchSpec {
     return when (dialect) {
-        "pf" -> "Z52"
-        else -> "C52"
-    }
-}
-private fun getStatementTypeAfterDialect(dialect: String? = null): String {
-    return when (dialect) {
-        "pf" -> "Z53"
-        else -> "C53"
+        "pf" -> EbicsFetchSpec(
+            orderType = "Z53",
+            orderParams = p,
+            ebics3Service = null,
+            originalLevel = FetchLevel.STATEMENT
+        )
+        else -> EbicsFetchSpec(
+            orderType = "C53",
+            orderParams = p,
+            ebics3Service = null,
+            originalLevel = FetchLevel.STATEMENT
+        )
     }
 }
 
-private fun getNotificationTypeAfterDialect(dialect: String? = null): String {
+private fun getNotificationSpecAfterDialect(dialect: String? = null, p: EbicsOrderParams): EbicsFetchSpec {
     return when (dialect) {
-        "pf" -> "Z54"
-        else -> throw NotImplementedError(
-            "Notifications not implemented in the 'default' EBICS dialect"
+        "pf" -> EbicsFetchSpec(
+            orderType = null, // triggers 3.0
+            orderParams = p,
+            ebics3Service = Ebics3Request.OrderDetails.Service().apply {
+                serviceName = "REP"
+                messageName = "camt.054"
+                scope = "CH"
+            },
+            originalLevel = FetchLevel.NOTIFICATION
+        )
+        else -> EbicsFetchSpec(
+            orderType = "C54",
+            orderParams = p,
+            ebics3Service = null,
+            originalLevel = FetchLevel.NOTIFICATION
+        )
+    }
+}
+private fun getReportSpecAfterDialect(dialect: String? = null, p: EbicsOrderParams): EbicsFetchSpec {
+    return when (dialect) {
+        "pf" -> EbicsFetchSpec(
+            orderType = "Z52",
+            orderParams = p,
+            ebics3Service = null,
+            originalLevel = FetchLevel.REPORT
+        )
+        else -> EbicsFetchSpec(
+            orderType = "C52",
+            orderParams = p,
+            ebics3Service = null,
+            originalLevel = FetchLevel.REPORT
         )
     }
 }
@@ -522,7 +582,8 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             is FetchSpecLatestJson -> {
                 EbicsFetchSpec(
                     orderType = "Z01", // PoFi specific.
-                    orderParams = EbicsStandardOrderParams()
+                    orderParams = EbicsStandardOrderParams(),
+                    originalLevel = fetchSpec.level
                 )
             }
             else -> throw NotImplementedError("Fetch spec '${fetchSpec::class}' not supported for payment receipts.")
@@ -532,8 +593,10 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             doEbicsDownloadTransaction(
                 client,
                 subscriberDetails,
-                ebicsOrderInfo.orderType,
-                ebicsOrderInfo.orderParams
+                EbicsFetchSpec(
+                    orderType = ebicsOrderInfo.orderType,
+                    orderParams = ebicsOrderInfo.orderParams
+                )
             )
         } catch (e: EbicsProtocolError) {
             if (e.ebicsTechnicalCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
@@ -579,17 +642,17 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         fun addForLevel(l: FetchLevel, p: EbicsOrderParams) {
             when (l) {
                 FetchLevel.ALL -> {
-                    specs.add(EbicsFetchSpec(getReportTypeAfterDialect(subscriberDetails.dialect), p))
-                    specs.add(EbicsFetchSpec(getStatementTypeAfterDialect(subscriberDetails.dialect), p))
+                    specs.add(getReportSpecAfterDialect(subscriberDetails.dialect, p))
+                    specs.add(getStatementSpecAfterDialect(subscriberDetails.dialect, p))
                 }
                 FetchLevel.REPORT -> {
-                    specs.add(EbicsFetchSpec(getReportTypeAfterDialect(subscriberDetails.dialect), p))
+                    specs.add(getReportSpecAfterDialect(subscriberDetails.dialect, p))
                 }
                 FetchLevel.STATEMENT -> {
-                    specs.add(EbicsFetchSpec(getStatementTypeAfterDialect(subscriberDetails.dialect), p))
+                    specs.add(getStatementSpecAfterDialect(subscriberDetails.dialect, p))
                 }
                 FetchLevel.NOTIFICATION -> {
-                    specs.add(EbicsFetchSpec(getNotificationTypeAfterDialect(subscriberDetails.dialect), p))
+                    specs.add(getNotificationSpecAfterDialect(subscriberDetails.dialect, p))
                 }
                 else -> {
                     logger.error("fetch level wrong in addForLevel() helper: ${fetchSpec.level}.")
@@ -646,32 +709,17 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 )
                 when (fetchSpec.level) {
                     FetchLevel.ALL -> {
-                        specs.add(EbicsFetchSpec(
-                            orderType = getReportTypeAfterDialect(dialect = subscriberDetails.dialect),
-                            orderParams = pRep
-                        ))
-                        specs.add(EbicsFetchSpec(
-                            orderType = getStatementTypeAfterDialect(dialect = subscriberDetails.dialect),
-                            orderParams = pStmt
-                        ))
+                        specs.add(getReportSpecAfterDialect(subscriberDetails.dialect, pRep))
+                        specs.add(getStatementSpecAfterDialect(subscriberDetails.dialect, pRep))
                     }
                     FetchLevel.REPORT -> {
-                        specs.add(EbicsFetchSpec(
-                            orderType = getReportTypeAfterDialect(dialect = subscriberDetails.dialect),
-                            orderParams = pRep
-                        ))
+                        specs.add(getReportSpecAfterDialect(subscriberDetails.dialect, pRep))
                     }
                     FetchLevel.STATEMENT -> {
-                        specs.add(EbicsFetchSpec(
-                            orderType = getStatementTypeAfterDialect(dialect = subscriberDetails.dialect),
-                            orderParams = pStmt
-                        ))
+                        specs.add(getStatementSpecAfterDialect(subscriberDetails.dialect, pStmt))
                     }
                     FetchLevel.NOTIFICATION -> {
-                        specs.add(EbicsFetchSpec(
-                            orderType = getNotificationTypeAfterDialect(dialect = subscriberDetails.dialect),
-                            orderParams = pNtfn
-                        ))
+                        specs.add(getNotificationSpecAfterDialect(subscriberDetails.dialect, pNtfn))
                     }
                     else -> throw badRequest("Fetch level ${fetchSpec.level} " +
                             "not supported in the 'since last' EBICS time range.")
@@ -682,11 +730,10 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         val errors = mutableListOf<Exception>()
         for (spec in specs) {
             try {
-                fetchEbicsC5x(
-                    spec.orderType,
+                fetchEbicsTransactions(
+                    spec,
                     client,
                     bankConnectionId,
-                    spec.orderParams,
                     subscriberDetails
                 )
             } catch (e: Exception) {
@@ -741,7 +788,14 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             dbData.subscriberDetails,
             getSubmissionTypeAfterDialect(dbData.subscriberDetails.dialect),
             dbData.painXml.toByteArray(Charsets.UTF_8),
-            EbicsStandardOrderParams()
+            EbicsStandardOrderParams(),
+            ebics3OrderService = if (dbData.subscriberDetails.dialect == "pf") {
+                Ebics3Request.OrderDetails.Service().apply {
+                    serviceName = "MCT"
+                    scope = "CH"
+                    messageName = "pain.001"
+                }
+            } else null
         )
         transaction {
             val payment = getPaymentInitiation(paymentInitiationId)
@@ -1025,7 +1079,12 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
     override suspend fun fetchAccounts(client: HttpClient, connId: String) {
         val subscriberDetails = transaction { getEbicsSubscriberDetails(connId) }
         val response = doEbicsDownloadTransaction(
-            client, subscriberDetails, "HTD", EbicsStandardOrderParams()
+            client,
+            subscriberDetails,
+            EbicsFetchSpec(
+                orderType = "HTD",
+                orderParams = EbicsStandardOrderParams()
+            )
         )
         when (response) {
             is EbicsDownloadEmptyResult -> {

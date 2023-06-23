@@ -5,7 +5,6 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
 import tech.libeufin.nexus.bankaccount.getBankAccount
-import tech.libeufin.nexus.ebics.EbicsBankConnectionProtocol
 import tech.libeufin.nexus.ebics.doEbicsUploadTransaction
 import tech.libeufin.nexus.ebics.getEbicsSubscriberDetails
 import tech.libeufin.nexus.getConnectionPlugin
