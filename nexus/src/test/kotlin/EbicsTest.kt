@@ -13,9 +13,7 @@ import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
 import tech.libeufin.nexus.bankaccount.submitAllPaymentInitiations
-import tech.libeufin.nexus.ebics.EbicsBankConnectionProtocol
-import tech.libeufin.nexus.ebics.doEbicsUploadTransaction
-import tech.libeufin.nexus.ebics.getEbicsSubscriberDetails
+import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
 import tech.libeufin.nexus.iso20022.createPain001document
 import tech.libeufin.nexus.server.FetchLevel
@@ -204,9 +202,12 @@ class DownloadAndSubmit {
                         doEbicsUploadTransaction(
                             client,
                             unallowedSubscriber,
-                            "CCT",
-                            painMessage.toByteArray(Charsets.UTF_8),
-                            EbicsStandardOrderParams()
+                            EbicsUploadSpec(
+                                orderType = "CCT",
+                                isEbics3 = false,
+                                orderParams = EbicsStandardOrderParams()
+                            ),
+                            painMessage.toByteArray(Charsets.UTF_8)
                         )
                     } catch (e: EbicsProtocolError) {
                         if (e.ebicsTechnicalCode ==
@@ -322,36 +323,56 @@ class DownloadAndSubmit {
 
 class EbicsTest {
 
+    @Test
+    fun genEbics3Upload() {
+        withTestDatabase {
+            prepNexusDb()
+            val foo = transaction { getEbicsSubscriberDetails("foo") }
+            val uploadDoc = createEbicsRequestForUploadInitialization(
+                subscriberDetails = foo,
+                ebics3OrderService = Ebics3Request.OrderDetails.Service().apply {
+                    serviceName = "OTH"
+                    scope = "BIL"
+                    serviceOption = "CH002LMF"
+                    messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+                        value = "csv"
+                    }
+                },
+                null,
+                prepareUploadPayload(
+                    foo,
+                    "foo".toByteArray(),
+                    isEbics3 = true
+                )
+            )
+            assert(XMLUtil.validateFromString(uploadDoc))
+        }
+    }
+
     /**
      * Tests the validity of EBICS 3.0 messages.
      */
     @Test
-    fun genEbics3() {
+    fun genEbics3Download() {
         withTestDatabase {
             prepNexusDb()
             val foo = transaction { getEbicsSubscriberDetails("foo") }
             val downloadDoc = createEbicsRequestForDownloadInitialization(
-                foo,
-                orderType = null, // triggers 3.0
-                EbicsStandardOrderParams(),
-                Ebics3Request.OrderDetails.Service().apply {
-                    messageName = "camt.054"
+                subscriberDetails = foo,
+                ebics3OrderService = Ebics3Request.OrderDetails.Service().apply {
+                    messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+                        value = "camt.054"
+                        version = "04"
+                    }
                     scope = "CH"
                     serviceName = "REP"
-                }
+                    container = Ebics3Request.OrderDetails.Service.Container().apply {
+                        containerType = "ZIP"
+                    }
+                },
+                orderParams = EbicsStandardOrderParams()
             )
             assert(XMLUtil.validateFromString(downloadDoc))
-            val uploadDoc = createEbicsRequestForDownloadInitialization(
-                foo,
-                orderType = null, // triggers 3.0
-                EbicsStandardOrderParams(),
-                Ebics3Request.OrderDetails.Service().apply {
-                    messageName = "pain.001"
-                    scope = "EU"
-                    serviceName = "MCT"
-                }
-            )
-            assert(XMLUtil.validateFromString(uploadDoc))
         }
     }
 }

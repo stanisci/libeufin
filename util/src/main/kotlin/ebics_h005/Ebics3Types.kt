@@ -63,7 +63,6 @@ object Ebics3Types {
         var lastSegment: Boolean? = null
     }
 
-
     @XmlType(name = "", propOrder = ["encryptionPubKeyDigest", "transactionKey"])
     @XmlAccessorType(XmlAccessType.NONE)
     class DataEncryptionInfo {

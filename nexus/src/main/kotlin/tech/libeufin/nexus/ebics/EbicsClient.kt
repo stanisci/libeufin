@@ -112,16 +112,31 @@ suspend fun doEbicsDownloadTransaction(
 ): EbicsDownloadResult {
 
     // Initialization phase
-    val initDownloadRequestStr = createEbicsRequestForDownloadInitialization(
-        subscriberDetails,
-        fetchSpec.orderType,
-        fetchSpec.orderParams,
-        fetchSpec.ebics3Service
-    )
+    val initDownloadRequestStr = if (fetchSpec.isEbics3) {
+        if (fetchSpec.ebics3Service == null)
+            throw internalServerError("Expected EBICS 3 fetch spec but null was found.")
+        createEbicsRequestForDownloadInitialization(
+            subscriberDetails,
+            fetchSpec.ebics3Service,
+            fetchSpec.orderParams
+        )
+    }
+    else {
+        if (fetchSpec.orderType == null)
+            throw internalServerError("Expected EBICS 2.5 order type but null was found.")
+        createEbicsRequestForDownloadInitialization(
+            subscriberDetails,
+            fetchSpec.orderType,
+            fetchSpec.orderParams
+        )
+    }
     val payloadChunks = LinkedList<String>()
     val initResponseStr = client.postToBank(subscriberDetails.ebicsUrl, initDownloadRequestStr)
-    val initResponse = parseAndValidateEbicsResponse(subscriberDetails, initResponseStr)
-
+    val initResponse = parseAndValidateEbicsResponse(
+        subscriberDetails,
+        initResponseStr,
+        withEbics3 = fetchSpec.isEbics3
+    )
     val transactionID: String? = initResponse.transactionID
     // Checking for EBICS communication problems.
     when (initResponse.technicalReturnCode) {
@@ -192,7 +207,8 @@ suspend fun doEbicsDownloadTransaction(
                 subscriberDetails,
                 transactionID,
                 x,
-                numSegments
+                numSegments,
+                fetchSpec.isEbics3
             )
         logger.debug("EBICS download transfer phase of ${transactionID}: sending segment $x")
         val transferResponseStr = client.postToBank(subscriberDetails.ebicsUrl, transferReqStr)
@@ -236,13 +252,18 @@ suspend fun doEbicsDownloadTransaction(
     // Acknowledgement phase
     val ackRequest = createEbicsRequestForDownloadReceipt(
         subscriberDetails,
-        transactionID
+        transactionID,
+        fetchSpec.isEbics3
     )
     val ackResponseStr = client.postToBank(
         subscriberDetails.ebicsUrl,
         ackRequest
     )
-    val ackResponse = parseAndValidateEbicsResponse(subscriberDetails, ackResponseStr)
+    val ackResponse = parseAndValidateEbicsResponse(
+        subscriberDetails,
+        ackResponseStr,
+        withEbics3 = fetchSpec.isEbics3
+    )
     when (ackResponse.technicalReturnCode) {
         EbicsReturnCode.EBICS_DOWNLOAD_POSTPROCESS_DONE -> {
         }
@@ -263,28 +284,46 @@ suspend fun doEbicsDownloadTransaction(
 suspend fun doEbicsUploadTransaction(
     client: HttpClient,
     subscriberDetails: EbicsClientSubscriberDetails,
-    orderType: String? = null,
-    payload: ByteArray,
-    orderParams: EbicsOrderParams,
-    ebics3OrderService: Ebics3Request.OrderDetails.Service? = null
+    uploadSpec: EbicsUploadSpec,
+    payload: ByteArray
 ) {
     if (subscriberDetails.bankEncPub == null) {
         throw NexusError(HttpStatusCode.BadRequest,
             "bank encryption key unknown, request HPB first"
         )
     }
-    val preparedUploadData = prepareUploadPayload(subscriberDetails, payload)
-    val req = createEbicsRequestForUploadInitialization(
+    val preparedUploadData = prepareUploadPayload(
         subscriberDetails,
-        orderType,
-        orderParams,
-        preparedUploadData,
-        ebics3OrderService = ebics3OrderService
+        payload,
+        isEbics3 = uploadSpec.isEbics3
     )
+    val req: String = if (uploadSpec.isEbics3) {
+        if (uploadSpec.ebics3Service == null)
+            throw internalServerError("EBICS 3 service data was expected, but null was found.")
+        createEbicsRequestForUploadInitialization(
+            subscriberDetails,
+            uploadSpec.ebics3Service,
+            uploadSpec.orderParams,
+            preparedUploadData
+        )
+    } else {
+        if (uploadSpec.orderType == null)
+            throw internalServerError("EBICS 2.5 order type was expected, but null was found.")
+        createEbicsRequestForUploadInitialization(
+            subscriberDetails,
+            uploadSpec.orderType,
+            uploadSpec.orderParams ?: EbicsStandardOrderParams(),
+            preparedUploadData
+        )
+    }
     logger.debug("EBICS upload message to: ${subscriberDetails.ebicsUrl}")
     val responseStr = client.postToBank(subscriberDetails.ebicsUrl, req)
 
-    val initResponse = parseAndValidateEbicsResponse(subscriberDetails, responseStr)
+    val initResponse = parseAndValidateEbicsResponse(
+        subscriberDetails,
+        responseStr,
+        withEbics3 = uploadSpec.isEbics3
+    )
     // The bank indicated one error, hence Nexus sent invalid data.
     if (initResponse.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
         throw NexusError(
@@ -311,13 +350,18 @@ suspend fun doEbicsUploadTransaction(
         subscriberDetails,
         transactionID,
         preparedUploadData,
-        0
+        0,
+        withEbics3 = uploadSpec.isEbics3
     )
     val txRespStr = client.postToBank(
         subscriberDetails.ebicsUrl,
         ebicsPayload
     )
-    val txResp = parseAndValidateEbicsResponse(subscriberDetails, txRespStr)
+    val txResp = parseAndValidateEbicsResponse(
+        subscriberDetails,
+        txRespStr,
+        withEbics3 = uploadSpec.isEbics3
+    )
     when (txResp.technicalReturnCode) {
         EbicsReturnCode.EBICS_OK -> {/* do nothing */}
         else -> {

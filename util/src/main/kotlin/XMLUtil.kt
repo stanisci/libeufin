@@ -66,10 +66,10 @@ import logger
 class DefaultNamespaces : NamespacePrefixMapper() {
     override fun getPreferredPrefix(namespaceUri: String?, suggestion: String?, requirePrefix: Boolean): String? {
         if (namespaceUri == "http://www.w3.org/2000/09/xmldsig#") return "ds"
+        if (namespaceUri == XMLConstants.W3C_XML_SCHEMA_INSTANCE_NS_URI) return "xsi"
         return null
     }
 }
-
 
 class DOMInputImpl : LSInput {
     var fPublicId: String? = null
@@ -292,23 +292,35 @@ class XMLUtil private constructor() {
             return validate(xmlSource)
         }
 
-        inline fun <reified T> convertJaxbToString(obj: T): String {
+        inline fun <reified T> convertJaxbToString(
+            obj: T,
+            withSchemaLocation: String? = null
+            ): String {
             val sw = StringWriter()
             val jc = JAXBContext.newInstance(T::class.java)
             val m = jc.createMarshaller()
             m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true)
+            if (withSchemaLocation != null) {
+                m.setProperty(Marshaller.JAXB_SCHEMA_LOCATION, withSchemaLocation)
+            }
             m.setProperty("com.sun.xml.bind.namespacePrefixMapper", DefaultNamespaces())
             m.marshal(obj, sw)
             return sw.toString()
         }
 
-        inline fun <reified T> convertJaxbToDocument(obj: T): Document {
+        inline fun <reified T> convertJaxbToDocument(
+            obj: T,
+            withSchemaLocation: String? = null
+        ): Document {
             val dbf: DocumentBuilderFactory = DocumentBuilderFactory.newInstance()
             dbf.isNamespaceAware = true
             val doc = dbf.newDocumentBuilder().newDocument()
             val jc = JAXBContext.newInstance(T::class.java)
             val m = jc.createMarshaller()
             m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true)
+            if (withSchemaLocation != null) {
+                m.setProperty(Marshaller.JAXB_SCHEMA_LOCATION, withSchemaLocation)
+            }
             m.setProperty("com.sun.xml.bind.namespacePrefixMapper", DefaultNamespaces())
             m.marshal(obj, doc)
             return doc
@@ -339,8 +351,6 @@ class XMLUtil private constructor() {
             /* Make Transformer.  */
             val tf = TransformerFactory.newInstance()
             val t = tf.newTransformer()
-
-            //t.setOutputProperty(OutputKeys.INDENT, "yes")
 
             /* Make string writer.  */
             val sw = StringWriter()
@@ -409,7 +419,7 @@ class XMLUtil private constructor() {
             doc: Document,
             signingPriv: PrivateKey,
             withEbics3: Boolean = false
-        ): Unit {
+        ) {
             val xpath = XPathFactory.newInstance().newXPath()
             xpath.namespaceContext = object : NamespaceContext {
                 override fun getNamespaceURI(p0: String?): String {

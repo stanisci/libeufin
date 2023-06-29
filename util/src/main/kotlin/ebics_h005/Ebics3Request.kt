@@ -163,8 +163,7 @@ class Ebics3Request {
         lateinit var adminOrderType: String
 
         @XmlAccessorType(XmlAccessType.NONE)
-        @XmlType(propOrder = ["serviceName", "scope", "messageName"])
-
+        @XmlType(propOrder = ["serviceName", "scope", "serviceOption", "container", "messageName"])
         class Service {
             @get:XmlElement(name = "ServiceName", required = true)
             @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
@@ -174,9 +173,31 @@ class Ebics3Request {
             @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
             lateinit var scope: String
 
+            @XmlAccessorType(XmlAccessType.NONE)
+            @XmlType(name = "", propOrder = ["value"])
+            class MessageName {
+                @XmlValue
+                lateinit var value: String
+
+                @XmlAttribute(name = "version")
+                var version: String? = null
+            }
+
             @get:XmlElement(name = "MsgName", required = true)
+            lateinit var messageName: MessageName
+
+            @get:XmlElement(name = "ServiceOption", required = true)
             @get:XmlJavaTypeAdapter(CollapsedStringAdapter::class)
-            lateinit var messageName: String
+            var serviceOption: String? = null
+
+            @XmlAccessorType(XmlAccessType.NONE)
+            class Container {
+                @XmlAttribute(name = "containerType")
+                lateinit var containerType: String
+            }
+
+            @get:XmlElement(name = "Container", required = true)
+            var container: Container? = null
         }
 
         @XmlAccessorType(XmlAccessType.NONE)
@@ -250,9 +271,8 @@ class Ebics3Request {
         var value: ByteArray? = null
     }
 
-
     @XmlAccessorType(XmlAccessType.NONE)
-    @XmlType(propOrder = ["dataEncryptionInfo", "signatureData", "orderData", "hostId"])
+    @XmlType(propOrder = ["dataEncryptionInfo", "signatureData", "dataDigest", "orderData", "hostId"])
     class DataTransfer {
 
         @get:XmlElement(name = "DataEncryptionInfo")
@@ -260,6 +280,18 @@ class Ebics3Request {
 
         @get:XmlElement(name = "SignatureData")
         var signatureData: SignatureData? = null
+
+        @XmlAccessorType(XmlAccessType.NONE)
+        class DataDigest {
+            @get:XmlAttribute(name = "SignatureVersion", required = true)
+            var signatureVersion: String = "A006"
+
+            @get:XmlValue
+            var value: ByteArray? = null
+        }
+
+        @get:XmlElement(name = "DataDigest")
+        var dataDigest: DataDigest? = null
 
         @get:XmlElement(name = "OrderData")
         var orderData: String? = null
@@ -411,6 +443,7 @@ class Ebics3Request {
         fun createForUploadInitializationPhase(
             encryptedTransactionKey: ByteArray,
             encryptedSignatureData: ByteArray,
+            aDataDigest: ByteArray,
             hostId: String,
             nonceArg: ByteArray,
             partnerId: String,
@@ -436,7 +469,7 @@ class Ebics3Request {
                         userID = userId
                         orderDetails = OrderDetails().apply {
                             this.adminOrderType = "BTU"
-                            this.btdOrderParams = OrderDetails.BTOrderParams().apply {
+                            this.btuOrderParams = OrderDetails.BTOrderParams().apply {
                                 service = aOrderService
                             }
                         }
@@ -466,6 +499,9 @@ class Ebics3Request {
                         signatureData = SignatureData().apply {
                             authenticate = true
                             value = encryptedSignatureData
+                        }
+                        dataDigest = DataTransfer.DataDigest().apply {
+                            value = aDataDigest
                         }
                         dataEncryptionInfo = Ebics3Types.DataEncryptionInfo().apply {
                             transactionKey = encryptedTransactionKey

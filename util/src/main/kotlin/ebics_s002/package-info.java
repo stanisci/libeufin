@@ -4,10 +4,10 @@
  */
 
 @XmlSchema(
-        namespace = "urn:org:ebics:H005",
+        namespace = "http://www.ebics.org/S002",
         elementFormDefault = XmlNsForm.QUALIFIED
 )
-package tech.libeufin.util.ebics_h005;
-import javax.xml.bind.annotation.XmlNs;
+package tech.libeufin.util.ebics_s002;
+
 import javax.xml.bind.annotation.XmlNsForm;
 import javax.xml.bind.annotation.XmlSchema;

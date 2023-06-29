@@ -78,26 +78,21 @@ data class EbicsFetchSpec(
     val ebics3Service: Ebics3Request.OrderDetails.Service? = null, // unused for 2.5
     // Not always available, for example at raw POST /download/${ebicsMessageName} calls.
     // It helps to trace back the original level.
-    val originalLevel: FetchLevel? = null
+    val originalLevel: FetchLevel? = null,
+    val isEbics3: Boolean = false
 )
 
 /**
- * Maps EBICS specific history types to their camt
- * counterparts.  That allows the database to store
- * camt types per-se, without any reference to the
- * EBICS message that brought them.  For example, a
- * EBICS "Z52" and "C52" will both bring a camt.052.
- * Such camt.052 is associated with the more generic
- * type of FetchLevel.REPORT.
+ * Collects EBICS 2.5 and/or 3.0 parameters for a unified
+ * way of passing parameters.  Individual helpers will then
+ * act according to the EBICS version.
  */
-private fun getFetchLevelFromEbicsOrder(ebicsHistoryType: String): FetchLevel {
-    return when(ebicsHistoryType) {
-        "C52", "Z52" -> FetchLevel.REPORT
-        "C53", "Z53" -> FetchLevel.STATEMENT
-        "C54", "Z54" -> FetchLevel.NOTIFICATION
-        else -> throw internalServerError("EBICS history type '$ebicsHistoryType' not supported")
-    }
-}
+data class EbicsUploadSpec(
+    val isEbics3: Boolean = false,
+    val ebics3Service: Ebics3Request.OrderDetails.Service? = null, // unused for 2.5
+    val orderType: String? = null,
+    val orderParams: EbicsOrderParams? = null
+)
 
 // Validate and store the received document for later ingestion.
 private fun validateAndStoreCamt(
@@ -206,7 +201,6 @@ private suspend fun fetchEbicsTransactions(
         // re-throw in any other error case.
         throw e
     }
-
     handleEbicsDownloadResult(
         response,
         bankConnectionId,
@@ -523,10 +517,17 @@ private fun getNotificationSpecAfterDialect(dialect: String? = null, p: EbicsOrd
             orderParams = p,
             ebics3Service = Ebics3Request.OrderDetails.Service().apply {
                 serviceName = "REP"
-                messageName = "camt.054"
+                messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+                    value = "camt.054"
+                    version = "04"
+                }
                 scope = "CH"
+                container = Ebics3Request.OrderDetails.Service.Container().apply {
+                    containerType = "ZIP"
+                }
             },
-            originalLevel = FetchLevel.NOTIFICATION
+            originalLevel = FetchLevel.NOTIFICATION,
+            isEbics3 = true
         )
         else -> EbicsFetchSpec(
             orderType = "C54",
@@ -737,7 +738,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                     subscriberDetails
                 )
             } catch (e: Exception) {
-                logger.warn("Fetching transactions (${spec.orderType}) excepted: ${e.message}.")
+                logger.warn("Fetching transactions (${spec.originalLevel}) excepted: ${e.message}.")
                 errors.add(e)
             }
         }
@@ -782,20 +783,27 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 val subscriberDetails = subscriberDetails
             }
         }
-        // Used to validate here, then removed for performances reasons.
-        doEbicsUploadTransaction(
-            httpClient,
-            dbData.subscriberDetails,
-            getSubmissionTypeAfterDialect(dbData.subscriberDetails.dialect),
-            dbData.painXml.toByteArray(Charsets.UTF_8),
-            EbicsStandardOrderParams(),
-            ebics3OrderService = if (dbData.subscriberDetails.dialect == "pf") {
+        val isPoFi = dbData.subscriberDetails.dialect == "pf"
+        val uploadSpec = EbicsUploadSpec(
+            isEbics3 = isPoFi,
+            orderType = if (!isPoFi) getSubmissionTypeAfterDialect(dbData.subscriberDetails.dialect) else null,
+            orderParams = EbicsStandardOrderParams(),
+            ebics3Service = if (isPoFi)
                 Ebics3Request.OrderDetails.Service().apply {
                     serviceName = "MCT"
                     scope = "CH"
-                    messageName = "pain.001"
+                    messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+                        value = "pain.001"
+                        version = "09"
+                    }
                 }
-            } else null
+                else null
+        )
+        doEbicsUploadTransaction(
+            httpClient,
+            dbData.subscriberDetails,
+            uploadSpec,
+            dbData.painXml.toByteArray(Charsets.UTF_8)
         )
         transaction {
             val payment = getPaymentInitiation(paymentInitiationId)

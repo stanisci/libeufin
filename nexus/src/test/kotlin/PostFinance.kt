@@ -5,16 +5,18 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
 import tech.libeufin.nexus.bankaccount.getBankAccount
+import tech.libeufin.nexus.ebics.EbicsUploadSpec
 import tech.libeufin.nexus.ebics.doEbicsUploadTransaction
 import tech.libeufin.nexus.ebics.getEbicsSubscriberDetails
 import tech.libeufin.nexus.getConnectionPlugin
 import tech.libeufin.nexus.getNexusUser
 import tech.libeufin.nexus.server.*
 import tech.libeufin.util.EbicsStandardOrderParams
+import tech.libeufin.util.ebics_h005.Ebics3Request
 import java.io.BufferedReader
 import java.io.File
 
-// Submits a Z54 to the bank, expecting a camt.054 back.
+// Asks a camt.054 to the bank.
 private fun downloadPayment() {
     val httpClient = HttpClient()
     runBlocking {
@@ -42,15 +44,24 @@ private fun uploadQrrPayment() {
         doEbicsUploadTransaction(
             httpClient,
             getEbicsSubscriberDetails("postfinance"),
-            "XTC",
-            qrr.toByteArray(Charsets.UTF_8),
-            EbicsStandardOrderParams()
+            EbicsUploadSpec(
+                ebics3Service = Ebics3Request.OrderDetails.Service().apply {
+                    serviceName = "OTH"
+                    scope = "BIL"
+                    serviceOption = "CH002LMF"
+                    messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+                        value = "csv"
+                    }
+                },
+                isEbics3 = true
+            ),
+            qrr.toByteArray(Charsets.UTF_8)
         )
     }
 }
 
 /**
- * Submits a XE2 (+ pain.001 version 2019) message to the bank.
+ * Submits a pain.001 version 2019 message to the bank.
  *
  * Causes one DBIT payment to show up in the camt.054.  This one
  * however lacks the AcctSvcrRef, so other ways to pin it are needed.
@@ -75,13 +86,12 @@ private fun uploadPain001Payment() {
     }
     val ebicsConn = getConnectionPlugin("ebics")
     val httpClient = HttpClient()
-    runBlocking {
-        ebicsConn.submitPaymentInitiation(httpClient, 1L)
-    }
+    runBlocking { ebicsConn.submitPaymentInitiation(httpClient, 1L) }
 }
 
 fun main() {
     // Loads EBICS subscriber's keys from disk.
+    // The keys should be found under libeufin-internal.git/convenience/
     val bufferedReader: BufferedReader = File("/tmp/pofi.json").bufferedReader()
     val accessDataTxt = bufferedReader.use { it.readText() }
     val ebicsConn = getConnectionPlugin("ebics")
@@ -102,6 +112,7 @@ fun main() {
             fooBankAccount.iban = "CH9789144829733648596"
         }
     }
-    // uploadQrrPayment()
-    // downloadPayment()
+    uploadQrrPayment()
+    downloadPayment()
+    uploadPain001Payment()
 }
