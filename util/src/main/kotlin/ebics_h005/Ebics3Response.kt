@@ -108,12 +108,11 @@ class Ebics3Response {
     @XmlType(name = "DataTransferResponseType", propOrder = ["dataEncryptionInfo", "orderData"])
     class DataTransferResponseType {
         @get:XmlElement(name = "DataEncryptionInfo")
-        var dataEncryptionInfo: EbicsTypes.DataEncryptionInfo? = null
+        var dataEncryptionInfo: Ebics3Types.DataEncryptionInfo? = null
 
         @get:XmlElement(name = "OrderData", required = true)
         lateinit var orderData: OrderData
     }
-
 
     @XmlAccessorType(XmlAccessType.NONE)
     @XmlType(name = "ResponseStaticHeaderType", propOrder = ["transactionID", "numSegments"])
@@ -295,7 +294,6 @@ class Ebics3Response {
                 }
             }
         }
-
         fun createForDownloadInitializationPhase(
             transactionID: String,
             numSegments: Int,
@@ -330,9 +328,9 @@ class Ebics3Response {
                         this.value = "000000"
                     }
                     this.dataTransfer = DataTransferResponseType().apply {
-                        this.dataEncryptionInfo = EbicsTypes.DataEncryptionInfo().apply {
+                        this.dataEncryptionInfo = Ebics3Types.DataEncryptionInfo().apply {
                             this.authenticate = true
-                            this.encryptionPubKeyDigest = EbicsTypes.PubKeyDigest()
+                            this.encryptionPubKeyDigest = Ebics3Types.PubKeyDigest()
                                 .apply {
                                 this.algorithm = "http://www.w3.org/2001/04/xmlenc#sha256"
                                 this.version = "E002"

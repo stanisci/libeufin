@@ -99,7 +99,8 @@ private fun validateAndStoreCamt(
     bankConnectionId: String,
     camt: String,
     fetchLevel: FetchLevel,
-    transactionID: String? = null // the EBICS transaction that carried this camt.
+    transactionID: String? = null, // the EBICS transaction that carried this camt.
+    validateBankContent: Boolean = false
 ) {
     val camtDoc = try {
         XMLUtil.parseStringIntoDom(camt)
@@ -107,8 +108,10 @@ private fun validateAndStoreCamt(
     catch (e: Exception) {
         throw badGateway("Could not parse camt document from EBICS transaction $transactionID")
     }
-    if (!XMLUtil.validateFromDom(camtDoc))
+    if (validateBankContent && !XMLUtil.validateFromDom(camtDoc)) {
+        logger.error("This document didn't validate: $camt")
         throw badGateway("Camt document from EBICS transaction $transactionID is invalid")
+    }
 
     val msgId = camtDoc.pickStringWithRootNs("/*[1]/*[1]/root:GrpHdr/root:MsgId")
     logger.info("Camt document '$msgId' received via $fetchLevel.")
@@ -191,7 +194,7 @@ private suspend fun fetchEbicsTransactions(
         )
     } catch (e: EbicsProtocolError) {
         /**
-         * Although given a error type, a empty transactions list does
+         * Although given a error type, an empty transactions list does
          * not mean anything wrong.
          */
         if (e.ebicsTechnicalCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
@@ -498,7 +501,17 @@ private fun getStatementSpecAfterDialect(dialect: String? = null, p: EbicsOrderP
         "pf" -> EbicsFetchSpec(
             orderType = "Z53",
             orderParams = p,
-            ebics3Service = null,
+            ebics3Service = Ebics3Request.OrderDetails.Service().apply {
+                serviceName = "EOP"
+                messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+                    value = "camt.053"
+                    version = "04"
+                }
+                scope = "CH"
+                container = Ebics3Request.OrderDetails.Service.Container().apply {
+                    containerType = "ZIP"
+                }
+            },
             originalLevel = FetchLevel.STATEMENT
         )
         else -> EbicsFetchSpec(
@@ -519,7 +532,7 @@ private fun getNotificationSpecAfterDialect(dialect: String? = null, p: EbicsOrd
                 serviceName = "REP"
                 messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
                     value = "camt.054"
-                    version = "04"
+                    version = "08"
                 }
                 scope = "CH"
                 container = Ebics3Request.OrderDetails.Service.Container().apply {
@@ -739,6 +752,7 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 )
             } catch (e: Exception) {
                 logger.warn("Fetching transactions (${spec.originalLevel}) excepted: ${e.message}.")
+                e.printStackTrace()
                 errors.add(e)
             }
         }

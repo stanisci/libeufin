@@ -574,7 +574,6 @@ def new_ebics_connection(
 
     check_response_status(resp)
 
-
 @connections.command(help="Initialize the bank connection.")
 @click.argument("connection-name")
 @click.pass_obj

@@ -169,6 +169,7 @@ suspend fun doEbicsDownloadTransaction(
             return EbicsDownloadEmptyResult()
         }
         else -> {
+            println("Bank raw response: $initResponseStr")
             logger.error(
                 "Bank-technical error at init phase: ${initResponse.bankReturnCode}" +
                         ", for fetching level ${fetchSpec.originalLevel} and transaction ID $transactionID."

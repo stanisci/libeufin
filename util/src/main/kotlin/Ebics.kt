@@ -210,7 +210,11 @@ fun createEbicsRequestForDownloadReceipt(
         )
         XMLUtil.convertJaxbToDocument(req)
     }
-    XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv)
+    XMLUtil.signEbicsDocument(
+        doc,
+        subscriberDetails.customerAuthPriv,
+        withEbics3
+    )
     return XMLUtil.convertDomToString(doc)
 }
 
@@ -619,6 +623,7 @@ fun parseEbicsHpbOrder(orderDataRaw: ByteArray): HpbResponseData {
 }
 
 private fun ebics3toInternalRepr(response: String): EbicsResponseContent {
+    // logger.debug("Converting bank resp to internal repr.: $response")
     val resp: JAXBElement<Ebics3Response> = try {
         XMLUtil.convertStringToJaxb(response)
     } catch (e: Exception) {

@@ -68,6 +68,10 @@ check-cli:
 	@cd ./cli/tests && ./circuit_test.sh
 	@cd ./cli/tests && ./debit_test.sh
 
-.PHONY: pofi
-pofi:
-	@./gradlew -q :nexus:pofi
+.PHONY: pofi-get
+pofi-get:
+	@./gradlew -q :nexus:pofi --args="download" # --args="arg1 arg2 .."
+
+.PHONY: pofi-post
+pofi-post:
+	@./gradlew -q :nexus:pofi --args="upload"
