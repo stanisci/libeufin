@@ -58,7 +58,10 @@ data class EbicsProtocolError(
     val ebicsTechnicalCode: EbicsReturnCode? = null
 ) : Exception(reason)
 
-data class EbicsDateRange(val start: ZonedDateTime, val end: ZonedDateTime)
+data class EbicsDateRange(
+    val start: ZonedDateTime,
+    val end: ZonedDateTime
+)
 
 sealed class EbicsOrderParams
 data class EbicsStandardOrderParams(

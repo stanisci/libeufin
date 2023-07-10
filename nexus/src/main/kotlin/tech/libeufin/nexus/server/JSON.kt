@@ -202,11 +202,14 @@ enum class FetchLevel(@get:JsonValue val jsonName: String) {
     JsonSubTypes.Type(value = FetchSpecLatestJson::class, name = "latest"),
     JsonSubTypes.Type(value = FetchSpecAllJson::class, name = "all"),
     JsonSubTypes.Type(value = FetchSpecPreviousDaysJson::class, name = "previous-days"),
-    JsonSubTypes.Type(value = FetchSpecSinceLastJson::class, name = "since-last")
+    JsonSubTypes.Type(value = FetchSpecSinceLastJson::class, name = "since-last"),
+    JsonSubTypes.Type(value = FetchSpecTimeRangeJson::class, name = "time-range")
 )
 abstract class FetchSpecJson(
     val level: FetchLevel,
-    val bankConnection: String?
+    val bankConnection: String?,
+    val start: String? = null,
+    val end: String? = null
 )
 
 @JsonTypeName("latest")
@@ -217,6 +220,14 @@ class FetchSpecAllJson(level: FetchLevel, bankConnection: String?) : FetchSpecJs
 
 @JsonTypeName("since-last")
 class FetchSpecSinceLastJson(level: FetchLevel, bankConnection: String?) : FetchSpecJson(level, bankConnection)
+
+@JsonTypeName("time-range")
+class FetchSpecTimeRangeJson(
+    level: FetchLevel,
+    start: String,
+    end: String,
+    bankConnection: String?
+) : FetchSpecJson(level, bankConnection)
 
 @JsonTypeName("previous-days")
 class FetchSpecPreviousDaysJson(level: FetchLevel, bankConnection: String?, val number: Int) :

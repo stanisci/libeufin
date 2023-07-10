@@ -59,10 +59,7 @@ import tech.libeufin.util.ebics_h005.Ebics3Request
 import java.io.ByteArrayOutputStream
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneOffset
-import java.time.ZonedDateTime
+import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.*
 import javax.crypto.EncryptedPrivateKeyInfo
@@ -676,6 +673,19 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
         }
         // Figuring out what time range to put in the fetch instructions.
         when (fetchSpec) {
+            is FetchSpecTimeRangeJson -> {
+                // the parse() method defaults to the YYYY-MM-DD format.
+                // If parsing fails, the global catcher intervenes.
+                val start: LocalDate = LocalDate.parse(fetchSpec.start)
+                val end: LocalDate = LocalDate.parse(fetchSpec.end)
+                val p = EbicsStandardOrderParams(
+                    EbicsDateRange(
+                        start = start.atStartOfDay().atZone(ZoneId.systemDefault()),
+                        end = end.atStartOfDay().atZone(ZoneId.systemDefault())
+                    )
+                )
+                addForLevel(fetchSpec.level, p)
+            }
             is FetchSpecLatestJson -> {
                 val p = EbicsStandardOrderParams()
                 addForLevel(fetchSpec.level, p)

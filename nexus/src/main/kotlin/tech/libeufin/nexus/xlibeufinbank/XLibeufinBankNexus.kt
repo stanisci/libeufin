@@ -27,6 +27,7 @@ import tech.libeufin.nexus.server.*
 import tech.libeufin.util.*
 import java.net.MalformedURLException
 import java.net.URL
+import java.time.LocalDate
 
 // Gets Sandbox URL and credentials, taking the connection name as input.
 fun getXLibeufinBankCredentials(conn: NexusBankConnectionEntity): XLibeufinBankTransport {
@@ -235,7 +236,7 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
     }
 
     override suspend fun fetchTransactions(
-        fetchSpec: FetchSpecJson,
+        fetchSpec: FetchSpecJson, // FIXME: handle time range.
         client: HttpClient,
         bankConnectionId: String,
         accountId: String
@@ -261,6 +262,13 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
                 baseUrl.path.dropLastWhile { it == '/' },
                 "accounts/${credentials.username}/transactions")
             when (fetchSpec) {
+                is FetchSpecTimeRangeJson -> {
+                    // the parse() method defaults to the YYYY-MM-DD format.
+                    val start: LocalDate = LocalDate.parse(fetchSpec.start)
+                    val end: LocalDate = LocalDate.parse(fetchSpec.end)
+                    this.parameters["from_ms"] = start.toString()
+                    this.parameters["to_ms"] = end.toString()
+                }
                 // Gets the last 5 transactions
                 is FetchSpecLatestJson -> {
                     // Do nothing, the bare endpoint gets the last 5 txs by default.
