@@ -23,7 +23,7 @@ if (!JavaVersion.current().isJava11Compatible()){
 allprojects {
     ext.set("ktor_version", "2.2.1")
     ext.set("ktor_auth_version", "1.6.8")
-    ext.set("exposed_version", "0.32.1")
+    ext.set("exposed_version", "0.41.1")
 
     repositories {
         mavenCentral()

@@ -120,14 +120,17 @@ class SandboxAccessApiTest {
                     }
                     val mapper = ObjectMapper()
                     var j = mapper.readTree(R.readBytes())
-                    assert(j.get("balance").get("amount").asText() == "TESTKUDOS:20")
+                    val expectDebitOf20 = j.get("balance").get("amount").asText()
+                    println("Expect debit of 20: $expectDebitOf20")
+                    val testkudos20regex = "^TESTKUDOS:20(.00)?$".toRegex()
+                    assert(testkudos20regex.matches(expectDebitOf20))
                     assert(j.get("balance").get("credit_debit_indicator").asText().lowercase() == "debit")
                     // Bar checks its balance: 20
                     R = client.get("/demobanks/default/access-api/accounts/bar") {
                         basicAuth("bar", "bar")
                     }
                     j = mapper.readTree(R.readBytes())
-                    assert(j.get("balance").get("amount").asText() == "TESTKUDOS:20")
+                    assert(testkudos20regex.matches(j.get("balance").get("amount").asText()))
                     assert(j.get("balance").get("credit_debit_indicator").asText().lowercase() == "credit")
                     // Foo tries with an invalid amount
                     R = client.post("/demobanks/default/access-api/accounts/foo/transactions") {

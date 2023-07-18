@@ -1,12 +1,12 @@
 package tech.libeufin.sandbox
 
 import io.ktor.http.*
+import org.jetbrains.exposed.sql.StdOutSqlLogger
+import org.jetbrains.exposed.sql.addLogger
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.util.*
 import java.math.BigDecimal
-
-
 
 /**
  * Check whether the given bank account would surpass the
@@ -21,7 +21,7 @@ fun maybeDebit(
         "Demobank '${demobankName}' not found when trying to check the debit threshold" +
                 " for user $accountLabel"
     )
-    val balance = getBalance(accountLabel, demobankName, withPending = true)
+    val balance = getBalance(accountLabel, demobankName)
     val maxDebt = if (accountLabel == "admin") {
         demobank.config.bankDebtLimit
     } else demobank.config.usersDebtLimit
@@ -52,16 +52,18 @@ fun getBalanceForJson(value: BigDecimal, currency: String): BalanceJson {
     )
 }
 
+fun getBalance(bankAccount: BankAccountEntity): BigDecimal {
+    return BigDecimal(bankAccount.balance)
+}
+
 /**
- * The last balance is the one mentioned in the bank account's
- * last statement.  If the bank account does not have any statement
- * yet, then zero is returned.  When 'withPending' is true, it adds
- * the pending transactions to it.
- *
- * Note: because transactions are searched after the bank accounts
- * (numeric) id, the research in the database is not ambiguous.
+ * This function balances _in bank account statements_.  A statement
+ * witnesses the bank account after a given business time slot.  Therefore
+ * _this_ type of balance is not guaranteed to hold the _actual_ and
+ * more up-to-date bank account.  It'll be used when Sandbox will support
+ * the issuing of bank statement.
  */
-fun getBalance(
+fun getBalanceForStatement(
     bankAccount: BankAccountEntity,
     withPending: Boolean = true
 ): BigDecimal {
@@ -104,8 +106,7 @@ fun getBalance(
 
 // Gets the balance of 'accountLabel', which is hosted at 'demobankName'.
 fun getBalance(accountLabel: String,
-               demobankName: String = "default",
-               withPending: Boolean = true
+               demobankName: String = "default"
 ): BigDecimal {
     val demobank = getDemobank(demobankName) ?: throw SandboxError(
         HttpStatusCode.InternalServerError,
@@ -124,7 +125,7 @@ fun getBalance(accountLabel: String,
         demobank,
         withBankFault = true
     )
-    return getBalance(account, withPending)
+    return getBalance(account)
 }
 
 /**
@@ -190,6 +191,7 @@ fun wireTransfer(
     val timeStamp = getUTCnow().toInstant().toEpochMilli()
     val transactionRef = getRandomString(8)
     transaction {
+        // addLogger(StdOutSqlLogger)
         BankAccountTransactionEntity.new {
             creditorIban = creditAccount.iban
             creditorBic = creditAccount.bic
@@ -224,6 +226,15 @@ fun wireTransfer(
             this.demobank = demobank
             this.pmtInfId = pmtInfId
         }
+
+        // Adjusting the balances (acceptable debit conditions checked before).
+        // Debit:
+        val newDebitBalance = (BigDecimal(debitAccount.balance) - amountAsNumber).roundToTwoDigits()
+        debitAccount.balance = newDebitBalance.toPlainString() // FIXME: that's ignored!
+        // Credit:
+        val newCreditBalance = (BigDecimal(creditAccount.balance) + amountAsNumber).roundToTwoDigits()
+        creditAccount.balance = newCreditBalance.toPlainString()
+
         // Signaling this wire transfer's event.
         if (this.isPostgres()) {
             val creditChannel = buildChannelName(

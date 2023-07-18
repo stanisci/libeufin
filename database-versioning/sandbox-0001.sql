@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS bankaccounts
 ALTER TABLE
   bankaccounts ADD CONSTRAINT accountLabelIndex UNIQUE ("label");
 
+ALTER TABLE
+  bankaccounts ADD COLUMN balance TEXT DEFAULT ('0');
+
 CREATE TABLE IF NOT EXISTS bankaccounttransactions 
   (id BIGSERIAL PRIMARY KEY
   ,"creditorIban" TEXT NOT NULL

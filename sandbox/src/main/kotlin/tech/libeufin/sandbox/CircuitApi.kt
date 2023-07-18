@@ -146,12 +146,6 @@ fun generateCashoutSubject(
             " to ${amountCredit.currency}:${amountCredit.amount}"
 }
 
-fun BigDecimal.roundToTwoDigits(): BigDecimal {
-    // val twoDigitsRounding = MathContext(2)
-    // return this.round(twoDigitsRounding)
-    return this.setScale(2, RoundingMode.HALF_UP)
-}
-
 /**
  * By default, it takes the amount in the regional currency
  * and applies ratio and fees to convert it to fiat.  If the
@@ -522,8 +516,7 @@ fun circuitApi(circuitRoute: Route) {
         // check that the balance is sufficient
         val balance = getBalance(
             user,
-            demobank.name,
-            withPending = true
+            demobank.name
         )
         val balanceCheck = balance - amountDebitAsNumber
         if (balanceCheck < BigDecimal.ZERO && balanceCheck.abs() > BigDecimal(demobank.config.usersDebtLimit))

@@ -282,8 +282,6 @@ fun buildCamtString(
     type: Int,
     subscriberIban: String,
     history: MutableList<XLibeufinBankTransaction>,
-    balancePrcd: BigDecimal, // Balance up to freshHistory (excluded).
-    balanceClbd: BigDecimal,
     currency: String
 ): SandboxCamt {
     /**
@@ -357,45 +355,6 @@ fun buildCamtString(
                                     text("XY")
                                 }
                             }
-                        }
-                    }
-                    element("Bal") {
-                        element("Tp/CdOrPrtry/Cd") {
-                            /* Balance type, in a coded format.  PRCD stands
-                               for "Previously closed booked" and shows the
-                               balance at the time _before_ all the entries
-                               reported in this document were posted to the
-                               involved bank account.  */
-                            text("PRCD")
-                        }
-                        element("Amt") {
-                            attribute("Ccy", currency)
-                            text(balancePrcd.abs().toPlainString())
-                        }
-                        element("CdtDbtInd") {
-                            text(getCreditDebitInd(balancePrcd))
-                        }
-                        element("Dt/Dt") {
-                            // date of this balance
-                            text(dashedDate)
-                        }
-                    }
-                    element("Bal") {
-                        element("Tp/CdOrPrtry/Cd") {
-                            /* CLBD stands for "Closing booked balance", and it
-                               is calculated by summing the PRCD with all the
-                               entries reported in this document */
-                            text("CLBD")
-                        }
-                        element("Amt") {
-                            attribute("Ccy", currency)
-                            text(balanceClbd.abs().toPlainString())
-                        }
-                        element("CdtDbtInd") {
-                            text(getCreditDebitInd(balanceClbd))
-                        }
-                        element("Dt/Dt") {
-                            text(dashedDate)
                         }
                     }
                     history.forEach {
@@ -532,38 +491,10 @@ private fun constructCamtResponse(
             }
         }
         if (history.size == 0) throw EbicsNoDownloadDataAvailable()
-
-        /**
-         * PRCD balance: balance mentioned in the last statement.  This
-         * will be normally zero, because statements need to be explicitly created.
-         *
-         * CLBD balance: PRCD + transactions accounted in the current C52.
-         * Alternatively, that could be changed into: PRCD + all the pending
-         * transactions.  This way, the CLBD balance would closer reflect the
-         * latest (pending) activities.
-         */
-        val prcdBalance = getBalance(bankAccount, withPending = false)
-        val clbdBalance = run {
-            var base = prcdBalance
-            history.forEach { tx ->
-                when (tx.direction) {
-                    XLibeufinBankDirection.DEBIT -> base -= parseDecimal(tx.amount)
-                    XLibeufinBankDirection.CREDIT -> base += parseDecimal(tx.amount)
-                    else -> {
-                        logger.error("Transaction with subject '${tx.subject}' is " +
-                                "inconsistent: neither DBIT nor CRDT")
-                        throw internalServerError("Transactions internal error.")
-                    }
-                }
-            }
-            base
-        }
         val camtData = buildCamtString(
             type,
             bankAccount.iban,
             history,
-            balancePrcd = prcdBalance,
-            balanceClbd = clbdBalance,
             bankAccount.demoBank.config.currency
         )
         val paymentsList: String = if (logger.isDebugEnabled) {

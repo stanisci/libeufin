@@ -638,7 +638,10 @@ private suspend fun addIncoming(call: ApplicationCall) {
      * the ingested ones.
      */
     val lastIncomingPayment = transaction {
-        val lastRecord = TalerIncomingPaymentEntity.all().last()
+        val allIncomingPayments = TalerIncomingPaymentEntity.all()
+        if (allIncomingPayments.empty())
+            throw internalServerError("Incoming payment(s) not found AFTER /add-incoming")
+        val lastRecord = allIncomingPayments.last()
         return@transaction Pair(lastRecord.id.value, lastRecord.timestampMs)
     }
     call.respond(object {

@@ -3,6 +3,7 @@ package tech.libeufin.util
 import UtilError
 import io.ktor.http.*
 import java.math.BigDecimal
+import java.math.RoundingMode
 
 /*
  * This file is part of LibEuFin.
@@ -48,4 +49,10 @@ fun isAmountZero(a: BigDecimal): Boolean {
             return false
     }
     return true
+}
+
+fun BigDecimal.roundToTwoDigits(): BigDecimal {
+    // val twoDigitsRounding = MathContext(2)
+    // return this.round(twoDigitsRounding)
+    return this.setScale(2, RoundingMode.HALF_UP)
 }

@@ -34,6 +34,7 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.transactions.transactionManager
+import tech.libeufin.sandbox.CashoutSubmissionsTable.nullable
 import tech.libeufin.util.*
 import java.sql.Connection
 import kotlin.reflect.*
@@ -498,6 +499,7 @@ class BankAccountTransactionEntity(id: EntityID<Long>) : LongEntity(id) {
  * own multiple bank accounts.
  */
 object BankAccountsTable : IntIdTable() {
+    val balance = text("balance").default("0")
     val iban = text("iban")
     val bic = text("bic").default("SANDBOXX")
     val label = text("label").uniqueIndex("accountLabelIndex")
@@ -538,6 +540,7 @@ object BankAccountsTable : IntIdTable() {
 class BankAccountEntity(id: EntityID<Int>) : IntEntity(id) {
     companion object : IntEntityClass<BankAccountEntity>(BankAccountsTable)
 
+    var balance by BankAccountsTable.balance
     var iban by BankAccountsTable.iban
     var bic by BankAccountsTable.bic
     var label by BankAccountsTable.label
@@ -555,7 +558,7 @@ object BankAccountStatementsTable : IntIdTable() {
     val xmlMessage = text("xmlMessage")
     val bankAccount = reference("bankAccount", BankAccountsTable)
     // Signed BigDecimal representing a Camt.053 CLBD field.
-    val balanceClbd = text("balanceClbd")
+    val balanceClbd = text("balanceClbd").nullable()
 }
 
 class BankAccountStatementEntity(id: EntityID<Int>) : IntEntity(id) {

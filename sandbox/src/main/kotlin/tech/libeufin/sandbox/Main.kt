@@ -264,14 +264,10 @@ class Camt053Tick : CliktCommand(
                  * Resorting the closing (CLBD) balance of the last statement; will
                  * become the PRCD balance of the _new_ one.
                  */
-                val lastBalance = getBalance(accountIter, withPending = false)
-                val balanceClbd = getBalance(accountIter, withPending = true)
                 val camtData = buildCamtString(
                     53,
                     accountIter.iban,
                     newStatements[accountIter.label]!!,
-                    balanceClbd = balanceClbd,
-                    balancePrcd = lastBalance,
                     currency = accountIter.demoBank.config.currency
                 )
                 BankAccountStatementEntity.new {
@@ -279,7 +275,6 @@ class Camt053Tick : CliktCommand(
                     creationTime = getUTCnow().toInstant().epochSecond
                     xmlMessage = camtData.camtMessage
                     bankAccount = accountIter
-                    this.balanceClbd = balanceClbd.toPlainString()
                 }
             }
             BankAccountFreshTransactionsTable.deleteAll()
@@ -802,7 +797,7 @@ val sandboxApp: Application.() -> Unit = {
                 val bankAccount = getBankAccountFromLabel(label, demobank)
                 if (!allowOwnerOrAdmin(username, label))
                     throw unauthorized("'${username}' has no rights over '$label'")
-                val balance = getBalance(bankAccount, withPending = true)
+                val balance = getBalance(bankAccount)
                 object {
                     val balance = "${bankAccount.demoBank.config.currency}:${balance}"
                     val iban = bankAccount.iban
@@ -1453,10 +1448,11 @@ val sandboxApp: Application.() -> Unit = {
                     val authGranted = !WITH_AUTH || bankAccount.isPublic || username == "admin"
                     if (!authGranted && bankAccount.owner != username)
                         throw forbidden("Customer '$username' cannot access bank account '$accountAccessed'")
-                    val balance = getBalance(bankAccount, withPending = true)
+                    val balance = getBalance(bankAccount)
+                    logger.debug("Balance of '$username': ${balance.toPlainString()}")
                     call.respond(object {
                         val balance = object {
-                            val amount = "${demobank.config.currency}:${balance.abs(). toPlainString()}"
+                            val amount = "${demobank.config.currency}:${balance.abs().toPlainString()}"
                             val credit_debit_indicator = if (balance < BigDecimal.ZERO) "debit" else "credit"
                         }
                         val paytoUri = buildIbanPaytoUri(
@@ -1574,10 +1570,7 @@ val sandboxApp: Application.() -> Unit = {
                                     BankAccountsTable.demoBank eq demobank.id
                             )
                         }.forEach {
-                            val balanceIter = getBalance(
-                                it,
-                                withPending = true,
-                            )
+                            val balanceIter = getBalance(it)
                             ret.publicAccounts.add(
                                 PublicAccountInfo(
                                     balance = "${demobank.config.currency}:$balanceIter",
@@ -1632,7 +1625,7 @@ val sandboxApp: Application.() -> Unit = {
                         demobank = demobank.name,
                         isPublic = req.isPublic
                     )
-                    val balance = getBalance(newAccount.bankAccount, withPending = true)
+                    val balance = getBalance(newAccount.bankAccount)
                     call.respond(object {
                         val balance = getBalanceForJson(balance, demobank.config.currency)
                         val paytoUri = buildIbanPaytoUri(

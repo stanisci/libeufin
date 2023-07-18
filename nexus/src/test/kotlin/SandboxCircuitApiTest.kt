@@ -13,6 +13,7 @@ import org.junit.Test
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.getIban
 import tech.libeufin.util.parseAmount
+import tech.libeufin.util.roundToTwoDigits
 import java.io.File
 import java.math.BigDecimal
 import java.util.*
@@ -617,7 +618,7 @@ class SandboxCircuitApiTest {
                     amount = "TESTKUDOS:100"
                 )
                 val fooBalance = getBalance("foo")
-                assert(fooBalance == BigDecimal("100"))
+                assert(fooBalance.roundToTwoDigits() == BigDecimal("100").roundToTwoDigits())
                 // Foo pays 3 to bar.
                 wireTransfer(
                     "foo",
@@ -626,7 +627,7 @@ class SandboxCircuitApiTest {
                     amount = "TESTKUDOS:3"
                 )
                 val barBalance = getBalance("bar")
-                assert(barBalance == BigDecimal("3"))
+                assert(barBalance.roundToTwoDigits() == BigDecimal("3").roundToTwoDigits())
                 // Deleting foo from the system.
                 transaction {
                     val uBankAccount = getBankAccountFromLabel("foo")
@@ -635,7 +636,7 @@ class SandboxCircuitApiTest {
                     uCustomerProfile.delete()
                 }
                 val barBalanceUpdate = getBalance("bar")
-                assert(barBalanceUpdate == BigDecimal("3"))
+                assert(barBalanceUpdate.roundToTwoDigits() == BigDecimal("3").roundToTwoDigits())
             }
         }
     }

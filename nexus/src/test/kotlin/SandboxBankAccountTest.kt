@@ -6,6 +6,7 @@ import tech.libeufin.sandbox.sandboxApp
 import tech.libeufin.sandbox.wireTransfer
 import tech.libeufin.util.buildBasicAuthLine
 import tech.libeufin.util.parseDecimal
+import tech.libeufin.util.roundToTwoDigits
 
 class SandboxBankAccountTest {
     // Check if the balance shows debit.
@@ -26,7 +27,7 @@ class SandboxBankAccountTest {
              * transactions must be included in the calculation.
              */
             var bankBalance = getBalance("admin")
-            assert(bankBalance == parseDecimal("-1"))
+            assert(bankBalance.roundToTwoDigits() == parseDecimal("-1").roundToTwoDigits())
             wireTransfer(
                 "foo",
                 "admin",
@@ -35,7 +36,7 @@ class SandboxBankAccountTest {
                 "TESTKUDOS:5"
             )
             bankBalance = getBalance("admin")
-            assert(bankBalance == parseDecimal("4"))
+            assert(bankBalance.roundToTwoDigits() == parseDecimal("4").roundToTwoDigits())
             // Trigger Insufficient funds case for users.
             try {
                 wireTransfer(
@@ -64,9 +65,9 @@ class SandboxBankAccountTest {
             }
             // Check balance didn't change for both parties.
             bankBalance = getBalance("admin")
-            assert(bankBalance == parseDecimal("4"))
+            assert(bankBalance.roundToTwoDigits() == parseDecimal("4").roundToTwoDigits())
             val fooBalance = getBalance("foo")
-            assert(fooBalance == parseDecimal("-4"))
+            assert(fooBalance.roundToTwoDigits() == parseDecimal("-4").roundToTwoDigits())
         }
     }
 }
