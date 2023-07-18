@@ -27,6 +27,7 @@ import io.ktor.server.application.call
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.content.TextContent
 import io.ktor.http.*
 import io.ktor.server.request.receive
@@ -613,18 +614,29 @@ private suspend fun addIncoming(call: ApplicationCall) {
         )
     }
     val client = HttpClient { followRedirects = true }
-    client.post(fromDb.first) {
+    val resp = client.post(fromDb.first) {
         setBody(currentBody)
         basicAuth("exchange", "x")
         contentType(ContentType.Application.Json)
-        expectSuccess = true
+        expectSuccess = false
+    }
+    // Sandbox itself failed.  Responding Bad Gateway because here is a proxy.
+    if (resp.status.value.toString().startsWith('5')) {
+        logger.error("Sandbox failed with status code: ${resp.status.description}")
+        throw badGateway("Sandbox failed at creating the 'admin/add-incoming' payment")
+    }
+    // Echo back whatever error is left, because that should be the client fault.
+    if (!resp.status.value.toString().startsWith('2')) {
+        logger.error("Client-side error for /admin/add-incoming.  Sandbox says: ${resp.bodyAsText()}")
+        call.respond(resp.status, resp.bodyAsText())
     }
     /**
      * At this point, Sandbox booked the payment.  Now the "row_id"
      * value to put in the response needs to be resorted; that may
      * be known by fetching a fresh C52 report, then let Nexus ingest
      * the result, and finally _optimistically_ pick the latest entry
-     * in the received payments.  */
+     * in the received payments.  NOTE: if this fails, the global handler
+     * responds 500 as this should _never_ fail.  */
     fetchBankAccountTransactions(
         client,
         FetchSpecLatestJson(
@@ -639,6 +651,10 @@ private suspend fun addIncoming(call: ApplicationCall) {
      */
     val lastIncomingPayment = transaction {
         val allIncomingPayments = TalerIncomingPaymentEntity.all()
+        /**
+         * One payment must appear, since it was created BY this handler.
+         * If not, then respond 500.
+         */
         if (allIncomingPayments.empty())
             throw internalServerError("Incoming payment(s) not found AFTER /add-incoming")
         val lastRecord = allIncomingPayments.last()
