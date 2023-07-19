@@ -1201,7 +1201,7 @@ val sandboxApp: Application.() -> Unit = {
                             "Invalid request"
                         )
                     }
-                    transaction {
+                    val singletonTx = transaction {
                         val demobank = ensureDemobank(call)
                         val bankAccountCredit = getBankAccountFromLabel(username, demobank)
                         if (bankAccountCredit.owner != username) throw forbidden(
@@ -1209,16 +1209,35 @@ val sandboxApp: Application.() -> Unit = {
                         )
                         val bankAccountDebit = getBankAccountFromPayto(body.debit_account)
                         logger.debug("TWG add-incoming about to wire transfer")
-                        wireTransfer(
+                        val ref = wireTransfer(
                             bankAccountDebit.label,
                             bankAccountCredit.label,
                             demobank.name,
                             body.reserve_pub,
                             body.amount
                         )
-                        logger.debug("TWG add-incoming has wire transferred")
+                        /**
+                         * The remaining part aims at returning an x-libeufin-bank-formatted
+                         * message to Nexus, to let it ingest the (incoming side of the) payment
+                         * information.  The format choice makes it more practical for Nexus,
+                         * because it handles this format already for the x-libeufin-bank connection
+                         * type.
+                         */
+                        val incomingTx = BankAccountTransactionEntity.find {
+                            BankAccountTransactionsTable.accountServicerReference eq ref and (
+                                    BankAccountTransactionsTable.direction eq "CRDT"
+                            ) // closes the 'and'.
+                        }.firstOrNull()
+                        if (incomingTx == null)
+                            throw internalServerError("Just created transaction not found in DB.  AcctSvcrRef: $ref")
+                        val incomingHistoryElement = getHistoryElementFromTransactionRow(incomingTx)
+                        logger.debug("TWG add-incoming has wire transferred, AcctSvcrRef: $ref")
+                        incomingHistoryElement
                     }
-                    call.respond(object {})
+                    val resp = object {
+                        val transactions = listOf(singletonTx)
+                    }
+                    call.respond(resp)
                     return@post
                 }
             }

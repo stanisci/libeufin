@@ -35,6 +35,10 @@ val bankConnectionRegistry: Map<BankConnectionType, BankConnectionProtocol> = ma
 )
 
 interface BankConnectionProtocol {
+    // Get the bank URL in the same format that
+    // it was given when the connection was created.
+    // This helps the /admin/add-incoming handler.
+    fun getBankUrl(connId: String): String
     // Initialize the connection.  Usually uploads keys to the bank.
     suspend fun connect(client: HttpClient, connId: String)
 

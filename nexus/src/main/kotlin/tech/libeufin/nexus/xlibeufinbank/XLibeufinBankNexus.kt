@@ -30,7 +30,7 @@ import java.net.URL
 import java.time.LocalDate
 
 // Gets Sandbox URL and credentials, taking the connection name as input.
-fun getXLibeufinBankCredentials(conn: NexusBankConnectionEntity): XLibeufinBankTransport {
+private fun getXLibeufinBankCredentials(conn: NexusBankConnectionEntity): XLibeufinBankTransport {
     val maybeCredentials = transaction {
         XLibeufinBankUserEntity.find {
             XLibeufinBankUsersTable.nexusBankConnection eq conn.id
@@ -45,12 +45,14 @@ fun getXLibeufinBankCredentials(conn: NexusBankConnectionEntity): XLibeufinBankT
         baseUrl = maybeCredentials.baseUrl
     )
 }
-fun getXLibeufinBankCredentials(connId: String): XLibeufinBankTransport {
+private fun getXLibeufinBankCredentials(connId: String): XLibeufinBankTransport {
     val conn = getBankConnection(connId)
     return getXLibeufinBankCredentials(conn)
 }
-
 class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
+    override fun getBankUrl(connId: String): String {
+        return getXLibeufinBankCredentials(connId).baseUrl
+    }
     /**
      * Together with checking the credentials, this method downloads
      * additional details from the bank, and stores them in the table
@@ -316,6 +318,18 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
     }
 }
 
+fun ingestXLibeufinBankMessage(
+    bankAccountId: String,
+    data: String // JSON
+): IngestedTransactionsCount {
+    val jMessage = try { jacksonObjectMapper().readTree(data) }
+    catch (e: Exception) {
+        logger.error("Bank message $data could not" +
+                " be parsed into JSON by the x-libeufin-bank ingestion.")
+        throw internalServerError("Could not ingest x-libeufin-bank message.")
+    }
+    return ingestXLibeufinBankMessage(bankAccountId, jMessage)
+}
 /**
  * Parses one x-libeufin-bank message and INSERTs Nexus local
  * transaction records into the database.  After this function

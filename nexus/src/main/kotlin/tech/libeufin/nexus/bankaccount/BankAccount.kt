@@ -431,7 +431,7 @@ suspend fun fetchBankAccountTransactions(
         accountId
     )
     /**
-     * The following two functions further processe the banking data
+     * The following two functions further process the banking data
      * that was recently downloaded, according to the particular facade
      * being honored.
      */

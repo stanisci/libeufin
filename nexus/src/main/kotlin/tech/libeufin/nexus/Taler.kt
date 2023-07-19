@@ -48,6 +48,7 @@ import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
+import tech.libeufin.nexus.xlibeufinbank.ingestXLibeufinBankMessage
 import tech.libeufin.util.*
 import java.net.URL
 import kotlin.math.abs
@@ -587,30 +588,24 @@ private suspend fun addIncoming(call: ApplicationCall) {
         val conn = NexusBankConnectionEntity.findByName(facadeState.bankConnection) ?: throw internalServerError(
             "state of facade $facadeId has no bank connection!"
         )
-        val ebicsData = NexusEbicsSubscribersTable.select {
-            NexusEbicsSubscribersTable.nexusBankConnection eq conn.id
-        }.firstOrNull() ?: throw internalServerError(
-            "Connection '${conn.connectionId}' doesn't have EBICS"
-        )
-        // Resort Sandbox URL from EBICS endpoint.
-        val sandboxUrl = URL(ebicsData[NexusEbicsSubscribersTable.ebicsURL])
+        val sandboxUrl = URL(getConnectionPlugin(conn.type).getBankUrl(conn.connectionId))
         // NOTE: the exchange username must be 'exchange', at the Sandbox.
         return@transaction Pair(
             url {
                 protocol = URLProtocol(sandboxUrl.protocol, 80)
                 host = sandboxUrl.host
-            if (sandboxUrl.port != 80)
-                port = sandboxUrl.port
-            path(
-                "demobanks",
-                "default",
-                "taler-wire-gateway",
-                "exchange",
-                "admin",
-                "add-incoming"
-            )
-        },
-            facadeState.bankAccount
+                if (sandboxUrl.port != 80)
+                    port = sandboxUrl.port
+                path(
+                    "demobanks",
+                    "default",
+                    "taler-wire-gateway",
+                    "exchange",
+                    "admin",
+                    "add-incoming"
+                )
+            }, // first
+            facadeState.bankAccount // second
         )
     }
     val client = HttpClient { followRedirects = true }
@@ -630,20 +625,26 @@ private suspend fun addIncoming(call: ApplicationCall) {
         logger.error("Client-side error for /admin/add-incoming.  Sandbox says: ${resp.bodyAsText()}")
         call.respond(resp.status, resp.bodyAsText())
     }
-    /**
-     * At this point, Sandbox booked the payment.  Now the "row_id"
-     * value to put in the response needs to be resorted; that may
-     * be known by fetching a fresh C52 report, then let Nexus ingest
-     * the result, and finally _optimistically_ pick the latest entry
-     * in the received payments.  NOTE: if this fails, the global handler
-     * responds 500 as this should _never_ fail.  */
-    fetchBankAccountTransactions(
-        client,
-        FetchSpecLatestJson(
-            FetchLevel.REPORT,
-            null
-        ),
-        fromDb.second
+    // x-libeufin-bank-ingest
+    val ingestionResult = ingestXLibeufinBankMessage(
+        fromDb.second,
+        resp.bodyAsText()
+    )
+    if (ingestionResult.newTransactions != 1)
+        throw internalServerError("/admin/add-incoming was ingested into ${ingestionResult.newTransactions} new transactions, but it must have one.")
+    if (ingestionResult.errors != null) {
+        val errors = ingestionResult.errors
+        errors?.forEach {
+            logger.error(it.message)
+        }
+        throw internalServerError("/admin/add-incoming ingestion failed.")
+    }
+    // TWG ingest.
+    ingestFacadeTransactions(
+        bankAccountId = fromDb.second,
+        facadeType = NexusFacadeType.TALER,
+        incomingFilterCb = ::talerFilter,
+        refundCb = ::maybeTalerRefunds
     )
     /**
      * The latest incoming payment should now be found among

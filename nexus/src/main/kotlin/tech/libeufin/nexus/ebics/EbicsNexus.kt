@@ -633,6 +633,11 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             }
         }
     }
+
+    override fun getBankUrl(connId: String): String {
+        val subscriberDetails = transaction { getEbicsSubscriberDetails(connId) }
+        return subscriberDetails.ebicsUrl
+    }
     override suspend fun fetchTransactions(
         fetchSpec: FetchSpecJson,
         client: HttpClient,
