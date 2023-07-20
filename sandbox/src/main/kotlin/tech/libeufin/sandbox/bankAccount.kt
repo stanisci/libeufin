@@ -186,7 +186,7 @@ fun wireTransfer(
             demobank.name
     )) {
         logger.error("Account ${debitAccount.label} would surpass debit threshold.  Rollback wire transfer")
-        throw SandboxError(HttpStatusCode.PreconditionFailed, "Insufficient funds")
+        throw SandboxError(HttpStatusCode.Conflict, "Insufficient funds")
     }
     val timeStamp = getUTCnow().toInstant().toEpochMilli()
     val transactionRef = getRandomString(8)
