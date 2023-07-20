@@ -1394,7 +1394,7 @@ val sandboxApp: Application.() -> Unit = {
                             transaction { maybeOwnedAccount.demoBank.name }
                         )) {
                         logger.error("Account ${maybeOwnedAccount.label} would surpass debit threshold.  Not withdrawing")
-                        throw SandboxError(HttpStatusCode.Forbidden, "Insufficient funds")
+                        throw SandboxError(HttpStatusCode.Conflict, "Insufficient funds")
                     }
                     val wo: TalerWithdrawalEntity = transaction {
                         TalerWithdrawalEntity.new {
