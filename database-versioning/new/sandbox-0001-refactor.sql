@@ -43,9 +43,9 @@ CREATE TABLE IF NOT EXISTS BankAccounts
   ,"label" TEXT NOT NULL UNIQUE
   ,"owner" TEXT NOT NULL
   ,"isPublic" BOOLEAN DEFAULT false NOT NULL
-  ,"demoBank" REFERENCES DemobankConfigs(id) ON DELETE RESTRICT ON UPDATE RESTRICT
-  ,"lastTransaction" NULL REFERENCES BankAccountTransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT -- FIXME: under discussion on MM, might be removed.
-  ,"lastFiatSubmission" NULL REFERENCES BankAccountTransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+  ,"demoBank" FIXME_TYPE REFERENCES DemobankConfigs(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+  ,"lastTransaction" FIXME_TYPE NULL REFERENCES BankAccountTransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT -- FIXME: under discussion on MM, might be removed.
+  ,"lastFiatSubmission" FIXME_TYPE NULL REFERENCES BankAccountTransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   ,"lastFiatFetch" TEXT DEFAULT '0' NOT NULL
   ,"balance" TEXT DEFAULT '0'
   );
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS BankAccountTransactions
   ,"EndToEndId" TEXT NULL
   ,direction TEXT NOT NULL
   ,account INT NOT NULL REFERENCES BankAccounts(id) ON DELETE CASCADE ON UPDATE RESTRICT
-  ,demobank NOT NULL REFERENCES DemobankConfigs(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+  ,demobank FIXME_TYPE NOT NULL REFERENCES DemobankConfigs(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   );
 
 -- end of: money transactions
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS BankAccountTransactions
 
 CREATE TABLE IF NOT EXISTS CashoutSubmissions 
   (id BIGSERIAL PRIMARY KEY
-  ,"localTransaction" NOT NULL UNIQUE REFERENCES BankAccountTransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+  ,"localTransaction" FIXME_TYPE NOT NULL UNIQUE REFERENCES BankAccountTransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   ,"maybeNexusResponse" TEXT NULL
   ,"submissionTime" BIGINT NULL
   );
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS EbicsOrderSignatures
 
 CREATE TABLE IF NOT EXISTS BankAccountFreshTransactions 
   (id BIGSERIAL PRIMARY KEY
-  ,"transaction" NOT NULL REFERENCES BankAccountTransactions(id) ON DELETE CASCADE ON UPDATE RESTRICT
+  ,"transaction" FIXME_TYPE NOT NULL REFERENCES BankAccountTransactions(id) ON DELETE CASCADE ON UPDATE RESTRICT
   );
 
 CREATE TABLE IF NOT EXISTS BankAccountReports 
