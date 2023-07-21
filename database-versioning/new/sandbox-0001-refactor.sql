@@ -21,9 +21,9 @@ CREATE TABLE IF NOT EXISTS bankaccounts
   ,"label" TEXT NOT NULL UNIQUE
   ,"owner" TEXT NOT NULL
   ,"isPublic" BOOLEAN DEFAULT false NOT NULL
-  ,"demoBank" BIGINT REFERENCES demobankconfigs(id) ON DELETE RESTRICT ON UPDATE RESTRICT
-  ,"lastTransaction" BIGINT NULL REFERENCES bankaccounttransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT -- FIXME: under discussion on MM, might be removed.
-  ,"lastFiatSubmission" BIGINT NULL REFERENCES bankaccounttransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+  ,"demoBank" REFERENCES demobankconfigs(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+  ,"lastTransaction" NULL REFERENCES bankaccounttransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT -- FIXME: under discussion on MM, might be removed.
+  ,"lastFiatSubmission" NULL REFERENCES bankaccounttransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   ,"lastFiatFetch" TEXT DEFAULT '0' NOT NULL
   ,"balance" TEXT DEFAULT '0'
   );
@@ -45,12 +45,12 @@ CREATE TABLE IF NOT EXISTS bankaccounttransactions
   ,"EndToEndId" TEXT NULL
   ,direction TEXT NOT NULL
   ,account INT NOT NULL REFERENCES bankaccounts(id) ON DELETE CASCADE ON UPDATE RESTRICT
-  ,demobank BIGINT NOT NULL REFERENCES demobankconfigs(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+  ,demobank NOT NULL REFERENCES demobankconfigs(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   );
 
 CREATE TABLE IF NOT EXISTS cashoutsubmissions 
   (id BIGSERIAL PRIMARY KEY
-  ,"localTransaction" BIGINT NOT NULL UNIQUE REFERENCES bankaccounttransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+  ,"localTransaction" NOT NULL UNIQUE REFERENCES bankaccounttransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   ,"maybeNexusResponse" TEXT NULL
   ,"submissionTime" BIGINT NULL
   );
@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS ebicsordersignatures
 
 CREATE TABLE IF NOT EXISTS bankaccountfreshtransactions 
   (id BIGSERIAL PRIMARY KEY
-  ,"transaction" BIGINT NOT NULL REFERENCES bankaccounttransactions(id) ON DELETE CASCADE ON UPDATE RESTRICT
+  ,"transaction" NOT NULL REFERENCES bankaccounttransactions(id) ON DELETE CASCADE ON UPDATE RESTRICT
   );
 
 CREATE TABLE IF NOT EXISTS bankaccountreports 
