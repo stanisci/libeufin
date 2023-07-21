@@ -1,4 +1,9 @@
--- Compatible with LibEuFin version: 1fe2687aaf696c8566367fe7ed082f1d78e6b78d
+
+-- Under discussion:
+
+-- amount format
+-- timestamp format
+-- comment format: '--' vs 'COMMENT ON'
 
 BEGIN;
 
@@ -6,18 +11,18 @@ SELECT _v.register_patch('sandbox-0001', NULL, NULL);
 
 CREATE TABLE IF NOT EXISTS demobankconfigs 
   (id BIGSERIAL PRIMARY KEY
-  ,hostname TEXT NOT NULL
+  ,name TEXT NOT NULL
   );
 
 CREATE TABLE IF NOT EXISTS bankaccounts 
   (id SERIAL PRIMARY KEY
   ,iban TEXT NOT NULL
-  ,bic TEXT DEFAULT 'SANDBOXX' NOT NULL
+  ,bic TEXT NOT NULL -- NOTE: This had a default of 'SANDBOXX', now Kotlin must keep it.
   ,"label" TEXT NOT NULL UNIQUE
   ,"owner" TEXT NOT NULL
   ,"isPublic" BOOLEAN DEFAULT false NOT NULL
   ,"demoBank" BIGINT REFERENCES demobankconfigs(id) ON DELETE RESTRICT ON UPDATE RESTRICT
-  ,"lastTransaction" BIGINT NULL REFERENCES bankaccounttransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
+  ,"lastTransaction" BIGINT NULL REFERENCES bankaccounttransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT -- FIXME: under discussion on MM, might be removed.
   ,"lastFiatSubmission" BIGINT NULL REFERENCES bankaccounttransactions(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   ,"lastFiatFetch" TEXT DEFAULT '0' NOT NULL
   ,"balance" TEXT DEFAULT '0'

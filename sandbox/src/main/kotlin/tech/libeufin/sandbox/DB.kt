@@ -529,10 +529,7 @@ object BankAccountsTable : IntIdTable() {
     /**
      * Tracks the last fiat payment that was read from Nexus.  This tracker
      * gets updated ONLY IF the exchange gets successfully paid with the related
-     * amount in the regional currency.  NOTE: in case of disputes, the customer
-     * will provide the date of a problematic withdrawal, and the regional currency
-     * administrator should check into the "admin" (regional) outgoing history by
-     * using such date as filter.
+     * amount in the regional currency.
      */
     val lastFiatFetch = text("lastFiatFetch").default("0")
 }
