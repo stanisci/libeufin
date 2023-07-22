@@ -1,5 +1,4 @@
--- To Do: group tables per purpose.
-
+-- To Do: comments, although '--' vs 'COMMENT ON' is under discussion.
 
 BEGIN;
 
