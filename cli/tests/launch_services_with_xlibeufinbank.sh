@@ -22,8 +22,7 @@ echo RUNNING SANDBOX-NEXUS EBICS PAIR
 jq --version &> /dev/null || (echo "'jq' command not found"; exit 77)
 curl --version &> /dev/null || (echo "'curl' command not found"; exit 77)
 
-DB_CONN="jdbc:postgresql://localhost/libeufincheck?socketFactory=org.newsclub.net.unix.AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/var/run/postgresql/.s.PGSQL.5432"
-
+DB_CONN="postgresql:///libeufincheck"
 export LIBEUFIN_SANDBOX_DB_CONNECTION=$DB_CONN
 export LIBEUFIN_NEXUS_DB_CONNECTION=$DB_CONN
 
@@ -74,7 +73,7 @@ export LIBEUFIN_NEXUS_URL=http://localhost:5001
 # echoing the password to STDIN, as that is a "prompt" option.
 libeufin-cli connections new-xlibeufinbank-connection \
   --bank-url "http://localhost:5000/demobanks/default/access-api" \
-  --username sandbox-user
+  --username sandbox-user \
   --password foo \
   wwwconn
 echo DONE
