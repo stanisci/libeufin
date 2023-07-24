@@ -59,8 +59,8 @@ echo -n Waiting for Nexus...
 curl --max-time 2 --retry-connrefused --retry-delay 1 --retry 10 http://localhost:5001/ &> /dev/null
 echo DONE
 
-echo -n "Register the 'www' Sandbox account..."
-export LIBEUFIN_SANDBOX_USERNAME=www
+echo -n "Register the Sandbox account..."
+export LIBEUFIN_SANDBOX_USERNAME=sandbox-user
 export LIBEUFIN_SANDBOX_PASSWORD=foo
 libeufin-cli \
   sandbox --sandbox-url http://localhost:5000/ \
@@ -74,7 +74,7 @@ export LIBEUFIN_NEXUS_URL=http://localhost:5001
 # echoing the password to STDIN, as that is a "prompt" option.
 libeufin-cli connections new-xlibeufinbank-connection \
   --bank-url "http://localhost:5000/demobanks/default/access-api" \
-  --username www \
+  --username sandbox-user
   --password foo \
   wwwconn
 echo DONE
@@ -84,7 +84,7 @@ echo DONE
 # Importing the bank account under a local name at Nexus.
 echo -n Importing the x-libeufin-bank account locally..
 libeufin-cli connections import-bank-account \
-  --offered-account-id www \
+  --offered-account-id sandbox-user \
   --nexus-bank-account-id foo-at-nexus wwwconn
 echo DONE
 echo -n Create the Taler facade at Nexus...

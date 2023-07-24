@@ -9,6 +9,6 @@ RESERVE_PUB=$(gnunet-ecc -g1 /tmp/www &> /dev/null && gnunet-ecc -p /tmp/www)
 export LIBEUFIN_SANDBOX_DB_CONNECTION="jdbc:postgresql://localhost:5432/libeufincheck?user=$(whoami)"
 libeufin-sandbox \
   make-transaction \
-    --credit-account=www \
+    --credit-account=sandbox-user \
     --debit-account=admin MANA:2 \
    $RESERVE_PUB
