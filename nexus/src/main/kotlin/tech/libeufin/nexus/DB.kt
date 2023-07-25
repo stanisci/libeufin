@@ -30,8 +30,6 @@ import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.server.FetchLevel
 import tech.libeufin.util.*
-import java.sql.Connection
-import kotlin.reflect.typeOf
 
 /**
  * This table holds the values that exchange gave to issue a payment,
@@ -521,14 +519,14 @@ class NexusPermissionEntity(id: EntityID<Long>) : LongEntity(id) {
     var permissionName by NexusPermissionsTable.permissionName
 }
 
-fun dbDropTables(dbConnectionString: String) {
-    connectWithSchema(dbConnectionString)
+fun dbDropTables(connStringFromEnv: String) {
+    connectWithSchema(getJdbcConnectionFromPg(connStringFromEnv))
     if (isPostgres()) {
         val ret = execCommand(
             listOf(
                 "libeufin-load-sql",
                 "-d",
-                getDatabaseName(),
+                connStringFromEnv,
                 "-s",
                 "nexus",
                 "-r"
@@ -563,13 +561,13 @@ fun dbDropTables(dbConnectionString: String) {
     }
 }
 
-fun dbCreateTables(dbConnectionString: String) {
-    connectWithSchema(dbConnectionString)
+fun dbCreateTables(connStringFromEnv: String) {
+    connectWithSchema(getJdbcConnectionFromPg(connStringFromEnv))
     if (isPostgres()) {
         execCommand(listOf(
             "libeufin-load-sql",
             "-d",
-            getDatabaseName(),
+            connStringFromEnv,
             "-s",
             "nexus"
         ))

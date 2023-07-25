@@ -309,7 +309,7 @@ class SandboxAccessApiTest {
                         basicAuth("foo", "foo")
                         setBody("{\"amount\": \"TESTKUDOS:99999999999\"}")
                     }
-                    assert(HttpStatusCode.Forbidden.value == r.status.value)
+                    assert(HttpStatusCode.Conflict.value == r.status.value)
                 }
             }
         }

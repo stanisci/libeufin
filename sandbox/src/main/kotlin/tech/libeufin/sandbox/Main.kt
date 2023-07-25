@@ -231,7 +231,7 @@ class Camt053Tick : CliktCommand(
 ) {
     override fun run() {
         val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
-        dbCreateTables(dbConnString)
+        execThrowableOrTerminate { dbCreateTables(dbConnString) }
         val newStatements = mutableMapOf<String, MutableList<XLibeufinBankTransaction>>()
         /**
          * For each bank account, extract the latest statement and
@@ -293,13 +293,15 @@ class MakeTransaction : CliktCommand("Wire-transfer money between Sandbox bank a
     private val subjectArg by argument("SUBJECT", "Payment's subject")
 
     override fun run() {
-        val dbConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
         /**
          * Merely connecting here (and NOT creating any table) because this
          * command should only be run after actual bank accounts exist in the
          * system, meaning therefore that the database got already set up.
          */
-        connectWithSchema(dbConnString)
+        execThrowableOrTerminate {
+            val pgConnString = getDbConnFromEnv(SANDBOX_DB_ENV_VAR_NAME)
+            connectWithSchema(getJdbcConnectionFromPg(pgConnString))
+        }
         // Refuse to operate without a default demobank.
         val demobank = getDemobank("default")
         if (demobank == null) {

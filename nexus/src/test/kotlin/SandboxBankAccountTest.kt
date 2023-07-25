@@ -47,8 +47,8 @@ class SandboxBankAccountTest {
                     "TESTKUDOS:5000"
                 )
             } catch (e: SandboxError) {
-                // Future versions may wrap this case into a dedicate exception type.
-                assert(e.statusCode == HttpStatusCode.PreconditionFailed)
+                // Future versions may wrap this case into a dedicated exception type.
+                assert(e.statusCode == HttpStatusCode.Conflict)
             }
             // Trigger Insufficient funds case for the bank.
             try {
@@ -60,8 +60,8 @@ class SandboxBankAccountTest {
                     "TESTKUDOS:5000000"
                 )
             } catch (e: SandboxError) {
-                // Future versions may wrap this case into a dedicate exception type.
-                assert(e.statusCode == HttpStatusCode.PreconditionFailed)
+                // Future versions may wrap this case into a dedicated exception type.
+                assert(e.statusCode == HttpStatusCode.Conflict)
             }
             // Check balance didn't change for both parties.
             bankBalance = getBalance("admin")

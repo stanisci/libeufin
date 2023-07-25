@@ -24,8 +24,7 @@ val BANK_IBAN = getIban()
 val FOO_USER_IBAN = getIban()
 val BAR_USER_IBAN = getIban()
 val TCP_POSTGRES_CONN="jdbc:postgresql://localhost:5432/libeufincheck?user=$currentUser"
-val UNIX_SOCKET_CONN= "jdbc:postgresql://localhost/libeufincheck?socketFactory=org.newsclub.net.unix." +
-        "AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/var/run/postgresql/.s.PGSQL.5432"
+val UNIX_SOCKET_CONN= "postgresql:///libeufincheck"
 val TEST_DB_CONN = UNIX_SOCKET_CONN
 
 val bankKeys = EbicsKeys(
@@ -200,7 +199,6 @@ fun prepSandboxDb(
     cashoutCurrency: String = "EUR"
 ) {
     tech.libeufin.sandbox.dbCreateTables(TEST_DB_CONN)
-    connectWithSchema(TEST_DB_CONN)
     transaction {
         val config = DemobankConfig(
             currency = currency,

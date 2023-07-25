@@ -31,12 +31,8 @@ import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.dao.id.IntIdTable
 import org.jetbrains.exposed.dao.id.LongIdTable
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.transactions.transactionManager
-import tech.libeufin.sandbox.CashoutSubmissionsTable.nullable
 import tech.libeufin.util.*
-import java.sql.Connection
 import kotlin.reflect.*
 import kotlin.reflect.full.*
 
@@ -666,14 +662,14 @@ class CashoutSubmissionEntity(id: EntityID<Long>) : LongEntity(id) {
     var submissionTime by CashoutSubmissionsTable.submissionTime
 }
 
-fun dbDropTables(dbConnectionString: String) {
-    connectWithSchema(dbConnectionString)
+fun dbDropTables(connStringFromEnv: String) {
+    connectWithSchema(getJdbcConnectionFromPg(connStringFromEnv))
     if (isPostgres()) {
         val ret = execCommand(
             listOf(
                 "libeufin-load-sql",
                 "-d",
-                getDatabaseName(),
+                connStringFromEnv,
                 "-s",
                 "sandbox",
                 "-r" // the drop option
@@ -713,13 +709,13 @@ fun dbDropTables(dbConnectionString: String) {
 
 }
 
-fun dbCreateTables(dbConnectionString: String) {
-    connectWithSchema(dbConnectionString)
+fun dbCreateTables(connStringFromEnv: String) {
+    connectWithSchema(getJdbcConnectionFromPg(connStringFromEnv))
     if (isPostgres()) {
         execCommand(listOf(
             "libeufin-load-sql",
             "-d",
-            getDatabaseName(),
+            connStringFromEnv,
             "-s",
             "sandbox"
         ))

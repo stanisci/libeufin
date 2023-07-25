@@ -203,3 +203,12 @@ fun extractReservePubFromSubject(rawSubject: String): String? {
     val result = re.find(rawSubject.replace("[\n]+".toRegex(), "")) ?: return null
     return result.value.uppercase()
 }
+
+fun getQueryParam(uriQueryString: String, param: String): String? {
+    uriQueryString.split('&').forEach {
+        val kv = it.split('=')
+        if (kv[0] == param)
+            return kv[1]
+    }
+    return null
+}

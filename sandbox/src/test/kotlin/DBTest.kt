@@ -21,34 +21,23 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.sandbox.*
+import tech.libeufin.util.connectWithSchema
 import tech.libeufin.util.getCurrentUser
+import tech.libeufin.util.getJdbcConnectionFromPg
 import tech.libeufin.util.millis
 import java.io.File
 import java.time.LocalDateTime
 import kotlin.reflect.KProperty
+import kotlin.reflect.typeOf
 
 /**
  * Run a block after connecting to the test database.
  * Cleans up the DB file afterwards.
  */
 fun withTestDatabase(f: () -> Unit) {
-    val dbFile = "/tmp/sandbox-test.sqlite3"
-    val dbConn = "jdbc:sqlite:${dbFile}"
-    File(dbFile).also {
-        if (it.exists()) {
-            it.delete()
-        }
-    }
-    Database.connect(dbConn, user = getCurrentUser())
-    dbDropTables(dbConn)
-    dbCreateTables(dbConn)
-    try { f() }
-    finally {
-        File(dbFile).also {
-            if (it.exists())
-                it.delete()
-        }
-    }
+    dbDropTables("postgresql:///libeufincheck")
+    dbCreateTables("postgresql:///libeufincheck")
+    f()
 }
 
 class DBTest {
@@ -60,6 +49,26 @@ class DBTest {
         demobankName = "default",
         withSignupBonus = false,
     )
+
+    /**
+     * This tests the conversion from a Postgres connection
+     * string to a JDBC one.
+     */
+    @Test
+    fun connectionStringTest() {
+        var conv = getJdbcConnectionFromPg("postgresql:///libeufincheck")
+        connectWithSchema(conv)
+        conv = getJdbcConnectionFromPg("postgresql://localhost:5432/libeufincheck?user=${System.getProperty("user.name")}")
+        connectWithSchema(conv)
+        conv = getJdbcConnectionFromPg("postgresql:///libeufincheck?host=/tmp/libeufin")
+        var exception: Exception? = null
+        try {
+            connectWithSchema(conv)
+        } catch (e: Exception) {
+            exception = e
+        }
+        assert(exception is UtilError)
+    }
 
     /**
      * Storing configuration values into the database,

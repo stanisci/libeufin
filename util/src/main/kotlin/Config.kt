@@ -64,6 +64,10 @@ fun getValueFromEnv(varName: String): String? {
     return ret
 }
 
+/**
+ * Gets the connection string in Postgres format and
+ * returns the JDBC version of it.
+ */
 fun getDbConnFromEnv(varName: String): String {
     val dbConnStr = System.getenv(varName)
     if (dbConnStr.isNullOrBlank() or dbConnStr.isNullOrEmpty()) {

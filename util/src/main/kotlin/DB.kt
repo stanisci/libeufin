@@ -25,9 +25,12 @@ import logger
 import net.taler.wallet.crypto.Base32Crockford
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.Transaction
+import org.jetbrains.exposed.sql.name
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.postgresql.jdbc.PgConnection
+import java.net.URI
+import kotlin.system.exitProcess
 
 fun Transaction.isPostgres(): Boolean {
     return this.db.vendor == "postgresql"
@@ -237,13 +240,60 @@ fun getDatabaseName(): String {
  * to a database and ONLY use the passed schema
  * WHEN PostgreSQL is the DBMS.
  */
-fun connectWithSchema(dbConn: String, schemaName: String? = null) {
+fun connectWithSchema(jdbcConn: String, schemaName: String? = null) {
     Database.connect(
-        dbConn,
-        user = getCurrentUser(),
+        jdbcConn,
         setupConnection = { conn ->
             if (isPostgres() && schemaName != null)
                 conn.schema = schemaName
         }
     )
+    try { transaction { this.db.name } }
+    catch (e: Throwable) {
+        logger.error("Test query failed: ${e.message}")
+        throw internalServerError("Failed connection to: $jdbcConn")
+    }
+}
+
+/**
+ * This function converts a postgresql://-URI to a JDBC one.
+ * It is only needed because JDBC strings based on Unix domain
+ * sockets need individual intervention.
+ */
+fun getJdbcConnectionFromPg(pgConn: String): String {
+    if (!pgConn.startsWith("postgresql://")) {
+        logger.info("Not a Postgres connection string: $pgConn")
+        throw internalServerError("Not a Postgres connection string: $pgConn")
+    }
+    var maybeUnixSocket = false
+    val parsed = URI(pgConn)
+    val hostAsParam: String? = if (parsed.query != null)
+        getQueryParam(parsed.query, "host")
+    else null
+    /**
+     * In some cases, it is possible to leave the hostname empty
+     * and specify it via a query param, therefore a "postgresql:///"-starting
+     * connection string does NOT always mean Unix domain socket.
+     * https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+     */
+    if (parsed.host == null &&
+        (hostAsParam == null || hostAsParam.startsWith('/'))) {
+        maybeUnixSocket = true
+    }
+    if (maybeUnixSocket) {
+        // Check whether the database user should differ from the process user.
+        var pgUser = getCurrentUser()
+        if (parsed.query != null) {
+            val maybeUserParam = getQueryParam(parsed.query, "user")
+            if (maybeUserParam != null) pgUser = maybeUserParam
+        }
+        // Check whether the Unix domain socket location was given non-standard.
+        val socketLocation = hostAsParam ?: "/var/run/postgresql/.s.PGSQL.5432"
+        if (!socketLocation.startsWith('/')) {
+            throw internalServerError("PG connection wants Unix domain socket, but non-null host doesn't start with slash")
+        }
+        return "jdbc:postgresql://localhost${parsed.path}?user=$pgUser&socketFactory=org.newsclub.net.unix." +
+                "AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=$socketLocation"
+    }
+    return "jdbc:$pgConn"
 }
