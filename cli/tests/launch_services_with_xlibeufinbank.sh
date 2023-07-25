@@ -45,7 +45,7 @@ libeufin-sandbox serve > sandbox.log 2>&1 &
 SANDBOX_PID=$!
 echo DONE
 echo -n Wait for the bank...
-curl --max-time 2 --retry-connrefused --retry-delay 1 --retry 10 http://localhost:5000/ &> /dev/null
+curl --max-time 4 --retry-all-errors --retry-connrefused --retry-delay 1 --retry 10 http://localhost:5000/ &> /dev/null
 echo DONE
 echo -n Make one superuser at Nexus...
 libeufin-nexus superuser test-user --password x
@@ -55,7 +55,7 @@ libeufin-nexus serve &> nexus.log &
 NEXUS_PID=$!
 echo DONE
 echo -n Waiting for Nexus...
-curl --max-time 2 --retry-connrefused --retry-delay 1 --retry 10 http://localhost:5001/ &> /dev/null
+curl --max-time 4 --retry-all-errors --retry-connrefused --retry-delay 1 --retry 10 http://localhost:5001/ &> /dev/null
 echo DONE
 
 echo -n "Register the Sandbox account..."

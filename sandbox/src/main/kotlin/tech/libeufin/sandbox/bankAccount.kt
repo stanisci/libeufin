@@ -228,6 +228,8 @@ fun wireTransfer(
         }
 
         // Adjusting the balances (acceptable debit conditions checked before).
+        debitAccount.refresh()
+        creditAccount.refresh()
         // Debit:
         val newDebitBalance = (BigDecimal(debitAccount.balance) - amountAsNumber).roundToTwoDigits()
         debitAccount.balance = newDebitBalance.toPlainString() // FIXME: that's ignored!
