@@ -4,6 +4,9 @@ BEGIN;
 
 SELECT _v.register_patch('nexus-0001', NULL, NULL);
 
+CREATE SCHEMA nexus;
+SET search_path TO nexus;
+
 -- start of: user management
 
 CREATE TABLE IF NOT EXISTS nexus_users

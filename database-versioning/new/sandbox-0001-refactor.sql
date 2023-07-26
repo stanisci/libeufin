@@ -8,6 +8,9 @@ BEGIN;
 
 SELECT _v.register_patch('sandbox-0001', NULL, NULL);
 
+CREATE SCHEMA sandbox;
+SET search_path TO sandbox;
+
 -- start of: demobank config tables
 
 CREATE TABLE IF NOT EXISTS demobank_configs 
