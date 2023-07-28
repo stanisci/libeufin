@@ -238,17 +238,6 @@ class ConversionServiceTest {
         }
     }
 
-    // Abstracts the mock handler installation.
-    private fun getMockedClient(handler: MockRequestHandleScope.(HttpRequestData) -> HttpResponseData): HttpClient {
-        return HttpClient(MockEngine) {
-            followRedirects = false
-            engine {
-                addHandler {
-                        request -> handler(request)
-                }
-            }
-        }
-    }
     /**
      * Checks that the cash-out monitor reacts after
      * a CRDT transaction arrives at the designated account.

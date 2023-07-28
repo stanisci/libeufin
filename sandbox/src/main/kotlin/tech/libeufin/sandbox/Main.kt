@@ -518,6 +518,7 @@ private suspend fun getWithdrawal(call: ApplicationCall) {
 
 private suspend fun confirmWithdrawal(call: ApplicationCall) {
     val withdrawalId = call.expectUriComponent("withdrawal_id")
+    logger.debug("Maybe confirming withdrawal: $withdrawalId")
     transaction {
         val wo = getWithdrawalOperation(withdrawalId)
         if (wo.aborted) throw SandboxError(
@@ -541,6 +542,7 @@ private suspend fun confirmWithdrawal(call: ApplicationCall) {
                 "Cannot withdraw without an exchange."
             )
         )
+        logger.debug("Withdrawal ${wo.wopid} confirmed? ${wo.confirmationDone}")
         if (!wo.confirmationDone) {
             wireTransfer(
                 debitAccount = wo.walletBankAccount,
@@ -1557,15 +1559,18 @@ val sandboxApp: Application.() -> Unit = {
                     var ret: List<XLibeufinBankTransaction> = transaction {
                         extractTxHistory(historyParams)
                     }
+                    logger.debug("Is payment data empty? ${ret.isEmpty()}")
                     // Data was found already, UNLISTEN and respond.
                     if (listenHandle != null && ret.isNotEmpty()) {
+                        logger.debug("No need to wait DB events, payment data found.")
                         listenHandle.postgresUnlisten()
                         call.respond(object {val transactions = ret})
                         return@get
                     }
                     // No data was found, sleep until the timeout or getting woken up.
                     // Third condition only silences the compiler.
-                    if (listenHandle != null && ret.isEmpty() && longPollMs != null) {
+                    if (listenHandle != null && longPollMs != null) {
+                        logger.debug("Waiting DB event for new payment data.")
                         val notificationArrived = listenHandle.waitOnIODispatchers(longPollMs)
                         // Only if the awaited event fired, query again the DB.
                         if (notificationArrived)

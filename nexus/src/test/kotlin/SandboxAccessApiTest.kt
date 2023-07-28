@@ -15,6 +15,7 @@ import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.sandbox.*
+import tech.libeufin.util.getDatabaseName
 import java.util.*
 import kotlin.concurrent.schedule
 
@@ -250,7 +251,9 @@ class SandboxAccessApiTest {
                 // Check the withdrawal amount in the unique transaction.
                 val t = client.get("/demobanks/default/access-api/accounts/foo/transactions") {
                     basicAuth("foo", "foo")
+                    expectSuccess = true
                 }
+                println(t.bodyAsText())
                 val amount = mapper.readTree(t.readBytes()).get("transactions").get(0).get("amount").asText()
                 assert(amount == "500000000")
             }

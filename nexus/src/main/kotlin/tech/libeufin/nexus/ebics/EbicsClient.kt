@@ -46,18 +46,17 @@ private suspend inline fun HttpClient.postToBank(url: String, body: String): Str
                 setBody(body)
         }
     } catch (e: ClientRequestException) {
-        logger.error(e.message)
+        logger.error("Exception during request to $url: ${e.message}")
         val returnStatus = if (e.response.status.value == HttpStatusCode.RequestTimeout.value)
             HttpStatusCode.GatewayTimeout
         else HttpStatusCode.BadGateway
-        
         throw NexusError(
             returnStatus,
             e.message
         )
     }
     catch (e: Exception) {
-        logger.error("Exception during request ${e.message}")
+        logger.error("Exception during request to $url: ${e.message}")
         throw NexusError(
             HttpStatusCode.BadGateway,
             e.message ?: "Could not reach the bank"

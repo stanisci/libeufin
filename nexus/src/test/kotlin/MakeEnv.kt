@@ -1,4 +1,7 @@
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import io.ktor.client.*
+import io.ktor.client.engine.mock.*
+import io.ktor.client.request.*
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.TransactionManager
@@ -755,3 +758,15 @@ val poFiCamt054_2019_incoming: String = """
 	</BkToCstmrDbtCdtNtfctn>
 </Document>
 """.trimIndent()
+
+// Abstracts the mock handler installation.
+fun getMockedClient(handler: MockRequestHandleScope.(HttpRequestData) -> HttpResponseData): HttpClient {
+    return HttpClient(MockEngine) {
+        followRedirects = false
+        engine {
+            addHandler {
+                    request -> handler(request)
+            }
+        }
+    }
+}

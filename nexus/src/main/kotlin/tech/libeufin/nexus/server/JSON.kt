@@ -227,7 +227,7 @@ class FetchSpecTimeRangeJson(
     start: String,
     end: String,
     bankConnection: String?
-) : FetchSpecJson(level, bankConnection)
+) : FetchSpecJson(level, bankConnection, start, end)
 
 @JsonTypeName("previous-days")
 class FetchSpecPreviousDaysJson(level: FetchLevel, bankConnection: String?, val number: Int) :

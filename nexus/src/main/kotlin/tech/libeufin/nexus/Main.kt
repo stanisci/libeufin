@@ -30,6 +30,7 @@ import com.github.ajalt.clikt.parameters.types.int
 import execThrowableOrTerminate
 import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.options.*
+import io.ktor.server.application.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -38,7 +39,6 @@ import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
 import tech.libeufin.nexus.iso20022.createPain001document
 import tech.libeufin.nexus.iso20022.parseCamtMessage
 import tech.libeufin.nexus.server.EbicsDialects
-import tech.libeufin.nexus.server.client
 import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.util.*
 import java.io.File
@@ -77,7 +77,7 @@ class Serve : CliktCommand("Run nexus HTTP server") {
     override fun run() {
         setLogLevel(logLevel)
         execThrowableOrTerminate { dbCreateTables(getDbConnFromEnv(NEXUS_DB_ENV_VAR_NAME)) }
-        CoroutineScope(Dispatchers.IO).launch(fallback) { whileTrueOperationScheduler(client) }
+        CoroutineScope(Dispatchers.IO).launch(fallback) { whileTrueOperationScheduler() }
         if (withUnixSocket != null) {
             startServer(
                 withUnixSocket!!,

@@ -53,3 +53,13 @@ fun LocalDateTime.millis(): Long {
     val instant = Instant.from(this.atZone(ZoneOffset.UTC))
     return instant.toEpochMilli()
 }
+
+fun parseDashedDate(maybeDashedDate: String?): LocalDate {
+    if (maybeDashedDate == null)
+        throw badRequest("dashed date found as null")
+    return try {
+        LocalDate.parse(maybeDashedDate)
+    } catch (e: Exception) {
+        throw badRequest("bad dashed date: $maybeDashedDate.  ${e.message}")
+    }
+}

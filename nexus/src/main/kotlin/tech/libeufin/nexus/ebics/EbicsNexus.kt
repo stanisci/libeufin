@@ -681,8 +681,9 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
             is FetchSpecTimeRangeJson -> {
                 // the parse() method defaults to the YYYY-MM-DD format.
                 // If parsing fails, the global catcher intervenes.
-                val start: LocalDate = LocalDate.parse(fetchSpec.start)
-                val end: LocalDate = LocalDate.parse(fetchSpec.end)
+
+                val start: LocalDate = parseDashedDate(fetchSpec.start)
+                val end: LocalDate = parseDashedDate(fetchSpec.end)
                 val p = EbicsStandardOrderParams(
                     EbicsDateRange(
                         start = start.atStartOfDay().atZone(ZoneId.systemDefault()),

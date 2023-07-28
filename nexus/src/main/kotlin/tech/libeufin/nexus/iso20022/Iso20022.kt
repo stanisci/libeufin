@@ -59,6 +59,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import tech.libeufin.nexus.logger
 
 
 enum class CashManagementResponseType(@get:JsonValue val jsonName: String) {

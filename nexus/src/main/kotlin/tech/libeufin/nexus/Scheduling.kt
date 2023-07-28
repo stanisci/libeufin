@@ -30,6 +30,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
 import tech.libeufin.nexus.bankaccount.submitAllPaymentInitiations
 import tech.libeufin.nexus.server.FetchSpecJson
+import tech.libeufin.nexus.server.client
 import java.lang.IllegalArgumentException
 import java.time.Duration
 import java.time.Instant
@@ -162,7 +163,7 @@ suspend fun javaTimerOperationScheduler(httpClient: HttpClient) {
 }
 */
 
-suspend fun whileTrueOperationScheduler(httpClient: HttpClient) {
+suspend fun whileTrueOperationScheduler(httpClient: HttpClient = client) {
     while (true) {
         operationScheduler(httpClient)
         // Wait the shortest period that the cron spec would allow.

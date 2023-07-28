@@ -1,9 +1,12 @@
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import io.ktor.client.engine.mock.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.config.*
 import io.ktor.server.testing.*
 import io.netty.handler.codec.http.HttpResponseStatus
 import kotlinx.coroutines.async
@@ -13,7 +16,14 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import tech.libeufin.nexus.PaymentInitiationEntity
-import tech.libeufin.nexus.server.nexusApp
+import tech.libeufin.nexus.bankaccount.ingestBankMessagesIntoAccount
+import tech.libeufin.nexus.getConnectionPlugin
+import tech.libeufin.nexus.iso20022.ingestCamtMessageIntoAccount
+import tech.libeufin.nexus.server.*
+import tech.libeufin.sandbox.BankAccountTransactionEntity
+import tech.libeufin.sandbox.BankAccountTransactionsTable
+import tech.libeufin.sandbox.sandboxApp
+import tech.libeufin.sandbox.wireTransfer
 
 /**
  * This class tests the API offered by Nexus,
@@ -143,7 +153,6 @@ class NexusApiTest {
                     contentType(ContentType.Application.Json)
                     expectSuccess = true
                     basicAuth("foo", "foo")
-                    // NOTE: current API doesn't allow to omit the 'params' field.
                     setBody("""{
                         "name": "send-payments",
                         "cronspec": "* * *",
@@ -205,7 +214,58 @@ class NexusApiTest {
                     expectSuccess = false
                 }
                 assert(maybeConflict.status.value == HttpStatusCode.Conflict.value)
+            }
+        }
+    }
+    @Test
+    fun timeRangeFetch() {
+        withTestDatabase {
+            prepSandboxDb()
+            prepNexusDb()
+            val ref = wireTransfer(
+                "admin",
+                "foo",
+                subject = "past payment",
+                amount = "TESTKUDOS:30"
+                )
+            transaction {
+                BankAccountTransactionEntity.find {
+                    BankAccountTransactionsTable.accountServicerReference eq ref
+                }.first().date = 1577833200000L // Jan, 1st, 2020
+            }
+            testApplication {
+                application(sandboxApp)
+                val conn = getConnectionPlugin("ebics")
 
+                // Asking a time range where the one payment is expected to exist
+                conn.fetchTransactions(
+                    fetchSpec = FetchSpecTimeRangeJson(
+                        FetchLevel.REPORT,
+                        start = "2019-12-31",
+                        end = "2020-01-02",
+                        bankConnection = null
+                    ),
+                    accountId = "foo",
+                    bankConnectionId = "foo",
+                    client = client
+                )
+                val res = ingestBankMessagesIntoAccount("foo", "foo")
+                assert(res.newTransactions == 1)
+                // Asking a time range where the one payment is NOT expected to exist
+                conn.fetchTransactions(
+                    fetchSpec = FetchSpecTimeRangeJson(
+                        FetchLevel.REPORT,
+                        start = "2019-10-31",
+                        end = "2020-11-30",
+                        bankConnection = null
+                    ),
+                    accountId = "foo",
+                    bankConnectionId = "foo",
+                    client = client
+                )
+                val resNoData = ingestBankMessagesIntoAccount("foo", "foo")
+                assert(resNoData.downloadedTransactions == 0)
+                assert(resNoData.newTransactions == 0)
             }
         }
     }

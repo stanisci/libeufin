@@ -47,6 +47,7 @@ import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.iso20022.ingestCamtMessageIntoAccount
 import tech.libeufin.util.*
 import java.net.URLEncoder
+import tech.libeufin.nexus.logger
 
 // Return facade state depending on the type.
 fun getFacadeState(type: String, facade: FacadeEntity): JsonNode {
@@ -780,16 +781,26 @@ val nexusApp: Application.() -> Unit = {
              * fetches, it is ALSO possible that although one error is reported,
              * SOME transactions made it to the database!
              */
-            if (ingestionResult.errors != null)
-            /**
-             * Nexus could not handle the error (regardless of it being generated
-             * here or gotten from the bank).  The response body should inform the
-             * client about what failed.
-             */
-            statusCode = HttpStatusCode.InternalServerError
+            if (ingestionResult.errors != null) {
+                /**
+                 * Nexus could not handle the error (regardless of it being generated
+                 * here or gotten from the bank).  The response body should inform the
+                 * client about what failed.
+                 */
+                statusCode = HttpStatusCode.InternalServerError
+            }
+
             call.respond(
                 status = statusCode,
-                ingestionResult
+                object {
+                    val newTransactions = ingestionResult.newTransactions
+                    val downloadedTransactions = ingestionResult.downloadedTransactions
+                    val errors = mutableListOf<String>().apply {
+                        ingestionResult.errors?.forEach {
+                            this.add(it.message ?: "Error message not found.")
+                        }
+                    }
+                }
             )
             return@post
         }

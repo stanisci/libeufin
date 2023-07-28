@@ -37,6 +37,7 @@ import java.math.BigInteger
 import java.security.SecureRandom
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.*
 import java.util.zip.DeflaterInputStream
@@ -382,7 +383,9 @@ fun createEbicsRequestForDownloadInitialization(
         subscriberDetails.partnerId,
         subscriberDetails.hostId,
         nonce,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
+        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar(
+            TimeZone.getTimeZone(ZoneId.systemDefault())
+        )),
         subscriberDetails.bankEncPub ?: throw EbicsProtocolError(
             HttpStatusCode.BadRequest,
             "Invalid subscriber state 'bankEncPub' missing, please send HPB first"
@@ -415,7 +418,9 @@ fun createEbicsRequestForDownloadInitialization(
         subscriberDetails.partnerId,
         subscriberDetails.hostId,
         nonce,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
+        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar(
+            TimeZone.getTimeZone(ZoneId.systemDefault())
+        )),
         subscriberDetails.bankEncPub ?: throw EbicsProtocolError(
             HttpStatusCode.BadRequest,
             "Invalid subscriber state 'bankEncPub' missing, please send HPB first"
