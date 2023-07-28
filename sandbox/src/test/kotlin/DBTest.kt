@@ -57,6 +57,7 @@ class DBTest {
     @Test
     fun connectionStringTest() {
         var conv = getJdbcConnectionFromPg("postgresql:///libeufincheck")
+        connectWithSchema(getJdbcConnectionFromPg("postgres:///libeufincheck"))
         connectWithSchema(conv)
         conv = getJdbcConnectionFromPg("postgresql://localhost:5432/libeufincheck?user=${System.getProperty("user.name")}")
         connectWithSchema(conv)

@@ -261,7 +261,7 @@ fun connectWithSchema(jdbcConn: String, schemaName: String? = null) {
  * sockets need individual intervention.
  */
 fun getJdbcConnectionFromPg(pgConn: String): String {
-    if (!pgConn.startsWith("postgresql://")) {
+    if (!pgConn.startsWith("postgresql://") && !pgConn.startsWith("postgres://")) {
         logger.info("Not a Postgres connection string: $pgConn")
         throw internalServerError("Not a Postgres connection string: $pgConn")
     }
