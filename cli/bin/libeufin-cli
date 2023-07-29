@@ -957,11 +957,11 @@ def delete_payment(obj, account_name, payment_uuid):
 @click.option(
     "--range-type",
     default="all",
-    help="Admitted values: all, latest, previous-days, since-last, time-frame",
+    help="Admitted values: all, latest, previous-days, since-last, time-range",
 )
 @click.option("--level", default="all", help="Admitted values: report, statement, all")
-@click.option("--start", help="If --range-type is 'time-frame', this option holds the (inclusive) starting date in the format YYYY-MM-DD.  If missing, it defaults to 1970-01-01.")
-@click.option("--end", help="If --range-type is 'time-frame', this option holds the (inclusive) ending date in the format YYYY-MM-DD.  If missing, it defaults to the present date.")
+@click.option("--start", help="If --range-type is 'time-range', this option holds the (inclusive) starting date in the format YYYY-MM-DD.  If missing, it defaults to 1970-01-01.")
+@click.option("--end", help="If --range-type is 'time-range', this option holds the (inclusive) ending date in the format YYYY-MM-DD.  If missing, it defaults to the present date.")
 @click.argument("account-name")
 @click.pass_obj
 def fetch_transactions(obj, account_name, range_type, level, start, end):
@@ -969,7 +969,7 @@ def fetch_transactions(obj, account_name, range_type, level, start, end):
         obj.nexus_base_url, "/bank-accounts/{}/fetch-transactions".format(account_name)
     )
     body = dict(rangeType=range_type, level=level)
-    if range_type == "time-frame":
+    if range_type == "time-range":
         start_value = start if start else "1970-01-01"
         end_value = end if end else datetime.today().strftime("%Y-%m-%d")
         body.update(dict(start=start_value, end=end_value))
