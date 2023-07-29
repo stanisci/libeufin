@@ -545,14 +545,14 @@ private suspend fun confirmWithdrawal(call: ApplicationCall) {
         logger.debug("Withdrawal ${wo.wopid} confirmed? ${wo.confirmationDone}")
         if (!wo.confirmationDone) {
             wireTransfer(
-                debitAccount = wo.walletBankAccount,
-                creditAccount = exchangeBankAccount,
+                debitAccount = wo.walletBankAccount.label,
+                creditAccount = exchangeBankAccount.label,
                 amount = wo.amount,
                 subject = wo.reservePub ?: throw internalServerError(
                     "Cannot transfer funds without reserve public key."
                 ),
                 // provide the currency.
-                demobank = ensureDemobank(call)
+                demobank = ensureDemobank(call).name
             )
             wo.confirmationDone = true
         }
@@ -1347,9 +1347,9 @@ val sandboxApp: Application.() -> Unit = {
                      * of 'bankAccount' be correctly accessed.  */
                     transaction {
                         wireTransfer(
-                            debitAccount = bankAccount,
-                            creditAccount = getBankAccountFromIban(payto.iban),
-                            demobank = bankAccount.demoBank,
+                            debitAccount = bankAccount.label,
+                            creditAccount = getBankAccountFromIban(payto.iban).label,
+                            demobank = bankAccount.demoBank.name,
                             subject = payto.message ?: throw badRequest(
                                 "'message' query parameter missing in Payto address"
                             ),

@@ -160,7 +160,7 @@ fun wireTransfer(
 }
 
 // Book a CRDT and a DBIT transaction and return the unique reference thereof.
-fun wireTransfer(
+private fun wireTransfer(
     debitAccount: BankAccountEntity,
     creditAccount: BankAccountEntity,
     demobank: DemobankConfigEntity,

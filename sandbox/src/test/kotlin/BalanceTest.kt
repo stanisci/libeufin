@@ -91,13 +91,13 @@ class BalanceTest {
                     this.demobank = demobank
                 }
                 wireTransfer(
-                    other, one, demobank, "one gets 1", "EUR:1"
+                    other.label, one.label, demobank.name, "one gets 1", "EUR:1"
                 )
                 wireTransfer(
-                    other, one, demobank, "one gets another 1", "EUR:1"
+                    other.label, one.label, demobank.name, "one gets another 1", "EUR:1"
                 )
                 wireTransfer(
-                    one, other, demobank, "one gives 1", "EUR:1"
+                    one.label, other.label, demobank.name, "one gives 1", "EUR:1"
                 )
                 val maybeOneBalance: BigDecimal = getBalance(one)
                 println(maybeOneBalance)
