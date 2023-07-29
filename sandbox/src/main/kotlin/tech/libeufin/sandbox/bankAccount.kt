@@ -143,113 +143,90 @@ fun wireTransfer(
     pmtInfId: String? = null
 ): String {
     logger.debug("Maybe wire transfer: $debitAccount -> $creditAccount, $subject, $amount")
-    val args: Triple<BankAccountEntity, BankAccountEntity, DemobankConfigEntity> = transaction {
+    return transaction {
         val demobankDb = ensureDemobank(demobank)
         val debitAccountDb = getBankAccountFromLabel(debitAccount, demobankDb)
         val creditAccountDb = getBankAccountFromLabel(creditAccount, demobankDb)
-        Triple(debitAccountDb, creditAccountDb, demobankDb)
-    }
-    return wireTransfer(
-        debitAccount = args.first,
-        creditAccount = args.second,
-        demobank = args.third,
-        subject = subject,
-        amount = amount,
-        pmtInfId
-    )
-}
-
-// Book a CRDT and a DBIT transaction and return the unique reference thereof.
-private fun wireTransfer(
-    debitAccount: BankAccountEntity,
-    creditAccount: BankAccountEntity,
-    demobank: DemobankConfigEntity,
-    subject: String,
-    amount: String, // $currency:$value
-    pmtInfId: String? = null
-): String {
-    val parsedAmount = parseAmount(amount)
-    // Potential amount to transfer.
-    val amountAsNumber = BigDecimal(parsedAmount.amount)
-    if (amountAsNumber == BigDecimal.ZERO)
-        throw badRequest("Wire transfers of zero not possible.")
-    if (parsedAmount.currency != demobank.config.currency)
-        throw badRequest(
-            "Won't wire transfer with currency: ${parsedAmount.currency}." +
-                    "  Only ${demobank.config.currency} allowed."
-        )
-    // Check funds are sufficient.
-    if (
-        maybeDebit(
-            debitAccount.label,
-            amountAsNumber,
-            demobank.name
-    )) {
-        logger.error("Account ${debitAccount.label} would surpass debit threshold.  Rollback wire transfer")
-        throw SandboxError(HttpStatusCode.Conflict, "Insufficient funds")
-    }
-    val timeStamp = getUTCnow().toInstant().toEpochMilli()
-    val transactionRef = getRandomString(8)
-    transaction {
-        // addLogger(StdOutSqlLogger)
+        val parsedAmount = parseAmount(amount)
+        // Potential amount to transfer.
+        val amountAsNumber = BigDecimal(parsedAmount.amount)
+        if (amountAsNumber == BigDecimal.ZERO)
+            throw badRequest("Wire transfers of zero not possible.")
+        if (parsedAmount.currency != demobankDb.config.currency)
+            throw badRequest(
+                "Won't wire transfer with currency: ${parsedAmount.currency}." +
+                        "  Only ${demobankDb.config.currency} allowed."
+            )
+        // Check funds are sufficient.
+        if (
+            maybeDebit(
+                debitAccountDb.label,
+                amountAsNumber,
+                demobankDb.name
+            )) {
+            logger.error("Account ${debitAccountDb.label} would surpass debit threshold.  Rollback wire transfer")
+            throw SandboxError(HttpStatusCode.Conflict, "Insufficient funds")
+        }
+        val timeStamp = getUTCnow().toInstant().toEpochMilli()
+        val transactionRef = getRandomString(8)
         BankAccountTransactionEntity.new {
-            creditorIban = creditAccount.iban
-            creditorBic = creditAccount.bic
-            this.creditorName = getPersonNameFromCustomer(creditAccount.owner)
-            debtorIban = debitAccount.iban
-            debtorBic = debitAccount.bic
-            debtorName = getPersonNameFromCustomer(debitAccount.owner)
+            creditorIban = creditAccountDb.iban
+            creditorBic = creditAccountDb.bic
+            this.creditorName = getPersonNameFromCustomer(creditAccountDb.owner)
+            debtorIban = debitAccountDb.iban
+            debtorBic = debitAccountDb.bic
+            debtorName = getPersonNameFromCustomer(debitAccountDb.owner)
             this.subject = subject
             this.amount = parsedAmount.amount
-            this.currency = demobank.config.currency
+            this.currency = demobankDb.config.currency
             date = timeStamp
             accountServicerReference = transactionRef
-            account = creditAccount
+            account = creditAccountDb
             direction = "CRDT"
-            this.demobank = demobank
+            this.demobank = demobankDb
             this.pmtInfId = pmtInfId
         }
         BankAccountTransactionEntity.new {
-            creditorIban = creditAccount.iban
-            creditorBic = creditAccount.bic
-            this.creditorName = getPersonNameFromCustomer(creditAccount.owner)
-            debtorIban = debitAccount.iban
-            debtorBic = debitAccount.bic
-            debtorName = getPersonNameFromCustomer(debitAccount.owner)
+            creditorIban = creditAccountDb.iban
+            creditorBic = creditAccountDb.bic
+            this.creditorName = getPersonNameFromCustomer(creditAccountDb.owner)
+            debtorIban = debitAccountDb.iban
+            debtorBic = debitAccountDb.bic
+            debtorName = getPersonNameFromCustomer(debitAccountDb.owner)
             this.subject = subject
             this.amount = parsedAmount.amount
-            this.currency = demobank.config.currency
+            this.currency = demobankDb.config.currency
             date = timeStamp
             accountServicerReference = transactionRef
-            account = debitAccount
+            account = debitAccountDb
             direction = "DBIT"
-            this.demobank = demobank
+            this.demobank = demobankDb
             this.pmtInfId = pmtInfId
         }
 
         // Adjusting the balances (acceptable debit conditions checked before).
         // Debit:
-        val newDebitBalance = (BigDecimal(debitAccount.balance) - amountAsNumber).roundToTwoDigits()
-        debitAccount.balance = newDebitBalance.toPlainString()
+        val newDebitBalance = (BigDecimal(debitAccountDb.balance) - amountAsNumber).roundToTwoDigits()
+        debitAccountDb.balance = newDebitBalance.toPlainString()
         // Credit:
-        val newCreditBalance = (BigDecimal(creditAccount.balance) + amountAsNumber).roundToTwoDigits()
-        creditAccount.balance = newCreditBalance.toPlainString()
+        val newCreditBalance = (BigDecimal(creditAccountDb.balance) + amountAsNumber).roundToTwoDigits()
+        creditAccountDb.balance = newCreditBalance.toPlainString()
 
         // Signaling this wire transfer's event.
         if (this.isPostgres()) {
             val creditChannel = buildChannelName(
                 NotificationsChannelDomains.LIBEUFIN_REGIO_TX,
-                creditAccount.label
+                creditAccountDb.label
             )
             this.postgresNotify(creditChannel, "CRDT")
             val debitChannel = buildChannelName(
                 NotificationsChannelDomains.LIBEUFIN_REGIO_TX,
-                debitAccount.label
+                debitAccountDb.label
             )
             this.postgresNotify(debitChannel, "DBIT")
         }
+        transactionRef
     }
-    return transactionRef
 }
 
 /**
