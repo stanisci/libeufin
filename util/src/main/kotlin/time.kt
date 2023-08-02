@@ -55,7 +55,7 @@ fun LocalDateTime.millis(): Long {
 }
 
 fun LocalDate.millis(): Long {
-    val instant = Instant.from(this)
+    val instant = Instant.from(this.atStartOfDay().atZone(ZoneId.systemDefault()))
     return instant.toEpochMilli()
 }
 
