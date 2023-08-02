@@ -9,6 +9,8 @@ SET search_path TO nexus;
 
 -- start of: user management
 
+-- This table accounts the users registered at Nexus
+-- without any mention of banking connections.
 CREATE TABLE IF NOT EXISTS nexus_users
   (id BIGSERIAL PRIMARY KEY
   ,username TEXT NOT NULL
@@ -20,6 +22,10 @@ CREATE TABLE IF NOT EXISTS nexus_users
 
 -- start of: connection management
 
+
+-- This table accounts the bank connections that were
+-- created in Nexus and points to their owners.  NO connection
+-- configuration details are supposed to exist here.
 CREATE TABLE IF NOT EXISTS nexus_bank_connections 
   (id BIGSERIAL PRIMARY KEY
   ,connection_id TEXT NOT NULL
@@ -29,6 +35,10 @@ CREATE TABLE IF NOT EXISTS nexus_bank_connections
   ,CONSTRAINT fk_nexusbankconnections_user_id FOREIGN KEY (user) REFERENCES nexus_users(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   );
 
+
+-- Details of one EBICS connection.  Each row should point to
+-- nexus_bank_connections, where the meta information (like name and type)
+-- about the connection is stored.
 CREATE TABLE IF NOT EXISTS nexus_ebics_subscribers
   (id BIGSERIAL PRIMARY KEY
   ,ebics_url TEXT NOT NULL
@@ -47,6 +57,9 @@ CREATE TABLE IF NOT EXISTS nexus_ebics_subscribers
   ,CONSTRAINT fk_nexusebicssubscribers_nexusbankconnection_id FOREIGN KEY (nexus_bank_connection) REFERENCES nexus_bank_connections(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   );
 
+
+-- Details of one X-LIBEUFIN-BANK connection.  In other
+-- words, each line is one Libeufin-Sandbox user.
 CREATE TABLE IF NOT EXISTS xlibeufin_bank_users
   (id BIGSERIAL PRIMARY KEY
   ,username TEXT NOT NULL
@@ -56,6 +69,13 @@ CREATE TABLE IF NOT EXISTS xlibeufin_bank_users
   ,CONSTRAINT fk_xlibeufinbankusers_nexusbankconnection_id FOREIGN KEY (nexus_bank_connection) REFERENCES nexus_bank_connections(id) ON DELETE RESTRICT ON UPDATE RESTRICT
   );
 
+
+-- This table holds the names of the bank accounts as they
+-- exist at the bank where the Nexus user has one account.
+-- This table participates in the process of 'importing' one
+-- bank account.  The importing action has the main goal of
+-- providing friendlier names to the Nexus side of one bank
+-- account.
 CREATE TABLE IF NOT EXISTS offered_bank_accounts 
   (id BIGSERIAL PRIMARY KEY
   ,offered_account_id TEXT NOT NULL
