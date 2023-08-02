@@ -268,8 +268,8 @@ class XlibeufinBankConnectionProtocol : BankConnectionProtocol {
                     // the parse() method defaults to the YYYY-MM-DD format.
                     val start: LocalDate = LocalDate.parse(fetchSpec.start)
                     val end: LocalDate = LocalDate.parse(fetchSpec.end)
-                    this.parameters["from_ms"] = start.toString()
-                    this.parameters["to_ms"] = end.toString()
+                    this.parameters["from_ms"] = start.millis().toString()
+                    this.parameters["to_ms"] = end.millis().toString()
                 }
                 // Gets the last 5 transactions
                 is FetchSpecLatestJson -> {

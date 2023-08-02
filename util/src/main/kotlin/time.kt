@@ -54,6 +54,11 @@ fun LocalDateTime.millis(): Long {
     return instant.toEpochMilli()
 }
 
+fun LocalDate.millis(): Long {
+    val instant = Instant.from(this)
+    return instant.toEpochMilli()
+}
+
 fun parseDashedDate(maybeDashedDate: String?): LocalDate {
     if (maybeDashedDate == null)
         throw badRequest("dashed date found as null")
