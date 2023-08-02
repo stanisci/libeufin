@@ -241,8 +241,10 @@ data class HistoryParams(
     val untilMs: Long,
     val bankAccount: BankAccountEntity
 )
+
 fun extractTxHistory(params: HistoryParams): List<XLibeufinBankTransaction> {
     val ret = mutableListOf<XLibeufinBankTransaction>()
+
     /**
      * Helper that gets transactions earlier than the 'firstElementId'
      * transaction AND that match the URI parameters.

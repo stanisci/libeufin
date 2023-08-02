@@ -71,10 +71,10 @@ fun getValueFromEnv(varName: String): String? {
 fun getDbConnFromEnv(varName: String): String {
     val dbConnStr = System.getenv(varName)
     if (dbConnStr.isNullOrBlank() or dbConnStr.isNullOrEmpty()) {
-        printLnErr("\nError: DB connection string undefined or invalid in the env variable $varName.")
+        printLnErr("\nError: DB connection string undefined in the env variable $varName.")
         printLnErr("\nThe following two examples are valid connection strings:")
-        printLnErr("\njdbc:sqlite:/tmp/libeufindb.sqlite3")
-        printLnErr("jdbc:postgresql://localhost:5432/libeufindb?user=Foo&password=secret\n")
+        printLnErr("\npostgres:///libeufindb")
+        printLnErr("postgresql://localhost:5432/libeufindb?user=Foo&password=secret\n")
         exitProcess(1)
     }
     return dbConnStr

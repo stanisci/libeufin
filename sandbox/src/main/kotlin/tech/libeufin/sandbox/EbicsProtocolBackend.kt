@@ -27,6 +27,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.util.AttributeKey
+import io.ktor.util.date.*
 import org.apache.xml.security.binding.xmldsig.RSAKeyValueType
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -476,20 +477,27 @@ private fun constructCamtResponse(
     subscriber: EbicsSubscriberEntity,
     dateRange: Pair<Long, Long>?
 ): List<String> {
-
     if (type != 53 && type != 52) throw EbicsUnsupportedOrderType()
     val bankAccount = getBankAccountFromSubscriber(subscriber)
+    val history = mutableListOf<XLibeufinBankTransaction>()
     if (type == 52) {
-        if (dateRange != null)
-            throw EbicsOrderParamsIgnored("C52 does not support date ranges.")
-        val history = mutableListOf<XLibeufinBankTransaction>()
-        transaction {
-            BankAccountFreshTransactionEntity.all().forEach {
-                if (it.transactionRef.account.label == bankAccount.label) {
-                    history.add(getHistoryElementFromTransactionRow(it))
+        if (dateRange != null) {
+            transaction {
+                BankAccountTransactionEntity.find {
+                    BankAccountTransactionsTable.account eq bankAccount.id and
+                            BankAccountTransactionsTable.date.between(
+                                dateRange.first, dateRange.second
+                            )
+                }.forEach { history.add(getHistoryElementFromTransactionRow(it)) }
+            }
+        } else
+            transaction {
+                BankAccountFreshTransactionEntity.all().forEach {
+                    if (it.transactionRef.account.label == bankAccount.label) {
+                        history.add(getHistoryElementFromTransactionRow(it))
+                    }
                 }
             }
-        }
         if (history.size == 0) throw EbicsNoDownloadDataAvailable()
         val camtData = buildCamtString(
             type,
@@ -678,6 +686,9 @@ private fun handleCct(
             )
             return@transaction
         }
+        /**
+         * FIXME: here call wire_transfer(), because it'll set the balances too.
+         */
         val bankAccount = getBankAccountFromIban(parseResult.debtorIban)
         if (parseResult.currency != bankAccount.demoBank.config.currency) throw EbicsRequestError(
             "[EBICS_PROCESSING_ERROR] Currency (${parseResult.currency}) not supported.",
@@ -740,10 +751,16 @@ private fun handleCct(
  * to the querying subscriber.
  */
 private fun handleEbicsC52(requestContext: RequestContext): ByteArray {
+    val maybeDateRange = requestContext.requestObject.header.static.orderDetails?.orderParams
+    val dateRange: Pair<Long, Long>? = if (maybeDateRange is EbicsRequest.StandardOrderParams) {
+        val start: Long? = maybeDateRange.dateRange?.start?.toGregorianCalendar()?.timeInMillis
+        val end: Long? = maybeDateRange.dateRange?.end?.toGregorianCalendar()?.timeInMillis
+        Pair(start ?: 0L, end ?: getTimeMillis())
+    } else null
     val report = constructCamtResponse(
         52,
         requestContext.subscriber,
-        dateRange = null
+        dateRange = dateRange
     )
     sandboxAssert(
         report.size == 1,
