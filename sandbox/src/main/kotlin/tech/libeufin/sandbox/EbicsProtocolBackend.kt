@@ -685,9 +685,6 @@ private fun handleCct(
             )
             return@transaction
         }
-        /**
-         * FIXME: here call wire_transfer(), because it'll set the balances too.
-         */
         val bankAccount = getBankAccountFromIban(parseResult.debtorIban)
         if (parseResult.currency != bankAccount.demoBank.config.currency) throw EbicsRequestError(
             "[EBICS_PROCESSING_ERROR] Currency (${parseResult.currency}) not supported.",
