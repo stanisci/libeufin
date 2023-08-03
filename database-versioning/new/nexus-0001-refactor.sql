@@ -92,6 +92,8 @@ CREATE TABLE IF NOT EXISTS offered_bank_accounts
 
 -- start of: background tasks
 
+
+-- Accounts for the background tasks that were created by the user.
 CREATE TABLE IF NOT EXISTS nexus_scheduled_tasks 
   (id BIGSERIAL PRIMARY KEY
   ,resource_type TEXT NOT NULL
@@ -108,13 +110,22 @@ CREATE TABLE IF NOT EXISTS nexus_scheduled_tasks
 
 -- start of: facades management
 
+-- Basic information about the facade state.
 CREATE TABLE IF NOT EXISTS facade_state 
   (id BIGSERIAL PRIMARY KEY
   ,bank_account TEXT NOT NULL
   ,bank_connection TEXT NOT NULL
   ,currency TEXT NOT NULL
+  -- The following column informs whether this facade
+  -- wants payment data to come from statements (usually
+  -- once a day when the payment is very likely settled),
+  -- reports (multiple times a day but the payment might
+  -- not be settled).
   ,reserve_transfer_level TEXT NOT NULL
   ,facade BIGINT NOT NULL
+  -- The following column points to the last transaction
+  -- that was processed already by the facade.  It's used
+  -- along the facade-specific ingestion.
   ,highest_seen_message_serial_id BIGINT DEFAULT 0 NOT NULL
   ,CONSTRAINT fk_facadestate_facade_id FOREIGN KEY (facade) REFERENCES facades(id) ON DELETE CASCADE ON UPDATE RESTRICT
   );
