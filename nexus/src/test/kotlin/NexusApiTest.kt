@@ -256,7 +256,7 @@ class NexusApiTest {
                     fetchSpec = FetchSpecTimeRangeJson(
                         FetchLevel.REPORT,
                         start = "2019-10-31",
-                        end = "2020-11-30",
+                        end = "2019-11-30",
                         bankConnection = null
                     ),
                     accountId = "foo",

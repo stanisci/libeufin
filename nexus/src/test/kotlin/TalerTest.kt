@@ -68,8 +68,10 @@ class TalerTest {
                  */
                 fetchBankAccountTransactions(
                     client,
-                    fetchSpec = FetchSpecAllJson(
+                    fetchSpec = FetchSpecTimeRangeJson(
                         level = if (testedAccount == "bar") FetchLevel.STATEMENT else FetchLevel.REPORT,
+                        start = "2020-01-01",
+                        end = "3000-01-01",
                         bankConnection = testedAccount
                     ),
                     accountId = testedAccount

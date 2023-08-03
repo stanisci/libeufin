@@ -22,16 +22,19 @@ package tech.libeufin.util
 import java.time.*
 import java.time.format.DateTimeFormatter
 
-private var LIBEUFIN_CLOCK = Clock.system(ZoneOffset.UTC)
+private var LIBEUFIN_CLOCK = Clock.system(ZoneId.systemDefault())
 
 fun setClock(rel: Duration) {
     LIBEUFIN_CLOCK = Clock.offset(LIBEUFIN_CLOCK, rel)
 }
 fun getNow(): ZonedDateTime {
-    return ZonedDateTime.now(LIBEUFIN_CLOCK)
+    return ZonedDateTime.now(ZoneId.systemDefault())
 }
-fun getUTCnow(): ZonedDateTime {
-    return ZonedDateTime.now(ZoneOffset.UTC)
+fun getNowMillis(): Long = getNow().toInstant().toEpochMilli()
+
+fun getSystemTimeNow(): ZonedDateTime {
+    // return ZonedDateTime.now(ZoneOffset.UTC)
+    return ZonedDateTime.now(ZoneId.systemDefault())
 }
 
 fun ZonedDateTime.toZonedString(): String {

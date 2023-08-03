@@ -30,7 +30,6 @@ import io.ktor.util.AttributeKey
 import io.ktor.util.date.*
 import org.apache.xml.security.binding.xmldsig.RSAKeyValueType
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.w3c.dom.Document
@@ -297,7 +296,7 @@ fun buildCamtString(
      * - Proprietary code of the bank transaction
      * - Id of the servicer (Issuer and Code)
      */
-    val camtCreationTime = getUTCnow() // FIXME: should this be the payment time?
+    val camtCreationTime = getSystemTimeNow() // FIXME: should this be the payment time?
     val dashedDate = camtCreationTime.toDashedDate()
     val zonedDateTime = camtCreationTime.toZonedString()
     val creationTimeMillis = camtCreationTime.toInstant().toEpochMilli()
@@ -703,46 +702,15 @@ private fun handleCct(
         }
         if (maybeDebit(bankAccount.label, maybeAmount, bankAccount.demoBank.name))
             throw EbicsAmountCheckError("The requested amount (${parseResult.amount}) would exceed the debit threshold")
-
-        // Get the two parties.
-        BankAccountTransactionEntity.new {
-            account = bankAccount
-            demobank = bankAccount.demoBank
-            creditorIban = parseResult.creditorIban
-            creditorName = parseResult.creditorName
-            creditorBic = parseResult.creditorBic
-            debtorIban = parseResult.debtorIban
-            debtorName = parseResult.debtorName
-            debtorBic = parseResult.debtorBic
-            subject = parseResult.subject
-            amount = parseResult.amount
-            currency = parseResult.currency
-            date = getUTCnow().toInstant().toEpochMilli()
-            pmtInfId = parseResult.pmtInfId
+        logger.debug("Wire-transfer'ing endToEndId: ${parseResult.endToEndId}")
+        wireTransfer(
+            bankAccount.label,
+            getBankAccountFromIban(parseResult.creditorIban).label,
+            bankAccount.demoBank.name,
+            parseResult.subject,
+            "${parseResult.currency}:${parseResult.amount}",
             endToEndId = parseResult.endToEndId
-            accountServicerReference = "sandboxref-${getRandomString(16)}"
-            direction = "DBIT"
-        }
-        val maybeLocalCreditor = BankAccountEntity.find(BankAccountsTable.iban eq parseResult.creditorIban).firstOrNull()
-        if (maybeLocalCreditor != null) {
-            BankAccountTransactionEntity.new {
-                account = maybeLocalCreditor
-                demobank = maybeLocalCreditor.demoBank
-                creditorIban = parseResult.creditorIban
-                creditorName = parseResult.creditorName
-                creditorBic = parseResult.creditorBic
-                debtorIban = parseResult.debtorIban
-                debtorName = parseResult.debtorName
-                debtorBic = parseResult.debtorBic
-                subject = parseResult.subject
-                amount = parseResult.amount
-                currency = parseResult.currency
-                date = getUTCnow().toInstant().toEpochMilli()
-                pmtInfId = parseResult.pmtInfId
-                accountServicerReference = "sandboxref-${getRandomString(16)}"
-                direction = "CRDT"
-            }
-        }
+        )
     }
 }
 
@@ -755,8 +723,9 @@ private fun handleEbicsC52(requestContext: RequestContext): ByteArray {
     val dateRange: Pair<Long, Long>? = if (maybeDateRange is EbicsRequest.StandardOrderParams) {
         val start: Long? = maybeDateRange.dateRange?.start?.toGregorianCalendar()?.timeInMillis
         val end: Long? = maybeDateRange.dateRange?.end?.toGregorianCalendar()?.timeInMillis
-        Pair(start ?: 0L, end ?: getTimeMillis())
+        Pair(start ?: 0L, end ?: Long.MAX_VALUE)
     } else null
+    logger.debug("Date range: $dateRange")
     val report = constructCamtResponse(
         52,
         requestContext.subscriber,

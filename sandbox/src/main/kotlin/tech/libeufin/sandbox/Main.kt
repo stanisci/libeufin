@@ -272,7 +272,7 @@ class Camt053Tick : CliktCommand(
                 )
                 BankAccountStatementEntity.new {
                     statementId = camtData.messageId
-                    creationTime = getUTCnow().toInstant().epochSecond
+                    creationTime = getSystemTimeNow().toInstant().epochSecond
                     xmlMessage = camtData.camtMessage
                     bankAccount = accountIter
                 }
@@ -843,7 +843,7 @@ val sandboxApp: Application.() -> Unit = {
                     debtorName = body.debtorName
                     subject = body.subject
                     this.amount = amount.amount
-                    date = getUTCnow().toInstant().toEpochMilli()
+                    date = getSystemTimeNow().toInstant().toEpochMilli()
                     accountServicerReference = "sandbox-$randId"
                     this.account = account
                     direction = "CRDT"
@@ -966,7 +966,7 @@ val sandboxApp: Application.() -> Unit = {
                         debtorName = "Max Mustermann"
                         subject = "sample transaction $transactionReferenceCrdt"
                         this.amount = amount.toString()
-                        date = getUTCnow().toInstant().toEpochMilli()
+                        date = getSystemTimeNow().toInstant().toEpochMilli()
                         accountServicerReference = transactionReferenceCrdt
                         this.account = account
                         direction = "CRDT"
@@ -987,7 +987,7 @@ val sandboxApp: Application.() -> Unit = {
                         creditorName = "Max Mustermann"
                         subject = "sample transaction $transactionReferenceDbit"
                         this.amount = amount.toString()
-                        date = getUTCnow().toInstant().toEpochMilli()
+                        date = getSystemTimeNow().toInstant().toEpochMilli()
                         accountServicerReference = transactionReferenceDbit
                         this.account = account
                         direction = "DBIT"
@@ -1530,9 +1530,9 @@ val sandboxApp: Application.() -> Unit = {
                     val size: Int = expectInt(call.request.queryParameters["size"] ?: "5")
                     if (size < 1) throw badRequest("'size' param is less than 1")
                     // Time range filter values
-                    val fromMs = expectLong(call.request.queryParameters["from_ms"] ?: "0")
+                    val fromMs: Long = expectLong(call.request.queryParameters["from_ms"] ?: "0")
                     if (fromMs < 0) throw badRequest("'from_ms' param is less than 0")
-                    val untilMs = expectLong(call.request.queryParameters["until_ms"] ?: Long.MAX_VALUE.toString())
+                    val untilMs: Long = expectLong(call.request.queryParameters["until_ms"] ?: Long.MAX_VALUE.toString())
                     if (untilMs < 0) throw badRequest("'until_ms' param is less than 0")
                     val longPollMs: Long? = call.maybeLong("long_poll_ms")
                     // LISTEN, if Postgres.

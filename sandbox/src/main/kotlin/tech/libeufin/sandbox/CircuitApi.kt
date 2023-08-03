@@ -13,7 +13,6 @@ import tech.libeufin.util.*
 import java.io.File
 import java.io.InputStreamReader
 import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.concurrent.TimeUnit
 import kotlin.text.toByteArray
 
@@ -322,7 +321,7 @@ fun circuitApi(circuitRoute: Route) {
                 amount = op.amountDebit
             )
             op.status = CashoutOperationStatus.CONFIRMED
-            op.confirmationTime = getUTCnow().toInstant().toEpochMilli()
+            op.confirmationTime = getSystemTimeNow().toInstant().toEpochMilli()
             // TODO(signal this payment over LIBEUFIN_REGIO_INCOMING)
         }
         call.respond(HttpStatusCode.NoContent)
@@ -538,7 +537,7 @@ fun circuitApi(circuitRoute: Route) {
                 this.sellAtRatio = ratiosAndFees.sell_at_ratio.toString()
                 this.sellOutFee = ratiosAndFees.sell_out_fee.toString()
                 this.subject = cashoutSubject
-                this.creationTime = getUTCnow().toInstant().toEpochMilli()
+                this.creationTime = getSystemTimeNow().toInstant().toEpochMilli()
                 this.tanChannel = SupportedTanChannels.valueOf(tanChannel)
                 this.account = user
                 this.tan = getRandomString(5)

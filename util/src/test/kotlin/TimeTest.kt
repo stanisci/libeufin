@@ -1,6 +1,7 @@
 import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.util.getNow
+import tech.libeufin.util.millis
 import tech.libeufin.util.setClock
 import java.time.*
 import java.time.format.DateTimeFormatter
@@ -58,7 +59,8 @@ class TimeTest {
             val dtf = DateTimeFormatter.ISO_LOCAL_DATE
             return LocalDate.parse(dashedDate, dtf)
         }
-        val ret = parse("1970-01-01")
+        val ret: LocalDate = parse("1970-01-01")
         println(ret.toString())
+        ret.millis() // Just testing it doesn't raise Exception.
     }
 }

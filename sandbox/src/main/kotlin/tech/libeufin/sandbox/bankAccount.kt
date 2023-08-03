@@ -1,8 +1,6 @@
 package tech.libeufin.sandbox
 
 import io.ktor.http.*
-import org.jetbrains.exposed.sql.StdOutSqlLogger
-import org.jetbrains.exposed.sql.addLogger
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.util.*
@@ -140,9 +138,10 @@ fun wireTransfer(
     demobank: String = "default",
     subject: String,
     amount: String, // $currency:x.y
-    pmtInfId: String? = null
+    pmtInfId: String? = null,
+    endToEndId: String? = null
 ): String {
-    logger.debug("Maybe wire transfer: $debitAccount -> $creditAccount, $subject, $amount")
+    logger.debug("Maybe wire transfer (endToEndId: $endToEndId): $debitAccount -> $creditAccount, $subject, $amount")
     return transaction {
         val demobankDb = ensureDemobank(demobank)
         val debitAccountDb = getBankAccountFromLabel(debitAccount, demobankDb)
@@ -167,7 +166,7 @@ fun wireTransfer(
             logger.error("Account ${debitAccountDb.label} would surpass debit threshold.  Rollback wire transfer")
             throw SandboxError(HttpStatusCode.Conflict, "Insufficient funds")
         }
-        val timeStamp = getUTCnow().toInstant().toEpochMilli()
+        val timeStamp = getNowMillis()
         val transactionRef = getRandomString(8)
         BankAccountTransactionEntity.new {
             creditorIban = creditAccountDb.iban
@@ -202,6 +201,7 @@ fun wireTransfer(
             direction = "DBIT"
             this.demobank = demobankDb
             this.pmtInfId = pmtInfId
+            this.endToEndId = endToEndId
         }
 
         // Adjusting the balances (acceptable debit conditions checked before).

@@ -987,7 +987,6 @@ def fetch_transactions(obj, account_name, range_type, level, start, end):
     check_response_status(resp)
     tell_user(resp)
 
-
 @accounts.command(help="Get transactions from the simplified nexus JSON API")
 @click.option(
     "--compact/--no-compact",

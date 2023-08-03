@@ -697,11 +697,13 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 addForLevel(fetchSpec.level, p)
             }
             is FetchSpecAllJson -> {
+                val start = ZonedDateTime.ofInstant(
+                    Instant.EPOCH,
+                    ZoneOffset.UTC
+                )
+                val end = ZonedDateTime.ofInstant(Instant.now(), ZoneOffset.systemDefault())
                 val p = EbicsStandardOrderParams(
-                    EbicsDateRange(
-                        ZonedDateTime.ofInstant(Instant.EPOCH, ZoneOffset.UTC),
-                        ZonedDateTime.now(ZoneOffset.UTC)
-                    )
+                    EbicsDateRange(start, end)
                 )
                 addForLevel(fetchSpec.level, p)
             }

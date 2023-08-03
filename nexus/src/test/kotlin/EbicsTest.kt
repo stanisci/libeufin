@@ -6,6 +6,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Test
 import org.w3c.dom.Document
@@ -16,15 +17,15 @@ import tech.libeufin.nexus.bankaccount.submitAllPaymentInitiations
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
 import tech.libeufin.nexus.iso20022.createPain001document
-import tech.libeufin.nexus.server.FetchLevel
-import tech.libeufin.nexus.server.FetchSpecAllJson
-import tech.libeufin.nexus.server.Pain001Data
+import tech.libeufin.nexus.server.*
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.EbicsRequest
 import tech.libeufin.util.ebics_h004.EbicsResponse
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import tech.libeufin.util.ebics_h005.Ebics3Request
+import java.time.LocalDate
+import java.time.ZonedDateTime
 
 /**
  * These test cases run EBICS CCT and C52, mixing ordinary operations
@@ -104,13 +105,16 @@ class DownloadAndSubmit {
                 "Exist in logging!",
                 "TESTKUDOS:5"
             )
+
             testApplication {
                 application(sandboxApp)
                 runBlocking {
                     fetchBankAccountTransactions(
                         client,
-                        fetchSpec = FetchSpecAllJson(
+                        fetchSpec = FetchSpecTimeRangeJson(
                             level = FetchLevel.REPORT,
+                            start = "2020-10-10",
+                            end = "3000-10-10",
                             bankConnection = "foo"
                         ),
                         accountId = "foo"
@@ -138,7 +142,7 @@ class DownloadAndSubmit {
                     // Create Pain.001 to be submitted.
                     addPaymentInitiation(
                         Pain001Data(
-                            creditorIban = getIban(),
+                            creditorIban = BAR_USER_IBAN,
                             creditorBic = "SANDBOXX",
                             creditorName = "Tester",
                             subject = "test payment",
@@ -157,11 +161,12 @@ class DownloadAndSubmit {
                     )
                 }
                 transaction {
-                    val payment = BankAccountTransactionEntity[1]
-                    assert(payment.debtorIban == FOO_USER_IBAN &&
-                            payment.subject == "test payment" &&
-                            payment.direction == "DBIT"
-                    )
+                    val howMany = BankAccountTransactionEntity.find {
+                        BankAccountTransactionsTable.debtorIban eq FOO_USER_IBAN and (
+                            BankAccountTransactionsTable.subject eq "test payment"
+                        ) and (BankAccountTransactionsTable.direction eq "DBIT")
+                    }.count()
+                    assert(howMany == 1L)
                 }
             }
         }
