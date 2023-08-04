@@ -21,12 +21,6 @@ sandbox_user=libeufin-sandbox
 sandbox_group=libeufin-sandbox
 libeufin_home=/var/lib/libeufin
 
-# Set permissions for sqlite3 file
-# (for when we support sqlite3 in the future)
-dbc_dbfile_owner="${_USERNAME}:${_GROUPNAME}"
-dbc_dbfile_perms="0600"
-dbc_first_version="0.9.2"
-
 . /usr/share/debconf/confmodule
 
 case "${1}" in
@@ -40,19 +34,9 @@ case "${1}" in
     if ! getent passwd $sandbox_user >/dev/null; then
       adduser --quiet --system --no-create-home --ingroup $sandbox_group --home $libeufin_home $sandbox_user
     fi
-
-    # Set up postgres database (needs dbconfig-pgsql package)
-    if [ -f /usr/share/dbconfig-common/dpkg/postinst.pgsql ]; then
-      . /usr/share/dbconfig-common/dpkg/postinst.pgsql
-      dbc_pgsql_createdb_encoding="UTF8"
-      dbc_go libeufin-sandbox "$@"
-    fi
-
     ;;
-
   abort-upgrade|abort-remove|abort-deconfigure)
     ;;
-
   *)
     echo "postinst called with unknown argument \`${1}'" >&2
     exit 1

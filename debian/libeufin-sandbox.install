@@ -1,7 +1,4 @@
 debian/etc/* etc/
 
-# Files needed by dbconf
-debian/db/install-sandbox/* usr/share/dbconfig-common/scripts/libeufin-sandbox/install/
-
 # Install the SPA + JS config:
 debian/usr/share/libeufin/* usr/share/libeufin/
