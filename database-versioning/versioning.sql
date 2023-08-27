@@ -146,12 +146,17 @@
 
 BEGIN;
 
+-- Added by Christian Grothoff to support concurrency, see
+-- https://stackoverflow.com/questions/29900845/create-schema-if-not-exists-raises-duplicate-key-error?rq=4
+LOCK TABLE pg_catalog.pg_namespace;
+
+
 -- This file adds versioning support to database it will be loaded to.
 -- It requires that PL/pgSQL is already loaded - will raise exception otherwise.
 -- All versioning "stuff" (tables, functions) is in "_v" schema.
 
 -- All functions are defined as 'RETURNS SETOF INT4' to be able to make them to RETURN literally nothing (0 rows).
--- >> RETURNS VOID<< IS similar, but it still outputs "empty line" in psql when calling.
+-- >> RETURNS VOID<< IS similar, but it still outputs "empty line" in psql when calling
 CREATE SCHEMA IF NOT EXISTS _v;
 COMMENT ON SCHEMA _v IS 'Schema for versioning data and functionality.';
 
@@ -205,7 +210,7 @@ BEGIN
     RETURN;
 END;
 $$ language plpgsql;
-COMMENT ON FUNCTION _v.register_patch( TEXT, TEXT[], TEXT[]) IS 'Function to register patches in database. Raises exception if there are conflicts, prerequisites are not installed or the migration has already been installed.';
+COMMENT ON FUNCTION _v.register_patch( TEXT, TEXT[], TEXT[] ) IS 'Function to register patches in database. Raises exception if there are conflicts, prerequisites are not installed or the migration has already been installed.';
 
 CREATE OR REPLACE FUNCTION _v.register_patch( TEXT, TEXT[] ) RETURNS setof INT4 AS $$
     SELECT _v.register_patch( $1, $2, NULL );
