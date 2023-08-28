@@ -33,6 +33,18 @@ COMMENT ON TYPE taler_amount
 CREATE TYPE resource_enum
   AS ENUM ('account', 'connection', 'facade');
 
+CREATE TYPE fetch_level_enum
+  AS ENUM ('report', 'statement', 'notification');
+
+CREATE TYPE direction_enum
+  AS ENUM ('credit', 'debit');
+
+CREATE TYPE transaction_state_enum
+  AS ENUM ('pending', 'booked');
+
+CREATE TYPE ebics_key_state_enum
+  AS ENUM ('sent', 'notsent');
+
 -- start of: user management
 
 -- This table accounts the users registered at Nexus
@@ -88,10 +100,9 @@ CREATE TABLE IF NOT EXISTS nexus_ebics_subscribers
   ,connection_id BIGINT NOT NULL
     REFERENCES nexus_bank_connections(connection_id)
     ON DELETE RESTRICT ON UPDATE RESTRICT
-  ,ebics_ini_state VARCHAR(16) NOT NULL
-  ,ebics_hia_state VARCHAR(16) NOT NULL
+  ,ebics_ini_state ebics_key_state NOT NULL DEFAULT TO 'notsent'
+  ,ebics_hia_state ebics_key_state NOT NULL DEFAULT TO 'notsent'
   );
-
 
 -- Details of one X-LIBEUFIN-BANK connection.  In other
 -- words, each line is one Libeufin-Sandbox user.
@@ -104,7 +115,6 @@ CREATE TABLE IF NOT EXISTS xlibeufin_bank_users
       REFERENCES nexus_bank_connections(connection_id)
       ON DELETE CASCADE ON UPDATE RESTRICT
   );
-
 
 -- This table holds the names of the bank accounts as they
 -- exist at the bank where the Nexus user has one account.
@@ -133,7 +143,6 @@ CREATE TABLE IF NOT EXISTS offered_bank_accounts
 
 -- start of: background tasks
 
-
 -- Accounts for the background tasks that were created by the user.
 CREATE TABLE IF NOT EXISTS nexus_scheduled_tasks 
   (id BIGSERIAL PRIMARY KEY
@@ -153,7 +162,7 @@ CREATE TABLE IF NOT EXISTS nexus_scheduled_tasks
 
 -- A bank account managed by Nexus.  Each row corresponds to an
 -- actual bank account at the bank and that is owned by the 'account_holder'
--- column.  FIXME: is account_holder a name or a user-name?
+-- column.
 CREATE TABLE IF NOT EXISTS nexus_bank_accounts
   (nexus_account_id BIGSERIAL PRIMARY KEY
   ,nexus_account_label TEXT NOT NULL UNIQUE
@@ -162,12 +171,11 @@ CREATE TABLE IF NOT EXISTS nexus_bank_accounts
   ,bank_code TEXT NOT NULL
   ,default_connection_id BIGINT DEFAULT(NULL)
     REFERENCES nexus_bank_connections(connection_id)
-    ON DELETE SET TO NULL -- FIXME: sql syntax?
+    ON DELETE SET NULL
   ,last_statement_creation_timestamp BIGINT NULL
   ,last_report_creation_timestamp BIGINT NULL
   ,last_notification_creation_timestamp BIGINT NULL
   ,highest_seen_bank_message_serial_id BIGINT NOT NULL
-  ,pain001counter BIGINT DEFAULT 1 NOT NULL -- keep?
   );
 
 -- start of: facades management
@@ -208,6 +216,7 @@ CREATE TABLE IF NOT EXISTS wire_gateway_facade_state
   );
 
 
+-- FIXME: will 'permissions' survive the upcoming Nexus simplification?
 CREATE TABLE IF NOT EXISTS nexus_permissions 
   (permission_id BIGSERIAL PRIMARY KEY
   ,resource_type resource_enum NOT NULL
@@ -224,17 +233,16 @@ CREATE TABLE IF NOT EXISTS nexus_permissions
 
 -- All the payments that were ingested by Nexus.  Each row
 -- points at the Nexus bank account that is related to the transaction.
--- FIXME: explain 'updated_by'.
 CREATE TABLE IF NOT EXISTS nexus_bank_transactions 
   (transaction_id BIGSERIAL PRIMARY KEY
   ,account_transaction_id TEXT NOT NULL
   ,nexus_account_account_id NOT NULL
     REFERENCES nexus_bank_accounts(nexus_account_id)
     ON DELETE RESTRICT ON UPDATE RESTRICT
-  ,credit_debit_indicator TEXT NOT NULL -- FIXME: enum
+  ,credit_debit_indicator direction_enum NOT NULL
   ,currency TEXT NOT NULL
   ,amount taler_amount NOT NULL
-  ,status VARCHAR(16) NOT NULL -- FIXME: enum
+  ,status transaction_state_enum NOT NULL
   ,transaction_json TEXT NOT NULL
   );
 
@@ -248,7 +256,7 @@ CREATE TABLE IF NOT EXISTS taler_incoming_payments
     ON DELETE CASCADE
     ON UPDATE RESTRICT
   ,reserve_public_key BYTEA CHECK(LENGTH(reserve_public_key)=32)
-  ,timestamp_ms BIGINT NOT NULL -- change to GNUnet-style timestamps (microseconds, not ms)
+  ,timestamp BIGINT NOT NULL
   ,incoming_payto_uri TEXT NOT NULL
   );
 
@@ -277,11 +285,11 @@ CREATE TABLE IF NOT EXISTS payment_initiations
   ,creditor_bic TEXT NULL
   ,creditor_name TEXT NOT NULL
   ,submitted BOOLEAN DEFAULT FALSE NOT NULL
-  ,invalid BOOLEAN -- document NULL case
+  ,invalid BOOLEAN -- does NULL mean _likely_ valid?
   ,message_id TEXT NOT NULL
   ,confirmation_transaction_id BIGINT NULL
     REFERENCES nexus_bank_transactions(transaction_id)
-    ON DELETE SET TO NULL -- fixme: sql syntax?
+    ON DELETE SET NULL
     ON UPDATE RESTRICT
   );
 
@@ -303,7 +311,7 @@ CREATE TABLE IF NOT EXISTS taler_requested_payments
   ,amount taler_amount NOT NULL -- currency from facade
   ,exchange_base_url TEXT NOT NULL
   ,wtid TEXT NOT NULL
-  ,credit_account TEXT NOT NULL -- add _payto_uri?
+  ,credit_account_payto_uri TEXT NOT NULL
   );
 
 
@@ -315,7 +323,7 @@ CREATE TABLE IF NOT EXISTS taler_invalid_incoming_payments
   ,transaction_id NOT NULL
     REFERENCES nexus_bank_transactions(transaction_id)
     ON DELETE RESTRICT ON UPDATE RESTRICT
-  ,timestamp_ms BIGINT NOT NULL -- FIXME: use GNUnet style timestamp
+  ,timestamp BIGINT NOT NULL
   ,refunded BOOLEAN DEFAULT false NOT NULL
   );
 
@@ -329,18 +337,12 @@ CREATE TABLE IF NOT EXISTS anastasis_incoming_payments
     REFERENCES nexus_bank_transactions(id)
     ON DELETE RESTRICT ON UPDATE RESTRICT
   ,subject TEXT NOT NULL
-  ,timestamp_ms BIGINT NOT NULL -- FIXME: use GNUnet style payments
+  ,timestamp BIGINT NOT NULL
   ,incoming_payto_uri TEXT NOT NULL
   );
 
 -- end of: Anastasis facade management
 
-
-
--- This table holds the business content that came from the
--- bank.  Storing messages here happens with problematic messages,
--- or when the storing is enabled.  By default, successful messages
--- are never stored.
 CREATE TABLE IF NOT EXISTS nexus_bank_messages
   (bank_message_id BIGSERIAL PRIMARY KEY
   ,bank_connection BIGINT NOT NULL
@@ -349,9 +351,14 @@ CREATE TABLE IF NOT EXISTS nexus_bank_messages
      ON UPDATE RESTRICT
   ,message BYTEA NOT NULL
   ,message_id TEXT NULL
-  ,fetch_level VARCHAR(16) NOT NULL -- report, statement or notification? --  FIXME: enum?
+  ,fetch_level fetch_level_enum NOT NULL
   ,errors BOOLEAN DEFAULT FALSE NOT NULL
   );
+COMMENT ON TABLE nexus_bank_messages
+  IS 'This table holds the business content that came from the
+bank.  Storing messages here happens with problematic messages,
+or when the storing is enabled.  By default, successful messages
+are never stored.'
 
 
 -- end of: core banking
