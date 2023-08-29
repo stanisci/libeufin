@@ -362,13 +362,13 @@ CREATE TABLE IF NOT EXISTS taler_withdrawal_operations
   ,reserve_pub BYTEA CHECK(length(reserve_pub)=32) NULL
   ,selected_exchange_payto TEXT
   ,wallet_bank_account BIGINT NOT NULL
-    REFERENCES bank_accounts(id)
+    REFERENCES bank_accounts(bank_account_id)
       ON DELETE RESTRICT
       ON UPDATE RESTRICT
   );
-COMMENT ON COLUMN taler_withdrawals.selection_done
+COMMENT ON COLUMN taler_withdrawal_operations.selection_done
   IS 'Signals whether the wallet specified the exchange and gave the reserve public key';
-COMMENT ON COLUMN taler_withdrawals.confirmation_done
+COMMENT ON COLUMN taler_withdrawal_operations.confirmation_done
   IS 'Signals whether the payment to the exchange took place';
 
 -- end of: Taler integration
