@@ -7,10 +7,11 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.bankaccount.addPaymentInitiation
 import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
-import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.nexus.ebics.EbicsUploadSpec
 import tech.libeufin.nexus.ebics.doEbicsUploadTransaction
 import tech.libeufin.nexus.ebics.getEbicsSubscriberDetails
+import tech.libeufin.nexus.getBankAccount
+import tech.libeufin.nexus.getBankConnection
 import tech.libeufin.nexus.getConnectionPlugin
 import tech.libeufin.nexus.getNexusUser
 import tech.libeufin.nexus.server.*
@@ -92,7 +93,7 @@ private fun uploadPain001Payment(
                 subject = subject,
                 endToEndId = "Zufall"
             ),
-            getBankAccount("foo")
+            getBankAccount("foo").bankAccountName
         )
     }
     val ebicsConn = getConnectionPlugin("ebics")

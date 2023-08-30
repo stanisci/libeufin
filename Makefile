@@ -54,6 +54,12 @@ install-db-versioning:
 	@sed "s|__STATIC_PATCHES_LOCATION__|$(prefix)/share/libeufin/sql|" < contrib/$(LOAD_SQL_SCRIPT_NAME) > build/$(LOAD_SQL_SCRIPT_NAME)
 	@install -D database-versioning/*.sql -t $(prefix)/share/libeufin/sql
 	@install -D build/$(LOAD_SQL_SCRIPT_NAME) -t $(prefix)/bin
+	$(eval SANDBOX_DBINIT_SCRIPT := libeufin-bank-dbinit)
+	@sed "s|__SANDBOX_STATIC_PATCHES_LOCATION__|$(prefix)/share/libeufin/sql/bank|" < contrib/$(SANDBOX_DBINIT_SCRIPT) > build/$(SANDBOX_DBINIT_SCRIPT)
+	@install -D database-versioning/new/libeufin-bank*.sql -t $(prefix)/share/libeufin/sql/bank
+	@install -D database-versioning/new/versioning.sql -t $(prefix)/share/libeufin/sql/bank
+	@install -D database-versioning/new/procedures.sql -t $(prefix)/share/libeufin/sql/bank
+	@install -D build/$(SANDBOX_DBINIT_SCRIPT) -t $(prefix)/bin
 
 .PHONY: assemble
 assemble:

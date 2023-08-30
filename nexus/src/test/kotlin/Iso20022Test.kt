@@ -12,12 +12,9 @@ import org.w3c.dom.Document
 import poFiCamt054_2019_incoming
 import poFiCamt054_2019_outgoing
 import prepNexusDb
-import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.EbicsDialects
 import tech.libeufin.nexus.server.FetchLevel
-import tech.libeufin.nexus.server.getBankConnection
-import tech.libeufin.nexus.server.nexusApp
 import tech.libeufin.util.DestructionError
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.destructXml

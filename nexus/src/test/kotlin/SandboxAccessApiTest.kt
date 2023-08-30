@@ -13,7 +13,6 @@ import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Ignore
 import org.junit.Test
-import tech.libeufin.nexus.bankaccount.getBankAccount
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.getDatabaseName
 import java.util.*

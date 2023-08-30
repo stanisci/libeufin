@@ -38,23 +38,6 @@ import java.time.ZonedDateTime
 
 private val keepBankMessages: String? = System.getenv("LIBEUFIN_NEXUS_KEEP_BANK_MESSAGES")
 
-/**
- * Gets a prepared payment starting from its 'payment information id'.
- * Note: although the terminology comes from CaMt, a 'payment information id'
- * is indeed any UID that identifies the payment.  For this reason, also
- * the x-libeufin-bank logic uses this helper.
- *
- * Returns the prepared payment, or null if that's not found.  Not throwing
- * any exception because the null case is common: not every transaction being
- * processed by Neuxs was prepared/initiated here; incoming transactions are
- * one example.
- */
-fun getPaymentInitiation(pmtInfId: String): PaymentInitiationEntity? =
-    transaction {
-        PaymentInitiationEntity.find(
-            PaymentInitiationsTable.paymentInformationId.eq(pmtInfId)
-        ).firstOrNull()
-    }
 fun requireBankAccount(call: ApplicationCall, parameterKey: String): NexusBankAccountEntity {
     val name = call.parameters[parameterKey]
     if (name == null)
@@ -283,18 +266,6 @@ fun ingestBankMessagesIntoAccount(
     )
 }
 
-/**
- * Retrieve payment initiation from database, raising exception if not found.
- */
-fun getPaymentInitiation(uuid: Long): PaymentInitiationEntity {
-    return transaction {
-        PaymentInitiationEntity.findById(uuid)
-    } ?: throw NexusError(
-        HttpStatusCode.NotFound,
-        "Payment '$uuid' not found"
-    )
-}
-
 data class LastMessagesTimes(
     val lastStatement: ZonedDateTime?,
     val lastReport: ZonedDateTime?,
@@ -323,55 +294,10 @@ fun getLastMessagesTimes(acct: NexusBankAccountEntity): LastMessagesTimes {
         }
     )
 }
-fun getBankAccount(label: String): NexusBankAccountEntity {
-    val maybeBankAccount = transaction {
-        NexusBankAccountEntity.findByName(label)
-    }
-    return maybeBankAccount ?:
-    throw NexusError(
-        HttpStatusCode.NotFound,
-        "Account $label not found"
-    )
-}
+
 fun addPaymentInitiation(paymentData: Pain001Data, debtorAccount: String): PaymentInitiationEntity {
     val bankAccount = getBankAccount(debtorAccount)
     return addPaymentInitiation(paymentData, bankAccount)
-}
-
-/**
- * Insert one row in the database, and leaves it marked as non-submitted.
- * @param debtorAccount the mnemonic id assigned by the bank to one bank
- * account of the subscriber that is creating the pain entity.  In this case,
- * it will be the account whose money will pay the wire transfer being defined
- * by this pain document.
- */
-fun addPaymentInitiation(
-    paymentData: Pain001Data,
-    debtorAccount: NexusBankAccountEntity
-): PaymentInitiationEntity {
-    return transaction {
-
-        val now = Instant.now().toEpochMilli()
-        val nowHex = now.toString(16)
-        val painCounter = debtorAccount.pain001Counter++
-        val painHex = painCounter.toString(16)
-        val acctHex = debtorAccount.id.value.toString(16)
-
-        PaymentInitiationEntity.new {
-            currency = paymentData.currency
-            bankAccount = debtorAccount
-            subject = paymentData.subject
-            sum = paymentData.sum
-            creditorName = paymentData.creditorName
-            creditorBic = paymentData.creditorBic
-            creditorIban = paymentData.creditorIban
-            preparationDate = now
-            endToEndId = paymentData.endToEndId ?: "leuf-e-$nowHex-$painHex-$acctHex"
-            messageId = "leuf-mp1-$nowHex-$painHex-$acctHex"
-            paymentInformationId = "leuf-p-$nowHex-$painHex-$acctHex"
-            instructionId = "leuf-i-$nowHex-$painHex-$acctHex"
-        }
-    }
 }
 
 suspend fun fetchBankAccountTransactions(

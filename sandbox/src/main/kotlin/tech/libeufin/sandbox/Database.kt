@@ -6,6 +6,7 @@ import tech.libeufin.util.internalServerError
 import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.util.*
 
 private const val DB_CTR_LIMIT = 1000000
 
@@ -56,6 +57,17 @@ data class BankAccountTransaction(
     val bankAccountId: Long,
 )
 
+data class TalerWithdrawalOperation(
+    val withdrawalId: UUID,
+    val amount: TalerAmount,
+    val selectionDone: Boolean = false,
+    val aborted: Boolean = false,
+    val confirmationDone: Boolean = false,
+    val reservePub: ByteArray?,
+    val selectedExchangePayto: String?,
+    val walletBankAccount: Long
+)
+
 class Database(private val dbConfig: String) {
     private var dbConn: PgConnection? = null
     private var dbCtr: Int = 0
@@ -73,6 +85,7 @@ class Database(private val dbConfig: String) {
         preparedStatements.clear()
         dbConn = DriverManager.getConnection(dbConfig).unwrap(PgConnection::class.java)
         dbCtr = 0
+        dbConn?.execSQLUpdate("SET search_path TO libeufin_bank;")
     }
 
     private fun prepare(sql: String): PreparedStatement {
@@ -88,22 +101,19 @@ class Database(private val dbConfig: String) {
     // CONFIG
     fun configGet(configKey: String): String? {
         reconnect()
-        val stmt = prepare("""
-            SELECT value FROM configuration WHERE key=?;
-        """.trimIndent())
+        val stmt = prepare("SELECT config_value FROM configuration WHERE config_key=?;")
         stmt.setString(1, configKey)
-        if (!stmt.execute()) return null
-        stmt.use {
-            return stmt.resultSet.getString("value")
+        val rs = stmt.executeQuery()
+        rs.use {
+            if(!it.next()) return null
+            return it.getString("config_value")
         }
     }
     fun configSet(configKey: String, configValue: String) {
         reconnect()
-        val stmt = prepare("""
-            UPDATE configuration SET value=? WHERE key=? 
-        """.trimIndent())
-        stmt.setString(1, configValue)
-        stmt.setString(2, configKey)
+        val stmt = prepare("CALL bank_set_config(TEXT(?), TEXT(?))")
+        stmt.setString(1, configKey)
+        stmt.setString(2, configValue)
         stmt.execute()
     }
 
@@ -111,8 +121,17 @@ class Database(private val dbConfig: String) {
     fun customerCreate(customer: Customer) {
         reconnect()
         val stmt = prepare("""
-            INSERT INTO customers VALUES (?, ?, ?, ?, ?, ?, ?) 
-        """.trimIndent()
+            INSERT INTO customers (
+              login
+              ,password_hash
+              ,name
+              ,email
+              ,phone
+              ,cashout_payto
+              ,cashout_currency
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?) 
+        """
         )
         stmt.setString(1, customer.login)
         stmt.setString(2, customer.passwordHash)
@@ -123,40 +142,61 @@ class Database(private val dbConfig: String) {
         stmt.setString(7, customer.cashoutCurrency)
         stmt.execute()
     }
-    fun customerGetFromLogin(login: String, cb: (ResultSet)->Unit) {
+    fun customerGetFromLogin(login: String): Customer? {
         reconnect()
         val stmt = prepare("""
-            SELECT * FROM customers WHERE login=?
-        """.trimIndent())
+            SELECT
+              password_hash,
+              name,
+              email,
+              phone,
+              cashout_payto,
+              cashout_currency
+            FROM customers
+            WHERE login=?
+        """)
         stmt.setString(1, login)
-        if (!stmt.execute()) return
-        stmt.use { // why .use{} and not directly access .resultSet?
-            cb(stmt.resultSet)
+        val rs = stmt.executeQuery()
+        rs.use {
+            if (!rs.next()) return null
+            return Customer(
+                login = login,
+                passwordHash = it.getString("password_hash"),
+                name = it.getString("name"),
+                phone = it.getString("phone"),
+                email = it.getString("email"),
+                cashoutCurrency = it.getString("cashout_currency"),
+                cashoutPayto = it.getString("cashout_payto")
+            )
         }
     }
     // Possibly more "customerGetFrom*()" to come.
 
     // BANK ACCOUNTS
-    fun bankAccountCreate(bankAccount: BankAccount) {
+
+    /*
+    // Returns false on conflicts.
+    fun bankAccountCreate(bankAccount: BankAccount): Boolean {
         reconnect()
         val stmt = prepare("""
-            INSERT INTO bank_accounts VALUES (?, ?, ?, ?, ?, ?, ?)
-        """.trimIndent())
+            INSERT INTO bank_accounts (col, col, ..) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """)
         stmt.setString(1, bankAccount.iban)
-        stmt.setString(1, bankAccount.bic)
-        stmt.setString(1, bankAccount.bankAccountLabel)
-        stmt.setLong(1, bankAccount.owningCustomerId)
-        stmt.setLong(1, bankAccount.lastNexusFetchRowId)
-        // Following might fail and need a "?::taler_amount" on the last parameter.
-        // See: https://stackoverflow.com/questions/10571821/inserting-into-custom-sql-types-with-prepared-statements-in-java
-        stmt.setObject(1, bankAccount.balance)
-        stmt.execute()
+        stmt.setString(2, bankAccount.bic)
+        stmt.setString(3, bankAccount.bankAccountLabel)
+        stmt.setLong(4, bankAccount.owningCustomerId)
+        stmt.setLong(5, bankAccount.lastNexusFetchRowId)
+        // using the default zero value for the balance.
+        val ret = stmt.execute()
+        // FIXME: investigate the failure cause: DBMS vs Unique constraint violation.
+        // FIXME: need test case to trigger such violation.
     }
-    fun bankAccountGetFromLabel(bankAccountLabel: String, cb: (ResultSet) -> Unit) {
+
+    fun bankAccountGetFromLabel(bankAccountLabel: String): BankAccount {
         reconnect()
         val stmt = prepare("""
             SELECT * FROM bank_accounts WHERE bank_account_label=?
-        """.trimIndent())
+        """)
         stmt.setString(1, bankAccountLabel)
         if (!stmt.execute()) return
         stmt.use { // why .use{} and not directly access .resultSet?
@@ -166,26 +206,34 @@ class Database(private val dbConfig: String) {
     // More bankAccountGetFrom*() to come, on a needed basis.
 
     // BANK ACCOUNT TRANSACTIONS
-    fun bankTransactionCreate(tx: BankAccountTransaction) {
+    enum class BankTransactionResult {
+        NO_CREDITOR,
+        NO_DEBTOR,
+        SUCCESS,
+        CONFLICT
+    }
+    fun bankTransactionCreate(
+        // tx: BankInternalTransaction
+        creditTx: BankAccountTransaction,
+        debitTx: BankAccountTransaction
+    ): BankTransactionResult {
         reconnect()
         val stmt = prepare("""
-            INSERT INTO bank_account_transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """.trimIndent())
-        stmt.setString(1, tx.creditorIban)
-        stmt.setString(2, tx.creditorBic)
-        stmt.setString(3, tx.creditorName)
-        stmt.setString(4, tx.debtorIban)
-        stmt.setString(5, tx.debtorBic)
-        stmt.setString(6, tx.debtorName)
+            SELECT out_nx_creditor, out_nx_debitor, out_balance_insufficient
+            FROM bank_wire_transfer(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """ // FIXME: adjust balances.
+        )
+        // FIXME: implement this operation with a stored procedure.
+        // Credit side
+        stmt.setString(1, tx.creditorAccountId)
+        stmt.setString(1, tx.debitorAccountId)
         stmt.setString(7, tx.subject)
         stmt.setObject(8, tx.amount)
         stmt.setLong(9, tx.transactionDate)
         stmt.setString(10, tx.accountServicerReference)
         stmt.setString(11, tx.paymentInformationId)
         stmt.setString(12, tx.endToEndId)
-        stmt.setBoolean(13, tx.isPending)
-        stmt.setObject(14, tx.direction)
-        stmt.setLong(15, tx.bankAccountId)
+
         stmt.execute()
     }
 
@@ -202,7 +250,7 @@ class Database(private val dbConfig: String) {
             bankAccountTransactionId < ?
             AND bank_account_id=?
             AND transaction_date BETWEEN ? AND ?
-        """.trimIndent())
+        """)
         stmt.setLong(1, upperBound)
         stmt.setLong(2, bankAccountId)
         stmt.setLong(3, fromMs)
@@ -212,7 +260,52 @@ class Database(private val dbConfig: String) {
             cb(stmt.resultSet)
         }
     }
-    // NOTE: to run BFH, EBICS and cash-out tables can be postponed.
 
+    // WITHDRAWALS
+    fun talerWithdrawalCreate(opUUID: UUID, walletBankAccount: Long) {
+        reconnect()
+        val stmt = prepare("""
+            INSERT INTO taler_withdrawals_operations (withdrawal_id, wallet_bank_account)
+            VALUES (?,?)
+        """) // Take all defaults from the SQL.
+        stmt.setObject(1, opUUID)
+        stmt.setObject(2, walletBankAccount)
+        stmt.execute()
+    }
+
+    // Values coming from the wallet.
+    fun talerWithdrawalSetDetails(
+        opUUID: UUID,
+        exchangePayto: String,
+        reservePub: ByteArray
+    ) {
+        reconnect()
+        val stmt = prepare("""
+            UPDATE taler_withdrawal_operations
+            SET selected_exchange_payto = ?, reserve_pub = ?, selection_done = true
+            WHERE withdrawal_id=?
+        """
+        )
+        stmt.setString(1, exchangePayto)
+        stmt.setBytes(2, reservePub)
+        stmt.setObject(3, opUUID)
+        stmt.execute()
+    }
+
+    fun talerWithdrawalConfirm(opUUID: UUID) {
+        reconnect()
+        val stmt = prepare("""
+            UPDATE taler_withdrawal_operations
+            SET confirmation_done = true
+            WHERE withdrawal_id=?
+        """
+        )
+        stmt.setObject(1, opUUID)
+        stmt.execute()
+    }
+
+
+    // NOTE: to run BFH, EBICS and cash-out tables can be postponed.
+*/
 
 }

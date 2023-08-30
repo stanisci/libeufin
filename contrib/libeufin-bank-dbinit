@@ -1,0 +1,107 @@
+#!/bin/bash
+
+set -eu
+
+# The only CLI argument is 'nexus' or 'sandbox',
+# indicating which service will get its database prepared.
+
+fail () {
+  echo $1
+  exit 1
+}
+
+usage_and_exit () {
+  echo Usage: libeufin-bank-dbinit OPTIONS
+  echo
+  echo By default, this command creates and/or patches the Sandbox tables.
+  echo Pass '-r' to drop the tables before creating them again.
+  echo
+  echo 'Supported options:'
+  echo '  -d DB_CONN  -- required.  Pass DB_CONN as the postgres connection string.  Passed verbatim to Psql'
+  echo '  -l LOC      -- required.  Pass LOC as the SQL files location.  Typically $prefix/share/libeufin/sql'
+  echo '  -h           -- print this help'
+  echo '  -r           -- drop all the tables before creating them again'
+  exit 0
+}
+
+run_sql_file () {
+  # -q doesn't hide all the output, hence the
+  # redirection to /dev/null.
+  psql -d $DB_CONNECTION \
+    -q \
+    -f $1 \
+    --set ON_ERROR_STOP=1 > /dev/null
+}
+
+get_patch_path () {
+  echo "$PATCHES_LOCATION/$1"
+}
+
+# The real check happens (by the caller)
+# by checking the returned text.
+check_patch_applied () {
+  psql -d $DB_CONNECTION \
+  -t \
+  -c "SELECT applied_by FROM _v.patches WHERE patch_name = '$1' LIMIT 1"
+}
+
+# Iterates over the .sql migration files and applies
+# the new ones.
+iterate_over_patches () {
+  cd $PATCHES_LOCATION
+  for patch_filename in $(ls -1 -v libeufin-bank-[0-9][0-9][0-9][0-9].sql); do
+    patch_name=$(echo $patch_filename | cut -f1 -d.) # drops the final .sql
+    echo Checking patch: "$patch_name"
+    maybe_applied=$(check_patch_applied "$patch_name")
+    if test -n "$maybe_applied"; then continue; fi
+    # patch not applied, apply it.
+    echo Patch $patch_name not applied, applying it.
+    run_sql_file $patch_filename
+  done
+  cd - > /dev/null # cd to previous location.
+}
+
+if test $# -eq 0; then
+  usage_and_exit
+fi
+
+while getopts ":d:l:hr" OPTION; do
+  case "$OPTION" in 
+    d)
+      DB_CONNECTION="$OPTARG" # only one required.
+      ;;
+    l)
+      PATCHES_LOCATION="$OPTARG"
+      ;;
+    r)
+      DROP="YES"
+      ;;
+    h)
+      usage_and_exit
+      ;;
+    ?)
+      fail 'Unrecognized command line option'
+    ;;
+  esac
+done
+
+# Checking required options.
+if test -z "${PATCHES_LOCATION:-}"; then
+  # This value is substituted by GNU make at installation time.
+  PATCHES_LOCATION=__SANDBOX_STATIC_PATCHES_LOCATION__
+fi
+if test -z "${DB_CONNECTION:-}"; then
+  fail "Required option '-d' was missing."
+fi
+
+run_sql_file $(get_patch_path "versioning.sql")
+if test "${DROP:-}" = "YES"; then
+  maybe_applied=$(check_patch_applied "libeufin-bank-0001")
+  if test -n "$maybe_applied"; then 
+    run_sql_file $(get_patch_path "libeufin-bank-drop.sql")
+  else
+    echo "Nothing to drop"
+  fi
+fi
+iterate_over_patches
+run_sql_file $(get_patch_path "procedures.sql")

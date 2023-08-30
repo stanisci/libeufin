@@ -47,7 +47,6 @@ import org.jetbrains.exposed.sql.statements.api.ExposedBlob
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.bankaccount.getLastMessagesTimes
-import tech.libeufin.nexus.bankaccount.getPaymentInitiation
 import tech.libeufin.nexus.iso20022.NexusPaymentInitiationData
 import tech.libeufin.nexus.iso20022.createPain001document
 import tech.libeufin.nexus.logger
