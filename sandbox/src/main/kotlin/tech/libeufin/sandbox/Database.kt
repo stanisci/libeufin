@@ -6,6 +6,7 @@ import tech.libeufin.util.internalServerError
 import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.sql.SQLException
 import java.util.*
 
 private const val DB_CTR_LIMIT = 1000000
@@ -21,8 +22,8 @@ data class Customer(
 )
 
 data class TalerAmount(
-    val value: Int, // maps to INT4
-    val frac: Long // maps to INT8
+    val value: Long,
+    val frac: Int
 )
 
 data class BankAccount(
@@ -32,7 +33,7 @@ data class BankAccount(
     val owningCustomerId: Long,
     val isPublic: Boolean = false,
     val lastNexusFetchRowId: Long,
-    val balance: TalerAmount
+    val balance: TalerAmount? = null
 )
 
 enum class TransactionDirection {
@@ -98,6 +99,23 @@ class Database(private val dbConfig: String) {
         return ps
     }
 
+    /**
+     * Helper that returns false if the row to be inserted
+     * hits a unique key constraint violation, true when it
+     * succeeds.  Any other error throws exception.
+     */
+    private fun myExecute(stmt: PreparedStatement): Boolean {
+        try {
+            stmt.execute()
+        } catch (e: SQLException) {
+            logger.error(e.message)
+            if (e.errorCode == 0) return false // unique key violation.
+            // rethrowing, not to hide other types of errors.
+            throw e
+        }
+        return true
+    }
+
     // CONFIG
     fun configGet(configKey: String): String? {
         reconnect()
@@ -118,7 +136,7 @@ class Database(private val dbConfig: String) {
     }
 
     // CUSTOMERS
-    fun customerCreate(customer: Customer) {
+    fun customerCreate(customer: Customer): Boolean {
         reconnect()
         val stmt = prepare("""
             INSERT INTO customers (
@@ -140,7 +158,8 @@ class Database(private val dbConfig: String) {
         stmt.setString(5, customer.phone)
         stmt.setString(6, customer.cashoutPayto)
         stmt.setString(7, customer.cashoutCurrency)
-        stmt.execute()
+
+        return myExecute(stmt)
     }
     fun customerGetFromLogin(login: String): Customer? {
         reconnect()
@@ -173,38 +192,65 @@ class Database(private val dbConfig: String) {
     // Possibly more "customerGetFrom*()" to come.
 
     // BANK ACCOUNTS
-
-    /*
     // Returns false on conflicts.
     fun bankAccountCreate(bankAccount: BankAccount): Boolean {
         reconnect()
         val stmt = prepare("""
-            INSERT INTO bank_accounts (col, col, ..) VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO bank_accounts
+              (iban
+              ,bic
+              ,bank_account_label
+              ,owning_customer_id
+              ,is_public
+              ,last_nexus_fetch_row_id
+              )
+            VALUES (?, ?, ?, ?, ?, ?)
         """)
         stmt.setString(1, bankAccount.iban)
         stmt.setString(2, bankAccount.bic)
         stmt.setString(3, bankAccount.bankAccountLabel)
         stmt.setLong(4, bankAccount.owningCustomerId)
-        stmt.setLong(5, bankAccount.lastNexusFetchRowId)
+        stmt.setBoolean(5, bankAccount.isPublic)
+        stmt.setLong(6, bankAccount.lastNexusFetchRowId)
         // using the default zero value for the balance.
-        val ret = stmt.execute()
-        // FIXME: investigate the failure cause: DBMS vs Unique constraint violation.
-        // FIXME: need test case to trigger such violation.
+        return myExecute(stmt)
     }
 
-    fun bankAccountGetFromLabel(bankAccountLabel: String): BankAccount {
+    fun bankAccountGetFromLabel(bankAccountLabel: String): BankAccount? {
         reconnect()
         val stmt = prepare("""
-            SELECT * FROM bank_accounts WHERE bank_account_label=?
+            SELECT
+             iban
+             ,bic
+             ,owning_customer_id
+             ,is_public
+             ,last_nexus_fetch_row_id
+             ,(balance).val AS balance_value
+             ,(balance).frac AS balance_frac
+            FROM bank_accounts
+            WHERE bank_account_label=?
         """)
         stmt.setString(1, bankAccountLabel)
-        if (!stmt.execute()) return
-        stmt.use { // why .use{} and not directly access .resultSet?
-            cb(stmt.resultSet)
+
+        val rs = stmt.executeQuery()
+        rs.use {
+            if (!it.next()) return null
+            return BankAccount(
+                iban = it.getString("iban"),
+                bic = it.getString("bic"),
+                balance = TalerAmount(
+                    it.getLong("balance_value"),
+                    it.getInt("balance_frac")
+                ),
+                bankAccountLabel = bankAccountLabel,
+                lastNexusFetchRowId = it.getLong("last_nexus_fetch_row_id"),
+                owningCustomerId = it.getLong("owning_customer_id")
+            )
         }
     }
     // More bankAccountGetFrom*() to come, on a needed basis.
 
+    /*
     // BANK ACCOUNT TRANSACTIONS
     enum class BankTransactionResult {
         NO_CREDITOR,
