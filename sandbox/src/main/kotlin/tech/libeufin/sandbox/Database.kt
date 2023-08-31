@@ -265,7 +265,7 @@ class Database(private val dbConfig: String) {
     ): BankTransactionResult {
         reconnect()
         val stmt = prepare("""
-            SELECT out_nx_creditor, out_nx_debitor, out_balance_insufficient
+            SELECT out_nx_creditor, out_nx_debtor, out_balance_insufficient
             FROM bank_wire_transfer(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """ // FIXME: adjust balances.
         )

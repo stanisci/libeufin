@@ -30,7 +30,7 @@ COMMENT ON TYPE taler_amount
 
 -- Indicates whether a transaction is incoming or outgoing.
 CREATE TYPE direction_enum
-  AS ENUM ('CRDT', 'DBIT');
+  AS ENUM ('credit', 'debit');
 
 CREATE TYPE tan_enum
   AS ENUM ('sms', 'email', 'file'); -- file is for testing purposes.
@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS bank_accounts
   ,is_public BOOLEAN DEFAULT FALSE NOT NULL -- privacy by default
   ,last_nexus_fetch_row_id BIGINT
   ,balance taler_amount DEFAULT (0, 0)
+  ,has_debt BOOLEAN NON NULL DEFAULT TO FALSE
   ,UNIQUE (owning_customer_id, bank_account_label)
   );
 
@@ -96,7 +97,8 @@ did).  The idea was to provide multiple bank accounts to one
 user.  Nonetheless, for simplicity the current version enforces
 one bank account for one user, and additionally the bank
 account label matches always the login.';
-
+COMMENT ON COLUMN bank_accounts.has_debt
+  IS 'When true, the balance is negative';
 COMMENT ON COLUMN bank_accounts.last_nexus_fetch_row_id
   IS 'Keeps the ID of the last incoming payment that was learnt
 from Nexus.  For that reason, this ID is stored verbatim as
@@ -131,7 +133,6 @@ CREATE TABLE IF NOT EXISTS bank_account_transactions
   ,account_servicer_reference TEXT NOT NULL
   ,payment_information_id TEXT
   ,end_to_end_id TEXT
-  ,is_pending BOOLEAN NOT NULL DEFAULT TRUE
   ,direction direction_enum NOT NULL
   ,bank_account_id BIGINT NOT NULL
     REFERENCES bank_accounts(bank_account_id)
