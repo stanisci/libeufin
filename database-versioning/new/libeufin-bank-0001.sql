@@ -86,7 +86,8 @@ CREATE TABLE IF NOT EXISTS bank_accounts
   ,is_public BOOLEAN DEFAULT FALSE NOT NULL -- privacy by default
   ,last_nexus_fetch_row_id BIGINT
   ,balance taler_amount DEFAULT (0, 0)
-  ,has_debt BOOLEAN NON NULL DEFAULT TO FALSE
+  ,max_debt taler_amount DEFAULT (0, 0)
+  ,has_debt BOOLEAN NOT NULL DEFAULT FALSE
   ,UNIQUE (owning_customer_id, bank_account_label)
   );
 

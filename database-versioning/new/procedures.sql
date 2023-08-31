@@ -85,7 +85,7 @@ END $$;
 COMMENT ON PROCEDURE bank_set_config(TEXT, TEXT)
   IS 'Update or insert configuration values';
 
-CREATE OR REPLACE PROCEDURE bank_wire_transfer(
+CREATE OR REPLACE FUNCTION bank_wire_transfer(
   IN in_creditor_account_id BIGINT,
   IN in_debtor_account_id BIGINT,
   IN in_subject TEXT,
@@ -101,140 +101,159 @@ CREATE OR REPLACE PROCEDURE bank_wire_transfer(
 LANGUAGE plpgsql
 AS $$
 DECLARE
-debtor_account RECORD;
-creditor_account RECORD;
+debtor_has_debt BOOLEAN;
+debtor_balance taler_amount;
+debtor_max_debt taler_amount;
+creditor_has_debt BOOLEAN;
+creditor_balance taler_amount;
+potential_balance taler_amount;
+potential_balance_check BOOLEAN;
+new_debtor_balance taler_amount;
+new_creditor_balance taler_amount;
+will_debtor_have_debt BOOLEAN;
+will_creditor_have_debt BOOLEAN;
+spending_capacity taler_amount;
+potential_balance_ok BOOLEAN;
 BEGIN
 -- check debtor exists.
 SELECT
-  INTO debtor_account
+  has_debt,
+  (balance).val, (balance).frac,
+  (max_debt).val, (max_debt).frac
+  INTO
+    debtor_has_debt,
+    debtor_balance.val, debtor_balance.frac,
+    debtor_max_debt.val, debtor_max_debt.frac
   FROM bank_accounts
-  WHERE bank_account_id=in_debtor_account_id
+  WHERE bank_account_id=in_debtor_account_id;
 IF NOT FOUND
-  out_nx_debtor=FALSE
-  out_nx_creditor=NULL
-  out_balance_insufficient=NULL
+THEN
+  out_nx_debtor=TRUE;
   RETURN;
 END IF;
+out_nx_debtor=FALSE;
 -- check creditor exists.  Future versions may skip this
 -- due to creditors being hosted at other banks.
 SELECT
-  INTO creditor_account
+  has_debt,
+  (balance).val, (balance).frac
+  INTO
+    creditor_has_debt,
+    creditor_balance.val, creditor_balance.frac
   FROM bank_accounts
-  WHERE bank_account_id=in_creditor_account_id
+  WHERE bank_account_id=in_creditor_account_id;
 IF NOT FOUND
-  out_nx_debtor=TRUE
-  out_nx_creditor=FALSE
-  out_balance_insufficient=NULL
+THEN
+  out_nx_creditor=TRUE;
   RETURN;
 END IF;
+out_nx_creditor=FALSE;
 -- DEBTOR SIDE
 -- check debtor has enough funds.
-IF (debtor_account.has_debt)
+IF (debtor_has_debt)
 THEN -- debt case: simply checking against the max debt allowed.
-SELECT
-  INTO potential_balance
-  FROM amount_add(debtor_account.balance
-                  in_amount);
-SELECT *
-INTO potential_balance_check
-FROM amount_left_minus_right(debtor_account.max_debt,
-                             potential_balance);
-IF (NOT potential_balance_check.ok)
-THEN
-out_nx_creditor=TRUE;
-out_nx_debtor=TRUE;
-out_balance_insufficient=TRUE;
-RETURN;
-new_debtor_balance=potential_balance_check.diff;
-will_debtor_have_debt=TRUE;
-END IF;
+  SELECT
+    (sum).val, (sum).frac
+    INTO
+      potential_balance.val, potential_balance.frac
+    FROM amount_add(debtor_balance,
+                    in_amount);
+  SELECT ok
+    INTO potential_balance_check
+    FROM amount_left_minus_right(debtor_max_debt,
+                                 potential_balance);
+  IF (NOT potential_balance_check)
+  THEN
+    out_balance_insufficient=TRUE;
+    RETURN;
+  END IF;
+  new_debtor_balance=potential_balance;
+  will_debtor_have_debt=TRUE;
 ELSE -- not a debt account
-SELECT -- checking first funds availability.
-  INTO spending_capacity
-  FROM amount_add(debtor_account.balance,
-                  debtor_account.max_debt);
-IF (NOT spending_capacity.ok)
-THEN
-out_nx_creditor=TRUE;
-out_nx_debtor=TRUE;
-out_balance_insufficient=TRUE;
-RETURN;
+  SELECT
+    ok,
+    (diff).val, (diff).frac
+    INTO
+      potential_balance_ok,
+      potential_balance.val,
+      potential_balance.frac
+    FROM amount_left_minus_right(debtor_balance,
+                                 in_amount);
+  IF (potential_balance_ok) -- debtor has enough funds in the (positive) balance.
+  THEN
+    new_debtor_balance=potential_balance;
+    will_debtor_have_debt=FALSE;
+  ELSE -- debtor will switch to debt: determine their new negative balance.
+    SELECT
+      (diff).val, (diff).frac
+      INTO
+        new_debtor_balance.val, new_debtor_balance.frac
+      FROM amount_left_minus_right(in_amount,
+                                   debtor_balance);
+    will_debtor_have_debt=TRUE;
+    SELECT ok
+      INTO potential_balance_check
+      FROM amount_left_minus_right(debtor_max_debt,
+                                   new_debtor_balance);
+    IF (NOT potential_balance_check)
+    THEN
+      out_balance_insufficient=TRUE;
+      RETURN;
+    END IF;
+  END IF;
 END IF;
--- debtor has enough funds, now determine the new
--- balance and whether they go to debit.
-SELECT
-  INTO potential_balance
-  FROM amount_left_minus_right(debtor_account.balance,
-                               in_amount);
-IF (potential_balance.ok) -- debtor has enough funds in the (positive) balance.
-THEN
-new_debtor_balance=potential_balance.diff;
-will_debtor_have_debt=FALSE;
-ELSE -- debtor will switch to debt: determine their new negative balance.
-SELECT diff
-  INTO new_debtor_balance
-  FROM amount_left_minus_right(in_amount,
-                               debtor_account.balance);
-will_debtor_have_debt=TRUE;
-END IF; -- closes has_debt.
+
 -- CREDITOR SIDE.
 -- Here we figure out whether the creditor would switch
 -- from debit to a credit situation, and adjust the balance
 -- accordingly.
-IF (NOT creditor_account.has_debt) -- easy case.
+IF (NOT creditor_has_debt) -- easy case.
 THEN
-SELECT
-  INTO new_creditor_balance
-  FROM amount_add(creditor_account.balance,
-                  in_amount);
-will_creditor_have_debit=FALSE;
+  SELECT
+    (sum).val, (sum).frac
+    INTO new_creditor_balance.val, new_creditor_balance.frac
+    FROM amount_add(creditor_balance,
+                    in_amount);
+  will_creditor_have_debt=FALSE;
 ELSE -- creditor had debit but MIGHT switch to credit.
-SELECT
-  INTO new_creditor_balance
-  FROM amount_left_minus_right(creditor_account.balance,
-                               in_amount);
-IF (new_debtor_balance.ok)
--- the debt is bigger than the amount, keep
--- this last calculated balance but stay debt.
-will_creditor_have_debit=TRUE;
+  SELECT
+    (diff).val, (diff).frac
+    INTO new_creditor_balance.val, new_creditor_balance.frac
+    FROM amount_left_minus_right(creditor_account.balance,
+                                 in_amount);
+  IF (new_debtor_balance.ok)
+  -- the debt is bigger than the amount, keep
+  -- this last calculated balance but stay debt.
+  THEN
+    will_creditor_have_debt=TRUE;
+  ELSE
+  -- the amount would bring the account back to credit,
+  -- determine by how much.
+    SELECT
+      (diff).val, (diff).frac
+      INTO new_creditor_balance.val, new_creditor_balance.frac
+      FROM amount_left_minus_right(in_amount,
+                                   creditor_balance);
+    will_creditor_have_debt=FALSE;
+  END IF;
 END IF;
--- the amount would bring the account back to credit,
--- determine by how much.
-SELECT
-  INTO new_creditor_balance
-  FROM amount_left_minus_right(in_amount,
-                               creditor_account.balance);
-will_creditor_have_debit=FALSE;
-
--- checks and balances set up, now update bank accounts.
-UPDATE bank_accounts
-SET
-  balance=new_debtor_balance
-  has_debt=will_debtor_have_debt
-WHERE bank_account_id=in_debtor_account_id;
-
-UPDATE bank_accounts
-SET
-  balance=new_creditor_balance
-  has_debt=will_creditor_have_debt
-WHERE bank_account_id=in_creditor_account_id;
-
+out_balance_insufficient=FALSE;
 -- now actually create the bank transaction.
 -- debtor side:
 INSERT INTO bank_account_transactions (
-  ,creditor_iban 
+  creditor_iban
   ,creditor_bic
   ,creditor_name
-  ,debtor_iban 
+  ,debtor_iban
   ,debtor_bic
   ,debtor_name
   ,subject
-  ,amount taler_amount
+  ,amount
   ,transaction_date
   ,account_servicer_reference
   ,payment_information_id
   ,end_to_end_id
-  ,direction direction_enum
+  ,direction
   ,bank_account_id
   )
 VALUES (
@@ -256,19 +275,19 @@ VALUES (
 
 -- debtor side:
 INSERT INTO bank_account_transactions (
-  ,creditor_iban
+  creditor_iban
   ,creditor_bic
   ,creditor_name
   ,debtor_iban
   ,debtor_bic
   ,debtor_name
   ,subject
-  ,amount taler_amount
+  ,amount
   ,transaction_date
   ,account_servicer_reference
   ,payment_information_id
   ,end_to_end_id
-  ,direction direction_enum
+  ,direction
   ,bank_account_id
   )
 VALUES (
@@ -287,8 +306,18 @@ VALUES (
   "credit",
   in_creditor_account_id
 );
-out_nx_debtor=TRUE;
-out_nx_creditor=TRUE;
-out_balance_insufficient=FALSE;
+-- checks and balances set up, now update bank accounts.
+UPDATE bank_accounts
+SET
+  balance=new_debtor_balance,
+  has_debt=will_debtor_have_debt
+WHERE bank_account_id=in_debtor_account_id;
+
+UPDATE bank_accounts
+SET
+  balance=new_creditor_balance,
+  has_debt=will_creditor_have_debt
+WHERE bank_account_id=in_creditor_account_id;
+RETURN;
 END $$;
 COMMIT;

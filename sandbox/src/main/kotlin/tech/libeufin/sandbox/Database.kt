@@ -40,6 +40,17 @@ enum class TransactionDirection {
     Credit, Debit
 }
 
+data class BankInternalTransaction(
+    val creditorAccountId: Long,
+    val debtorAccountId: Long,
+    val subject: String,
+    val amount: TalerAmount,
+    val transactionDate: Long,
+    val accountServicerReference: String,
+    val endToEndId: String,
+    val paymentInformationId: String
+)
+
 data class BankAccountTransaction(
     val creditorIban: String,
     val creditorBic: String,
@@ -216,6 +227,22 @@ class Database(private val dbConfig: String) {
         return myExecute(stmt)
     }
 
+    fun bankAccountSetMaxDebt(
+        bankAccountLabel: String,
+        maxDebt: TalerAmount
+    ): Boolean {
+        reconnect()
+        val stmt = prepare("""
+           UPDATE bank_accounts
+           SET max_debt=(?,?)::taler_amount
+           WHERE bank_account_label=?
+        """)
+        stmt.setLong(1, maxDebt.value)
+        stmt.setInt(2, maxDebt.frac)
+        stmt.setString(3, bankAccountLabel)
+        return myExecute(stmt)
+    }
+
     fun bankAccountGetFromLabel(bankAccountLabel: String): BankAccount? {
         reconnect()
         val stmt = prepare("""
@@ -250,7 +277,6 @@ class Database(private val dbConfig: String) {
     }
     // More bankAccountGetFrom*() to come, on a needed basis.
 
-    /*
     // BANK ACCOUNT TRANSACTIONS
     enum class BankTransactionResult {
         NO_CREDITOR,
@@ -259,30 +285,34 @@ class Database(private val dbConfig: String) {
         CONFLICT
     }
     fun bankTransactionCreate(
-        // tx: BankInternalTransaction
-        creditTx: BankAccountTransaction,
-        debitTx: BankAccountTransaction
+        tx: BankInternalTransaction
     ): BankTransactionResult {
         reconnect()
         val stmt = prepare("""
             SELECT out_nx_creditor, out_nx_debtor, out_balance_insufficient
-            FROM bank_wire_transfer(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-        """ // FIXME: adjust balances.
+            FROM bank_wire_transfer(?,?,TEXT(?),(?,?)::taler_amount,?,TEXT(?),TEXT(?),TEXT(?))
+        """
         )
-        // FIXME: implement this operation with a stored procedure.
-        // Credit side
-        stmt.setString(1, tx.creditorAccountId)
-        stmt.setString(1, tx.debitorAccountId)
-        stmt.setString(7, tx.subject)
-        stmt.setObject(8, tx.amount)
-        stmt.setLong(9, tx.transactionDate)
-        stmt.setString(10, tx.accountServicerReference)
-        stmt.setString(11, tx.paymentInformationId)
-        stmt.setString(12, tx.endToEndId)
-
-        stmt.execute()
+        stmt.setLong(1, tx.creditorAccountId)
+        stmt.setLong(2, tx.debtorAccountId)
+        stmt.setString(3, tx.subject)
+        stmt.setLong(4, tx.amount.value)
+        stmt.setInt(5, tx.amount.frac)
+        stmt.setLong(6, tx.transactionDate)
+        stmt.setString(7, tx.accountServicerReference)
+        stmt.setString(8, tx.paymentInformationId)
+        stmt.setString(9, tx.endToEndId)
+        val rs = stmt.executeQuery()
+        rs.use {
+            if (!rs.next()) throw internalServerError("Bank transaction didn't properly return")
+            if (rs.getBoolean("out_nx_debtor")) return BankTransactionResult.NO_DEBTOR
+            if (rs.getBoolean("out_nx_creditor")) return BankTransactionResult.NO_CREDITOR
+            if (rs.getBoolean("out_balance_insufficient")) return BankTransactionResult.CONFLICT
+            return BankTransactionResult.SUCCESS
+        }
     }
 
+    /*
     fun bankTransactionGetForHistoryPage(
         upperBound: Long,
         bankAccountId: Long,
