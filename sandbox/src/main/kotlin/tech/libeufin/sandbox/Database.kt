@@ -329,7 +329,7 @@ class Database(private val dbConfig: String) {
               ,debtor_bic
               ,debtor_name
               ,subject
-              ,(amount).val AS amount_val,
+              ,(amount).val AS amount_val
               ,(amount).frac AS amount_frac
               ,transaction_date
               ,account_servicer_reference
@@ -338,7 +338,7 @@ class Database(private val dbConfig: String) {
               ,direction
               ,bank_account_id
             FROM bank_account_transactions
-	        WHERE bank_account_transaction_id < ?
+	        WHERE bank_transaction_id < ?
               AND bank_account_id=?
               AND transaction_date BETWEEN ? AND ?
         """)

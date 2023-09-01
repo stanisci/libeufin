@@ -203,4 +203,16 @@ class DatabaseTest {
         // Finally confirming the operation (means customer wired funds to the exchange.)
         assert(db.talerWithdrawalGet(uuid)?.confirmationDone == true)
     }
+    // Only testing the interaction between Kotlin and the DBMS.  No actual logic tested.
+    @Test
+    fun historyTest() {
+        val db = initDb()
+        val res = db.bankTransactionGetForHistoryPage(
+            10L,
+            1L,
+            fromMs = 0,
+            toMs = Long.MAX_VALUE
+        )
+        assert(res.isEmpty())
+    }
 }
