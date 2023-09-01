@@ -1,7 +1,7 @@
 BEGIN;
 SET search_path TO libeufin_bank;
 
-CREATE OR REPLACE FUNCTION amount_normalize(
+CREATE OR REPLACE PROCEDURE amount_normalize(
     IN amount taler_amount
   ,OUT normalized taler_amount
 )
@@ -11,10 +11,10 @@ BEGIN
   normalized.val = amount.val + amount.frac / 100000000;
   normalized.frac = amount.frac % 100000000;
 END $$;
-COMMENT ON FUNCTION amount_normalize
+COMMENT ON PROCEDURE amount_normalize
   IS 'Returns the normalized amount by adding to the .val the value of (.frac / 100000000) and removing the modulus 100000000 from .frac.';
 
-CREATE OR REPLACE FUNCTION amount_add(
+CREATE OR REPLACE PROCEDURE amount_add(
    IN a taler_amount
   ,IN b taler_amount
   ,OUT sum taler_amount
@@ -28,8 +28,9 @@ BEGIN
   THEN
     RAISE EXCEPTION 'addition overflow';
   END IF;
+  RETURN;
 END $$;
-COMMENT ON FUNCTION amount_add
+COMMENT ON PROCEDURE amount_add
   IS 'Returns the normalized sum of two amounts. It raises an exception when the resulting .val is larger than 2^52';
 
 CREATE OR REPLACE FUNCTION amount_left_minus_right(
@@ -103,6 +104,12 @@ AS $$
 DECLARE
 debtor_has_debt BOOLEAN;
 debtor_balance taler_amount;
+debtor_iban TEXT;
+debtor_bic TEXT;
+debtor_name TEXT;
+creditor_iban TEXT;
+creditor_bic TEXT;
+creditor_name TEXT;
 debtor_max_debt taler_amount;
 creditor_has_debt BOOLEAN;
 creditor_balance taler_amount;
@@ -119,12 +126,15 @@ BEGIN
 SELECT
   has_debt,
   (balance).val, (balance).frac,
-  (max_debt).val, (max_debt).frac
+  (max_debt).val, (max_debt).frac,
+  iban, bic, customers.name
   INTO
     debtor_has_debt,
     debtor_balance.val, debtor_balance.frac,
-    debtor_max_debt.val, debtor_max_debt.frac
+    debtor_max_debt.val, debtor_max_debt.frac,
+    debtor_iban, debtor_bic, debtor_name 
   FROM bank_accounts
+  JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
   WHERE bank_account_id=in_debtor_account_id;
 IF NOT FOUND
 THEN
@@ -136,11 +146,14 @@ out_nx_debtor=FALSE;
 -- due to creditors being hosted at other banks.
 SELECT
   has_debt,
-  (balance).val, (balance).frac
+  (balance).val, (balance).frac,
+  iban, bic, customers.name
   INTO
     creditor_has_debt,
-    creditor_balance.val, creditor_balance.frac
+    creditor_balance.val, creditor_balance.frac,
+    creditor_iban, creditor_bic, creditor_name 
   FROM bank_accounts
+  JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
   WHERE bank_account_id=in_creditor_account_id;
 IF NOT FOUND
 THEN
@@ -152,12 +165,7 @@ out_nx_creditor=FALSE;
 -- check debtor has enough funds.
 IF (debtor_has_debt)
 THEN -- debt case: simply checking against the max debt allowed.
-  SELECT
-    (sum).val, (sum).frac
-    INTO
-      potential_balance.val, potential_balance.frac
-    FROM amount_add(debtor_balance,
-                    in_amount);
+  CALL amount_add(debtor_balance, in_amount, potential_balance);
   SELECT ok
     INTO potential_balance_check
     FROM amount_left_minus_right(debtor_max_debt,
@@ -209,17 +217,13 @@ END IF;
 -- accordingly.
 IF (NOT creditor_has_debt) -- easy case.
 THEN
-  SELECT
-    (sum).val, (sum).frac
-    INTO new_creditor_balance.val, new_creditor_balance.frac
-    FROM amount_add(creditor_balance,
-                    in_amount);
+  CALL amount_add(creditor_balance, in_amount, new_creditor_balance);
   will_creditor_have_debt=FALSE;
 ELSE -- creditor had debit but MIGHT switch to credit.
   SELECT
     (diff).val, (diff).frac
     INTO new_creditor_balance.val, new_creditor_balance.frac
-    FROM amount_left_minus_right(creditor_account.balance,
+    FROM amount_left_minus_right(creditor_balance,
                                  in_amount);
   IF (new_debtor_balance.ok)
   -- the debt is bigger than the amount, keep
@@ -257,19 +261,19 @@ INSERT INTO bank_account_transactions (
   ,bank_account_id
   )
 VALUES (
-  creditor_account.iban,
-  creditor_account.bic,
-  creditor_account.name,
-  debtor_account.iban,
-  debtor_account.bic,
-  debtor_account.name,
+  creditor_iban,
+  creditor_bic,
+  creditor_name,
+  debtor_iban,
+  debtor_bic,
+  debtor_name,
   in_subject,
   in_amount,
   in_transaction_date,
   in_account_servicer_reference,
   in_payment_information_id,
   in_end_to_end_id,
-  "debit",
+  'debit',
   in_debtor_account_id
 );
 
@@ -291,19 +295,19 @@ INSERT INTO bank_account_transactions (
   ,bank_account_id
   )
 VALUES (
-  creditor_account.iban,
-  creditor_account.bic,
-  creditor_account.name,
-  debtor_account.iban,
-  debtor_account.bic,
-  debtor_account.name,
+  creditor_iban,
+  creditor_bic,
+  creditor_name,
+  debtor_iban,
+  debtor_bic,
+  debtor_name,
   in_subject,
   in_amount,
   in_transaction_date,
   in_account_servicer_reference,
   in_payment_information_id,
   in_end_to_end_id, -- does this interest the receiving party?
-  "credit",
+  'credit',
   in_creditor_account_id
 );
 -- checks and balances set up, now update bank accounts.

@@ -41,15 +41,15 @@ class DatabaseTest {
         db.customerCreate(c)
         db.customerCreate(c1)
         db.bankAccountCreate(BankAccount(
-            iban = "XYZ",
-            bic = "not used",
+            iban = "FOO-IBAN-XYZ",
+            bic = "FOO-BIC",
             bankAccountLabel = "foo",
             lastNexusFetchRowId = 1L,
             owningCustomerId = 1L
         ))
         db.bankAccountCreate(BankAccount(
-            iban = "ABC",
-            bic = "not used",
+            iban = "BAR-IBAN-ABC",
+            bic = "BAR-BIC",
             bankAccountLabel = "bar",
             lastNexusFetchRowId = 1L,
             owningCustomerId = 2L
