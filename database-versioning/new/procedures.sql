@@ -116,10 +116,11 @@ creditor_balance taler_amount;
 potential_balance taler_amount;
 potential_balance_check BOOLEAN;
 new_debtor_balance taler_amount;
+new_debtor_balance_ok BOOLEAN;
 new_creditor_balance taler_amount;
 will_debtor_have_debt BOOLEAN;
 will_creditor_have_debt BOOLEAN;
-spending_capacity taler_amount;
+amount_at_least_debit BOOLEAN;
 potential_balance_ok BOOLEAN;
 BEGIN
 -- check debtor exists.
@@ -165,7 +166,9 @@ out_nx_creditor=FALSE;
 -- check debtor has enough funds.
 IF (debtor_has_debt)
 THEN -- debt case: simply checking against the max debt allowed.
-  CALL amount_add(debtor_balance, in_amount, potential_balance);
+  CALL amount_add(debtor_balance,
+	          in_amount,
+		  potential_balance);
   SELECT ok
     INTO potential_balance_check
     FROM amount_left_minus_right(debtor_max_debt,
@@ -221,24 +224,27 @@ THEN
   will_creditor_have_debt=FALSE;
 ELSE -- creditor had debit but MIGHT switch to credit.
   SELECT
-    (diff).val, (diff).frac
-    INTO new_creditor_balance.val, new_creditor_balance.frac
-    FROM amount_left_minus_right(creditor_balance,
-                                 in_amount);
-  IF (new_debtor_balance.ok)
-  -- the debt is bigger than the amount, keep
-  -- this last calculated balance but stay debt.
+    (diff).val, (diff).frac,
+    ok
+    INTO
+      new_creditor_balance.val, new_creditor_balance.frac,
+      amount_at_least_debit
+    FROM amount_left_minus_right(in_amount,
+                                 creditor_balance);
+  IF (amount_at_least_debit)
+  -- the amount is at least as big as the debit, can switch to credit then.
   THEN
-    will_creditor_have_debt=TRUE;
+    will_creditor_have_debt=FALSE;
+    -- compute new balance.
   ELSE
-  -- the amount would bring the account back to credit,
-  -- determine by how much.
+  -- the amount is not enough to bring the receiver
+  -- to a credit state, switch operators to calculate the new balance.
     SELECT
       (diff).val, (diff).frac
       INTO new_creditor_balance.val, new_creditor_balance.frac
-      FROM amount_left_minus_right(in_amount,
-                                   creditor_balance);
-    will_creditor_have_debt=FALSE;
+      FROM amount_left_minus_right(creditor_balance,
+	                           in_amount);
+    will_creditor_have_debt=TRUE;
   END IF;
 END IF;
 out_balance_insufficient=FALSE;

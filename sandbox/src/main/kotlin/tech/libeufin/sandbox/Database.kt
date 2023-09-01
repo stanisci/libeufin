@@ -33,7 +33,8 @@ data class BankAccount(
     val owningCustomerId: Long,
     val isPublic: Boolean = false,
     val lastNexusFetchRowId: Long,
-    val balance: TalerAmount? = null
+    val balance: TalerAmount? = null,
+    val hasDebt: Boolean
 )
 
 enum class TransactionDirection {
@@ -254,6 +255,7 @@ class Database(private val dbConfig: String) {
              ,last_nexus_fetch_row_id
              ,(balance).val AS balance_value
              ,(balance).frac AS balance_frac
+             ,has_debt
             FROM bank_accounts
             WHERE bank_account_label=?
         """)
@@ -271,7 +273,8 @@ class Database(private val dbConfig: String) {
                 ),
                 bankAccountLabel = bankAccountLabel,
                 lastNexusFetchRowId = it.getLong("last_nexus_fetch_row_id"),
-                owningCustomerId = it.getLong("owning_customer_id")
+                owningCustomerId = it.getLong("owning_customer_id"),
+                hasDebt = it.getBoolean("has_debt")
             )
         }
     }
