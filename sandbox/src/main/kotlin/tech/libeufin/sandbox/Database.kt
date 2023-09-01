@@ -65,7 +65,6 @@ data class BankAccountTransaction(
     val accountServicerReference: String,
     val paymentInformationId: String,
     val endToEndId: String,
-    val isPending: Boolean,
     val direction: TransactionDirection,
     val bankAccountId: Long,
 )
@@ -114,7 +113,7 @@ class Database(private val dbConfig: String) {
     /**
      * Helper that returns false if the row to be inserted
      * hits a unique key constraint violation, true when it
-     * succeeds.  Any other error throws exception.
+     * succeeds.  Any other error (re)throws exception.
      */
     private fun myExecute(stmt: PreparedStatement): Boolean {
         try {
@@ -315,31 +314,76 @@ class Database(private val dbConfig: String) {
         }
     }
 
-    /*
     fun bankTransactionGetForHistoryPage(
         upperBound: Long,
         bankAccountId: Long,
         fromMs: Long,
-        toMs: Long,
-        cb: (ResultSet) -> Unit
-    ) {
+        toMs: Long
+    ): List<BankAccountTransaction> {
         reconnect()
         val stmt = prepare("""
-            SELECT * FROM bank_account_transactions WHERE
-            bankAccountTransactionId < ?
-            AND bank_account_id=?
-            AND transaction_date BETWEEN ? AND ?
+            SELECT 
+              creditor_iban
+              ,creditor_bic
+              ,creditor_name
+              ,debtor_iban
+              ,debtor_bic
+              ,debtor_name
+              ,subject
+              ,(amount).val AS amount_val,
+              ,(amount).frac AS amount_frac
+              ,transaction_date
+              ,account_servicer_reference
+              ,payment_information_id
+              ,end_to_end_id
+              ,direction
+              ,bank_account_id
+            FROM bank_account_transactions
+	        WHERE bank_account_transaction_id < ?
+              AND bank_account_id=?
+              AND transaction_date BETWEEN ? AND ?
         """)
         stmt.setLong(1, upperBound)
         stmt.setLong(2, bankAccountId)
         stmt.setLong(3, fromMs)
         stmt.setLong(4, toMs)
-        if (!stmt.execute()) return
-        stmt.use {
-            cb(stmt.resultSet)
+        val rs = stmt.executeQuery()
+        rs.use {
+            val ret = mutableListOf<BankAccountTransaction>()
+            if (!it.next()) return ret
+            do {
+                ret.add(
+                    BankAccountTransaction(
+                    creditorIban = it.getString("creditor_iban"),
+                    creditorBic = it.getString("creditor_bic"),
+                    creditorName = it.getString("creditor_name"),
+                    debtorIban = it.getString("debtor_iban"),
+                    debtorBic = it.getString("debtor_bic"),
+                    debtorName = it.getString("debtor_name"),
+                    amount = TalerAmount(
+                        it.getLong("amount_val"),
+                        it.getInt("amount_frac")
+                    ),
+                    accountServicerReference = it.getString("account_servicer_reference"),
+                    endToEndId = it.getString("end_to_end_id"),
+                    direction = it.getString("direction").run {
+                        when(this) {
+                            "credit" -> TransactionDirection.Credit
+                            "debit" -> TransactionDirection.Debit
+                            else -> throw internalServerError("Wrong direction in transaction: $this")
+                        }
+                    },
+                    bankAccountId = it.getLong("bank_account_id"),
+                    paymentInformationId = it.getString("payment_information_id"),
+                    subject = it.getString("subject"),
+                    transactionDate = it.getLong("transaction_date")
+                ))
+            } while (it.next())
+            return ret
         }
     }
 
+    /*
     // WITHDRAWALS
     fun talerWithdrawalCreate(opUUID: UUID, walletBankAccount: Long) {
         reconnect()
