@@ -1,6 +1,7 @@
 import org.junit.Test
 import tech.libeufin.sandbox.*
 import tech.libeufin.util.execCommand
+import java.util.UUID
 
 class DatabaseTest {
     private val customerFoo = Customer(
@@ -175,5 +176,31 @@ class DatabaseTest {
         assert(!db.bankAccountCreate(bankAccount)) // Triggers conflict.
         assert(db.bankAccountGetFromLabel("foo")?.bankAccountLabel == "foo")
         assert(db.bankAccountGetFromLabel("foo")?.balance?.equals(TalerAmount(0, 0)) == true)
+    }
+
+    @Test
+    fun withdrawalTest() {
+        val db = initDb()
+        val uuid = UUID.randomUUID()
+        // insert new.
+        assert(db.talerWithdrawalCreate(
+            uuid,
+            1L,
+            TalerAmount(1, 0)
+        ))
+        // get it.
+        val op = db.talerWithdrawalGet(uuid)
+        assert(op?.walletBankAccount == 1L && op.withdrawalUuid == uuid)
+        // Setting the details.
+        assert(db.talerWithdrawalSetDetails(
+            uuid,
+            "exchange-payto",
+            ByteArray(32)
+        ))
+        val opSelected = db.talerWithdrawalGet(uuid)
+        assert(opSelected?.selectionDone == true && !opSelected.confirmationDone)
+        assert(db.talerWithdrawalConfirm(uuid))
+        // Finally confirming the operation (means customer wired funds to the exchange.)
+        assert(db.talerWithdrawalGet(uuid)?.confirmationDone == true)
     }
 }

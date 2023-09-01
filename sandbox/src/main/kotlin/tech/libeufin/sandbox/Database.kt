@@ -5,7 +5,6 @@ import tech.libeufin.util.internalServerError
 
 import java.sql.DriverManager
 import java.sql.PreparedStatement
-import java.sql.ResultSet
 import java.sql.SQLException
 import java.util.*
 
@@ -70,7 +69,7 @@ data class BankAccountTransaction(
 )
 
 data class TalerWithdrawalOperation(
-    val withdrawalId: UUID,
+    val withdrawalUuid: UUID,
     val amount: TalerAmount,
     val selectionDone: Boolean = false,
     val aborted: Boolean = false,
@@ -354,46 +353,88 @@ class Database(private val dbConfig: String) {
             do {
                 ret.add(
                     BankAccountTransaction(
-                    creditorIban = it.getString("creditor_iban"),
-                    creditorBic = it.getString("creditor_bic"),
-                    creditorName = it.getString("creditor_name"),
-                    debtorIban = it.getString("debtor_iban"),
-                    debtorBic = it.getString("debtor_bic"),
-                    debtorName = it.getString("debtor_name"),
-                    amount = TalerAmount(
-                        it.getLong("amount_val"),
-                        it.getInt("amount_frac")
-                    ),
-                    accountServicerReference = it.getString("account_servicer_reference"),
-                    endToEndId = it.getString("end_to_end_id"),
-                    direction = it.getString("direction").run {
-                        when(this) {
-                            "credit" -> TransactionDirection.Credit
-                            "debit" -> TransactionDirection.Debit
-                            else -> throw internalServerError("Wrong direction in transaction: $this")
-                        }
-                    },
-                    bankAccountId = it.getLong("bank_account_id"),
-                    paymentInformationId = it.getString("payment_information_id"),
-                    subject = it.getString("subject"),
-                    transactionDate = it.getLong("transaction_date")
+                        creditorIban = it.getString("creditor_iban"),
+                        creditorBic = it.getString("creditor_bic"),
+                        creditorName = it.getString("creditor_name"),
+                        debtorIban = it.getString("debtor_iban"),
+                        debtorBic = it.getString("debtor_bic"),
+                        debtorName = it.getString("debtor_name"),
+                        amount = TalerAmount(
+                            it.getLong("amount_val"),
+                            it.getInt("amount_frac")
+                        ),
+                        accountServicerReference = it.getString("account_servicer_reference"),
+                        endToEndId = it.getString("end_to_end_id"),
+                        direction = it.getString("direction").run {
+                            when(this) {
+                                "credit" -> TransactionDirection.Credit
+                                "debit" -> TransactionDirection.Debit
+                                else -> throw internalServerError("Wrong direction in transaction: $this")
+                            }
+                        },
+                        bankAccountId = it.getLong("bank_account_id"),
+                        paymentInformationId = it.getString("payment_information_id"),
+                        subject = it.getString("subject"),
+                        transactionDate = it.getLong("transaction_date")
                 ))
             } while (it.next())
             return ret
         }
     }
 
-    /*
     // WITHDRAWALS
-    fun talerWithdrawalCreate(opUUID: UUID, walletBankAccount: Long) {
+    fun talerWithdrawalCreate(
+        opUUID: UUID,
+        walletBankAccount: Long,
+        amount: TalerAmount
+    ): Boolean {
         reconnect()
         val stmt = prepare("""
-            INSERT INTO taler_withdrawals_operations (withdrawal_id, wallet_bank_account)
-            VALUES (?,?)
+            INSERT INTO
+              taler_withdrawal_operations
+              (withdrawal_uuid, wallet_bank_account, amount)
+            VALUES (?,?,(?,?)::taler_amount)
         """) // Take all defaults from the SQL.
         stmt.setObject(1, opUUID)
-        stmt.setObject(2, walletBankAccount)
-        stmt.execute()
+        stmt.setLong(2, walletBankAccount)
+        stmt.setLong(3, amount.value)
+        stmt.setInt(4, amount.frac)
+
+        return myExecute(stmt)
+    }
+    fun talerWithdrawalGet(opUUID: UUID): TalerWithdrawalOperation? {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+              (amount).val as amount_val
+              ,(amount).frac as amount_frac
+              ,withdrawal_uuid
+              ,selection_done     
+              ,aborted     
+              ,confirmation_done     
+              ,reserve_pub
+              ,selected_exchange_payto 
+	          ,wallet_bank_account
+            FROM taler_withdrawal_operations
+            WHERE withdrawal_uuid=?
+        """)
+        stmt.setObject(1, opUUID)
+        stmt.executeQuery().use {
+            if (!it.next()) return null
+            return TalerWithdrawalOperation(
+               amount = TalerAmount(
+                   it.getLong("amount_val"),
+                   it.getInt("amount_frac")
+               ),
+               selectionDone = it.getBoolean("selection_done"),
+               selectedExchangePayto = it.getString("selected_exchange_payto"),
+               walletBankAccount = it.getLong("wallet_bank_account"),
+               confirmationDone = it.getBoolean("confirmation_done"),
+               aborted = it.getBoolean("aborted"),
+               reservePub = it.getBytes("reserve_pub"),
+               withdrawalUuid = it.getObject("withdrawal_uuid") as UUID
+            )
+        }
     }
 
     // Values coming from the wallet.
@@ -401,34 +442,30 @@ class Database(private val dbConfig: String) {
         opUUID: UUID,
         exchangePayto: String,
         reservePub: ByteArray
-    ) {
+    ): Boolean {
         reconnect()
         val stmt = prepare("""
             UPDATE taler_withdrawal_operations
             SET selected_exchange_payto = ?, reserve_pub = ?, selection_done = true
-            WHERE withdrawal_id=?
+            WHERE withdrawal_uuid=?
         """
         )
         stmt.setString(1, exchangePayto)
         stmt.setBytes(2, reservePub)
         stmt.setObject(3, opUUID)
-        stmt.execute()
+        return myExecute(stmt)
     }
-
-    fun talerWithdrawalConfirm(opUUID: UUID) {
+    fun talerWithdrawalConfirm(opUUID: UUID): Boolean {
         reconnect()
         val stmt = prepare("""
             UPDATE taler_withdrawal_operations
             SET confirmation_done = true
-            WHERE withdrawal_id=?
+            WHERE withdrawal_uuid=?
         """
         )
         stmt.setObject(1, opUUID)
-        stmt.execute()
+        return myExecute(stmt)
     }
-
-
-    // NOTE: to run BFH, EBICS and cash-out tables can be postponed.
-*/
+    // NOTE: EBICS not needed for BFH and NB.
 
 }
