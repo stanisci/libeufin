@@ -330,4 +330,24 @@ SET
 WHERE bank_account_id=in_creditor_account_id;
 RETURN;
 END $$;
+
+CREATE OR REPLACE FUNCTION cashout_delete(
+  IN in_cashout_uuid UUID,
+  OUT out_already_confirmed BOOLEAN
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  PERFORM
+    FROM cashout_operations
+    WHERE cashout_uuid=in_cashout_uuid AND tan_confirmation_time IS NOT NULL;
+  IF FOUND
+  THEN
+    out_already_confirmed=TRUE;
+    RETURN;
+  END IF;
+  out_already_confirmed=FALSE;
+  DELETE FROM cashout_operations WHERE cashout_uuid=in_cashout_uuid;
+  RETURN;
+END $$;
 COMMIT;

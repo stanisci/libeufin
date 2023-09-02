@@ -50,11 +50,19 @@ class DatabaseTest {
             throwIfFails = true
         )
         val db = Database("jdbc:postgresql:///libeufincheck")
-        // Need accounts first.
-        db.customerCreate(customerFoo)
-        db.customerCreate(customerBar)
-        db.bankAccountCreate(bankAccountFoo)
-        db.bankAccountCreate(bankAccountBar)
+        return db
+    }
+
+    @Test
+    fun bankTransactionsTest() {
+        val db = initDb()
+        assert(db.customerCreate(customerFoo))
+        assert(db.customerCreate(customerBar))
+        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountBar))
+        var fooAccount = db.bankAccountGetFromLabel("foo")
+        assert(fooAccount?.hasDebt == false) // Foo has NO debit.
+        // Preparing the payment data.
         db.bankAccountSetMaxDebt(
             "foo",
             TalerAmount(100, 0)
@@ -63,15 +71,6 @@ class DatabaseTest {
             "bar",
             TalerAmount(50, 0)
         )
-        return db
-    }
-
-    @Test
-    fun bankTransactionsTest() {
-        val db = initDb()
-        var fooAccount = db.bankAccountGetFromLabel("foo")
-        assert(fooAccount?.hasDebt == false) // Foo has NO debit.
-        // Preparing the payment data.
         val fooPaysBar = BankInternalTransaction(
             creditorAccountId = 2,
             debtorAccountId = 1,
@@ -163,17 +162,9 @@ class DatabaseTest {
     fun bankAccountTest() {
         val db = initDb()
         assert(db.bankAccountGetFromLabel("foo") == null)
-        val bankAccount = BankAccount(
-            iban = "not used",
-            bic = "not used",
-            bankAccountLabel = "foo",
-            lastNexusFetchRowId = 1L,
-            owningCustomerId = 1L,
-            hasDebt = false
-        )
-        db.customerCreate(customerFoo) // Satisfies the REFERENCE
-        assert(db.bankAccountCreate(bankAccount))
-        assert(!db.bankAccountCreate(bankAccount)) // Triggers conflict.
+        assert(db.customerCreate(customerFoo))
+        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(!db.bankAccountCreate(bankAccountFoo)) // Triggers conflict.
         assert(db.bankAccountGetFromLabel("foo")?.bankAccountLabel == "foo")
         assert(db.bankAccountGetFromLabel("foo")?.balance?.equals(TalerAmount(0, 0)) == true)
     }
@@ -182,6 +173,8 @@ class DatabaseTest {
     fun withdrawalTest() {
         val db = initDb()
         val uuid = UUID.randomUUID()
+        assert(db.customerCreate(customerFoo))
+        assert(db.bankAccountCreate(bankAccountFoo))
         // insert new.
         assert(db.talerWithdrawalCreate(
             uuid,
@@ -234,6 +227,35 @@ class DatabaseTest {
             tanChannel = TanChannel.sms,
             tanCode = "secret",
         )
+        assert(db.customerCreate(customerFoo))
+        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.customerCreate(customerBar))
+        assert(db.bankAccountCreate(bankAccountBar))
         assert(db.cashoutCreate(op))
-    }
+        val fromDb = db.cashoutGetFromUuid(op.cashoutUuid)
+        assert(fromDb?.subject == op.subject && fromDb.tanConfirmationTime == null)
+        assert(db.cashoutDelete(op.cashoutUuid) == Database.CashoutDeleteResult.SUCCESS)
+        assert(db.cashoutCreate(op))
+        db.bankAccountSetMaxDebt(
+            "foo",
+            TalerAmount(100, 0)
+        )
+        assert(db.bankTransactionCreate(BankInternalTransaction(
+            creditorAccountId = 2,
+            debtorAccountId = 1,
+            subject = "backing the cash-out",
+            amount = TalerAmount(10, 0),
+            accountServicerReference = "acct-svcr-ref",
+            endToEndId = "end-to-end-id",
+            paymentInformationId = "pmtinfid",
+            transactionDate = 100000L
+        )) == Database.BankTransactionResult.SUCCESS)
+        // Confirming the cash-out
+        assert(db.cashoutConfirm(op.cashoutUuid, 1L, 1L))
+        // Checking the confirmation took place.
+        assert(db.cashoutGetFromUuid(op.cashoutUuid)?.tanConfirmationTime != null)
+        // Deleting the operation.
+        assert(db.cashoutDelete(op.cashoutUuid) == Database.CashoutDeleteResult.CONFLICT_ALREADY_CONFIRMED)
+        assert(db.cashoutGetFromUuid(op.cashoutUuid) != null) // previous didn't delete.
+     }
 }

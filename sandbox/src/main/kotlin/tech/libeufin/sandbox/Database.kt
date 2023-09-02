@@ -330,9 +330,18 @@ class Database(private val dbConfig: String) {
         val rs = stmt.executeQuery()
         rs.use {
             if (!rs.next()) throw internalServerError("Bank transaction didn't properly return")
-            if (rs.getBoolean("out_nx_debtor")) return BankTransactionResult.NO_DEBTOR
-            if (rs.getBoolean("out_nx_creditor")) return BankTransactionResult.NO_CREDITOR
-            if (rs.getBoolean("out_balance_insufficient")) return BankTransactionResult.CONFLICT
+            if (rs.getBoolean("out_nx_debtor")) {
+                logger.error("No debtor account found")
+                return BankTransactionResult.NO_DEBTOR
+            }
+            if (rs.getBoolean("out_nx_creditor")) {
+                logger.error("No creditor account found")
+                return BankTransactionResult.NO_CREDITOR
+            }
+            if (rs.getBoolean("out_balance_insufficient")) {
+                logger.error("Balance insufficient")
+                return BankTransactionResult.CONFLICT
+            }
             return BankTransactionResult.SUCCESS
         }
     }
@@ -509,7 +518,7 @@ class Database(private val dbConfig: String) {
               ,bank_account
               ,cashout_address
               ,cashout_currency
-	        )
+	    )
             VALUES (
 	      ?
 	      ,(?,?)::taler_amount
@@ -546,6 +555,112 @@ class Database(private val dbConfig: String) {
         stmt.setString(17, op.cashoutAddress)
         stmt.setString(18, op.cashoutCurrency)
         return myExecute(stmt)
+    }
+
+    fun cashoutConfirm(
+        opUuid: UUID,
+        tanConfirmationTimestamp: Long,
+        bankTransaction: Long // regional payment backing the operation
+    ): Boolean {
+        reconnect()
+        val stmt = prepare("""
+            UPDATE cashout_operations
+              SET tan_confirmation_time = ?, local_transaction = ?
+              WHERE cashout_uuid=?;
+        """)
+        stmt.setLong(1, tanConfirmationTimestamp)
+        stmt.setLong(2, bankTransaction)
+        stmt.setObject(3, opUuid)
+        return myExecute(stmt)
+    }
+    // used by /abort
+    enum class CashoutDeleteResult {
+        SUCCESS,
+        CONFLICT_ALREADY_CONFIRMED
+    }
+    fun cashoutDelete(opUuid: UUID): CashoutDeleteResult {
+        val stmt = prepare("""
+           SELECT out_already_confirmed
+             FROM cashout_delete(?)
+        """)
+        stmt.setObject(1, opUuid)
+        stmt.executeQuery().use {
+            if (!it.next()) {
+                throw internalServerError("Cashout deletion gave no result")
+            }
+            if (it.getBoolean("out_already_confirmed")) return CashoutDeleteResult.CONFLICT_ALREADY_CONFIRMED
+            return CashoutDeleteResult.SUCCESS
+        }
+    }
+    fun cashoutGetFromUuid(opUuid: UUID): Cashout? {
+        val stmt = prepare("""
+           SELECT
+             (amount_debit).val as amount_debit_val
+             ,(amount_debit).frac as amount_debit_frac
+             ,(amount_credit).val as amount_credit_val
+             ,(amount_credit).frac as amount_credit_frac
+             ,buy_at_ratio
+             ,(buy_in_fee).val as buy_in_fee_val
+             ,(buy_in_fee).frac as buy_in_fee_frac
+             ,sell_at_ratio
+             ,(sell_out_fee).val as sell_out_fee_val
+             ,(sell_out_fee).frac as sell_out_fee_frac
+             ,subject
+             ,creation_time
+             ,tan_channel
+             ,tan_code
+             ,bank_account
+             ,cashout_address
+             ,cashout_currency
+	     ,tan_confirmation_time
+	     ,local_transaction
+	      FROM cashout_operations
+	      WHERE cashout_uuid=?;
+        """)
+        stmt.setObject(1, opUuid)
+        stmt.executeQuery().use {
+            if (!it.next()) return null
+            return Cashout(
+                amountDebit = TalerAmount(
+                    value = it.getLong("amount_debit_val"),
+                    frac = it.getInt("amount_debit_frac")
+                ),
+                amountCredit = TalerAmount(
+                    value = it.getLong("amount_credit_val"),
+                    frac = it.getInt("amount_credit_frac")
+                ),
+                bankAccount = it.getLong("bank_account"),
+                buyAtRatio = it.getInt("buy_at_ratio"),
+                buyInFee = TalerAmount(
+                    value = it.getLong("buy_in_fee_val"),
+                    frac = it.getInt("buy_in_fee_frac")
+                ),
+                cashoutAddress = it.getString("cashout_address"),
+                cashoutCurrency = it.getString("cashout_currency"),
+                cashoutUuid = opUuid,
+                creationTime = it.getLong("creation_time"),
+                sellAtRatio = it.getInt("sell_at_ratio"),
+                sellOutFee = TalerAmount(
+                    value = it.getLong("sell_out_fee_val"),
+                    frac = it.getInt("sell_out_fee_frac")
+                ),
+                subject = it.getString("subject"),
+                tanChannel = it.getString("tan_channel").run {
+                    when(this) {
+                        "sms" -> TanChannel.sms
+                        "email" -> TanChannel.email
+                        "file" -> TanChannel.file
+                        else -> throw internalServerError("TAN channel $this unsupported")
+                    }
+                },
+                tanCode = it.getString("tan_code"),
+                localTransaction = it.getLong("local_transaction"),
+                tanConfirmationTime = it.getLong("tan_confirmation_time").run {
+                    if (this == 0L) return@run null
+                    return@run this
+                }
+            )
+        }
     }
 
     // NOTE: EBICS not needed for BFH and NB.
