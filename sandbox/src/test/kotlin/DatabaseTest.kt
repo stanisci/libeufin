@@ -215,4 +215,25 @@ class DatabaseTest {
         )
         assert(res.isEmpty())
     }
+    @Test
+    fun cashoutTest() {
+        val db = initDb()
+        val op = Cashout(
+            cashoutUuid = UUID.randomUUID(),
+            amountDebit = TalerAmount(1, 0),
+            amountCredit = TalerAmount(2, 0),
+            bankAccount = 1L,
+            buyAtRatio = 3,
+            buyInFee = TalerAmount(0, 22),
+            sellAtRatio = 2,
+            sellOutFee = TalerAmount(0, 44),
+            cashoutAddress = "IBAN",
+            cashoutCurrency = "KUDOS",
+            creationTime = 3L,
+            subject = "31st",
+            tanChannel = TanChannel.sms,
+            tanCode = "secret",
+        )
+        assert(db.cashoutCreate(op))
+    }
 }

@@ -37,7 +37,11 @@ data class BankAccount(
 )
 
 enum class TransactionDirection {
-    Credit, Debit
+    credit, debit
+}
+
+enum class TanChannel {
+    sms, email, file
 }
 
 data class BankInternalTransaction(
@@ -77,6 +81,25 @@ data class TalerWithdrawalOperation(
     val reservePub: ByteArray?,
     val selectedExchangePayto: String?,
     val walletBankAccount: Long
+)
+
+data class Cashout(
+    val cashoutUuid: UUID,
+    val localTransaction: Long? = null,
+    val amountDebit: TalerAmount,
+    val amountCredit: TalerAmount,
+    val buyAtRatio: Int,
+    val buyInFee: TalerAmount,
+    val sellAtRatio: Int,
+    val sellOutFee: TalerAmount,
+    val subject: String,
+    val creationTime: Long,
+    val tanConfirmationTime: Long? = null,
+    val tanChannel: TanChannel,
+    val tanCode: String,
+    val bankAccount: Long,
+    val cashoutAddress: String,
+    val cashoutCurrency: String
 )
 
 class Database(private val dbConfig: String) {
@@ -119,7 +142,8 @@ class Database(private val dbConfig: String) {
             stmt.execute()
         } catch (e: SQLException) {
             logger.error(e.message)
-            if (e.errorCode == 0) return false // unique key violation.
+            // NOTE: it seems that _every_ error gets the 0 code.
+            if (e.errorCode == 0) return false
             // rethrowing, not to hide other types of errors.
             throw e
         }
@@ -367,8 +391,8 @@ class Database(private val dbConfig: String) {
                         endToEndId = it.getString("end_to_end_id"),
                         direction = it.getString("direction").run {
                             when(this) {
-                                "credit" -> TransactionDirection.Credit
-                                "debit" -> TransactionDirection.Debit
+                                "credit" -> TransactionDirection.credit
+                                "debit" -> TransactionDirection.debit
                                 else -> throw internalServerError("Wrong direction in transaction: $this")
                             }
                         },
@@ -466,6 +490,64 @@ class Database(private val dbConfig: String) {
         stmt.setObject(1, opUUID)
         return myExecute(stmt)
     }
+
+    fun cashoutCreate(op: Cashout): Boolean {
+        reconnect()
+        val stmt = prepare("""
+            INSERT INTO cashout_operations (
+              cashout_uuid
+              ,amount_debit 
+              ,amount_credit 
+              ,buy_at_ratio
+              ,buy_in_fee 
+              ,sell_at_ratio
+              ,sell_out_fee
+              ,subject
+              ,creation_time
+              ,tan_channel
+              ,tan_code
+              ,bank_account
+              ,cashout_address
+              ,cashout_currency
+	        )
+            VALUES (
+	      ?
+	      ,(?,?)::taler_amount
+	      ,(?,?)::taler_amount
+	      ,?
+	      ,(?,?)::taler_amount
+	      ,?
+	      ,(?,?)::taler_amount
+	      ,?
+	      ,?
+	      ,?::tan_enum
+	      ,?
+	      ,?
+	      ,?
+	      ,?
+	    );
+        """)
+        stmt.setObject(1, op.cashoutUuid)
+        stmt.setLong(2, op.amountDebit.value)
+        stmt.setInt(3, op.amountDebit.frac)
+        stmt.setLong(4, op.amountCredit.value)
+        stmt.setInt(5, op.amountCredit.frac)
+        stmt.setInt(6, op.buyAtRatio)
+        stmt.setLong(7, op.buyInFee.value)
+        stmt.setInt(8, op.buyInFee.frac)
+        stmt.setInt(9, op.sellAtRatio)
+        stmt.setLong(10, op.sellOutFee.value)
+        stmt.setInt(11, op.sellOutFee.frac)
+        stmt.setString(12, op.subject)
+        stmt.setLong(13, op.creationTime)
+        stmt.setString(14, op.tanChannel.name)
+        stmt.setString(15, op.tanCode)
+        stmt.setLong(16, op.bankAccount)
+        stmt.setString(17, op.cashoutAddress)
+        stmt.setString(18, op.cashoutCurrency)
+        return myExecute(stmt)
+    }
+
     // NOTE: EBICS not needed for BFH and NB.
 
 }
