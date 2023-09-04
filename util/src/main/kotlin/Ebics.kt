@@ -110,7 +110,16 @@ private fun getNonce(size: Int): ByteArray {
 
 private fun getXmlDate(d: ZonedDateTime): XMLGregorianCalendar {
     return DatatypeFactory.newInstance()
-        .newXMLGregorianCalendar(d.year, d.monthValue, d.dayOfMonth, 0, 0, 0, 0, d.offset.totalSeconds / 60)
+        .newXMLGregorianCalendar(
+            d.year,
+            d.monthValue,
+            d.dayOfMonth,
+            0,
+            0,
+            0,
+            0,
+            d.offset.totalSeconds / 60
+        )
 }
 
 private fun makeOrderParams(orderParams: EbicsOrderParams): EbicsRequest.OrderParams {

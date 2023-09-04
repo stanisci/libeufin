@@ -767,6 +767,7 @@ val nexusApp: Application.() -> Unit = {
             val fetchSpec = if (call.request.hasBody()) {
                 call.receive<FetchSpecJson>()
             } else {
+                logger.warn("fetch-transactions wants statements (they aren't implemented at the bank)")
                 FetchSpecLatestJson(
                     FetchLevel.STATEMENT,
                     null

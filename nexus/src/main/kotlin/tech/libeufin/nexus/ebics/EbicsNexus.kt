@@ -695,12 +695,25 @@ class EbicsBankConnectionProtocol: BankConnectionProtocol {
                 val p = EbicsStandardOrderParams()
                 addForLevel(fetchSpec.level, p)
             }
+            /**
+             * This spec wants _all_ the records, therefore the
+             * largest time frame possible needs to be specified.
+             * Rarely employed in production, but useful for tests.
+             */
             is FetchSpecAllJson -> {
                 val start = ZonedDateTime.ofInstant(
                     Instant.EPOCH,
                     ZoneOffset.UTC
                 )
-                val end = ZonedDateTime.ofInstant(Instant.now(), ZoneOffset.systemDefault())
+                val end = ZonedDateTime.ofInstant(
+                    /**
+                     * XML date sets the time to 'start of the day'.  By
+                     * adding 24 hours, we make sure today's transactions
+                     * are included in the response.
+                     */
+                    Instant.now().plusSeconds(60 * 60 * 24),
+                    ZoneOffset.systemDefault()
+                )
                 val p = EbicsStandardOrderParams(
                     EbicsDateRange(start, end)
                 )

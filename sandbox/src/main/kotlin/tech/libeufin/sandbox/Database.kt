@@ -662,7 +662,4 @@ class Database(private val dbConfig: String) {
             )
         }
     }
-
-    // NOTE: EBICS not needed for BFH and NB.
-
 }

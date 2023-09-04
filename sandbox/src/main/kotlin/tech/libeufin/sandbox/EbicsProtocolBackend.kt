@@ -481,6 +481,7 @@ private fun constructCamtResponse(
     val history = mutableListOf<XLibeufinBankTransaction>()
     if (type == 52) {
         if (dateRange != null) {
+            logger.debug("Finding date-ranged transactions for account: ${bankAccount.label}, range: ${dateRange.first}, ${dateRange.second}")
             transaction {
                 BankAccountTransactionEntity.find {
                     BankAccountTransactionsTable.account eq bankAccount.id and
