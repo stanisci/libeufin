@@ -81,13 +81,13 @@ data class TalerIncomingBankTransaction(
     val row_id: Long,
     val date: GnunetTimestamp, // timestamp
     val amount: String,
-    val credit_account: String, // payto form,
     val debit_account: String,
     val reserve_pub: String
 )
 
 data class TalerIncomingHistory(
-    var incoming_transactions: MutableList<TalerIncomingBankTransaction> = mutableListOf()
+    var incoming_transactions: MutableList<TalerIncomingBankTransaction> = mutableListOf(),
+    val credit_account: String
 )
 
 data class TalerOutgoingBankTransaction(
@@ -483,12 +483,12 @@ private suspend fun historyIncoming(call: ApplicationCall) {
         throw EbicsProtocolError(HttpStatusCode.BadRequest, "'${param}' is not Int")
     }
     val start: Long = handleStartArgument(call.request.queryParameters["start"], delta)
-    val history = TalerIncomingHistory()
+    val facadeBankAccount = getFacadeBankAccount(facadeId)
     val startCmpOp = getComparisonOperator(delta, start, TalerIncomingPaymentsTable)
     val listenHandle: PostgresListenHandle? = if (isPostgres() && longPollTimeout != null) {
         val notificationChannelName = buildChannelName(
             NotificationsChannelDomains.LIBEUFIN_TALER_INCOMING,
-            getFacadeBankAccount(facadeId).iban
+            facadeBankAccount.iban
         )
         val handle = PostgresListenHandle(channelName = notificationChannelName)
         handle.postgresListen()
@@ -534,7 +534,14 @@ private suspend fun historyIncoming(call: ApplicationCall) {
      * proceeds to the response (== resultOrWait.first IS EFFECTIVE).
      */
     val maybeNewPayments = result
-    if (maybeNewPayments.isNotEmpty()) {
+    val resp = if (maybeNewPayments.isNotEmpty()) {
+        val history = TalerIncomingHistory(
+            credit_account = buildIbanPaytoUri(
+                facadeBankAccount.iban,
+                facadeBankAccount.bankCode,
+                facadeBankAccount.accountHolder,
+            )
+        )
         transaction {
             maybeNewPayments.subList(
                 0,
@@ -547,24 +554,20 @@ private suspend fun historyIncoming(call: ApplicationCall) {
                         row_id = it.id.value,
                         amount = "${it.payment.currency}:${it.payment.amount}",
                         reserve_pub = it.reservePublicKey,
-                        credit_account = buildIbanPaytoUri(
-                            it.payment.bankAccount.iban,
-                            it.payment.bankAccount.bankCode,
-                            it.payment.bankAccount.accountHolder,
-                        ),
                         debit_account = it.debtorPaytoUri
                     )
                 )
             }
         }
-    }
-    if (history.incoming_transactions.size == 0) {
+        history
+    } else null
+    if (resp == null) {
         call.respond(HttpStatusCode.NoContent)
         return
     }
     return call.respond(
         status = HttpStatusCode.OK,
-        TextContent(customConverter(history), ContentType.Application.Json)
+        TextContent(customConverter(resp), ContentType.Application.Json)
     )
 }
 

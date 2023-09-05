@@ -21,7 +21,6 @@ data class AnastasisIncomingBankTransaction(
     val row_id: Long,
     val date: GnunetTimestamp, // timestamp
     val amount: String,
-    val credit_account: String, // payto form,
     val debit_account: String,
     val subject: String
 )
@@ -76,6 +75,11 @@ fun anastasisFilter(payment: NexusBankTransactionEntity, txDtls: TransactionDeta
     }
 }
 
+data class AnastasisIncomingTransactions(
+    val credit_account: String,
+    val incoming_transactions: MutableList<AnastasisIncomingBankTransaction>
+)
+
 // Handle a /taler-wire-gateway/history/incoming request.
 private suspend fun historyIncoming(call: ApplicationCall) {
     val facadeId = expectNonNull(call.parameters["fcid"])
@@ -90,16 +94,29 @@ private suspend fun historyIncoming(call: ApplicationCall) {
     val delta: Int = try { param.toInt() } catch (e: Exception) {
         throw EbicsProtocolError(HttpStatusCode.BadRequest, "'${param}' is not Int")
     }
-    val start: Long = handleStartArgument(call.request.queryParameters["start"], delta)
+    val start: Long = handleStartArgument(
+        call.request.queryParameters["start"],
+        delta
+    )
     val history = object {
         val incoming_transactions: MutableList<AnastasisIncomingBankTransaction> = mutableListOf()
+
     }
     val startCmpOp = getComparisonOperator(delta, start, AnastasisIncomingPaymentsTable)
-    transaction {
+    val incomingTransactionsResp = transaction {
         val orderedPayments = AnastasisIncomingPaymentEntity.find {
             startCmpOp
         }.orderTaler(delta) // Taler and Anastasis have same ordering policy.  Fixme: find better function's name?
         if (orderedPayments.isNotEmpty()) {
+            val creditBankAccountObj = orderedPayments[0]
+            val ret = AnastasisIncomingTransactions(
+                credit_account = buildIbanPaytoUri(
+                    creditBankAccountObj.payment.bankAccount.iban,
+                    creditBankAccountObj.payment.bankAccount.bankCode,
+                    creditBankAccountObj.payment.bankAccount.accountHolder,
+                ),
+                incoming_transactions = mutableListOf()
+            )
             orderedPayments.subList(0, min(abs(delta), orderedPayments.size)).forEach {
                 history.incoming_transactions.add(
                     AnastasisIncomingBankTransaction(
@@ -108,18 +125,23 @@ private suspend fun historyIncoming(call: ApplicationCall) {
                         row_id = it.id.value,
                         amount = "${it.payment.currency}:${it.payment.amount}",
                         subject = it.subject,
-                        credit_account = buildIbanPaytoUri(
-                            it.payment.bankAccount.iban,
-                            it.payment.bankAccount.bankCode,
-                            it.payment.bankAccount.accountHolder,
-                        ),
                         debit_account = it.debtorPaytoUri
                     )
                 )
             }
-        }
+            return@transaction ret
+        } else null
     }
-    return call.respond(TextContent(customConverter(history), ContentType.Application.Json))
+    if (incomingTransactionsResp == null) {
+        call.respond(HttpStatusCode.NoContent)
+        return
+    }
+    return call.respond(
+        TextContent(
+            customConverter(incomingTransactionsResp),
+            ContentType.Application.Json
+        )
+    )
 }
 
 fun anastasisFacadeRoutes(route: Route) {
