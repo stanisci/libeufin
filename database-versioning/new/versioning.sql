@@ -146,10 +146,6 @@
 
 BEGIN;
 
--- Added by Christian Grothoff to support concurrency, see
--- https://stackoverflow.com/questions/29900845/create-schema-if-not-exists-raises-duplicate-key-error?rq=4
-LOCK TABLE pg_catalog.pg_namespace;
-
 
 -- This file adds versioning support to database it will be loaded to.
 -- It requires that PL/pgSQL is already loaded - will raise exception otherwise.
