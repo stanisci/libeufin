@@ -1,4 +1,4 @@
 rootProject.name = 'libeufin'
-include("sandbox")
+include("bank")
 include("nexus")
 include("util")
