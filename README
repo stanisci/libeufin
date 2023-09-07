@@ -19,7 +19,7 @@ $ make install
 
 If the previous step succeeded, libeufin-nexus and a command line
 client (libeufin-cli) should be found under $PFX/bin.  Additionally,
-the libeufin-sandbox command used for testing should be found under
+the libeufin-bank command used for testing should be found under
 $PFX/bin as well.
 
 Running tests
@@ -54,7 +54,7 @@ The TGZ file should be found at: build/distributions/libeufin-$VERSION-sources.t
 Exporting an archive with the three executables
 ===============================================
 
-Such archive contains the compiled Sandbox and Nexus,
+Such archive contains the compiled Bank and Nexus,
 and the CLI script.
 
 $ ./bootstrap # Needed to silence 'GNU make'
@@ -76,8 +76,8 @@ This repository does not ship any UI, rather it downloads
 one from the following project along the "make deb" target:
 https://git.taler.net/wallet-core.git/tree/packages/demobank-ui
 
-This way, the libeufin-sandbox Debian package provides one
-self-contained solution including Nginx, LibEuFin Sandbox,
+This way, the libeufin-bank Debian package provides one
+self-contained solution including Nginx, LibEuFin Bank,
 and the UI.
 
 Note: the UI an independent Web app that could even be served

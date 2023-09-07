@@ -63,11 +63,11 @@ task execArch(type: Zip) {
     dependsOn versionFile
     dependsOn replaceVersionCli
     evaluationDependsOn("nexus")
-    evaluationDependsOn("sandbox")
+    evaluationDependsOn("bank")
     def topDir = "${getRootProject().name}-${getRootProject().version}"
     archiveFileName = "${topDir}.zip"
     subprojects.each {
-        if (it.name == "nexus" || it.name == "sandbox") {
+        if (it.name == "nexus" || it.name == "bank") {
             Task t = it.tasks.getByName("installShadowDist")
             dependsOn(t) // invokes the task 't'
         }
@@ -76,8 +76,8 @@ task execArch(type: Zip) {
         include("**/libeufin-nexus")
         include("**/*.jar")
     }
-    from("sandbox/build/install/sandbox-shadow") {
-        include("**/libeufin-sandbox")
+    from("bank/build/install/bank-shadow") {
+        include("**/libeufin-bank")
         include("**/*.jar")
     }
     from("${project.buildDir}/generated/python") {
