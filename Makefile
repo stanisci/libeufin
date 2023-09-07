@@ -3,7 +3,7 @@ include build-system/config.mk
 escaped_pwd = $(shell pwd | sed 's/\//\\\//g')
 
 all: assemble
-install: install-nexus install-sandbox install-cli install-db-versioning
+install: install-nexus install-bank install-cli install-db-versioning
 git-archive-all = ./build-system/taler-build-scripts/archive-with-submodules/git_archive_all.py
 git_tag=$(shell git describe --tags)
 gradle_version=$(shell ./gradlew -q libeufinVersion)
@@ -35,9 +35,9 @@ get-spa:
 deb: exec-arch copy-spa
 	@dpkg-buildpackage -rfakeroot -b -uc -us
 
-.PHONY: install-sandbox
-install-sandbox:
-	@./gradlew -q -Pprefix=$(prefix) sandbox:installToPrefix; cd ..
+.PHONY: install-bank
+install-bank:
+	@./gradlew -q -Pprefix=$(prefix) bank:installToPrefix; cd ..
 
 .PHONY: install-nexus
 install-nexus:
@@ -54,12 +54,12 @@ install-db-versioning:
 	@sed "s|__STATIC_PATCHES_LOCATION__|$(prefix)/share/libeufin/sql|" < contrib/$(LOAD_SQL_SCRIPT_NAME) > build/$(LOAD_SQL_SCRIPT_NAME)
 	@install -D database-versioning/*.sql -t $(prefix)/share/libeufin/sql
 	@install -D build/$(LOAD_SQL_SCRIPT_NAME) -t $(prefix)/bin
-	$(eval SANDBOX_DBINIT_SCRIPT := libeufin-bank-dbinit)
-	@sed "s|__SANDBOX_STATIC_PATCHES_LOCATION__|$(prefix)/share/libeufin/sql/bank|" < contrib/$(SANDBOX_DBINIT_SCRIPT) > build/$(SANDBOX_DBINIT_SCRIPT)
+	$(eval BANK_DBINIT_SCRIPT := libeufin-bank-dbinit)
+	@sed "s|__BANK_STATIC_PATCHES_LOCATION__|$(prefix)/share/libeufin/sql/bank|" < contrib/$(BANK_DBINIT_SCRIPT) > build/$(BANK_DBINIT_SCRIPT)
 	@install -D database-versioning/new/libeufin-bank*.sql -t $(prefix)/share/libeufin/sql/bank
 	@install -D database-versioning/new/versioning.sql -t $(prefix)/share/libeufin/sql/bank
 	@install -D database-versioning/new/procedures.sql -t $(prefix)/share/libeufin/sql/bank
-	@install -D build/$(SANDBOX_DBINIT_SCRIPT) -t $(prefix)/bin
+	@install -D build/$(BANK_DBINIT_SCRIPT) -t $(prefix)/bin
 
 .PHONY: assemble
 assemble:

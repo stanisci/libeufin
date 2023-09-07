@@ -1,0 +1,14 @@
+[Unit]
+Description=LibEuFin Bank service.
+
+[Service]
+EnvironmentFile=/etc/libeufin/bank.env
+User=libeufin-bank
+ExecStart=/usr/bin/libeufin-bank serve --port=${LIBEUFIN_BANK_PORT}
+Restart=on-failure
+RestartSec=1s
+RuntimeMaxSec=3600s
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

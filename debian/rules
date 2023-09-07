@@ -26,13 +26,13 @@ override_dh_auto_configure:
 override_dh_auto_install:
 	unzip build/distributions/libeufin-$(FULLVER).zip
 	dh_install libeufin-$(FULLVER)/lib/nexus-$(FULLVER)-all.jar $(LIBEUFIN_HOME)/lib
-	dh_install libeufin-$(FULLVER)/lib/sandbox-$(FULLVER)-all.jar $(LIBEUFIN_HOME)/lib
+	dh_install libeufin-$(FULLVER)/lib/bank-$(FULLVER)-all.jar $(LIBEUFIN_HOME)/lib
 	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-cli debian/libeufin/$(LIBEUFIN_HOME)/bin/libeufin-cli
 	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-nexus debian/libeufin/$(LIBEUFIN_HOME)/bin/libeufin-nexus
-	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-sandbox debian/libeufin/$(LIBEUFIN_HOME)/bin/libeufin-sandbox
+	install -D -m755 libeufin-$(FULLVER)/bin/libeufin-bank debian/libeufin/$(LIBEUFIN_HOME)/bin/libeufin-bank
 	dh_link $(LIBEUFIN_HOME)/bin/libeufin-cli /usr/bin/libeufin-cli
 	dh_link $(LIBEUFIN_HOME)/bin/libeufin-nexus /usr/bin/libeufin-nexus
-	dh_link $(LIBEUFIN_HOME)/bin/libeufin-sandbox /usr/bin/libeufin-sandbox
+	dh_link $(LIBEUFIN_HOME)/bin/libeufin-bank /usr/bin/libeufin-bank
 
 # Override this step because it's very slow and likely
 # unnecessary for us.
@@ -54,15 +54,15 @@ override_dh_install:
 	mv debian/libeufin/usr/share/libeufin/bin/libeufin-nexus \
            debian/libeufin-nexus/usr/share/libeufin/bin/
 
-	mkdir -p debian/libeufin-sandbox/usr/share/libeufin/lib/
-	mv debian/libeufin-common/usr/share/libeufin/lib/sandbox-*.jar \
-           debian/libeufin-sandbox/usr/share/libeufin/lib/
-	mkdir -p debian/libeufin-sandbox/usr/bin/
-	mv debian/libeufin-common/usr/bin/libeufin-sandbox \
-           debian/libeufin-sandbox/usr/bin/
-	mkdir -p debian/libeufin-sandbox/usr/share/libeufin/bin/
-	mv debian/libeufin/usr/share/libeufin/bin/libeufin-sandbox \
-           debian/libeufin-sandbox/usr/share/libeufin/bin/
+	mkdir -p debian/libeufin-bank/usr/share/libeufin/lib/
+	mv debian/libeufin-common/usr/share/libeufin/lib/bank-*.jar \
+           debian/libeufin-bank/usr/share/libeufin/lib/
+	mkdir -p debian/libeufin-bank/usr/bin/
+	mv debian/libeufin-common/usr/bin/libeufin-bank \
+           debian/libeufin-bank/usr/bin/
+	mkdir -p debian/libeufin-bank/usr/share/libeufin/bin/
+	mv debian/libeufin/usr/share/libeufin/bin/libeufin-bank \
+           debian/libeufin-bank/usr/share/libeufin/bin/
 
 	mkdir -p debian/libeufin-common/usr/share/libeufin/bin/
 	mv debian/libeufin/usr/share/libeufin/bin/libeufin-cli \
@@ -74,7 +74,7 @@ override_dh_installsystemd:
 	# Need to specify units manually, since we have multiple
 	# and dh_installsystemd by default only looks for "<package>.service".
 	dh_installsystemd -plibeufin-nexus --name=libeufin-nexus --no-start --no-enable
-	dh_installsystemd -plibeufin-sandbox --name=libeufin-sandbox --no-start --no-enable
+	dh_installsystemd -plibeufin-bank --name=libeufin-bank --no-start --no-enable
 	# final invocation to generate daemon reload
 	dh_installsystemd
 
