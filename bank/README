@@ -1,0 +1,25 @@
+Description
+===========
+
+The Libeufin bank implements a simple core banking system with
+account and REST APIs, including REST APIs for a Web interface
+and REST APIs to interact with GNU Taler components.
+
+It also will provide a server side implementation of multiple
+banking protocols currently used in the European Union.  Notably, the
+EBICS, FinTS, and the major protocols that banks will employ to respect
+the PSD2 regulation: https://ec.europa.eu/info/law/payment-services-psd-2-directive-eu-2015-2366_en
+
+
+Running the Bank
+===================
+
+Run the Bank with the following command
+
+$ cd <this repository>
+$ ./gradlew bank:run --console=plain --args=serve [--db-name=<my-db>]
+
+Documentation
+=============
+
+See https://docs.taler.net/ for the documentation.

@@ -24,8 +24,8 @@ compileTestKotlin {
 
 task installToPrefix(type: Copy) {
     dependsOn(installShadowDist)
-    from("build/install/sandbox-shadow") {
-        include("**/libeufin-sandbox")
+    from("build/install/bank-shadow") {
+        include("**/libeufin-bank")
         include("**/*.jar")
     }
     /**
@@ -83,13 +83,13 @@ dependencies {
 }
 
 application {
-    mainClassName = "tech.libeufin.sandbox.MainKt"
-    applicationName = "libeufin-sandbox"
+    mainClassName = "tech.libeufin.bank.MainKt"
+    applicationName = "libeufin-bank"
     applicationDefaultJvmArgs = ['-Djava.net.preferIPv6Addresses=true']
 }
 
 jar {
     manifest {
-        attributes "Main-Class": "tech.libeufin.sandbox.MainKt"
+        attributes "Main-Class": "tech.libeufin.bank.MainKt"
     }
 }
