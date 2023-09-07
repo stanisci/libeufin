@@ -17,7 +17,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.sandbox
+package tech.libeufin.bank
 
 import io.ktor.http.*
 import org.jetbrains.exposed.dao.Entity

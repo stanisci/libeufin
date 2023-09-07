@@ -18,7 +18,7 @@
  */
 
 
-package tech.libeufin.sandbox
+package tech.libeufin.bank
 
 import io.ktor.server.application.*
 import io.ktor.http.ContentType

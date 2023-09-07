@@ -1,4 +1,4 @@
-package tech.libeufin.sandbox
+package tech.libeufin.bank
 
 import io.ktor.http.*
 import io.ktor.http.content.*

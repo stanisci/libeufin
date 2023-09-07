@@ -1,4 +1,4 @@
-package tech.libeufin.sandbox
+package tech.libeufin.bank
 
 import org.postgresql.jdbc.PgConnection
 import tech.libeufin.util.internalServerError

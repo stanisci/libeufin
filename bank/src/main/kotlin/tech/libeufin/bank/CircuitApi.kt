@@ -1,4 +1,4 @@
-package tech.libeufin.sandbox
+package tech.libeufin.bank
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.ktor.server.application.*

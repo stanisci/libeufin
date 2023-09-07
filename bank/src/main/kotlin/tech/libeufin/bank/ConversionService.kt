@@ -1,4 +1,4 @@
-package tech.libeufin.sandbox
+package tech.libeufin.bank
 
 import CamtBankAccountEntry
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper

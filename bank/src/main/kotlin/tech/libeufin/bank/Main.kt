@@ -17,7 +17,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.sandbox
+package tech.libeufin.bank
 
 import UtilError
 import com.fasterxml.jackson.core.util.DefaultIndenter
@@ -62,7 +62,7 @@ import java.security.interfaces.RSAPublicKey
 import javax.xml.bind.JAXBContext
 import kotlin.system.exitProcess
 
-val logger: Logger = LoggerFactory.getLogger("tech.libeufin.sandbox")
+val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank")
 const val PROTOCOL_VERSION_UNIFIED = "0:0:0" // Every protocol is still using the same version.
 const val SANDBOX_DB_ENV_VAR_NAME = "LIBEUFIN_SANDBOX_DB_CONNECTION"
 private val adminPassword: String? = System.getenv("LIBEUFIN_SANDBOX_ADMIN_PASSWORD")
