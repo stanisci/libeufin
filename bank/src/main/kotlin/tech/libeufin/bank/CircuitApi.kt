@@ -8,7 +8,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.sandbox.CashoutOperationsTable.uuid
+import tech.libeufin.bank.CashoutOperationsTable.uuid
 import tech.libeufin.util.*
 import java.io.File
 import java.io.InputStreamReader

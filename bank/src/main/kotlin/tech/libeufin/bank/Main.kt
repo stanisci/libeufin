@@ -572,7 +572,7 @@ private suspend fun abortWithdrawal(call: ApplicationCall) {
 val sandboxApp: Application.() -> Unit = {
     install(CallLogging) {
         this.level = Level.DEBUG
-        this.logger = tech.libeufin.sandbox.logger
+        this.logger = tech.libeufin.bank.logger
         this.format { call ->
             "${call.response.status()}, ${call.request.httpMethod.value} ${call.request.path()}"
         }
