@@ -1,3 +1,6 @@
+-- NOTE: REFACTORING IN PROGRESS IN THIS FILE.  THIS
+-- FILE IS NOT EMPLOYED YET.
+
 --
 -- This file is part of TALER
 -- Copyright (C) 2023 Taler Systems SA

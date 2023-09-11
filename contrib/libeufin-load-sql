@@ -1,9 +1,10 @@
 #!/bin/bash
 
-set -eu
+# NOTE: THIS FILE CONSIDERS _ONLY_ THE OBSOLETE NEXUS
+# SQL FILES.  THIS FILE WILL BE DISCARDED AS SOON AS NEXUS
+# WILL GET ITS SQL REFACTORED.
 
-# The only CLI argument is 'nexus' or 'sandbox',
-# indicating which service will get its database prepared.
+set -eu
 
 fail () {
   echo $1
@@ -108,11 +109,9 @@ run_sql_file $(get_patch_path "versioning.sql")
 if test -z "${SERVICE:-}"; then # impact both services.
   # Maybe drop.
   if test "${DROP:-}" = "YES"; then
-    run_sql_file $(get_patch_path "sandbox-drop.sql")
     run_sql_file $(get_patch_path "nexus-drop.sql")
     exit 0
   fi
-  iterate_over_patches sandbox
   iterate_over_patches nexus
   exit 0
 fi
