@@ -1,6 +1,9 @@
 import org.junit.Test
-import tech.libeufin.sandbox.*
+import tech.libeufin.bank.*
 import tech.libeufin.util.execCommand
+import tech.libeufin.util.getNow
+import tech.libeufin.util.toMicro
+import java.util.Random
 import java.util.UUID
 
 class DatabaseTest {
@@ -23,20 +26,18 @@ class DatabaseTest {
         cashoutCurrency = "KUDOS"
     )
     private val bankAccountFoo = BankAccount(
-        iban = "FOO-IBAN-XYZ",
-        bic = "FOO-BIC",
-        bankAccountLabel = "foo",
+        internalPaytoUri = "FOO-IBAN-XYZ",
         lastNexusFetchRowId = 1L,
         owningCustomerId = 1L,
-        hasDebt = false
+        hasDebt = false,
+        maxDebt = TalerAmount(10, 1)
     )
     private val bankAccountBar = BankAccount(
-        iban = "BAR-IBAN-ABC",
-        bic = "BAR-BIC",
-        bankAccountLabel = "bar",
+        internalPaytoUri = "BAR-IBAN-ABC",
         lastNexusFetchRowId = 1L,
         owningCustomerId = 2L,
-        hasDebt = false
+        hasDebt = false,
+        maxDebt = TalerAmount(10, 1)
     )
 
     fun initDb(): Database {
@@ -54,21 +55,40 @@ class DatabaseTest {
     }
 
     @Test
+    fun bearerTokenTest() {
+        val db = initDb()
+        val tokenBytes = ByteArray(32)
+        Random().nextBytes(tokenBytes)
+        val token = BearerToken(
+            bankCustomer = 1L,
+            content = tokenBytes,
+            creationTime = getNow().toMicro(), // make .toMicro()? implicit?
+            expirationTime = getNow().plusDays(1).toMicro(),
+            scope = TokenScope.readonly
+        )
+        assert(db.bearerTokenGet(token.content) == null)
+        db.customerCreate(customerBar) // Tokens need owners.
+        assert(db.bearerTokenCreate(token))
+        assert(db.bearerTokenGet(tokenBytes) != null)
+    }
+    @Test
     fun bankTransactionsTest() {
         val db = initDb()
-        assert(db.customerCreate(customerFoo))
-        assert(db.customerCreate(customerBar))
+        val fooId = db.customerCreate(customerFoo)
+        assert(fooId != null)
+        val barId = db.customerCreate(customerBar)
+        assert(barId != null)
         assert(db.bankAccountCreate(bankAccountFoo))
         assert(db.bankAccountCreate(bankAccountBar))
-        var fooAccount = db.bankAccountGetFromLabel("foo")
+        var fooAccount = db.bankAccountGetFromOwnerId(fooId!!)
         assert(fooAccount?.hasDebt == false) // Foo has NO debit.
         // Preparing the payment data.
         db.bankAccountSetMaxDebt(
-            "foo",
+            fooId,
             TalerAmount(100, 0)
         )
         db.bankAccountSetMaxDebt(
-            "bar",
+            barId!!,
             TalerAmount(50, 0)
         )
         val fooPaysBar = BankInternalTransaction(
@@ -83,13 +103,13 @@ class DatabaseTest {
         )
         val firstSpending = db.bankTransactionCreate(fooPaysBar) // Foo pays Bar and goes debit.
         assert(firstSpending == Database.BankTransactionResult.SUCCESS)
-        fooAccount = db.bankAccountGetFromLabel("foo")
+        fooAccount = db.bankAccountGetFromOwnerId(fooId)
         // Foo: credit -> debit
         assert(fooAccount?.hasDebt == true) // Asserting Foo's debit.
         // Now checking that more spending doesn't get Foo out of debit.
         val secondSpending = db.bankTransactionCreate(fooPaysBar)
         assert(secondSpending == Database.BankTransactionResult.SUCCESS)
-        fooAccount = db.bankAccountGetFromLabel("foo")
+        fooAccount = db.bankAccountGetFromOwnerId(fooId)
         // Checking that Foo's debit is two times the paid amount
         // Foo: debit -> debit
         assert(fooAccount?.balance?.value == 20L
@@ -97,7 +117,7 @@ class DatabaseTest {
                 && fooAccount.hasDebt
         )
         // Asserting Bar has a positive balance and what Foo paid so far.
-        var barAccount = db.bankAccountGetFromLabel("bar")
+        var barAccount = db.bankAccountGetFromOwnerId(barId)
         val barBalance: TalerAmount? = barAccount?.balance
         assert(
             barAccount?.hasDebt == false
@@ -116,7 +136,7 @@ class DatabaseTest {
         )
         val barPays = db.bankTransactionCreate(barPaysFoo)
         assert(barPays == Database.BankTransactionResult.SUCCESS)
-        barAccount = db.bankAccountGetFromLabel("bar")
+        barAccount = db.bankAccountGetFromOwnerId(barId)
         val barBalanceTen: TalerAmount? = barAccount?.balance
         // Bar: credit -> credit
         assert(barAccount?.hasDebt == false && barBalanceTen?.value == 10L && barBalanceTen.frac == 0)
@@ -124,8 +144,8 @@ class DatabaseTest {
         val barPaysAgain = db.bankTransactionCreate(barPaysFoo)
         assert(barPaysAgain == Database.BankTransactionResult.SUCCESS)
         // Refreshing the two accounts.
-        barAccount = db.bankAccountGetFromLabel("bar")
-        fooAccount = db.bankAccountGetFromLabel("foo")
+        barAccount = db.bankAccountGetFromOwnerId(barId)
+        fooAccount = db.bankAccountGetFromOwnerId(fooId)
         // Foo should have returned to zero and no debt, same for Bar.
         // Foo: debit -> credit
         assert(fooAccount?.hasDebt == false && barAccount?.hasDebt == false)
@@ -134,8 +154,8 @@ class DatabaseTest {
         // Bringing Bar to debit.
         val barPaysMore = db.bankTransactionCreate(barPaysFoo)
         assert(barPaysAgain == Database.BankTransactionResult.SUCCESS)
-        barAccount = db.bankAccountGetFromLabel("bar")
-        fooAccount = db.bankAccountGetFromLabel("foo")
+        barAccount = db.bankAccountGetFromOwnerId(barId)
+        fooAccount = db.bankAccountGetFromOwnerId(fooId)
         // Bar: credit -> debit
         assert(fooAccount?.hasDebt == false && barAccount?.hasDebt == true)
         assert(fooAccount?.balance?.equals(TalerAmount(10, 0)) == true)
@@ -148,7 +168,7 @@ class DatabaseTest {
         db.customerCreate(customerFoo)
         assert(db.customerGetFromLogin("foo")?.name == "Foo")
         // Trigger conflict.
-        assert(!db.customerCreate(customerFoo))
+        assert(db.customerCreate(customerFoo) == null)
     }
     @Test
     fun configTest() {
@@ -161,19 +181,18 @@ class DatabaseTest {
     @Test
     fun bankAccountTest() {
         val db = initDb()
-        assert(db.bankAccountGetFromLabel("foo") == null)
-        assert(db.customerCreate(customerFoo))
+        assert(db.bankAccountGetFromOwnerId(1L) == null)
+        assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo))
         assert(!db.bankAccountCreate(bankAccountFoo)) // Triggers conflict.
-        assert(db.bankAccountGetFromLabel("foo")?.bankAccountLabel == "foo")
-        assert(db.bankAccountGetFromLabel("foo")?.balance?.equals(TalerAmount(0, 0)) == true)
+        assert(db.bankAccountGetFromOwnerId(1L)?.balance?.equals(TalerAmount(0, 0)) == true)
     }
 
     @Test
     fun withdrawalTest() {
         val db = initDb()
         val uuid = UUID.randomUUID()
-        assert(db.customerCreate(customerFoo))
+        assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo))
         // insert new.
         assert(db.talerWithdrawalCreate(
@@ -220,16 +239,17 @@ class DatabaseTest {
             buyInFee = TalerAmount(0, 22),
             sellAtRatio = 2,
             sellOutFee = TalerAmount(0, 44),
-            cashoutAddress = "IBAN",
+            credit_payto_uri = "IBAN",
             cashoutCurrency = "KUDOS",
             creationTime = 3L,
             subject = "31st",
             tanChannel = TanChannel.sms,
             tanCode = "secret",
         )
-        assert(db.customerCreate(customerFoo))
+        val fooId = db.customerCreate(customerFoo)
+        assert(fooId != null)
         assert(db.bankAccountCreate(bankAccountFoo))
-        assert(db.customerCreate(customerBar))
+        assert(db.customerCreate(customerBar) != null)
         assert(db.bankAccountCreate(bankAccountBar))
         assert(db.cashoutCreate(op))
         val fromDb = db.cashoutGetFromUuid(op.cashoutUuid)
@@ -237,10 +257,11 @@ class DatabaseTest {
         assert(db.cashoutDelete(op.cashoutUuid) == Database.CashoutDeleteResult.SUCCESS)
         assert(db.cashoutCreate(op))
         db.bankAccountSetMaxDebt(
-            "foo",
+            fooId!!,
             TalerAmount(100, 0)
         )
-        assert(db.bankTransactionCreate(BankInternalTransaction(
+        assert(db.bankTransactionCreate(
+            BankInternalTransaction(
             creditorAccountId = 2,
             debtorAccountId = 1,
             subject = "backing the cash-out",
@@ -249,7 +270,8 @@ class DatabaseTest {
             endToEndId = "end-to-end-id",
             paymentInformationId = "pmtinfid",
             transactionDate = 100000L
-        )) == Database.BankTransactionResult.SUCCESS)
+        )
+        ) == Database.BankTransactionResult.SUCCESS)
         // Confirming the cash-out
         assert(db.cashoutConfirm(op.cashoutUuid, 1L, 1L))
         // Checking the confirmation took place.

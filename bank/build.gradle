@@ -73,6 +73,9 @@ dependencies {
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
     implementation "io.ktor:ktor-auth:$ktor_auth_version"
     implementation "io.ktor:ktor-serialization-jackson:$ktor_version"
+    // implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
+    // implementation("io.ktor:ktor-serialization-gson:$ktor_version")
+    implementation "io.ktor:ktor-server-request-validation:$ktor_version"
 
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
     testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'

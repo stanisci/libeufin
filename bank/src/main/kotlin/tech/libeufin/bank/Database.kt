@@ -14,26 +14,29 @@ data class Customer(
     val login: String,
     val passwordHash: String,
     val name: String,
-    val email: String,
-    val phone: String,
-    val cashoutPayto: String,
-    val cashoutCurrency: String
+    val dbRowId: Long? = null, // mostly used when retrieving records.
+    val email: String?,
+    val phone: String?,
+    val cashoutPayto: String?,
+    val cashoutCurrency: String?
 )
+fun Customer.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Cutsomer '${this.login}' had no DB row ID")
 
 data class TalerAmount(
     val value: Long,
     val frac: Int
 )
 
+// BIC got removed, because it'll be expressed in the internal_payto_uri.
 data class BankAccount(
-    val iban: String,
-    val bic: String,
-    val bankAccountLabel: String,
+    val internalPaytoUri: String,
     val owningCustomerId: Long,
     val isPublic: Boolean = false,
-    val lastNexusFetchRowId: Long,
+    val isTalerExchange: Boolean = false,
+    val lastNexusFetchRowId: Long = 0L,
     val balance: TalerAmount? = null,
-    val hasDebt: Boolean
+    val hasDebt: Boolean,
+    val maxDebt: TalerAmount
 )
 
 enum class TransactionDirection {
@@ -43,6 +46,25 @@ enum class TransactionDirection {
 enum class TanChannel {
     sms, email, file
 }
+
+enum class TokenScope {
+    readonly, readwrite
+}
+
+data class BearerToken(
+    val content: ByteArray,
+    val scope: TokenScope,
+    val creationTime: Long,
+    val expirationTime: Long,
+    /**
+     * Serial ID of the database row that hosts the bank customer
+     * that is associated with this token.  NOTE: if the token is
+     * refreshed by a client that doesn't have a user+password login
+     * in the system, the creator remains always the original bank
+     * customer that created the very first token.
+     */
+    val bankCustomer: Long
+)
 
 data class BankInternalTransaction(
     val creditorAccountId: Long,
@@ -56,11 +78,9 @@ data class BankInternalTransaction(
 )
 
 data class BankAccountTransaction(
-    val creditorIban: String,
-    val creditorBic: String,
+    val creditorPaytoUri: String,
     val creditorName: String,
-    val debtorIban: String,
-    val debtorBic: String,
+    val debtorPaytoUri: String,
     val debtorName: String,
     val subject: String,
     val amount: TalerAmount,
@@ -98,7 +118,7 @@ data class Cashout(
     val tanChannel: TanChannel,
     val tanCode: String,
     val bankAccount: Long,
-    val cashoutAddress: String,
+    val credit_payto_uri: String,
     val cashoutCurrency: String
 )
 
@@ -170,7 +190,15 @@ class Database(private val dbConfig: String) {
     }
 
     // CUSTOMERS
-    fun customerCreate(customer: Customer): Boolean {
+    /**
+     * This method INSERTs a new customer into the database and
+     * returns its row ID.  That is useful because often a new user
+     * ID has to be specified in more database records, notably in
+     * bank accounts to point at their owners.
+     *
+     * In case of conflict, this method returns null.
+     */
+    fun customerCreate(customer: Customer): Long? {
         reconnect()
         val stmt = prepare("""
             INSERT INTO customers (
@@ -182,7 +210,8 @@ class Database(private val dbConfig: String) {
               ,cashout_payto
               ,cashout_currency
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            RETURNING customer_id
         """
         )
         stmt.setString(1, customer.login)
@@ -193,12 +222,84 @@ class Database(private val dbConfig: String) {
         stmt.setString(6, customer.cashoutPayto)
         stmt.setString(7, customer.cashoutCurrency)
 
-        return myExecute(stmt)
+        val res = try {
+            stmt.executeQuery()
+        } catch (e: SQLException) {
+            logger.error(e.message)
+            if (e.errorCode == 0) return null // unique constraint violation.
+            throw e // rethrow on other errors.
+        }
+        res.use {
+            if (!it.next())
+                throw internalServerError("SQL RETURNING gave nothing.")
+            return it.getLong("customer_id")
+        }
+    }
+
+    fun customerPwAuth(login: String, pwHash: String): Customer? {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+              name,
+              email,
+              phone,
+              cashout_payto,
+              cashout_currency
+            FROM customers
+            WHERE login=? AND password_hash=?
+        """)
+        stmt.setString(1, login)
+        stmt.setString(2, pwHash)
+        val rs = stmt.executeQuery()
+        rs.use {
+            if (!rs.next()) return null
+            return Customer(
+                login = login,
+                passwordHash = pwHash,
+                name = it.getString("name"),
+                phone = it.getString("phone"),
+                email = it.getString("email"),
+                cashoutCurrency = it.getString("cashout_currency"),
+                cashoutPayto = it.getString("cashout_payto")
+            )
+        }
+    }
+
+    // Mostly used to get customers out of bearer tokens.
+    fun customerGetFromRowId(customer_id: Long): Customer? {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+              login,
+              password_hash,
+              name,
+              email,
+              phone,
+              cashout_payto,
+              cashout_currency
+            FROM customers
+            WHERE customer_id=?
+        """)
+        stmt.setLong(1, customer_id)
+        val rs = stmt.executeQuery()
+        rs.use {
+            if (!rs.next()) return null
+            return Customer(
+                login = it.getString("login"),
+                passwordHash = it.getString("password_hash"),
+                name = it.getString("name"),
+                phone = it.getString("phone"),
+                email = it.getString("email"),
+                cashoutCurrency = it.getString("cashout_currency"),
+                cashoutPayto = it.getString("cashout_payto")
+            )
+        }
     }
     fun customerGetFromLogin(login: String): Customer? {
         reconnect()
         val stmt = prepare("""
             SELECT
+              customer_id,
               password_hash,
               name,
               email,
@@ -219,84 +320,140 @@ class Database(private val dbConfig: String) {
                 phone = it.getString("phone"),
                 email = it.getString("email"),
                 cashoutCurrency = it.getString("cashout_currency"),
-                cashoutPayto = it.getString("cashout_payto")
+                cashoutPayto = it.getString("cashout_payto"),
+                dbRowId = it.getLong("customer_id")
             )
         }
     }
     // Possibly more "customerGetFrom*()" to come.
 
+    // BEARER TOKEN
+    fun bearerTokenCreate(token: BearerToken): Boolean {
+        reconnect()
+        val stmt = prepare("""
+             INSERT INTO bearer_tokens
+               (content,
+                creation_time,
+                expiration_time,
+                scope,
+                bank_customer              
+               ) VALUES
+               (?, ?, ?, ?::token_scope_enum, ?)
+        """)
+        stmt.setBytes(1, token.content)
+        stmt.setLong(2, token.creationTime)
+        stmt.setLong(3, token.expirationTime)
+        stmt.setString(4, token.scope.name)
+        stmt.setLong(5, token.bankCustomer)
+
+        return myExecute(stmt)
+    }
+    fun bearerTokenGet(token: ByteArray): BearerToken? {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+              expiration_time,
+              creation_time,
+              bank_customer,
+              scope
+            FROM bearer_tokens
+            WHERE content=?;            
+        """)
+
+        stmt.setBytes(1, token)
+        stmt.executeQuery().use {
+            if (!it.next()) return null
+            return BearerToken(
+                content = token,
+                creationTime = it.getLong("creation_time"),
+                expirationTime = it.getLong("expiration_time"),
+                bankCustomer = it.getLong("bank_customer"),
+                scope = it.getString("scope").run {
+                    if (this == TokenScope.readwrite.name) return@run TokenScope.readwrite
+                    if (this == TokenScope.readonly.name) return@run TokenScope.readonly
+                    else throw internalServerError("Wrong token scope found in the database: $this")
+                }
+            )
+        }
+    }
+
     // BANK ACCOUNTS
     // Returns false on conflicts.
     fun bankAccountCreate(bankAccount: BankAccount): Boolean {
         reconnect()
+        // FIXME: likely to be changed to only do internal_payto_uri
         val stmt = prepare("""
             INSERT INTO bank_accounts
-              (iban
-              ,bic
-              ,bank_account_label
+              (internal_payto_uri
               ,owning_customer_id
               ,is_public
-              ,last_nexus_fetch_row_id
+              ,is_taler_exchange
+              ,max_debt
               )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, (?, ?)::taler_amount)
         """)
-        stmt.setString(1, bankAccount.iban)
-        stmt.setString(2, bankAccount.bic)
-        stmt.setString(3, bankAccount.bankAccountLabel)
-        stmt.setLong(4, bankAccount.owningCustomerId)
-        stmt.setBoolean(5, bankAccount.isPublic)
-        stmt.setLong(6, bankAccount.lastNexusFetchRowId)
+        stmt.setString(1, bankAccount.internalPaytoUri)
+        stmt.setLong(2, bankAccount.owningCustomerId)
+        stmt.setBoolean(3, bankAccount.isPublic)
+        stmt.setBoolean(4, bankAccount.isTalerExchange)
+        stmt.setLong(5, bankAccount.maxDebt.value)
+        stmt.setInt(6, bankAccount.maxDebt.frac)
         // using the default zero value for the balance.
         return myExecute(stmt)
     }
 
     fun bankAccountSetMaxDebt(
-        bankAccountLabel: String,
+        owningCustomerId: Long,
         maxDebt: TalerAmount
     ): Boolean {
         reconnect()
         val stmt = prepare("""
            UPDATE bank_accounts
            SET max_debt=(?,?)::taler_amount
-           WHERE bank_account_label=?
+           WHERE owning_customer_id=?
         """)
         stmt.setLong(1, maxDebt.value)
         stmt.setInt(2, maxDebt.frac)
-        stmt.setString(3, bankAccountLabel)
+        stmt.setLong(3, owningCustomerId)
         return myExecute(stmt)
     }
 
-    fun bankAccountGetFromLabel(bankAccountLabel: String): BankAccount? {
+    fun bankAccountGetFromOwnerId(ownerId: Long): BankAccount? {
         reconnect()
         val stmt = prepare("""
             SELECT
-             iban
-             ,bic
+             internal_payto_uri
              ,owning_customer_id
              ,is_public
+             ,is_taler_exchange
              ,last_nexus_fetch_row_id
-             ,(balance).val AS balance_value
+             ,(balance).val AS balance_val
              ,(balance).frac AS balance_frac
              ,has_debt
+             ,(max_debt).val AS max_debt_val
+             ,(max_debt).frac AS max_debt_frac
             FROM bank_accounts
-            WHERE bank_account_label=?
+            WHERE owning_customer_id=?
         """)
-        stmt.setString(1, bankAccountLabel)
+        stmt.setLong(1, ownerId)
 
         val rs = stmt.executeQuery()
         rs.use {
             if (!it.next()) return null
             return BankAccount(
-                iban = it.getString("iban"),
-                bic = it.getString("bic"),
+                internalPaytoUri = it.getString("internal_payto_uri"),
                 balance = TalerAmount(
-                    it.getLong("balance_value"),
+                    it.getLong("balance_val"),
                     it.getInt("balance_frac")
                 ),
-                bankAccountLabel = bankAccountLabel,
                 lastNexusFetchRowId = it.getLong("last_nexus_fetch_row_id"),
                 owningCustomerId = it.getLong("owning_customer_id"),
-                hasDebt = it.getBoolean("has_debt")
+                hasDebt = it.getBoolean("has_debt"),
+                isTalerExchange = it.getBoolean("is_taler_exchange"),
+                maxDebt = TalerAmount(
+                    value = it.getLong("max_debt_val"),
+                    frac = it.getInt("max_debt_frac")
+                )
             )
         }
     }
@@ -355,11 +512,9 @@ class Database(private val dbConfig: String) {
         reconnect()
         val stmt = prepare("""
             SELECT 
-              creditor_iban
-              ,creditor_bic
+              creditor_payto_uri
               ,creditor_name
-              ,debtor_iban
-              ,debtor_bic
+              ,debtor_payto_uri
               ,debtor_name
               ,subject
               ,(amount).val AS amount_val
@@ -386,11 +541,9 @@ class Database(private val dbConfig: String) {
             do {
                 ret.add(
                     BankAccountTransaction(
-                        creditorIban = it.getString("creditor_iban"),
-                        creditorBic = it.getString("creditor_bic"),
+                        creditorPaytoUri = it.getString("creditor_payto_uri"),
                         creditorName = it.getString("creditor_name"),
-                        debtorIban = it.getString("debtor_iban"),
-                        debtorBic = it.getString("debtor_bic"),
+                        debtorPaytoUri = it.getString("debtor_payto_uri"),
                         debtorName = it.getString("debtor_name"),
                         amount = TalerAmount(
                             it.getLong("amount_val"),
@@ -409,7 +562,8 @@ class Database(private val dbConfig: String) {
                         paymentInformationId = it.getString("payment_information_id"),
                         subject = it.getString("subject"),
                         transactionDate = it.getLong("transaction_date")
-                ))
+                )
+                )
             } while (it.next())
             return ret
         }
@@ -516,7 +670,7 @@ class Database(private val dbConfig: String) {
               ,tan_channel
               ,tan_code
               ,bank_account
-              ,cashout_address
+              ,credit_payto_uri
               ,cashout_currency
 	    )
             VALUES (
@@ -552,7 +706,7 @@ class Database(private val dbConfig: String) {
         stmt.setString(14, op.tanChannel.name)
         stmt.setString(15, op.tanCode)
         stmt.setLong(16, op.bankAccount)
-        stmt.setString(17, op.cashoutAddress)
+        stmt.setString(17, op.credit_payto_uri)
         stmt.setString(18, op.cashoutCurrency)
         return myExecute(stmt)
     }
@@ -610,7 +764,7 @@ class Database(private val dbConfig: String) {
              ,tan_channel
              ,tan_code
              ,bank_account
-             ,cashout_address
+             ,credit_payto_uri
              ,cashout_currency
 	     ,tan_confirmation_time
 	     ,local_transaction
@@ -635,7 +789,7 @@ class Database(private val dbConfig: String) {
                     value = it.getLong("buy_in_fee_val"),
                     frac = it.getInt("buy_in_fee_frac")
                 ),
-                cashoutAddress = it.getString("cashout_address"),
+                credit_payto_uri = it.getString("credit_payto_uri"),
                 cashoutCurrency = it.getString("cashout_currency"),
                 cashoutUuid = opUuid,
                 creationTime = it.getLong("creation_time"),

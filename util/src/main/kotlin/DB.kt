@@ -255,12 +255,16 @@ fun connectWithSchema(jdbcConn: String, schemaName: String? = null) {
     }
 }
 
+// Prepends "jdbc:" to the Postgres database connection string.
+fun getJdbcConnectionFromPg(pgConn: String): String {
+    return "jdbc:$pgConn"
+}
 /**
  * This function converts a postgresql://-URI to a JDBC one.
  * It is only needed because JDBC strings based on Unix domain
  * sockets need individual intervention.
  */
-fun getJdbcConnectionFromPg(pgConn: String): String {
+fun _getJdbcConnectionFromPg(pgConn: String): String {
     if (!pgConn.startsWith("postgresql://") && !pgConn.startsWith("postgres://")) {
         logger.info("Not a Postgres connection string: $pgConn")
         throw internalServerError("Not a Postgres connection string: $pgConn")

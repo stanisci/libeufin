@@ -104,11 +104,9 @@ AS $$
 DECLARE
 debtor_has_debt BOOLEAN;
 debtor_balance taler_amount;
-debtor_iban TEXT;
-debtor_bic TEXT;
+debtor_payto_uri TEXT;
 debtor_name TEXT;
-creditor_iban TEXT;
-creditor_bic TEXT;
+creditor_payto_uri TEXT;
 creditor_name TEXT;
 debtor_max_debt taler_amount;
 creditor_has_debt BOOLEAN;
@@ -128,12 +126,12 @@ SELECT
   has_debt,
   (balance).val, (balance).frac,
   (max_debt).val, (max_debt).frac,
-  iban, bic, customers.name
+  internal_payto_uri, customers.name
   INTO
     debtor_has_debt,
     debtor_balance.val, debtor_balance.frac,
     debtor_max_debt.val, debtor_max_debt.frac,
-    debtor_iban, debtor_bic, debtor_name 
+    debtor_payto_uri, debtor_name
   FROM bank_accounts
   JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
   WHERE bank_account_id=in_debtor_account_id;
@@ -148,11 +146,11 @@ out_nx_debtor=FALSE;
 SELECT
   has_debt,
   (balance).val, (balance).frac,
-  iban, bic, customers.name
+  internal_payto_uri, customers.name
   INTO
     creditor_has_debt,
     creditor_balance.val, creditor_balance.frac,
-    creditor_iban, creditor_bic, creditor_name 
+    creditor_payto_uri, creditor_name
   FROM bank_accounts
   JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
   WHERE bank_account_id=in_creditor_account_id;
@@ -251,11 +249,9 @@ out_balance_insufficient=FALSE;
 -- now actually create the bank transaction.
 -- debtor side:
 INSERT INTO bank_account_transactions (
-  creditor_iban
-  ,creditor_bic
+  creditor_payto_uri
   ,creditor_name
-  ,debtor_iban
-  ,debtor_bic
+  ,debtor_payto_uri
   ,debtor_name
   ,subject
   ,amount
@@ -267,11 +263,9 @@ INSERT INTO bank_account_transactions (
   ,bank_account_id
   )
 VALUES (
-  creditor_iban,
-  creditor_bic,
+  creditor_payto_uri,
   creditor_name,
-  debtor_iban,
-  debtor_bic,
+  debtor_payto_uri,
   debtor_name,
   in_subject,
   in_amount,
@@ -285,11 +279,9 @@ VALUES (
 
 -- debtor side:
 INSERT INTO bank_account_transactions (
-  creditor_iban
-  ,creditor_bic
+  creditor_payto_uri
   ,creditor_name
-  ,debtor_iban
-  ,debtor_bic
+  ,debtor_payto_uri
   ,debtor_name
   ,subject
   ,amount
@@ -301,11 +293,9 @@ INSERT INTO bank_account_transactions (
   ,bank_account_id
   )
 VALUES (
-  creditor_iban,
-  creditor_bic,
+  creditor_payto_uri,
   creditor_name,
-  debtor_iban,
-  debtor_bic,
+  debtor_payto_uri,
   debtor_name,
   in_subject,
   in_amount,

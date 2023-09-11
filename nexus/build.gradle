@@ -102,14 +102,13 @@ dependencies {
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
     testImplementation 'io.ktor:ktor-client-mock:2.2.4'
     testImplementation 'com.kohlschutter.junixsocket:junixsocket-core:2.6.2'
-    testImplementation project(":bank")
 }
 
 test {
     useJUnit()
     failFast = true
     testLogging.showStandardStreams = false
-    environment.put("LIBEUFIN_SANDBOX_ADMIN_PASSWORD", "foo")
+    environment.put("LIBEUFIN_BANK_ADMIN_PASSWORD", "foo")
     environment.put("LIBEUFIN_CASHOUT_TEST_TAN", "foo")
 }
 

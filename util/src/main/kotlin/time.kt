@@ -30,6 +30,8 @@ fun setClock(rel: Duration) {
 fun getNow(): ZonedDateTime {
     return ZonedDateTime.now(ZoneId.systemDefault())
 }
+
+fun ZonedDateTime.toMicro(): Long = this.nano / 1000L
 fun getNowMillis(): Long = getNow().toInstant().toEpochMilli()
 
 fun getSystemTimeNow(): ZonedDateTime {

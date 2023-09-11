@@ -6,7 +6,7 @@
         </encoder>
     </appender>
 
-    <logger name="tech.libeufin.sandbox" level="ALL"  additivity="false">
+    <logger name="tech.libeufin.bank" level="ALL"  additivity="false">
         <appender-ref ref="STDERR" />
     </logger>
     <logger name="tech.libeufin.util" level="ALL"  additivity="false">

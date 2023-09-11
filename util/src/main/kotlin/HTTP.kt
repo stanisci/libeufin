@@ -36,7 +36,7 @@ fun badGateway(msg: String): UtilError {
 
 /**
  * Returns the token (including the 'secret-token:' prefix)
- * from a Authorization header.  Throws exception on malformations
+ * from an Authorization header.  Throws exception on malformations
  * Note, the token gets URL-decoded before being returned.
  */
 fun extractToken(authHeader: String): String {
@@ -153,20 +153,14 @@ fun expectAdmin(username: String?) {
 }
 
 fun getHTTPBasicAuthCredentials(request: io.ktor.server.request.ApplicationRequest): Pair<String, String> {
-    val authHeader = getAuthorizationHeader(request)
+    val authHeader = getAuthorizationRawHeader(request)
     return extractUserAndPassword(authHeader)
 }
 
-/**
- * Extracts the Authorization:-header line and throws error if not found.
- */
-fun getAuthorizationHeader(request: ApplicationRequest): String {
+// Extracts the Authorization:-header line and throws error if not found.
+fun getAuthorizationRawHeader(request: ApplicationRequest): String {
     val authorization = request.headers["Authorization"]
-    // logger.debug("Found Authorization header: $authorization")
-    return authorization ?: throw UtilError(
-        HttpStatusCode.Unauthorized, "Authorization header not found",
-        LibeufinErrorCode.LIBEUFIN_EC_AUTHENTICATION_FAILED
-    )
+    return authorization ?: throw badRequest("Authorization header not found")
 }
 
 // Builds the Authorization:-header value, given the credentials.
@@ -176,6 +170,24 @@ fun buildBasicAuthLine(username: String, password: String): String {
     val enc = bytesToBase64(cred.toByteArray(Charsets.UTF_8))
     return ret+enc
 }
+
+/**
+ * Holds the details contained in an Authorization header.
+ * The content is held as it was found in the header and supposed
+ * to be processed according to the scheme.
+ */
+data class AuthorizationDetails(
+    val scheme: String,
+    val content: String
+)
+// Returns the authorization scheme mentioned in the Auth header.
+fun getAuthorizationDetails(authorizationHeader: String): AuthorizationDetails {
+    val split = authorizationHeader.split(" ")
+    if (split.isEmpty()) throw badRequest("malformed Authorization header: contains no space")
+    if (split.size != 2) throw badRequest("malformed Authorization header: contains more than one space")
+    return AuthorizationDetails(scheme = split[0], content = split[1])
+}
+
 /**
  * This helper function parses a Authorization:-header line, decode the credentials
  * and returns a pair made of username and hashed (sha256) password.  The hashed value

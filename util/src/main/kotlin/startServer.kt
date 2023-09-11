@@ -30,6 +30,8 @@ private fun serverMain(options: StartServerOptions, app: Application.() -> Unit)
             }
             module(app)
         },
+        // Maybe remove this?  Was introduced
+        // to debug concurrency issues..
         configure = {
             connectionGroupSize = 1
             workerGroupSize = 1
