@@ -1,41 +1,53 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
-import io.ktor.serialization.jackson.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.plugins.requestvalidation.*
-import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.plugins.callloging.*
+import kotlinx.serialization.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.json.Json
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import tech.libeufin.util.*
-import javax.xml.bind.ValidationException
 
 // GLOBALS
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank")
 val db = Database(System.getProperty("BANK_DB_CONNECTION_STRING"))
+const val GENERIC_JSON_INVALID = 22
+const val GENERIC_PARAMETER_MALFORMED = 26
+const val GENERIC_PARAMETER_MISSING = 25
 
 // TYPES
+@Serializable
+data class TalerError(
+    val code: Int,
+    val hint: String? = null
+)
+
+@Serializable
 data class ChallengeContactData(
     val email: String? = null,
     val phone: String? = null
 )
+@Serializable
 data class RegisterAccountRequest(
     val username: String,
     val password: String,
     val name: String,
     val is_public: Boolean = false,
     val is_taler_exchange: Boolean = false,
-    val challenge_contact_data: ChallengeContactData,
-    val cashout_payto_uri: String?,
-    val internal_payto_uri: String?
+    val challenge_contact_data: ChallengeContactData? = null,
+    val cashout_payto_uri: String? = null,
+    val internal_payto_uri: String? = null
 )
 
 // Generates a new Payto-URI with IBAN scheme.
@@ -45,8 +57,11 @@ fun parseTalerAmount(amount: String): TalerAmount {
     val match = Regex(amountWithCurrencyRe).find(amount) ?:
     throw badRequest("Invalid amount")
     val value = match.destructured.component2()
-    val fraction = match.destructured.component3().substring(1)
-    return TalerAmount(value.toLong(), fraction.toInt())
+    val fraction: Int = match.destructured.component3().run {
+        if (this.isEmpty()) return@run 0
+        return@run this.substring(1).toInt()
+    }
+    return TalerAmount(value.toLong(), fraction)
 }
 
 /**
@@ -104,7 +119,6 @@ fun ApplicationCall.myAuth(requiredScope: TokenScope): Customer? {
     }
 }
 
-
 val webApp: Application.() -> Unit = {
     install(CallLogging) {
         this.level = Level.DEBUG
@@ -123,7 +137,34 @@ val webApp: Application.() -> Unit = {
         allowCredentials = true
     }
     install(IgnoreTrailingSlash)
-    install(ContentNegotiation) { jackson {} }
+    install(ContentNegotiation) {
+        json(Json {
+            ignoreUnknownKeys = true
+            isLenient = false
+        })
+    }
+    install(RequestValidation)
+    install(StatusPages) {
+        exception<BadRequestException> {call, cause ->
+            // Discouraged use, but the only helpful message.
+            var rootCause: Throwable? = cause.cause
+            while (rootCause?.cause != null)
+                rootCause = rootCause.cause
+            logger.error(rootCause?.message)
+            // Telling apart invalid JSON vs missing parameter vs invalid parameter.
+            val talerErrorCode = when(cause) {
+                is MissingRequestParameterException -> GENERIC_PARAMETER_MISSING // 25
+                is ParameterConversionException -> GENERIC_PARAMETER_MALFORMED // 26
+                else -> GENERIC_JSON_INVALID // 22
+            }
+            call.respond(
+                HttpStatusCode.BadRequest,
+                TalerError(
+                    code = talerErrorCode,
+                    hint = rootCause?.message
+                ))
+        }
+    }
     routing {
         post("/accounts") {
             // check if only admin.
@@ -132,7 +173,7 @@ val webApp: Application.() -> Unit = {
                 val customer: Customer? = call.myAuth(TokenScope.readwrite)
                 if (customer == null || customer.login != "admin")
                     // OK to leak the only-admin policy here?
-                    throw forbidden("Only admin allowed, and it failed to authenticate.")
+                    throw unauthorized("Only admin allowed, and it failed to authenticate.")
             }
             // auth passed, proceed with activity.
             val req = call.receive<RegisterAccountRequest>()
@@ -141,19 +182,23 @@ val webApp: Application.() -> Unit = {
                 throw conflict("Username '${req.username}' is reserved.")
             // Checking imdepotency.
             val maybeCustomerExists = db.customerGetFromLogin(req.username)
-            if (maybeCustomerExists != null) {
-                val bankingInfo = db.bankAccountGetFromOwnerId(maybeCustomerExists.expectRowId())
-                    ?: throw internalServerError("Existing customer had no bank account!")
+            // Can be null if previous call crashed before completion.
+            val maybeHasBankAccount = maybeCustomerExists.run {
+                if (this == null) return@run null
+                db.bankAccountGetFromOwnerId(this.expectRowId())
+            }
+            if (maybeCustomerExists != null && maybeHasBankAccount != null) {
+                logger.debug("Registering username was found: ${maybeCustomerExists.login}")
                 // Checking _all_ the details are the same.
                 val isIdentic =
                     maybeCustomerExists.name == req.name &&
-                    maybeCustomerExists.email == req.challenge_contact_data.email &&
-                    maybeCustomerExists.phone == req.challenge_contact_data.phone &&
+                    maybeCustomerExists.email == req.challenge_contact_data?.email &&
+                    maybeCustomerExists.phone == req.challenge_contact_data?.phone &&
                     maybeCustomerExists.cashoutPayto == req.cashout_payto_uri &&
                     maybeCustomerExists.passwordHash == CryptoUtil.hashpw(req.password) &&
-                    bankingInfo.isPublic == req.is_public &&
-                    bankingInfo.isTalerExchange == req.is_taler_exchange &&
-                    bankingInfo.internalPaytoUri == req.internal_payto_uri
+                    maybeHasBankAccount.isPublic == req.is_public &&
+                    maybeHasBankAccount.isTalerExchange == req.is_taler_exchange &&
+                    maybeHasBankAccount.internalPaytoUri == req.internal_payto_uri
                 if (isIdentic) call.respond(HttpStatusCode.Created)
                 call.respond(HttpStatusCode.Conflict)
             }
@@ -161,8 +206,8 @@ val webApp: Application.() -> Unit = {
             val newCustomer = Customer(
                 login = req.username,
                 name = req.name,
-                email = req.challenge_contact_data.email,
-                phone = req.challenge_contact_data.phone,
+                email = req.challenge_contact_data?.email,
+                phone = req.challenge_contact_data?.phone,
                 cashoutPayto = req.cashout_payto_uri,
                 // Following could be gone, if included in cashout_payto
                 cashoutCurrency = db.configGet("cashout_currency"),

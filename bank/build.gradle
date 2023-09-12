@@ -4,6 +4,7 @@ plugins {
     id 'application'
     id 'org.jetbrains.kotlin.jvm'
     id "com.github.johnrengelman.shadow" version "5.2.0"
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.7.22'
 }
 
 sourceCompatibility = "11"
@@ -37,6 +38,7 @@ task installToPrefix(type: Copy) {
     into "${project.findProperty('prefix') ?: '/tmp'}"
 }
 apply plugin: 'kotlin-kapt'
+// apply plugin: 'kotlinx-serialization'
 
 sourceSets {
     main.java.srcDirs = ['src/main/kotlin']
@@ -72,9 +74,8 @@ dependencies {
     implementation "io.ktor:ktor-server-netty:$ktor_version"
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
     implementation "io.ktor:ktor-auth:$ktor_auth_version"
-    implementation "io.ktor:ktor-serialization-jackson:$ktor_version"
-    // implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
-    // implementation("io.ktor:ktor-serialization-gson:$ktor_version")
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1"
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
     implementation "io.ktor:ktor-server-request-validation:$ktor_version"
 
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
