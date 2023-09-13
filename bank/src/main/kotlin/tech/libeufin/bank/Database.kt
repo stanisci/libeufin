@@ -15,10 +15,10 @@ data class Customer(
     val passwordHash: String,
     val name: String,
     val dbRowId: Long? = null, // mostly used when retrieving records.
-    val email: String?,
-    val phone: String?,
-    val cashoutPayto: String?,
-    val cashoutCurrency: String?
+    val email: String? = null,
+    val phone: String? = null,
+    val cashoutPayto: String? = null,
+    val cashoutCurrency: String? = null
 )
 fun Customer.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Cutsomer '${this.login}' had no DB row ID")
 

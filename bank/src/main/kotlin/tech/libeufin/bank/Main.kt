@@ -1,3 +1,22 @@
+/*
+ * This file is part of LibEuFin.
+ * Copyright (C) 2019 Stanisci and Dold.
+
+ * LibEuFin is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation; either version 3, or
+ * (at your option) any later version.
+
+ * LibEuFin is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General
+ * Public License for more details.
+
+ * You should have received a copy of the GNU Affero General Public
+ * License along with LibEuFin; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>
+ */
+
 package tech.libeufin.bank
 
 import io.ktor.http.*
@@ -22,11 +41,25 @@ import tech.libeufin.util.*
 // GLOBALS
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank")
 val db = Database(System.getProperty("BANK_DB_CONNECTION_STRING"))
+// fixme: make enum out of error codes.
 const val GENERIC_JSON_INVALID = 22
 const val GENERIC_PARAMETER_MALFORMED = 26
 const val GENERIC_PARAMETER_MISSING = 25
+const val BANK_UNMANAGED_EXCEPTION = 5110
+const val BANK_BAD_FORMAT_AMOUNT = 5108
+const val GENERIC_HTTP_HEADERS_MALFORMED = 23
+const val GENERIC_INTERNAL_INVARIANT_FAILURE = 60
+const val BANK_LOGIN_FAILED = 5105
+const val GENERIC_UNAUTHORIZED = 40
+const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 
 // TYPES
+
+enum class FracDigits(howMany: Int) {
+    TWO(2),
+    EIGHT(8)
+}
+
 @Serializable
 data class TalerError(
     val code: Int,
@@ -50,19 +83,11 @@ data class RegisterAccountRequest(
     val internal_payto_uri: String? = null
 )
 
-// Generates a new Payto-URI with IBAN scheme.
-fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
-fun parseTalerAmount(amount: String): TalerAmount {
-    val amountWithCurrencyRe = "^([A-Z]+):([0-9]+(\\.[0-9][0-9]?)?)$"
-    val match = Regex(amountWithCurrencyRe).find(amount) ?:
-    throw badRequest("Invalid amount")
-    val value = match.destructured.component2()
-    val fraction: Int = match.destructured.component3().run {
-        if (this.isEmpty()) return@run 0
-        return@run this.substring(1).toInt()
-    }
-    return TalerAmount(value.toLong(), fraction)
-}
+class LibeufinBankException(
+    val httpStatus: HttpStatusCode,
+    val talerError: TalerError
+) : Exception(talerError.hint)
+
 
 /**
  * Performs the HTTP basic authentication.  Returns the
@@ -79,7 +104,14 @@ fun doBasicAuth(encodedCredentials: String): Customer? {
          */
         limit = 2
     )
-    if (userAndPassSplit.size != 2) throw badRequest("Malformed Basic auth credentials found in the Authorization header.")
+    if (userAndPassSplit.size != 2)
+        throw LibeufinBankException(
+            httpStatus = HttpStatusCode.BadRequest,
+            talerError = TalerError(
+                code = GENERIC_HTTP_HEADERS_MALFORMED, // 23
+                "Malformed Basic auth credentials found in the Authorization header."
+            )
+        )
     val login = userAndPassSplit[0]
     val plainPassword = userAndPassSplit[1]
     return db.customerPwAuth(login, CryptoUtil.hashpw(plainPassword))
@@ -96,7 +128,12 @@ fun doTokenAuth(
     if (isExpired || maybeToken.scope != requiredScope) return null // FIXME: mention the reason?
     // Getting the related username.
     return db.customerGetFromRowId(maybeToken.bankCustomer)
-        ?: throw internalServerError("Customer not found, despite token mentions it.")
+        ?: throw LibeufinBankException(
+            httpStatus = HttpStatusCode.InternalServerError,
+            talerError = TalerError(
+                code = GENERIC_INTERNAL_INVARIANT_FAILURE,
+                hint = "Customer not found, despite token mentions it.",
+        ))
 }
 
 /**
@@ -115,7 +152,13 @@ fun ApplicationCall.myAuth(requiredScope: TokenScope): Customer? {
     return when (authDetails.scheme) {
         "Basic" -> doBasicAuth(authDetails.content)
         "Bearer" -> doTokenAuth(authDetails.content, requiredScope)
-        else -> throw badRequest("Authorization scheme '${authDetails.scheme}' is not supported.")
+        else -> throw LibeufinBankException(
+            httpStatus = HttpStatusCode.Unauthorized,
+            talerError = TalerError(
+                code = GENERIC_UNAUTHORIZED,
+                hint = "Authorization method wrong or not supported."
+            )
+        )
     }
 }
 
@@ -145,8 +188,15 @@ val webApp: Application.() -> Unit = {
     }
     install(RequestValidation)
     install(StatusPages) {
+        /**
+         * This branch triggers when the Ktor layers detect one
+         * invalid request.  It _might_ be thrown by the bank's
+         * actual logic, but that should be avoided because this
+         * (Ktor native) type doesn't easily map to the Taler error
+         * format.
+         */
         exception<BadRequestException> {call, cause ->
-            // Discouraged use, but the only helpful message.
+            // Discouraged use, but the only helpful message:
             var rootCause: Throwable? = cause.cause
             while (rootCause?.cause != null)
                 rootCause = rootCause.cause
@@ -158,11 +208,35 @@ val webApp: Application.() -> Unit = {
                 else -> GENERIC_JSON_INVALID // 22
             }
             call.respond(
-                HttpStatusCode.BadRequest,
-                TalerError(
+                status = HttpStatusCode.BadRequest,
+                message = TalerError(
                     code = talerErrorCode,
                     hint = rootCause?.message
                 ))
+        }
+        /**
+         * This branch triggers when a bank handler throws it, and namely
+         * after one logical failure of the request(-handling).  This branch
+         * should be preferred to catch errors, as it allows to include the
+         * Taler specific error detail.
+         */
+        exception<LibeufinBankException> {call, cause ->
+            logger.error(cause.talerError.hint)
+            call.respond(
+                status = cause.httpStatus,
+                message = cause.talerError
+            )
+        }
+        // Catch-all branch to mean that the bank wasn't able to manage one error.
+        exception<Exception> {call, cause ->
+            logger.error(cause.message)
+            call.respond(
+                status = HttpStatusCode.InternalServerError,
+                message = TalerError(
+                    code = BANK_UNMANAGED_EXCEPTION,// 5110, bank's fault
+                    hint = cause.message
+                )
+            )
         }
     }
     routing {
@@ -173,13 +247,25 @@ val webApp: Application.() -> Unit = {
                 val customer: Customer? = call.myAuth(TokenScope.readwrite)
                 if (customer == null || customer.login != "admin")
                     // OK to leak the only-admin policy here?
-                    throw unauthorized("Only admin allowed, and it failed to authenticate.")
+                    throw LibeufinBankException(
+                        httpStatus = HttpStatusCode.Unauthorized,
+                        talerError = TalerError(
+                            code = BANK_LOGIN_FAILED,
+                            hint = "Only admin allowed."
+                        )
+                    )
             }
             // auth passed, proceed with activity.
             val req = call.receive<RegisterAccountRequest>()
             // Prohibit reserved usernames:
             if (req.username == "admin" || req.username == "bank")
-                throw conflict("Username '${req.username}' is reserved.")
+                throw LibeufinBankException(
+                    httpStatus = HttpStatusCode.Conflict,
+                    talerError = TalerError(
+                        code = GENERIC_UNDEFINED, // FIXME: this waits GANA.
+                        hint = "Username '${req.username}' is reserved."
+                    )
+                )
             // Checking imdepotency.
             val maybeCustomerExists = db.customerGetFromLogin(req.username)
             // Can be null if previous call crashed before completion.

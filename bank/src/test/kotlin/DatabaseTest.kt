@@ -41,6 +41,10 @@ class DatabaseTest {
     )
 
     fun initDb(): Database {
+        System.setProperty(
+            "BANK_DB_CONNECTION_STRING",
+            "jdbc:postgresql:///libeufincheck"
+        )
         execCommand(
             listOf(
                 "libeufin-bank-dbinit",

@@ -10,6 +10,7 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/bank" />
+            <option value="$PROJECT_DIR$/nexus" />
             <option value="$PROJECT_DIR$/util" />
           </set>
         </option>
