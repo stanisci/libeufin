@@ -41,15 +41,10 @@ fun parseTalerAmount(
     fracDigits: FracDigits = FracDigits.EIGHT
 ): TalerAmount {
     val format = when (fracDigits) {
-        FracDigits.TWO ->
-            Pair("^([A-Z]+):([0-9])(\\.[0-9][0-9]?)?$", 100)
-        FracDigits.EIGHT ->
-            Pair(
-                "^([A-Z]+):([0-9])(\\.[0-9][0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?)?\$",
-                100000000
-            )
+        FracDigits.TWO -> "^([A-Z]+):([0-9]+)(\\.[0-9][0-9]?)?$"
+        FracDigits.EIGHT -> "^([A-Z]+):([0-9]+)(\\.[0-9][0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?)?$"
     }
-    val match = Regex(format.first).find(amount) ?: throw LibeufinBankException(
+    val match = Regex(format).find(amount) ?: throw LibeufinBankException(
         httpStatus = HttpStatusCode.BadRequest,
         talerError = TalerError(
             code = BANK_BAD_FORMAT_AMOUNT,
@@ -59,7 +54,7 @@ fun parseTalerAmount(
     // Fraction is at most 8 digits, so it's always < than MAX_INT.
     val fraction: Int = match.destructured.component3().run {
         var frac = 0
-        var power = format.second
+        var power = 100000000
         if (this.isNotEmpty())
             // Skips the dot and processes the fractional chars.
             this.substring(1).forEach { chr ->

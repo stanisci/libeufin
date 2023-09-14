@@ -114,7 +114,9 @@ fun doBasicAuth(encodedCredentials: String): Customer? {
         )
     val login = userAndPassSplit[0]
     val plainPassword = userAndPassSplit[1]
-    return db.customerPwAuth(login, CryptoUtil.hashpw(plainPassword))
+    val maybeCustomer = db.customerGetFromLogin(login) ?: return null
+    if (!CryptoUtil.checkpw(plainPassword, maybeCustomer.passwordHash)) return null
+    return maybeCustomer
 }
 
 /* Performs the bearer-token authentication.  Returns the
@@ -246,12 +248,11 @@ val webApp: Application.() -> Unit = {
             if (maybeOnlyAdmin?.lowercase() == "yes") {
                 val customer: Customer? = call.myAuth(TokenScope.readwrite)
                 if (customer == null || customer.login != "admin")
-                    // OK to leak the only-admin policy here?
                     throw LibeufinBankException(
                         httpStatus = HttpStatusCode.Unauthorized,
                         talerError = TalerError(
                             code = BANK_LOGIN_FAILED,
-                            hint = "Only admin allowed."
+                            hint = "Either 'admin' not authenticated or an ordinary user tried this operation."
                         )
                     )
             }
@@ -281,12 +282,21 @@ val webApp: Application.() -> Unit = {
                     maybeCustomerExists.email == req.challenge_contact_data?.email &&
                     maybeCustomerExists.phone == req.challenge_contact_data?.phone &&
                     maybeCustomerExists.cashoutPayto == req.cashout_payto_uri &&
-                    maybeCustomerExists.passwordHash == CryptoUtil.hashpw(req.password) &&
+                    CryptoUtil.checkpw(req.password, maybeCustomerExists.passwordHash) &&
                     maybeHasBankAccount.isPublic == req.is_public &&
                     maybeHasBankAccount.isTalerExchange == req.is_taler_exchange &&
                     maybeHasBankAccount.internalPaytoUri == req.internal_payto_uri
-                if (isIdentic) call.respond(HttpStatusCode.Created)
-                call.respond(HttpStatusCode.Conflict)
+                if (isIdentic) {
+                    call.respond(HttpStatusCode.Created)
+                    return@post
+                }
+                throw LibeufinBankException(
+                    httpStatus = HttpStatusCode.Conflict,
+                    talerError = TalerError(
+                        code = GENERIC_UNDEFINED, // GANA needs this.
+                        hint = "Idempotency check failed."
+                    )
+                )
             }
             // From here: fresh user being added.
             val newCustomer = Customer(
@@ -295,7 +305,7 @@ val webApp: Application.() -> Unit = {
                 email = req.challenge_contact_data?.email,
                 phone = req.challenge_contact_data?.phone,
                 cashoutPayto = req.cashout_payto_uri,
-                // Following could be gone, if included in cashout_payto
+                // Following could be gone, if included in cashout_payto_uri
                 cashoutCurrency = db.configGet("cashout_currency"),
                 passwordHash = CryptoUtil.hashpw(req.password)
             )

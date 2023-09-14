@@ -236,35 +236,6 @@ class Database(private val dbConfig: String) {
         }
     }
 
-    fun customerPwAuth(login: String, pwHash: String): Customer? {
-        reconnect()
-        val stmt = prepare("""
-            SELECT
-              name,
-              email,
-              phone,
-              cashout_payto,
-              cashout_currency
-            FROM customers
-            WHERE login=? AND password_hash=?
-        """)
-        stmt.setString(1, login)
-        stmt.setString(2, pwHash)
-        val rs = stmt.executeQuery()
-        rs.use {
-            if (!rs.next()) return null
-            return Customer(
-                login = login,
-                passwordHash = pwHash,
-                name = it.getString("name"),
-                phone = it.getString("phone"),
-                email = it.getString("email"),
-                cashoutCurrency = it.getString("cashout_currency"),
-                cashoutPayto = it.getString("cashout_payto")
-            )
-        }
-    }
-
     // Mostly used to get customers out of bearer tokens.
     fun customerGetFromRowId(customer_id: Long): Customer? {
         reconnect()
