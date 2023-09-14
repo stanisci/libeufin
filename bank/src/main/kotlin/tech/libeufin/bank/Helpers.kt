@@ -154,6 +154,7 @@ fun parseTalerAmount(
     }
     return TalerAmount(
         value = value,
-        frac = fraction
+        frac = fraction,
+        currency = match.destructured.component1()
     )
 }

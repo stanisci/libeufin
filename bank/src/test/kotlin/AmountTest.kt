@@ -5,10 +5,9 @@ import tech.libeufin.bank.parseTalerAmount
 class AmountTest {
     @Test
     fun parseTalerAmountTest() {
-        parseTalerAmount("KUDOS:11")
         val one = "EUR:1"
         var obj = parseTalerAmount(one)
-        assert(obj.value == 1L && obj.frac == 0)
+        assert(obj.value == 1L && obj.frac == 0 && obj.currency == "EUR")
         val onePointZero = "EUR:1.00"
         obj = parseTalerAmount(onePointZero)
         assert(obj.value == 1L && obj.frac == 0)

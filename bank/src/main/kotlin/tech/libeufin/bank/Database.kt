@@ -22,9 +22,19 @@ data class Customer(
 )
 fun Customer.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Cutsomer '${this.login}' had no DB row ID")
 
+/**
+ * Represents a Taler amount.  This type can be used both
+ * to hold database records and amounts coming from the parser.
+ */
 data class TalerAmount(
     val value: Long,
-    val frac: Int
+    val frac: Int,
+    /**
+     * The currency is likely null when the object is defined
+     * from database records.  It is instead not null when the
+     * object comes from the parsing of serialized amounts.
+     */
+    val currency: String? = null
 )
 
 // BIC got removed, because it'll be expressed in the internal_payto_uri.
