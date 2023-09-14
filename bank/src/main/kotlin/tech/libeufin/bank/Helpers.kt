@@ -20,11 +20,70 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
-import tech.libeufin.util.getIban
+import tech.libeufin.util.*
 import java.lang.NumberFormatException
 
-// HELPERS.  FIXME: make unit tests for them.
+// HELPERS.
 
+
+
+/**
+ * Performs the HTTP basic authentication.  Returns the
+ * authenticated customer on success, or null otherwise.
+ */
+fun doBasicAuth(encodedCredentials: String): Customer? {
+    val plainUserAndPass = String(base64ToBytes(encodedCredentials), Charsets.UTF_8) // :-separated
+    val userAndPassSplit = plainUserAndPass.split(
+        ":",
+        /**
+         * this parameter allows colons to occur in passwords.
+         * Without this, passwords that have colons would be split
+         * and become meaningless.
+         */
+        limit = 2
+    )
+    if (userAndPassSplit.size != 2)
+        throw LibeufinBankException(
+            httpStatus = HttpStatusCode.BadRequest,
+            talerError = TalerError(
+                code = GENERIC_HTTP_HEADERS_MALFORMED, // 23
+                "Malformed Basic auth credentials found in the Authorization header."
+            )
+        )
+    val login = userAndPassSplit[0]
+    val plainPassword = userAndPassSplit[1]
+    val maybeCustomer = db.customerGetFromLogin(login) ?: return null
+    if (!CryptoUtil.checkpw(plainPassword, maybeCustomer.passwordHash)) return null
+    return maybeCustomer
+}
+
+/* Performs the bearer-token authentication.  Returns the
+ * authenticated customer on success, null otherwise. */
+fun doTokenAuth(
+    token: String,
+    requiredScope: TokenScope, // readonly or readwrite
+): Customer? {
+    val maybeToken: BearerToken = db.bearerTokenGet(token.toByteArray(Charsets.UTF_8)) ?: return null
+    val isExpired: Boolean = maybeToken.expirationTime - getNow().toMicro() < 0
+    if (isExpired || maybeToken.scope != requiredScope) return null // FIXME: mention the reason?
+    // Getting the related username.
+    return db.customerGetFromRowId(maybeToken.bankCustomer)
+        ?: throw LibeufinBankException(
+            httpStatus = HttpStatusCode.InternalServerError,
+            talerError = TalerError(
+                code = GENERIC_INTERNAL_INVARIANT_FAILURE,
+                hint = "Customer not found, despite token mentions it.",
+            ))
+}
+
+fun unauthorized(hint: String? = null): LibeufinBankException =
+    LibeufinBankException(
+        httpStatus = HttpStatusCode.Unauthorized,
+        talerError = TalerError(
+            code = BANK_LOGIN_FAILED,
+            hint = hint
+        )
+    )
 fun internalServerError(hint: String): LibeufinBankException =
     LibeufinBankException(
         httpStatus = HttpStatusCode.InternalServerError,
@@ -33,9 +92,28 @@ fun internalServerError(hint: String): LibeufinBankException =
             hint = hint
         )
     )
+fun badRequest(
+    hint: String? = null,
+    talerErrorCode: Int = GENERIC_JSON_INVALID
+): LibeufinBankException =
+    LibeufinBankException(
+        httpStatus = HttpStatusCode.InternalServerError,
+        talerError = TalerError(
+            code = talerErrorCode,
+            hint = hint
+        )
+    )
 // Generates a new Payto-URI with IBAN scheme.
 fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
 
+/**
+ * This helper takes the serialized version of a Taler Amount
+ * type and parses it into Libeufin's internal representation.
+ * It returns a TalerAmount type, or throws a LibeufinBankException
+ * it the input is invalid.  Such exception will be then caught by
+ * Ktor, transformed into the appropriate HTTP error type, and finally
+ * responded to the client.
+ */
 fun parseTalerAmount(
     amount: String,
     fracDigits: FracDigits = FracDigits.EIGHT

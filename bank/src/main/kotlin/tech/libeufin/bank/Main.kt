@@ -16,6 +16,7 @@
  * License along with LibEuFin; see the file COPYING.  If not, see
  * <http://www.gnu.org/licenses/>
  */
+// Main HTTP handlers and related data definitions.
 
 package tech.libeufin.bank
 
@@ -32,7 +33,11 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.encoding.decodeStructure
+import kotlinx.serialization.json.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
@@ -83,60 +88,56 @@ data class RegisterAccountRequest(
     val internal_payto_uri: String? = null
 )
 
+/**
+ * This is the _internal_ representation of a RelativeTime
+ * JSON type.
+ */
+data class RelativeTime(
+    val d_us: Long
+)
+
+/**
+ * This custom (de)serializer interprets the RelativeTime JSON
+ * type.  In particular, it is responsible for converting the
+ * "forever" string into Long.MAX_VALUE.  Any other numeric value
+ * is passed as is.
+ */
+object RelativeTimeSerializer : KSerializer<RelativeTime> {
+    override fun serialize(encoder: Encoder, value: RelativeTime) {
+        throw internalServerError("Encoding of RelativeTime not implemented.") // API doesn't require this.
+    }
+    override fun deserialize(decoder: Decoder): RelativeTime {
+        val jsonInput = decoder as? JsonDecoder ?: throw internalServerError("RelativeTime had no JsonDecoder")
+        val json = try {
+            jsonInput.decodeJsonElement().jsonObject
+        } catch (e: Exception) {
+            throw badRequest(e.message) // JSON was malformed.
+        }
+        val maybeDUs = json["d_us"]?.jsonPrimitive ?: throw badRequest("Relative time invalid: d_us field not found")
+        if (maybeDUs.isString) {
+            if (maybeDUs.content != "forever") throw badRequest("Only 'forever' allowed for d_us as string, but '${maybeDUs.content}' was found")
+            return RelativeTime(d_us = Long.MAX_VALUE)
+        }
+        val dUs: Long = maybeDUs.longOrNull ?: throw badRequest("Could not convert d_us: '${maybeDUs.content}' to a number")
+        return RelativeTime(d_us = dUs)
+    }
+
+    override val descriptor: SerialDescriptor =
+        buildClassSerialDescriptor("RelativeTime") {
+            element<JsonElement>("d_us")
+        }
+}
+@Serializable
+data class TokenRequest(
+    val scope: TokenScope,
+    @Contextual
+    val duration: RelativeTime
+)
+
 class LibeufinBankException(
     val httpStatus: HttpStatusCode,
     val talerError: TalerError
 ) : Exception(talerError.hint)
-
-
-/**
- * Performs the HTTP basic authentication.  Returns the
- * authenticated customer on success, or null otherwise.
- */
-fun doBasicAuth(encodedCredentials: String): Customer? {
-    val plainUserAndPass = String(base64ToBytes(encodedCredentials), Charsets.UTF_8) // :-separated
-    val userAndPassSplit = plainUserAndPass.split(
-        ":",
-        /**
-         * this parameter allows colons to occur in passwords.
-         * Without this, passwords that have colons would be split
-         * and become meaningless.
-         */
-        limit = 2
-    )
-    if (userAndPassSplit.size != 2)
-        throw LibeufinBankException(
-            httpStatus = HttpStatusCode.BadRequest,
-            talerError = TalerError(
-                code = GENERIC_HTTP_HEADERS_MALFORMED, // 23
-                "Malformed Basic auth credentials found in the Authorization header."
-            )
-        )
-    val login = userAndPassSplit[0]
-    val plainPassword = userAndPassSplit[1]
-    val maybeCustomer = db.customerGetFromLogin(login) ?: return null
-    if (!CryptoUtil.checkpw(plainPassword, maybeCustomer.passwordHash)) return null
-    return maybeCustomer
-}
-
-/* Performs the bearer-token authentication.  Returns the
- * authenticated customer on success, null otherwise. */
-fun doTokenAuth(
-    token: String,
-    requiredScope: TokenScope, // readonly or readwrite
-): Customer? {
-    val maybeToken: BearerToken = db.bearerTokenGet(token.toByteArray(Charsets.UTF_8)) ?: return null
-    val isExpired: Boolean = maybeToken.expirationTime - getNow().toMicro() < 0
-    if (isExpired || maybeToken.scope != requiredScope) return null // FIXME: mention the reason?
-    // Getting the related username.
-    return db.customerGetFromRowId(maybeToken.bankCustomer)
-        ?: throw LibeufinBankException(
-            httpStatus = HttpStatusCode.InternalServerError,
-            talerError = TalerError(
-                code = GENERIC_INTERNAL_INVARIANT_FAILURE,
-                hint = "Customer not found, despite token mentions it.",
-        ))
-}
 
 /**
  * This function tries to authenticate the call according
@@ -242,6 +243,13 @@ val webApp: Application.() -> Unit = {
         }
     }
     routing {
+        post("/accounts/{USERNAME}/auth-token") {
+            val customer = call.myAuth(TokenScope.readwrite)
+            val endpointOwner = call.expectUriComponent("USERNAME")
+            if (customer == null || customer.login != endpointOwner)
+                throw unauthorized("Auth failed or client has no rights")
+
+        }
         post("/accounts") {
             // check if only admin.
             val maybeOnlyAdmin = db.configGet("only_admin_registrations")

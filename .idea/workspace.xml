@@ -6,11 +6,9 @@
   <component name="ChangeListManager">
     <list default="true" id="9436eb1e-de48-4f11-8ff7-f359340cb458" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bank/src/main/kotlin/tech/libeufin/bank/Database.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bank/src/main/kotlin/tech/libeufin/bank/Database.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bank/src/main/kotlin/tech/libeufin/bank/Helpers.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bank/src/main/kotlin/tech/libeufin/bank/Helpers.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bank/src/main/kotlin/tech/libeufin/bank/Main.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bank/src/main/kotlin/tech/libeufin/bank/Main.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bank/src/test/kotlin/AmountTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bank/src/test/kotlin/AmountTest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bank/src/test/kotlin/LibeuFinApiTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bank/src/test/kotlin/LibeuFinApiTest.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bank/src/test/kotlin/JsonTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/bank/src/test/kotlin/JsonTest.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -72,30 +70,7 @@
     &quot;settings.editor.splitter.proportion&quot;: &quot;0.31419808&quot;
   }
 }</component>
-  <component name="RunManager" selected="Gradle.LibeuFinApiTest.createAccountTest">
-    <configuration name="AmountTest.parseAmountTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
-      <ExternalSystemSettings>
-        <option name="executionName" />
-        <option name="externalProjectPath" value="$PROJECT_DIR$" />
-        <option name="externalSystemIdString" value="GRADLE" />
-        <option name="scriptParameters" value="--quiet" />
-        <option name="taskDescriptions">
-          <list />
-        </option>
-        <option name="taskNames">
-          <list>
-            <option value=":bank:test" />
-            <option value="--tests" />
-            <option value="&quot;AmountTest.parseAmountTest&quot;" />
-          </list>
-        </option>
-        <option name="vmOptions" />
-      </ExternalSystemSettings>
-      <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
-      <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
-      <DebugAllEnabled>false</DebugAllEnabled>
-      <method v="2" />
-    </configuration>
+  <component name="RunManager" selected="Gradle.JsonTest.unionTypeTest">
     <configuration name="AmountTest.parseTalerAmountTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
       <ExternalSystemSettings>
         <option name="executionName" />
@@ -142,12 +117,12 @@
       <DebugAllEnabled>false</DebugAllEnabled>
       <method v="2" />
     </configuration>
-    <configuration name="DatabaseTest.bankAccountTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
+    <configuration name="JsonTest.deserializationTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
       <ExternalSystemSettings>
         <option name="executionName" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
         <option name="externalSystemIdString" value="GRADLE" />
-        <option name="scriptParameters" value="" />
+        <option name="scriptParameters" value="--quiet" />
         <option name="taskDescriptions">
           <list />
         </option>
@@ -155,7 +130,30 @@
           <list>
             <option value=":bank:test" />
             <option value="--tests" />
-            <option value="&quot;DatabaseTest.bankAccountTest&quot;" />
+            <option value="&quot;JsonTest.deserializationTest&quot;" />
+          </list>
+        </option>
+        <option name="vmOptions" />
+      </ExternalSystemSettings>
+      <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
+      <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+      <DebugAllEnabled>false</DebugAllEnabled>
+      <method v="2" />
+    </configuration>
+    <configuration name="JsonTest.unionTypeTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
+      <ExternalSystemSettings>
+        <option name="executionName" />
+        <option name="externalProjectPath" value="$PROJECT_DIR$" />
+        <option name="externalSystemIdString" value="GRADLE" />
+        <option name="scriptParameters" value="--quiet" />
+        <option name="taskDescriptions">
+          <list />
+        </option>
+        <option name="taskNames">
+          <list>
+            <option value=":bank:test" />
+            <option value="--tests" />
+            <option value="&quot;JsonTest.unionTypeTest&quot;" />
           </list>
         </option>
         <option name="vmOptions" />
@@ -189,19 +187,19 @@
       <method v="2" />
     </configuration>
     <list>
+      <item itemvalue="Gradle.JsonTest.unionTypeTest" />
       <item itemvalue="Gradle.CryptoUtilTest.passwordHashing" />
-      <item itemvalue="Gradle.DatabaseTest.bankAccountTest" />
       <item itemvalue="Gradle.AmountTest.parseTalerAmountTest" />
-      <item itemvalue="Gradle.AmountTest.parseAmountTest" />
+      <item itemvalue="Gradle.JsonTest.deserializationTest" />
       <item itemvalue="Gradle.LibeuFinApiTest.createAccountTest" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Gradle.JsonTest.unionTypeTest" />
+        <item itemvalue="Gradle.JsonTest.deserializationTest" />
         <item itemvalue="Gradle.LibeuFinApiTest.createAccountTest" />
         <item itemvalue="Gradle.CryptoUtilTest.passwordHashing" />
         <item itemvalue="Gradle.AmountTest.parseTalerAmountTest" />
-        <item itemvalue="Gradle.DatabaseTest.bankAccountTest" />
-        <item itemvalue="Gradle.AmountTest.parseAmountTest" />
       </list>
     </recent_temporary>
   </component>
