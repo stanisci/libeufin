@@ -70,11 +70,6 @@ assemble:
 check:
 	@./gradlew check
 
-.PHONY: check-cli
-check-cli:
-	@cd ./cli/tests && ./circuit_test.sh
-	@cd ./cli/tests && ./debit_test.sh
-
 .PHONY: pofi-get
 pofi-get:
 	@./gradlew -q :nexus:pofi --args="download" # --args="arg1 arg2 .."

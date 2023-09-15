@@ -88,7 +88,7 @@ done
 # Checking required options.
 if test -z "${PATCHES_LOCATION:-}"; then
   # This value is substituted by GNU make at installation time.
-  PATCHES_LOCATION=__SANDBOX_STATIC_PATCHES_LOCATION__
+  PATCHES_LOCATION=__BANK_STATIC_PATCHES_LOCATION__
 fi
 if test -z "${DB_CONNECTION:-}"; then
   fail "Required option '-d' was missing."
