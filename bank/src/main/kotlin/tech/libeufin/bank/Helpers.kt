@@ -20,6 +20,7 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
+import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.*
 import java.lang.NumberFormatException
 
@@ -44,7 +45,7 @@ fun doBasicAuth(encodedCredentials: String): Customer? {
         throw LibeufinBankException(
             httpStatus = HttpStatusCode.BadRequest,
             talerError = TalerError(
-                code = GENERIC_HTTP_HEADERS_MALFORMED, // 23
+                code = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED.code,
                 "Malformed Basic auth credentials found in the Authorization header."
             )
         )
@@ -69,7 +70,7 @@ fun doTokenAuth(
         ?: throw LibeufinBankException(
             httpStatus = HttpStatusCode.InternalServerError,
             talerError = TalerError(
-                code = GENERIC_INTERNAL_INVARIANT_FAILURE,
+                code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
                 hint = "Customer not found, despite token mentions it.",
             ))
 }
@@ -78,7 +79,7 @@ fun unauthorized(hint: String? = null): LibeufinBankException =
     LibeufinBankException(
         httpStatus = HttpStatusCode.Unauthorized,
         talerError = TalerError(
-            code = BANK_LOGIN_FAILED,
+            code = TalerErrorCode.TALER_EC_BANK_LOGIN_FAILED.code,
             hint = hint
         )
     )
@@ -86,18 +87,18 @@ fun internalServerError(hint: String): LibeufinBankException =
     LibeufinBankException(
         httpStatus = HttpStatusCode.InternalServerError,
         talerError = TalerError(
-            code = GENERIC_INTERNAL_INVARIANT_FAILURE,
+            code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
             hint = hint
         )
     )
 fun badRequest(
     hint: String? = null,
-    talerErrorCode: Int = GENERIC_JSON_INVALID
+    talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
 ): LibeufinBankException =
     LibeufinBankException(
         httpStatus = HttpStatusCode.InternalServerError,
         talerError = TalerError(
-            code = talerErrorCode,
+            code = talerErrorCode.code,
             hint = hint
         )
     )
@@ -123,7 +124,7 @@ fun parseTalerAmount(
     val match = Regex(format).find(amount) ?: throw LibeufinBankException(
         httpStatus = HttpStatusCode.BadRequest,
         talerError = TalerError(
-            code = BANK_BAD_FORMAT_AMOUNT,
+            code = TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT.code,
             hint = "Invalid amount: $amount"
         ))
     val _value = match.destructured.component2()
@@ -145,7 +146,7 @@ fun parseTalerAmount(
         throw LibeufinBankException(
             httpStatus = HttpStatusCode.BadRequest,
             talerError = TalerError(
-                code = BANK_BAD_FORMAT_AMOUNT,
+                code = TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT.code,
                 hint = "Invalid amount: ${amount}, could not extract the value part."
             )
         )

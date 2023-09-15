@@ -38,6 +38,7 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.encoding.decodeStructure
 import kotlinx.serialization.json.*
+import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
@@ -46,16 +47,6 @@ import tech.libeufin.util.*
 // GLOBALS
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank")
 val db = Database(System.getProperty("BANK_DB_CONNECTION_STRING"))
-// fixme: make enum out of error codes.
-const val GENERIC_JSON_INVALID = 22
-const val GENERIC_PARAMETER_MALFORMED = 26
-const val GENERIC_PARAMETER_MISSING = 25
-const val BANK_UNMANAGED_EXCEPTION = 5110
-const val BANK_BAD_FORMAT_AMOUNT = 5108
-const val GENERIC_HTTP_HEADERS_MALFORMED = 23
-const val GENERIC_INTERNAL_INVARIANT_FAILURE = 60
-const val BANK_LOGIN_FAILED = 5105
-const val GENERIC_UNAUTHORIZED = 40
 const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 
 // TYPES
@@ -112,7 +103,10 @@ object RelativeTimeSerializer : KSerializer<RelativeTime> {
         val json = try {
             jsonInput.decodeJsonElement().jsonObject
         } catch (e: Exception) {
-            throw badRequest("Did not find a RelativeTime JSON object: ${e.message}")
+            throw badRequest(
+                "Did not find a RelativeTime JSON object: ${e.message}",
+                TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
+            )
         }
         val maybeDUs = json["d_us"]?.jsonPrimitive ?: throw badRequest("Relative time invalid: d_us field not found")
         if (maybeDUs.isString) {
@@ -153,11 +147,11 @@ fun ApplicationCall.myAuth(requiredScope: TokenScope): Customer? {
     // Extracting the Authorization header.
     val header = getAuthorizationRawHeader(this.request) ?: throw badRequest(
         "Authorization header not found.",
-        GENERIC_HTTP_HEADERS_MALFORMED
+        TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
     )
     val authDetails = getAuthorizationDetails(header) ?: throw badRequest(
         "Authorization is invalid.",
-        GENERIC_HTTP_HEADERS_MALFORMED
+        TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
     )
     return when (authDetails.scheme) {
         "Basic" -> doBasicAuth(authDetails.content)
@@ -165,7 +159,7 @@ fun ApplicationCall.myAuth(requiredScope: TokenScope): Customer? {
         else -> throw LibeufinBankException(
             httpStatus = HttpStatusCode.Unauthorized,
             talerError = TalerError(
-                code = GENERIC_UNAUTHORIZED,
+                code = TalerErrorCode.TALER_EC_GENERIC_UNAUTHORIZED.code,
                 hint = "Authorization method wrong or not supported."
             )
         )
@@ -213,14 +207,16 @@ val webApp: Application.() -> Unit = {
             logger.error(rootCause?.message)
             // Telling apart invalid JSON vs missing parameter vs invalid parameter.
             val talerErrorCode = when(cause) {
-                is MissingRequestParameterException -> GENERIC_PARAMETER_MISSING // 25
-                is ParameterConversionException -> GENERIC_PARAMETER_MALFORMED // 26
-                else -> GENERIC_JSON_INVALID // 22
+                is MissingRequestParameterException ->
+                    TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
+                is ParameterConversionException ->
+                    TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MALFORMED
+                else -> TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
             }
             call.respond(
                 status = HttpStatusCode.BadRequest,
                 message = TalerError(
-                    code = talerErrorCode,
+                    code = talerErrorCode.code,
                     hint = rootCause?.message
                 ))
         }
@@ -243,7 +239,7 @@ val webApp: Application.() -> Unit = {
             call.respond(
                 status = HttpStatusCode.InternalServerError,
                 message = TalerError(
-                    code = BANK_UNMANAGED_EXCEPTION,// 5110, bank's fault
+                    code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
                     hint = cause.message
                 )
             )
@@ -266,7 +262,7 @@ val webApp: Application.() -> Unit = {
                     throw LibeufinBankException(
                         httpStatus = HttpStatusCode.Unauthorized,
                         talerError = TalerError(
-                            code = BANK_LOGIN_FAILED,
+                            code = TalerErrorCode.TALER_EC_BANK_LOGIN_FAILED.code,
                             hint = "Either 'admin' not authenticated or an ordinary user tried this operation."
                         )
                     )

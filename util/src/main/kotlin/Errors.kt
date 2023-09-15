@@ -1,6 +1,3 @@
-import io.ktor.http.*
-import tech.libeufin.util.LibeufinErrorCode
-import tech.libeufin.util.TalerErrorCode
 import kotlin.system.exitProcess
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
