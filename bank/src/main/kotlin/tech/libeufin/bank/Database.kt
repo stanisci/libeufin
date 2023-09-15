@@ -62,6 +62,13 @@ class TalerAmount(
             ?: throw internalServerError("internal_currency not found in the config")
         internalCurrency
     } else maybeCurrency
+
+    override fun equals(other: Any?): Boolean {
+        return other is TalerAmount &&
+                other.value == this.value &&
+                other.frac == this.frac &&
+                other.currency == this.currency
+    }
 }
 
 // BIC got removed, because it'll be expressed in the internal_payto_uri.

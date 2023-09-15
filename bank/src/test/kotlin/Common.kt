@@ -35,5 +35,6 @@ fun initDb(): Database {
         throwIfFails = true
     )
     val db = Database("jdbc:postgresql:///libeufincheck")
+    db.configSet("internal_currency", "KUDOS")
     return db
 }

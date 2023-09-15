@@ -9,24 +9,6 @@ import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.execCommand
 
 class LibeuFinApiTest {
-    fun initDb(): Database {
-        System.setProperty(
-            "BANK_DB_CONNECTION_STRING",
-            "jdbc:postgresql:///libeufincheck"
-        )
-        execCommand(
-            listOf(
-                "libeufin-bank-dbinit",
-                "-d",
-                "libeufincheck",
-                "-r"
-            ),
-            throwIfFails = true
-        )
-        val db = Database("jdbc:postgresql:///libeufincheck")
-        return db
-    }
-
     /**
      * Testing the account creation, its idempotency and
      * the restriction to admin to create accounts.
@@ -36,7 +18,7 @@ class LibeuFinApiTest {
         testApplication {
             val db = initDb()
             val ibanPayto = genIbanPaytoUri()
-            // Bank needs that to operate:
+            // Bank needs those to operate:
             db.configSet("max_debt_ordinary_customers", "KUDOS:11")
             application(webApp)
             var resp = client.post("/accounts") {

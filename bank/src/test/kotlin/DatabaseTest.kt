@@ -50,14 +50,14 @@ class DatabaseTest {
         lastNexusFetchRowId = 1L,
         owningCustomerId = 1L,
         hasDebt = false,
-        maxDebt = TalerAmount(10, 1)
+        maxDebt = TalerAmount(10, 1, "KUDOS")
     )
     private val bankAccountBar = BankAccount(
         internalPaytoUri = "BAR-IBAN-ABC",
         lastNexusFetchRowId = 1L,
         owningCustomerId = 2L,
         hasDebt = false,
-        maxDebt = TalerAmount(10, 1)
+        maxDebt = TalerAmount(10, 1, "KUDOS")
     )
 
     @Test
@@ -155,8 +155,8 @@ class DatabaseTest {
         // Foo should have returned to zero and no debt, same for Bar.
         // Foo: debit -> credit
         assert(fooAccount?.hasDebt == false && barAccount?.hasDebt == false)
-        assert(fooAccount?.balance?.equals(TalerAmount(0, 0)) == true)
-        assert(barAccount?.balance?.equals(TalerAmount(0, 0)) == true)
+        assert(fooAccount?.balance?.equals(TalerAmount(0, 0, "KUDOS")) == true)
+        assert(barAccount?.balance?.equals(TalerAmount(0, 0, "KUDOS")) == true)
         // Bringing Bar to debit.
         val barPaysMore = db.bankTransactionCreate(barPaysFoo)
         assert(barPaysAgain == Database.BankTransactionResult.SUCCESS)
@@ -164,8 +164,8 @@ class DatabaseTest {
         fooAccount = db.bankAccountGetFromOwnerId(fooId)
         // Bar: credit -> debit
         assert(fooAccount?.hasDebt == false && barAccount?.hasDebt == true)
-        assert(fooAccount?.balance?.equals(TalerAmount(10, 0)) == true)
-        assert(barAccount?.balance?.equals(TalerAmount(10, 0)) == true)
+        assert(fooAccount?.balance?.equals(TalerAmount(10, 0, "KUDOS")) == true)
+        assert(barAccount?.balance?.equals(TalerAmount(10, 0, "KUDOS")) == true)
     }
     @Test
     fun customerCreationTest() {
