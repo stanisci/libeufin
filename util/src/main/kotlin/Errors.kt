@@ -25,14 +25,6 @@ import org.slf4j.LoggerFactory
  */
 
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
-
-open class UtilError(
-    val statusCode: HttpStatusCode,
-    val reason: String,
-    val ec: LibeufinErrorCode? = null
-) :
-    Exception("$reason (HTTP status $statusCode)")
-
 /**
  * Helper function that wraps throwable code and
  * (1) prints the error message and (2) terminates
@@ -53,5 +45,4 @@ fun execThrowableOrTerminate(func: () -> Unit) {
 
 fun printLnErr(errorMessage: String) {
     System.err.println(errorMessage)
-
 }

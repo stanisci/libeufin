@@ -31,12 +31,10 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import org.postgresql.jdbc.PgConnection
 import java.net.URI
 
-fun Transaction.isPostgres(): Boolean {
-    return this.db.vendor == "postgresql"
-}
+fun getCurrentUser(): String = System.getProperty("user.name")
 
 fun isPostgres(): Boolean {
-    val db = TransactionManager.defaultDatabase ?: throw internalServerError(
+    val db = TransactionManager.defaultDatabase ?: throw Exception(
         "Could not find the default database, can't check if that's Postgres."
     )
     return db.vendor == "postgresql"
@@ -93,7 +91,7 @@ fun Transaction.postgresNotify(
     if (payload != null) {
         val argEnc = Base32Crockford.encode(payload.toByteArray())
         if (payload.toByteArray().size > 8000)
-            throw internalServerError(
+            throw Exception(
                 "DB notification on channel $channel used >8000 bytes payload '$payload'"
             )
         this.exec("NOTIFY $channel, '$argEnc'")
@@ -118,7 +116,7 @@ fun Transaction.postgresNotify(
  * delivery more reliable.
  */
 class PostgresListenHandle(val channelName: String) {
-    private val db = TransactionManager.defaultDatabase ?: throw internalServerError(
+    private val db = TransactionManager.defaultDatabase ?: throw Exception(
         "Could not find the default database, won't get Postgres notifications."
     )
     private val conn = db.connector().connection as PgConnection
@@ -165,7 +163,7 @@ class PostgresListenHandle(val channelName: String) {
         for (n in maybeNotifications) {
             if (n.name.lowercase() != channelName.lowercase()) {
                 conn.close() // always close on error, without the optional check.
-                throw internalServerError("Channel $channelName got notified from ${n.name}!")
+                throw Exception("Channel $channelName got notified from ${n.name}!")
             }
         }
         logger.debug("Found DB notifications on channel $channelName")
@@ -231,7 +229,7 @@ fun getDatabaseName(): String {
                 maybe_db_name = oneLineRes.getString("database_name")
         }
     }
-    return maybe_db_name ?: throw internalServerError("Could not find current DB name")
+    return maybe_db_name ?: throw Exception("Could not find current DB name")
 }
 
 /**
@@ -250,7 +248,7 @@ fun connectWithSchema(jdbcConn: String, schemaName: String? = null) {
     try { transaction { this.db.name } }
     catch (e: Throwable) {
         logger.error("Test query failed: ${e.message}")
-        throw internalServerError("Failed connection to: $jdbcConn")
+        throw Exception("Failed connection to: $jdbcConn")
     }
 }
 
@@ -266,7 +264,7 @@ fun getJdbcConnectionFromPg(pgConn: String): String {
 fun _getJdbcConnectionFromPg(pgConn: String): String {
     if (!pgConn.startsWith("postgresql://") && !pgConn.startsWith("postgres://")) {
         logger.info("Not a Postgres connection string: $pgConn")
-        throw internalServerError("Not a Postgres connection string: $pgConn")
+        throw Exception("Not a Postgres connection string: $pgConn")
     }
     var maybeUnixSocket = false
     val parsed = URI(pgConn)
@@ -293,7 +291,7 @@ fun _getJdbcConnectionFromPg(pgConn: String): String {
         // Check whether the Unix domain socket location was given non-standard.
         val socketLocation = hostAsParam ?: "/var/run/postgresql/.s.PGSQL.5432"
         if (!socketLocation.startsWith('/')) {
-            throw internalServerError("PG connection wants Unix domain socket, but non-null host doesn't start with slash")
+            throw Exception("PG connection wants Unix domain socket, but non-null host doesn't start with slash")
         }
         return "jdbc:postgresql://localhost${parsed.path}?user=$pgUser&socketFactory=org.newsclub.net.unix." +
                 "AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=$socketLocation"

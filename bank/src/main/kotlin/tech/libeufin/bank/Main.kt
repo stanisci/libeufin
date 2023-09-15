@@ -60,6 +60,7 @@ const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 
 // TYPES
 
+// FIXME: double-check the enum numeric value.
 enum class FracDigits(howMany: Int) {
     TWO(2),
     EIGHT(8)
@@ -150,8 +151,14 @@ class LibeufinBankException(
  */
 fun ApplicationCall.myAuth(requiredScope: TokenScope): Customer? {
     // Extracting the Authorization header.
-    val header = getAuthorizationRawHeader(this.request)
-    val authDetails = getAuthorizationDetails(header)
+    val header = getAuthorizationRawHeader(this.request) ?: throw badRequest(
+        "Authorization header not found.",
+        GENERIC_HTTP_HEADERS_MALFORMED
+    )
+    val authDetails = getAuthorizationDetails(header) ?: throw badRequest(
+        "Authorization is invalid.",
+        GENERIC_HTTP_HEADERS_MALFORMED
+    )
     return when (authDetails.scheme) {
         "Basic" -> doBasicAuth(authDetails.content)
         "Bearer" -> doTokenAuth(authDetails.content, requiredScope)

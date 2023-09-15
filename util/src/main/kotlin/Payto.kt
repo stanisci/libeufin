@@ -1,11 +1,10 @@
 package tech.libeufin.util
 
-import UtilError
 import io.ktor.http.*
+import logger
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
-import javax.security.auth.Subject
 
 // Payto information.
 data class Payto(
@@ -17,10 +16,9 @@ data class Payto(
     val message: String?,
     val amount: String?
 )
-class InvalidPaytoError(msg: String) : UtilError(HttpStatusCode.BadRequest, msg)
 
 // Return the value of query string parameter 'name', or null if not found.
-// 'params' is the a list of key-value elements of all the query parameters found in the URI.
+// 'params' is the list of key-value elements of all the query parameters found in the URI.
 private fun getQueryParamOrNull(name: String, params: List<Pair<String, String>>?): String? {
     if (params == null) return null
     return params.firstNotNullOfOrNull { pair ->
@@ -28,30 +26,37 @@ private fun getQueryParamOrNull(name: String, params: List<Pair<String, String>>
     }
 }
 
-fun parsePayto(payto: String): Payto {
+// Parses a Payto URI, returning null if the input is invalid.
+fun parsePayto(payto: String): Payto? {
     /**
      * This check is due because URIs having a "payto:" prefix without
      * slashes are correctly parsed by the Java 'URI' class.  'mailto'
      * for example lacks the double-slash part.
      */
-    if (!payto.startsWith("payto://"))
-        throw InvalidPaytoError("Invalid payto URI: $payto")
+    if (!payto.startsWith("payto://")) {
+        logger.error("Invalid payto URI: $payto")
+        return null
+    }
 
     val javaParsedUri = try {
         URI(payto)
     } catch (e: java.lang.Exception) {
-        throw InvalidPaytoError("'${payto}' is not a valid URI")
+        logger.error("'${payto}' is not a valid URI")
+        return null
     }
     if (javaParsedUri.scheme != "payto") {
-        throw InvalidPaytoError("'${payto}' is not payto")
+        logger.error("'${payto}' is not payto")
+        return null
     }
     val wireMethod = javaParsedUri.host
     if (wireMethod != "iban") {
-        throw InvalidPaytoError("Only 'iban' is supported, not '$wireMethod'")
+        logger.error("Only 'iban' is supported, not '$wireMethod'")
+        return null
     }
     val splitPath = javaParsedUri.path.split("/").filter { it.isNotEmpty() }
     if (splitPath.size > 2) {
-        throw InvalidPaytoError("too many path segments in iban payto URI: $payto")
+        logger.error("too many path segments in iban payto URI: $payto")
+        return null
     }
     val (iban, bic) = if (splitPath.size == 1) {
         Pair(splitPath[0], null)
@@ -61,7 +66,10 @@ fun parsePayto(payto: String): Payto {
         val queryString: List<String> = javaParsedUri.query.split("&")
         queryString.map {
             val split = it.split("=");
-            if (split.size != 2) throw InvalidPaytoError("parameter '$it' was malformed")
+            if (split.size != 2) {
+                logger.error("parameter '$it' was malformed")
+                return null
+            }
             Pair(split[0], split[1])
         }
     } else null

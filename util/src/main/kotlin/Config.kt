@@ -3,11 +3,8 @@ package tech.libeufin.util
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.LoggerContext
 import ch.qos.logback.core.util.Loader
-import io.ktor.server.application.*
 import io.ktor.util.*
 import org.slf4j.LoggerFactory
-import printLnErr
-import kotlin.system.exitProcess
 
 /**
  * Putting those values into the 'attributes' container because they
@@ -43,38 +40,3 @@ fun setLogLevel(logLevel: String?) {
         }
     }
 }
-
-/**
- * Retun the attribute, or throw 500 Internal server error.
- */
-fun <T : Any>ApplicationCall.ensureAttribute(key: AttributeKey<T>): T {
-    if (!this.attributes.contains(key)) {
-        println("Error: attribute $key not found along the call.")
-        throw internalServerError("Attribute $key not found along the call.")
-    }
-    return this.attributes[key]
-}
-
-fun getValueFromEnv(varName: String): String? {
-    val ret = System.getenv(varName)
-    if (ret.isNullOrBlank() or ret.isNullOrEmpty()) {
-        println("WARNING, $varName was not found in the environment. Will stay unknown")
-        return null
-    }
-    return ret
-}
-
-// Gets the DB connection string from env, or fail if not found.
-fun getDbConnFromEnv(varName: String): String {
-    val dbConnStr = System.getenv(varName)
-    if (dbConnStr.isNullOrBlank() or dbConnStr.isNullOrEmpty()) {
-        printLnErr("\nError: DB connection string undefined in the env variable $varName.")
-        printLnErr("\nThe following two examples are valid connection strings:")
-        printLnErr("\npostgres:///libeufindb")
-        printLnErr("postgresql://localhost:5432/libeufindb?user=Foo&password=secret\n")
-        exitProcess(1)
-    }
-    return dbConnStr
-}
-
-fun getCurrentUser(): String = System.getProperty("user.name")

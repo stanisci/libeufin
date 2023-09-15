@@ -31,6 +31,6 @@ fun execCommand(cmd: List<String>, throwIfFails: Boolean = true): Int {
         .start()
         .waitFor()
     if (result != 0 && throwIfFails)
-        throw internalServerError("Command '$cmd' failed.")
+        throw Exception("Command '$cmd' failed.")
     return result
 }

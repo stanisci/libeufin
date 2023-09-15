@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.fasterxml.jackson.databind.annotation.JsonSerialize
 import com.fasterxml.jackson.databind.deser.std.StdDeserializer
 import com.fasterxml.jackson.databind.ser.std.StdSerializer
-import tech.libeufin.util.internalServerError
 
 enum class CreditDebitIndicator {
     DBIT,
@@ -53,10 +52,6 @@ data class CurrencyAmount(
     val currency: String,
     val value: String
 )
-
-fun CurrencyAmount.toPlainString(): String {
-    return "${this.currency}:${this.value}"
-}
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class CashAccount(
@@ -285,14 +280,14 @@ data class CamtBankAccountEntry(
     val batches: List<Batch>?
 ) {
     // Checks that the given list contains only one element and returns it.
-    private fun <T>checkAndGetSingleton(maybeTxs: List<T>?): T {
-        if (maybeTxs == null || maybeTxs.size > 1) throw internalServerError(
-            "Only a singleton transaction is " +
-                    "allowed inside ${this.javaClass}."
-        )
+    private fun <T>checkAndGetSingleton(maybeTxs: List<T>?): T? {
+        if (maybeTxs == null || maybeTxs.size > 1) {
+            logger.error("Only a singleton transaction is allowed inside ${this.javaClass}.")
+            return null
+        }
         return maybeTxs[0]
     }
-    private fun getSingletonTxDtls(): TransactionDetails {
+    private fun getSingletonTxDtls(): TransactionDetails? {
         /**
          * Types breakdown until the meaningful payment information is reached.
          *
@@ -315,9 +310,9 @@ data class CamtBankAccountEntry(
          * type, that is also -- so far -- required to be a singleton
          * inside Batch.
          */
-        val batch: Batch = checkAndGetSingleton(this.batches)
+        val batch: Batch = checkAndGetSingleton(this.batches) ?: return null
         val batchTransactions = batch.batchTransactions
-        val tx: BatchTransaction = checkAndGetSingleton(batchTransactions)
+        val tx: BatchTransaction = checkAndGetSingleton(batchTransactions) ?: return null
         val details: TransactionDetails = tx.details
         return details
     }
@@ -329,18 +324,8 @@ data class CamtBankAccountEntry(
      * and never participate in the application logic.
      */
     @JsonIgnore
-    fun getSingletonSubject(): String {
-        val maybeSubject = getSingletonTxDtls().unstructuredRemittanceInformation
-        if (maybeSubject == null) {
-            throw internalServerError(
-                "The parser let in a transaction without subject" +
-                        ", acctSvcrRef: ${this.getSingletonAcctSvcrRef()}."
-            )
-        }
+    fun getSingletonSubject(): String? {
+        val maybeSubject = getSingletonTxDtls()?.unstructuredRemittanceInformation ?: return null
         return maybeSubject
-    }
-    @JsonIgnore
-    fun getSingletonAcctSvcrRef(): String? {
-        return getSingletonTxDtls().accountServicerRef
     }
 }

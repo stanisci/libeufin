@@ -19,10 +19,8 @@
 
 package tech.libeufin.util
 
-import UtilError
-import io.ktor.http.HttpStatusCode
+import logger
 import java.math.BigInteger
-import java.math.BigDecimal
 import java.util.*
 
 fun ByteArray.toHexString(): String {
@@ -103,24 +101,6 @@ data class AmountWithCurrency(
     val amount: String
 )
 
-fun parseDecimal(decimalStr: String): BigDecimal {
-    if(!validatePlainAmount(decimalStr, withSign = true))
-        throw UtilError(
-            HttpStatusCode.BadRequest,
-            "Bad string amount given: $decimalStr",
-            LibeufinErrorCode.LIBEUFIN_EC_GENERIC_PARAMETER_MALFORMED
-        )
-    return try {
-        BigDecimal(decimalStr)
-    } catch (e: NumberFormatException) {
-        throw UtilError(
-            HttpStatusCode.BadRequest,
-            "Bad string amount given: $decimalStr",
-            LibeufinErrorCode.LIBEUFIN_EC_GENERIC_PARAMETER_MALFORMED
-        )
-    }
-}
-
 fun getRandomString(length: Int): String {
     val allowedChars = ('A' .. 'Z') + ('0' .. '9')
     return (1 .. length)
@@ -146,31 +126,7 @@ fun isValidResourceName(name: String): Boolean {
     return name.matches(Regex("[a-z]([-a-z0-9]*[a-z0-9])?"))
 }
 
-fun requireValidResourceName(name: String): String {
-    if (!isValidResourceName(name)) {
-        throw UtilError(
-            HttpStatusCode.BadRequest,
-            "Invalid resource name. The first character must be a lowercase letter, " +
-                    "and all following characters (except for the last character) must be a dash, " +
-                    "lowercase letter, or digit. The last character must be a lowercase letter or digit.",
-            LibeufinErrorCode.LIBEUFIN_EC_GENERIC_PARAMETER_MALFORMED
-        )
-    }
-    return name
-}
-
-
-fun sanityCheckOrThrow(credentials: Pair<String, String>) {
-    if (!sanityCheckCredentials(credentials)) throw UtilError(
-        HttpStatusCode.BadRequest,
-        "Please only use alphanumeric credentials.",
-        LibeufinErrorCode.LIBEUFIN_EC_GENERIC_PARAMETER_MALFORMED
-    )
-}
-
-/**
- * Sanity-check user's credentials.
- */
+// Sanity-check user's credentials.
 fun sanityCheckCredentials(credentials: Pair<String, String>): Boolean {
     val allowedChars = Regex("^[a-zA-Z0-9]+$")
     if (!allowedChars.matches(credentials.first)) return false
@@ -182,11 +138,12 @@ fun sanityCheckCredentials(credentials: Pair<String, String>): Boolean {
  * Parses string into java.util.UUID format or throws 400 Bad Request.
  * The output is usually consumed in database queries.
  */
-fun parseUuid(maybeUuid: String): UUID {
+fun parseUuid(maybeUuid: String): UUID? {
     val uuid = try {
         UUID.fromString(maybeUuid)
     } catch (e: Exception) {
-        throw badRequest("'$maybeUuid' is an invalid UUID.")
+        logger.error("'$maybeUuid' is an invalid UUID.")
+        return null
     }
     return uuid
 }
@@ -198,6 +155,7 @@ fun hasWopidPlaceholder(captchaUrl: String): Boolean {
 }
 
 // Tries to extract a valid reserve public key from the raw subject line
+// or returns null if the input is invalid.
 fun extractReservePubFromSubject(rawSubject: String): String? {
     val re = "\\b[a-z0-9A-Z]{52}\\b".toRegex()
     val result = re.find(rawSubject.replace("[\n]+".toRegex(), "")) ?: return null
