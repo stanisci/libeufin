@@ -1,3 +1,3 @@
-This directory contains the new definitions of Sandbox
-and Nexus database schemas.  At the time of writing, they
-do NOT get installed/used.
+This directory contains the database schemas of bank and nexus.
+Currently only the bank files get installed.  Nexus will after
+its refactoring.
