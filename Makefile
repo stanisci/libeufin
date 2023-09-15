@@ -3,7 +3,7 @@ include build-system/config.mk
 escaped_pwd = $(shell pwd | sed 's/\//\\\//g')
 
 all: assemble
-install: install-nexus install-bank install-cli install-db-versioning
+install: install-bank install-cli install-db-versioning # install-nexus 
 git-archive-all = ./build-system/taler-build-scripts/archive-with-submodules/git_archive_all.py
 git_tag=$(shell git describe --tags)
 gradle_version=$(shell ./gradlew -q libeufinVersion)
@@ -39,9 +39,10 @@ deb: exec-arch copy-spa
 install-bank:
 	@./gradlew -q -Pprefix=$(prefix) bank:installToPrefix; cd ..
 
-.PHONY: install-nexus
-install-nexus:
-	@./gradlew -q -Pprefix=$(prefix) nexus:installToPrefix; cd ..
+# To reactivate after the refactoring.
+# .PHONY: install-nexus
+# install-nexus:
+#	@./gradlew -q -Pprefix=$(prefix) nexus:installToPrefix; cd ..
 
 .PHONY: install-cli
 install-cli:
