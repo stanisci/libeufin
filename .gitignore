@@ -1,4 +1,4 @@
-.idea/
+.idea/*
 /nexus/bin/
 /sandbox/bin/
 /util/bin/
