@@ -51,15 +51,11 @@ install-cli:
 
 .PHONY: install-db-versioning
 install-db-versioning:
-	$(eval LOAD_SQL_SCRIPT_NAME := libeufin-load-sql)
-	@sed "s|__STATIC_PATCHES_LOCATION__|$(prefix)/share/libeufin/sql|" < contrib/$(LOAD_SQL_SCRIPT_NAME) > build/$(LOAD_SQL_SCRIPT_NAME)
-	@install -D database-versioning/*.sql -t $(prefix)/share/libeufin/sql
-	@install -D build/$(LOAD_SQL_SCRIPT_NAME) -t $(prefix)/bin
 	$(eval BANK_DBINIT_SCRIPT := libeufin-bank-dbinit)
 	@sed "s|__BANK_STATIC_PATCHES_LOCATION__|$(prefix)/share/libeufin/sql/bank|" < contrib/$(BANK_DBINIT_SCRIPT) > build/$(BANK_DBINIT_SCRIPT)
-	@install -D database-versioning/new/libeufin-bank*.sql -t $(prefix)/share/libeufin/sql/bank
-	@install -D database-versioning/new/versioning.sql -t $(prefix)/share/libeufin/sql/bank
-	@install -D database-versioning/new/procedures.sql -t $(prefix)/share/libeufin/sql/bank
+	@install -D database-versioning/libeufin-bank*.sql -t $(prefix)/share/libeufin/sql/bank
+	@install -D database-versioning/versioning.sql -t $(prefix)/share/libeufin/sql/bank
+	@install -D database-versioning/procedures.sql -t $(prefix)/share/libeufin/sql/bank
 	@install -D build/$(BANK_DBINIT_SCRIPT) -t $(prefix)/bin
 
 .PHONY: assemble
