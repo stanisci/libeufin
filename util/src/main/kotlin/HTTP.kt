@@ -67,6 +67,7 @@ fun nullConfigValueError(
 ): Throwable {
     return internalServerError("Configuration value for '$configKey' at demobank '$demobankName' is null.")
 }
+
 fun internalServerError(
     reason: String,
     libeufinErrorCode: LibeufinErrorCode? = LibeufinErrorCode.LIBEUFIN_EC_NONE

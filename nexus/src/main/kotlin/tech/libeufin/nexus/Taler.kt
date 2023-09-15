@@ -44,9 +44,6 @@ import org.jetbrains.exposed.dao.id.IdTable
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
-import tech.libeufin.nexus.bankaccount.addPaymentInitiation
-import tech.libeufin.nexus.bankaccount.fetchBankAccountTransactions
-import tech.libeufin.nexus.iso20022.*
 import tech.libeufin.nexus.server.*
 import tech.libeufin.nexus.xlibeufinbank.ingestXLibeufinBankMessage
 import tech.libeufin.util.*

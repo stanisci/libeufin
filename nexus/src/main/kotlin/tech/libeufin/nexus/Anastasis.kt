@@ -1,7 +1,6 @@
 package tech.libeufin.nexus
 
 import TransactionDetails
-import io.ktor.client.*
 import io.ktor.http.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.server.PermissionQuery

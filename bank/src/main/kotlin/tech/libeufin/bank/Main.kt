@@ -111,7 +111,7 @@ object RelativeTimeSerializer : KSerializer<RelativeTime> {
         val json = try {
             jsonInput.decodeJsonElement().jsonObject
         } catch (e: Exception) {
-            throw badRequest(e.message) // JSON was malformed.
+            throw badRequest("Did not find a RelativeTime JSON object: ${e.message}")
         }
         val maybeDUs = json["d_us"]?.jsonPrimitive ?: throw badRequest("Relative time invalid: d_us field not found")
         if (maybeDUs.isString) {

@@ -30,7 +30,6 @@ import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.postgresql.jdbc.PgConnection
 import java.net.URI
-import kotlin.system.exitProcess
 
 fun Transaction.isPostgres(): Boolean {
     return this.db.vendor == "postgresql"

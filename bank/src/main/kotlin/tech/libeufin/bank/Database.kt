@@ -1,8 +1,26 @@
+/*
+ * This file is part of LibEuFin.
+ * Copyright (C) 2019 Stanisci and Dold.
+
+ * LibEuFin is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation; either version 3, or
+ * (at your option) any later version.
+
+ * LibEuFin is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General
+ * Public License for more details.
+
+ * You should have received a copy of the GNU Affero General Public
+ * License along with LibEuFin; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>
+ */
+
+
 package tech.libeufin.bank
 
 import org.postgresql.jdbc.PgConnection
-import tech.libeufin.util.internalServerError
-
 import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.SQLException
@@ -20,22 +38,31 @@ data class Customer(
     val cashoutPayto: String? = null,
     val cashoutCurrency: String? = null
 )
-fun Customer.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Cutsomer '${this.login}' had no DB row ID")
+fun Customer.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Cutsomer '$login' had no DB row ID")
 
 /**
  * Represents a Taler amount.  This type can be used both
  * to hold database records and amounts coming from the parser.
+ * If maybeCurrency is null, then the constructor defaults it
+ * to be the "internal currency".  Internal currency is the one
+ * with which Libeufin-Bank moves funds within itself, therefore
+ * not to be mistaken with the cashout currency, which is the one
+ * that gets credited to Libeufin-Bank users to their cashout_payto_uri.
+ *
+ * maybeCurrency is typically null when the TalerAmount object gets
+ * defined by the Database class.
  */
-data class TalerAmount(
+class TalerAmount(
     val value: Long,
     val frac: Int,
-    /**
-     * The currency is likely null when the object is defined
-     * from database records.  It is instead not null when the
-     * object comes from the parsing of serialized amounts.
-     */
-    val currency: String? = null
-)
+    maybeCurrency: String? = null
+) {
+    val currency: String = if (maybeCurrency == null) {
+        val internalCurrency = db.configGet("internal_currency")
+            ?: throw internalServerError("internal_currency not found in the config")
+        internalCurrency
+    } else maybeCurrency
+}
 
 // BIC got removed, because it'll be expressed in the internal_payto_uri.
 data class BankAccount(

@@ -24,7 +24,6 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.client.HttpClient
 import io.ktor.http.HttpStatusCode
 import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.iso20022.*

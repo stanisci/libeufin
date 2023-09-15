@@ -25,8 +25,6 @@ import java.lang.NumberFormatException
 
 // HELPERS.
 
-
-
 /**
  * Performs the HTTP basic authentication.  Returns the
  * authenticated customer on success, or null otherwise.
@@ -155,6 +153,6 @@ fun parseTalerAmount(
     return TalerAmount(
         value = value,
         frac = fraction,
-        currency = match.destructured.component1()
+        maybeCurrency = match.destructured.component1()
     )
 }

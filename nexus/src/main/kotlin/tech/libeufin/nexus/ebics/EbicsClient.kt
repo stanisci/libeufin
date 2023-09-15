@@ -31,7 +31,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.NexusError
 import tech.libeufin.util.*
-import tech.libeufin.util.ebics_h005.Ebics3Request
 import java.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
