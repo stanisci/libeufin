@@ -62,7 +62,7 @@ classes {
 task execArch(type: Zip) {
     dependsOn versionFile
     dependsOn replaceVersionCli
-    evaluationDependsOn("nexus")
+    // evaluationDependsOn("nexus")
     evaluationDependsOn("bank")
     def topDir = "${getRootProject().name}-${getRootProject().version}"
     archiveFileName = "${topDir}.zip"
@@ -72,10 +72,10 @@ task execArch(type: Zip) {
             dependsOn(t) // invokes the task 't'
         }
     }
-    from("nexus/build/install/nexus-shadow") {
-        include("**/libeufin-nexus")
-        include("**/*.jar")
-    }
+    //from("nexus/build/install/nexus-shadow") {
+    //  include("**/libeufin-nexus")
+    //  include("**/*.jar")
+    //}
     from("bank/build/install/bank-shadow") {
         include("**/libeufin-bank")
         include("**/*.jar")

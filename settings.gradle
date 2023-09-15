@@ -1,4 +1,4 @@
 rootProject.name = 'libeufin'
 include("bank")
-include("nexus")
+// include("nexus")
 include("util")
