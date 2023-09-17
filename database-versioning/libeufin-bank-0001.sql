@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS bearer_tokens
   ,creation_time INT8
   ,expiration_time INT8
   ,scope token_scope_enum
+  ,is_refreshable BOOLEAN
   ,bank_customer BIGINT NOT NULL REFERENCES customers(customer_id) ON DELETE CASCADE
 );
 

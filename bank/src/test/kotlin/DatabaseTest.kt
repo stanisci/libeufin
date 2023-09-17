@@ -20,9 +20,7 @@
 
 import org.junit.Test
 import tech.libeufin.bank.*
-import tech.libeufin.util.execCommand
-import tech.libeufin.util.getNow
-import tech.libeufin.util.toMicro
+import tech.libeufin.util.getNowUs
 import java.util.Random
 import java.util.UUID
 
@@ -68,8 +66,8 @@ class DatabaseTest {
         val token = BearerToken(
             bankCustomer = 1L,
             content = tokenBytes,
-            creationTime = getNow().toMicro(), // make .toMicro()? implicit?
-            expirationTime = getNow().plusDays(1).toMicro(),
+            creationTime = getNowUs(), // make .toMicro()? implicit?
+            expirationTime = getNowUs(),
             scope = TokenScope.readonly
         )
         assert(db.bearerTokenGet(token.content) == null)

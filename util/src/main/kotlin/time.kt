@@ -20,10 +20,7 @@
 package tech.libeufin.util
 
 import java.time.*
-import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
-fun getNow(): ZonedDateTime {
-    return ZonedDateTime.now(ZoneId.systemDefault())
-}
 
-fun ZonedDateTime.toMicro(): Long = this.nano / 1000L
+fun getNowUs(): Long = ChronoUnit.MICROS.between(Instant.EPOCH, Instant.now())

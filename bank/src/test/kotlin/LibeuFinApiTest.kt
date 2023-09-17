@@ -1,14 +1,67 @@
+import io.ktor.auth.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import kotlinx.serialization.json.Json
+import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
-import tech.libeufin.util.execCommand
+import tech.libeufin.util.getNowUs
+import java.time.Duration
+import kotlin.random.Random
 
 class LibeuFinApiTest {
+    private val customerFoo = Customer(
+    login = "foo",
+    passwordHash = CryptoUtil.hashpw("pw"),
+    name = "Foo",
+    phone = "+00",
+    email = "foo@b.ar",
+    cashoutPayto = "payto://external-IBAN",
+    cashoutCurrency = "KUDOS"
+    )
+    // Checking the POST /token handling.
+    @Test
+    fun tokenTest() {
+        val db = initDb()
+        assert(db.customerCreate(customerFoo) != null)
+        testApplication {
+            application(webApp)
+            client.post("/accounts/foo/token") {
+                expectSuccess = true
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "pw")
+                setBody("""
+                    {"scope": "readonly"}
+                """.trimIndent())
+            }
+            // foo tries on bar endpoint
+            val r = client.post("/accounts/bar/token") {
+                expectSuccess = false
+                basicAuth("foo", "pw")
+            }
+            assert(r.status == HttpStatusCode.Forbidden)
+            // Make ad-hoc token for foo.
+            val fooTok = ByteArray(32).apply { Random.nextBytes(this) }
+            assert(db.bearerTokenCreate(BearerToken(
+                content = fooTok,
+                bankCustomer = 1L, // only foo exists.
+                scope = TokenScope.readonly,
+                creationTime = getNowUs(),
+                isRefreshable = true,
+                expirationTime = getNowUs() + (Duration.ofHours(1).toMillis() * 1000)
+            )))
+            // Testing the bearer-token:-scheme.
+            client.post("/accounts/foo/token") {
+                headers.set("Authorization", "Bearer bearer-token:${Base32Crockford.encode(fooTok)}")
+                contentType(ContentType.Application.Json)
+                setBody("{\"scope\": \"readonly\"}")
+                expectSuccess = true
+            }
+        }
+    }
     /**
      * Testing the account creation, its idempotency and
      * the restriction to admin to create accounts.

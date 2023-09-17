@@ -20,11 +20,29 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
+import io.ktor.server.application.*
 import net.taler.common.errorcodes.TalerErrorCode
+import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.util.*
 import java.lang.NumberFormatException
 
-// HELPERS.
+// Get the auth token (stripped of the bearer-token:-prefix)
+// IF the call was authenticated with it.
+fun ApplicationCall.getAuthToken(): String? {
+    val h = getAuthorizationRawHeader(this.request) ?: return null
+    val authDetails = getAuthorizationDetails(h) ?: throw badRequest(
+        "Authorization header is malformed.",
+        TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+    )
+    if (authDetails.scheme == "Bearer")
+        return splitBearerToken(authDetails.content) ?: throw
+        throw badRequest(
+            "Authorization header is malformed (could not strip the prefix from Bearer token).",
+            TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+        )
+    return null // Not a Bearer token case.
+}
+
 
 /**
  * Performs the HTTP basic authentication.  Returns the
@@ -56,15 +74,53 @@ fun doBasicAuth(encodedCredentials: String): Customer? {
     return maybeCustomer
 }
 
+/**
+ * This function takes a prefixed Bearer token, removes the
+ * bearer-token:-prefix and returns it.  Returns null, if the
+ * input is invalid.
+ */
+private fun splitBearerToken(tok: String): String? {
+    val tokenSplit = tok.split(":", limit = 2)
+    if (tokenSplit.size != 2) return null
+    if (tokenSplit[0] != "bearer-token") return null
+    return tokenSplit[1]
+}
+
 /* Performs the bearer-token authentication.  Returns the
  * authenticated customer on success, null otherwise. */
 fun doTokenAuth(
     token: String,
-    requiredScope: TokenScope, // readonly or readwrite
+    requiredScope: TokenScope,
 ): Customer? {
-    val maybeToken: BearerToken = db.bearerTokenGet(token.toByteArray(Charsets.UTF_8)) ?: return null
-    val isExpired: Boolean = maybeToken.expirationTime - getNow().toMicro() < 0
-    if (isExpired || maybeToken.scope != requiredScope) return null // FIXME: mention the reason?
+    val bareToken = splitBearerToken(token) ?: throw badRequest(
+        "Bearer token malformed",
+        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+    )
+    val tokenBytes = try {
+        Base32Crockford.decode(bareToken)
+    } catch (e: Exception) {
+        throw badRequest(
+            e.message,
+            TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+        )
+    }
+    val maybeToken: BearerToken? = db.bearerTokenGet(tokenBytes)
+    if (maybeToken == null) {
+        logger.error("Auth token not found")
+        return null
+    }
+    if (maybeToken.expirationTime - getNowUs() < 0) {
+        logger.error("Auth token is expired")
+        return null
+    }
+    if (maybeToken.scope == TokenScope.readonly && requiredScope == TokenScope.readwrite) {
+        logger.error("Auth token has insufficient scope")
+        return null
+    }
+    if (!maybeToken.isRefreshable && requiredScope == TokenScope.refreshable) {
+        logger.error("Could not refresh unrefreshable token")
+        return null
+    }
     // Getting the related username.
     return db.customerGetFromRowId(maybeToken.bankCustomer)
         ?: throw LibeufinBankException(
@@ -75,6 +131,15 @@ fun doTokenAuth(
             ))
 }
 
+fun forbidden(hint: String? = null, talerErrorCode: TalerErrorCode): LibeufinBankException =
+    LibeufinBankException(
+        httpStatus = HttpStatusCode.Forbidden,
+        talerError = TalerError(
+            code = talerErrorCode.code,
+            hint = hint
+        )
+    )
+
 fun unauthorized(hint: String? = null): LibeufinBankException =
     LibeufinBankException(
         httpStatus = HttpStatusCode.Unauthorized,
@@ -83,7 +148,7 @@ fun unauthorized(hint: String? = null): LibeufinBankException =
             hint = hint
         )
     )
-fun internalServerError(hint: String): LibeufinBankException =
+fun internalServerError(hint: String?): LibeufinBankException =
     LibeufinBankException(
         httpStatus = HttpStatusCode.InternalServerError,
         talerError = TalerError(
@@ -96,7 +161,7 @@ fun badRequest(
     talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
 ): LibeufinBankException =
     LibeufinBankException(
-        httpStatus = HttpStatusCode.InternalServerError,
+        httpStatus = HttpStatusCode.BadRequest,
         talerError = TalerError(
             code = talerErrorCode.code,
             hint = hint

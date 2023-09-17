@@ -4295,6 +4295,4 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   TALER_EC_END(9999),
-
-
 }

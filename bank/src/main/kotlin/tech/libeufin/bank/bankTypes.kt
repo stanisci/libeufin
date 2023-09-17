@@ -1,0 +1,329 @@
+/*
+ * This file is part of LibEuFin.
+ * Copyright (C) 2019 Stanisci and Dold.
+
+ * LibEuFin is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation; either version 3, or
+ * (at your option) any later version.
+
+ * LibEuFin is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General
+ * Public License for more details.
+
+ * You should have received a copy of the GNU Affero General Public
+ * License along with LibEuFin; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>
+ */
+
+package tech.libeufin.bank
+
+import io.ktor.http.*
+import kotlinx.serialization.Contextual
+import kotlinx.serialization.Serializable
+import java.util.*
+
+// Allowed lengths for fractional digits in amounts.
+enum class FracDigits(howMany: Int) {
+    TWO(2),
+    EIGHT(8)
+}
+
+
+// It contains the number of microseconds since the Epoch.
+@Serializable
+data class Timestamp(
+    val t_s: Long // FIXME (?): not supporting "never" at the moment.
+)
+
+/**
+ * HTTP response type of successful token refresh.
+ * access_token is the Crockford encoding of the 32 byte
+ * access token, whereas 'expiration' is the point in time
+ * when this token expires.
+ */
+@Serializable
+data class TokenSuccessResponse(
+    val access_token: String,
+    val expiration: Timestamp
+)
+
+/**
+ * Error object to respond to the client.  The
+ * 'code' field takes values from the GANA gnu-taler-error-code
+ * specification.  'hint' is a human-readable description
+ * of the error.
+ */
+@Serializable
+data class TalerError(
+    val code: Int,
+    val hint: String? = null
+)
+
+/* Contains contact data to send TAN challges to the
+* users, to let them complete cashout operations. */
+@Serializable
+data class ChallengeContactData(
+    val email: String? = null,
+    val phone: String? = null
+)
+
+// Type expected at POST /accounts
+@Serializable
+data class RegisterAccountRequest(
+    val username: String,
+    val password: String,
+    val name: String,
+    val is_public: Boolean = false,
+    val is_taler_exchange: Boolean = false,
+    val challenge_contact_data: ChallengeContactData? = null,
+    // External bank account where to send cashout amounts.
+    val cashout_payto_uri: String? = null,
+    // Bank account internal to Libeufin-Bank.
+    val internal_payto_uri: String? = null
+)
+
+/* Internal representation of relative times.  The
+* "forever" case is represented with Long.MAX_VALUE.
+*/
+data class RelativeTime(
+    val d_us: Long
+)
+
+/**
+ * Type expected at POST /accounts/{USERNAME}/token
+ * It complies with Taler's design document #49
+ */
+@Serializable
+data class TokenRequest(
+    val scope: TokenScope,
+    @Contextual
+    val duration: RelativeTime? = null,
+    val refreshable: Boolean = false
+)
+
+/**
+ * Convenience type to throw errors along the bank activity
+ * and that is meant to be caught by Ktor and responded to the
+ * client.
+ */
+class LibeufinBankException(
+    // Status code that Ktor will set for the response.
+    val httpStatus: HttpStatusCode,
+    // Error detail object, after Taler API.
+    val talerError: TalerError
+) : Exception(talerError.hint)
+
+/**
+ * Convenience type to hold customer data, typically after such
+ * data gets fetched from the database.  It is also used to _insert_
+ * customer data to the database.
+ */
+data class Customer(
+    val login: String,
+    val passwordHash: String,
+    val name: String,
+    /**
+     * Only non-null when this object is defined _by_ the
+     * database.
+     */
+    val dbRowId: Long? = null,
+    val email: String? = null,
+    val phone: String? = null,
+    /**
+     * External bank account where customers send
+     * their cashout amounts.
+     */
+    val cashoutPayto: String? = null,
+    /**
+     * Currency of the external bank account where
+     * customers send their cashout amounts.
+     */
+    val cashoutCurrency: String? = null
+)
+
+/**
+* Represents a Taler amount.  This type can be used both
+* to hold database records and amounts coming from the parser.
+* If maybeCurrency is null, then the constructor defaults it
+* to be the "internal currency".  Internal currency is the one
+* with which Libeufin-Bank moves funds within itself, therefore
+* not to be mistaken with the cashout currency, which is the one
+* that gets credited to Libeufin-Bank users to their cashout_payto_uri.
+*
+* maybeCurrency is typically null when the TalerAmount object gets
+* defined by the Database class.
+*/
+class TalerAmount(
+    val value: Long,
+    val frac: Int,
+    maybeCurrency: String? = null
+) {
+    val currency: String = if (maybeCurrency == null) {
+        val internalCurrency = db.configGet("internal_currency")
+            ?: throw internalServerError("internal_currency not found in the config")
+        internalCurrency
+    } else maybeCurrency
+
+    override fun equals(other: Any?): Boolean {
+        return other is TalerAmount &&
+                other.value == this.value &&
+                other.frac == this.frac &&
+                other.currency == this.currency
+    }
+}
+
+/**
+ * Convenience type to get and set bank account information
+ * from/to the database.
+ */
+data class BankAccount(
+    val internalPaytoUri: String,
+    // Database row ID of the customer that owns this bank account.
+    val owningCustomerId: Long,
+    val isPublic: Boolean = false,
+    val isTalerExchange: Boolean = false,
+    /**
+     * Because bank accounts MAY be funded by an external currency,
+     * local bank accounts need to query Nexus, in order to find this
+     * out.  This field is a pointer to the latest incoming payment that
+     * was contained in a Nexus history response.
+     *
+     * Typically, the 'admin' bank account uses this field, in order
+     * to initiate Taler withdrawals that depend on an external currency
+     * being wired by wallet owners.
+     */
+    val lastNexusFetchRowId: Long = 0L,
+    val balance: TalerAmount? = null,
+    val hasDebt: Boolean,
+    val maxDebt: TalerAmount
+)
+
+// Allowed values for bank transactions directions.
+enum class TransactionDirection {
+    credit,
+    debit
+}
+
+// Allowed values for cashout TAN channels.
+enum class TanChannel {
+    sms,
+    email,
+    file // Writes cashout TANs to /tmp, for testing.
+}
+
+// Scopes for authentication tokens.
+enum class TokenScope {
+    readonly,
+    readwrite,
+    refreshable // Not spec'd as a scope!
+}
+
+/**
+ * Convenience type to set/get authentication tokens to/from
+ * the database.
+ */
+data class BearerToken(
+    val content: ByteArray,
+    val scope: TokenScope,
+    val isRefreshable: Boolean = false,
+    val creationTime: Long,
+    val expirationTime: Long,
+    /**
+     * Serial ID of the database row that hosts the bank customer
+     * that is associated with this token.  NOTE: if the token is
+     * refreshed by a client that doesn't have a user+password login
+     * in the system, the creator remains always the original bank
+     * customer that created the very first token.
+     */
+    val bankCustomer: Long
+)
+
+/**
+ * Convenience type to _communicate_ a bank transfer to the
+ * database procedure, NOT representing therefore any particular
+ * table.  The procedure will then retrieve all the tables data
+ * from this type.
+ */
+data class BankInternalTransaction(
+    // Database row ID of the internal bank account sending the payment.
+    val creditorAccountId: Long,
+    // Database row ID of the internal bank account receiving the payment.
+    val debtorAccountId: Long,
+    val subject: String,
+    val amount: TalerAmount,
+    val transactionDate: Long,
+    val accountServicerReference: String, // ISO20022
+    val endToEndId: String, // ISO20022
+    val paymentInformationId: String // ISO20022
+)
+
+/**
+ * Convenience type representing bank transactions as they
+ * are in the respective database table.  Only used to _get_
+ * the information from the database.
+ */
+data class BankAccountTransaction(
+    val creditorPaytoUri: String,
+    val creditorName: String,
+    val debtorPaytoUri: String,
+    val debtorName: String,
+    val subject: String,
+    val amount: TalerAmount,
+    val transactionDate: Long, // microseconds
+    /**
+     * Is the transaction debit, or credit for the
+     * bank account pointed by this object?
+     */
+    val direction: TransactionDirection,
+    /**
+     * database row ID of the bank account that is
+     * impacted by the direction.  For example, if the
+     * direction is debit, then this value points to the
+     * bank account of the payer.
+     */
+    val bankAccountId: Long,
+    // Following are ISO20022 specific.
+    val accountServicerReference: String,
+    val paymentInformationId: String,
+    val endToEndId: String,
+)
+
+/**
+ * Represents a Taler withdrawal operation, as it is
+ * stored in the respective database table.
+ */
+data class TalerWithdrawalOperation(
+    val withdrawalUuid: UUID,
+    val amount: TalerAmount,
+    val selectionDone: Boolean = false,
+    val aborted: Boolean = false,
+    val confirmationDone: Boolean = false,
+    val reservePub: ByteArray?,
+    val selectedExchangePayto: String?,
+    val walletBankAccount: Long
+)
+
+/**
+ * Represents a cashout operation, as it is stored
+ * in the respective database table.
+ */
+data class Cashout(
+    val cashoutUuid: UUID,
+    val localTransaction: Long? = null,
+    val amountDebit: TalerAmount,
+    val amountCredit: TalerAmount,
+    val buyAtRatio: Int,
+    val buyInFee: TalerAmount,
+    val sellAtRatio: Int,
+    val sellOutFee: TalerAmount,
+    val subject: String,
+    val creationTime: Long,
+    val tanConfirmationTime: Long? = null,
+    val tanChannel: TanChannel,
+    val tanCode: String,
+    val bankAccount: Long,
+    val credit_payto_uri: String,
+    val cashoutCurrency: String
+)

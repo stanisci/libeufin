@@ -44,6 +44,6 @@ class JsonTest {
               "duration": {"d_us": 30}
             }
         """.trimIndent())
-        assert(tokenReq.scope == TokenScope.readonly && tokenReq.duration.d_us == 30L)
+        assert(tokenReq.scope == TokenScope.readonly && tokenReq.duration?.d_us == 30L)
     }
 }

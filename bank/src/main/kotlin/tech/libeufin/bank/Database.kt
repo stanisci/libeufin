@@ -28,143 +28,9 @@ import java.util.*
 
 private const val DB_CTR_LIMIT = 1000000
 
-data class Customer(
-    val login: String,
-    val passwordHash: String,
-    val name: String,
-    val dbRowId: Long? = null, // mostly used when retrieving records.
-    val email: String? = null,
-    val phone: String? = null,
-    val cashoutPayto: String? = null,
-    val cashoutCurrency: String? = null
-)
+
 fun Customer.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Cutsomer '$login' had no DB row ID")
 
-/**
- * Represents a Taler amount.  This type can be used both
- * to hold database records and amounts coming from the parser.
- * If maybeCurrency is null, then the constructor defaults it
- * to be the "internal currency".  Internal currency is the one
- * with which Libeufin-Bank moves funds within itself, therefore
- * not to be mistaken with the cashout currency, which is the one
- * that gets credited to Libeufin-Bank users to their cashout_payto_uri.
- *
- * maybeCurrency is typically null when the TalerAmount object gets
- * defined by the Database class.
- */
-class TalerAmount(
-    val value: Long,
-    val frac: Int,
-    maybeCurrency: String? = null
-) {
-    val currency: String = if (maybeCurrency == null) {
-        val internalCurrency = db.configGet("internal_currency")
-            ?: throw internalServerError("internal_currency not found in the config")
-        internalCurrency
-    } else maybeCurrency
-
-    override fun equals(other: Any?): Boolean {
-        return other is TalerAmount &&
-                other.value == this.value &&
-                other.frac == this.frac &&
-                other.currency == this.currency
-    }
-}
-
-// BIC got removed, because it'll be expressed in the internal_payto_uri.
-data class BankAccount(
-    val internalPaytoUri: String,
-    val owningCustomerId: Long,
-    val isPublic: Boolean = false,
-    val isTalerExchange: Boolean = false,
-    val lastNexusFetchRowId: Long = 0L,
-    val balance: TalerAmount? = null,
-    val hasDebt: Boolean,
-    val maxDebt: TalerAmount
-)
-
-enum class TransactionDirection {
-    credit, debit
-}
-
-enum class TanChannel {
-    sms, email, file
-}
-
-enum class TokenScope {
-    readonly, readwrite
-}
-
-data class BearerToken(
-    val content: ByteArray,
-    val scope: TokenScope,
-    val creationTime: Long,
-    val expirationTime: Long,
-    /**
-     * Serial ID of the database row that hosts the bank customer
-     * that is associated with this token.  NOTE: if the token is
-     * refreshed by a client that doesn't have a user+password login
-     * in the system, the creator remains always the original bank
-     * customer that created the very first token.
-     */
-    val bankCustomer: Long
-)
-
-data class BankInternalTransaction(
-    val creditorAccountId: Long,
-    val debtorAccountId: Long,
-    val subject: String,
-    val amount: TalerAmount,
-    val transactionDate: Long,
-    val accountServicerReference: String,
-    val endToEndId: String,
-    val paymentInformationId: String
-)
-
-data class BankAccountTransaction(
-    val creditorPaytoUri: String,
-    val creditorName: String,
-    val debtorPaytoUri: String,
-    val debtorName: String,
-    val subject: String,
-    val amount: TalerAmount,
-    val transactionDate: Long, // microseconds
-    val accountServicerReference: String,
-    val paymentInformationId: String,
-    val endToEndId: String,
-    val direction: TransactionDirection,
-    val bankAccountId: Long,
-)
-
-data class TalerWithdrawalOperation(
-    val withdrawalUuid: UUID,
-    val amount: TalerAmount,
-    val selectionDone: Boolean = false,
-    val aborted: Boolean = false,
-    val confirmationDone: Boolean = false,
-    val reservePub: ByteArray?,
-    val selectedExchangePayto: String?,
-    val walletBankAccount: Long
-)
-
-data class Cashout(
-    val cashoutUuid: UUID,
-    val localTransaction: Long? = null,
-    val amountDebit: TalerAmount,
-    val amountCredit: TalerAmount,
-    val buyAtRatio: Int,
-    val buyInFee: TalerAmount,
-    val sellAtRatio: Int,
-    val sellOutFee: TalerAmount,
-    val subject: String,
-    val creationTime: Long,
-    val tanConfirmationTime: Long? = null,
-    val tanChannel: TanChannel,
-    val tanCode: String,
-    val bankAccount: Long,
-    val credit_payto_uri: String,
-    val cashoutCurrency: String
-)
 
 class Database(private val dbConfig: String) {
     private var dbConn: PgConnection? = null
@@ -306,7 +172,8 @@ class Database(private val dbConfig: String) {
                 phone = it.getString("phone"),
                 email = it.getString("email"),
                 cashoutCurrency = it.getString("cashout_currency"),
-                cashoutPayto = it.getString("cashout_payto")
+                cashoutPayto = it.getString("cashout_payto"),
+                dbRowId = customer_id
             )
         }
     }
@@ -351,16 +218,17 @@ class Database(private val dbConfig: String) {
                 creation_time,
                 expiration_time,
                 scope,
-                bank_customer              
+                bank_customer,
+                is_refreshable
                ) VALUES
-               (?, ?, ?, ?::token_scope_enum, ?)
+               (?, ?, ?, ?::token_scope_enum, ?, ?)
         """)
         stmt.setBytes(1, token.content)
         stmt.setLong(2, token.creationTime)
         stmt.setLong(3, token.expirationTime)
         stmt.setString(4, token.scope.name)
         stmt.setLong(5, token.bankCustomer)
-
+        stmt.setBoolean(6, token.isRefreshable)
         return myExecute(stmt)
     }
     fun bearerTokenGet(token: ByteArray): BearerToken? {
@@ -370,7 +238,8 @@ class Database(private val dbConfig: String) {
               expiration_time,
               creation_time,
               bank_customer,
-              scope
+              scope,
+              is_refreshable
             FROM bearer_tokens
             WHERE content=?;            
         """)
@@ -387,7 +256,8 @@ class Database(private val dbConfig: String) {
                     if (this == TokenScope.readwrite.name) return@run TokenScope.readwrite
                     if (this == TokenScope.readonly.name) return@run TokenScope.readonly
                     else throw internalServerError("Wrong token scope found in the database: $this")
-                }
+                },
+                isRefreshable = it.getBoolean("is_refreshable")
             )
         }
     }

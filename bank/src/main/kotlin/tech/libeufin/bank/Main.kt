@@ -36,57 +36,23 @@ import io.ktor.server.routing.*
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.encoding.decodeStructure
 import kotlinx.serialization.json.*
+import kotlinx.serialization.modules.SerializersModule
 import net.taler.common.errorcodes.TalerErrorCode
+import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import tech.libeufin.util.*
+import java.time.Duration
+import kotlin.random.Random
 
 // GLOBALS
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank")
 val db = Database(System.getProperty("BANK_DB_CONNECTION_STRING"))
 const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
+val TOKEN_DEFAULT_DURATION_US = Duration.ofDays(1L).seconds * 1000000
 
-// TYPES
-
-// FIXME: double-check the enum numeric value.
-enum class FracDigits(howMany: Int) {
-    TWO(2),
-    EIGHT(8)
-}
-
-@Serializable
-data class TalerError(
-    val code: Int,
-    val hint: String? = null
-)
-
-@Serializable
-data class ChallengeContactData(
-    val email: String? = null,
-    val phone: String? = null
-)
-@Serializable
-data class RegisterAccountRequest(
-    val username: String,
-    val password: String,
-    val name: String,
-    val is_public: Boolean = false,
-    val is_taler_exchange: Boolean = false,
-    val challenge_contact_data: ChallengeContactData? = null,
-    val cashout_payto_uri: String? = null,
-    val internal_payto_uri: String? = null
-)
-
-/**
- * This is the _internal_ representation of a RelativeTime
- * JSON type.
- */
-data class RelativeTime(
-    val d_us: Long
-)
 
 /**
  * This custom (de)serializer interprets the RelativeTime JSON
@@ -122,17 +88,7 @@ object RelativeTimeSerializer : KSerializer<RelativeTime> {
             element<JsonElement>("d_us")
         }
 }
-@Serializable
-data class TokenRequest(
-    val scope: TokenScope,
-    @Contextual
-    val duration: RelativeTime
-)
 
-class LibeufinBankException(
-    val httpStatus: HttpStatusCode,
-    val talerError: TalerError
-) : Exception(talerError.hint)
 
 /**
  * This function tries to authenticate the call according
@@ -187,7 +143,12 @@ val webApp: Application.() -> Unit = {
     install(ContentNegotiation) {
         json(Json {
             ignoreUnknownKeys = true
-            isLenient = false
+            // Registering custom parser for RelativeTime
+            serializersModule = SerializersModule {
+                contextual(RelativeTime::class) {
+                    RelativeTimeSerializer
+                }
+            }
         })
     }
     install(RequestValidation)
@@ -246,12 +207,78 @@ val webApp: Application.() -> Unit = {
         }
     }
     routing {
-        post("/accounts/{USERNAME}/auth-token") {
-            val customer = call.myAuth(TokenScope.readwrite)
+        post("/accounts/{USERNAME}/token") {
+            val customer = call.myAuth(TokenScope.refreshable) ?: throw unauthorized("Authentication failed")
             val endpointOwner = call.expectUriComponent("USERNAME")
-            if (customer == null || customer.login != endpointOwner)
-                throw unauthorized("Auth failed or client has no rights")
-
+            if (customer.login != endpointOwner)
+                throw forbidden(
+                    "User has no rights on this enpoint",
+                    TalerErrorCode.TALER_EC_END // FIXME: need generic forbidden
+                )
+            val maybeAuthToken = call.getAuthToken()
+            val req = call.receive<TokenRequest>()
+            /**
+             * This block checks permissions ONLY IF the call was authenticated
+             * with a token.  Basic auth gets always granted.
+             */
+            if (maybeAuthToken != null) {
+                val tokenBytes = Base32Crockford.decode(maybeAuthToken)
+                val refreshingToken = db.bearerTokenGet(tokenBytes) ?: throw internalServerError(
+                    "Token used to auth not found in the database!"
+                )
+                if (refreshingToken.scope == TokenScope.readonly && req.scope == TokenScope.readwrite)
+                    throw forbidden(
+                        "Cannot generate RW token from RO",
+                        TalerErrorCode.TALER_EC_GENERIC_TOKEN_PERMISSION_INSUFFICIENT
+                    )
+            }
+            val tokenBytes = ByteArray(32).apply {
+                java.util.Random().nextBytes(this)
+            }
+            val maxDurationTime: Long = db.configGet("token_max_duration").run {
+                if (this == null)
+                    return@run Long.MAX_VALUE
+                return@run try {
+                    this.toLong()
+                } catch (e: Exception) {
+                    logger.error("Could not convert config's token_max_duration to Long")
+                    throw internalServerError(e.message)
+                }
+            }
+            if (req.duration != null && req.duration.d_us.compareTo(maxDurationTime) == 1)
+                throw forbidden(
+                    "Token duration bigger than bank's limit",
+                    // FIXME: define new EC for this case.
+                    TalerErrorCode.TALER_EC_END
+                )
+            val tokenDurationUs  = req.duration?.d_us ?: TOKEN_DEFAULT_DURATION_US
+            val customerDbRow = customer.dbRowId ?: throw internalServerError(
+                "Coud not resort customer '${customer.login}' database row ID"
+            )
+            val expirationTimestampUs: Long = getNowUs() + tokenDurationUs
+            if (expirationTimestampUs < tokenDurationUs)
+                throw badRequest(
+                    "Token duration caused arithmetic overflow",
+                    // FIXME: need dedicate EC (?)
+                    talerErrorCode = TalerErrorCode.TALER_EC_END
+                )
+            val token = BearerToken(
+                bankCustomer = customerDbRow,
+                content = tokenBytes,
+                creationTime = expirationTimestampUs,
+                expirationTime = expirationTimestampUs,
+                scope = req.scope,
+                isRefreshable = req.refreshable
+            )
+            if (!db.bearerTokenCreate(token))
+                throw internalServerError("Failed at inserting new token in the database")
+            call.respond(TokenSuccessResponse(
+                access_token = Base32Crockford.encode(tokenBytes),
+                expiration = Timestamp(
+                    t_s = expirationTimestampUs / 1000000L
+                )
+            ))
+            return@post
         }
         post("/accounts") {
             // check if only admin.
