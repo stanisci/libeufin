@@ -194,6 +194,7 @@ val webApp: Application.() -> Unit = {
         }
         // Catch-all branch to mean that the bank wasn't able to manage one error.
         exception<Exception> {call, cause ->
+            cause.printStackTrace()
             logger.error(cause.message)
             call.respond(
                 status = HttpStatusCode.InternalServerError,

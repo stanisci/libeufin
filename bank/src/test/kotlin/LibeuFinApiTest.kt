@@ -1,10 +1,8 @@
-import io.ktor.auth.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import io.netty.handler.codec.http.HttpResponseStatus
 import kotlinx.serialization.json.Json
 import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
@@ -16,14 +14,63 @@ import kotlin.random.Random
 
 class LibeuFinApiTest {
     private val customerFoo = Customer(
-    login = "foo",
-    passwordHash = CryptoUtil.hashpw("pw"),
-    name = "Foo",
-    phone = "+00",
-    email = "foo@b.ar",
-    cashoutPayto = "payto://external-IBAN",
-    cashoutCurrency = "KUDOS"
+        login = "foo",
+        passwordHash = CryptoUtil.hashpw("pw"),
+        name = "Foo",
+        phone = "+00",
+        email = "foo@b.ar",
+        cashoutPayto = "payto://external-IBAN",
+        cashoutCurrency = "KUDOS"
     )
+    private val customerBar = Customer(
+        login = "bar",
+        passwordHash = CryptoUtil.hashpw("pw"),
+        name = "Bar",
+        phone = "+99",
+        email = "bar@example.com",
+        cashoutPayto = "payto://external-IBAN",
+        cashoutCurrency = "KUDOS"
+    )
+    private fun genBankAccount(rowId: Long) = BankAccount(
+        hasDebt = false,
+        internalPaytoUri = "payto://iban/SANDBOXX/${rowId}-IBAN",
+        maxDebt = TalerAmount(100, 0),
+        owningCustomerId = rowId
+    )
+
+    // Testing the creation of bank transactions.
+    @Test
+    fun postTransactionsTest() {
+        val db = initDb()
+        // foo account
+        val fooId = db.customerCreate(customerFoo); assert(fooId != null)
+        assert(db.bankAccountCreate(genBankAccount(fooId!!)))
+        // bar account
+        val barId = db.customerCreate(customerBar); assert(barId != null)
+        assert(db.bankAccountCreate(genBankAccount(barId!!)))
+        // accounts exist, now create one transaction.
+        testApplication {
+            application(webApp)
+            client.post("/accounts/foo/transactions") {
+                expectSuccess = true
+                basicAuth("foo", "pw")
+                contentType(ContentType.Application.Json)
+                // expectSuccess = true
+                setBody("""{
+                    "payto_uri": "payto://iban/SANDBOXX/${barId}-IBAN?message=payout", 
+                    "amount": "KUDOS:3.3"
+                }
+                """.trimIndent())
+            }
+            // Getting the only tx that exists in the DB, hence has ID == 1.
+            val r = client.get("/accounts/foo/transactions/1") {
+                basicAuth("foo", "pw")
+                expectSuccess = true
+            }
+            val obj: BankAccountTransactionInfo = Json.decodeFromString(r.bodyAsText())
+            assert(obj.subject == "payout")
+        }
+    }
     // Checking the POST /token handling.
     @Test
     fun tokenTest() {

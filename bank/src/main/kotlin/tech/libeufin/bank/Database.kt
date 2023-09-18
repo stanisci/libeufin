@@ -353,7 +353,7 @@ class Database(private val dbConfig: String) {
         reconnect()
         val stmt = prepare("""
             SELECT
-             ,bank_account_id
+             bank_account_id
              ,owning_customer_id
              ,is_public
              ,is_taler_exchange
@@ -452,7 +452,7 @@ class Database(private val dbConfig: String) {
               ,payment_information_id
               ,end_to_end_id
               ,direction
-              ,owning_customer_id
+              ,bank_account_id
             FROM bank_account_transactions
 	        WHERE bank_transaction_id=?
         """)
@@ -478,7 +478,7 @@ class Database(private val dbConfig: String) {
                         else -> throw internalServerError("Wrong direction in transaction: $this")
                     }
                 },
-                bankAccountId = it.getLong("owning_customer_id"),
+                bankAccountId = it.getLong("bank_account_id"),
                 paymentInformationId = it.getString("payment_information_id"),
                 subject = it.getString("subject"),
                 transactionDate = it.getLong("transaction_date")

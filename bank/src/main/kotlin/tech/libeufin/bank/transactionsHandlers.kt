@@ -18,12 +18,14 @@ fun Routing.transactionsHandlers() {
         if ((c.login != resourceName) && (call.getAuthToken() == null))
             throw forbidden()
         val txData = call.receive<BankAccountTransactionCreate>()
-        val payto = parsePayto(txData.payto_uri)
-        val subject = payto?.message ?: throw badRequest("Wire transfer lacks subject")
+        // FIXME: make payto parser IBAN-agnostic?
+        val payto = parsePayto(txData.payto_uri) ?: throw badRequest("Invalid creditor Payto")
+        val paytoWithoutParams = "payto://iban/${payto.bic}/${payto.iban}"
+        val subject = payto.message ?: throw badRequest("Wire transfer lacks subject")
         val debtorId = c.dbRowId ?: throw internalServerError("Debtor database ID not found")
         // This performs already a SELECT on the bank account,
         // like the wire transfer will do as well later!
-        val creditorCustomerData = db.bankAccountGetFromInternalPayto(txData.payto_uri)
+        val creditorCustomerData = db.bankAccountGetFromInternalPayto(paytoWithoutParams)
             ?: throw notFound(
                 "Creditor account not found",
                 TalerErrorCode.TALER_EC_END // FIXME: define this EC.
