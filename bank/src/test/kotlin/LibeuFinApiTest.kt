@@ -4,6 +4,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import io.netty.handler.codec.http.HttpResponseStatus
 import kotlinx.serialization.json.Json
 import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
@@ -112,6 +113,11 @@ class LibeuFinApiTest {
                 expectSuccess = true
                 basicAuth("admin", "admin")
             }
+            val shouldNot = client.get("/accounts/foo") {
+                basicAuth("not", "not")
+                expectSuccess = false
+            }
+            assert(shouldNot.status == HttpStatusCode.Unauthorized)
         }
     }
     /**
