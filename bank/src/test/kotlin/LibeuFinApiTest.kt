@@ -4,6 +4,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import kotlinx.serialization.json.Json
 import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import tech.libeufin.bank.*
@@ -59,6 +60,57 @@ class LibeuFinApiTest {
                 contentType(ContentType.Application.Json)
                 setBody("{\"scope\": \"readonly\"}")
                 expectSuccess = true
+            }
+        }
+    }
+
+    /**
+     * Testing the retrieval of account information.
+     * The tested logic is the one usually needed by SPAs
+     * to show customers their status.
+     */
+    @Test
+    fun getAccountTest() {
+        // Artificially insert a customer and bank account in the database.
+        val db = initDb()
+        val customerRowId = db.customerCreate(Customer(
+            "foo",
+            CryptoUtil.hashpw("pw"),
+            "Foo"
+        ))
+        assert(customerRowId != null)
+        assert(db.bankAccountCreate(
+            BankAccount(
+                hasDebt = false,
+                internalPaytoUri = "payto://iban/SANDBOXX/FOO-IBAN",
+                maxDebt = TalerAmount(100, 0),
+                owningCustomerId = customerRowId!!
+            )
+        ))
+        testApplication {
+            application(webApp)
+            val r = client.get("/accounts/foo") {
+                expectSuccess = true
+                basicAuth("foo", "pw")
+            }
+            val obj: AccountData = Json.decodeFromString(r.bodyAsText())
+            assert(obj.name == "Foo")
+            // Checking admin can.
+            val adminRowId = db.customerCreate(Customer(
+                "admin",
+                CryptoUtil.hashpw("admin"),
+                "Admin"
+            ))
+            assert(adminRowId != null)
+            assert(db.bankAccountCreate(BankAccount(
+                hasDebt = false,
+                internalPaytoUri = "payto://iban/SANDBOXX/ADMIN-IBAN",
+                maxDebt = TalerAmount(100, 0),
+                owningCustomerId = adminRowId!!
+            )))
+            client.get("/accounts/foo") {
+                expectSuccess = true
+                basicAuth("admin", "admin")
             }
         }
     }

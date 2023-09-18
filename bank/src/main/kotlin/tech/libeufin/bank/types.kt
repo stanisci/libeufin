@@ -172,6 +172,10 @@ class TalerAmount(
                 other.frac == this.frac &&
                 other.currency == this.currency
     }
+
+    override fun toString(): String {
+        return "$currency:$value.$frac"
+    }
 }
 
 /**
@@ -196,7 +200,7 @@ data class BankAccount(
      * being wired by wallet owners.
      */
     val lastNexusFetchRowId: Long = 0L,
-    val balance: TalerAmount,
+    val balance: TalerAmount? = null, // null when a new bank account gets created.
     val hasDebt: Boolean,
     val maxDebt: TalerAmount
 )
@@ -340,11 +344,12 @@ data class Config(
 )
 
 // GET /accounts/$USERNAME response.
+@Serializable
 data class AccountData(
     val name: String,
-    val balance: TalerAmount,
+    val balance: String,
     val payto_uri: String,
-    val debit_threshold: TalerAmount,
+    val debit_threshold: String,
     val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: String? = null,
     val has_debit: Boolean

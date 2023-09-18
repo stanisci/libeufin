@@ -20,6 +20,7 @@
 import tech.libeufin.bank.Database
 import tech.libeufin.util.execCommand
 
+// Init the database and sets the currency to KUDOS.
 fun initDb(): Database {
     System.setProperty(
         "BANK_DB_CONNECTION_STRING",

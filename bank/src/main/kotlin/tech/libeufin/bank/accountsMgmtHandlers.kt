@@ -126,8 +126,8 @@ fun Routing.accountsMgmtHandlers() {
         val bankAccountData = db.bankAccountGetFromOwnerId(customerInternalId) ?: throw internalServerError("Customer '${c.login} had no bank account despite they are customer.'")
         call.respond(AccountData(
             name = customerData.name,
-            balance = bankAccountData.balance,
-            debit_threshold = bankAccountData.maxDebt,
+            balance = bankAccountData.balance.toString(),
+            debit_threshold = bankAccountData.maxDebt.toString(),
             payto_uri = bankAccountData.internalPaytoUri,
             contact_data = ChallengeContactData(
                 email = customerData.email,

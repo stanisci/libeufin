@@ -188,8 +188,7 @@ class Database(private val dbConfig: String) {
               email,
               phone,
               cashout_payto,
-              cashout_currency,
-              has_debit
+              cashout_currency
             FROM customers
             WHERE login=?
         """)
@@ -268,6 +267,10 @@ class Database(private val dbConfig: String) {
     // Returns false on conflicts.
     fun bankAccountCreate(bankAccount: BankAccount): Boolean {
         reconnect()
+        if (bankAccount.balance != null)
+            throw internalServerError(
+                "Do not pass a balance upon bank account creation, do a wire transfer instead."
+            )
         // FIXME: likely to be changed to only do internal_payto_uri
         val stmt = prepare("""
             INSERT INTO bank_accounts
