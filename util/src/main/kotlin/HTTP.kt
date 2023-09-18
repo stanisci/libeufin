@@ -50,7 +50,7 @@ fun ApplicationRequest.getBaseUrl(): String? {
  * Get the URI (path's) component or throw Internal server error.
  * @param component the name of the URI component to return.
  */
-fun ApplicationCall.expectUriComponent(name: String): String? {
+fun ApplicationCall.maybeUriComponent(name: String): String? {
     val ret: String? = this.parameters[name]
     if (ret == null) {
         logger.error("Component $name not found in URI")

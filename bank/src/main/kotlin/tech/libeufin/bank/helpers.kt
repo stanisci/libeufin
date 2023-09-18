@@ -26,6 +26,11 @@ import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.util.*
 import java.lang.NumberFormatException
 
+fun ApplicationCall.expectUriComponent(componentName: String) =
+    this.maybeUriComponent(componentName) ?: throw badRequest(
+        hint = "No username found in the URI",
+        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
+)
 // Get the auth token (stripped of the bearer-token:-prefix)
 // IF the call was authenticated with it.
 fun ApplicationCall.getAuthToken(): String? {
@@ -131,7 +136,11 @@ fun doTokenAuth(
             ))
 }
 
-fun forbidden(hint: String? = null, talerErrorCode: TalerErrorCode): LibeufinBankException =
+fun forbidden(
+    hint: String = "No rights on the resource",
+    // FIXME: create a 'generic forbidden' Taler EC.
+    talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_END
+): LibeufinBankException =
     LibeufinBankException(
         httpStatus = HttpStatusCode.Forbidden,
         talerError = TalerError(
@@ -140,7 +149,7 @@ fun forbidden(hint: String? = null, talerErrorCode: TalerErrorCode): LibeufinBan
         )
     )
 
-fun unauthorized(hint: String? = null): LibeufinBankException =
+fun unauthorized(hint: String = "Login failed"): LibeufinBankException =
     LibeufinBankException(
         httpStatus = HttpStatusCode.Unauthorized,
         talerError = TalerError(
@@ -153,6 +162,31 @@ fun internalServerError(hint: String?): LibeufinBankException =
         httpStatus = HttpStatusCode.InternalServerError,
         talerError = TalerError(
             code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
+            hint = hint
+        )
+    )
+
+
+fun notFound(
+    hint: String?,
+    talerEc: TalerErrorCode
+): LibeufinBankException =
+    LibeufinBankException(
+        httpStatus = HttpStatusCode.NotFound,
+        talerError = TalerError(
+            code = talerEc.code,
+            hint = hint
+        )
+    )
+
+fun conflict(
+    hint: String?,
+    talerEc: TalerErrorCode
+): LibeufinBankException =
+    LibeufinBankException(
+        httpStatus = HttpStatusCode.Conflict,
+        talerError = TalerError(
+            code = talerEc.code,
             hint = hint
         )
     )
@@ -222,3 +256,5 @@ fun parseTalerAmount(
         maybeCurrency = match.destructured.component1()
     )
 }
+
+fun getBankCurrency(): String = db.configGet("internal_currency") ?: throw internalServerError("Bank lacks currency")

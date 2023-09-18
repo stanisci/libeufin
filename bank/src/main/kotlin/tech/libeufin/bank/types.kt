@@ -182,6 +182,7 @@ data class BankAccount(
     val internalPaytoUri: String,
     // Database row ID of the customer that owns this bank account.
     val owningCustomerId: Long,
+    val bankAccountId: Long? = null, // null at INSERT.
     val isPublic: Boolean = false,
     val isTalerExchange: Boolean = false,
     /**
@@ -195,7 +196,7 @@ data class BankAccount(
      * being wired by wallet owners.
      */
     val lastNexusFetchRowId: Long = 0L,
-    val balance: TalerAmount? = null,
+    val balance: TalerAmount,
     val hasDebt: Boolean,
     val maxDebt: TalerAmount
 )
@@ -254,9 +255,9 @@ data class BankInternalTransaction(
     val subject: String,
     val amount: TalerAmount,
     val transactionDate: Long,
-    val accountServicerReference: String, // ISO20022
-    val endToEndId: String, // ISO20022
-    val paymentInformationId: String // ISO20022
+    val accountServicerReference: String = "not used", // ISO20022
+    val endToEndId: String = "not used", // ISO20022
+    val paymentInformationId: String = "not used" // ISO20022
 )
 
 /**
@@ -326,4 +327,44 @@ data class Cashout(
     val bankAccount: Long,
     val credit_payto_uri: String,
     val cashoutCurrency: String
+)
+
+// Type to return as GET /config response
+@Serializable // Never used to parse JSON.
+data class Config(
+    val name: String = "libeufin-bank",
+    val version: String = "0:0:0",
+    val have_cashout: Boolean = false,
+    // Following might probably get renamed:
+    val fiat_currency: String? = null
+)
+
+// GET /accounts/$USERNAME response.
+data class AccountData(
+    val name: String,
+    val balance: TalerAmount,
+    val payto_uri: String,
+    val debit_threshold: TalerAmount,
+    val contact_data: ChallengeContactData? = null,
+    val cashout_payto_uri: String? = null,
+    val has_debit: Boolean
+)
+
+// Type of POST /transactions
+@Serializable
+data class BankAccountTransactionCreate(
+    val payto_uri: String,
+    val amount: String
+)
+
+// GET /transactions/T_ID
+@Serializable
+data class BankAccountTransactionInfo(
+    val creditor_payto_uri: String,
+    val debtor_payto_uri: String,
+    val amount: String,
+    val direction: TransactionDirection,
+    val subject: String,
+    val row_id: Long, // is T_ID
+    val date: Long
 )

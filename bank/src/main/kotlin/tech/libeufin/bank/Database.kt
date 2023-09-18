@@ -177,6 +177,7 @@ class Database(private val dbConfig: String) {
             )
         }
     }
+
     fun customerGetFromLogin(login: String): Customer? {
         reconnect()
         val stmt = prepare("""
@@ -187,7 +188,8 @@ class Database(private val dbConfig: String) {
               email,
               phone,
               cashout_payto,
-              cashout_currency
+              cashout_currency,
+              has_debit
             FROM customers
             WHERE login=?
         """)
@@ -317,6 +319,7 @@ class Database(private val dbConfig: String) {
              ,has_debt
              ,(max_debt).val AS max_debt_val
              ,(max_debt).frac AS max_debt_frac
+             ,bank_account_id
             FROM bank_accounts
             WHERE owning_customer_id=?
         """)
@@ -338,7 +341,48 @@ class Database(private val dbConfig: String) {
                 maxDebt = TalerAmount(
                     value = it.getLong("max_debt_val"),
                     frac = it.getInt("max_debt_frac")
-                )
+                ),
+                bankAccountId = it.getLong("bank_account_id")
+            )
+        }
+    }
+    fun bankAccountGetFromInternalPayto(internalPayto: String): BankAccount? {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+             ,bank_account_id
+             ,owning_customer_id
+             ,is_public
+             ,is_taler_exchange
+             ,last_nexus_fetch_row_id
+             ,(balance).val AS balance_val
+             ,(balance).frac AS balance_frac
+             ,has_debt
+             ,(max_debt).val AS max_debt_val
+             ,(max_debt).frac AS max_debt_frac
+            FROM bank_accounts
+            WHERE internal_payto_uri=?
+        """)
+        stmt.setString(1, internalPayto)
+
+        val rs = stmt.executeQuery()
+        rs.use {
+            if (!it.next()) return null
+            return BankAccount(
+                internalPaytoUri = internalPayto,
+                balance = TalerAmount(
+                    it.getLong("balance_val"),
+                    it.getInt("balance_frac")
+                ),
+                lastNexusFetchRowId = it.getLong("last_nexus_fetch_row_id"),
+                owningCustomerId = it.getLong("owning_customer_id"),
+                hasDebt = it.getBoolean("has_debt"),
+                isTalerExchange = it.getBoolean("is_taler_exchange"),
+                maxDebt = TalerAmount(
+                    value = it.getLong("max_debt_val"),
+                    frac = it.getInt("max_debt_frac")
+                ),
+                bankAccountId = it.getLong("bank_account_id")
             )
         }
     }
@@ -385,6 +429,57 @@ class Database(private val dbConfig: String) {
                 return BankTransactionResult.CONFLICT
             }
             return BankTransactionResult.SUCCESS
+        }
+    }
+
+    // Get the bank transaction whose row ID is rowId
+    fun bankTransactionGetFromInternalId(rowId: Long): BankAccountTransaction? {
+        reconnect()
+        val stmt = prepare("""
+            SELECT 
+              creditor_payto_uri
+              ,creditor_name
+              ,debtor_payto_uri
+              ,debtor_name
+              ,subject
+              ,(amount).val AS amount_val
+              ,(amount).frac AS amount_frac
+              ,transaction_date
+              ,account_servicer_reference
+              ,payment_information_id
+              ,end_to_end_id
+              ,direction
+              ,owning_customer_id
+            FROM bank_account_transactions
+	        WHERE bank_transaction_id=?
+        """)
+        stmt.setLong(1, rowId)
+        val rs = stmt.executeQuery()
+        rs.use {
+            if (!it.next()) return null
+            return BankAccountTransaction(
+                creditorPaytoUri = it.getString("creditor_payto_uri"),
+                creditorName = it.getString("creditor_name"),
+                debtorPaytoUri = it.getString("debtor_payto_uri"),
+                debtorName = it.getString("debtor_name"),
+                amount = TalerAmount(
+                    it.getLong("amount_val"),
+                    it.getInt("amount_frac")
+                ),
+                accountServicerReference = it.getString("account_servicer_reference"),
+                endToEndId = it.getString("end_to_end_id"),
+                direction = it.getString("direction").run {
+                    when(this) {
+                        "credit" -> TransactionDirection.credit
+                        "debit" -> TransactionDirection.debit
+                        else -> throw internalServerError("Wrong direction in transaction: $this")
+                    }
+                },
+                bankAccountId = it.getLong("owning_customer_id"),
+                paymentInformationId = it.getString("payment_information_id"),
+                subject = it.getString("subject"),
+                transactionDate = it.getLong("transaction_date")
+            )
         }
     }
 
