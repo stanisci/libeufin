@@ -223,11 +223,10 @@ class DatabaseTest {
     @Test
     fun historyTest() {
         val db = initDb()
-        val res = db.bankTransactionGetForHistoryPage(
+        val res = db.bankTransactionGetHistory(
             10L,
             1L,
-            fromMs = 0,
-            toMs = Long.MAX_VALUE
+            1L
         )
         assert(res.isEmpty())
     }

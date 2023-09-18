@@ -2,14 +2,62 @@ package tech.libeufin.bank
 
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.getNowUs
 import tech.libeufin.util.parsePayto
+import kotlin.math.abs
 
 fun Routing.transactionsHandlers() {
+    get("/accounts/{USERNAME}/transactions") {
+        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
+        val resourceName = call.expectUriComponent("USERNAME")
+        if (c.login != resourceName && c.login != "admin") throw forbidden()
+        // Collecting params.
+        val deltaParam: String = call.request.queryParameters["delta"] ?: throw MissingRequestParameterException("Parameter 'delta' not found")
+        val delta: Long = try {
+            deltaParam.toLong()
+        } catch (e: Exception) {
+            logger.error(e.message)
+            throw badRequest("Param 'delta' not a number")
+        }
+        // Note: minimum 'start' is zero, as database IDs start from 1.
+        val start: Long = when (val param = call.request.queryParameters["start"]) {
+            null -> if (delta >= 0) 0L else Long.MAX_VALUE
+            else -> try {
+                param.toLong()
+            } catch (e: Exception) {
+                logger.error(e.message)
+                throw badRequest("Param 'start' not a number")
+            }
+        }
+        logger.info("Param long_poll_ms not supported")
+        // Making the query.
+        val bankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
+            ?: throw internalServerError("Customer '${c.login}' lacks bank account.")
+        val bankAccountId = bankAccount.bankAccountId
+            ?: throw internalServerError("Bank account lacks row ID.")
+        val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(bankAccountId, start, delta)
+        val res = BankAccountTransactionsResponse(transactions = mutableListOf())
+        history.forEach {
+            res.transactions.add(BankAccountTransactionInfo(
+                debtor_payto_uri = it.debtorPaytoUri,
+                creditor_payto_uri = it.creditorPaytoUri,
+                subject = it.subject,
+                amount = it.amount.toString(),
+                direction = it.direction,
+                date = it.transactionDate,
+                row_id = it.dbRowId ?: throw internalServerError(
+                    "Transaction timestamped with '${it.transactionDate}' did not have row ID"
+                )
+            ))
+        }
+        call.respond(res)
+        return@get
+    }
     // Creates a bank transaction.
     post("/accounts/{USERNAME}/transactions") {
         val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()

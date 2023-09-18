@@ -289,6 +289,8 @@ data class BankAccountTransaction(
      * bank account of the payer.
      */
     val bankAccountId: Long,
+    // Null if this type is used to _create_ one transaction.
+    val dbRowId: Long? = null,
     // Following are ISO20022 specific.
     val accountServicerReference: String,
     val paymentInformationId: String,
@@ -372,4 +374,9 @@ data class BankAccountTransactionInfo(
     val subject: String,
     val row_id: Long, // is T_ID
     val date: Long
+)
+
+@Serializable
+data class BankAccountTransactionsResponse(
+    val transactions: MutableList<BankAccountTransactionInfo>
 )

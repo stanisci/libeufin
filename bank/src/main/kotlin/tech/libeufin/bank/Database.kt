@@ -25,6 +25,7 @@ import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.SQLException
 import java.util.*
+import kotlin.math.abs
 
 private const val DB_CTR_LIMIT = 1000000
 
@@ -485,14 +486,19 @@ class Database(private val dbConfig: String) {
             )
         }
     }
-
-    fun bankTransactionGetForHistoryPage(
-        upperBound: Long,
+    private data class HistoryParams(
+        val cmpOp: String, // < or >
+        val orderBy: String // ASC or DESC
+    )
+    fun bankTransactionGetHistory(
+        start: Long,
+        delta: Long,
         bankAccountId: Long,
-        fromMs: Long,
-        toMs: Long
     ): List<BankAccountTransaction> {
         reconnect()
+        val ops = if (delta < 0)
+            HistoryParams("<", "DESC") else
+                HistoryParams(">", "ASC")
         val stmt = prepare("""
             SELECT 
               creditor_payto_uri
@@ -508,15 +514,15 @@ class Database(private val dbConfig: String) {
               ,end_to_end_id
               ,direction
               ,bank_account_id
+              ,bank_transaction_id
             FROM bank_account_transactions
-	        WHERE bank_transaction_id < ?
-              AND bank_account_id=?
-              AND transaction_date BETWEEN ? AND ?
+	        WHERE bank_transaction_id ${ops.cmpOp} ? AND bank_account_id=?
+            ORDER BY bank_transaction_id ${ops.orderBy}
+            LIMIT ?
         """)
-        stmt.setLong(1, upperBound)
+        stmt.setLong(1, start)
         stmt.setLong(2, bankAccountId)
-        stmt.setLong(3, fromMs)
-        stmt.setLong(4, toMs)
+        stmt.setLong(3, abs(delta))
         val rs = stmt.executeQuery()
         rs.use {
             val ret = mutableListOf<BankAccountTransaction>()
@@ -544,9 +550,9 @@ class Database(private val dbConfig: String) {
                         bankAccountId = it.getLong("bank_account_id"),
                         paymentInformationId = it.getString("payment_information_id"),
                         subject = it.getString("subject"),
-                        transactionDate = it.getLong("transaction_date")
-                )
-                )
+                        transactionDate = it.getLong("transaction_date"),
+                        dbRowId = it.getLong("bank_transaction_id")
+                ))
             } while (it.next())
             return ret
         }
