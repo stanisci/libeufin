@@ -92,15 +92,13 @@ fun Routing.accountsMgmtHandlers() {
             parseTalerAmount(this)
         }
         val bonus = db.configGet("registration_bonus")
-        val initialBalance = if (bonus != null) parseTalerAmount(bonus) else TalerAmount(0, 0)
         val newBankAccount = BankAccount(
             hasDebt = false,
             internalPaytoUri = req.internal_payto_uri ?: genIbanPaytoUri(),
             owningCustomerId = newCustomerRowId,
             isPublic = req.is_public,
             isTalerExchange = req.is_taler_exchange,
-            maxDebt = maxDebt,
-            balance = initialBalance
+            maxDebt = maxDebt
         )
         if (!db.bankAccountCreate(newBankAccount))
             throw internalServerError("Could not INSERT bank account despite all the checks.")
