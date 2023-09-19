@@ -50,6 +50,7 @@ val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank")
 val db = Database(System.getProperty("BANK_DB_CONNECTION_STRING"))
 const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 val TOKEN_DEFAULT_DURATION_US = Duration.ofDays(1L).seconds * 1000000
+const val FRACTION_BASE = 100000000
 
 
 /**
@@ -224,7 +225,7 @@ val webApp: Application.() -> Unit = {
         this.accountsMgmtHandlers()
         this.tokenHandlers()
         this.transactionsHandlers()
-        // this.talerHandlers()
+        this.talerWebHandlers()
         // this.walletIntegrationHandlers()
     }
 }

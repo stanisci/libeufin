@@ -364,7 +364,8 @@ data class BankAccountTransactionCreate(
     val amount: String
 )
 
-// GET /transactions/T_ID
+/* History element, either from GET /transactions/T_ID
+  or from GET /transactions */
 @Serializable
 data class BankAccountTransactionInfo(
     val creditor_payto_uri: String,
@@ -376,7 +377,14 @@ data class BankAccountTransactionInfo(
     val date: Long
 )
 
+// Response type for histories, namely GET /transactions
 @Serializable
 data class BankAccountTransactionsResponse(
     val transactions: MutableList<BankAccountTransactionInfo>
+)
+
+// Taler withdrawal request.
+@Serializable
+data class BankAccountCreateWithdrawalRequest(
+    val amount: String
 )

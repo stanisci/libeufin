@@ -230,7 +230,7 @@ fun parseTalerAmount(
     // Fraction is at most 8 digits, so it's always < than MAX_INT.
     val fraction: Int = match.destructured.component3().run {
         var frac = 0
-        var power = 100000000
+        var power = FRACTION_BASE
         if (this.isNotEmpty())
             // Skips the dot and processes the fractional chars.
             this.substring(1).forEach { chr ->
@@ -257,4 +257,82 @@ fun parseTalerAmount(
     )
 }
 
+private fun normalizeAmount(amt: TalerAmount): TalerAmount {
+    if (amt.frac > FRACTION_BASE) {
+        val normalValue = amt.value + (amt.frac / FRACTION_BASE)
+        val normalFrac = amt.frac % FRACTION_BASE
+        return TalerAmount(
+            value = normalValue,
+            frac = normalFrac,
+            maybeCurrency = amt.currency
+        )
+    }
+    return amt
+}
+
+
+// Adds two amounts and returns the normalized version.
+private fun amountAdd(first: TalerAmount, second: TalerAmount): TalerAmount {
+    if (first.currency != second.currency)
+        throw badRequest(
+            "Currency mismatch, balance '${first.currency}', price '${second.currency}'",
+            TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+        )
+    val valueAdd = first.value + second.value
+    if (valueAdd < first.value)
+        throw badRequest("Amount value overflowed")
+    val fracAdd = first.frac + second.frac
+    if (fracAdd < first.frac)
+        throw badRequest("Amount fraction overflowed")
+    return normalizeAmount(TalerAmount(
+        value = valueAdd,
+        frac = fracAdd,
+        maybeCurrency = first.currency
+    ))
+}
+
+/**
+ * Checks whether the balance could cover the due amount.  Returns true
+ * when it does, false otherwise.  Note: this function is only a checker,
+ * meaning that no actual business state should change after it runs.
+ * The place where business states change is in the SQL that's loaded in
+ * the database.
+ */
+fun isBalanceEnough(
+    balance: TalerAmount,
+    due: TalerAmount,
+    maxDebt: TalerAmount,
+    hasBalanceDebt: Boolean
+): Boolean {
+    val normalMaxDebt = normalizeAmount(maxDebt) // Very unlikely to be needed.
+    if (hasBalanceDebt) {
+        val chargedBalance = amountAdd(balance, due)
+        if (chargedBalance.value > normalMaxDebt.value) return false // max debt surpassed
+        if (
+            (chargedBalance.value == normalMaxDebt.value) &&
+            (chargedBalance.frac > maxDebt.frac)
+            )
+            return false
+        return true
+    }
+    /**
+     * Balance doesn't have debt, but it MIGHT get one.  The following
+     * block calculates how much debt the balance would get, should a
+     * subtraction of 'due' occur.
+     */
+    if (balance.currency != due.currency)
+        throw badRequest(
+            "Currency mismatch, balance '${balance.currency}', due '${due.currency}'",
+            TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+        )
+    val valueDiff = if (balance.value < due.value) due.value - balance.value else 0L
+    val fracDiff = if (balance.frac < due.frac) due.frac - balance.frac else 0
+    // Getting the normalized version of such diff.
+    val normalDiff = normalizeAmount(TalerAmount(valueDiff, fracDiff, balance.currency))
+    // Failing if the normalized diff surpasses the max debt.
+    if (normalDiff.value > normalMaxDebt.value) return false
+    if ((normalDiff.value == normalMaxDebt.value) &&
+        (normalDiff.frac > normalMaxDebt.frac)) return false
+    return true
+}
 fun getBankCurrency(): String = db.configGet("internal_currency") ?: throw internalServerError("Bank lacks currency")

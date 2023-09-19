@@ -21,9 +21,58 @@
 import org.junit.Test
 import tech.libeufin.bank.FracDigits
 import tech.libeufin.bank.TalerAmount
+import tech.libeufin.bank.isBalanceEnough
 import tech.libeufin.bank.parseTalerAmount
 
 class AmountTest {
+    @Test
+    fun amountAdditionTest() {
+        // Balance enough, assert for true
+        assert(isBalanceEnough(
+            balance = TalerAmount(10, 0, "KUDOS"),
+            due = TalerAmount(8, 0, "KUDOS"),
+            hasBalanceDebt = false,
+            maxDebt = TalerAmount(100, 0, "KUDOS")
+        ))
+        // Balance still sufficient, thanks for big enough debt permission.  Assert true.
+        assert(isBalanceEnough(
+            balance = TalerAmount(10, 0, "KUDOS"),
+            due = TalerAmount(80, 0, "KUDOS"),
+            hasBalanceDebt = false,
+            maxDebt = TalerAmount(100, 0, "KUDOS")
+        ))
+        // Balance not enough, max debt cannot cover, asserting for false.
+        assert(!isBalanceEnough(
+            balance = TalerAmount(10, 0, "KUDOS"),
+            due = TalerAmount(80, 0, "KUDOS"),
+            hasBalanceDebt = true,
+            maxDebt = TalerAmount(50, 0, "KUDOS")
+        ))
+        // Balance becomes enough, due to a larger max debt, asserting for true.
+        assert(isBalanceEnough(
+            balance = TalerAmount(10, 0, "KUDOS"),
+            due = TalerAmount(80, 0, "KUDOS"),
+            hasBalanceDebt = false,
+            maxDebt = TalerAmount(70, 0, "KUDOS")
+        ))
+        // Max debt not enough for the smallest fraction, asserting for false
+        assert(!isBalanceEnough(
+            balance = TalerAmount(0, 0, "KUDOS"),
+            due = TalerAmount(0, 2, "KUDOS"),
+            hasBalanceDebt = false,
+            maxDebt = TalerAmount(0, 1, "KUDOS")
+        ))
+        // Same as above, but already in debt.
+        assert(!isBalanceEnough(
+            balance = TalerAmount(0, 1, "KUDOS"),
+            due = TalerAmount(0, 1, "KUDOS"),
+            hasBalanceDebt = true,
+            maxDebt = TalerAmount(0, 1, "KUDOS")
+        ))
+
+
+    }
+
     /* Testing that currency is fetched from the config
        and set in the TalerAmount dedicated field. */
     @Test
