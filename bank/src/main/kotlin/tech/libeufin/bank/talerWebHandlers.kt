@@ -26,7 +26,10 @@ package tech.libeufin.bank
 
 import io.ktor.server.application.*
 import io.ktor.server.request.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import net.taler.common.errorcodes.TalerErrorCode
+import java.util.*
 
 fun Routing.talerWebHandlers() {
     post("/accounts/{USERNAME}/withdrawals") {
@@ -39,8 +42,34 @@ fun Routing.talerWebHandlers() {
         // Checking that the user has enough funds.
         val b = db.bankAccountGetFromOwnerId(c.expectRowId())
             ?: throw internalServerError("Customer '${c.login}' lacks bank account.")
+        val withdrawalAmount = parseTalerAmount(req.amount)
+        if (
+            !isBalanceEnough(
+                balance = b.expectBalance(),
+                due = withdrawalAmount,
+                maxDebt = b.maxDebt,
+                hasBalanceDebt = b.hasDebt
+            ))
+            throw forbidden(
+                hint = "Insufficient funds to withdraw with Taler",
+                talerErrorCode = TalerErrorCode.TALER_EC_NONE // FIXME: need EC.
+            )
+        // Auth and funds passed, create the operation now!
+        val opId = UUID.randomUUID()
+        if(
+            !db.talerWithdrawalCreate(
+                opId,
+                b.expectRowId(),
+                withdrawalAmount
+            )
+        )
+            throw internalServerError("Bank failed at creating the withdraw operation.")
 
-        throw NotImplementedError()
+        call.respond(BankAccountCreateWithdrawalResponse(
+            withdrawal_id = opId.toString(),
+            taler_withdraw_uri = "FIXME"
+        ))
+        return@post
     }
     get("/accounts/{USERNAME}/withdrawals/{W_ID}") {
         throw NotImplementedError()

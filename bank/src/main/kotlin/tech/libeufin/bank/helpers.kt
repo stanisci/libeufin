@@ -21,10 +21,12 @@ package tech.libeufin.bank
 
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.util.*
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.util.*
 import java.lang.NumberFormatException
+import java.net.URL
 
 fun ApplicationCall.expectUriComponent(componentName: String) =
     this.maybeUriComponent(componentName) ?: throw badRequest(
@@ -336,3 +338,35 @@ fun isBalanceEnough(
     return true
 }
 fun getBankCurrency(): String = db.configGet("internal_currency") ?: throw internalServerError("Bank lacks currency")
+
+/**
+ *  Builds the taler://withdraw-URI.  Such URI will serve the requests
+ *  from wallets, when they need to manage the operation.  For example,
+ *  a URI like taler://withdraw/$BANK_URL/taler-integration/$WO_ID needs
+ *  the bank to implement the Taler integratino API at the following base URL:
+ *
+ *      https://$BANK_URL/taler-integration
+ */
+fun getTalerWithdrawUri(baseUrl: String, woId: String) =
+    url {
+        val baseUrlObj = URL(baseUrl)
+        protocol = URLProtocol(
+            name = "taler".plus(if (baseUrlObj.protocol.lowercase() == "http") "+http" else ""),
+            defaultPort = -1
+        )
+        host = "withdraw"
+        val pathSegments = mutableListOf(
+            // adds the hostname(+port) of the actual bank that will serve the withdrawal request.
+            baseUrlObj.host.plus(
+                if (baseUrlObj.port != -1)
+                    ":${baseUrlObj.port}"
+                else ""
+            )
+        )
+        // Removing potential double slashes.
+        baseUrlObj.path.split("/").forEach {
+            if (it.isNotEmpty()) pathSegments.add(it)
+        }
+        pathSegments.add("taler-integration/${woId}")
+        this.appendPathSegments(pathSegments)
+    }
