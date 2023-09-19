@@ -8,7 +8,7 @@ import io.ktor.server.util.*
 import io.ktor.util.*
 import logger
 
-// Get the base URL of a request; handles proxied case.
+// Get the base URL of a request, returns null if any problem occurs.
 fun ApplicationRequest.getBaseUrl(): String? {
     return if (this.headers.contains("X-Forwarded-Host")) {
         logger.info("Building X-Forwarded- base URL")

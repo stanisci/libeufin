@@ -29,6 +29,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
+import tech.libeufin.util.getBaseUrl
 import java.util.*
 
 fun Routing.talerWebHandlers() {
@@ -65,9 +66,11 @@ fun Routing.talerWebHandlers() {
         )
             throw internalServerError("Bank failed at creating the withdraw operation.")
 
+        val bankBaseUrl = call.request.getBaseUrl()
+            ?: throw internalServerError("Bank could not find its base URL")
         call.respond(BankAccountCreateWithdrawalResponse(
             withdrawal_id = opId.toString(),
-            taler_withdraw_uri = "FIXME"
+            taler_withdraw_uri = getTalerWithdrawUri(bankBaseUrl, opId.toString())
         ))
         return@post
     }
