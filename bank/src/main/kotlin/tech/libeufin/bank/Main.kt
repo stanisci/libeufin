@@ -140,6 +140,7 @@ val webApp: Application.() -> Unit = {
     install(IgnoreTrailingSlash)
     install(ContentNegotiation) {
         json(Json {
+            prettyPrint = true
             ignoreUnknownKeys = true
             // Registering custom parser for RelativeTime
             serializersModule = SerializersModule {
@@ -159,11 +160,21 @@ val webApp: Application.() -> Unit = {
          * format.
          */
         exception<BadRequestException> {call, cause ->
-            // Discouraged use, but the only helpful message:
+            /**
+             * NOTE: extracting the root cause helps with JSON error messages,
+             * because they mention the particular way they are invalid, but OTOH
+             * it loses (by getting null) other error messages, like for example
+             * the one from MissingRequestParameterException.  Therefore, in order
+             * to get the most detailed message, we must consider BOTH sides:
+             * the 'cause' AND its root cause!
+             */
             var rootCause: Throwable? = cause.cause
             while (rootCause?.cause != null)
                 rootCause = rootCause.cause
-            logger.error(rootCause?.message)
+            /* Here getting _some_ error message, by giving precedence
+             * to the root cause, as otherwise JSON details would be lost. */
+            val errorMessage: String? = rootCause?.message ?: cause.message
+            logger.error(errorMessage)
             // Telling apart invalid JSON vs missing parameter vs invalid parameter.
             val talerErrorCode = when(cause) {
                 is MissingRequestParameterException ->
@@ -176,7 +187,7 @@ val webApp: Application.() -> Unit = {
                 status = HttpStatusCode.BadRequest,
                 message = TalerError(
                     code = talerErrorCode.code,
-                    hint = rootCause?.message
+                    hint = errorMessage
                 ))
         }
         /**

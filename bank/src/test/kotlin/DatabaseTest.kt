@@ -24,6 +24,19 @@ import tech.libeufin.util.getNowUs
 import java.util.Random
 import java.util.UUID
 
+// Foo pays Bar with custom subject.
+fun genTx(subject: String = "test"): BankInternalTransaction =
+    BankInternalTransaction(
+        creditorAccountId = 2,
+        debtorAccountId = 1,
+        subject = subject,
+        amount = TalerAmount( 10, 0, "KUDOS"),
+        accountServicerReference = "acct-svcr-ref",
+        endToEndId = "end-to-end-id",
+        paymentInformationId = "pmtinfid",
+        transactionDate = 100000L
+    )
+
 class DatabaseTest {
     private val customerFoo = Customer(
         login = "foo",
@@ -57,7 +70,7 @@ class DatabaseTest {
         hasDebt = false,
         maxDebt = TalerAmount(10, 1, "KUDOS")
     )
-
+    val fooPaysBar = genTx()
     @Test
     fun bearerTokenTest() {
         val db = initDb()
@@ -94,16 +107,6 @@ class DatabaseTest {
         db.bankAccountSetMaxDebt(
             barId!!,
             TalerAmount(50, 0)
-        )
-        val fooPaysBar = BankInternalTransaction(
-            creditorAccountId = 2,
-            debtorAccountId = 1,
-            subject = "test",
-            amount = TalerAmount(10, 0),
-            accountServicerReference = "acct-svcr-ref",
-            endToEndId = "end-to-end-id",
-            paymentInformationId = "pmtinfid",
-            transactionDate = 100000L
         )
         val firstSpending = db.bankTransactionCreate(fooPaysBar) // Foo pays Bar and goes debit.
         assert(firstSpending == Database.BankTransactionResult.SUCCESS)
@@ -157,7 +160,7 @@ class DatabaseTest {
         assert(barAccount?.balance?.equals(TalerAmount(0, 0, "KUDOS")) == true)
         // Bringing Bar to debit.
         val barPaysMore = db.bankTransactionCreate(barPaysFoo)
-        assert(barPaysAgain == Database.BankTransactionResult.SUCCESS)
+        assert(barPaysMore == Database.BankTransactionResult.SUCCESS)
         barAccount = db.bankAccountGetFromOwnerId(barId)
         fooAccount = db.bankAccountGetFromOwnerId(fooId)
         // Bar: credit -> debit
@@ -223,12 +226,24 @@ class DatabaseTest {
     @Test
     fun historyTest() {
         val db = initDb()
-        val res = db.bankTransactionGetHistory(
-            10L,
-            1L,
-            1L
+        db.customerCreate(customerFoo); db.bankAccountCreate(bankAccountFoo)
+        db.customerCreate(customerBar); db.bankAccountCreate(bankAccountBar)
+        assert(db.bankAccountSetMaxDebt(1L, TalerAmount(10000000, 0)))
+        // Foo pays Bar 100 times:
+        for (i in 1..100) { db.bankTransactionCreate(genTx("test-$i")) }
+        // Testing positive delta:
+        val forward = db.bankTransactionGetHistory(
+            start = 50L,
+            delta = 2L,
+            bankAccountId = 1L // asking as Foo
         )
-        assert(res.isEmpty())
+        assert(forward.size == 2 && forward[0].dbRowId!! < forward[1].dbRowId!!)
+        val backward = db.bankTransactionGetHistory(
+            start = 50L,
+            delta = -2L,
+            bankAccountId = 1L // asking as Foo
+        )
+        assert(backward.size == 2 && backward[0].dbRowId!! > backward[1].dbRowId!!)
     }
     @Test
     fun cashoutTest() {

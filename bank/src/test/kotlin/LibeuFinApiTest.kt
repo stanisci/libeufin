@@ -38,6 +38,39 @@ class LibeuFinApiTest {
         owningCustomerId = rowId
     )
 
+    /**
+     * Testing GET /transactions.  This test checks that the sign
+     * of delta gets honored by the HTTP handler, namely that the
+     * records appear in ASC or DESC order, according to the sign
+     * of delta.
+     */
+    @Test
+    fun testHistory() {
+        val db = initDb()
+        val fooId = db.customerCreate(customerFoo); assert(fooId != null)
+        assert(db.bankAccountCreate(genBankAccount(fooId!!)))
+        val barId = db.customerCreate(customerBar); assert(barId != null)
+        assert(db.bankAccountCreate(genBankAccount(barId!!)))
+        for (i in 1..10) { db.bankTransactionCreate(genTx("test-$i")) }
+        testApplication {
+            application(webApp)
+            val asc = client.get("/accounts/foo/transactions?delta=2") {
+                basicAuth("foo", "pw")
+                expectSuccess = true
+            }
+            var obj = Json.decodeFromString<BankAccountTransactionsResponse>(asc.bodyAsText())
+            assert(obj.transactions.size == 2)
+            assert(obj.transactions[0].row_id < obj.transactions[1].row_id)
+            val desc = client.get("/accounts/foo/transactions?delta=-2") {
+                basicAuth("foo", "pw")
+                expectSuccess = true
+            }
+            obj = Json.decodeFromString(desc.bodyAsText())
+            assert(obj.transactions.size == 2)
+            assert(obj.transactions[0].row_id > obj.transactions[1].row_id)
+        }
+    }
+
     // Testing the creation of bank transactions.
     @Test
     fun postTransactionsTest() {
