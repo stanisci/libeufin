@@ -24,6 +24,7 @@
 
 package tech.libeufin.bank
 
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.request.*
@@ -33,6 +34,27 @@ import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.util.getBaseUrl
 import java.util.*
+
+/**
+ * This handler factors out the checking of the query param
+ * and the retrieval of the related withdrawal database row.
+ * It throws 404 if the operation is not found, and throws 400
+ * if the query param doesn't parse into an UUID.
+ */
+private fun getWithdrawal(opIdParam: String): TalerWithdrawalOperation {
+    val opId = try {
+        UUID.fromString(opIdParam)
+    } catch (e: Exception) {
+        logger.error(e.message)
+        throw badRequest("withdrawal_id query parameter was malformed")
+    }
+    val op = db.talerWithdrawalGet(opId)
+        ?: throw notFound(
+            hint = "Withdrawal operation ${opIdParam} not found",
+            talerEc = TalerErrorCode.TALER_EC_END
+        )
+    return op
+}
 
 fun Routing.talerWebHandlers() {
     post("/accounts/{USERNAME}/withdrawals") {
@@ -76,25 +98,13 @@ fun Routing.talerWebHandlers() {
         ))
         return@post
     }
-    get("/accounts/{USERNAME}/withdrawals/{W_ID}") {
+    get("/accounts/{USERNAME}/withdrawals/{withdrawal_id}") {
         val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
         val accountName = call.expectUriComponent("USERNAME")
         // Admin allowed to see the details
         if (c.login != accountName && c.login != "admin") throw forbidden()
         // Permissions passed, get the information.
-        val opIdParam: String = call.request.queryParameters.get("W_ID") ?: throw
-                MissingRequestParameterException("withdrawal_id")
-        val opId = try {
-            UUID.fromString(opIdParam)
-        } catch (e: Exception) {
-            logger.error(e.message)
-            throw badRequest("withdrawal_id query parameter was malformed")
-        }
-        val op = db.talerWithdrawalGet(opId)
-            ?: throw notFound(
-                hint = "Withdrawal operation ${opIdParam} not found",
-                talerEc = TalerErrorCode.TALER_EC_END
-            )
+        val op = getWithdrawal(call.expectUriComponent("withdrawal_id"))
         call.respond(BankAccountGetWithdrawalResponse(
             amount = op.amount.toString(),
             aborted = op.aborted,
@@ -107,11 +117,51 @@ fun Routing.talerWebHandlers() {
         ))
         return@get
     }
-    post("/accounts/{USERNAME}/withdrawals/abort") {
-        throw NotImplementedError()
+    post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/abort") {
+        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
+        // Admin allowed to abort.
+        if (!call.getResourceName("USERNAME").canI(c)) throw forbidden()
+        val op = getWithdrawal(call.expectUriComponent("withdrawal_id"))
+        // Idempotency:
+        if (op.aborted) {
+            call.respondText("{}", ContentType.Application.Json)
+            return@post
+        }
+        // Op is found, it'll now fail only if previously confirmed (DB checks).
+        if (!db.talerWithdrawalAbort(op.withdrawalUuid)) throw conflict(
+            hint = "Cannot abort confirmed withdrawal",
+            talerEc = TalerErrorCode.TALER_EC_END
+        )
+        call.respondText("{}", ContentType.Application.Json)
+        return@post
     }
-    post("/accounts/{USERNAME}/withdrawals/confirm") {
-        throw NotImplementedError()
+    post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
+        val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()
+        // No admin allowed.
+        if(!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
+        val op = getWithdrawal(call.expectUriComponent("withdrawal_id"))
+        // Checking idempotency:
+        if (op.confirmationDone) {
+            call.respondText("{}", ContentType.Application.Json)
+            return@post
+        }
+        if (op.aborted)
+            throw conflict(
+                hint = "Cannot confirm an aborted withdrawal",
+                talerEc = TalerErrorCode.TALER_EC_BANK_CONFIRM_ABORT_CONFLICT
+            )
+        // Checking that reserve GOT indeed selected.
+        if (!op.selectionDone)
+            throw LibeufinBankException(
+                httpStatus = HttpStatusCode.UnprocessableEntity,
+                talerError = TalerError(
+                    hint = "Cannot confirm an unselected withdrawal",
+                    code = TalerErrorCode.TALER_EC_END.code
+            ))
+        /* Confirmation conditions are all met, now put the operation
+         * to the selected state _and_ wire the funds to the exchange.
+         */
+        throw NotImplementedError("Need a database transaction now?")
     }
 }
 

@@ -144,7 +144,7 @@ class Database(private val dbConfig: String) {
         }
         res.use {
             if (!it.next())
-                throw internalServerError("SQL RETURNING gave nothing.")
+                throw internalServerError("SQL RETURNING gave no customer_id.")
             return it.getLong("customer_id")
         }
     }
@@ -613,6 +613,27 @@ class Database(private val dbConfig: String) {
                withdrawalUuid = it.getObject("withdrawal_uuid") as UUID
             )
         }
+    }
+
+    /**
+     * Aborts one Taler withdrawal, only if it wasn't previously
+     * confirmed.  It returns false if the UPDATE didn't succeed.
+     */
+    fun talerWithdrawalAbort(opUUID: UUID): Boolean {
+        reconnect()
+        val stmt = prepare("""
+            UPDATE taler_withdrawal_operations
+            SET aborted = true
+            WHERE withdrawal_uuid=? AND selection_done = false
+            RETURNING taler_withdrawal_id
+        """
+        )
+        stmt.setObject(1, opUUID)
+        val res = stmt.executeQuery()
+        res.use {
+            if (!it.next()) return false
+        }
+        return true
     }
 
     // Values coming from the wallet.

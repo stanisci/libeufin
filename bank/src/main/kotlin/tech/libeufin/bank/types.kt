@@ -20,6 +20,7 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
+import io.ktor.server.application.*
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import java.util.*
@@ -406,3 +407,25 @@ data class BankAccountGetWithdrawalResponse(
     val selected_reserve_pub: String? = null,
     val selected_exchange_account: String? = null
 )
+
+typealias ResourceName = String
+
+
+// Checks if the input Customer has the rights over ResourceName
+fun ResourceName.canI(c: Customer, withAdmin: Boolean = true): Boolean {
+    if (c.login == this) return true
+    if (c.login == "admin" && withAdmin) return true
+    return false
+}
+
+/**
+ * Factors out the retrieval of the resource name from
+ * the URI.  The resource looked for defaults to "USERNAME"
+ * as this is frequently mentioned resource along the endpoints.
+ *
+ * This helper is recommended because it returns a ResourceName
+ * type that then offers the ".canI()" helper to check if the user
+ * has the rights on the resource.
+ */
+fun ApplicationCall.getResourceName(param: String): ResourceName =
+    this.expectUriComponent(param)
