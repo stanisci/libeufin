@@ -395,3 +395,14 @@ data class BankAccountCreateWithdrawalResponse(
     val withdrawal_id: String,
     val taler_withdraw_uri: String
 )
+
+// Taler withdrawal details response
+@Serializable
+data class BankAccountGetWithdrawalResponse(
+    val amount: String,
+    val aborted: Boolean,
+    val confirmation_done: Boolean,
+    val selection_done: Boolean,
+    val selected_reserve_pub: String? = null,
+    val selected_exchange_account: String? = null
+)

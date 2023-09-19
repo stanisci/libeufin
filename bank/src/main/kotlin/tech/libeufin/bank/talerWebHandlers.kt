@@ -25,10 +25,12 @@
 package tech.libeufin.bank
 
 import io.ktor.server.application.*
+import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
+import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.util.getBaseUrl
 import java.util.*
 
@@ -67,7 +69,7 @@ fun Routing.talerWebHandlers() {
             throw internalServerError("Bank failed at creating the withdraw operation.")
 
         val bankBaseUrl = call.request.getBaseUrl()
-            ?: throw internalServerError("Bank could not find its base URL")
+            ?: throw internalServerError("Bank could not find its own base URL")
         call.respond(BankAccountCreateWithdrawalResponse(
             withdrawal_id = opId.toString(),
             taler_withdraw_uri = getTalerWithdrawUri(bankBaseUrl, opId.toString())
@@ -75,7 +77,35 @@ fun Routing.talerWebHandlers() {
         return@post
     }
     get("/accounts/{USERNAME}/withdrawals/{W_ID}") {
-        throw NotImplementedError()
+        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
+        val accountName = call.expectUriComponent("USERNAME")
+        // Admin allowed to see the details
+        if (c.login != accountName && c.login != "admin") throw forbidden()
+        // Permissions passed, get the information.
+        val opIdParam: String = call.request.queryParameters.get("W_ID") ?: throw
+                MissingRequestParameterException("withdrawal_id")
+        val opId = try {
+            UUID.fromString(opIdParam)
+        } catch (e: Exception) {
+            logger.error(e.message)
+            throw badRequest("withdrawal_id query parameter was malformed")
+        }
+        val op = db.talerWithdrawalGet(opId)
+            ?: throw notFound(
+                hint = "Withdrawal operation ${opIdParam} not found",
+                talerEc = TalerErrorCode.TALER_EC_END
+            )
+        call.respond(BankAccountGetWithdrawalResponse(
+            amount = op.amount.toString(),
+            aborted = op.aborted,
+            confirmation_done = op.confirmationDone,
+            selection_done = op.selectionDone,
+            selected_exchange_account = op.selectedExchangePayto,
+            selected_reserve_pub = if (op.reservePub != null) {
+                Base32Crockford.encode(op.reservePub)
+            } else null
+        ))
+        return@get
     }
     post("/accounts/{USERNAME}/withdrawals/abort") {
         throw NotImplementedError()
