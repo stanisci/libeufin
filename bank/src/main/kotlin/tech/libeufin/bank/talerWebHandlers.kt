@@ -33,6 +33,7 @@ import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.util.getBaseUrl
+import tech.libeufin.util.getNowUs
 import java.util.*
 
 /**
@@ -158,8 +159,38 @@ fun Routing.talerWebHandlers() {
             ))
         /* Confirmation conditions are all met, now put the operation
          * to the selected state _and_ wire the funds to the exchange.
+         * Note: 'when' helps not to omit more result codes, should more
+         * be added.
          */
-        throw NotImplementedError("Need a database transaction now?")
+        when (db.talerWithdrawalConfirm(op.withdrawalUuid, getNowUs())) {
+            WithdrawalConfirmationResult.BALANCE_INSUFFICIENT ->
+                throw conflict(
+                    "Insufficient funds",
+                    TalerErrorCode.TALER_EC_END // FIXME: define EC for this.
+                )
+            WithdrawalConfirmationResult.OP_NOT_FOUND ->
+                /**
+                 * Despite previous checks, the database _still_ did not
+                 * find the withdrawal operation, that's on the bank.
+                 */
+                throw internalServerError("Withdrawal operation (${op.withdrawalUuid}) not found")
+            WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND ->
+                /**
+                 * That can happen because the bank did not check the exchange
+                 * exists when POST /withdrawals happened, or because the exchange
+                 * bank account got removed before this confirmation.
+                 */
+                throw conflict(
+                    hint = "Exchange to withdraw from not found",
+                    talerEc = TalerErrorCode.TALER_EC_END // FIXME
+                )
+            WithdrawalConfirmationResult.SUCCESS ->
+                call.respondText(
+                    "{}",
+                    ContentType.Application.Json
+                )
+        }
+        return@post
     }
 }
 

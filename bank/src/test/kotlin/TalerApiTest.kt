@@ -78,9 +78,54 @@ class TalerApiTest {
         }
     }
     // Testing withdrawal confirmation
-    @Ignore
+    @Test
     fun withdrawalConfirmation() {
-        assert(false)
+        val db = initDb()
+        val bankAccountBar = BankAccount(
+            internalPaytoUri = "BAR-IBAN-ABC",
+            lastNexusFetchRowId = 1L,
+            owningCustomerId = 2L,
+            hasDebt = false,
+            maxDebt = TalerAmount(10, 1, "KUDOS")
+        )
+        val customerBar = Customer(
+            login = "bar",
+            passwordHash = "hash",
+            name = "Bar",
+            phone = "+00",
+            email = "foo@b.ar",
+            cashoutPayto = "payto://external-IBAN",
+            cashoutCurrency = "KUDOS"
+        )
+
+        // Creating Foo as the wallet owner and Bar as the exchange.
+        assert(db.customerCreate(customerFoo) != null)
+        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.customerCreate(customerBar) != null)
+        assert(db.bankAccountCreate(bankAccountBar))
+
+        // Artificially making a withdrawal operation for Foo.
+        val uuid = UUID.randomUUID()
+        assert(db.talerWithdrawalCreate(
+            opUUID = uuid,
+            walletBankAccount = 1L,
+            amount = TalerAmount(1, 0)
+        ))
+        // Specifying Bar as the exchange, via its Payto URI.
+        assert(db.talerWithdrawalSetDetails(
+            opUuid = uuid,
+            exchangePayto = "BAR-IBAN-ABC",
+            reservePub = "UNCHECKED-RESERVE-PUB"
+        ))
+
+        // Starting the bank and POSTing as Foo to /confirm the operation.
+        testApplication {
+            application(webApp)
+            client.post("/accounts/foo/withdrawals/${uuid}/confirm") {
+                expectSuccess = true // Sufficient to assert on success.
+                basicAuth("foo", "pw")
+            }
+        }
     }
     // Testing the generation of taler://withdraw-URIs.
     @Test
