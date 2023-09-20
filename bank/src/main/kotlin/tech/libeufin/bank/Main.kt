@@ -226,6 +226,7 @@ val webApp: Application.() -> Unit = {
         this.tokenHandlers()
         this.transactionsHandlers()
         this.talerWebHandlers()
-        // this.walletIntegrationHandlers()
+        this.talerIntegrationHandlers()
+        // this.talerWireGatewayHandlers()
     }
 }

@@ -440,3 +440,60 @@ enum class WithdrawalConfirmationResult {
     EXCHANGE_NOT_FOUND,
     BALANCE_INSUFFICIENT
 }
+
+// GET /config response from the Taler Integration API.
+@Serializable
+data class TalerIntegrationConfigResponse(
+    val name: String = "taler-bank-integration",
+    val version: String = "0:0:0:",
+    val currency: String
+)
+
+// Withdrawal status as spec'd in the Taler Integration API.
+@Serializable
+data class BankWithdrawalOperationStatus(
+    // Indicates whether the withdrawal was aborted.
+    val aborted: Boolean,
+
+    /* Has the wallet selected parameters for the withdrawal operation
+      (exchange and reserve public key) and successfully sent it
+      to the bank? */
+    val selection_done: Boolean,
+
+    /* The transfer has been confirmed and registered by the bank.
+       Does not guarantee that the funds have arrived at the exchange
+       already. */
+    val transfer_done: Boolean,
+
+    /* Amount that will be withdrawn with this operation
+       (raw amount without fee considerations). */
+    val amount: String,
+
+    /* Bank account of the customer that is withdrawing, as a
+      ``payto`` URI. */
+    val sender_wire: String? = null,
+
+    // Suggestion for an exchange given by the bank.
+    val suggested_exchange: String? = null,
+
+    /* URL that the user needs to navigate to in order to
+       complete some final confirmation (e.g. 2FA).
+       It may contain withdrawal operation id */
+    val confirm_transfer_url: String? = null,
+
+    // Wire transfer types supported by the bank.
+    val wire_types: MutableList<String> = mutableListOf("iban")
+)
+
+// Selection request on a Taler withdrawal.
+@Serializable
+data class BankWithdrawalOperationPostRequest(
+    val reserve_pub: String,
+    val selected_exchange: String? = null // Use suggested exchange if that's missing.
+)
+
+@Serializable
+data class BankWithdrawalOperationPostResponse(
+    val transfer_done: Boolean,
+    val confirm_transfer_url: String? = null
+)

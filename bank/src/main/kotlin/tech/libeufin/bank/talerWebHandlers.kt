@@ -36,27 +36,6 @@ import tech.libeufin.util.getBaseUrl
 import tech.libeufin.util.getNowUs
 import java.util.*
 
-/**
- * This handler factors out the checking of the query param
- * and the retrieval of the related withdrawal database row.
- * It throws 404 if the operation is not found, and throws 400
- * if the query param doesn't parse into an UUID.
- */
-private fun getWithdrawal(opIdParam: String): TalerWithdrawalOperation {
-    val opId = try {
-        UUID.fromString(opIdParam)
-    } catch (e: Exception) {
-        logger.error(e.message)
-        throw badRequest("withdrawal_id query parameter was malformed")
-    }
-    val op = db.talerWithdrawalGet(opId)
-        ?: throw notFound(
-            hint = "Withdrawal operation ${opIdParam} not found",
-            talerEc = TalerErrorCode.TALER_EC_END
-        )
-    return op
-}
-
 fun Routing.talerWebHandlers() {
     post("/accounts/{USERNAME}/withdrawals") {
         val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()

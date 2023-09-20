@@ -27,6 +27,7 @@ import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.util.*
 import java.lang.NumberFormatException
 import java.net.URL
+import java.util.*
 
 fun ApplicationCall.expectUriComponent(componentName: String) =
     this.maybeUriComponent(componentName) ?: throw badRequest(
@@ -370,3 +371,39 @@ fun getTalerWithdrawUri(baseUrl: String, woId: String) =
         pathSegments.add("taler-integration/${woId}")
         this.appendPathSegments(pathSegments)
     }
+
+fun getWithdrawalConfirmUrl(baseUrl: String, wopId: String) =
+    url {
+        val baseUrlObj = URL(baseUrl)
+        protocol = URLProtocol(name = baseUrlObj.protocol, defaultPort = -1)
+        host = baseUrlObj.host
+        // Removing potential double slashes:
+        baseUrlObj.path.split("/").forEach {
+            this.appendPathSegments(it)
+        }
+        // Completing the endpoint:
+        this.appendPathSegments("${wopId}/confirm")
+    }
+
+
+/**
+ * This handler factors out the checking of the query param
+ * and the retrieval of the related withdrawal database row.
+ * It throws 404 if the operation is not found, and throws 400
+ * if the query param doesn't parse into a UUID.  Currently
+ * used by the Taler Web/SPA and Integration API handlers.
+ */
+fun getWithdrawal(opIdParam: String): TalerWithdrawalOperation {
+    val opId = try {
+        UUID.fromString(opIdParam)
+    } catch (e: Exception) {
+        logger.error(e.message)
+        throw badRequest("withdrawal_id query parameter was malformed")
+    }
+    val op = db.talerWithdrawalGet(opId)
+        ?: throw notFound(
+            hint = "Withdrawal operation ${opIdParam} not found",
+            talerEc = TalerErrorCode.TALER_EC_END
+        )
+    return op
+}
