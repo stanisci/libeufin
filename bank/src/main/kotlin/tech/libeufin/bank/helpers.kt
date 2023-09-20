@@ -372,7 +372,11 @@ fun getTalerWithdrawUri(baseUrl: String, woId: String) =
         this.appendPathSegments(pathSegments)
     }
 
-fun getWithdrawalConfirmUrl(baseUrl: String, wopId: String) =
+fun getWithdrawalConfirmUrl(
+    baseUrl: String,
+    wopId: String,
+    username: String
+    ) =
     url {
         val baseUrlObj = URL(baseUrl)
         protocol = URLProtocol(name = baseUrlObj.protocol, defaultPort = -1)
@@ -382,7 +386,7 @@ fun getWithdrawalConfirmUrl(baseUrl: String, wopId: String) =
             this.appendPathSegments(it)
         }
         // Completing the endpoint:
-        this.appendPathSegments("${wopId}/confirm")
+        this.appendPathSegments("accounts/${username}/withdrawals/${wopId}/confirm")
     }
 
 

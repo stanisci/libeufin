@@ -27,6 +27,61 @@ class TalerApiTest {
         hasDebt = false,
         maxDebt = TalerAmount(10, 1, "KUDOS")
     )
+    // Selecting withdrawal details from the Integrtion API endpoint.
+    @Test
+    fun intSelect() {
+        val db = initDb()
+        val uuid = UUID.randomUUID()
+        assert(db.customerCreate(customerFoo) != null)
+        assert(db.bankAccountCreate(bankAccountFoo))
+        db.configSet(
+            "suggested_exchange",
+            "payto://suggested-exchange"
+        )
+        // insert new.
+        assert(db.talerWithdrawalCreate(
+            opUUID = uuid,
+            walletBankAccount = 1L,
+            amount = TalerAmount(1, 0)
+        ))
+        testApplication {
+            application(webApp)
+            val r = client.post("/taler-integration/withdrawal-operation/${uuid}") {
+                expectSuccess = true
+                contentType(ContentType.Application.Json)
+                setBody("""
+                    {"reserve_pub": "RESERVE-FOO", 
+                     "selected_exchange": "payto://selected/foo/exchange" }
+                """.trimIndent())
+            }
+            println(r.bodyAsText())
+        }
+    }
+    // Showing withdrawal details from the Integrtion API endpoint.
+    @Test
+    fun intGet() {
+        val db = initDb()
+        val uuid = UUID.randomUUID()
+        assert(db.customerCreate(customerFoo) != null)
+        assert(db.bankAccountCreate(bankAccountFoo))
+        db.configSet(
+            "suggested_exchange",
+            "payto://suggested-exchange"
+        )
+        // insert new.
+        assert(db.talerWithdrawalCreate(
+            opUUID = uuid,
+            walletBankAccount = 1L,
+            amount = TalerAmount(1, 0)
+        ))
+        testApplication {
+            application(webApp)
+            val r = client.get("/taler-integration/withdrawal-operation/${uuid}") {
+                expectSuccess = true
+            }
+            println(r.bodyAsText())
+        }
+    }
     // Testing withdrawal abort
     @Test
     fun withdrawalAbort() {

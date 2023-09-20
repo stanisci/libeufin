@@ -44,9 +44,13 @@ fun Routing.talerIntegrationHandlers() {
             throw internalServerError("Bank has a withdrawal not related to any bank account.")
         val suggestedExchange = db.configGet("suggested_exchange")
             ?: throw internalServerError("Bank does not have an exchange to suggest.")
+        val walletCustomer = db.customerGetFromRowId(relatedBankAccount.owningCustomerId)
+        if (walletCustomer == null)
+            throw internalServerError("Could not resort the username that owns this withdrawal")
         val confirmUrl = getWithdrawalConfirmUrl(
             baseUrl = call.request.getBaseUrl() ?: throw internalServerError("Could not get bank own base URL."),
-            wopId = wopid
+            wopId = wopid,
+            username = walletCustomer.login
         )
         call.respond(BankWithdrawalOperationStatus(
             aborted = op.aborted,
@@ -88,19 +92,26 @@ fun Routing.talerIntegrationHandlers() {
         if (!dbSuccess)
             // Whatever the problem, the bank missed it: respond 500.
             throw internalServerError("Bank failed at selecting the withdrawal.")
+        // Getting user details that MIGHT be used later.
+        val confirmUrl: String? = if (!op.confirmationDone) {
+            val walletBankAccount = db.bankAccountGetFromOwnerId(op.walletBankAccount)
+                ?: throw internalServerError("Could not resort the bank account owning this withdrawal")
+            val walletCustomer = db.customerGetFromRowId(walletBankAccount.owningCustomerId)
+                ?: throw internalServerError("Could not resort the username owning this withdrawal")
+            getWithdrawalConfirmUrl(
+                baseUrl = call.request.getBaseUrl()
+                    ?: throw internalServerError("Could not get bank own base URL."),
+                wopId = wopid,
+                username = walletCustomer.login
+            )
+        }
+        else
+            null
         val resp = BankWithdrawalOperationPostResponse(
             transfer_done = op.confirmationDone,
-            confirm_transfer_url = if (!op.confirmationDone)
-                getWithdrawalConfirmUrl(
-                    baseUrl = call.request.getBaseUrl()
-                        ?: throw internalServerError("Could not get bank own base URL."),
-                    wopId = wopid
-                )
-                else
-                    null
+            confirm_transfer_url = confirmUrl
         )
         call.respond(resp)
         return@post
     }
 }
-
