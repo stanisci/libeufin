@@ -220,10 +220,7 @@ class DatabaseTest {
         ))
         val opSelected = db.talerWithdrawalGet(uuid)
         assert(opSelected?.selectionDone == true && !opSelected.confirmationDone)
-        println(
-            db.talerWithdrawalConfirm(uuid, 1L) // ==
-                    // WithdrawalConfirmationResult.SUCCESS
-        )
+        assert(db.talerWithdrawalConfirm(uuid, 1L) == WithdrawalConfirmationResult.SUCCESS)
         // Finally confirming the operation (means customer wired funds to the exchange.)
         assert(db.talerWithdrawalGet(uuid)?.confirmationDone == true)
     }
