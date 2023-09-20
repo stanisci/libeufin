@@ -27,6 +27,49 @@ class TalerApiTest {
         hasDebt = false,
         maxDebt = TalerAmount(10, 1, "KUDOS")
     )
+    val bankAccountBar = BankAccount(
+        internalPaytoUri = "BAR-IBAN-ABC",
+        lastNexusFetchRowId = 1L,
+        owningCustomerId = 2L,
+        hasDebt = false,
+        maxDebt = TalerAmount(10, 1, "KUDOS")
+    )
+    val customerBar = Customer(
+        login = "bar",
+        passwordHash = "hash",
+        name = "Bar",
+        phone = "+00",
+        email = "foo@b.ar",
+        cashoutPayto = "payto://external-IBAN",
+        cashoutCurrency = "KUDOS"
+    )
+    @Test
+    fun addIncoming() {
+        val db = initDb()
+        assert(db.customerCreate(customerFoo) != null)
+        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.customerCreate(customerBar) != null)
+        assert(db.bankAccountCreate(bankAccountBar))
+        assert(db.bankAccountSetMaxDebt(
+            2L,
+            TalerAmount(1000, 0)
+        ))
+        testApplication {
+            application(webApp)
+            client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
+                expectSuccess = true
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "pw")
+                setBody("""
+                    {"amount": "KUDOS:44",
+                     "reserve_pub": "RESERVE-PUB-TEST",
+                      "debit_account": "BAR-IBAN-ABC"
+                      }
+                """.trimIndent())
+            }
+        }
+
+    }
     // Selecting withdrawal details from the Integrtion API endpoint.
     @Test
     fun intSelect() {
@@ -136,23 +179,6 @@ class TalerApiTest {
     @Test
     fun withdrawalConfirmation() {
         val db = initDb()
-        val bankAccountBar = BankAccount(
-            internalPaytoUri = "BAR-IBAN-ABC",
-            lastNexusFetchRowId = 1L,
-            owningCustomerId = 2L,
-            hasDebt = false,
-            maxDebt = TalerAmount(10, 1, "KUDOS")
-        )
-        val customerBar = Customer(
-            login = "bar",
-            passwordHash = "hash",
-            name = "Bar",
-            phone = "+00",
-            email = "foo@b.ar",
-            cashoutPayto = "payto://external-IBAN",
-            cashoutCurrency = "KUDOS"
-        )
-
         // Creating Foo as the wallet owner and Bar as the exchange.
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo))

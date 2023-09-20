@@ -227,6 +227,6 @@ val webApp: Application.() -> Unit = {
         this.transactionsHandlers()
         this.talerWebHandlers()
         this.talerIntegrationHandlers()
-        // this.talerWireGatewayHandlers()
+        this.talerWireGatewayHandlers()
     }
 }

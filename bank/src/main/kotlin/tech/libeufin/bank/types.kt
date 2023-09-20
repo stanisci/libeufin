@@ -492,8 +492,37 @@ data class BankWithdrawalOperationPostRequest(
     val selected_exchange: String? = null // Use suggested exchange if that's missing.
 )
 
+/**
+ * Response to the wallet after it selects the exchange
+ * and the reserve pub.
+ */
 @Serializable
 data class BankWithdrawalOperationPostResponse(
     val transfer_done: Boolean,
     val confirm_transfer_url: String? = null
+)
+
+/**
+ * Request to an /admin/add-incoming request from
+ * the Taler Wire Gateway API.
+ */
+@Serializable
+data class AddIncomingRequest(
+    val amount: String,
+    val reserve_pub: String,
+    val debit_account: String
+)
+
+// Response to /admin/add-incoming
+@Serializable
+data class AddIncomingResponse(
+    val timestamp: Long,
+    val row_id: Long
+)
+
+@Serializable
+data class TWGConfigResponse(
+    val name: String = "taler-wire-gateway",
+    val version: String = "0:0:0:",
+    val currency: String
 )

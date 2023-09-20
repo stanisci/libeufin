@@ -399,7 +399,7 @@ class Database(private val dbConfig: String) {
         NO_CREDITOR,
         NO_DEBTOR,
         SUCCESS,
-        CONFLICT
+        CONFLICT // balance insufficient
     }
     fun bankTransactionCreate(
         tx: BankInternalTransaction
@@ -435,6 +435,28 @@ class Database(private val dbConfig: String) {
                 return BankTransactionResult.CONFLICT
             }
             return BankTransactionResult.SUCCESS
+        }
+    }
+
+    /**
+     * Only checks if a bank transaction with the given subject
+     * exists.  That's only used in the /admin/add-incoming, to
+     * prevent a public key from being reused.
+     *
+     * Returns the row ID if found, null otherwise.
+     */
+    fun bankTransactionCheckExists(subject: String): Long? {
+        reconnect()
+        val stmt = prepare("""
+            SELECT bank_transaction_id
+            FROM bank_account_transactions
+            WHERE subject = ?;           
+        """)
+        stmt.setString(1, subject)
+        val res = stmt.executeQuery()
+        res.use {
+            if (!it.next()) return null
+            return it.getLong("bank_transaction_id")
         }
     }
 

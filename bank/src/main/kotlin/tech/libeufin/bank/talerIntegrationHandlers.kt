@@ -77,6 +77,12 @@ fun Routing.talerIntegrationHandlers() {
                 )
         }
         val dbSuccess: Boolean = if (!op.selectionDone) {
+            // Check if reserve pub. was used in _another_ withdrawal.
+            if (db.bankTransactionCheckExists(req.reserve_pub) != null)
+                throw conflict(
+                    "Reserve pub. already used",
+                    TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
+                )
             val exchangePayto = req.selected_exchange
                 ?: (db.configGet("suggested_exchange")
                     ?: throw internalServerError("Suggested exchange not found")
