@@ -111,9 +111,7 @@ fun Routing.talerWebHandlers() {
             confirmation_done = op.confirmationDone,
             selection_done = op.selectionDone,
             selected_exchange_account = op.selectedExchangePayto,
-            selected_reserve_pub = if (op.reservePub != null) {
-                Base32Crockford.encode(op.reservePub)
-            } else null
+            selected_reserve_pub = op.reservePub
         ))
         return@get
     }

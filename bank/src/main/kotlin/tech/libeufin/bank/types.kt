@@ -308,7 +308,7 @@ data class TalerWithdrawalOperation(
     val selectionDone: Boolean = false,
     val aborted: Boolean = false,
     val confirmationDone: Boolean = false,
-    val reservePub: ByteArray?,
+    val reservePub: String?,
     val selectedExchangePayto: String?,
     val walletBankAccount: Long
 )
@@ -429,3 +429,14 @@ fun ResourceName.canI(c: Customer, withAdmin: Boolean = true): Boolean {
  */
 fun ApplicationCall.getResourceName(param: String): ResourceName =
     this.expectUriComponent(param)
+
+/**
+ * This type communicates the result of a database operation
+ * to confirm one withdrawal operation.
+ */
+enum class WithdrawalConfirmationResult {
+    SUCCESS,
+    OP_NOT_FOUND,
+    EXCHANGE_NOT_FOUND,
+    BALANCE_INSUFFICIENT
+}

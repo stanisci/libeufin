@@ -86,6 +86,93 @@ END $$;
 COMMENT ON PROCEDURE bank_set_config(TEXT, TEXT)
   IS 'Update or insert configuration values';
 
+CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
+  IN in_withdrawal_uuid uuid,
+  IN in_confirmation_date BIGINT,
+  IN in_acct_svcr_ref TEXT,
+  IN in_pmt_inf_id TEXT,
+  IN in_end_to_end_id TEXT,
+  OUT out_nx_op BOOLEAN,
+  -- can't use out_balance_insufficient, because
+  -- it conflicts with the return column of the called
+  -- function that moves the funds.  FIXME?
+  OUT out_insufficient_funds BOOLEAN,
+  OUT out_nx_exchange BOOLEAN
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  confirmation_done_local BOOLEAN;
+  reserve_pub_local TEXT;
+  selected_exchange_payto_local TEXT;
+  wallet_bank_account_local BIGINT;
+  amount_local taler_amount;
+  exchange_bank_account_id BIGINT;
+  maybe_balance_insufficient BOOLEAN;
+BEGIN
+SELECT -- Really no-star policy and instead DECLARE almost one var per column?
+  confirmation_done,
+  reserve_pub,
+  selected_exchange_payto,
+  wallet_bank_account,
+  (amount).val, (amount).frac
+  INTO
+    confirmation_done_local,
+    reserve_pub_local,
+    selected_exchange_payto_local,
+    wallet_bank_account_local,
+    amount_local.val, amount_local.frac
+  FROM taler_withdrawal_operations
+  WHERE withdrawal_uuid=in_withdrawal_uuid;
+IF NOT FOUND
+THEN
+  out_nx_op=TRUE;
+  RETURN;
+END IF;
+out_nx_op=FALSE;
+IF (confirmation_done_local)
+THEN
+  RETURN; -- nothing to do, idempotentially returning.
+END IF;
+-- exists and wasn't confirmed, do it.
+UPDATE taler_withdrawal_operations
+  SET confirmation_done = true
+  WHERE withdrawal_uuid=in_withdrawal_uuid;
+-- sending the funds to the exchange, but needs first its bank account row ID
+SELECT
+  bank_account_id
+  INTO exchange_bank_account_id
+  FROM bank_accounts
+  WHERE internal_payto_uri = selected_exchange_payto_local;
+IF NOT FOUND
+THEN
+  out_nx_exchange=TRUE;
+  RETURN;
+END IF;
+out_nx_exchange=FALSE;
+SELECT -- not checking for accounts existence, as it was done above.
+  out_balance_insufficient
+  INTO
+    maybe_balance_insufficient
+FROM bank_wire_transfer(
+  exchange_bank_account_id,
+  wallet_bank_account_local,
+  reserve_pub_local,
+  amount_local,
+  in_confirmation_date,
+  in_acct_svcr_ref,
+  in_pmt_inf_id,
+  in_end_to_end_id
+);
+IF (maybe_balance_insufficient)
+THEN
+  out_insufficient_funds=TRUE;
+END IF;
+out_insufficient_funds=FALSE;
+END $$;
+COMMENT ON FUNCTION confirm_taler_withdrawal(uuid, bigint, text, text, text)
+  IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';
+
 CREATE OR REPLACE FUNCTION bank_wire_transfer(
   IN in_creditor_account_id BIGINT,
   IN in_debtor_account_id BIGINT,

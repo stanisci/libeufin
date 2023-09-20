@@ -201,6 +201,8 @@ class DatabaseTest {
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.customerCreate(customerBar) != null) // plays the exchange.
+        assert(db.bankAccountCreate(bankAccountBar))
         // insert new.
         assert(db.talerWithdrawalCreate(
             uuid,
@@ -212,13 +214,16 @@ class DatabaseTest {
         assert(op?.walletBankAccount == 1L && op.withdrawalUuid == uuid)
         // Setting the details.
         assert(db.talerWithdrawalSetDetails(
-            uuid,
-            "exchange-payto",
-            ByteArray(32)
+            opUuid = uuid,
+            exchangePayto = "BAR-IBAN-ABC",
+            reservePub = "UNCHECKED-RESERVE-PUB"
         ))
         val opSelected = db.talerWithdrawalGet(uuid)
         assert(opSelected?.selectionDone == true && !opSelected.confirmationDone)
-        assert(db.talerWithdrawalConfirm(uuid))
+        println(
+            db.talerWithdrawalConfirm(uuid, 1L) // ==
+                    // WithdrawalConfirmationResult.SUCCESS
+        )
         // Finally confirming the operation (means customer wired funds to the exchange.)
         assert(db.talerWithdrawalGet(uuid)?.confirmationDone == true)
     }

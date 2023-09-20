@@ -371,7 +371,7 @@ CREATE TABLE IF NOT EXISTS taler_withdrawal_operations
   ,selection_done BOOLEAN DEFAULT FALSE NOT NULL
   ,aborted BOOLEAN DEFAULT FALSE NOT NULL
   ,confirmation_done BOOLEAN DEFAULT FALSE NOT NULL
-  ,reserve_pub BYTEA CHECK(length(reserve_pub)=32) NULL
+  ,reserve_pub TEXT NULL -- Kotlin must check it's valid.
   ,selected_exchange_payto TEXT
   ,wallet_bank_account BIGINT NOT NULL
     REFERENCES bank_accounts(bank_account_id)

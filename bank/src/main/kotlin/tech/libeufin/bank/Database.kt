@@ -609,7 +609,7 @@ class Database(private val dbConfig: String) {
                walletBankAccount = it.getLong("wallet_bank_account"),
                confirmationDone = it.getBoolean("confirmation_done"),
                aborted = it.getBoolean("aborted"),
-               reservePub = it.getBytes("reserve_pub"),
+               reservePub = it.getString("reserve_pub"),
                withdrawalUuid = it.getObject("withdrawal_uuid") as UUID
             )
         }
@@ -638,9 +638,9 @@ class Database(private val dbConfig: String) {
 
     // Values coming from the wallet.
     fun talerWithdrawalSetDetails(
-        opUUID: UUID,
+        opUuid: UUID,
         exchangePayto: String,
-        reservePub: ByteArray
+        reservePub: String
     ): Boolean {
         reconnect()
         val stmt = prepare("""
@@ -650,20 +650,41 @@ class Database(private val dbConfig: String) {
         """
         )
         stmt.setString(1, exchangePayto)
-        stmt.setBytes(2, reservePub)
-        stmt.setObject(3, opUUID)
+        stmt.setString(2, reservePub)
+        stmt.setObject(3, opUuid)
         return myExecute(stmt)
     }
-    fun talerWithdrawalConfirm(opUUID: UUID): Boolean {
+
+    fun talerWithdrawalConfirm(
+        opUuid: UUID,
+        timestamp: Long,
+        accountServicerReference: String = "NOT-USED",
+        endToEndId: String = "NOT-USED",
+        paymentInfId: String = "NOT-USED"
+    ): WithdrawalConfirmationResult {
         reconnect()
         val stmt = prepare("""
-            UPDATE taler_withdrawal_operations
-            SET confirmation_done = true
-            WHERE withdrawal_uuid=?
+            SELECT
+              out_nx_op,
+              out_nx_exchange,
+              out_insufficient_funds
+            FROM confirm_taler_withdrawal(?, ?, ?, ?, ?);
         """
         )
-        stmt.setObject(1, opUUID)
-        return myExecute(stmt)
+        stmt.setObject(1, opUuid)
+        stmt.setLong(2, timestamp)
+        stmt.setString(3, accountServicerReference)
+        stmt.setString(4, endToEndId)
+        stmt.setString(5, paymentInfId)
+        val res = stmt.executeQuery()
+        res.use {
+            if (!res.next())
+                throw internalServerError("No result from DB procedure confirm_taler_withdrawal")
+            if (it.getBoolean("out_nx_op")) return WithdrawalConfirmationResult.OP_NOT_FOUND
+            if (it.getBoolean("out_nx_exchange")) return WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND
+            if (it.getBoolean("out_insufficient_funds")) return WithdrawalConfirmationResult.BALANCE_INSUFFICIENT
+        }
+        return WithdrawalConfirmationResult.SUCCESS
     }
 
     fun cashoutCreate(op: Cashout): Boolean {
