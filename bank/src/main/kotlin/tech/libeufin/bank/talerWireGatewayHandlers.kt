@@ -30,7 +30,7 @@ import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.getNowUs
 
 fun Routing.talerWireGatewayHandlers() {
-    get("/accounts/{USERNAME}/taler-wire-gateway/config") {
+    get("/taler-wire-gateway/config") {
         val internalCurrency = db.configGet("internal_currency")
             ?: throw internalServerError("Could not find bank own currency.")
         call.respond(TWGConfigResponse(currency = internalCurrency))
@@ -69,6 +69,56 @@ fun Routing.talerWireGatewayHandlers() {
         return@get
     }
     post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
+        val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()
+        if (!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
+        val req = call.receive<TransferRequest>()
+        // Checking for idempotency.
+        val maybeDoneAlready = db.talerTransferGetFromUid(req.request_uid)
+        if (maybeDoneAlready != null) {
+            val isIdempotent =
+                maybeDoneAlready.amount == req.amount
+                        && maybeDoneAlready.credit_account == req.credit_account
+                        && maybeDoneAlready.exchange_base_url == req.exchange_base_url
+                        && maybeDoneAlready.wtid == req.wtid
+            if (isIdempotent) {
+                val timestamp = maybeDoneAlready.timestamp
+                    ?: throw internalServerError("Timestamp not found on idempotent request")
+                val rowId = maybeDoneAlready.row_id
+                    ?: throw internalServerError("Row ID not found on idempotent request")
+                call.respond(TransferResponse(
+                    timestamp = timestamp,
+                    row_id = rowId
+                ))
+                return@post
+            }
+            throw conflict(
+                hint = "request_uid used already",
+                talerEc = TalerErrorCode.TALER_EC_END // FIXME: need appropriate Taler EC.
+            )
+        }
+        // Legitimate request, go on.
+        val exchangeBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
+            ?: throw internalServerError("Exchange does not have a bank account")
+        val transferTimestamp = getNowUs()
+        val dbRes = db.talerTransferCreate(
+            req = req,
+            exchangeBankAccountId = exchangeBankAccount.expectRowId(),
+            timestamp = transferTimestamp
+        )
+        if (dbRes == Database.BankTransactionResult.CONFLICT)
+            throw conflict(
+                "Insufficient balance for exchange",
+                TalerErrorCode.TALER_EC_END // FIXME
+            )
+        if (dbRes == Database.BankTransactionResult.NO_CREDITOR)
+            throw notFound(
+                "Creditor account was not found",
+                TalerErrorCode.TALER_EC_END // FIXME
+            )
+        call.respond(TransferResponse(
+            timestamp = transferTimestamp,
+            row_id = 0 // FIXME!
+        ))
         return@post
     }
     post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {

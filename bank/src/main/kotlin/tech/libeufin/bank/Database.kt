@@ -394,7 +394,6 @@ class Database(private val dbConfig: String) {
             )
         }
     }
-    // More bankAccountGetFrom*() to come, on a needed basis.
 
     // BANK ACCOUNT TRANSACTIONS
     enum class BankTransactionResult {
@@ -898,6 +897,100 @@ class Database(private val dbConfig: String) {
                     return@run this
                 }
             )
+        }
+    }
+
+    // Gets a Taler transfer request, given its UID.
+    fun talerTransferGetFromUid(requestUid: String): TransferRequest? {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+              wtid
+              ,(amount).val AS amount_value
+              ,(amount).frac AS amount_frac
+              ,exchange_base_url
+              ,credit_account_payto
+              FROM taler_exchange_transfers
+              WHERE request_uid = ?;
+        """)
+        stmt.setString(1, requestUid)
+        val res = stmt.executeQuery()
+        res.use {
+            if (!it.next()) return null
+            return TransferRequest(
+                wtid = it.getString("wtid"),
+                amount = TalerAmount(
+                    value = it.getLong("amount_value"),
+                    frac = it.getInt("amount_frac"),
+                ),
+                credit_account = it.getString("credit_account_payto"),
+                exchange_base_url = it.getString("exchange_base_url"),
+                request_uid = requestUid,
+                // FIXME: fix the following two after setting the bank_transaction_id on this row.
+                row_id = 0L,
+                timestamp = 0L
+            )
+        }
+    }
+
+    /**
+     * This function calls the SQL function that (1) inserts the TWG
+     * requests details into the database and (2) performs the actual
+     * bank transaction to pay the merchant according to the 'req' parameter.
+     *
+     * 'req' contains the same data that was POSTed by the exchange
+     * to the TWG /transfer endpoint.  The exchangeBankAccountId parameter
+     * is the row ID of the exchange's bank account.  The return type
+     * is the same returned by "bank_wire_transfer()" where however
+     * the NO_DEBTOR error will hardly take place.
+     */
+    fun talerTransferCreate(
+        req: TransferRequest,
+        exchangeBankAccountId: Long,
+        timestamp: Long,
+        acctSvcrRef: String = "not used",
+        pmtInfId: String = "not used",
+        endToEndId: String = "not used",
+        ): BankTransactionResult {
+        reconnect()
+        // FIXME: future versions should return the exchange's latest bank transaction ID
+        val stmt = prepare("""
+            SELECT
+              out_exchange_balance_insufficient
+              ,out_nx_creditor
+              FROM
+                taler_transfer (
+                  ?,
+                  ?,
+                  (?,?)::taler_amount,
+                  ?,
+                  ?,
+                  ?,
+                  ?,
+                  ?,
+                  ?,
+                  ?
+                );
+        """)
+        stmt.setString(1, req.request_uid)
+        stmt.setString(2, req.wtid)
+        stmt.setLong(3, req.amount.value)
+        stmt.setInt(4, req.amount.frac)
+        stmt.setString(5, req.exchange_base_url)
+        stmt.setString(6, req.credit_account)
+        stmt.setLong(7, exchangeBankAccountId)
+        stmt.setLong(8, timestamp)
+        stmt.setString(9, acctSvcrRef)
+        stmt.setString(10, pmtInfId)
+        stmt.setString(11, endToEndId)
+
+        val res = stmt.executeQuery()
+        res.use {
+            if (!it.next())
+                throw internalServerError("SQL function taler_transfer did not return anything.")
+            if (it.getBoolean("out_exchange_balance_insufficient")) return BankTransactionResult.CONFLICT
+            if (it.getBoolean("out_nx_creditor")) return BankTransactionResult.NO_CREDITOR
+            return BankTransactionResult.SUCCESS
         }
     }
 }

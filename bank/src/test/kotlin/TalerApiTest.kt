@@ -44,6 +44,63 @@ class TalerApiTest {
         cashoutPayto = "payto://external-IBAN",
         cashoutCurrency = "KUDOS"
     )
+    // Testing the POST /transfer call from the TWG API.
+    @Test
+    fun transfer() {
+        val db = initDb()
+        // Creating the exchange and merchant accounts first.
+        assert(db.customerCreate(customerFoo) != null)
+        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.customerCreate(customerBar) != null)
+        assert(db.bankAccountCreate(bankAccountBar))
+        // Give the exchange reasonable debt allowance:
+        assert(db.bankAccountSetMaxDebt(
+            1L,
+            TalerAmount(1000, 0)
+        ))
+        // Do POST /transfer.
+        testApplication {
+            application(webApp)
+            val req = """
+                    {
+                      "request_uid": "entropic 0",
+                      "wtid": "entropic 1",
+                      "exchange_base_url": "http://exchange.example.com/",
+                      "amount": "KUDOS:33",
+                      "credit_account": "BAR-IBAN-ABC"
+                    }
+                """.trimIndent()
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "pw")
+                contentType(ContentType.Application.Json)
+                expectSuccess = true
+                setBody(req)
+            }
+            // check idempotency
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "pw")
+                contentType(ContentType.Application.Json)
+                expectSuccess = true
+                setBody(req)
+            }
+            // Trigger conflict due to reused request_uid
+            val r = client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "pw")
+                contentType(ContentType.Application.Json)
+                expectSuccess = false
+                setBody("""
+                    {
+                      "request_uid": "entropic 0",
+                      "wtid": "entropic 1",
+                      "exchange_base_url": "http://different-exchange.example.com/",
+                      "amount": "KUDOS:33",
+                      "credit_account": "BAR-IBAN-ABC"
+                    }
+                """.trimIndent())
+            }
+            assert(r.status == HttpStatusCode.Conflict)
+        }
+    }
     // Testing the /history/incoming call from the TWG API.
     @Test
     fun historyIncoming() {

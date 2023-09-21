@@ -23,6 +23,7 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
+import java.io.Serial
 import java.util.*
 
 // Allowed lengths for fractional digits in amounts.
@@ -545,4 +546,25 @@ data class IncomingReserveTransaction(
     val amount: String,
     val debit_account: String, // Payto of the sender.
     val reserve_pub: String
+)
+
+// TWG's request to pay a merchant.
+@Serializable
+data class TransferRequest(
+    val request_uid: String,
+    @Contextual
+    val amount: TalerAmount,
+    val exchange_base_url: String,
+    val wtid: String,
+    val credit_account: String,
+    // Only used when this type if defined from a DB record
+    val timestamp: Long? = null, // when this request got finalized with a wire transfer
+    val row_id: Long? = null // DB row ID of this record
+)
+
+// TWG's response to merchant payouts
+@Serializable
+data class TransferResponse(
+    val timestamp: Long,
+    val row_id: Long
 )

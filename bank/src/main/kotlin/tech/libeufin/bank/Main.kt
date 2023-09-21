@@ -39,6 +39,7 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.SerializersModule
 import net.taler.common.errorcodes.TalerErrorCode
+import org.jetbrains.exposed.sql.stringLiteral
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
@@ -88,6 +89,25 @@ object RelativeTimeSerializer : KSerializer<RelativeTime> {
         }
 }
 
+object TalerAmountSerializer : KSerializer<TalerAmount> {
+
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("TalerAmount", PrimitiveKind.STRING)
+    override fun serialize(encoder: Encoder, value: TalerAmount) {
+        throw internalServerError("Encoding of TalerAmount not implemented.") // API doesn't require this.
+    }
+    override fun deserialize(decoder: Decoder): TalerAmount {
+        val maybeAmount = try {
+            decoder.decodeString()
+        } catch (e: Exception) {
+            throw badRequest(
+                "Did not find any Taler amount as string: ${e.message}",
+                TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
+            )
+        }
+        return parseTalerAmount(maybeAmount)
+    }
+}
 
 /**
  * This function tries to authenticate the call according
@@ -147,6 +167,9 @@ val webApp: Application.() -> Unit = {
             serializersModule = SerializersModule {
                 contextual(RelativeTime::class) {
                     RelativeTimeSerializer
+                }
+                contextual(TalerAmount::class) {
+                    TalerAmountSerializer
                 }
             }
         })

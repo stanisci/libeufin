@@ -17,7 +17,6 @@
  * <http://www.gnu.org/licenses/>
  */
 
-
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.getNowUs
@@ -75,6 +74,35 @@ class DatabaseTest {
         maxDebt = TalerAmount(10, 1, "KUDOS")
     )
     val fooPaysBar = genTx()
+
+    /**
+     * Tests the SQL function that performs the instructions
+     * given by the exchange to pay one merchant.
+     */
+    @Test
+    fun talerTransferTest() {
+        val exchangeReq = TransferRequest(
+            amount = TalerAmount(9, 0, "KUDOS"),
+            credit_account = "BAR-IBAN-ABC", // foo pays bar
+            exchange_base_url = "example.com/exchange",
+            request_uid = "entropic 0",
+            wtid = "entropic 1"
+        )
+        val db = initDb()
+        val fooId = db.customerCreate(customerFoo)
+        assert(fooId != null)
+        val barId = db.customerCreate(customerBar)
+        assert(barId != null)
+        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountBar))
+        val res = db.talerTransferCreate(
+            req = exchangeReq,
+            exchangeBankAccountId = 1L,
+            timestamp = getNowUs()
+        )
+        assert(res == Database.BankTransactionResult.SUCCESS)
+    }
+
     @Test
     fun bearerTokenTest() {
         val db = initDb()

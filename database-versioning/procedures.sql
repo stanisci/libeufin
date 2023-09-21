@@ -86,6 +86,91 @@ END $$;
 COMMENT ON PROCEDURE bank_set_config(TEXT, TEXT)
   IS 'Update or insert configuration values';
 
+CREATE OR REPLACE FUNCTION taler_transfer(
+  IN in_request_uid TEXT,
+  IN in_wtid TEXT,
+  IN in_amount taler_amount,
+  IN in_exchange_base_url TEXT,
+  IN in_credit_account_payto TEXT,
+  IN in_exchange_bank_account_id BIGINT,
+  IN in_timestamp BIGINT,
+  IN in_account_servicer_reference TEXT,
+  IN in_payment_information_id TEXT,
+  IN in_end_to_end_id TEXT,
+  OUT out_exchange_balance_insufficient BOOLEAN,
+  OUT out_nx_creditor BOOLEAN
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+maybe_balance_insufficient BOOLEAN;
+receiver_bank_account_id BIGINT;
+payment_subject TEXT;
+BEGIN
+
+INSERT
+  INTO taler_exchange_transfers (
+    request_uid,
+    wtid,
+    exchange_base_url,
+    credit_account_payto,
+    amount
+    -- FIXME: this needs the bank transaction row ID here.
+) VALUES (
+  in_request_uid,
+  in_wtid,
+  in_exchange_base_url,
+  in_credit_account_payto,
+  in_amount
+);
+SELECT
+  bank_account_id
+  INTO receiver_bank_account_id
+  FROM bank_accounts
+  WHERE internal_payto_uri = in_credit_account_payto;
+IF NOT FOUND
+THEN
+  out_nx_creditor=TRUE;
+  RETURN;
+END IF;
+out_nx_creditor=FALSE;
+SELECT CONCAT(in_wtid, ' ', in_exchange_base_url)
+  INTO payment_subject;
+SELECT
+  out_balance_insufficient
+  INTO maybe_balance_insufficient
+  FROM bank_wire_transfer(
+    receiver_bank_account_id,
+    in_exchange_bank_account_id,
+    payment_subject,
+    in_amount,
+    in_timestamp,
+    in_account_servicer_reference,
+    in_payment_information_id,
+    in_end_to_end_id
+  );
+IF (maybe_balance_insufficient)
+THEN
+  out_exchange_balance_insufficient=TRUE;
+END IF;
+out_exchange_balance_insufficient=FALSE;
+END $$;
+COMMENT ON FUNCTION taler_transfer(
+  text,
+  text,
+  taler_amount,
+  text,
+  text,
+  bigint,
+  bigint,
+  text,
+  text,
+  text
+  )
+  IS 'function that (1) inserts the TWG requests'
+     'details into the database and (2) performs '
+     'the actual bank transaction to pay the merchant';
+
 CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
   IN in_confirmation_date BIGINT,
