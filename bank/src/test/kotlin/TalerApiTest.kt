@@ -70,19 +70,21 @@ class TalerApiTest {
                       "credit_account": "BAR-IBAN-ABC"
                     }
                 """.trimIndent()
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+            val resp = client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
                 contentType(ContentType.Application.Json)
                 expectSuccess = true
                 setBody(req)
             }
+            // println(resp.bodyAsText())
             // check idempotency
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+            val idemResp = client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
                 contentType(ContentType.Application.Json)
                 expectSuccess = true
                 setBody(req)
             }
+            // println(idemResp.bodyAsText())
             // Trigger conflict due to reused request_uid
             val r = client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")

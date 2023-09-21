@@ -163,6 +163,8 @@ fun Routing.talerWebHandlers() {
                     hint = "Exchange to withdraw from not found",
                     talerEc = TalerErrorCode.TALER_EC_END // FIXME
                 )
+            WithdrawalConfirmationResult.CONFLICT ->
+                throw internalServerError("Bank didn't check for idempotency")
             WithdrawalConfirmationResult.SUCCESS ->
                 call.respondText(
                     "{}",

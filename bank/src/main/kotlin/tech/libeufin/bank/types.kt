@@ -442,7 +442,16 @@ enum class WithdrawalConfirmationResult {
     SUCCESS,
     OP_NOT_FOUND,
     EXCHANGE_NOT_FOUND,
-    BALANCE_INSUFFICIENT
+    BALANCE_INSUFFICIENT,
+    /**
+     * This state indicates that the withdrawal was already
+     * confirmed BUT Kotlin did not detect it and still invoked
+     * the SQL procedure to confirm the withdrawal.  This is
+     * conflictual because only Kotlin is responsible to check
+     * for idempotency, and this state witnesses a failure in
+     * this regard.
+     */
+    CONFLICT
 }
 
 // GET /config response from the Taler Integration API.
@@ -556,10 +565,7 @@ data class TransferRequest(
     val amount: TalerAmount,
     val exchange_base_url: String,
     val wtid: String,
-    val credit_account: String,
-    // Only used when this type if defined from a DB record
-    val timestamp: Long? = null, // when this request got finalized with a wire transfer
-    val row_id: Long? = null // DB row ID of this record
+    val credit_account: String
 )
 
 // TWG's response to merchant payouts

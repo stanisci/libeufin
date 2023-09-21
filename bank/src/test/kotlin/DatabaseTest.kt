@@ -100,7 +100,7 @@ class DatabaseTest {
             exchangeBankAccountId = 1L,
             timestamp = getNowUs()
         )
-        assert(res == Database.BankTransactionResult.SUCCESS)
+        assert(res.txResult == Database.BankTransactionResult.SUCCESS)
     }
 
     @Test

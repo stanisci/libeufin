@@ -370,7 +370,7 @@ CREATE TABLE IF NOT EXISTS taler_exchange_transfers
   ,exchange_base_url TEXT NOT NULL
   ,credit_account_payto TEXT NOT NULL
   ,amount taler_amount NOT NULL
-  ,bank_transaction BIGINT UNIQUE -- NOT NULL FIXME: make this not null.
+  ,bank_transaction BIGINT UNIQUE NOT NULL
     REFERENCES bank_account_transactions(bank_transaction_id)
       ON DELETE RESTRICT
       ON UPDATE RESTRICT

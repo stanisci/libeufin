@@ -77,17 +77,13 @@ fun Routing.talerWireGatewayHandlers() {
         if (maybeDoneAlready != null) {
             val isIdempotent =
                 maybeDoneAlready.amount == req.amount
-                        && maybeDoneAlready.credit_account == req.credit_account
-                        && maybeDoneAlready.exchange_base_url == req.exchange_base_url
+                        && maybeDoneAlready.creditAccount == req.credit_account
+                        && maybeDoneAlready.exchangeBaseUrl == req.exchange_base_url
                         && maybeDoneAlready.wtid == req.wtid
             if (isIdempotent) {
-                val timestamp = maybeDoneAlready.timestamp
-                    ?: throw internalServerError("Timestamp not found on idempotent request")
-                val rowId = maybeDoneAlready.row_id
-                    ?: throw internalServerError("Row ID not found on idempotent request")
                 call.respond(TransferResponse(
-                    timestamp = timestamp,
-                    row_id = rowId
+                    timestamp = maybeDoneAlready.timestamp,
+                    row_id = maybeDoneAlready.debitTxRowId
                 ))
                 return@post
             }
@@ -105,19 +101,21 @@ fun Routing.talerWireGatewayHandlers() {
             exchangeBankAccountId = exchangeBankAccount.expectRowId(),
             timestamp = transferTimestamp
         )
-        if (dbRes == Database.BankTransactionResult.CONFLICT)
+        if (dbRes.txResult == Database.BankTransactionResult.CONFLICT)
             throw conflict(
                 "Insufficient balance for exchange",
                 TalerErrorCode.TALER_EC_END // FIXME
             )
-        if (dbRes == Database.BankTransactionResult.NO_CREDITOR)
+        if (dbRes.txResult == Database.BankTransactionResult.NO_CREDITOR)
             throw notFound(
                 "Creditor account was not found",
                 TalerErrorCode.TALER_EC_END // FIXME
             )
+        val debitRowId = dbRes.txRowId
+            ?: throw internalServerError("Database did not return the debit tx row ID")
         call.respond(TransferResponse(
             timestamp = transferTimestamp,
-            row_id = 0 // FIXME!
+            row_id = debitRowId
         ))
         return@post
     }

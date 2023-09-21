@@ -98,7 +98,8 @@ CREATE OR REPLACE FUNCTION taler_transfer(
   IN in_payment_information_id TEXT,
   IN in_end_to_end_id TEXT,
   OUT out_exchange_balance_insufficient BOOLEAN,
-  OUT out_nx_creditor BOOLEAN
+  OUT out_nx_creditor BOOLEAN,
+  OUT out_tx_row_id BIGINT
 )
 LANGUAGE plpgsql
 AS $$
@@ -106,23 +107,13 @@ DECLARE
 maybe_balance_insufficient BOOLEAN;
 receiver_bank_account_id BIGINT;
 payment_subject TEXT;
+exchange_debit_tx_id BIGINT;
 BEGIN
 
-INSERT
-  INTO taler_exchange_transfers (
-    request_uid,
-    wtid,
-    exchange_base_url,
-    credit_account_payto,
-    amount
-    -- FIXME: this needs the bank transaction row ID here.
-) VALUES (
-  in_request_uid,
-  in_wtid,
-  in_exchange_base_url,
-  in_credit_account_payto,
-  in_amount
-);
+-- First creating the bank transaction, then updating
+-- the transfer request table, because that needs to point
+-- at the bank transaction.
+
 SELECT
   bank_account_id
   INTO receiver_bank_account_id
@@ -137,8 +128,11 @@ out_nx_creditor=FALSE;
 SELECT CONCAT(in_wtid, ' ', in_exchange_base_url)
   INTO payment_subject;
 SELECT
-  out_balance_insufficient
-  INTO maybe_balance_insufficient
+  out_balance_insufficient,
+  out_debit_row_id
+  INTO
+    maybe_balance_insufficient,
+    exchange_debit_tx_id
   FROM bank_wire_transfer(
     receiver_bank_account_id,
     in_exchange_bank_account_id,
@@ -154,6 +148,23 @@ THEN
   out_exchange_balance_insufficient=TRUE;
 END IF;
 out_exchange_balance_insufficient=FALSE;
+INSERT
+  INTO taler_exchange_transfers (
+    request_uid,
+    wtid,
+    exchange_base_url,
+    credit_account_payto,
+    amount,
+    bank_transaction
+) VALUES (
+  in_request_uid,
+  in_wtid,
+  in_exchange_base_url,
+  in_credit_account_payto,
+  in_amount,
+  exchange_debit_tx_id
+);
+out_tx_row_id = exchange_debit_tx_id;
 END $$;
 COMMENT ON FUNCTION taler_transfer(
   text,
@@ -182,7 +193,8 @@ CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   -- it conflicts with the return column of the called
   -- function that moves the funds.  FIXME?
   OUT out_insufficient_funds BOOLEAN,
-  OUT out_nx_exchange BOOLEAN
+  OUT out_nx_exchange BOOLEAN,
+  OUT out_already_confirmed_conflict BOOLEAN
 )
 LANGUAGE plpgsql
 AS $$
@@ -217,8 +229,10 @@ END IF;
 out_nx_op=FALSE;
 IF (confirmation_done_local)
 THEN
-  RETURN; -- nothing to do, idempotentially returning.
+  out_already_confirmed_conflict=TRUE
+  RETURN; -- Kotlin should have checked for idempotency before reaching here!
 END IF;
+out_already_confirmed_conflict=FALSE;
 -- exists and wasn't confirmed, do it.
 UPDATE taler_withdrawal_operations
   SET confirmation_done = true
@@ -269,7 +283,9 @@ CREATE OR REPLACE FUNCTION bank_wire_transfer(
   IN in_end_to_end_id TEXT,
   OUT out_nx_creditor BOOLEAN,
   OUT out_nx_debtor BOOLEAN,
-  OUT out_balance_insufficient BOOLEAN
+  OUT out_balance_insufficient BOOLEAN,
+  OUT out_credit_row_id BIGINT,
+  OUT out_debit_row_id BIGINT
 )
 LANGUAGE plpgsql
 AS $$
@@ -292,6 +308,8 @@ will_debtor_have_debt BOOLEAN;
 will_creditor_have_debt BOOLEAN;
 amount_at_least_debit BOOLEAN;
 potential_balance_ok BOOLEAN;
+new_debit_row_id BIGINT;
+new_credit_row_id BIGINT;
 BEGIN
 -- check debtor exists.
 SELECT
@@ -447,7 +465,8 @@ VALUES (
   in_end_to_end_id,
   'debit',
   in_debtor_account_id
-);
+) RETURNING bank_transaction_id INTO new_debit_row_id;
+out_debit_row_id=new_debit_row_id;
 
 -- debtor side:
 INSERT INTO bank_account_transactions (
@@ -477,7 +496,9 @@ VALUES (
   in_end_to_end_id, -- does this interest the receiving party?
   'credit',
   in_creditor_account_id
-);
+) RETURNING bank_transaction_id INTO new_credit_row_id;
+out_credit_row_id=new_credit_row_id;
+
 -- checks and balances set up, now update bank accounts.
 UPDATE bank_accounts
 SET

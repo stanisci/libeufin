@@ -686,7 +686,13 @@ class Database(private val dbConfig: String) {
         return true
     }
 
-    // Values coming from the wallet.
+    /**
+     * Associates a reserve public key and an exchange to
+     * a Taler withdrawal.  Returns true on success, false
+     * otherwise.
+     *
+     * Checking for idempotency is entirely on the Kotlin side.
+     */
     fun talerWithdrawalSetDetails(
         opUuid: UUID,
         exchangePayto: String,
@@ -705,6 +711,9 @@ class Database(private val dbConfig: String) {
         return myExecute(stmt)
     }
 
+    /**
+     *
+     */
     fun talerWithdrawalConfirm(
         opUuid: UUID,
         timestamp: Long,
@@ -717,7 +726,8 @@ class Database(private val dbConfig: String) {
             SELECT
               out_nx_op,
               out_nx_exchange,
-              out_insufficient_funds
+              out_insufficient_funds,
+              out_already_confirmed_conflict
             FROM confirm_taler_withdrawal(?, ?, ?, ?, ?);
         """
         )
@@ -733,6 +743,7 @@ class Database(private val dbConfig: String) {
             if (it.getBoolean("out_nx_op")) return WithdrawalConfirmationResult.OP_NOT_FOUND
             if (it.getBoolean("out_nx_exchange")) return WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND
             if (it.getBoolean("out_insufficient_funds")) return WithdrawalConfirmationResult.BALANCE_INSUFFICIENT
+            if (it.getBoolean("out_already_confirmed_conflict")) return WithdrawalConfirmationResult.CONFLICT
         }
         return WithdrawalConfirmationResult.SUCCESS
     }
@@ -899,40 +910,58 @@ class Database(private val dbConfig: String) {
             )
         }
     }
-
+    data class TalerTransferFromDb(
+        // Only used when this type if defined from a DB record
+        val timestamp: Long,
+        val debitTxRowId: Long,
+        val requestUid: String,
+        val amount: TalerAmount,
+        val exchangeBaseUrl: String,
+        val wtid: String,
+        val creditAccount: String
+    )
     // Gets a Taler transfer request, given its UID.
-    fun talerTransferGetFromUid(requestUid: String): TransferRequest? {
+    fun talerTransferGetFromUid(requestUid: String): TalerTransferFromDb? {
         reconnect()
         val stmt = prepare("""
             SELECT
               wtid
-              ,(amount).val AS amount_value
-              ,(amount).frac AS amount_frac
               ,exchange_base_url
-              ,credit_account_payto
-              FROM taler_exchange_transfers
+              ,(tfr.amount).val AS amount_value
+              ,(tfr.amount).frac AS amount_frac
+              ,tfr.credit_account_payto
+              ,tfr.bank_transaction
+              ,txs.transaction_date AS timestamp
+              FROM taler_exchange_transfers AS tfr
+                JOIN bank_account_transactions AS txs
+                  ON bank_transaction=txs.bank_transaction_id
               WHERE request_uid = ?;
         """)
         stmt.setString(1, requestUid)
         val res = stmt.executeQuery()
         res.use {
             if (!it.next()) return null
-            return TransferRequest(
+            return TalerTransferFromDb(
                 wtid = it.getString("wtid"),
                 amount = TalerAmount(
                     value = it.getLong("amount_value"),
                     frac = it.getInt("amount_frac"),
                 ),
-                credit_account = it.getString("credit_account_payto"),
-                exchange_base_url = it.getString("exchange_base_url"),
-                request_uid = requestUid,
-                // FIXME: fix the following two after setting the bank_transaction_id on this row.
-                row_id = 0L,
-                timestamp = 0L
+                creditAccount = it.getString("credit_account_payto"),
+                exchangeBaseUrl = it.getString("exchange_base_url"),
+                requestUid = requestUid,
+                debitTxRowId = it.getLong("bank_transaction"),
+                timestamp = it.getLong("timestamp")
             )
         }
     }
 
+    data class TalerTransferDbResult(
+        val txResult: BankTransactionResult,
+        // Row ID of the debit bank transaction
+        // of a successful case.  Null upon errors
+        val txRowId: Long? = null
+    )
     /**
      * This function calls the SQL function that (1) inserts the TWG
      * requests details into the database and (2) performs the actual
@@ -951,13 +980,14 @@ class Database(private val dbConfig: String) {
         acctSvcrRef: String = "not used",
         pmtInfId: String = "not used",
         endToEndId: String = "not used",
-        ): BankTransactionResult {
+        ): TalerTransferDbResult {
         reconnect()
         // FIXME: future versions should return the exchange's latest bank transaction ID
         val stmt = prepare("""
             SELECT
               out_exchange_balance_insufficient
               ,out_nx_creditor
+              ,out_tx_row_id
               FROM
                 taler_transfer (
                   ?,
@@ -988,9 +1018,15 @@ class Database(private val dbConfig: String) {
         res.use {
             if (!it.next())
                 throw internalServerError("SQL function taler_transfer did not return anything.")
-            if (it.getBoolean("out_exchange_balance_insufficient")) return BankTransactionResult.CONFLICT
-            if (it.getBoolean("out_nx_creditor")) return BankTransactionResult.NO_CREDITOR
-            return BankTransactionResult.SUCCESS
+            if (it.getBoolean("out_nx_creditor"))
+                return TalerTransferDbResult(BankTransactionResult.NO_CREDITOR)
+            if (it.getBoolean("out_exchange_balance_insufficient"))
+                return TalerTransferDbResult(BankTransactionResult.CONFLICT)
+            val txRowId = it.getLong("out_tx_row_id")
+            return TalerTransferDbResult(
+                txResult = BankTransactionResult.SUCCESS,
+                txRowId = txRowId
+            )
         }
     }
 }
