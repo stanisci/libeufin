@@ -21,6 +21,7 @@
 
 package tech.libeufin.bank
 
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -36,6 +37,35 @@ fun Routing.talerWireGatewayHandlers() {
         return@get
     }
     get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {
+        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
+        if (!call.getResourceName("USERNAME").canI(c, withAdmin = true)) throw forbidden()
+        val params = getHistoryParams(call.request)
+        val bankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
+            ?: throw internalServerError("Customer '${c.login}' lacks bank account.")
+        if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
+        val bankAccountId = bankAccount.expectRowId()
+
+        val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
+            start = params.start,
+            delta = params.delta,
+            bankAccountId = bankAccountId,
+            withDirection = TransactionDirection.credit
+        )
+        if (history.isEmpty()) {
+            call.respond(HttpStatusCode.NoContent)
+            return@get
+        }
+        val resp = IncomingHistory(credit_account = bankAccount.internalPaytoUri)
+        history.forEach {
+            resp.incoming_transactions.add(IncomingReserveTransaction(
+                row_id = it.expectRowId(),
+                amount = it.amount.toString(),
+                date = it.transactionDate,
+                debit_account = it.debtorPaytoUri,
+                reserve_pub = it.subject
+            ))
+        }
+        call.respond(resp)
         return@get
     }
     post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {

@@ -197,7 +197,7 @@ class LibeuFinApiTest {
                 basicAuth("not", "not")
                 expectSuccess = false
             }
-            assert(shouldNot.status == HttpStatusCode.Unauthorized)
+            assert(shouldNot.status == HttpStatusCode.NotFound)
         }
     }
     /**

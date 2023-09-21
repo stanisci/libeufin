@@ -32,17 +32,52 @@ class TalerApiTest {
         lastNexusFetchRowId = 1L,
         owningCustomerId = 2L,
         hasDebt = false,
-        maxDebt = TalerAmount(10, 1, "KUDOS")
+        maxDebt = TalerAmount(10, 1, "KUDOS"),
+        isTalerExchange = true
     )
     val customerBar = Customer(
         login = "bar",
-        passwordHash = "hash",
+        passwordHash = CryptoUtil.hashpw("secret"),
         name = "Bar",
         phone = "+00",
         email = "foo@b.ar",
         cashoutPayto = "payto://external-IBAN",
         cashoutCurrency = "KUDOS"
     )
+    // Testing the /history/incoming call from the TWG API.
+    @Test
+    fun historyIncoming() {
+        val db = initDb()
+        assert(db.customerCreate(customerFoo) != null)
+        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.customerCreate(customerBar) != null)
+        assert(db.bankAccountCreate(bankAccountBar))
+        // Give Foo reasonable debt allowance:
+        assert(db.bankAccountSetMaxDebt(
+            1L,
+            TalerAmount(1000, 0)
+        ))
+        // Foo pays Bar (the exchange) twice.
+        assert(db.bankTransactionCreate(genTx("withdrawal 1")) == Database.BankTransactionResult.SUCCESS)
+        assert(db.bankTransactionCreate(genTx("withdrawal 2")) == Database.BankTransactionResult.SUCCESS)
+        // Bar pays Foo once, but that should not appear in the result.
+        assert(
+            db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)) ==
+                    Database.BankTransactionResult.SUCCESS
+            )
+        // Bar expects two entries in the incoming history
+        testApplication {
+            application(webApp)
+            val resp = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=5") {
+                basicAuth("bar", "secret")
+                expectSuccess = true
+            }
+            val j: IncomingHistory = Json.decodeFromString(resp.bodyAsText())
+            assert(j.incoming_transactions.size == 2)
+        }
+    }
+
+    // Testing the /admin/add-incoming call from the TWG API.
     @Test
     fun addIncoming() {
         val db = initDb()
@@ -50,6 +85,7 @@ class TalerApiTest {
         assert(db.bankAccountCreate(bankAccountFoo))
         assert(db.customerCreate(customerBar) != null)
         assert(db.bankAccountCreate(bankAccountBar))
+        // Give Bar reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             2L,
             TalerAmount(1000, 0)
@@ -68,7 +104,6 @@ class TalerApiTest {
                 """.trimIndent())
             }
         }
-
     }
     // Selecting withdrawal details from the Integrtion API endpoint.
     @Test

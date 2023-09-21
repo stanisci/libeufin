@@ -33,6 +33,8 @@ private const val DB_CTR_LIMIT = 1000000
 fun Customer.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Cutsomer '$login' had no DB row ID.")
 fun BankAccount.expectBalance(): TalerAmount = this.balance ?: throw internalServerError("Bank account '${this.internalPaytoUri}' lacks balance.")
 fun BankAccount.expectRowId(): Long = this.bankAccountId ?: throw internalServerError("Bank account '${this.internalPaytoUri}' lacks database row ID.")
+fun BankAccountTransaction.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Bank account transaction (${this.subject}) lacks database row ID.")
+
 
 
 class Database(private val dbConfig: String) {
@@ -510,6 +512,15 @@ class Database(private val dbConfig: String) {
             )
         }
     }
+
+    /**
+     * The following function returns the list of transactions, according
+     * to the history parameters.  The parameters take at least the 'start'
+     * and 'delta' values, and _optionally_ the payment direction.  At the
+     * moment, only the TWG uses the direction, to provide the /incoming
+     * and /outgoing endpoints.
+     */
+    // Helper type to collect the history parameters.
     private data class HistoryParams(
         val cmpOp: String, // < or >
         val orderBy: String // ASC or DESC
@@ -518,6 +529,7 @@ class Database(private val dbConfig: String) {
         start: Long,
         delta: Long,
         bankAccountId: Long,
+        withDirection: TransactionDirection? = null
     ): List<BankAccountTransaction> {
         reconnect()
         val ops = if (delta < 0)
@@ -536,22 +548,45 @@ class Database(private val dbConfig: String) {
               ,account_servicer_reference
               ,payment_information_id
               ,end_to_end_id
-              ,direction
+              ${if (withDirection != null) "" else ",direction"}
               ,bank_account_id
               ,bank_transaction_id
             FROM bank_account_transactions
-	        WHERE bank_transaction_id ${ops.cmpOp} ? AND bank_account_id=?
+	        WHERE bank_transaction_id ${ops.cmpOp} ? 
+              AND bank_account_id=?
+              ${if (withDirection != null) "AND direction=?::direction_enum" else ""}
             ORDER BY bank_transaction_id ${ops.orderBy}
             LIMIT ?
         """)
         stmt.setLong(1, start)
         stmt.setLong(2, bankAccountId)
-        stmt.setLong(3, abs(delta))
+        /**
+         * The LIMIT parameter index might change, according to
+         * the presence of the direction filter.
+         */
+        val limitParamIndex = if (withDirection != null) {
+            stmt.setString(3, withDirection.name)
+            4
+        }
+        else
+            3
+        stmt.setLong(limitParamIndex, abs(delta))
         val rs = stmt.executeQuery()
         rs.use {
             val ret = mutableListOf<BankAccountTransaction>()
             if (!it.next()) return ret
             do {
+                val direction = if (withDirection == null) {
+                    it.getString("direction").run {
+                        when (this) {
+                            "credit" -> TransactionDirection.credit
+                            "debit" -> TransactionDirection.debit
+                            else -> throw internalServerError("Wrong direction in transaction: $this")
+                        }
+                    }
+                }
+                else
+                    withDirection
                 ret.add(
                     BankAccountTransaction(
                         creditorPaytoUri = it.getString("creditor_payto_uri"),
@@ -564,13 +599,7 @@ class Database(private val dbConfig: String) {
                         ),
                         accountServicerReference = it.getString("account_servicer_reference"),
                         endToEndId = it.getString("end_to_end_id"),
-                        direction = it.getString("direction").run {
-                            when(this) {
-                                "credit" -> TransactionDirection.credit
-                                "debit" -> TransactionDirection.debit
-                                else -> throw internalServerError("Wrong direction in transaction: $this")
-                            }
-                        },
+                        direction = direction,
                         bankAccountId = it.getLong("bank_account_id"),
                         paymentInformationId = it.getString("payment_information_id"),
                         subject = it.getString("subject"),

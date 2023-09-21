@@ -410,8 +410,11 @@ data class BankAccountGetWithdrawalResponse(
 
 typealias ResourceName = String
 
-
-// Checks if the input Customer has the rights over ResourceName
+/**
+ * Checks if the input Customer has the rights over ResourceName.
+ * FIXME: myAuth() gives null on failures, but this gives false.
+ * Should they return the same, for consistency?
+ */
 fun ResourceName.canI(c: Customer, withAdmin: Boolean = true): Boolean {
     if (c.login == this) return true
     if (c.login == "admin" && withAdmin) return true
@@ -525,4 +528,21 @@ data class TWGConfigResponse(
     val name: String = "taler-wire-gateway",
     val version: String = "0:0:0:",
     val currency: String
+)
+
+// Response of a TWG /history/incoming call.
+@Serializable
+data class IncomingHistory(
+    val incoming_transactions: MutableList<IncomingReserveTransaction> = mutableListOf(),
+    val credit_account: String // Receiver's Payto URI.
+)
+// TWG's incoming payment record.
+@Serializable
+data class IncomingReserveTransaction(
+    val type: String = "RESERVE",
+    val row_id: Long, // DB row ID of the payment.
+    val date: Long, // microseconds timestamp.
+    val amount: String,
+    val debit_account: String, // Payto of the sender.
+    val reserve_pub: String
 )

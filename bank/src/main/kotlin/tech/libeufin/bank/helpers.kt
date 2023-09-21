@@ -20,7 +20,10 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
+import io.ktor.http.cio.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.*
+import io.ktor.server.request.*
 import io.ktor.server.util.*
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
@@ -51,7 +54,6 @@ fun ApplicationCall.getAuthToken(): String? {
     return null // Not a Bearer token case.
 }
 
-
 /**
  * Performs the HTTP basic authentication.  Returns the
  * authenticated customer on success, or null otherwise.
@@ -77,7 +79,10 @@ fun doBasicAuth(encodedCredentials: String): Customer? {
         )
     val login = userAndPassSplit[0]
     val plainPassword = userAndPassSplit[1]
-    val maybeCustomer = db.customerGetFromLogin(login) ?: return null
+    val maybeCustomer = db.customerGetFromLogin(login) ?: throw notFound(
+        "User not found",
+        TalerErrorCode.TALER_EC_END // FIXME: define EC.
+    )
     if (!CryptoUtil.checkpw(plainPassword, maybeCustomer.passwordHash)) return null
     return maybeCustomer
 }
@@ -372,6 +377,7 @@ fun getTalerWithdrawUri(baseUrl: String, woId: String) =
         this.appendPathSegments(pathSegments)
     }
 
+// Builds a withdrawal confirm URL.
 fun getWithdrawalConfirmUrl(
     baseUrl: String,
     wopId: String,
@@ -410,4 +416,33 @@ fun getWithdrawal(opIdParam: String): TalerWithdrawalOperation {
             talerEc = TalerErrorCode.TALER_EC_END
         )
     return op
+}
+
+data class HistoryParams(
+    val delta: Long,
+    val start: Long
+)
+/**
+ * Extracts the query parameters from "history-like" endpoints,
+ * providing the defaults according to the API specification.
+ */
+fun getHistoryParams(req: ApplicationRequest): HistoryParams {
+    val deltaParam: String = req.queryParameters["delta"] ?: throw MissingRequestParameterException(parameterName = "delta")
+    val delta: Long = try {
+        deltaParam.toLong()
+    } catch (e: Exception) {
+        logger.error(e.message)
+        throw badRequest("Param 'delta' not a number")
+    }
+    // Note: minimum 'start' is zero, as database IDs start from 1.
+    val start: Long = when (val param = req.queryParameters["start"]) {
+        null -> if (delta >= 0) 0L else Long.MAX_VALUE
+        else -> try {
+            param.toLong()
+        } catch (e: Exception) {
+            logger.error(e.message)
+            throw badRequest("Param 'start' not a number")
+        }
+    }
+    return HistoryParams(delta = delta, start = start)
 }

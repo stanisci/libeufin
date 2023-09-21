@@ -17,32 +17,14 @@ fun Routing.transactionsHandlers() {
         val resourceName = call.expectUriComponent("USERNAME")
         if (c.login != resourceName && c.login != "admin") throw forbidden()
         // Collecting params.
-        val deltaParam: String = call.request.queryParameters["delta"] ?: throw MissingRequestParameterException(parameterName = "delta")
-        val delta: Long = try {
-            deltaParam.toLong()
-        } catch (e: Exception) {
-            logger.error(e.message)
-            throw badRequest("Param 'delta' not a number")
-        }
-        // Note: minimum 'start' is zero, as database IDs start from 1.
-        val start: Long = when (val param = call.request.queryParameters["start"]) {
-            null -> if (delta >= 0) 0L else Long.MAX_VALUE
-            else -> try {
-                param.toLong()
-            } catch (e: Exception) {
-                logger.error(e.message)
-                throw badRequest("Param 'start' not a number")
-            }
-        }
-        logger.info("Param long_poll_ms not supported")
+        val historyParams = getHistoryParams(call.request)
         // Making the query.
         val bankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
             ?: throw internalServerError("Customer '${c.login}' lacks bank account.")
-        val bankAccountId = bankAccount.bankAccountId
-            ?: throw internalServerError("Bank account lacks row ID.")
+        val bankAccountId = bankAccount.expectRowId()
         val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
-            start = start,
-            delta = delta,
+            start = historyParams.start,
+            delta = historyParams.delta,
             bankAccountId = bankAccountId
         )
         val res = BankAccountTransactionsResponse(transactions = mutableListOf())

@@ -25,10 +25,14 @@ import java.util.Random
 import java.util.UUID
 
 // Foo pays Bar with custom subject.
-fun genTx(subject: String = "test"): BankInternalTransaction =
+fun genTx(
+    subject: String = "test",
+    creditorId: Long = 2,
+    debtorId: Long = 1
+): BankInternalTransaction =
     BankInternalTransaction(
-        creditorAccountId = 2,
-        debtorAccountId = 1,
+        creditorAccountId = creditorId,
+        debtorAccountId = debtorId,
         subject = subject,
         amount = TalerAmount( 10, 0, "KUDOS"),
         accountServicerReference = "acct-svcr-ref",
