@@ -101,6 +101,23 @@ class TalerApiTest {
                 """.trimIndent())
             }
             assert(r.status == HttpStatusCode.Conflict)
+            /* Triggering currency mismatch.  This mainly tests
+             * the TalerAmount "@Contextual" parser.  */
+            val currencyMismatchResp = client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "pw")
+                contentType(ContentType.Application.Json)
+                expectSuccess = false
+                setBody("""
+                    {
+                      "request_uid": "entropic 3",
+                      "wtid": "entropic 4",
+                      "exchange_base_url": "http://different-exchange.example.com/",
+                      "amount": "EUR:33",
+                      "credit_account": "BAR-IBAN-ABC"
+                    }
+                """.trimIndent())
+            }
+            assert(currencyMismatchResp.status == HttpStatusCode.BadRequest)
         }
     }
     // Testing the /history/incoming call from the TWG API.

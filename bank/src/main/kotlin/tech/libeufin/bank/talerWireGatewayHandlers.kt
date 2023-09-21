@@ -93,6 +93,10 @@ fun Routing.talerWireGatewayHandlers() {
             )
         }
         // Legitimate request, go on.
+        val internalCurrency = db.configGet("internal_currency")
+            ?: throw internalServerError("Bank did not find own internal currency.")
+        if (internalCurrency != req.amount.currency)
+            throw badRequest("Currency mismatch: $internalCurrency vs ${req.amount.currency}")
         val exchangeBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
             ?: throw internalServerError("Exchange does not have a bank account")
         val transferTimestamp = getNowUs()
