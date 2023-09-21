@@ -956,7 +956,7 @@ class Database(private val dbConfig: String) {
         }
     }
 
-    data class TalerTransferDbResult(
+    data class TalerTransferCreationResult(
         val txResult: BankTransactionResult,
         // Row ID of the debit bank transaction
         // of a successful case.  Null upon errors
@@ -980,7 +980,7 @@ class Database(private val dbConfig: String) {
         acctSvcrRef: String = "not used",
         pmtInfId: String = "not used",
         endToEndId: String = "not used",
-        ): TalerTransferDbResult {
+        ): TalerTransferCreationResult {
         reconnect()
         // FIXME: future versions should return the exchange's latest bank transaction ID
         val stmt = prepare("""
@@ -1019,11 +1019,11 @@ class Database(private val dbConfig: String) {
             if (!it.next())
                 throw internalServerError("SQL function taler_transfer did not return anything.")
             if (it.getBoolean("out_nx_creditor"))
-                return TalerTransferDbResult(BankTransactionResult.NO_CREDITOR)
+                return TalerTransferCreationResult(BankTransactionResult.NO_CREDITOR)
             if (it.getBoolean("out_exchange_balance_insufficient"))
-                return TalerTransferDbResult(BankTransactionResult.CONFLICT)
+                return TalerTransferCreationResult(BankTransactionResult.CONFLICT)
             val txRowId = it.getLong("out_tx_row_id")
-            return TalerTransferDbResult(
+            return TalerTransferCreationResult(
                 txResult = BankTransactionResult.SUCCESS,
                 txRowId = txRowId
             )
