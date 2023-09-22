@@ -23,6 +23,8 @@ package tech.libeufin.bank
 import org.postgresql.jdbc.PgConnection
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import tech.libeufin.util.getJdbcConnectionFromPg
+import java.net.URI
 import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.SQLException
@@ -38,7 +40,6 @@ fun BankAccount.expectRowId(): Long = this.bankAccountId ?: throw internalServer
 fun BankAccountTransaction.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Bank account transaction (${this.subject}) lacks database row ID.")
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
-
 
 class Database(private val dbConfig: String, private val bankCurrency: String) {
     private var dbConn: PgConnection? = null
@@ -56,7 +57,10 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             return
         dbConn?.close()
         preparedStatements.clear()
-        dbConn = DriverManager.getConnection(dbConfig).unwrap(PgConnection::class.java)
+        // Translate "normal" postgresql:// connection URI to something that JDBC likes.
+        val jdbcConnStr = getJdbcConnectionFromPg(dbConfig)
+        logger.info("connecting to database via JDBC string '$jdbcConnStr'")
+        dbConn = DriverManager.getConnection(jdbcConnStr).unwrap(PgConnection::class.java)
         dbCtr = 0
         dbConn?.execSQLUpdate("SET search_path TO libeufin_bank;")
     }

@@ -367,7 +367,7 @@ fun durationFromPretty(s: String): Long {
 fun TalerConfig.requireValueDuration(section: String, option: String): Long {
     val durationStr = lookupValueString(section, option)
     if (durationStr == null) {
-        throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
+        throw TalerConfigError("expected duration for section $section, option $option, but config value is empty")
     }
     return durationFromPretty(durationStr)
 }

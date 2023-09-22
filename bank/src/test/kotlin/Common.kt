@@ -22,12 +22,10 @@ import tech.libeufin.bank.Database
 import tech.libeufin.bank.TalerAmount
 import tech.libeufin.util.execCommand
 
-// Init the database and sets the currency to KUDOS.
+/**
+ * Init the database and sets the currency to KUDOS.
+ */
 fun initDb(): Database {
-    System.setProperty(
-        "BANK_DB_CONNECTION_STRING",
-        "jdbc:postgresql:///libeufincheck"
-    )
     execCommand(
         listOf(
             "libeufin-bank-dbinit",
@@ -37,7 +35,7 @@ fun initDb(): Database {
         ),
         throwIfFails = true
     )
-    return Database("jdbc:postgresql:///libeufincheck", "KUDOS")
+    return Database("postgresql:///libeufincheck", "KUDOS")
 }
 
 fun getTestContext(
