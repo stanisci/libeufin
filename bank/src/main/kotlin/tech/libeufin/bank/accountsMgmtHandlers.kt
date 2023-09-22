@@ -44,7 +44,7 @@ fun Routing.accountsMgmtHandlers(db: Database) {
                     hint = "Username '${req.username}' is reserved."
                 )
             )
-        // Checking imdepotency.
+        // Checking idempotency.
         val maybeCustomerExists = db.customerGetFromLogin(req.username)
         // Can be null if previous call crashed before completion.
         val maybeHasBankAccount = maybeCustomerExists.run {
