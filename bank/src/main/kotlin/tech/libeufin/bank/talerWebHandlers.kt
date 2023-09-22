@@ -38,7 +38,7 @@ import java.util.*
 
 fun Routing.talerWebHandlers(db: Database) {
     post("/accounts/{USERNAME}/withdrawals") {
-        val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readwrite) ?: throw unauthorized()
         // Admin not allowed to withdraw in the name of customers:
         val accountName = call.expectUriComponent("USERNAME")
         if (c.login != accountName)
@@ -79,7 +79,7 @@ fun Routing.talerWebHandlers(db: Database) {
         return@post
     }
     get("/accounts/{USERNAME}/withdrawals/{withdrawal_id}") {
-        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readonly) ?: throw unauthorized()
         val accountName = call.expectUriComponent("USERNAME")
         // Admin allowed to see the details
         if (c.login != accountName && c.login != "admin") throw forbidden()
@@ -96,7 +96,7 @@ fun Routing.talerWebHandlers(db: Database) {
         return@get
     }
     post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/abort") {
-        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readonly) ?: throw unauthorized()
         // Admin allowed to abort.
         if (!call.getResourceName("USERNAME").canI(c)) throw forbidden()
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))
@@ -114,7 +114,7 @@ fun Routing.talerWebHandlers(db: Database) {
         return@post
     }
     post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
-        val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readwrite) ?: throw unauthorized()
         // No admin allowed.
         if(!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))

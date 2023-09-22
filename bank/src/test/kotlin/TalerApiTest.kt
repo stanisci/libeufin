@@ -4,7 +4,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
-import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
@@ -60,7 +59,9 @@ class TalerApiTest {
         ))
         // Do POST /transfer.
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             val req = """
                     {
                       "request_uid": "entropic 0",
@@ -143,7 +144,9 @@ class TalerApiTest {
             )
         // Bar expects two entries in the incoming history
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             val resp = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=5") {
                 basicAuth("bar", "secret")
                 expectSuccess = true
@@ -167,7 +170,9 @@ class TalerApiTest {
             TalerAmount(1000, 0, "KUDOS")
         ))
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
                 expectSuccess = true
                 contentType(ContentType.Application.Json)
@@ -199,7 +204,9 @@ class TalerApiTest {
             amount = TalerAmount(1, 0, "KUDOS")
         ))
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             val r = client.post("/taler-integration/withdrawal-operation/${uuid}") {
                 expectSuccess = true
                 contentType(ContentType.Application.Json)
@@ -229,7 +236,9 @@ class TalerApiTest {
             amount = TalerAmount(1, 0, "KUDOS")
         ))
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             val r = client.get("/taler-integration/withdrawal-operation/${uuid}") {
                 expectSuccess = true
             }
@@ -252,7 +261,9 @@ class TalerApiTest {
         val op = db.talerWithdrawalGet(uuid)
         assert(op?.aborted == false)
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             client.post("/accounts/foo/withdrawals/${uuid}/abort") {
                 expectSuccess = true
                 basicAuth("foo", "pw")
@@ -268,7 +279,9 @@ class TalerApiTest {
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo))
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             // Creating the withdrawal as if the SPA did it.
             val r = client.post("/accounts/foo/withdrawals") {
                 basicAuth("foo", "pw")
@@ -312,7 +325,9 @@ class TalerApiTest {
 
         // Starting the bank and POSTing as Foo to /confirm the operation.
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             client.post("/accounts/foo/withdrawals/${uuid}/confirm") {
                 expectSuccess = true // Sufficient to assert on success.
                 basicAuth("foo", "pw")

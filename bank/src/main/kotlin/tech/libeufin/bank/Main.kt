@@ -20,12 +20,24 @@
 
 package tech.libeufin.bank
 
+import TalerConfig
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.context
+import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.output.CliktHelpFormatter
+import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.versionOption
+import com.github.ajalt.clikt.parameters.types.int
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.plugins.requestvalidation.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
 import io.ktor.server.plugins.callloging.*
 import kotlinx.serialization.*
 import io.ktor.server.plugins.cors.routing.*
@@ -33,6 +45,9 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
@@ -44,10 +59,10 @@ import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import tech.libeufin.util.*
 import java.time.Duration
+import kotlin.system.exitProcess
 
 // GLOBALS
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
-private val db = Database(System.getProperty("BANK_DB_CONNECTION_STRING"))
 const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 val TOKEN_DEFAULT_DURATION_US = Duration.ofDays(1L).seconds * 1000000
 
@@ -62,6 +77,7 @@ object RelativeTimeSerializer : KSerializer<RelativeTime> {
     override fun serialize(encoder: Encoder, value: RelativeTime) {
         throw internalServerError("Encoding of RelativeTime not implemented.") // API doesn't require this.
     }
+
     override fun deserialize(decoder: Decoder): RelativeTime {
         val jsonInput = decoder as? JsonDecoder ?: throw internalServerError("RelativeTime had no JsonDecoder")
         val json = try {
@@ -77,7 +93,8 @@ object RelativeTimeSerializer : KSerializer<RelativeTime> {
             if (maybeDUs.content != "forever") throw badRequest("Only 'forever' allowed for d_us as string, but '${maybeDUs.content}' was found")
             return RelativeTime(d_us = Long.MAX_VALUE)
         }
-        val dUs: Long = maybeDUs.longOrNull ?: throw badRequest("Could not convert d_us: '${maybeDUs.content}' to a number")
+        val dUs: Long =
+            maybeDUs.longOrNull ?: throw badRequest("Could not convert d_us: '${maybeDUs.content}' to a number")
         return RelativeTime(d_us = dUs)
     }
 
@@ -91,9 +108,11 @@ object TalerAmountSerializer : KSerializer<TalerAmount> {
 
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("TalerAmount", PrimitiveKind.STRING)
+
     override fun serialize(encoder: Encoder, value: TalerAmount) {
         throw internalServerError("Encoding of TalerAmount not implemented.") // API doesn't require this.
     }
+
     override fun deserialize(decoder: Decoder): TalerAmount {
         val maybeAmount = try {
             decoder.decodeString()
@@ -116,7 +135,7 @@ object TalerAmountSerializer : KSerializer<TalerAmount> {
  *
  * Returns the authenticated customer, or null if they failed.
  */
-fun ApplicationCall.myAuth(requiredScope: TokenScope): Customer? {
+fun ApplicationCall.myAuth(db: Database, requiredScope: TokenScope): Customer? {
     // Extracting the Authorization header.
     val header = getAuthorizationRawHeader(this.request) ?: throw badRequest(
         "Authorization header not found.",
@@ -139,7 +158,11 @@ fun ApplicationCall.myAuth(requiredScope: TokenScope): Customer? {
     }
 }
 
-val webApp: Application.() -> Unit = {
+
+/**
+ * Set up web server handlers for the Taler corebank API.
+ */
+fun Application.corebankWebApp(db: Database) {
     install(CallLogging) {
         this.level = Level.DEBUG
         this.logger = tech.libeufin.bank.logger
@@ -181,7 +204,7 @@ val webApp: Application.() -> Unit = {
          * (Ktor native) type doesn't easily map to the Taler error
          * format.
          */
-        exception<BadRequestException> {call, cause ->
+        exception<BadRequestException> { call, cause ->
             /**
              * NOTE: extracting the root cause helps with JSON error messages,
              * because they mention the particular way they are invalid, but OTOH
@@ -198,11 +221,13 @@ val webApp: Application.() -> Unit = {
             val errorMessage: String? = rootCause?.message ?: cause.message
             logger.error(errorMessage)
             // Telling apart invalid JSON vs missing parameter vs invalid parameter.
-            val talerErrorCode = when(cause) {
+            val talerErrorCode = when (cause) {
                 is MissingRequestParameterException ->
                     TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
+
                 is ParameterConversionException ->
                     TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MALFORMED
+
                 else -> TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
             }
             call.respond(
@@ -210,7 +235,8 @@ val webApp: Application.() -> Unit = {
                 message = TalerError(
                     code = talerErrorCode.code,
                     hint = errorMessage
-                ))
+                )
+            )
         }
         /**
          * This branch triggers when a bank handler throws it, and namely
@@ -218,7 +244,7 @@ val webApp: Application.() -> Unit = {
          * should be preferred to catch errors, as it allows to include the
          * Taler specific error detail.
          */
-        exception<LibeufinBankException> {call, cause ->
+        exception<LibeufinBankException> { call, cause ->
             logger.error(cause.talerError.hint)
             call.respond(
                 status = cause.httpStatus,
@@ -226,7 +252,7 @@ val webApp: Application.() -> Unit = {
             )
         }
         // Catch-all branch to mean that the bank wasn't able to manage one error.
-        exception<Exception> {call, cause ->
+        exception<Exception> { call, cause ->
             cause.printStackTrace()
             logger.error(cause.message)
             call.respond(
@@ -250,4 +276,34 @@ val webApp: Application.() -> Unit = {
         this.talerIntegrationHandlers(db)
         this.talerWireGatewayHandlers(db)
     }
+}
+
+class LibeufinBankCommand : CliktCommand() {
+    init {
+        versionOption(getVersion())
+    }
+
+    override fun run() = Unit
+}
+
+class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") {
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+
+    override fun run() {
+        val config = TalerConfig.load()
+        val dbConnStr = config.requireValueString("libeufin-bank-db-postgres", "config")
+        logger.info("using database '$dbConnStr'")
+        val db = Database(dbConnStr)
+        embeddedServer(Netty, port = 8080) {
+            corebankWebApp(db)
+        }.start(wait = true)
+    }
+}
+
+fun main(args: Array<String>) {
+    LibeufinBankCommand().subcommands(ServeBank()).main(args)
 }

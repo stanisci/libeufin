@@ -37,7 +37,7 @@ fun Routing.tokenHandlers(db: Database) {
         throw internalServerError("Token deletion not implemented.")
     }
     post("/accounts/{USERNAME}/token") {
-        val customer = call.myAuth(TokenScope.refreshable) ?: throw unauthorized("Authentication failed")
+        val customer = call.myAuth(db, TokenScope.refreshable) ?: throw unauthorized("Authentication failed")
         val endpointOwner = call.maybeUriComponent("USERNAME")
         if (customer.login != endpointOwner)
             throw forbidden(

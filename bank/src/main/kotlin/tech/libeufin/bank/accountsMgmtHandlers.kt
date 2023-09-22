@@ -23,7 +23,7 @@ fun Routing.accountsMgmtHandlers(db: Database) {
         // check if only admin.
         val maybeOnlyAdmin = db.configGet("only_admin_registrations")
         if (maybeOnlyAdmin?.lowercase() == "yes") {
-            val customer: Customer? = call.myAuth(TokenScope.readwrite)
+            val customer: Customer? = call.myAuth(db, TokenScope.readwrite)
             if (customer == null || customer.login != "admin")
                 throw LibeufinBankException(
                     httpStatus = HttpStatusCode.Unauthorized,
@@ -110,7 +110,7 @@ fun Routing.accountsMgmtHandlers(db: Database) {
         return@post
     }
     get("/accounts/{USERNAME}") {
-        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized("Login failed")
+        val c = call.myAuth(db, TokenScope.readonly) ?: throw unauthorized("Login failed")
         val resourceName = call.maybeUriComponent("USERNAME") ?: throw badRequest(
             hint = "No username found in the URI",
             talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING

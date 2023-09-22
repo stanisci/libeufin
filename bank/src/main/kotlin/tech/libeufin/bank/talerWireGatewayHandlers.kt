@@ -37,7 +37,7 @@ fun Routing.talerWireGatewayHandlers(db: Database) {
         return@get
     }
     get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {
-        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readonly) ?: throw unauthorized()
         if (!call.getResourceName("USERNAME").canI(c, withAdmin = true)) throw forbidden()
         val params = getHistoryParams(call.request)
         val bankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
@@ -69,7 +69,7 @@ fun Routing.talerWireGatewayHandlers(db: Database) {
         return@get
     }
     post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
-        val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readwrite) ?: throw unauthorized()
         if (!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
         val req = call.receive<TransferRequest>()
         // Checking for idempotency.
@@ -124,7 +124,7 @@ fun Routing.talerWireGatewayHandlers(db: Database) {
         return@post
     }
     post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {
-        val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readwrite) ?: throw unauthorized()
         if (!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
         val req = call.receive<AddIncomingRequest>()
         val amount = parseTalerAmount(req.amount)

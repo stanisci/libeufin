@@ -54,7 +54,9 @@ class LibeuFinApiTest {
         assert(db.bankAccountCreate(genBankAccount(barId!!)))
         for (i in 1..10) { db.bankTransactionCreate(genTx("test-$i")) }
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             val asc = client.get("/accounts/foo/transactions?delta=2") {
                 basicAuth("foo", "pw")
                 expectSuccess = true
@@ -84,7 +86,9 @@ class LibeuFinApiTest {
         assert(db.bankAccountCreate(genBankAccount(barId!!)))
         // accounts exist, now create one transaction.
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             client.post("/accounts/foo/transactions") {
                 expectSuccess = true
                 basicAuth("foo", "pw")
@@ -111,7 +115,9 @@ class LibeuFinApiTest {
         val db = initDb()
         assert(db.customerCreate(customerFoo) != null)
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             client.post("/accounts/foo/token") {
                 expectSuccess = true
                 contentType(ContentType.Application.Json)
@@ -170,7 +176,9 @@ class LibeuFinApiTest {
             )
         ))
         testApplication {
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             val r = client.get("/accounts/foo") {
                 expectSuccess = true
                 basicAuth("foo", "pw")
@@ -212,7 +220,9 @@ class LibeuFinApiTest {
             val ibanPayto = genIbanPaytoUri()
             // Bank needs those to operate:
             db.configSet("max_debt_ordinary_customers", "KUDOS:11")
-            application(webApp)
+            application {
+                corebankWebApp(db)
+            }
             var resp = client.post("/accounts") {
                 expectSuccess = false
                 contentType(ContentType.Application.Json)

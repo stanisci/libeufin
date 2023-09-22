@@ -120,6 +120,14 @@ class TalerConfig {
         return Optional.ofNullable(lookupEntry(section, option)?.value)
     }
 
+    fun requireValueString(section: String, option: String): String {
+        val entry = lookupEntry(section, option)
+        if (entry == null) {
+            throw TalerConfigError("expected string in configuration section $section option $option")
+        }
+        return entry.value
+    }
+
     /**
      * Create a string representation of the loaded configuration.
      */

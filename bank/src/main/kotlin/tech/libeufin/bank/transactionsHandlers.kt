@@ -18,7 +18,7 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.transac
 
 fun Routing.transactionsHandlers(db: Database) {
     get("/accounts/{USERNAME}/transactions") {
-        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readonly) ?: throw unauthorized()
         val resourceName = call.expectUriComponent("USERNAME")
         if (c.login != resourceName && c.login != "admin") throw forbidden()
         // Collecting params.
@@ -51,7 +51,7 @@ fun Routing.transactionsHandlers(db: Database) {
     }
     // Creates a bank transaction.
     post("/accounts/{USERNAME}/transactions") {
-        val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readwrite) ?: throw unauthorized()
         val resourceName = call.expectUriComponent("USERNAME")
         // admin has no rights here.
         if ((c.login != resourceName) && (call.getAuthToken() == null))
@@ -98,7 +98,7 @@ fun Routing.transactionsHandlers(db: Database) {
         return@post
     }
     get("/accounts/{USERNAME}/transactions/{T_ID}") {
-        val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
+        val c = call.myAuth(db, TokenScope.readonly) ?: throw unauthorized()
         val accountOwner = call.expectUriComponent("USERNAME")
         // auth ok, check rights.
         if (c.login != "admin" && c.login != accountOwner)
