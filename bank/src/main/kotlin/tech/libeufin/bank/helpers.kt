@@ -219,6 +219,40 @@ fun badRequest(
 // Generates a new Payto-URI with IBAN scheme.
 fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
 
+// Parses Taler amount, returning null if the input is invalid.
+fun parseTalerAmount2(
+    amount: String,
+    fracDigits: FracDigits
+): TalerAmount? {
+    val format = when (fracDigits) {
+        FracDigits.TWO -> "^([A-Z]+):([0-9]+)(\\.[0-9][0-9]?)?$"
+        FracDigits.EIGHT -> "^([A-Z]+):([0-9]+)(\\.[0-9][0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?)?$"
+    }
+    val match = Regex(format).find(amount) ?: return null
+    val _value = match.destructured.component2()
+    // Fraction is at most 8 digits, so it's always < than MAX_INT.
+    val fraction: Int = match.destructured.component3().run {
+        var frac = 0
+        var power = FRACTION_BASE
+        if (this.isNotEmpty())
+        // Skips the dot and processes the fractional chars.
+            this.substring(1).forEach { chr ->
+                power /= 10
+                frac += power * chr.digitToInt()
+            }
+        return@run frac
+    }
+    val value: Long = try {
+        _value.toLong()
+    } catch (e: NumberFormatException) {
+        return null
+    }
+    return TalerAmount(
+        value = value,
+        frac = fraction,
+        currency = match.destructured.component1()
+    )
+}
 /**
  * This helper takes the serialized version of a Taler Amount
  * type and parses it into Libeufin's internal representation.
@@ -231,45 +265,14 @@ fun parseTalerAmount(
     amount: String,
     fracDigits: FracDigits = FracDigits.EIGHT
 ): TalerAmount {
-    val format = when (fracDigits) {
-        FracDigits.TWO -> "^([A-Z]+):([0-9]+)(\\.[0-9][0-9]?)?$"
-        FracDigits.EIGHT -> "^([A-Z]+):([0-9]+)(\\.[0-9][0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?)?$"
-    }
-    val match = Regex(format).find(amount) ?: throw LibeufinBankException(
-        httpStatus = HttpStatusCode.BadRequest,
-        talerError = TalerError(
-            code = TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT.code,
-            hint = "Invalid amount: $amount"
-        ))
-    val _value = match.destructured.component2()
-    // Fraction is at most 8 digits, so it's always < than MAX_INT.
-    val fraction: Int = match.destructured.component3().run {
-        var frac = 0
-        var power = FRACTION_BASE
-        if (this.isNotEmpty())
-            // Skips the dot and processes the fractional chars.
-            this.substring(1).forEach { chr ->
-                power /= 10
-                frac += power * chr.digitToInt()
-        }
-        return@run frac
-    }
-    val value: Long = try {
-        _value.toLong()
-    } catch (e: NumberFormatException) {
-        throw LibeufinBankException(
+    val maybeAmount = parseTalerAmount2(amount, fracDigits)
+        ?: throw LibeufinBankException(
             httpStatus = HttpStatusCode.BadRequest,
             talerError = TalerError(
                 code = TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT.code,
-                hint = "Invalid amount: ${amount}, could not extract the value part."
-            )
-        )
-    }
-    return TalerAmount(
-        value = value,
-        frac = fraction,
-        currency = match.destructured.component1()
-    )
+                hint = "Invalid amount: $amount"
+            ))
+    return maybeAmount
 }
 
 private fun normalizeAmount(amt: TalerAmount): TalerAmount {

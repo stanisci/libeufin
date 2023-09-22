@@ -9,6 +9,7 @@ import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.CryptoUtil
+import tech.libeufin.util.getNowUs
 import tech.libeufin.util.maybeUriComponent
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
@@ -95,7 +96,6 @@ fun Routing.accountsMgmtHandlers(db: Database) {
             if (this == null) throw internalServerError("Max debt not configured")
             parseTalerAmount(this)
         }
-        val bonus = db.configGet("registration_bonus")
         val newBankAccount = BankAccount(
             hasDebt = false,
             internalPaytoUri = req.internal_payto_uri ?: genIbanPaytoUri(),
@@ -104,8 +104,44 @@ fun Routing.accountsMgmtHandlers(db: Database) {
             isTalerExchange = req.is_taler_exchange,
             maxDebt = maxDebt
         )
-        if (!db.bankAccountCreate(newBankAccount))
-            throw internalServerError("Could not INSERT bank account despite all the checks.")
+        val newBankAccountId = db.bankAccountCreate(newBankAccount)
+            ?: throw internalServerError("Could not INSERT bank account despite all the checks.")
+
+        /**
+         * The new account got created, now optionally award the registration
+         * bonus to it.  The configuration gets either a Taler amount (of the
+         * bonus), or null if no bonus is meant to be awarded.
+         */
+        val bonusAmount = db.configGet("registration_bonus")
+        if (bonusAmount != null) {
+            // Double-checking that the currency is correct.
+            val internalCurrency = db.configGet("internal_currency")
+                ?: throw internalServerError("Bank own currency missing in the config")
+            val bonusAmountObj = parseTalerAmount2(bonusAmount, FracDigits.EIGHT)
+                ?: throw internalServerError("Bonus amount found invalid in the config.")
+            if (bonusAmountObj.currency != internalCurrency)
+                throw internalServerError("Bonus amount has the wrong currency: ${bonusAmountObj.currency}")
+            val adminCustomer = db.customerGetFromLogin("admin")
+                ?: throw internalServerError("Admin customer not found")
+            val adminBankAccount = db.bankAccountGetFromOwnerId(adminCustomer.expectRowId())
+                ?: throw internalServerError("Admin bank account not found")
+            val adminPaysBonus = BankInternalTransaction(
+                creditorAccountId = newBankAccountId,
+                debtorAccountId = adminBankAccount.expectRowId(),
+                amount = bonusAmountObj,
+                subject = "Registration bonus.",
+                transactionDate = getNowUs()
+            )
+            when(db.bankTransactionCreate(adminPaysBonus)) {
+                Database.BankTransactionResult.NO_CREDITOR ->
+                    throw internalServerError("Bonus impossible: creditor not found, despite its recent creation.")
+                Database.BankTransactionResult.NO_DEBTOR ->
+                    throw internalServerError("Bonus impossible: admin not found.")
+                Database.BankTransactionResult.CONFLICT ->
+                    throw internalServerError("Bonus impossible: admin has insufficient balance.")
+                Database.BankTransactionResult.SUCCESS -> {/* continue the execution */}
+            }
+        }
         call.respond(HttpStatusCode.Created)
         return@post
     }

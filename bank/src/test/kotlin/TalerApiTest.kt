@@ -49,9 +49,9 @@ class TalerApiTest {
         val db = initDb()
         // Creating the exchange and merchant accounts first.
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         assert(db.customerCreate(customerBar) != null)
-        assert(db.bankAccountCreate(bankAccountBar))
+        assert(db.bankAccountCreate(bankAccountBar) != null)
         // Give the exchange reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             1L,
@@ -126,9 +126,9 @@ class TalerApiTest {
     fun historyIncoming() {
         val db = initDb()
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         assert(db.customerCreate(customerBar) != null)
-        assert(db.bankAccountCreate(bankAccountBar))
+        assert(db.bankAccountCreate(bankAccountBar) != null)
         // Give Foo reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             1L,
@@ -161,9 +161,9 @@ class TalerApiTest {
     fun addIncoming() {
         val db = initDb()
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         assert(db.customerCreate(customerBar) != null)
-        assert(db.bankAccountCreate(bankAccountBar))
+        assert(db.bankAccountCreate(bankAccountBar) != null)
         // Give Bar reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             2L,
@@ -192,7 +192,7 @@ class TalerApiTest {
         val db = initDb()
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         db.configSet(
             "suggested_exchange",
             "payto://suggested-exchange"
@@ -224,7 +224,7 @@ class TalerApiTest {
         val db = initDb()
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         db.configSet(
             "suggested_exchange",
             "payto://suggested-exchange"
@@ -251,7 +251,7 @@ class TalerApiTest {
         val db = initDb()
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         // insert new.
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,
@@ -277,7 +277,7 @@ class TalerApiTest {
     fun withdrawalCreation() {
         val db = initDb()
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         testApplication {
             application {
                 corebankWebApp(db)
@@ -305,9 +305,9 @@ class TalerApiTest {
         val db = initDb()
         // Creating Foo as the wallet owner and Bar as the exchange.
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         assert(db.customerCreate(customerBar) != null)
-        assert(db.bankAccountCreate(bankAccountBar))
+        assert(db.bankAccountCreate(bankAccountBar) != null)
 
         // Artificially making a withdrawal operation for Foo.
         val uuid = UUID.randomUUID()

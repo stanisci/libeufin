@@ -291,8 +291,13 @@ class Database(private val dbConfig: String) {
     }
 
     // BANK ACCOUNTS
-    // Returns false on conflicts.
-    fun bankAccountCreate(bankAccount: BankAccount): Boolean {
+
+    /**
+     * Inserts a new bank account in the database, returning its
+     * row ID in the successful case.  If of unique constrain violation,
+     * it returns null and any other error will be thrown as 500.
+     */
+    fun bankAccountCreate(bankAccount: BankAccount): Long? {
         reconnect()
         if (bankAccount.balance != null)
             throw internalServerError(
@@ -307,7 +312,9 @@ class Database(private val dbConfig: String) {
               ,is_taler_exchange
               ,max_debt
               )
-            VALUES (?, ?, ?, ?, (?, ?)::taler_amount)
+            VALUES
+              (?, ?, ?, ?, (?, ?)::taler_amount)
+            RETURNING bank_account_id;
         """)
         stmt.setString(1, bankAccount.internalPaytoUri)
         stmt.setLong(2, bankAccount.owningCustomerId)
@@ -316,7 +323,18 @@ class Database(private val dbConfig: String) {
         stmt.setLong(5, bankAccount.maxDebt.value)
         stmt.setInt(6, bankAccount.maxDebt.frac)
         // using the default zero value for the balance.
-        return myExecute(stmt)
+        val res = try {
+            stmt.executeQuery()
+        } catch (e: SQLException) {
+            logger.error(e.message)
+            if (e.errorCode == 0) return null // unique constraint violation.
+            throw e // rethrow on other errors.
+        }
+        res.use {
+            if (!it.next())
+                throw internalServerError("SQL RETURNING gave no bank_account_id.")
+            return it.getLong("bank_account_id")
+        }
     }
 
     fun bankAccountSetMaxDebt(

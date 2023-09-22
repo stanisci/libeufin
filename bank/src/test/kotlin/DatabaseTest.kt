@@ -93,8 +93,8 @@ class DatabaseTest {
         assert(fooId != null)
         val barId = db.customerCreate(customerBar)
         assert(barId != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
-        assert(db.bankAccountCreate(bankAccountBar))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
+        assert(db.bankAccountCreate(bankAccountBar) != null)
         val res = db.talerTransferCreate(
             req = exchangeReq,
             exchangeBankAccountId = 1L,
@@ -127,8 +127,8 @@ class DatabaseTest {
         assert(fooId != null)
         val barId = db.customerCreate(customerBar)
         assert(barId != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
-        assert(db.bankAccountCreate(bankAccountBar))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
+        assert(db.bankAccountCreate(bankAccountBar) != null)
         var fooAccount = db.bankAccountGetFromOwnerId(fooId!!)
         assert(fooAccount?.hasDebt == false) // Foo has NO debit.
         val currency = "KUDOS"
@@ -224,8 +224,8 @@ class DatabaseTest {
         val currency = "KUDOS"
         assert(db.bankAccountGetFromOwnerId(1L) == null)
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
-        assert(!db.bankAccountCreate(bankAccountFoo)) // Triggers conflict.
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
+        assert(db.bankAccountCreate(bankAccountFoo) == null) // Triggers conflict.
         assert(db.bankAccountGetFromOwnerId(1L)?.balance?.equals(TalerAmount(0, 0, currency)) == true)
     }
 
@@ -235,9 +235,9 @@ class DatabaseTest {
         val uuid = UUID.randomUUID()
         val currency = "KUDOS"
         assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         assert(db.customerCreate(customerBar) != null) // plays the exchange.
-        assert(db.bankAccountCreate(bankAccountBar))
+        assert(db.bankAccountCreate(bankAccountBar) != null)
         // insert new.
         assert(db.talerWithdrawalCreate(
             uuid,
@@ -305,9 +305,9 @@ class DatabaseTest {
         )
         val fooId = db.customerCreate(customerFoo)
         assert(fooId != null)
-        assert(db.bankAccountCreate(bankAccountFoo))
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
         assert(db.customerCreate(customerBar) != null)
-        assert(db.bankAccountCreate(bankAccountBar))
+        assert(db.bankAccountCreate(bankAccountBar) != null)
         assert(db.cashoutCreate(op))
         val fromDb = db.cashoutGetFromUuid(op.cashoutUuid)
         assert(fromDb?.subject == op.subject && fromDb.tanConfirmationTime == null)

@@ -60,9 +60,9 @@ class LibeuFinApiTest {
     fun testHistory() {
         val db = initDb()
         val fooId = db.customerCreate(customerFoo); assert(fooId != null)
-        assert(db.bankAccountCreate(genBankAccount(fooId!!)))
+        assert(db.bankAccountCreate(genBankAccount(fooId!!)) != null)
         val barId = db.customerCreate(customerBar); assert(barId != null)
-        assert(db.bankAccountCreate(genBankAccount(barId!!)))
+        assert(db.bankAccountCreate(genBankAccount(barId!!)) != null)
         for (i in 1..10) { db.bankTransactionCreate(genTx("test-$i")) }
         testApplication {
             application {
@@ -91,10 +91,10 @@ class LibeuFinApiTest {
         val db = initDb()
         // foo account
         val fooId = db.customerCreate(customerFoo); assert(fooId != null)
-        assert(db.bankAccountCreate(genBankAccount(fooId!!)))
+        assert(db.bankAccountCreate(genBankAccount(fooId!!)) != null)
         // bar account
         val barId = db.customerCreate(customerBar); assert(barId != null)
-        assert(db.bankAccountCreate(genBankAccount(barId!!)))
+        assert(db.bankAccountCreate(genBankAccount(barId!!)) != null)
         // accounts exist, now create one transaction.
         testApplication {
             application {
@@ -185,7 +185,7 @@ class LibeuFinApiTest {
                 maxDebt = TalerAmount(100, 0, "KUDOS"),
                 owningCustomerId = customerRowId!!
             )
-        ))
+        ) != null)
         testApplication {
             application {
                 corebankWebApp(db)
@@ -208,7 +208,7 @@ class LibeuFinApiTest {
                 internalPaytoUri = "payto://iban/SANDBOXX/ADMIN-IBAN",
                 maxDebt = TalerAmount(100, 0, "KUDOS"),
                 owningCustomerId = adminRowId!!
-            )))
+            )) != null)
             client.get("/accounts/foo") {
                 expectSuccess = true
                 basicAuth("admin", "admin")
