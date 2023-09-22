@@ -16,7 +16,7 @@ import kotlin.math.abs
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.transactionHandlers")
 
-fun Routing.transactionsHandlers(db: Database) {
+fun Routing.transactionsHandlers(db: Database, ctx: BankApplicationContext) {
     get("/accounts/{USERNAME}/transactions") {
         val c = call.myAuth(db, TokenScope.readonly) ?: throw unauthorized()
         val resourceName = call.expectUriComponent("USERNAME")
@@ -70,7 +70,7 @@ fun Routing.transactionsHandlers(db: Database) {
                 TalerErrorCode.TALER_EC_END // FIXME: define this EC.
             )
         val amount = parseTalerAmount(txData.amount)
-        if (amount.currency != getBankCurrency(db))
+        if (amount.currency != ctx.currency)
             throw badRequest(
                 "Wrong currency: ${amount.currency}",
                 talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH

@@ -29,11 +29,9 @@ import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.getNowUs
 
-fun Routing.talerWireGatewayHandlers(db: Database) {
+fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) {
     get("/taler-wire-gateway/config") {
-        val internalCurrency = db.configGet("internal_currency")
-            ?: throw internalServerError("Could not find bank own currency.")
-        call.respond(TWGConfigResponse(currency = internalCurrency))
+        call.respond(TWGConfigResponse(currency = ctx.currency))
         return@get
     }
     get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {
@@ -93,8 +91,7 @@ fun Routing.talerWireGatewayHandlers(db: Database) {
             )
         }
         // Legitimate request, go on.
-        val internalCurrency = db.configGet("internal_currency")
-            ?: throw internalServerError("Bank did not find own internal currency.")
+        val internalCurrency = ctx.currency
         if (internalCurrency != req.amount.currency)
             throw badRequest("Currency mismatch: $internalCurrency vs ${req.amount.currency}")
         val exchangeBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
@@ -128,8 +125,7 @@ fun Routing.talerWireGatewayHandlers(db: Database) {
         if (!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
         val req = call.receive<AddIncomingRequest>()
         val amount = parseTalerAmount(req.amount)
-        val internalCurrency = db.configGet("internal_currency")
-            ?: throw internalServerError("Bank didn't find own currency.")
+        val internalCurrency = ctx.currency
         if (amount.currency != internalCurrency)
             throw badRequest(
                 "Currency mismatch",

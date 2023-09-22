@@ -40,11 +40,10 @@ fun BankAccountTransaction.expectRowId(): Long = this.dbRowId ?: throw internalS
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
 
 
-class Database(private val dbConfig: String) {
+class Database(private val dbConfig: String, private val bankCurrency: String) {
     private var dbConn: PgConnection? = null
     private var dbCtr: Int = 0
     private val preparedStatements: MutableMap<String, PreparedStatement> = mutableMapOf()
-    private var cachedCurrency: String? = null;
 
     init {
         Class.forName("org.postgresql.Driver")
@@ -88,42 +87,6 @@ class Database(private val dbConfig: String) {
             throw e
         }
         return true
-    }
-
-    /**
-     * Get the currency applicable to the bank.
-     */
-    private fun getCurrency(): String {
-        var myCurrency = cachedCurrency
-        if (myCurrency != null) {
-            return myCurrency
-        }
-        // FIXME: Should be retrieved from the config file instead of the DB.
-        myCurrency = configGet("internal_currency")
-        if (myCurrency == null) {
-            throw Error("configuration does not specify currency")
-        }
-        cachedCurrency = myCurrency
-        return myCurrency
-    }
-
-    // CONFIG
-    fun configGet(configKey: String): String? {
-        reconnect()
-        val stmt = prepare("SELECT config_value FROM configuration WHERE config_key=?;")
-        stmt.setString(1, configKey)
-        val rs = stmt.executeQuery()
-        rs.use {
-            if(!it.next()) return null
-            return it.getString("config_value")
-        }
-    }
-    fun configSet(configKey: String, configValue: String) {
-        reconnect()
-        val stmt = prepare("CALL bank_set_config(TEXT(?), TEXT(?))")
-        stmt.setString(1, configKey)
-        stmt.setString(2, configValue)
-        stmt.execute()
     }
 
     // CUSTOMERS
@@ -351,6 +314,10 @@ class Database(private val dbConfig: String) {
         stmt.setInt(2, maxDebt.frac)
         stmt.setLong(3, owningCustomerId)
         return myExecute(stmt)
+    }
+
+    private fun getCurrency(): String {
+        return bankCurrency
     }
 
     fun bankAccountGetFromOwnerId(ownerId: Long): BankAccount? {

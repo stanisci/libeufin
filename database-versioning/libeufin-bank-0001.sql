@@ -49,15 +49,6 @@ CREATE TYPE subscriber_state_enum
 
 -- FIXME: comments on types (see exchange for example)!
 
--- start of: bank config tables.  FIXME: eventually replaced by the INI file.
-
-CREATE TABLE IF NOT EXISTS configuration
-  (config_key TEXT PRIMARY KEY
-  ,config_value TEXT
-  );
-
--- end of: bank config tables
-
 -- start of: bank accounts
 
 CREATE TABLE IF NOT EXISTS customers

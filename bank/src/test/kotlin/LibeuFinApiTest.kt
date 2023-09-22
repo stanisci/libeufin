@@ -42,14 +42,16 @@ class LibeuFinApiTest {
     @Test
     fun getConfig() {
         val db = initDb()
+        val ctx = getTestContext()
         testApplication {
-            application { corebankWebApp(db) }
+            application { corebankWebApp(db, ctx) }
             val r = client.get("/config") {
                 expectSuccess = true
             }
             println(r.bodyAsText())
         }
     }
+
     /**
      * Testing GET /transactions.  This test checks that the sign
      * of delta gets honored by the HTTP handler, namely that the
@@ -59,14 +61,17 @@ class LibeuFinApiTest {
     @Test
     fun testHistory() {
         val db = initDb()
+        val ctx = getTestContext()
         val fooId = db.customerCreate(customerFoo); assert(fooId != null)
         assert(db.bankAccountCreate(genBankAccount(fooId!!)) != null)
         val barId = db.customerCreate(customerBar); assert(barId != null)
         assert(db.bankAccountCreate(genBankAccount(barId!!)) != null)
-        for (i in 1..10) { db.bankTransactionCreate(genTx("test-$i")) }
+        for (i in 1..10) {
+            db.bankTransactionCreate(genTx("test-$i"))
+        }
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             val asc = client.get("/accounts/foo/transactions?delta=2") {
                 basicAuth("foo", "pw")
@@ -89,6 +94,7 @@ class LibeuFinApiTest {
     @Test
     fun postTransactionsTest() {
         val db = initDb()
+        val ctx = getTestContext()
         // foo account
         val fooId = db.customerCreate(customerFoo); assert(fooId != null)
         assert(db.bankAccountCreate(genBankAccount(fooId!!)) != null)
@@ -98,18 +104,20 @@ class LibeuFinApiTest {
         // accounts exist, now create one transaction.
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             client.post("/accounts/foo/transactions") {
                 expectSuccess = true
                 basicAuth("foo", "pw")
                 contentType(ContentType.Application.Json)
                 // expectSuccess = true
-                setBody("""{
+                setBody(
+                    """{
                     "payto_uri": "payto://iban/SANDBOXX/${barId}-IBAN?message=payout", 
                     "amount": "KUDOS:3.3"
                 }
-                """.trimIndent())
+                """.trimIndent()
+                )
             }
             // Getting the only tx that exists in the DB, hence has ID == 1.
             val r = client.get("/accounts/foo/transactions/1") {
@@ -120,22 +128,26 @@ class LibeuFinApiTest {
             assert(obj.subject == "payout")
         }
     }
+
     // Checking the POST /token handling.
     @Test
     fun tokenTest() {
         val db = initDb()
+        val ctx = getTestContext()
         assert(db.customerCreate(customerFoo) != null)
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             client.post("/accounts/foo/token") {
                 expectSuccess = true
                 contentType(ContentType.Application.Json)
                 basicAuth("foo", "pw")
-                setBody("""
+                setBody(
+                    """
                     {"scope": "readonly"}
-                """.trimIndent())
+                """.trimIndent()
+                )
             }
             // foo tries on bar endpoint
             val r = client.post("/accounts/bar/token") {
@@ -145,14 +157,18 @@ class LibeuFinApiTest {
             assert(r.status == HttpStatusCode.Forbidden)
             // Make ad-hoc token for foo.
             val fooTok = ByteArray(32).apply { Random.nextBytes(this) }
-            assert(db.bearerTokenCreate(BearerToken(
-                content = fooTok,
-                bankCustomer = 1L, // only foo exists.
-                scope = TokenScope.readonly,
-                creationTime = getNowUs(),
-                isRefreshable = true,
-                expirationTime = getNowUs() + (Duration.ofHours(1).toMillis() * 1000)
-            )))
+            assert(
+                db.bearerTokenCreate(
+                    BearerToken(
+                        content = fooTok,
+                        bankCustomer = 1L, // only foo exists.
+                        scope = TokenScope.readonly,
+                        creationTime = getNowUs(),
+                        isRefreshable = true,
+                        expirationTime = getNowUs() + (Duration.ofHours(1).toMillis() * 1000)
+                    )
+                )
+            )
             // Testing the bearer-token:-scheme.
             client.post("/accounts/foo/token") {
                 headers.set("Authorization", "Bearer bearer-token:${Base32Crockford.encode(fooTok)}")
@@ -172,23 +188,28 @@ class LibeuFinApiTest {
     fun getAccountTest() {
         // Artificially insert a customer and bank account in the database.
         val db = initDb()
-        val customerRowId = db.customerCreate(Customer(
-            "foo",
-            CryptoUtil.hashpw("pw"),
-            "Foo"
-        ))
-        assert(customerRowId != null)
-        assert(db.bankAccountCreate(
-            BankAccount(
-                hasDebt = false,
-                internalPaytoUri = "payto://iban/SANDBOXX/FOO-IBAN",
-                maxDebt = TalerAmount(100, 0, "KUDOS"),
-                owningCustomerId = customerRowId!!
+        val ctx = getTestContext()
+        val customerRowId = db.customerCreate(
+            Customer(
+                "foo",
+                CryptoUtil.hashpw("pw"),
+                "Foo"
             )
-        ) != null)
+        )
+        assert(customerRowId != null)
+        assert(
+            db.bankAccountCreate(
+                BankAccount(
+                    hasDebt = false,
+                    internalPaytoUri = "payto://iban/SANDBOXX/FOO-IBAN",
+                    maxDebt = TalerAmount(100, 0, "KUDOS"),
+                    owningCustomerId = customerRowId!!
+                )
+            ) != null
+        )
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             val r = client.get("/accounts/foo") {
                 expectSuccess = true
@@ -197,18 +218,24 @@ class LibeuFinApiTest {
             val obj: AccountData = Json.decodeFromString(r.bodyAsText())
             assert(obj.name == "Foo")
             // Checking admin can.
-            val adminRowId = db.customerCreate(Customer(
-                "admin",
-                CryptoUtil.hashpw("admin"),
-                "Admin"
-            ))
+            val adminRowId = db.customerCreate(
+                Customer(
+                    "admin",
+                    CryptoUtil.hashpw("admin"),
+                    "Admin"
+                )
+            )
             assert(adminRowId != null)
-            assert(db.bankAccountCreate(BankAccount(
-                hasDebt = false,
-                internalPaytoUri = "payto://iban/SANDBOXX/ADMIN-IBAN",
-                maxDebt = TalerAmount(100, 0, "KUDOS"),
-                owningCustomerId = adminRowId!!
-            )) != null)
+            assert(
+                db.bankAccountCreate(
+                    BankAccount(
+                        hasDebt = false,
+                        internalPaytoUri = "payto://iban/SANDBOXX/ADMIN-IBAN",
+                        maxDebt = TalerAmount(100, 0, "KUDOS"),
+                        owningCustomerId = adminRowId!!
+                    )
+                ) != null
+            )
             client.get("/accounts/foo") {
                 expectSuccess = true
                 basicAuth("admin", "admin")
@@ -220,75 +247,97 @@ class LibeuFinApiTest {
             assert(shouldNot.status == HttpStatusCode.NotFound)
         }
     }
+
     /**
-     * Testing the account creation, its idempotency and
-     * the restriction to admin to create accounts.
+     * Testing the account creation and its idempotency
      */
     @Test
     fun createAccountTest() {
         testApplication {
             val db = initDb()
+            val ctx = getTestContext()
             val ibanPayto = genIbanPaytoUri()
-            // Bank needs those to operate:
-            db.configSet("max_debt_ordinary_customers", "KUDOS:11")
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             var resp = client.post("/accounts") {
                 expectSuccess = false
                 contentType(ContentType.Application.Json)
-                setBody("""{
+                setBody(
+                    """{
                     "username": "foo",
                     "password": "bar",
                     "name": "Jane",
                     "internal_payto_uri": "$ibanPayto"
-                }""".trimIndent())
+                }""".trimIndent()
+                )
             }
             assert(resp.status == HttpStatusCode.Created)
             // Testing idempotency.
             resp = client.post("/accounts") {
                 expectSuccess = false
                 contentType(ContentType.Application.Json)
-                setBody("""{
+                setBody(
+                    """{
                     "username": "foo",
                     "password": "bar",
                     "name": "Jane",
                     "internal_payto_uri": "$ibanPayto"
-                }""".trimIndent())
+                }""".trimIndent()
+                )
             }
             assert(resp.status == HttpStatusCode.Created)
             // Creating the administrator.
-            db.customerCreate(Customer(
-                "admin",
-                CryptoUtil.hashpw("pass"),
-                "CFO"
-            ))
-            db.configSet("only_admin_registrations", "yes")
+            db.customerCreate(
+                Customer(
+                    "admin",
+                    CryptoUtil.hashpw("pass"),
+                    "CFO"
+                )
+            )
+        }
+    }
+
+    /**
+     * Test admin-only account creation
+     */
+    @Test
+    fun createAccountRestrictedTest() {
+        testApplication {
+            val db = initDb()
+            // For this test, we restrict registrations
+            val ctx = getTestContext(restrictRegistration = true)
+
+            application {
+                corebankWebApp(db, ctx)
+            }
+
             // Ordinary user tries, should fail.
-            resp = client.post("/accounts") {
+            var resp = client.post("/accounts") {
                 expectSuccess = false
                 basicAuth("foo", "bar")
                 contentType(ContentType.Application.Json)
-                setBody("""{
+                setBody(
+                    """{
                     "username": "baz",
                     "password": "xyz",
                     "name": "Mallory"
-                }""".trimIndent())
+                }""".trimIndent()
+                )
             }
             assert(resp.status == HttpStatusCode.Unauthorized)
-            // admin tries (also giving bonus), should succeed
-            db.configSet("admin_max_debt", "KUDOS:2222")
-            db.configSet("registration_bonus", "KUDOS:32")
-            assert(maybeCreateAdminAccount(db)) // customer exists, this makes only the bank account.
+            assert(maybeCreateAdminAccount(db, ctx)) // customer exists, this makes only the bank account.
             resp = client.post("/accounts") {
                 expectSuccess = false
                 basicAuth("admin", "pass")
                 contentType(ContentType.Application.Json)
-                setBody("""{
+                setBody(
+                    """{
                     "username": "baz",
                     "password": "xyz",
                     "name": "Mallory"
-                }""".trimIndent())
+                }""".trimIndent()
+                )
             }
             assert(resp.status == HttpStatusCode.Created)
         }

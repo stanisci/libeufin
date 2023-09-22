@@ -79,14 +79,14 @@ class DatabaseTest {
     @Test
     fun createAdminTest() {
         val db = initDb()
+        val ctx = getTestContext()
         val noAdminCustomer = db.customerGetFromLogin("admin")
         assert(noAdminCustomer == null)
-        db.configSet("admin_max_debt", "KUDOS:2222")
-        assert(maybeCreateAdminAccount(db))
+        assert(maybeCreateAdminAccount(db, ctx))
         val yesAdminCustomer = db.customerGetFromLogin("admin")
         assert(yesAdminCustomer != null)
         assert(db.bankAccountGetFromOwnerId(yesAdminCustomer!!.expectRowId()) != null)
-        assert(maybeCreateAdminAccount(db))
+        assert(maybeCreateAdminAccount(db, ctx))
     }
 
     /**
@@ -224,14 +224,7 @@ class DatabaseTest {
         // Trigger conflict.
         assert(db.customerCreate(customerFoo) == null)
     }
-    @Test
-    fun configTest() {
-        val db = initDb()
-        assert(db.configGet("bar") == null)
-        assert(db.configGet("bar") == null)
-        db.configSet("foo", "bar")
-        assert(db.configGet("foo") == "bar")
-    }
+
     @Test
     fun bankAccountTest() {
         val db = initDb()

@@ -28,10 +28,9 @@ import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.getBaseUrl
 
-fun Routing.talerIntegrationHandlers(db: Database) {
+fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) {
     get("/taler-integration/config") {
-        val internalCurrency: String = db.configGet("internal_currency")
-            ?: throw internalServerError("Currency not found")
+        val internalCurrency: String = ctx.currency
         call.respond(TalerIntegrationConfigResponse(currency = internalCurrency))
         return@get
     }
@@ -42,8 +41,7 @@ fun Routing.talerIntegrationHandlers(db: Database) {
         val relatedBankAccount = db.bankAccountGetFromOwnerId(op.walletBankAccount)
         if (relatedBankAccount == null)
             throw internalServerError("Bank has a withdrawal not related to any bank account.")
-        val suggestedExchange = db.configGet("suggested_exchange")
-            ?: throw internalServerError("Bank does not have an exchange to suggest.")
+        val suggestedExchange = ctx.suggestedWithdrawalExchange
         val walletCustomer = db.customerGetFromRowId(relatedBankAccount.owningCustomerId)
         if (walletCustomer == null)
             throw internalServerError("Could not resort the username that owns this withdrawal")
@@ -84,9 +82,6 @@ fun Routing.talerIntegrationHandlers(db: Database) {
                     TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
                 )
             val exchangePayto = req.selected_exchange
-                ?: (db.configGet("suggested_exchange")
-                    ?: throw internalServerError("Suggested exchange not found")
-                        )
             db.talerWithdrawalSetDetails(
                 op.withdrawalUuid,
                 exchangePayto,

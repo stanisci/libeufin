@@ -17,7 +17,9 @@
  * <http://www.gnu.org/licenses/>
  */
 
+import tech.libeufin.bank.BankApplicationContext
 import tech.libeufin.bank.Database
+import tech.libeufin.bank.TalerAmount
 import tech.libeufin.util.execCommand
 
 // Init the database and sets the currency to KUDOS.
@@ -35,7 +37,22 @@ fun initDb(): Database {
         ),
         throwIfFails = true
     )
-    val db = Database("jdbc:postgresql:///libeufincheck")
-    db.configSet("internal_currency", "KUDOS")
-    return db
+    return Database("jdbc:postgresql:///libeufincheck", "KUDOS")
+}
+
+fun getTestContext(
+    restrictRegistration: Boolean = false,
+    suggestedExchange: String = "https://exchange.example.com"
+): BankApplicationContext {
+    return BankApplicationContext(
+        currency = "KUDOS",
+        restrictRegistration = restrictRegistration,
+        cashoutCurrency = "EUR",
+        defaultCustomerDebtLimit = TalerAmount(100, 0, "KUDOS"),
+        defaultAdminDebtLimit = TalerAmount(10000, 0, "KUDOS"),
+        registrationBonusEnabled = false,
+        registrationBonus = null,
+        suggestedWithdrawalExchange = suggestedExchange,
+        maxAuthTokenDurationUs = 200 * 1000000,
+    )
 }

@@ -70,16 +70,6 @@ class AmountTest {
 
     }
 
-    /* Testing that currency is fetched from the config
-       and set in the TalerAmount dedicated field. */
-    @Test
-    fun testAutoCurrency() {
-        val db = initDb()
-        db.configSet("internal_currency", "KUDOS")
-        val a = TalerAmount(1L, 0, getBankCurrency(db))
-        assert(a.currency == "KUDOS")
-    }
-
     @Test
     fun parseTalerAmountTest() {
         val one = "EUR:1"

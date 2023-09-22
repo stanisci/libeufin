@@ -21,6 +21,7 @@
 package tech.libeufin.bank
 
 import TalerConfig
+import TalerConfigError
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
@@ -47,13 +48,11 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.SerializersModule
 import net.taler.common.errorcodes.TalerErrorCode
-import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import tech.libeufin.util.*
 import java.time.Duration
-import java.util.Random
 import kotlin.system.exitProcess
 
 // GLOBALS
@@ -61,6 +60,50 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
 const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 val TOKEN_DEFAULT_DURATION_US = Duration.ofDays(1L).seconds * 1000000
 
+
+/**
+ * Application context with the parsed configuration.
+ */
+data class BankApplicationContext(
+    /**
+     * Main, internal currency of the bank.
+     */
+    val currency: String,
+    /**
+     * Restrict account registration to the administrator.
+     */
+    val restrictRegistration: Boolean,
+    /**
+     * Cashout currency, if cashouts are supported.
+     */
+    val cashoutCurrency: String?,
+    /**
+     * Default limit for the debt that a customer can have.
+     * Can be adjusted per account after account creation.
+     */
+    val defaultCustomerDebtLimit: TalerAmount,
+    /**
+     * Debt limit of the admin account.
+     */
+    val defaultAdminDebtLimit: TalerAmount,
+    /**
+     * If true, transfer a registration bonus from the admin
+     * account to the newly created account.
+     */
+    val registrationBonusEnabled: Boolean,
+    /**
+     * Only set if registration bonus is enabled.
+     */
+    val registrationBonus: TalerAmount?,
+    /**
+     * Exchange that the bank suggests to wallets for withdrawal.
+     */
+    val suggestedWithdrawalExchange: String?,
+    /**
+     * Max token duration in microseconds.
+     */
+    val maxAuthTokenDurationUs: Long,
+)
 
 /**
  * This custom (de)serializer interprets the RelativeTime JSON
@@ -157,7 +200,7 @@ fun ApplicationCall.myAuth(db: Database, requiredScope: TokenScope): Customer? {
 /**
  * Set up web server handlers for the Taler corebank API.
  */
-fun Application.corebankWebApp(db: Database) {
+fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
     install(CallLogging) {
         this.level = Level.DEBUG
         this.logger = tech.libeufin.bank.logger
@@ -266,12 +309,12 @@ fun Application.corebankWebApp(db: Database) {
             call.respond(Config())
             return@get
         }
-        this.accountsMgmtHandlers(db)
-        this.tokenHandlers(db)
-        this.transactionsHandlers(db)
+        this.accountsMgmtHandlers(db, ctx)
+        this.tokenHandlers(db, ctx)
+        this.transactionsHandlers(db, ctx)
         this.talerWebHandlers(db)
-        this.talerIntegrationHandlers(db)
-        this.talerWireGatewayHandlers(db)
+        this.talerIntegrationHandlers(db, ctx)
+        this.talerWireGatewayHandlers(db, ctx)
     }
 }
 
@@ -283,6 +326,88 @@ class LibeufinBankCommand : CliktCommand() {
     override fun run() = Unit
 }
 
+fun durationFromPretty(s: String): Long {
+    var durationUs: Long = 0;
+    var currentNum = "";
+    var parsingNum = true
+    for (c in s) {
+        if (c >= '0' && c <= '9') {
+            if (!parsingNum) {
+                throw Error("invalid duration, unexpected number")
+            }
+            currentNum += c
+            continue
+        }
+        if (c == ' ') {
+            if (currentNum != "") {
+                parsingNum = false
+            }
+            continue
+        }
+        if (currentNum == "") {
+            throw Error("invalid duration, missing number")
+        }
+        val n = currentNum.toInt(10)
+        durationUs += when (c) {
+            's' -> { n * 1000000 }
+            'm' -> { n * 1000000 * 60 }
+            'h' -> { n * 1000000 * 60 * 60 }
+            'd' -> { n * 1000000 * 60 * 60 * 24 }
+            else -> { throw Error("invalid duration, unsupported unit '$c'") }
+        }
+        parsingNum = true
+        currentNum = ""
+    }
+    return durationUs
+}
+
+/**
+ * FIXME: Introduce a datatype for this instead of using Long
+ */
+fun TalerConfig.requireValueDuration(section: String, option: String): Long {
+    val durationStr = lookupValueString(section, option)
+    if (durationStr == null) {
+        throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
+    }
+    return durationFromPretty(durationStr)
+}
+
+fun TalerConfig.requireValueAmount(section: String, option: String, currency: String): TalerAmount {
+    val amountStr = lookupValueString(section, option)
+    if (amountStr == null) {
+        throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
+    }
+    val amount = parseTalerAmount2(amountStr, FracDigits.EIGHT)
+    if (amount == null) {
+        throw TalerConfigError("expected amount for section $section, option $option, but amount is malformed")
+    }
+    if (amount.currency != currency) {
+        throw TalerConfigError(
+            "expected amount for section $section, option $option, but currency is wrong (got ${amount.currency} expected $currency"
+        )
+    }
+    return amount
+}
+
+/**
+ * Read the configuration of the bank from a config file.
+ * Throws an exception if the configuration is malformed.
+ */
+fun readBankApplicationContextFromConfig(cfg: TalerConfig): BankApplicationContext {
+    val currency = cfg.requireValueString("libeufin-bank", "currency")
+    return BankApplicationContext(
+        currency = currency,
+        restrictRegistration = cfg.lookupValueBooleanDefault("libeufin-bank", "restrict_registration", false),
+        cashoutCurrency = cfg.lookupValueString("libeufin-bank", "cashout_currency"),
+        defaultCustomerDebtLimit = cfg.requireValueAmount("libeufin-bank", "default_customer_debt_limit", currency),
+        registrationBonusEnabled = cfg.lookupValueBooleanDefault("libeufin-bank", "registration_bonus_enabled", false),
+        registrationBonus = cfg.requireValueAmount("libeufin-bank", "registration_bonus", currency),
+        suggestedWithdrawalExchange = cfg.lookupValueString("libeufin-bank", "suggested_withdrawal_exchange"),
+        defaultAdminDebtLimit = cfg.requireValueAmount("libeufin-bank", "default_admin_debt_limit", currency),
+        maxAuthTokenDurationUs = cfg.requireValueDuration("libeufin-bank", "max_auth_token_duration"),
+    )
+}
+
 class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") {
     init {
         context {
@@ -292,13 +417,14 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
 
     override fun run() {
         val config = TalerConfig.load()
+        val ctx = readBankApplicationContextFromConfig(config)
         val dbConnStr = config.requireValueString("libeufin-bank-db-postgres", "config")
         logger.info("using database '$dbConnStr'")
-        val db = Database(dbConnStr)
-        if (!maybeCreateAdminAccount(db)) // logs provided by the helper
+        val db = Database(dbConnStr, ctx.currency)
+        if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
         embeddedServer(Netty, port = 8080) {
-            corebankWebApp(db)
+            corebankWebApp(db, ctx)
         }.start(wait = true)
     }
 }

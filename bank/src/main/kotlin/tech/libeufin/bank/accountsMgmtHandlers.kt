@@ -19,11 +19,10 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.account
  * create, update, delete, show bank accounts.  No histories
  * and wire transfers should belong here.
  */
-fun Routing.accountsMgmtHandlers(db: Database) {
+fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
     post("/accounts") {
-        // check if only admin.
-        val maybeOnlyAdmin = db.configGet("only_admin_registrations")
-        if (maybeOnlyAdmin?.lowercase() == "yes") {
+        // check if only admin is allowed to create new accounts
+        if (ctx.restrictRegistration) {
             val customer: Customer? = call.myAuth(db, TokenScope.readwrite)
             if (customer == null || customer.login != "admin")
                 throw LibeufinBankException(
@@ -84,7 +83,7 @@ fun Routing.accountsMgmtHandlers(db: Database) {
             phone = req.challenge_contact_data?.phone,
             cashoutPayto = req.cashout_payto_uri,
             // Following could be gone, if included in cashout_payto_uri
-            cashoutCurrency = db.configGet("cashout_currency"),
+            cashoutCurrency = ctx.cashoutCurrency,
             passwordHash = CryptoUtil.hashpw(req.password),
         )
         val newCustomerRowId = db.customerCreate(newCustomer)
@@ -92,10 +91,7 @@ fun Routing.accountsMgmtHandlers(db: Database) {
         /* Crashing here won't break data consistency between customers
          * and bank accounts, because of the idempotency.  Client will
          * just have to retry.  */
-        val maxDebt = db.configGet("max_debt_ordinary_customers").run {
-            if (this == null) throw internalServerError("Max debt not configured")
-            parseTalerAmount(this)
-        }
+        val maxDebt = ctx.defaultCustomerDebtLimit
         val newBankAccount = BankAccount(
             hasDebt = false,
             internalPaytoUri = req.internal_payto_uri ?: genIbanPaytoUri(),
@@ -112,15 +108,8 @@ fun Routing.accountsMgmtHandlers(db: Database) {
          * bonus to it.  The configuration gets either a Taler amount (of the
          * bonus), or null if no bonus is meant to be awarded.
          */
-        val bonusAmount = db.configGet("registration_bonus")
+        val bonusAmount = if (ctx.registrationBonusEnabled) ctx.registrationBonus else null
         if (bonusAmount != null) {
-            // Double-checking that the currency is correct.
-            val internalCurrency = db.configGet("internal_currency")
-                ?: throw internalServerError("Bank own currency missing in the config")
-            val bonusAmountObj = parseTalerAmount2(bonusAmount, FracDigits.EIGHT)
-                ?: throw internalServerError("Bonus amount found invalid in the config.")
-            if (bonusAmountObj.currency != internalCurrency)
-                throw internalServerError("Bonus amount has the wrong currency: ${bonusAmountObj.currency}")
             val adminCustomer = db.customerGetFromLogin("admin")
                 ?: throw internalServerError("Admin customer not found")
             val adminBankAccount = db.bankAccountGetFromOwnerId(adminCustomer.expectRowId())
@@ -128,7 +117,7 @@ fun Routing.accountsMgmtHandlers(db: Database) {
             val adminPaysBonus = BankInternalTransaction(
                 creditorAccountId = newBankAccountId,
                 debtorAccountId = adminBankAccount.expectRowId(),
-                amount = bonusAmountObj,
+                amount = bonusAmount,
                 subject = "Registration bonus.",
                 transactionDate = getNowUs()
             )

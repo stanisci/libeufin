@@ -114,10 +114,10 @@ class TalerConfig {
     /**
      * Look up a string value from the configuration.
      *
-     * Return an empty Optional if the value was not found in the configuration.
+     * Return null if the value was not found in the configuration.
      */
-    fun lookupValueString(section: String, option: String): Optional<String> {
-        return Optional.ofNullable(lookupEntry(section, option)?.value)
+    fun lookupValueString(section: String, option: String): String? {
+        return lookupEntry(section, option)?.value
     }
 
     fun requireValueString(section: String, option: String): String {
@@ -126,6 +126,21 @@ class TalerConfig {
             throw TalerConfigError("expected string in configuration section $section option $option")
         }
         return entry.value
+    }
+
+    fun lookupValueBooleanDefault(section: String, option: String, default: Boolean): Boolean {
+        val entry = lookupEntry(section, option)
+        if (entry == null) {
+            return default
+        }
+        val v = entry.value.lowercase()
+        if (v == "yes") {
+            return true;
+        }
+        if (v == "false") {
+            return false;
+        }
+        throw TalerConfigError("expected yes/no in configuration section $section option $option but got $v")
     }
 
     /**

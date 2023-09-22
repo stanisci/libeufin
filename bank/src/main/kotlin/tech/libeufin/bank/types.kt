@@ -146,17 +146,17 @@ data class Customer(
 )
 
 /**
-* Represents a Taler amount.  This type can be used both
-* to hold database records and amounts coming from the parser.
-* If maybeCurrency is null, then the constructor defaults it
-* to be the "internal currency".  Internal currency is the one
-* with which Libeufin-Bank moves funds within itself, therefore
-* not to be mistaken with the cashout currency, which is the one
-* that gets credited to Libeufin-Bank users to their cashout_payto_uri.
-*
-* maybeCurrency is typically null when the TalerAmount object gets
-* defined by the Database class.
-*/
+ * Represents a Taler amount.  This type can be used both
+ * to hold database records and amounts coming from the parser.
+ * If maybeCurrency is null, then the constructor defaults it
+ * to be the "internal currency".  Internal currency is the one
+ * with which Libeufin-Bank moves funds within itself, therefore
+ * not to be mistaken with the cashout currency, which is the one
+ * that gets credited to Libeufin-Bank users to their cashout_payto_uri.
+ *
+ * maybeCurrency is typically null when the TalerAmount object gets
+ * defined by the Database class.
+ */
 class TalerAmount(
     val value: Long,
     val frac: Int,
@@ -437,6 +437,7 @@ enum class WithdrawalConfirmationResult {
     OP_NOT_FOUND,
     EXCHANGE_NOT_FOUND,
     BALANCE_INSUFFICIENT,
+
     /**
      * This state indicates that the withdrawal was already
      * confirmed BUT Kotlin did not detect it and still invoked
@@ -496,7 +497,7 @@ data class BankWithdrawalOperationStatus(
 @Serializable
 data class BankWithdrawalOperationPostRequest(
     val reserve_pub: String,
-    val selected_exchange: String? = null // Use suggested exchange if that's missing.
+    val selected_exchange: String,
 )
 
 /**
@@ -540,6 +541,7 @@ data class IncomingHistory(
     val incoming_transactions: MutableList<IncomingReserveTransaction> = mutableListOf(),
     val credit_account: String // Receiver's Payto URI.
 )
+
 // TWG's incoming payment record.
 @Serializable
 data class IncomingReserveTransaction(

@@ -38,7 +38,7 @@ class TalerConfigTest {
 
         println(conf.stringify())
 
-        assertEquals("baz", conf.lookupValueString("foo", "bar").orElseThrow())
+        assertEquals("baz", conf.lookupValueString("foo", "bar"))
 
         println(TalerConfig.getTalerInstallPath())
     }

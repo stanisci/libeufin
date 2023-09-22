@@ -354,7 +354,6 @@ fun isBalanceEnough(
         (normalDiff.frac > normalMaxDebt.frac)) return false
     return true
 }
-fun getBankCurrency(db: Database): String = db.configGet("internal_currency") ?: throw internalServerError("Bank lacks currency")
 
 /**
  *  Builds the taler://withdraw-URI.  Such URI will serve the requests
@@ -465,7 +464,7 @@ fun getHistoryParams(req: ApplicationRequest): HistoryParams {
  *
  * It returns false in case of problems, true otherwise.
  */
-fun maybeCreateAdminAccount(db: Database): Boolean {
+fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean {
     val maybeAdminCustomer = db.customerGetFromLogin("admin")
     val adminCustomerId: Long = if (maybeAdminCustomer == null) {
         logger.debug("Creating admin's customer row")
@@ -487,26 +486,8 @@ fun maybeCreateAdminAccount(db: Database): Boolean {
         maybeAdminCustomer.expectRowId()
     val maybeAdminBankAccount = db.bankAccountGetFromOwnerId(adminCustomerId)
     if (maybeAdminBankAccount == null) {
-        logger.debug("Creating admin's bank account row.")
-        val adminMaxDebt = db.configGet("admin_max_debt")
-        if (adminMaxDebt == null) {
-            logger.error("admin_max_debt not found in the config.")
-            return false
-        }
-        val adminMaxDebtObj = parseTalerAmount2(adminMaxDebt, FracDigits.EIGHT)
-        if (adminMaxDebtObj == null) {
-            logger.error("admin_max_debt was invalid in the config.")
-            return false
-        }
-        val internalCurrency = db.configGet("internal_currency")
-        if (internalCurrency == null) {
-            logger.error("Bank own currency (internal_currency) not found in the config.")
-            exitProcess(1)
-        }
-        if (adminMaxDebtObj.currency != internalCurrency) {
-            logger.error("admin_max_debt has an unsupported currency: ${adminMaxDebtObj.currency}.")
-            return false
-        }
+        logger.info("Creating admin bank account")
+        val adminMaxDebtObj = ctx.defaultAdminDebtLimit
         val adminBankAccount = BankAccount(
             hasDebt = false,
             internalPaytoUri = genIbanPaytoUri(),
@@ -516,7 +497,7 @@ fun maybeCreateAdminAccount(db: Database): Boolean {
             maxDebt = adminMaxDebtObj
         )
         if (db.bankAccountCreate(adminBankAccount) == null) {
-            logger.error("Failed at creating admin's bank account row.")
+            logger.error("Failed to creating admin bank account.")
             return false
         }
     }

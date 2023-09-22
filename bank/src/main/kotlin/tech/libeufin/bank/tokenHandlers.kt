@@ -32,7 +32,7 @@ import tech.libeufin.util.getNowUs
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
 
-fun Routing.tokenHandlers(db: Database) {
+fun Routing.tokenHandlers(db: Database, ctx: BankApplicationContext) {
     delete("/accounts/{USERNAME}/token") {
         throw internalServerError("Token deletion not implemented.")
     }
@@ -64,17 +64,8 @@ fun Routing.tokenHandlers(db: Database) {
         val tokenBytes = ByteArray(32).apply {
             java.util.Random().nextBytes(this)
         }
-        val maxDurationTime: Long = db.configGet("token_max_duration").run {
-            if (this == null)
-                return@run Long.MAX_VALUE
-            return@run try {
-                this.toLong()
-            } catch (e: Exception) {
-                logger.error("Could not convert config's token_max_duration to Long")
-                throw internalServerError(e.message)
-            }
-        }
-        if (req.duration != null && req.duration.d_us.compareTo(maxDurationTime) == 1)
+        val maxDurationTime: Long = ctx.maxAuthTokenDurationUs
+        if (req.duration != null && req.duration.d_us > maxDurationTime)
             throw forbidden(
                 "Token duration bigger than bank's limit",
                 // FIXME: define new EC for this case.
@@ -82,7 +73,7 @@ fun Routing.tokenHandlers(db: Database) {
             )
         val tokenDurationUs  = req.duration?.d_us ?: TOKEN_DEFAULT_DURATION_US
         val customerDbRow = customer.dbRowId ?: throw internalServerError(
-            "Coud not resort customer '${customer.login}' database row ID"
+            "Could not resort customer '${customer.login}' database row ID"
         )
         val expirationTimestampUs: Long = getNowUs() + tokenDurationUs
         if (expirationTimestampUs < tokenDurationUs)

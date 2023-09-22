@@ -47,6 +47,7 @@ class TalerApiTest {
     @Test
     fun transfer() {
         val db = initDb()
+        val ctx = getTestContext()
         // Creating the exchange and merchant accounts first.
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
@@ -60,7 +61,7 @@ class TalerApiTest {
         // Do POST /transfer.
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             val req = """
                     {
@@ -125,6 +126,7 @@ class TalerApiTest {
     @Test
     fun historyIncoming() {
         val db = initDb()
+        val ctx = getTestContext()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
         assert(db.customerCreate(customerBar) != null)
@@ -145,7 +147,7 @@ class TalerApiTest {
         // Bar expects two entries in the incoming history
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             val resp = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=5") {
                 basicAuth("bar", "secret")
@@ -160,6 +162,7 @@ class TalerApiTest {
     @Test
     fun addIncoming() {
         val db = initDb()
+        val ctx = getTestContext()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
         assert(db.customerCreate(customerBar) != null)
@@ -171,7 +174,7 @@ class TalerApiTest {
         ))
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
                 expectSuccess = true
@@ -190,13 +193,10 @@ class TalerApiTest {
     @Test
     fun intSelect() {
         val db = initDb()
+        val ctx = getTestContext(suggestedExchange = "payto://suggested-exchange")
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
-        db.configSet(
-            "suggested_exchange",
-            "payto://suggested-exchange"
-        )
         // insert new.
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,
@@ -205,7 +205,7 @@ class TalerApiTest {
         ))
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             val r = client.post("/taler-integration/withdrawal-operation/${uuid}") {
                 expectSuccess = true
@@ -225,10 +225,7 @@ class TalerApiTest {
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
-        db.configSet(
-            "suggested_exchange",
-            "payto://suggested-exchange"
-        )
+        val ctx = getTestContext(suggestedExchange = "payto://suggested-exchange")
         // insert new.
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,
@@ -237,7 +234,7 @@ class TalerApiTest {
         ))
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             val r = client.get("/taler-integration/withdrawal-operation/${uuid}") {
                 expectSuccess = true
@@ -250,6 +247,7 @@ class TalerApiTest {
     fun withdrawalAbort() {
         val db = initDb()
         val uuid = UUID.randomUUID()
+        val ctx = getTestContext()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
         // insert new.
@@ -262,7 +260,7 @@ class TalerApiTest {
         assert(op?.aborted == false)
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             client.post("/accounts/foo/withdrawals/${uuid}/abort") {
                 expectSuccess = true
@@ -276,11 +274,12 @@ class TalerApiTest {
     @Test
     fun withdrawalCreation() {
         val db = initDb()
+        val ctx = getTestContext()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             // Creating the withdrawal as if the SPA did it.
             val r = client.post("/accounts/foo/withdrawals") {
@@ -303,6 +302,7 @@ class TalerApiTest {
     @Test
     fun withdrawalConfirmation() {
         val db = initDb()
+        val ctx = getTestContext()
         // Creating Foo as the wallet owner and Bar as the exchange.
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
@@ -326,7 +326,7 @@ class TalerApiTest {
         // Starting the bank and POSTing as Foo to /confirm the operation.
         testApplication {
             application {
-                corebankWebApp(db)
+                corebankWebApp(db, ctx)
             }
             client.post("/accounts/foo/withdrawals/${uuid}/confirm") {
                 expectSuccess = true // Sufficient to assert on success.
