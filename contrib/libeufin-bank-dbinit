@@ -18,7 +18,7 @@ usage_and_exit () {
   echo
   echo 'Supported options:'
   echo '  -d DB_CONN  -- required.  Pass DB_CONN as the postgres connection string.  Passed verbatim to Psql'
-  echo '  -l LOC      -- required.  Pass LOC as the SQL files location.  Typically $prefix/share/libeufin/sql'
+  echo '  -l LOC      -- required.  Pass LOC as the SQL files location.  Typically $prefix/share/libeufin/sql/bank'
   echo '  -h           -- print this help'
   echo '  -r           -- drop all the tables before creating them again'
   exit 0
