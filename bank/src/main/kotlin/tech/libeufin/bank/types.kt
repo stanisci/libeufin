@@ -160,14 +160,8 @@ data class Customer(
 class TalerAmount(
     val value: Long,
     val frac: Int,
-    maybeCurrency: String? = null
+    val currency: String
 ) {
-    val currency: String = if (maybeCurrency == null) {
-        val internalCurrency = db.configGet("internal_currency")
-            ?: throw internalServerError("internal_currency not found in the config")
-        internalCurrency
-    } else maybeCurrency
-
     override fun equals(other: Any?): Boolean {
         return other is TalerAmount &&
                 other.value == this.value &&

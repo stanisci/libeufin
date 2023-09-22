@@ -36,7 +36,7 @@ import tech.libeufin.util.getBaseUrl
 import tech.libeufin.util.getNowUs
 import java.util.*
 
-fun Routing.talerWebHandlers() {
+fun Routing.talerWebHandlers(db: Database) {
     post("/accounts/{USERNAME}/withdrawals") {
         val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()
         // Admin not allowed to withdraw in the name of customers:
@@ -84,7 +84,7 @@ fun Routing.talerWebHandlers() {
         // Admin allowed to see the details
         if (c.login != accountName && c.login != "admin") throw forbidden()
         // Permissions passed, get the information.
-        val op = getWithdrawal(call.expectUriComponent("withdrawal_id"))
+        val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))
         call.respond(BankAccountGetWithdrawalResponse(
             amount = op.amount.toString(),
             aborted = op.aborted,
@@ -99,7 +99,7 @@ fun Routing.talerWebHandlers() {
         val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
         // Admin allowed to abort.
         if (!call.getResourceName("USERNAME").canI(c)) throw forbidden()
-        val op = getWithdrawal(call.expectUriComponent("withdrawal_id"))
+        val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))
         // Idempotency:
         if (op.aborted) {
             call.respondText("{}", ContentType.Application.Json)
@@ -117,7 +117,7 @@ fun Routing.talerWebHandlers() {
         val c = call.myAuth(TokenScope.readwrite) ?: throw unauthorized()
         // No admin allowed.
         if(!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
-        val op = getWithdrawal(call.expectUriComponent("withdrawal_id"))
+        val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))
         // Checking idempotency:
         if (op.confirmationDone) {
             call.respondText("{}", ContentType.Application.Json)

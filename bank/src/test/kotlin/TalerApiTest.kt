@@ -56,7 +56,7 @@ class TalerApiTest {
         // Give the exchange reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             1L,
-            TalerAmount(1000, 0)
+            TalerAmount(1000, 0, "KUDOS")
         ))
         // Do POST /transfer.
         testApplication {
@@ -131,7 +131,7 @@ class TalerApiTest {
         // Give Foo reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             1L,
-            TalerAmount(1000, 0)
+            TalerAmount(1000, 0, "KUDOS")
         ))
         // Foo pays Bar (the exchange) twice.
         assert(db.bankTransactionCreate(genTx("withdrawal 1")) == Database.BankTransactionResult.SUCCESS)
@@ -164,7 +164,7 @@ class TalerApiTest {
         // Give Bar reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             2L,
-            TalerAmount(1000, 0)
+            TalerAmount(1000, 0, "KUDOS")
         ))
         testApplication {
             application(webApp)
@@ -196,7 +196,7 @@ class TalerApiTest {
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,
             walletBankAccount = 1L,
-            amount = TalerAmount(1, 0)
+            amount = TalerAmount(1, 0, "KUDOS")
         ))
         testApplication {
             application(webApp)
@@ -226,7 +226,7 @@ class TalerApiTest {
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,
             walletBankAccount = 1L,
-            amount = TalerAmount(1, 0)
+            amount = TalerAmount(1, 0, "KUDOS")
         ))
         testApplication {
             application(webApp)
@@ -247,7 +247,7 @@ class TalerApiTest {
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,
             walletBankAccount = 1L,
-            amount = TalerAmount(1, 0)
+            amount = TalerAmount(1, 0, "KUDOS")
         ))
         val op = db.talerWithdrawalGet(uuid)
         assert(op?.aborted == false)
@@ -301,7 +301,7 @@ class TalerApiTest {
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,
             walletBankAccount = 1L,
-            amount = TalerAmount(1, 0)
+            amount = TalerAmount(1, 0, "KUDOS")
         ))
         // Specifying Bar as the exchange, via its Payto URI.
         assert(db.talerWithdrawalSetDetails(

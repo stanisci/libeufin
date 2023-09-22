@@ -21,6 +21,8 @@
 package tech.libeufin.bank
 
 import org.postgresql.jdbc.PgConnection
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.SQLException
@@ -35,16 +37,19 @@ fun BankAccount.expectBalance(): TalerAmount = this.balance ?: throw internalSer
 fun BankAccount.expectRowId(): Long = this.bankAccountId ?: throw internalServerError("Bank account '${this.internalPaytoUri}' lacks database row ID.")
 fun BankAccountTransaction.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Bank account transaction (${this.subject}) lacks database row ID.")
 
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
 
 
 class Database(private val dbConfig: String) {
     private var dbConn: PgConnection? = null
     private var dbCtr: Int = 0
     private val preparedStatements: MutableMap<String, PreparedStatement> = mutableMapOf()
+    private var cachedCurrency: String? = null;
 
     init {
         Class.forName("org.postgresql.Driver")
     }
+
     private fun reconnect() {
         dbCtr++
         val myDbConn = dbConn
@@ -83,6 +88,23 @@ class Database(private val dbConfig: String) {
             throw e
         }
         return true
+    }
+
+    /**
+     * Get the currency applicable to the bank.
+     */
+    private fun getCurrency(): String {
+        var myCurrency = cachedCurrency
+        if (myCurrency != null) {
+            return myCurrency
+        }
+        // FIXME: Should be retrieved from the config file instead of the DB.
+        myCurrency = configGet("internal_currency")
+        if (myCurrency == null) {
+            throw Error("configuration does not specify currency")
+        }
+        cachedCurrency = myCurrency
+        return myCurrency
     }
 
     // CONFIG
@@ -340,7 +362,8 @@ class Database(private val dbConfig: String) {
                 internalPaytoUri = it.getString("internal_payto_uri"),
                 balance = TalerAmount(
                     it.getLong("balance_val"),
-                    it.getInt("balance_frac")
+                    it.getInt("balance_frac"),
+                    getCurrency()
                 ),
                 lastNexusFetchRowId = it.getLong("last_nexus_fetch_row_id"),
                 owningCustomerId = it.getLong("owning_customer_id"),
@@ -348,7 +371,8 @@ class Database(private val dbConfig: String) {
                 isTalerExchange = it.getBoolean("is_taler_exchange"),
                 maxDebt = TalerAmount(
                     value = it.getLong("max_debt_val"),
-                    frac = it.getInt("max_debt_frac")
+                    frac = it.getInt("max_debt_frac"),
+                    getCurrency()
                 ),
                 bankAccountId = it.getLong("bank_account_id")
             )
@@ -380,7 +404,8 @@ class Database(private val dbConfig: String) {
                 internalPaytoUri = internalPayto,
                 balance = TalerAmount(
                     it.getLong("balance_val"),
-                    it.getInt("balance_frac")
+                    it.getInt("balance_frac"),
+                    getCurrency()
                 ),
                 lastNexusFetchRowId = it.getLong("last_nexus_fetch_row_id"),
                 owningCustomerId = it.getLong("owning_customer_id"),
@@ -388,7 +413,8 @@ class Database(private val dbConfig: String) {
                 isTalerExchange = it.getBoolean("is_taler_exchange"),
                 maxDebt = TalerAmount(
                     value = it.getLong("max_debt_val"),
-                    frac = it.getInt("max_debt_frac")
+                    frac = it.getInt("max_debt_frac"),
+                    getCurrency()
                 ),
                 bankAccountId = it.getLong("bank_account_id")
             )
@@ -493,7 +519,8 @@ class Database(private val dbConfig: String) {
                 debtorName = it.getString("debtor_name"),
                 amount = TalerAmount(
                     it.getLong("amount_val"),
-                    it.getInt("amount_frac")
+                    it.getInt("amount_frac"),
+                    getCurrency()
                 ),
                 accountServicerReference = it.getString("account_servicer_reference"),
                 endToEndId = it.getString("end_to_end_id"),
@@ -594,7 +621,8 @@ class Database(private val dbConfig: String) {
                         debtorName = it.getString("debtor_name"),
                         amount = TalerAmount(
                             it.getLong("amount_val"),
-                            it.getInt("amount_frac")
+                            it.getInt("amount_frac"),
+                            getCurrency()
                         ),
                         accountServicerReference = it.getString("account_servicer_reference"),
                         endToEndId = it.getString("end_to_end_id"),
@@ -652,7 +680,8 @@ class Database(private val dbConfig: String) {
             return TalerWithdrawalOperation(
                amount = TalerAmount(
                    it.getLong("amount_val"),
-                   it.getInt("amount_frac")
+                   it.getInt("amount_frac"),
+                   getCurrency()
                ),
                selectionDone = it.getBoolean("selection_done"),
                selectedExchangePayto = it.getString("selected_exchange_payto"),
@@ -871,17 +900,20 @@ class Database(private val dbConfig: String) {
             return Cashout(
                 amountDebit = TalerAmount(
                     value = it.getLong("amount_debit_val"),
-                    frac = it.getInt("amount_debit_frac")
+                    frac = it.getInt("amount_debit_frac"),
+                    getCurrency()
                 ),
                 amountCredit = TalerAmount(
                     value = it.getLong("amount_credit_val"),
-                    frac = it.getInt("amount_credit_frac")
+                    frac = it.getInt("amount_credit_frac"),
+                    getCurrency()
                 ),
                 bankAccount = it.getLong("bank_account"),
                 buyAtRatio = it.getInt("buy_at_ratio"),
                 buyInFee = TalerAmount(
                     value = it.getLong("buy_in_fee_val"),
-                    frac = it.getInt("buy_in_fee_frac")
+                    frac = it.getInt("buy_in_fee_frac"),
+                    getCurrency()
                 ),
                 credit_payto_uri = it.getString("credit_payto_uri"),
                 cashoutCurrency = it.getString("cashout_currency"),
@@ -890,7 +922,8 @@ class Database(private val dbConfig: String) {
                 sellAtRatio = it.getInt("sell_at_ratio"),
                 sellOutFee = TalerAmount(
                     value = it.getLong("sell_out_fee_val"),
-                    frac = it.getInt("sell_out_fee_frac")
+                    frac = it.getInt("sell_out_fee_frac"),
+                    getCurrency()
                 ),
                 subject = it.getString("subject"),
                 tanChannel = it.getString("tan_channel").run {
@@ -946,6 +979,7 @@ class Database(private val dbConfig: String) {
                 amount = TalerAmount(
                     value = it.getLong("amount_value"),
                     frac = it.getInt("amount_frac"),
+                    getCurrency()
                 ),
                 creditAccount = it.getString("credit_account_payto"),
                 exchangeBaseUrl = it.getString("exchange_base_url"),

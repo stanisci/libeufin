@@ -25,10 +25,14 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.util.maybeUriComponent
 import tech.libeufin.util.getNowUs
 
-fun Routing.tokenHandlers() {
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
+
+fun Routing.tokenHandlers(db: Database) {
     delete("/accounts/{USERNAME}/token") {
         throw internalServerError("Token deletion not implemented.")
     }
@@ -66,7 +70,7 @@ fun Routing.tokenHandlers() {
             return@run try {
                 this.toLong()
             } catch (e: Exception) {
-                tech.libeufin.bank.logger.error("Could not convert config's token_max_duration to Long")
+                logger.error("Could not convert config's token_max_duration to Long")
                 throw internalServerError(e.message)
             }
         }

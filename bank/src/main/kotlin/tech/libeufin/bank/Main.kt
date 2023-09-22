@@ -39,7 +39,6 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.SerializersModule
 import net.taler.common.errorcodes.TalerErrorCode
-import org.jetbrains.exposed.sql.stringLiteral
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
@@ -47,11 +46,10 @@ import tech.libeufin.util.*
 import java.time.Duration
 
 // GLOBALS
-val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank")
-val db = Database(System.getProperty("BANK_DB_CONNECTION_STRING"))
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
+private val db = Database(System.getProperty("BANK_DB_CONNECTION_STRING"))
 const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 val TOKEN_DEFAULT_DURATION_US = Duration.ofDays(1L).seconds * 1000000
-const val FRACTION_BASE = 100000000
 
 
 /**
@@ -129,8 +127,8 @@ fun ApplicationCall.myAuth(requiredScope: TokenScope): Customer? {
         TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
     )
     return when (authDetails.scheme) {
-        "Basic" -> doBasicAuth(authDetails.content)
-        "Bearer" -> doTokenAuth(authDetails.content, requiredScope)
+        "Basic" -> doBasicAuth(db, authDetails.content)
+        "Bearer" -> doTokenAuth(db, authDetails.content, requiredScope)
         else -> throw LibeufinBankException(
             httpStatus = HttpStatusCode.Unauthorized,
             talerError = TalerError(
@@ -245,11 +243,11 @@ val webApp: Application.() -> Unit = {
             call.respond(Config())
             return@get
         }
-        this.accountsMgmtHandlers()
-        this.tokenHandlers()
-        this.transactionsHandlers()
-        this.talerWebHandlers()
-        this.talerIntegrationHandlers()
-        this.talerWireGatewayHandlers()
+        this.accountsMgmtHandlers(db)
+        this.tokenHandlers(db)
+        this.transactionsHandlers(db)
+        this.talerWebHandlers(db)
+        this.talerIntegrationHandlers(db)
+        this.talerWireGatewayHandlers(db)
     }
 }

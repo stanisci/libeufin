@@ -19,10 +19,7 @@
 
 
 import org.junit.Test
-import tech.libeufin.bank.FracDigits
-import tech.libeufin.bank.TalerAmount
-import tech.libeufin.bank.isBalanceEnough
-import tech.libeufin.bank.parseTalerAmount
+import tech.libeufin.bank.*
 
 class AmountTest {
     @Test
@@ -79,7 +76,7 @@ class AmountTest {
     fun testAutoCurrency() {
         val db = initDb()
         db.configSet("internal_currency", "KUDOS")
-        val a = TalerAmount(1L, 0)
+        val a = TalerAmount(1L, 0, getBankCurrency(db))
         assert(a.currency == "KUDOS")
     }
 

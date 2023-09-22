@@ -29,7 +29,7 @@ import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.getNowUs
 
-fun Routing.talerWireGatewayHandlers() {
+fun Routing.talerWireGatewayHandlers(db: Database) {
     get("/taler-wire-gateway/config") {
         val internalCurrency = db.configGet("internal_currency")
             ?: throw internalServerError("Could not find bank own currency.")

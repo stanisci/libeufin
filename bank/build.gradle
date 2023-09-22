@@ -23,7 +23,7 @@ compileTestKotlin {
     }
 }
 
-task installToPrefix(type: Copy) {
+tasks.register('installToPrefix', Copy) {
     dependsOn(installShadowDist)
     from("build/install/bank-shadow") {
         include("**/libeufin-bank")
@@ -46,23 +46,17 @@ sourceSets {
 
 dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1-native-mt'
-    implementation "com.hubspot.jinjava:jinjava:2.5.9"
     implementation 'ch.qos.logback:logback-classic:1.4.5'
     implementation project(":util")
+
 
     // XML:
     implementation "javax.xml.bind:jaxb-api:2.3.0"
     implementation "org.glassfish.jaxb:jaxb-runtime:2.3.1"
-    implementation 'org.apache.santuario:xmlsec:2.2.2'
 
-    implementation group: 'org.bouncycastle', name: 'bcprov-jdk16', version: '1.46'
-    implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.36.0.1'
-    implementation 'org.postgresql:postgresql:42.2.23.jre7'
+    implementation 'org.postgresql:postgresql:42.2.27'
     implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.21'
     implementation('com.github.ajalt:clikt:2.8.0')
-    implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
-    implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
-    implementation "org.jetbrains.exposed:exposed-jdbc:$exposed_version"
 
     implementation "io.ktor:ktor-server-core:$ktor_version"
     implementation "io.ktor:ktor-server-call-logging:$ktor_version"

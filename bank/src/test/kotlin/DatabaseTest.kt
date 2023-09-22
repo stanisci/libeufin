@@ -131,14 +131,15 @@ class DatabaseTest {
         assert(db.bankAccountCreate(bankAccountBar))
         var fooAccount = db.bankAccountGetFromOwnerId(fooId!!)
         assert(fooAccount?.hasDebt == false) // Foo has NO debit.
+        val currency = "KUDOS"
         // Preparing the payment data.
         db.bankAccountSetMaxDebt(
             fooId,
-            TalerAmount(100, 0)
+            TalerAmount(100, 0, currency)
         )
         db.bankAccountSetMaxDebt(
             barId!!,
-            TalerAmount(50, 0)
+            TalerAmount(50, 0, currency)
         )
         val firstSpending = db.bankTransactionCreate(fooPaysBar) // Foo pays Bar and goes debit.
         assert(firstSpending == Database.BankTransactionResult.SUCCESS)
@@ -167,7 +168,7 @@ class DatabaseTest {
             creditorAccountId = 1,
             debtorAccountId = 2,
             subject = "test",
-            amount = TalerAmount(10, 0),
+            amount = TalerAmount(10, 0, currency),
             accountServicerReference = "acct-svcr-ref",
             endToEndId = "end-to-end-id",
             paymentInformationId = "pmtinfid",
@@ -220,17 +221,19 @@ class DatabaseTest {
     @Test
     fun bankAccountTest() {
         val db = initDb()
+        val currency = "KUDOS"
         assert(db.bankAccountGetFromOwnerId(1L) == null)
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo))
         assert(!db.bankAccountCreate(bankAccountFoo)) // Triggers conflict.
-        assert(db.bankAccountGetFromOwnerId(1L)?.balance?.equals(TalerAmount(0, 0)) == true)
+        assert(db.bankAccountGetFromOwnerId(1L)?.balance?.equals(TalerAmount(0, 0, currency)) == true)
     }
 
     @Test
     fun withdrawalTest() {
         val db = initDb()
         val uuid = UUID.randomUUID()
+        val currency = "KUDOS"
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo))
         assert(db.customerCreate(customerBar) != null) // plays the exchange.
@@ -239,7 +242,7 @@ class DatabaseTest {
         assert(db.talerWithdrawalCreate(
             uuid,
             1L,
-            TalerAmount(1, 0)
+            TalerAmount(1, 0, currency)
         ))
         // get it.
         val op = db.talerWithdrawalGet(uuid)
@@ -260,9 +263,10 @@ class DatabaseTest {
     @Test
     fun historyTest() {
         val db = initDb()
+        val currency = "KUDOS"
         db.customerCreate(customerFoo); db.bankAccountCreate(bankAccountFoo)
         db.customerCreate(customerBar); db.bankAccountCreate(bankAccountBar)
-        assert(db.bankAccountSetMaxDebt(1L, TalerAmount(10000000, 0)))
+        assert(db.bankAccountSetMaxDebt(1L, TalerAmount(10000000, 0, currency)))
         // Foo pays Bar 100 times:
         for (i in 1..100) { db.bankTransactionCreate(genTx("test-$i")) }
         // Testing positive delta:
@@ -282,15 +286,16 @@ class DatabaseTest {
     @Test
     fun cashoutTest() {
         val db = initDb()
+        val currency = "KUDOS"
         val op = Cashout(
             cashoutUuid = UUID.randomUUID(),
-            amountDebit = TalerAmount(1, 0),
-            amountCredit = TalerAmount(2, 0),
+            amountDebit = TalerAmount(1, 0, currency),
+            amountCredit = TalerAmount(2, 0, currency),
             bankAccount = 1L,
             buyAtRatio = 3,
-            buyInFee = TalerAmount(0, 22),
+            buyInFee = TalerAmount(0, 22, currency),
             sellAtRatio = 2,
-            sellOutFee = TalerAmount(0, 44),
+            sellOutFee = TalerAmount(0, 44, currency),
             credit_payto_uri = "IBAN",
             cashoutCurrency = "KUDOS",
             creationTime = 3L,
@@ -310,14 +315,14 @@ class DatabaseTest {
         assert(db.cashoutCreate(op))
         db.bankAccountSetMaxDebt(
             fooId!!,
-            TalerAmount(100, 0)
+            TalerAmount(100, 0, currency)
         )
         assert(db.bankTransactionCreate(
             BankInternalTransaction(
             creditorAccountId = 2,
             debtorAccountId = 1,
             subject = "backing the cash-out",
-            amount = TalerAmount(10, 0),
+            amount = TalerAmount(10, 0, currency),
             accountServicerReference = "acct-svcr-ref",
             endToEndId = "end-to-end-id",
             paymentInformationId = "pmtinfid",

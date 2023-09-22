@@ -27,10 +27,16 @@ import io.ktor.server.request.*
 import io.ktor.server.util.*
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import java.lang.NumberFormatException
 import java.net.URL
 import java.util.*
+
+const val FRACTION_BASE = 100000000
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers")
 
 fun ApplicationCall.expectUriComponent(componentName: String) =
     this.maybeUriComponent(componentName) ?: throw badRequest(
@@ -58,7 +64,7 @@ fun ApplicationCall.getAuthToken(): String? {
  * Performs the HTTP basic authentication.  Returns the
  * authenticated customer on success, or null otherwise.
  */
-fun doBasicAuth(encodedCredentials: String): Customer? {
+fun doBasicAuth(db: Database, encodedCredentials: String): Customer? {
     val plainUserAndPass = String(base64ToBytes(encodedCredentials), Charsets.UTF_8) // :-separated
     val userAndPassSplit = plainUserAndPass.split(
         ":",
@@ -102,6 +108,7 @@ private fun splitBearerToken(tok: String): String? {
 /* Performs the bearer-token authentication.  Returns the
  * authenticated customer on success, null otherwise. */
 fun doTokenAuth(
+    db: Database,
     token: String,
     requiredScope: TokenScope,
 ): Customer? {
@@ -261,7 +268,7 @@ fun parseTalerAmount(
     return TalerAmount(
         value = value,
         frac = fraction,
-        maybeCurrency = match.destructured.component1()
+        currency = match.destructured.component1()
     )
 }
 
@@ -272,7 +279,7 @@ private fun normalizeAmount(amt: TalerAmount): TalerAmount {
         return TalerAmount(
             value = normalValue,
             frac = normalFrac,
-            maybeCurrency = amt.currency
+            currency = amt.currency
         )
     }
     return amt
@@ -295,7 +302,7 @@ private fun amountAdd(first: TalerAmount, second: TalerAmount): TalerAmount {
     return normalizeAmount(TalerAmount(
         value = valueAdd,
         frac = fracAdd,
-        maybeCurrency = first.currency
+        currency = first.currency
     ))
 }
 
@@ -343,7 +350,7 @@ fun isBalanceEnough(
         (normalDiff.frac > normalMaxDebt.frac)) return false
     return true
 }
-fun getBankCurrency(): String = db.configGet("internal_currency") ?: throw internalServerError("Bank lacks currency")
+fun getBankCurrency(db: Database): String = db.configGet("internal_currency") ?: throw internalServerError("Bank lacks currency")
 
 /**
  *  Builds the taler://withdraw-URI.  Such URI will serve the requests
@@ -403,7 +410,7 @@ fun getWithdrawalConfirmUrl(
  * if the query param doesn't parse into a UUID.  Currently
  * used by the Taler Web/SPA and Integration API handlers.
  */
-fun getWithdrawal(opIdParam: String): TalerWithdrawalOperation {
+fun getWithdrawal(db: Database, opIdParam: String): TalerWithdrawalOperation {
     val opId = try {
         UUID.fromString(opIdParam)
     } catch (e: Exception) {
@@ -412,7 +419,7 @@ fun getWithdrawal(opIdParam: String): TalerWithdrawalOperation {
     }
     val op = db.talerWithdrawalGet(opId)
         ?: throw notFound(
-            hint = "Withdrawal operation ${opIdParam} not found",
+            hint = "Withdrawal operation $opIdParam not found",
             talerEc = TalerErrorCode.TALER_EC_END
         )
     return op

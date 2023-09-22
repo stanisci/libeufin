@@ -28,7 +28,7 @@ import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.getBaseUrl
 
-fun Routing.talerIntegrationHandlers() {
+fun Routing.talerIntegrationHandlers(db: Database) {
     get("/taler-integration/config") {
         val internalCurrency: String = db.configGet("internal_currency")
             ?: throw internalServerError("Currency not found")
@@ -38,7 +38,7 @@ fun Routing.talerIntegrationHandlers() {
     // Note: wopid acts as an authentication token.
     get("/taler-integration/withdrawal-operation/{wopid}") {
         val wopid = call.expectUriComponent("wopid")
-        val op = getWithdrawal(wopid) // throws 404 if not found.
+        val op = getWithdrawal(db, wopid) // throws 404 if not found.
         val relatedBankAccount = db.bankAccountGetFromOwnerId(op.walletBankAccount)
         if (relatedBankAccount == null)
             throw internalServerError("Bank has a withdrawal not related to any bank account.")
@@ -66,7 +66,7 @@ fun Routing.talerIntegrationHandlers() {
     post("/taler-integration/withdrawal-operation/{wopid}") {
         val wopid = call.expectUriComponent("wopid")
         val req = call.receive<BankWithdrawalOperationPostRequest>()
-        val op = getWithdrawal(wopid) // throws 404 if not found.
+        val op = getWithdrawal(db, wopid) // throws 404 if not found.
         if (op.selectionDone) {
             // idempotency
             if (op.selectedExchangePayto != req.selected_exchange &&

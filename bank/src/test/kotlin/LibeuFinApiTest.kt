@@ -31,10 +31,11 @@ class LibeuFinApiTest {
         cashoutPayto = "payto://external-IBAN",
         cashoutCurrency = "KUDOS"
     )
+
     private fun genBankAccount(rowId: Long) = BankAccount(
         hasDebt = false,
         internalPaytoUri = "payto://iban/SANDBOXX/${rowId}-IBAN",
-        maxDebt = TalerAmount(100, 0),
+        maxDebt = TalerAmount(100, 0, "KUDOS"),
         owningCustomerId = rowId
     )
 
@@ -164,7 +165,7 @@ class LibeuFinApiTest {
             BankAccount(
                 hasDebt = false,
                 internalPaytoUri = "payto://iban/SANDBOXX/FOO-IBAN",
-                maxDebt = TalerAmount(100, 0),
+                maxDebt = TalerAmount(100, 0, "KUDOS"),
                 owningCustomerId = customerRowId!!
             )
         ))
@@ -186,7 +187,7 @@ class LibeuFinApiTest {
             assert(db.bankAccountCreate(BankAccount(
                 hasDebt = false,
                 internalPaytoUri = "payto://iban/SANDBOXX/ADMIN-IBAN",
-                maxDebt = TalerAmount(100, 0),
+                maxDebt = TalerAmount(100, 0, "KUDOS"),
                 owningCustomerId = adminRowId!!
             )))
             client.get("/accounts/foo") {

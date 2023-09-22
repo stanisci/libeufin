@@ -6,15 +6,19 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.maybeUriComponent
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
 
 /**
  * This function collects all the /accounts handlers that
  * create, update, delete, show bank accounts.  No histories
  * and wire transfers should belong here.
  */
-fun Routing.accountsMgmtHandlers() {
+fun Routing.accountsMgmtHandlers(db: Database) {
     post("/accounts") {
         // check if only admin.
         val maybeOnlyAdmin = db.configGet("only_admin_registrations")

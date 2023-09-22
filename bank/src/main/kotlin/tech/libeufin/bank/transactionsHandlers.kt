@@ -7,11 +7,16 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.util.getNowUs
 import tech.libeufin.util.parsePayto
 import kotlin.math.abs
 
-fun Routing.transactionsHandlers() {
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.transactionHandlers")
+
+fun Routing.transactionsHandlers(db: Database) {
     get("/accounts/{USERNAME}/transactions") {
         val c = call.myAuth(TokenScope.readonly) ?: throw unauthorized()
         val resourceName = call.expectUriComponent("USERNAME")
@@ -65,7 +70,7 @@ fun Routing.transactionsHandlers() {
                 TalerErrorCode.TALER_EC_END // FIXME: define this EC.
             )
         val amount = parseTalerAmount(txData.amount)
-        if (amount.currency != getBankCurrency())
+        if (amount.currency != getBankCurrency(db))
             throw badRequest(
                 "Wrong currency: ${amount.currency}",
                 talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
