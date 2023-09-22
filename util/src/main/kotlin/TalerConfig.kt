@@ -128,6 +128,14 @@ class TalerConfig {
         return entry.value
     }
 
+    fun requireValueNumber(section: String, option: String): Long {
+        val entry = lookupEntry(section, option)
+        if (entry == null) {
+            throw TalerConfigError("expected string in configuration section $section option $option")
+        }
+        return entry.value.toLong(10)
+    }
+
     fun lookupValueBooleanDefault(section: String, option: String, default: Boolean): Boolean {
         val entry = lookupEntry(section, option)
         if (entry == null) {

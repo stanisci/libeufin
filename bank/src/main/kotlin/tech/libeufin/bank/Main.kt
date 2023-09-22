@@ -420,10 +420,17 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val ctx = readBankApplicationContextFromConfig(config)
         val dbConnStr = config.requireValueString("libeufin-bank-db-postgres", "config")
         logger.info("using database '$dbConnStr'")
+        val serveMethod = config.requireValueString("libeufin-bank", "serve")
+        if (serveMethod.lowercase() != "tcp") {
+            logger.info("Can only serve libeufin-bank via TCP")
+            exitProcess(1)
+        }
+        val servePortLong = config.requireValueNumber("libeufin-bank", "port")
+        val servePort = servePortLong.toInt()
         val db = Database(dbConnStr, ctx.currency)
         if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
-        embeddedServer(Netty, port = 8080) {
+        embeddedServer(Netty, port = servePort) {
             corebankWebApp(db, ctx)
         }.start(wait = true)
     }
