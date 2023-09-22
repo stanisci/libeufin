@@ -86,10 +86,7 @@ fun doBasicAuth(db: Database, encodedCredentials: String): Customer? {
         )
     val login = userAndPassSplit[0]
     val plainPassword = userAndPassSplit[1]
-    val maybeCustomer = db.customerGetFromLogin(login) ?: throw notFound(
-        "User not found",
-        TalerErrorCode.TALER_EC_END // FIXME: define EC.
-    )
+    val maybeCustomer = db.customerGetFromLogin(login) ?: throw unauthorized()
     if (!CryptoUtil.checkpw(plainPassword, maybeCustomer.passwordHash)) return null
     return maybeCustomer
 }

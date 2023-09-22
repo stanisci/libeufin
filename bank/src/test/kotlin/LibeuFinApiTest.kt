@@ -244,7 +244,7 @@ class LibeuFinApiTest {
                 basicAuth("not", "not")
                 expectSuccess = false
             }
-            assert(shouldNot.status == HttpStatusCode.NotFound)
+            assert(shouldNot.status == HttpStatusCode.Unauthorized)
         }
     }
 
@@ -287,14 +287,6 @@ class LibeuFinApiTest {
                 )
             }
             assert(resp.status == HttpStatusCode.Created)
-            // Creating the administrator.
-            db.customerCreate(
-                Customer(
-                    "admin",
-                    CryptoUtil.hashpw("pass"),
-                    "CFO"
-                )
-            )
         }
     }
 
@@ -326,6 +318,14 @@ class LibeuFinApiTest {
                 )
             }
             assert(resp.status == HttpStatusCode.Unauthorized)
+            // Creating the administrator.
+            assert(db.customerCreate(
+                Customer(
+                    "admin",
+                    CryptoUtil.hashpw("pass"),
+                    "CFO"
+                )
+            ) != null)
             assert(maybeCreateAdminAccount(db, ctx)) // customer exists, this makes only the bank account.
             resp = client.post("/accounts") {
                 expectSuccess = false
