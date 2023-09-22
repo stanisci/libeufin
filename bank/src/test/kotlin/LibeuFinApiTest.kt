@@ -276,7 +276,10 @@ class LibeuFinApiTest {
                 }""".trimIndent())
             }
             assert(resp.status == HttpStatusCode.Unauthorized)
-            // admin tries, should succeed
+            // admin tries (also giving bonus), should succeed
+            db.configSet("admin_max_debt", "KUDOS:2222")
+            db.configSet("registration_bonus", "KUDOS:32")
+            assert(maybeCreateAdminAccount(db)) // customer exists, this makes only the bank account.
             resp = client.post("/accounts") {
                 expectSuccess = false
                 basicAuth("admin", "pass")
