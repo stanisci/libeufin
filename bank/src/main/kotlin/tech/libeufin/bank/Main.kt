@@ -23,6 +23,7 @@ package tech.libeufin.bank
 import TalerConfig
 import TalerConfigError
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
@@ -409,6 +410,10 @@ fun readBankApplicationContextFromConfig(cfg: TalerConfig): BankApplicationConte
 }
 
 class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") {
+    private val configFile by option(
+        "--config",
+        help = "set the configuration file"
+    )
     init {
         context {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
@@ -416,7 +421,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
     }
 
     override fun run() {
-        val config = TalerConfig.load()
+        val config = TalerConfig.load(this.configFile)
         val ctx = readBankApplicationContextFromConfig(config)
         val dbConnStr = config.requireValueString("libeufin-bank-db-postgres", "config")
         logger.info("using database '$dbConnStr'")
