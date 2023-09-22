@@ -75,6 +75,20 @@ class DatabaseTest {
     )
     val fooPaysBar = genTx()
 
+    // Testing the helper that creates the admin account.
+    @Test
+    fun createAdminTest() {
+        val db = initDb()
+        val noAdminCustomer = db.customerGetFromLogin("admin")
+        assert(noAdminCustomer == null)
+        db.configSet("admin_max_debt", "KUDOS:2222")
+        assert(maybeCreateAdminAccount(db))
+        val yesAdminCustomer = db.customerGetFromLogin("admin")
+        assert(yesAdminCustomer != null)
+        assert(db.bankAccountGetFromOwnerId(yesAdminCustomer!!.expectRowId()) != null)
+        assert(maybeCreateAdminAccount(db))
+    }
+
     /**
      * Tests the SQL function that performs the instructions
      * given by the exchange to pay one merchant.

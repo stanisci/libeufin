@@ -47,11 +47,14 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.SerializersModule
 import net.taler.common.errorcodes.TalerErrorCode
+import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import tech.libeufin.util.*
 import java.time.Duration
+import java.util.Random
+import kotlin.system.exitProcess
 
 // GLOBALS
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
@@ -292,6 +295,8 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val dbConnStr = config.requireValueString("libeufin-bank-db-postgres", "config")
         logger.info("using database '$dbConnStr'")
         val db = Database(dbConnStr)
+        if (!maybeCreateAdminAccount(db)) // logs provided by the helper
+            exitProcess(1)
         embeddedServer(Netty, port = 8080) {
             corebankWebApp(db)
         }.start(wait = true)

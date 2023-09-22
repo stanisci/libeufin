@@ -33,6 +33,7 @@ import tech.libeufin.util.*
 import java.lang.NumberFormatException
 import java.net.URL
 import java.util.*
+import kotlin.system.exitProcess
 
 const val FRACTION_BASE = 100000000
 
@@ -455,4 +456,69 @@ fun getHistoryParams(req: ApplicationRequest): HistoryParams {
         }
     }
     return HistoryParams(delta = delta, start = start)
+}
+
+/**
+ * This function creates the admin account ONLY IF it was
+ * NOT found in the database.  It sets it to a random password that
+ * is only meant to be overridden by a dedicated CLI tool.
+ *
+ * It returns false in case of problems, true otherwise.
+ */
+fun maybeCreateAdminAccount(db: Database): Boolean {
+    val maybeAdminCustomer = db.customerGetFromLogin("admin")
+    val adminCustomerId: Long = if (maybeAdminCustomer == null) {
+        logger.debug("Creating admin's customer row")
+        val pwBuf = ByteArray(32)
+        Random().nextBytes(pwBuf)
+        val adminCustomer = Customer(
+            login = "admin",
+            passwordHash = Base32Crockford.encode(pwBuf),
+            name = "Bank administrator"
+        )
+        val rowId = db.customerCreate(adminCustomer)
+        if (rowId == null) {
+            logger.error("Could not create the admin customer row.")
+            return false
+        }
+        rowId
+    }
+    else
+        maybeAdminCustomer.expectRowId()
+    val maybeAdminBankAccount = db.bankAccountGetFromOwnerId(adminCustomerId)
+    if (maybeAdminBankAccount == null) {
+        logger.debug("Creating admin's bank account row.")
+        val adminMaxDebt = db.configGet("admin_max_debt")
+        if (adminMaxDebt == null) {
+            logger.error("admin_max_debt not found in the config.")
+            return false
+        }
+        val adminMaxDebtObj = parseTalerAmount2(adminMaxDebt, FracDigits.EIGHT)
+        if (adminMaxDebtObj == null) {
+            logger.error("admin_max_debt was invalid in the config.")
+            return false
+        }
+        val internalCurrency = db.configGet("internal_currency")
+        if (internalCurrency == null) {
+            logger.error("Bank own currency (internal_currency) not found in the config.")
+            exitProcess(1)
+        }
+        if (adminMaxDebtObj.currency != internalCurrency) {
+            logger.error("admin_max_debt has an unsupported currency: ${adminMaxDebtObj.currency}.")
+            return false
+        }
+        val adminBankAccount = BankAccount(
+            hasDebt = false,
+            internalPaytoUri = genIbanPaytoUri(),
+            owningCustomerId = adminCustomerId,
+            isPublic = false,
+            isTalerExchange = false,
+            maxDebt = adminMaxDebtObj
+        )
+        if (db.bankAccountCreate(adminBankAccount) == null) {
+            logger.error("Failed at creating admin's bank account row.")
+            return false
+        }
+    }
+    return true
 }
