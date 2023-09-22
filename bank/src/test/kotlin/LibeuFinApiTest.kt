@@ -39,6 +39,17 @@ class LibeuFinApiTest {
         owningCustomerId = rowId
     )
 
+    @Test
+    fun getConfig() {
+        val db = initDb()
+        testApplication {
+            application { corebankWebApp(db) }
+            val r = client.get("/config") {
+                expectSuccess = true
+            }
+            println(r.bodyAsText())
+        }
+    }
     /**
      * Testing GET /transactions.  This test checks that the sign
      * of delta gets honored by the HTTP handler, namely that the

@@ -174,6 +174,8 @@ fun Application.corebankWebApp(db: Database) {
     install(IgnoreTrailingSlash)
     install(ContentNegotiation) {
         json(Json {
+            explicitNulls = false
+            encodeDefaults = true
             prettyPrint = true
             ignoreUnknownKeys = true
             // Registering custom parser for RelativeTime
