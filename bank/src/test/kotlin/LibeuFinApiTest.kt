@@ -326,7 +326,8 @@ class LibeuFinApiTest {
                     "CFO"
                 )
             ) != null)
-            assert(maybeCreateAdminAccount(db, ctx)) // customer exists, this makes only the bank account.
+            // customer exists, this makes only the bank account:
+            assert(maybeCreateAdminAccount(db, ctx))
             resp = client.post("/accounts") {
                 expectSuccess = false
                 basicAuth("admin", "pass")

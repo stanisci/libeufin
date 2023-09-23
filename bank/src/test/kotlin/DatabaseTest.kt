@@ -19,6 +19,7 @@
 
 import org.junit.Test
 import tech.libeufin.bank.*
+import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.getNowUs
 import java.util.Random
 import java.util.UUID
@@ -80,13 +81,23 @@ class DatabaseTest {
     fun createAdminTest() {
         val db = initDb()
         val ctx = getTestContext()
+        // No admin accounts is expected.
         val noAdminCustomer = db.customerGetFromLogin("admin")
         assert(noAdminCustomer == null)
+        // Now creating one.
         assert(maybeCreateAdminAccount(db, ctx))
+        // Now expecting one.
         val yesAdminCustomer = db.customerGetFromLogin("admin")
         assert(yesAdminCustomer != null)
+        // Expecting also its _bank_ account.
         assert(db.bankAccountGetFromOwnerId(yesAdminCustomer!!.expectRowId()) != null)
+        // Checking idempotency.
         assert(maybeCreateAdminAccount(db, ctx))
+        // Checking that the random password blocks a login.
+        assert(!CryptoUtil.checkpw(
+            "likely-wrong",
+            yesAdminCustomer.passwordHash
+        ))
     }
 
     /**
