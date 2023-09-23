@@ -469,7 +469,11 @@ fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean 
         Random().nextBytes(pwBuf)
         val adminCustomer = Customer(
             login = "admin",
-            passwordHash = Base32Crockford.encode(pwBuf),
+            /**
+             * Hashing the password helps to avoid the "password not hashed"
+             * error, in case the admin tries to authenticate.
+             */
+            passwordHash = CryptoUtil.hashpw(String(pwBuf, Charsets.UTF_8)),
             name = "Bank administrator"
         )
         val rowId = db.customerCreate(adminCustomer)
