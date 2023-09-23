@@ -44,7 +44,7 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
         val suggestedExchange = ctx.suggestedWithdrawalExchange
         val walletCustomer = db.customerGetFromRowId(relatedBankAccount.owningCustomerId)
         if (walletCustomer == null)
-            throw internalServerError("Could not resort the username that owns this withdrawal")
+            throw internalServerError("Could not get the username that owns this withdrawal")
         val confirmUrl = getWithdrawalConfirmUrl(
             baseUrl = call.request.getBaseUrl() ?: throw internalServerError("Could not get bank own base URL."),
             wopId = wopid,
@@ -96,9 +96,9 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
         // Getting user details that MIGHT be used later.
         val confirmUrl: String? = if (!op.confirmationDone) {
             val walletBankAccount = db.bankAccountGetFromOwnerId(op.walletBankAccount)
-                ?: throw internalServerError("Could not resort the bank account owning this withdrawal")
+                ?: throw internalServerError("Could not get the bank account owning this withdrawal")
             val walletCustomer = db.customerGetFromRowId(walletBankAccount.owningCustomerId)
-                ?: throw internalServerError("Could not resort the username owning this withdrawal")
+                ?: throw internalServerError("Could not get the username owning this withdrawal")
             getWithdrawalConfirmUrl(
                 baseUrl = call.request.getBaseUrl()
                     ?: throw internalServerError("Could not get bank own base URL."),

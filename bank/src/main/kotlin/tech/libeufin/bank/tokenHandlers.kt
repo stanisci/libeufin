@@ -73,7 +73,7 @@ fun Routing.tokenHandlers(db: Database, ctx: BankApplicationContext) {
             )
         val tokenDurationUs  = req.duration?.d_us ?: TOKEN_DEFAULT_DURATION_US
         val customerDbRow = customer.dbRowId ?: throw internalServerError(
-            "Could not resort customer '${customer.login}' database row ID"
+            "Could not get customer '${customer.login}' database row ID"
         )
         val expirationTimestampUs: Long = getNowUs() + tokenDurationUs
         if (expirationTimestampUs < tokenDurationUs)

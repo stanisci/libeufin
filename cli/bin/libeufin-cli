@@ -1896,8 +1896,6 @@ def password_reconfig(obj, username):
 )
 @click.pass_obj
 def circuit_cashout(obj, subject, amount_debit, amount_credit, tan_channel):
-    # (not) resorting auth credentials, if they're None, request fails at the server.
-    # Craft the request.  
     req = dict(
         amount_debit=amount_debit,
         amount_credit=amount_credit
