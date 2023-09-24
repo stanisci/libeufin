@@ -23,17 +23,20 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
-import java.io.Serial
 import java.util.*
 
-// Allowed lengths for fractional digits in amounts.
+/**
+ * Allowed lengths for fractional digits in amounts.
+ */
 enum class FracDigits(howMany: Int) {
     TWO(2),
     EIGHT(8)
 }
 
 
-// It contains the number of microseconds since the Epoch.
+/**
+ * Timestamp containing the number of seconds since epoch.
+ */
 @Serializable
 data class Timestamp(
     val t_s: Long // FIXME (?): not supporting "never" at the moment.
@@ -86,9 +89,10 @@ data class RegisterAccountRequest(
     val internal_payto_uri: String? = null
 )
 
-/* Internal representation of relative times.  The
-* "forever" case is represented with Long.MAX_VALUE.
-*/
+/**
+ * Internal representation of relative times.  The
+ * "forever" case is represented with Long.MAX_VALUE.
+ */
 data class RelativeTime(
     val d_us: Long
 )
@@ -341,19 +345,30 @@ data class Config(
     val fiat_currency: String? = null
 )
 
-// GET /accounts/$USERNAME response.
+@Serializable
+data class Balance(
+    // FIXME: Should not be a string
+    val amount: String,
+    // FIXME: Should not be a string
+    val credit_debit_indicator: String,
+)
+
+/**
+ * GET /accounts/$USERNAME response.
+ */
 @Serializable
 data class AccountData(
     val name: String,
-    val balance: String,
+    val balance: Balance,
     val payto_uri: String,
     val debit_threshold: String,
     val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: String? = null,
-    val has_debit: Boolean
 )
 
-// Type of POST /transactions
+/**
+ * Response type of corebank API transaction initiation.
+ */
 @Serializable
 data class BankAccountTransactionCreate(
     val payto_uri: String,
@@ -457,7 +472,9 @@ data class TalerIntegrationConfigResponse(
     val currency: String
 )
 
-// Withdrawal status as spec'd in the Taler Integration API.
+/**
+ * Withdrawal status as specified in the Taler Integration API.
+ */
 @Serializable
 data class BankWithdrawalOperationStatus(
     // Indicates whether the withdrawal was aborted.
@@ -493,7 +510,9 @@ data class BankWithdrawalOperationStatus(
     val wire_types: MutableList<String> = mutableListOf("iban")
 )
 
-// Selection request on a Taler withdrawal.
+/**
+ * Selection request on a Taler withdrawal.
+ */
 @Serializable
 data class BankWithdrawalOperationPostRequest(
     val reserve_pub: String,
@@ -521,7 +540,9 @@ data class AddIncomingRequest(
     val debit_account: String
 )
 
-// Response to /admin/add-incoming
+/**
+ * Response to /admin/add-incoming
+ */
 @Serializable
 data class AddIncomingResponse(
     val timestamp: Long,
@@ -535,14 +556,18 @@ data class TWGConfigResponse(
     val currency: String
 )
 
-// Response of a TWG /history/incoming call.
+/**
+ * Response of a TWG /history/incoming call.
+ */
 @Serializable
 data class IncomingHistory(
     val incoming_transactions: MutableList<IncomingReserveTransaction> = mutableListOf(),
     val credit_account: String // Receiver's Payto URI.
 )
 
-// TWG's incoming payment record.
+/**
+ * TWG's incoming payment record.
+ */
 @Serializable
 data class IncomingReserveTransaction(
     val type: String = "RESERVE",
@@ -553,7 +578,9 @@ data class IncomingReserveTransaction(
     val reserve_pub: String
 )
 
-// TWG's request to pay a merchant.
+/**
+ * TWG's request to pay a merchant.
+ */
 @Serializable
 data class TransferRequest(
     val request_uid: String,
@@ -564,7 +591,9 @@ data class TransferRequest(
     val credit_account: String
 )
 
-// TWG's response to merchant payouts
+/**
+ * TWG's response to merchant payouts
+ */
 @Serializable
 data class TransferResponse(
     val timestamp: Long,

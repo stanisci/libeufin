@@ -3,9 +3,7 @@ package tech.libeufin.util
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
-import io.ktor.server.response.*
 import io.ktor.server.util.*
-import io.ktor.util.*
 import logger
 
 // Get the base URL of a request, returns null if any problem occurs.
@@ -22,13 +20,13 @@ fun ApplicationRequest.getBaseUrl(): String? {
             prefix += "/"
         URLBuilder(
             protocol = URLProtocol(
-                name = this.headers.get("X-Forwarded-Proto") ?: run {
+                name = this.headers["X-Forwarded-Proto"] ?: run {
                     logger.error("Reverse proxy did not define X-Forwarded-Proto")
                     return null
                 },
                 defaultPort = -1 // Port must be specified with X-Forwarded-Host.
             ),
-            host = this.headers.get("X-Forwarded-Host") ?: run {
+            host = this.headers["X-Forwarded-Host"] ?: run {
                 logger.error("Reverse proxy did not define X-Forwarded-Host")
                 return null
             }
@@ -46,10 +44,6 @@ fun ApplicationRequest.getBaseUrl(): String? {
     }
 }
 
-/**
- * Get the URI (path's) component or throw Internal server error.
- * @param component the name of the URI component to return.
- */
 fun ApplicationCall.maybeUriComponent(name: String): String? {
     val ret: String? = this.parameters[name]
     if (ret == null) {
@@ -77,6 +71,7 @@ data class AuthorizationDetails(
     val scheme: String,
     val content: String
 )
+
 // Returns the authorization scheme mentioned in the Auth header,
 // or null if that could not be found.
 fun getAuthorizationDetails(authorizationHeader: String): AuthorizationDetails? {

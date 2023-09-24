@@ -20,7 +20,6 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
-import io.ktor.http.cio.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.request.*
@@ -30,10 +29,8 @@ import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
-import java.lang.NumberFormatException
 import java.net.URL
 import java.util.*
-import kotlin.system.exitProcess
 
 const val FRACTION_BASE = 100000000
 
@@ -41,23 +38,20 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers
 
 fun ApplicationCall.expectUriComponent(componentName: String) =
     this.maybeUriComponent(componentName) ?: throw badRequest(
-        hint = "No username found in the URI",
-        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
-)
+        hint = "No username found in the URI", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
+    )
+
 // Get the auth token (stripped of the bearer-token:-prefix)
 // IF the call was authenticated with it.
 fun ApplicationCall.getAuthToken(): String? {
     val h = getAuthorizationRawHeader(this.request) ?: return null
     val authDetails = getAuthorizationDetails(h) ?: throw badRequest(
-        "Authorization header is malformed.",
+        "Authorization header is malformed.", TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+    )
+    if (authDetails.scheme == "Bearer") return splitBearerToken(authDetails.content) ?: throw throw badRequest(
+        "Authorization header is malformed (could not strip the prefix from Bearer token).",
         TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
     )
-    if (authDetails.scheme == "Bearer")
-        return splitBearerToken(authDetails.content) ?: throw
-        throw badRequest(
-            "Authorization header is malformed (could not strip the prefix from Bearer token).",
-            TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
-        )
     return null // Not a Bearer token case.
 }
 
@@ -76,14 +70,12 @@ fun doBasicAuth(db: Database, encodedCredentials: String): Customer? {
          */
         limit = 2
     )
-    if (userAndPassSplit.size != 2)
-        throw LibeufinBankException(
-            httpStatus = HttpStatusCode.BadRequest,
-            talerError = TalerError(
-                code = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED.code,
-                "Malformed Basic auth credentials found in the Authorization header."
-            )
+    if (userAndPassSplit.size != 2) throw LibeufinBankException(
+        httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
+            code = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED.code,
+            "Malformed Basic auth credentials found in the Authorization header."
         )
+    )
     val login = userAndPassSplit[0]
     val plainPassword = userAndPassSplit[1]
     val maybeCustomer = db.customerGetFromLogin(login) ?: throw unauthorized()
@@ -111,15 +103,13 @@ fun doTokenAuth(
     requiredScope: TokenScope,
 ): Customer? {
     val bareToken = splitBearerToken(token) ?: throw badRequest(
-        "Bearer token malformed",
-        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+        "Bearer token malformed", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
     )
     val tokenBytes = try {
         Base32Crockford.decode(bareToken)
     } catch (e: Exception) {
         throw badRequest(
-            e.message,
-            TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+            e.message, TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
         )
     }
     val maybeToken: BearerToken? = db.bearerTokenGet(tokenBytes)
@@ -140,87 +130,67 @@ fun doTokenAuth(
         return null
     }
     // Getting the related username.
-    return db.customerGetFromRowId(maybeToken.bankCustomer)
-        ?: throw LibeufinBankException(
-            httpStatus = HttpStatusCode.InternalServerError,
-            talerError = TalerError(
-                code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
-                hint = "Customer not found, despite token mentions it.",
-            ))
+    return db.customerGetFromRowId(maybeToken.bankCustomer) ?: throw LibeufinBankException(
+        httpStatus = HttpStatusCode.InternalServerError, talerError = TalerError(
+            code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
+            hint = "Customer not found, despite token mentions it.",
+        )
+    )
 }
 
 fun forbidden(
     hint: String = "No rights on the resource",
     // FIXME: create a 'generic forbidden' Taler EC.
     talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_END
-): LibeufinBankException =
-    LibeufinBankException(
-        httpStatus = HttpStatusCode.Forbidden,
-        talerError = TalerError(
-            code = talerErrorCode.code,
-            hint = hint
-        )
+): LibeufinBankException = LibeufinBankException(
+    httpStatus = HttpStatusCode.Forbidden, talerError = TalerError(
+        code = talerErrorCode.code, hint = hint
     )
+)
 
-fun unauthorized(hint: String = "Login failed"): LibeufinBankException =
-    LibeufinBankException(
-        httpStatus = HttpStatusCode.Unauthorized,
-        talerError = TalerError(
-            code = TalerErrorCode.TALER_EC_BANK_LOGIN_FAILED.code,
-            hint = hint
-        )
+fun unauthorized(hint: String = "Login failed"): LibeufinBankException = LibeufinBankException(
+    httpStatus = HttpStatusCode.Unauthorized, talerError = TalerError(
+        code = TalerErrorCode.TALER_EC_BANK_LOGIN_FAILED.code, hint = hint
     )
-fun internalServerError(hint: String?): LibeufinBankException =
-    LibeufinBankException(
-        httpStatus = HttpStatusCode.InternalServerError,
-        talerError = TalerError(
-            code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
-            hint = hint
-        )
+)
+
+fun internalServerError(hint: String?): LibeufinBankException = LibeufinBankException(
+    httpStatus = HttpStatusCode.InternalServerError, talerError = TalerError(
+        code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code, hint = hint
     )
+)
 
 
 fun notFound(
-    hint: String?,
-    talerEc: TalerErrorCode
-): LibeufinBankException =
-    LibeufinBankException(
-        httpStatus = HttpStatusCode.NotFound,
-        talerError = TalerError(
-            code = talerEc.code,
-            hint = hint
-        )
+    hint: String?, talerEc: TalerErrorCode
+): LibeufinBankException = LibeufinBankException(
+    httpStatus = HttpStatusCode.NotFound, talerError = TalerError(
+        code = talerEc.code, hint = hint
     )
+)
 
 fun conflict(
-    hint: String?,
-    talerEc: TalerErrorCode
-): LibeufinBankException =
-    LibeufinBankException(
-        httpStatus = HttpStatusCode.Conflict,
-        talerError = TalerError(
-            code = talerEc.code,
-            hint = hint
-        )
+    hint: String?, talerEc: TalerErrorCode
+): LibeufinBankException = LibeufinBankException(
+    httpStatus = HttpStatusCode.Conflict, talerError = TalerError(
+        code = talerEc.code, hint = hint
     )
+)
+
 fun badRequest(
-    hint: String? = null,
-    talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
-): LibeufinBankException =
-    LibeufinBankException(
-        httpStatus = HttpStatusCode.BadRequest,
-        talerError = TalerError(
-            code = talerErrorCode.code,
-            hint = hint
-        )
+    hint: String? = null, talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
+): LibeufinBankException = LibeufinBankException(
+    httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
+        code = talerErrorCode.code, hint = hint
     )
+)
+
 // Generates a new Payto-URI with IBAN scheme.
 fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
 
 // Parses Taler amount, returning null if the input is invalid.
 fun parseTalerAmount2(
-    amount: String,
-    fracDigits: FracDigits
+    amount: String, fracDigits: FracDigits
 ): TalerAmount? {
     val format = when (fracDigits) {
         FracDigits.TWO -> "^([A-Z]+):([0-9]+)(\\.[0-9][0-9]?)?$"
@@ -246,11 +216,10 @@ fun parseTalerAmount2(
         return null
     }
     return TalerAmount(
-        value = value,
-        frac = fraction,
-        currency = match.destructured.component1()
+        value = value, frac = fraction, currency = match.destructured.component1()
     )
 }
+
 /**
  * This helper takes the serialized version of a Taler Amount
  * type and parses it into Libeufin's internal representation.
@@ -260,16 +229,13 @@ fun parseTalerAmount2(
  * responded to the client.
  */
 fun parseTalerAmount(
-    amount: String,
-    fracDigits: FracDigits = FracDigits.EIGHT
+    amount: String, fracDigits: FracDigits = FracDigits.EIGHT
 ): TalerAmount {
-    val maybeAmount = parseTalerAmount2(amount, fracDigits)
-        ?: throw LibeufinBankException(
-            httpStatus = HttpStatusCode.BadRequest,
-            talerError = TalerError(
-                code = TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT.code,
-                hint = "Invalid amount: $amount"
-            ))
+    val maybeAmount = parseTalerAmount2(amount, fracDigits) ?: throw LibeufinBankException(
+        httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
+            code = TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT.code, hint = "Invalid amount: $amount"
+        )
+    )
     return maybeAmount
 }
 
@@ -278,9 +244,7 @@ private fun normalizeAmount(amt: TalerAmount): TalerAmount {
         val normalValue = amt.value + (amt.frac / FRACTION_BASE)
         val normalFrac = amt.frac % FRACTION_BASE
         return TalerAmount(
-            value = normalValue,
-            frac = normalFrac,
-            currency = amt.currency
+            value = normalValue, frac = normalFrac, currency = amt.currency
         )
     }
     return amt
@@ -289,22 +253,19 @@ private fun normalizeAmount(amt: TalerAmount): TalerAmount {
 
 // Adds two amounts and returns the normalized version.
 private fun amountAdd(first: TalerAmount, second: TalerAmount): TalerAmount {
-    if (first.currency != second.currency)
-        throw badRequest(
-            "Currency mismatch, balance '${first.currency}', price '${second.currency}'",
-            TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-        )
+    if (first.currency != second.currency) throw badRequest(
+        "Currency mismatch, balance '${first.currency}', price '${second.currency}'",
+        TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+    )
     val valueAdd = first.value + second.value
-    if (valueAdd < first.value)
-        throw badRequest("Amount value overflowed")
+    if (valueAdd < first.value) throw badRequest("Amount value overflowed")
     val fracAdd = first.frac + second.frac
-    if (fracAdd < first.frac)
-        throw badRequest("Amount fraction overflowed")
-    return normalizeAmount(TalerAmount(
-        value = valueAdd,
-        frac = fracAdd,
-        currency = first.currency
-    ))
+    if (fracAdd < first.frac) throw badRequest("Amount fraction overflowed")
+    return normalizeAmount(
+        TalerAmount(
+            value = valueAdd, frac = fracAdd, currency = first.currency
+        )
+    )
 }
 
 /**
@@ -315,20 +276,13 @@ private fun amountAdd(first: TalerAmount, second: TalerAmount): TalerAmount {
  * the database.
  */
 fun isBalanceEnough(
-    balance: TalerAmount,
-    due: TalerAmount,
-    maxDebt: TalerAmount,
-    hasBalanceDebt: Boolean
+    balance: TalerAmount, due: TalerAmount, maxDebt: TalerAmount, hasBalanceDebt: Boolean
 ): Boolean {
     val normalMaxDebt = normalizeAmount(maxDebt) // Very unlikely to be needed.
     if (hasBalanceDebt) {
         val chargedBalance = amountAdd(balance, due)
         if (chargedBalance.value > normalMaxDebt.value) return false // max debt surpassed
-        if (
-            (chargedBalance.value == normalMaxDebt.value) &&
-            (chargedBalance.frac > maxDebt.frac)
-            )
-            return false
+        if ((chargedBalance.value == normalMaxDebt.value) && (chargedBalance.frac > maxDebt.frac)) return false
         return true
     }
     /**
@@ -336,19 +290,17 @@ fun isBalanceEnough(
      * block calculates how much debt the balance would get, should a
      * subtraction of 'due' occur.
      */
-    if (balance.currency != due.currency)
-        throw badRequest(
-            "Currency mismatch, balance '${balance.currency}', due '${due.currency}'",
-            TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-        )
+    if (balance.currency != due.currency) throw badRequest(
+        "Currency mismatch, balance '${balance.currency}', due '${due.currency}'",
+        TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+    )
     val valueDiff = if (balance.value < due.value) due.value - balance.value else 0L
     val fracDiff = if (balance.frac < due.frac) due.frac - balance.frac else 0
     // Getting the normalized version of such diff.
     val normalDiff = normalizeAmount(TalerAmount(valueDiff, fracDiff, balance.currency))
     // Failing if the normalized diff surpasses the max debt.
     if (normalDiff.value > normalMaxDebt.value) return false
-    if ((normalDiff.value == normalMaxDebt.value) &&
-        (normalDiff.frac > normalMaxDebt.frac)) return false
+    if ((normalDiff.value == normalMaxDebt.value) && (normalDiff.frac > normalMaxDebt.frac)) return false
     return true
 }
 
@@ -360,47 +312,41 @@ fun isBalanceEnough(
  *
  *      https://$BANK_URL/taler-integration
  */
-fun getTalerWithdrawUri(baseUrl: String, woId: String) =
-    url {
-        val baseUrlObj = URL(baseUrl)
-        protocol = URLProtocol(
-            name = "taler".plus(if (baseUrlObj.protocol.lowercase() == "http") "+http" else ""),
-            defaultPort = -1
+fun getTalerWithdrawUri(baseUrl: String, woId: String) = url {
+    val baseUrlObj = URL(baseUrl)
+    protocol = URLProtocol(
+        name = "taler".plus(if (baseUrlObj.protocol.lowercase() == "http") "+http" else ""), defaultPort = -1
+    )
+    host = "withdraw"
+    val pathSegments = mutableListOf(
+        // adds the hostname(+port) of the actual bank that will serve the withdrawal request.
+        baseUrlObj.host.plus(
+            if (baseUrlObj.port != -1) ":${baseUrlObj.port}"
+            else ""
         )
-        host = "withdraw"
-        val pathSegments = mutableListOf(
-            // adds the hostname(+port) of the actual bank that will serve the withdrawal request.
-            baseUrlObj.host.plus(
-                if (baseUrlObj.port != -1)
-                    ":${baseUrlObj.port}"
-                else ""
-            )
-        )
-        // Removing potential double slashes.
-        baseUrlObj.path.split("/").forEach {
-            if (it.isNotEmpty()) pathSegments.add(it)
-        }
-        pathSegments.add("taler-integration/${woId}")
-        this.appendPathSegments(pathSegments)
+    )
+    // Removing potential double slashes.
+    baseUrlObj.path.split("/").forEach {
+        if (it.isNotEmpty()) pathSegments.add(it)
     }
+    pathSegments.add("taler-integration/${woId}")
+    this.appendPathSegments(pathSegments)
+}
 
 // Builds a withdrawal confirm URL.
 fun getWithdrawalConfirmUrl(
-    baseUrl: String,
-    wopId: String,
-    username: String
-    ) =
-    url {
-        val baseUrlObj = URL(baseUrl)
-        protocol = URLProtocol(name = baseUrlObj.protocol, defaultPort = -1)
-        host = baseUrlObj.host
-        // Removing potential double slashes:
-        baseUrlObj.path.split("/").forEach {
-            this.appendPathSegments(it)
-        }
-        // Completing the endpoint:
-        this.appendPathSegments("accounts/${username}/withdrawals/${wopId}/confirm")
+    baseUrl: String, wopId: String, username: String
+) = url {
+    val baseUrlObj = URL(baseUrl)
+    protocol = URLProtocol(name = baseUrlObj.protocol, defaultPort = -1)
+    host = baseUrlObj.host
+    // Removing potential double slashes:
+    baseUrlObj.path.split("/").forEach {
+        this.appendPathSegments(it)
     }
+    // Completing the endpoint:
+    this.appendPathSegments("accounts/${username}/withdrawals/${wopId}/confirm")
+}
 
 
 /**
@@ -417,24 +363,23 @@ fun getWithdrawal(db: Database, opIdParam: String): TalerWithdrawalOperation {
         logger.error(e.message)
         throw badRequest("withdrawal_id query parameter was malformed")
     }
-    val op = db.talerWithdrawalGet(opId)
-        ?: throw notFound(
-            hint = "Withdrawal operation $opIdParam not found",
-            talerEc = TalerErrorCode.TALER_EC_END
-        )
+    val op = db.talerWithdrawalGet(opId) ?: throw notFound(
+        hint = "Withdrawal operation $opIdParam not found", talerEc = TalerErrorCode.TALER_EC_END
+    )
     return op
 }
 
 data class HistoryParams(
-    val delta: Long,
-    val start: Long
+    val delta: Long, val start: Long
 )
+
 /**
  * Extracts the query parameters from "history-like" endpoints,
  * providing the defaults according to the API specification.
  */
 fun getHistoryParams(req: ApplicationRequest): HistoryParams {
-    val deltaParam: String = req.queryParameters["delta"] ?: throw MissingRequestParameterException(parameterName = "delta")
+    val deltaParam: String =
+        req.queryParameters["delta"] ?: throw MissingRequestParameterException(parameterName = "delta")
     val delta: Long = try {
         deltaParam.toLong()
     } catch (e: Exception) {
@@ -473,8 +418,7 @@ fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean 
              * Hashing the password helps to avoid the "password not hashed"
              * error, in case the admin tries to authenticate.
              */
-            passwordHash = CryptoUtil.hashpw(String(pwBuf, Charsets.UTF_8)),
-            name = "Bank administrator"
+            passwordHash = CryptoUtil.hashpw(String(pwBuf, Charsets.UTF_8)), name = "Bank administrator"
         )
         val rowId = db.customerCreate(adminCustomer)
         if (rowId == null) {
@@ -482,9 +426,7 @@ fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean 
             return false
         }
         rowId
-    }
-    else
-        maybeAdminCustomer.expectRowId()
+    } else maybeAdminCustomer.expectRowId()
     val maybeAdminBankAccount = db.bankAccountGetFromOwnerId(adminCustomerId)
     if (maybeAdminBankAccount == null) {
         logger.info("Creating admin bank account")
