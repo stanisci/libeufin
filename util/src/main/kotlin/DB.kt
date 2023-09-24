@@ -267,11 +267,22 @@ fun connectWithSchema(jdbcConn: String, schemaName: String? = null) {
 }
 
 /**
- * This function converts a postgresql://-URI to a JDBC one.
- * It is only needed because JDBC strings based on Unix domain
- * sockets need individual intervention.
+ * This function converts postgresql:// URIs to JDBC URIs.
+ *
+ * URIs that are already jdbc: URIs are passed through.
+ *
+ * This avoids the user having to create complex JDBC URIs for postgres connections.
+ * They are especially complex when using unix domain sockets, as they're not really
+ * supported natively by JDBC.
  */
 fun getJdbcConnectionFromPg(pgConn: String): String {
+    if (pgConn.startsWith("postgres://")) {
+        throw Exception("only the postgresql:// URI scheme is supported, not postgres://")
+    }
+    // Pass through jdbc URIs.
+    if (pgConn.startsWith("jdbc:")) {
+        return pgConn
+    }
     if (!pgConn.startsWith("postgresql://") && !pgConn.startsWith("postgres://")) {
         logger.info("Not a Postgres connection string: $pgConn")
         throw Exception("Not a Postgres connection string: $pgConn")
