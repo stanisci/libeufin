@@ -311,9 +311,6 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
             return@get
         }
         this.accountsMgmtHandlers(db, ctx)
-        this.tokenHandlers(db, ctx)
-        this.transactionsHandlers(db, ctx)
-        this.talerWebHandlers(db)
         this.talerIntegrationHandlers(db, ctx)
         this.talerWireGatewayHandlers(db, ctx)
     }
