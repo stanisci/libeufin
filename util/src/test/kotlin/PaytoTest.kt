@@ -1,5 +1,5 @@
 import org.junit.Test
-import tech.libeufin.util.Payto
+import tech.libeufin.util.IbanPayto
 import tech.libeufin.util.parsePayto
 
 class PaytoTest {
@@ -13,7 +13,7 @@ class PaytoTest {
 
     @Test
     fun parsePaytoTest() {
-        val withBic: Payto = parsePayto("payto://iban/BIC123/IBAN123?receiver-name=The%20Name")!!
+        val withBic: IbanPayto = parsePayto("payto://iban/BIC123/IBAN123?receiver-name=The%20Name")!!
         assert(withBic.iban == "IBAN123")
         assert(withBic.bic == "BIC123")
         assert(withBic.receiverName == "The Name")

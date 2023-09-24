@@ -56,13 +56,15 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         }
         val resp = IncomingHistory(credit_account = bankAccount.internalPaytoUri)
         history.forEach {
-            resp.incoming_transactions.add(IncomingReserveTransaction(
-                row_id = it.expectRowId(),
-                amount = it.amount.toString(),
-                date = it.transactionDate,
-                debit_account = it.debtorPaytoUri,
-                reserve_pub = it.subject
-            ))
+            resp.incoming_transactions.add(
+                IncomingReserveTransaction(
+                    row_id = it.expectRowId(),
+                    amount = it.amount.toString(),
+                    date = TalerProtocolTimestamp.fromMicroseconds(it.transactionDate),
+                    debit_account = it.debtorPaytoUri,
+                    reserve_pub = it.subject
+                )
+            )
         }
         call.respond(resp)
         return@get
@@ -81,10 +83,12 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                         && maybeDoneAlready.exchangeBaseUrl == req.exchange_base_url
                         && maybeDoneAlready.wtid == req.wtid
             if (isIdempotent) {
-                call.respond(TransferResponse(
-                    timestamp = maybeDoneAlready.timestamp,
-                    row_id = maybeDoneAlready.debitTxRowId
-                ))
+                call.respond(
+                    TransferResponse(
+                        timestamp = TalerProtocolTimestamp.fromMicroseconds(maybeDoneAlready.timestamp),
+                        row_id = maybeDoneAlready.debitTxRowId
+                    )
+                )
                 return@post
             }
             throw conflict(
@@ -116,10 +120,12 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             )
         val debitRowId = dbRes.txRowId
             ?: throw internalServerError("Database did not return the debit tx row ID")
-        call.respond(TransferResponse(
-            timestamp = transferTimestamp,
-            row_id = debitRowId
-        ))
+        call.respond(
+            TransferResponse(
+                timestamp = TalerProtocolTimestamp.fromMicroseconds(transferTimestamp),
+                row_id = debitRowId
+            )
+        )
         return@post
     }
 
@@ -169,8 +175,9 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         call.respond(
             AddIncomingResponse(
                 row_id = rowId,
-                timestamp = txTimestamp
-        ))
+                timestamp = TalerProtocolTimestamp.fromMicroseconds(txTimestamp)
+            )
+        )
         return@post
     }
 }

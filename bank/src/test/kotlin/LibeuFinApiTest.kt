@@ -291,6 +291,46 @@ class LibeuFinApiTest {
     }
 
     /**
+     * Testing the account creation and its idempotency
+     */
+    @Test
+    fun createTwoAccountsTest() {
+        testApplication {
+            val db = initDb()
+            val ctx = getTestContext()
+            val ibanPayto = genIbanPaytoUri()
+            application {
+                corebankWebApp(db, ctx)
+            }
+            var resp = client.post("/accounts") {
+                expectSuccess = false
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """{
+                    "username": "foo",
+                    "password": "bar",
+                    "name": "Jane"
+                }""".trimIndent()
+                )
+            }
+            assert(resp.status == HttpStatusCode.Created)
+            // Test creating another account.
+            resp = client.post("/accounts") {
+                expectSuccess = false
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """{
+                    "username": "joe",
+                    "password": "bar",
+                    "name": "Joe"
+                }""".trimIndent()
+                )
+            }
+            assert(resp.status == HttpStatusCode.Created)
+        }
+    }
+
+    /**
      * Test admin-only account creation
      */
     @Test

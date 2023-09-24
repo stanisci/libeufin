@@ -1,13 +1,12 @@
 package tech.libeufin.util
 
-import io.ktor.http.*
 import logger
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 
 // Payto information.
-data class Payto(
+data class IbanPayto(
     // represent query param "sender-name" or "receiver-name".
     val receiverName: String?,
     val iban: String,
@@ -27,7 +26,7 @@ private fun getQueryParamOrNull(name: String, params: List<Pair<String, String>>
 }
 
 // Parses a Payto URI, returning null if the input is invalid.
-fun parsePayto(payto: String): Payto? {
+fun parsePayto(payto: String): IbanPayto? {
     /**
      * This check is due because URIs having a "payto:" prefix without
      * slashes are correctly parsed by the Java 'URI' class.  'mailto'
@@ -74,7 +73,7 @@ fun parsePayto(payto: String): Payto? {
         }
     } else null
 
-    return Payto(
+    return IbanPayto(
         iban = iban,
         bic = bic,
         amount = getQueryParamOrNull("amount", params),
@@ -96,4 +95,17 @@ fun buildIbanPaytoUri(
         return "$ret&message=$messageUrlEnc"
     }
     return ret
+}
+
+/**
+ * Strip a payto://iban URI of everything
+ * except the IBAN.
+ */
+fun stripIbanPayto(paytoUri: String): String {
+    val parsedPayto = parsePayto(paytoUri)
+    if (parsedPayto == null) {
+        throw Error("invalid payto://iban URI")
+    }
+    val canonIban = parsedPayto.iban.lowercase()
+    return "payto://iban/${canonIban}"
 }

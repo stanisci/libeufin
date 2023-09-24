@@ -24,6 +24,7 @@ import io.ktor.server.application.*
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 import java.util.*
+import kotlin.reflect.jvm.internal.impl.types.AbstractStubType
 
 /**
  * Allowed lengths for fractional digits in amounts.
@@ -38,9 +39,15 @@ enum class FracDigits(howMany: Int) {
  * Timestamp containing the number of seconds since epoch.
  */
 @Serializable
-data class Timestamp(
-    val t_s: Long // FIXME (?): not supporting "never" at the moment.
-)
+data class TalerProtocolTimestamp(
+    val t_s: Long, // FIXME (?): not supporting "never" at the moment.
+) {
+    companion object {
+        fun fromMicroseconds(uSec: Long): TalerProtocolTimestamp {
+            return TalerProtocolTimestamp(uSec / 1000000)
+        }
+    }
+}
 
 /**
  * HTTP response type of successful token refresh.
@@ -51,7 +58,7 @@ data class Timestamp(
 @Serializable
 data class TokenSuccessResponse(
     val access_token: String,
-    val expiration: Timestamp
+    val expiration: TalerProtocolTimestamp
 )
 
 /**
@@ -545,7 +552,7 @@ data class AddIncomingRequest(
  */
 @Serializable
 data class AddIncomingResponse(
-    val timestamp: Long,
+    val timestamp: TalerProtocolTimestamp,
     val row_id: Long
 )
 
@@ -572,7 +579,7 @@ data class IncomingHistory(
 data class IncomingReserveTransaction(
     val type: String = "RESERVE",
     val row_id: Long, // DB row ID of the payment.
-    val date: Long, // microseconds timestamp.
+    val date: TalerProtocolTimestamp,
     val amount: String,
     val debit_account: String, // Payto of the sender.
     val reserve_pub: String
@@ -596,6 +603,6 @@ data class TransferRequest(
  */
 @Serializable
 data class TransferResponse(
-    val timestamp: Long,
+    val timestamp: TalerProtocolTimestamp,
     val row_id: Long
 )

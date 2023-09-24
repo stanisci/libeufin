@@ -27,20 +27,19 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.getBaseUrl
+import tech.libeufin.util.stripIbanPayto
 
 fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) {
     get("/taler-integration/config") {
         val internalCurrency: String = ctx.currency
         call.respond(TalerIntegrationConfigResponse(currency = internalCurrency))
         return@get
-    }
-    // Note: wopid acts as an authentication token.
+    } // Note: wopid acts as an authentication token.
     get("/taler-integration/withdrawal-operation/{wopid}") {
         val wopid = call.expectUriComponent("wopid")
         val op = getWithdrawal(db, wopid) // throws 404 if not found.
         val relatedBankAccount = db.bankAccountGetFromOwnerId(op.walletBankAccount)
-        if (relatedBankAccount == null)
-            throw internalServerError("Bank has a withdrawal not related to any bank account.")
+        if (relatedBankAccount == null) throw internalServerError("Bank has a withdrawal not related to any bank account.")
         val suggestedExchange = ctx.suggestedWithdrawalExchange
         val walletCustomer = db.customerGetFromRowId(relatedBankAccount.owningCustomerId)
         if (walletCustomer == null)
@@ -65,31 +64,23 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
         val wopid = call.expectUriComponent("wopid")
         val req = call.receive<BankWithdrawalOperationPostRequest>()
         val op = getWithdrawal(db, wopid) // throws 404 if not found.
-        if (op.selectionDone) {
-            // idempotency
-            if (op.selectedExchangePayto != req.selected_exchange &&
-                op.reservePub != req.reserve_pub)
-                throw conflict(
-                    hint = "Cannot select different exchange and reserve pub. under the same withdrawal operation",
-                    talerEc = TalerErrorCode.TALER_EC_BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT
-                )
-        }
-        val dbSuccess: Boolean = if (!op.selectionDone) {
-            // Check if reserve pub. was used in _another_ withdrawal.
-            if (db.bankTransactionCheckExists(req.reserve_pub) != null)
-                throw conflict(
-                    "Reserve pub. already used",
-                    TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
-                )
-            val exchangePayto = req.selected_exchange
-            db.talerWithdrawalSetDetails(
-                op.withdrawalUuid,
-                exchangePayto,
-                req.reserve_pub
+        if (op.selectionDone) { // idempotency
+            if (op.selectedExchangePayto != req.selected_exchange && op.reservePub != req.reserve_pub) throw conflict(
+                hint = "Cannot select different exchange and reserve pub. under the same withdrawal operation",
+                talerEc = TalerErrorCode.TALER_EC_BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT
             )
         }
-        else // DB succeeded in the past.
+        val dbSuccess: Boolean = if (!op.selectionDone) { // Check if reserve pub. was used in _another_ withdrawal.
+            if (db.bankTransactionCheckExists(req.reserve_pub) != null) throw conflict(
+                "Reserve pub. already used", TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
+            )
+            val exchangePayto = stripIbanPayto(req.selected_exchange)
+            db.talerWithdrawalSetDetails(
+                op.withdrawalUuid, exchangePayto, req.reserve_pub
+            )
+        } else { // Nothing to do in the database, i.e. we were successful
             true
+        }
         if (!dbSuccess)
             // Whatever the problem, the bank missed it: respond 500.
             throw internalServerError("Bank failed at selecting the withdrawal.")
@@ -99,12 +90,9 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
                 baseUrl = ctx.spaCaptchaURL,
                 wopId = wopid
             )
-        }
-        else
-            null
+        } else null
         val resp = BankWithdrawalOperationPostResponse(
-            transfer_done = op.confirmationDone,
-            confirm_transfer_url = confirmUrl
+            transfer_done = op.confirmationDone, confirm_transfer_url = confirmUrl
         )
         call.respond(resp)
         return@post
