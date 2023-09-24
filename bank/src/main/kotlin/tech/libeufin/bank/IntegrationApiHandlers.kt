@@ -26,7 +26,6 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
-import tech.libeufin.util.getBaseUrl
 import tech.libeufin.util.stripIbanPayto
 
 fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) {
@@ -44,20 +43,22 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
         val walletCustomer = db.customerGetFromRowId(relatedBankAccount.owningCustomerId)
         if (walletCustomer == null)
             throw internalServerError("Could not get the username that owns this withdrawal")
-        val confirmUrl = if (ctx.spaCaptchaURL == null) null else 
-          getWithdrawalConfirmUrl(
-            baseUrl = ctx.spaCaptchaURL,
-            wopId = wopid
-          )
-        call.respond(BankWithdrawalOperationStatus(
-            aborted = op.aborted,
-            selection_done = op.selectionDone,
-            transfer_done = op.confirmationDone,
-            amount = op.amount.toString(),
-            sender_wire = relatedBankAccount.internalPaytoUri,
-            suggested_exchange = suggestedExchange,
-            confirm_transfer_url = confirmUrl
-        ))
+        val confirmUrl = if (ctx.spaCaptchaURL == null) null else
+            getWithdrawalConfirmUrl(
+                baseUrl = ctx.spaCaptchaURL,
+                wopId = wopid
+            )
+        call.respond(
+            BankWithdrawalOperationStatus(
+                aborted = op.aborted,
+                selection_done = op.selectionDone,
+                transfer_done = op.confirmationDone,
+                amount = op.amount.toString(),
+                sender_wire = relatedBankAccount.internalPaytoUri,
+                suggested_exchange = suggestedExchange,
+                confirm_transfer_url = confirmUrl
+            )
+        )
         return@get
     }
     post("/taler-integration/withdrawal-operation/{wopid}") {
@@ -82,7 +83,7 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
             true
         }
         if (!dbSuccess)
-            // Whatever the problem, the bank missed it: respond 500.
+        // Whatever the problem, the bank missed it: respond 500.
             throw internalServerError("Bank failed at selecting the withdrawal.")
         // Getting user details that MIGHT be used later.
         val confirmUrl: String? = if (ctx.spaCaptchaURL !== null && !op.confirmationDone) {
