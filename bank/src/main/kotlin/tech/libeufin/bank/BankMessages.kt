@@ -468,7 +468,7 @@ enum class WithdrawalConfirmationResult {
 @Serializable
 data class TalerIntegrationConfigResponse(
     val name: String = "taler-bank-integration",
-    val version: String = "0:0:0:",
+    val version: String = "0:0:0",
     val currency: String
 )
 
@@ -552,7 +552,7 @@ data class AddIncomingResponse(
 @Serializable
 data class TWGConfigResponse(
     val name: String = "taler-wire-gateway",
-    val version: String = "0:0:0:",
+    val version: String = "0:0:0",
     val currency: String
 )
 
