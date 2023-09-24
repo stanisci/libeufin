@@ -400,7 +400,7 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
 
     override fun run() {
         val config = TalerConfig.load(this.configFile)
-        val dbConnStr = config.requireValueString("libeufin-bankdb", "config")
+        val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
         val sqlDir = config.requireValuePath("libeufin-bankdb-postgres", "sql_dir")
         if (requestReset) {
             resetDatabaseTables(dbConnStr, sqlDir)
@@ -423,7 +423,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
     override fun run() {
         val config = TalerConfig.load(this.configFile)
         val ctx = readBankApplicationContextFromConfig(config)
-        val dbConnStr = config.requireValueString("libeufin-bankdb", "config")
+        val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
         logger.info("using database '$dbConnStr'")
         val serveMethod = config.requireValueString("libeufin-bank", "serve")
         if (serveMethod.lowercase() != "tcp") {
