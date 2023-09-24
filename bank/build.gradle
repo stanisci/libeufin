@@ -37,7 +37,6 @@ tasks.register('installToPrefix', Copy) {
      */
     into "${project.findProperty('prefix') ?: '/tmp'}"
 }
-apply plugin: 'kotlin-kapt'
 // apply plugin: 'kotlinx-serialization'
 
 sourceSets {
