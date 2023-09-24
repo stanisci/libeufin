@@ -427,6 +427,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                 owningCustomerId = it.getLong("owning_customer_id"),
                 hasDebt = it.getBoolean("has_debt"),
                 isTalerExchange = it.getBoolean("is_taler_exchange"),
+                isPublic = it.getBoolean("is_public"),
                 maxDebt = TalerAmount(
                     value = it.getLong("max_debt_val"),
                     frac = it.getInt("max_debt_frac"),

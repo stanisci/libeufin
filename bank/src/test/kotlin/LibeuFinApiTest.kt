@@ -270,6 +270,7 @@ class LibeuFinApiTest {
                     "username": "foo",
                     "password": "bar",
                     "name": "Jane",
+                    "is_public": true,
                     "internal_payto_uri": "$ibanPayto"
                 }""".trimIndent()
                 )
@@ -284,6 +285,7 @@ class LibeuFinApiTest {
                     "username": "foo",
                     "password": "bar",
                     "name": "Jane",
+                    "is_public": true,
                     "internal_payto_uri": "$ibanPayto"
                 }""".trimIndent()
                 )

@@ -118,8 +118,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                         maybeCustomerExists.email == req.challenge_contact_data?.email &&
                         maybeCustomerExists.phone == req.challenge_contact_data?.phone &&
                         maybeCustomerExists.cashoutPayto == req.cashout_payto_uri &&
-                        CryptoUtil.checkpw(req.password, maybeCustomerExists.passwordHash)
-                        && maybeHasBankAccount.isPublic == req.is_public &&
+                        CryptoUtil.checkpw(req.password, maybeCustomerExists.passwordHash) &&
+                        maybeHasBankAccount.isPublic == req.is_public &&
                         maybeHasBankAccount.isTalerExchange == req.is_taler_exchange &&
                         maybeHasBankAccount.internalPaytoUri == internalPayto
             if (isIdentic) {
@@ -132,7 +132,9 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                     hint = "Idempotency check failed."
                 )
             )
-        } // From here: fresh user being added.
+        }
+
+        // From here: fresh user being added.
         val newCustomer = Customer(
             login = req.username,
             name = req.name,
