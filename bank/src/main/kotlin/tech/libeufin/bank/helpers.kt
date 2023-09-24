@@ -335,17 +335,9 @@ fun getTalerWithdrawUri(baseUrl: String, woId: String) = url {
 
 // Builds a withdrawal confirm URL.
 fun getWithdrawalConfirmUrl(
-    baseUrl: String, wopId: String, username: String
-) = url {
-    val baseUrlObj = URL(baseUrl)
-    protocol = URLProtocol(name = baseUrlObj.protocol, defaultPort = -1)
-    host = baseUrlObj.host
-    // Removing potential double slashes:
-    baseUrlObj.path.split("/").forEach {
-        this.appendPathSegments(it)
-    }
-    // Completing the endpoint:
-    this.appendPathSegments("accounts/${username}/withdrawals/${wopId}/confirm")
+    baseUrl: String, wopId: String
+): String {
+    return baseUrl.replace("{woid}", wopId)
 }
 
 

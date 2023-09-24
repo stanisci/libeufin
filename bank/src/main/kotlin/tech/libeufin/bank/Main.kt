@@ -104,6 +104,10 @@ data class BankApplicationContext(
      * Max token duration in microseconds.
      */
     val maxAuthTokenDurationUs: Long,
+    /**
+     * Max token duration in microseconds.
+     */
+    val spaCaptchaURL: String?,
 )
 
 /**
@@ -372,6 +376,7 @@ fun readBankApplicationContextFromConfig(cfg: TalerConfig): BankApplicationConte
         suggestedWithdrawalExchange = cfg.lookupValueString("libeufin-bank", "suggested_withdrawal_exchange"),
         defaultAdminDebtLimit = cfg.requireValueAmount("libeufin-bank", "default_admin_debt_limit", currency),
         maxAuthTokenDurationUs = cfg.requireValueDuration("libeufin-bank", "max_auth_token_duration"),
+        spaCaptchaURL = cfg.lookupValueString("libeufin-bank", "spa_captcha_url"),
     )
 }
 

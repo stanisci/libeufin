@@ -45,11 +45,11 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
         val walletCustomer = db.customerGetFromRowId(relatedBankAccount.owningCustomerId)
         if (walletCustomer == null)
             throw internalServerError("Could not get the username that owns this withdrawal")
-        val confirmUrl = getWithdrawalConfirmUrl(
-            baseUrl = call.request.getBaseUrl() ?: throw internalServerError("Could not get bank own base URL."),
-            wopId = wopid,
-            username = walletCustomer.login
-        )
+        val confirmUrl = if (ctx.spaCaptchaURL == null) null else 
+          getWithdrawalConfirmUrl(
+            baseUrl = ctx.spaCaptchaURL,
+            wopId = wopid
+          )
         call.respond(BankWithdrawalOperationStatus(
             aborted = op.aborted,
             selection_done = op.selectionDone,
@@ -94,16 +94,10 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
             // Whatever the problem, the bank missed it: respond 500.
             throw internalServerError("Bank failed at selecting the withdrawal.")
         // Getting user details that MIGHT be used later.
-        val confirmUrl: String? = if (!op.confirmationDone) {
-            val walletBankAccount = db.bankAccountGetFromOwnerId(op.walletBankAccount)
-                ?: throw internalServerError("Could not get the bank account owning this withdrawal")
-            val walletCustomer = db.customerGetFromRowId(walletBankAccount.owningCustomerId)
-                ?: throw internalServerError("Could not get the username owning this withdrawal")
+        val confirmUrl: String? = if (ctx.spaCaptchaURL !== null && !op.confirmationDone) {
             getWithdrawalConfirmUrl(
-                baseUrl = call.request.getBaseUrl()
-                    ?: throw internalServerError("Could not get bank own base URL."),
-                wopId = wopid,
-                username = walletCustomer.login
+                baseUrl = ctx.spaCaptchaURL,
+                wopId = wopid
             )
         }
         else
