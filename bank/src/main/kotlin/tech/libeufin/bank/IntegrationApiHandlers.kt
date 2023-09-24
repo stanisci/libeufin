@@ -33,7 +33,9 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
         val internalCurrency: String = ctx.currency
         call.respond(TalerIntegrationConfigResponse(currency = internalCurrency))
         return@get
-    } // Note: wopid acts as an authentication token.
+    }
+
+    // Note: wopid acts as an authentication token.
     get("/taler-integration/withdrawal-operation/{wopid}") {
         val wopid = call.expectUriComponent("wopid")
         val op = getWithdrawal(db, wopid) // throws 404 if not found.

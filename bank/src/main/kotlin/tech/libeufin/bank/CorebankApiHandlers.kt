@@ -106,16 +106,22 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             if (this == null) return@run null
             db.bankAccountGetFromOwnerId(this.expectRowId())
         }
+        val internalPayto: String = if (req.internal_payto_uri != null) {
+            stripIbanPayto(req.internal_payto_uri)
+        } else {
+            stripIbanPayto(genIbanPaytoUri())
+        }
         if (maybeCustomerExists != null && maybeHasBankAccount != null) {
             logger.debug("Registering username was found: ${maybeCustomerExists.login}") // Checking _all_ the details are the same.
             val isIdentic =
                 maybeCustomerExists.name == req.name &&
                         maybeCustomerExists.email == req.challenge_contact_data?.email &&
                         maybeCustomerExists.phone == req.challenge_contact_data?.phone &&
-                        maybeCustomerExists.cashoutPayto ==
-                        req.cashout_payto_uri && CryptoUtil.checkpw(
-                    req.password, maybeCustomerExists.passwordHash
-                ) && maybeHasBankAccount.isPublic == req.is_public && maybeHasBankAccount.isTalerExchange == req.is_taler_exchange && maybeHasBankAccount.internalPaytoUri == req.internal_payto_uri
+                        maybeCustomerExists.cashoutPayto == req.cashout_payto_uri &&
+                        CryptoUtil.checkpw(req.password, maybeCustomerExists.passwordHash)
+                        && maybeHasBankAccount.isPublic == req.is_public &&
+                        maybeHasBankAccount.isTalerExchange == req.is_taler_exchange &&
+                        maybeHasBankAccount.internalPaytoUri == internalPayto
             if (isIdentic) {
                 call.respond(HttpStatusCode.Created)
                 return@post
@@ -139,11 +145,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val newCustomerRowId = db.customerCreate(newCustomer)
             ?: throw internalServerError("New customer INSERT failed despite the previous checks") // Crashing here won't break data consistency between customers // and bank accounts, because of the idempotency.  Client will // just have to retry.
         val maxDebt = ctx.defaultCustomerDebtLimit
-        val internalPayto: String = if (req.internal_payto_uri != null) {
-            stripIbanPayto(req.internal_payto_uri)
-        } else {
-            stripIbanPayto(genIbanPaytoUri())
-        }
         val newBankAccount = BankAccount(
             hasDebt = false,
             internalPaytoUri = internalPayto,
@@ -368,6 +369,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val subject = payto.message ?: throw badRequest("Wire transfer lacks subject")
         val debtorId = c.dbRowId
             ?: throw internalServerError("Debtor database ID not found") // This performs already a SELECT on the bank account, // like the wire transfer will do as well later!
+        logger.info("creditor payto: $paytoWithoutParams")
         val creditorCustomerData = db.bankAccountGetFromInternalPayto(paytoWithoutParams) ?: throw notFound(
             "Creditor account not found", TalerErrorCode.TALER_EC_END // FIXME: define this EC.
         )

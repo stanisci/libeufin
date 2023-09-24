@@ -189,11 +189,11 @@ class TalerApiTest {
             }
         }
     }
-    // Selecting withdrawal details from the Integrtion API endpoint.
+    // Selecting withdrawal details from the Integration API endpoint.
     @Test
     fun intSelect() {
         val db = initDb()
-        val ctx = getTestContext(suggestedExchange = "payto://suggested-exchange")
+        val ctx = getTestContext(suggestedExchange = "payto://iban/ABC123")
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
@@ -212,7 +212,7 @@ class TalerApiTest {
                 contentType(ContentType.Application.Json)
                 setBody("""
                     {"reserve_pub": "RESERVE-FOO", 
-                     "selected_exchange": "payto://selected/foo/exchange" }
+                     "selected_exchange": "payto://iban/ABC123" }
                 """.trimIndent())
             }
             println(r.bodyAsText())
@@ -225,7 +225,7 @@ class TalerApiTest {
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
-        val ctx = getTestContext(suggestedExchange = "payto://suggested-exchange")
+        val ctx = getTestContext(suggestedExchange = "payto://iban/ABC123")
         // insert new.
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,

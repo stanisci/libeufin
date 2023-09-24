@@ -34,7 +34,7 @@ class LibeuFinApiTest {
 
     private fun genBankAccount(rowId: Long) = BankAccount(
         hasDebt = false,
-        internalPaytoUri = "payto://iban/SANDBOXX/${rowId}-IBAN",
+        internalPaytoUri = "payto://iban/ac${rowId}",
         maxDebt = TalerAmount(100, 0, "KUDOS"),
         owningCustomerId = rowId
     )
@@ -96,10 +96,12 @@ class LibeuFinApiTest {
         val db = initDb()
         val ctx = getTestContext()
         // foo account
-        val fooId = db.customerCreate(customerFoo); assert(fooId != null)
+        val fooId = db.customerCreate(customerFoo);
+        assert(fooId != null)
         assert(db.bankAccountCreate(genBankAccount(fooId!!)) != null)
         // bar account
-        val barId = db.customerCreate(customerBar); assert(barId != null)
+        val barId = db.customerCreate(customerBar);
+        assert(barId != null)
         assert(db.bankAccountCreate(genBankAccount(barId!!)) != null)
         // accounts exist, now create one transaction.
         testApplication {
@@ -113,7 +115,7 @@ class LibeuFinApiTest {
                 // expectSuccess = true
                 setBody(
                     """{
-                    "payto_uri": "payto://iban/SANDBOXX/${barId}-IBAN?message=payout", 
+                    "payto_uri": "payto://iban/AC${barId}?message=payout", 
                     "amount": "KUDOS:3.3"
                 }
                 """.trimIndent()
@@ -201,7 +203,7 @@ class LibeuFinApiTest {
             db.bankAccountCreate(
                 BankAccount(
                     hasDebt = false,
-                    internalPaytoUri = "payto://iban/SANDBOXX/FOO-IBAN",
+                    internalPaytoUri = "payto://iban/DE1234",
                     maxDebt = TalerAmount(100, 0, "KUDOS"),
                     owningCustomerId = customerRowId!!
                 )
@@ -298,7 +300,6 @@ class LibeuFinApiTest {
         testApplication {
             val db = initDb()
             val ctx = getTestContext()
-            val ibanPayto = genIbanPaytoUri()
             application {
                 corebankWebApp(db, ctx)
             }
@@ -359,13 +360,15 @@ class LibeuFinApiTest {
             }
             assert(resp.status == HttpStatusCode.Unauthorized)
             // Creating the administrator.
-            assert(db.customerCreate(
-                Customer(
-                    "admin",
-                    CryptoUtil.hashpw("pass"),
-                    "CFO"
-                )
-            ) != null)
+            assert(
+                db.customerCreate(
+                    Customer(
+                        "admin",
+                        CryptoUtil.hashpw("pass"),
+                        "CFO"
+                    )
+                ) != null
+            )
             // customer exists, this makes only the bank account:
             assert(maybeCreateAdminAccount(db, ctx))
             resp = client.post("/accounts") {
