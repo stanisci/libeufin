@@ -17,25 +17,19 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import tech.libeufin.bank.BankApplicationContext
-import tech.libeufin.bank.Database
-import tech.libeufin.bank.TalerAmount
+import tech.libeufin.bank.*
 import tech.libeufin.util.execCommand
 
 /**
  * Init the database and sets the currency to KUDOS.
  */
 fun initDb(): Database {
-    execCommand(
-        listOf(
-            "libeufin-bank-dbinit",
-            "-d",
-            "libeufincheck",
-            "-r"
-        ),
-        throwIfFails = true
-    )
-    return Database("postgresql:///libeufincheck", "KUDOS")
+    val config = TalerConfig.load()
+    val sqlPath = config.requireValuePath("libeufin-bankdb-postgres", "SQL_DIR")
+    val dbConnStr = "postgresql:///libeufincheck"
+    resetDatabaseTables(dbConnStr, sqlPath)
+    initializeDatabaseTables(dbConnStr, sqlPath)
+    return Database(dbConnStr, "KUDOS")
 }
 
 fun getTestContext(

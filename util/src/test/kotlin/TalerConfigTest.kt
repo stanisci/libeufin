@@ -18,6 +18,7 @@
  */
 
 import org.junit.Test
+import java.nio.file.FileSystems
 import kotlin.test.assertEquals
 
 class TalerConfigTest {

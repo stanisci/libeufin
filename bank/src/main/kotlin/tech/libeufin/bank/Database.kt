@@ -24,9 +24,10 @@ import org.postgresql.jdbc.PgConnection
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.getJdbcConnectionFromPg
-import java.net.URI
+import java.io.File
 import java.sql.DriverManager
 import java.sql.PreparedStatement
+import java.sql.ResultSet
 import java.sql.SQLException
 import java.util.*
 import kotlin.math.abs
@@ -40,6 +41,75 @@ fun BankAccount.expectRowId(): Long = this.bankAccountId ?: throw internalServer
 fun BankAccountTransaction.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Bank account transaction (${this.subject}) lacks database row ID.")
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
+
+fun initializeDatabaseTables(dbConfig: String, sqlDir: String) {
+    logger.info("doing DB initialization, sqldir $sqlDir, dbConfig $dbConfig")
+    val jdbcConnStr = getJdbcConnectionFromPg(dbConfig)
+    logger.info("connecting to database via JDBC string '$jdbcConnStr'")
+    val dbConn = DriverManager.getConnection(jdbcConnStr).unwrap(PgConnection::class.java)
+    if (dbConn == null) {
+        throw Error("could not open database")
+    }
+    val sqlVersioning = File("$sqlDir/versioning.sql").readText()
+    dbConn.execSQLUpdate(sqlVersioning)
+
+    val checkStmt = dbConn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
+
+    for (n in 1..9999) {
+        val numStr = n.toString().padStart(4, '0')
+        val patchName = "libeufin-bank-$numStr"
+
+        checkStmt.setString(1, patchName)
+        val res = checkStmt.executeQuery()
+        if (!res.next()) {
+            throw Error("unable to query patches")
+        }
+
+        val patchCount = res.getInt("n")
+        if (patchCount >= 1) {
+            logger.info("patch $patchName already applied")
+            continue
+        }
+
+        val path = File("$sqlDir/libeufin-bank-$numStr.sql")
+        if (!path.exists()) {
+            logger.info("path $path doesn't exist anymore, stopping")
+            break
+        }
+        logger.info("applying patch $path")
+        val sqlPatchText = path.readText()
+        dbConn.execSQLUpdate(sqlPatchText)
+    }
+    val sqlProcedures = File("$sqlDir/procedures.sql").readText()
+    dbConn.execSQLUpdate(sqlProcedures)
+}
+
+private fun countRows(rs: ResultSet): Int {
+    var size = 0
+    while (rs.next()) {
+        size++
+    }
+    return size
+}
+
+fun resetDatabaseTables(dbConfig: String, sqlDir: String) {
+    logger.info("doing DB initialization, sqldir $sqlDir, dbConfig $dbConfig")
+    val jdbcConnStr = getJdbcConnectionFromPg(dbConfig)
+    logger.info("connecting to database via JDBC string '$jdbcConnStr'")
+    val dbConn = DriverManager.getConnection(jdbcConnStr).unwrap(PgConnection::class.java)
+    if (dbConn == null) {
+        throw Error("could not open database")
+    }
+
+    val queryRes = dbConn.execSQLQuery("SELECT schema_name FROM information_schema.schemata WHERE schema_name='_v'")
+    if (countRows(queryRes) == 0) {
+        logger.info("versioning schema not present, not running drop sql")
+        return
+    }
+
+    val sqlDrop = File("$sqlDir/libeufin-bank-drop.sql").readText()
+    dbConn.execSQLUpdate(sqlDrop)
+}
 
 class Database(private val dbConfig: String, private val bankCurrency: String) {
     private var dbConn: PgConnection? = null

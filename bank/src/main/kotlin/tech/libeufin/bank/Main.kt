@@ -287,6 +287,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
+        subcommands(ServeBank(), BankDbInit())
     }
 
     override fun run() = Unit
@@ -374,6 +375,35 @@ fun readBankApplicationContextFromConfig(cfg: TalerConfig): BankApplicationConte
     )
 }
 
+
+class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = "dbinit") {
+    private val configFile by option(
+        "--config", "-c",
+        help = "set the configuration file"
+    )
+
+    private val requestReset by option(
+        "--reset", "-r",
+        help = "reset database (DANGEROUS: All existing data is lost)"
+    ).flag()
+
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+
+    override fun run() {
+        val config = TalerConfig.load(this.configFile)
+        val dbConnStr = config.requireValueString("libeufin-bankdb", "config")
+        val sqlDir = config.requireValuePath("libeufin-bankdb-postgres", "sql_dir")
+        if (requestReset) {
+            resetDatabaseTables(dbConnStr, sqlDir)
+        }
+        initializeDatabaseTables(dbConnStr, sqlDir)
+    }
+}
+
 class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") {
     private val configFile by option(
         "--config", "-c",
@@ -388,7 +418,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
     override fun run() {
         val config = TalerConfig.load(this.configFile)
         val ctx = readBankApplicationContextFromConfig(config)
-        val dbConnStr = config.requireValueString("libeufin-bank-db-postgres", "config")
+        val dbConnStr = config.requireValueString("libeufin-bankdb", "config")
         logger.info("using database '$dbConnStr'")
         val serveMethod = config.requireValueString("libeufin-bank", "serve")
         if (serveMethod.lowercase() != "tcp") {
@@ -407,5 +437,5 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
 }
 
 fun main(args: Array<String>) {
-    LibeufinBankCommand().subcommands(ServeBank()).main(args)
+    LibeufinBankCommand().main(args)
 }

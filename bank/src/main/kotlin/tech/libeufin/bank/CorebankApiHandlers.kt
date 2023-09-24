@@ -272,9 +272,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
     }
 
     post("/withdrawals/{withdrawal_id}/abort") {
-        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        // Admin allowed to abort.
-        if (!call.getResourceName("USERNAME").canI(c)) throw forbidden()
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))
         // Idempotency:
         if (op.aborted) {
@@ -290,9 +287,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
     }
 
     post("/withdrawals/{withdrawal_id}/confirm") {
-        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
-        // No admin allowed.
-        if (!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))
         // Checking idempotency:
         if (op.confirmationDone) {

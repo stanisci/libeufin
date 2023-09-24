@@ -170,6 +170,14 @@ class TalerConfig {
         return pathsub(entry.value)
     }
 
+    fun requireValuePath(section: String, option: String): String {
+        val res = lookupValuePath(section, option)
+        if (res == null) {
+            throw TalerConfigError("expected path for section $section option $option")
+        }
+        return res
+    }
+
     /**
      * Create a string representation of the loaded configuration.
      */
@@ -314,10 +322,14 @@ class TalerConfig {
         }
 
         fun getTalerInstallPath(): String {
+            return getInstallPathFromBinary("taler-config")
+        }
+
+        fun getInstallPathFromBinary(name: String): String {
             val pathEnv = System.getenv("PATH")
             val paths = pathEnv.split(":")
             for (p in paths) {
-                val possiblePath = Paths.get(p, "taler-config").toString()
+                val possiblePath = Paths.get(p, name).toString()
                 if (File(possiblePath).exists()) {
                     return Paths.get(p, "..").toRealPath().toString()
                 }

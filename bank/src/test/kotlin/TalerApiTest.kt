@@ -262,7 +262,7 @@ class TalerApiTest {
             application {
                 corebankWebApp(db, ctx)
             }
-            client.post("/accounts/foo/withdrawals/${uuid}/abort") {
+            client.post("/withdrawals/${uuid}/abort") {
                 expectSuccess = true
                 basicAuth("foo", "pw")
             }
@@ -292,7 +292,7 @@ class TalerApiTest {
             }
             val opId = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(r.bodyAsText())
             // Getting the withdrawal from the bank.  Throws (failing the test) if not found.
-            client.get("/accounts/foo/withdrawals/${opId.withdrawal_id}") {
+            client.get("/withdrawals/${opId.withdrawal_id}") {
                 expectSuccess = true
                 basicAuth("foo", "pw")
             }
@@ -328,7 +328,7 @@ class TalerApiTest {
             application {
                 corebankWebApp(db, ctx)
             }
-            client.post("/accounts/foo/withdrawals/${uuid}/confirm") {
+            client.post("/withdrawals/${uuid}/confirm") {
                 expectSuccess = true // Sufficient to assert on success.
                 basicAuth("foo", "pw")
             }
