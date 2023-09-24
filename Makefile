@@ -12,6 +12,9 @@ define versions_check =
     then echo WARNING: Project version from Gradle: $(gradle_version) differs from current Git tag: $(git_tag); fi
 endef
 
+sql_dir=$(prefix)/share/taler/sql/libeufin-bank
+config_dir=$(prefix)/share/taler/config.d
+
 .PHONY: dist
 dist:
 	@$(call versions_check)
@@ -37,6 +40,7 @@ deb: exec-arch copy-spa
 
 .PHONY: install-bank
 install-bank:
+	@install -D contrib/libeufin-bank.conf $(config_dir)
 	@./gradlew -q -Pprefix=$(prefix) bank:installToPrefix; cd ..
 
 # To reactivate after the refactoring.
@@ -51,12 +55,9 @@ install-cli:
 
 .PHONY: install-db-versioning
 install-db-versioning:
-	$(eval BANK_DBINIT_SCRIPT := libeufin-bank-dbinit)
-	@sed "s|__BANK_STATIC_PATCHES_LOCATION__|$(prefix)/share/libeufin/sql/bank|" < contrib/$(BANK_DBINIT_SCRIPT) > build/$(BANK_DBINIT_SCRIPT)
-	@install -D database-versioning/libeufin-bank*.sql -t $(prefix)/share/libeufin/sql/bank
-	@install -D database-versioning/versioning.sql -t $(prefix)/share/libeufin/sql/bank
-	@install -D database-versioning/procedures.sql -t $(prefix)/share/libeufin/sql/bank
-	@install -D build/$(BANK_DBINIT_SCRIPT) -t $(prefix)/bin
+	@install -D database-versioning/libeufin-bank*.sql -t $(sql_dir)
+	@install -D database-versioning/versioning.sql -t $(sql_dir)
+	@install -D database-versioning/procedures.sql -t $(sql_dir)
 
 .PHONY: assemble
 assemble:

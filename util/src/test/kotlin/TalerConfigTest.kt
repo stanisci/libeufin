@@ -42,4 +42,19 @@ class TalerConfigTest {
 
         println(TalerConfig.getTalerInstallPath())
     }
+
+    @Test
+    fun substitution() {
+        val conf = TalerConfig()
+        conf.putValueString("PATHS", "DATADIR", "mydir")
+        conf.putValueString("foo", "bar", "baz")
+        conf.putValueString("foo", "bar2", "baz")
+
+        assertEquals("baz", conf.lookupValueString("foo", "bar"))
+        assertEquals("baz", conf.lookupValuePath("foo", "bar"))
+
+        conf.putValueString("foo", "dir1", "foo/\$DATADIR/bar")
+
+        assertEquals("foo/mydir/bar", conf.lookupValuePath("foo", "dir1"))
+    }
 }

@@ -19,7 +19,6 @@
 
 import java.io.File
 import java.nio.file.Paths
-import java.util.*
 import kotlin.io.path.Path
 import kotlin.io.path.listDirectoryEntries
 
@@ -92,12 +91,13 @@ class TalerConfig {
     }
 
     private fun provideSection(name: String): Section {
-        val existingSec = this.sectionMap[name]
+        val canonSecName = name.uppercase()
+        val existingSec = this.sectionMap[canonSecName]
         if (existingSec != null) {
             return existingSec
         }
         val newSection = Section(entries = mutableMapOf())
-        this.sectionMap[name] = newSection
+        this.sectionMap[canonSecName] = newSection
         return newSection
     }
 
@@ -151,6 +151,25 @@ class TalerConfig {
         throw TalerConfigError("expected yes/no in configuration section $section option $option but got $v")
     }
 
+    private fun setSystemDefault(section: String, option: String, value: String) {
+        // FIXME: The value should be marked as a system default for diagnostics pretty printing
+        val sec = provideSection(section)
+        sec.entries[option.uppercase()] = Entry(value = value)
+    }
+
+    fun putValueString(section: String, option: String, value: String) {
+        val sec = provideSection(section)
+        sec.entries[option.uppercase()] = Entry(value = value)
+    }
+
+    fun lookupValuePath(section: String, option: String): String? {
+        val entry = lookupEntry(section, option)
+        if (entry == null) {
+            return null
+        }
+        return pathsub(entry.value)
+    }
+
     /**
      * Create a string representation of the loaded configuration.
      */
@@ -187,7 +206,61 @@ class TalerConfig {
     fun loadDefaults() {
         val installDir = getTalerInstallPath()
         val baseConfigDir = Paths.get(installDir, "share/taler/config.d").toString()
+        setSystemDefault("PATHS", "PREFIX", "${installDir}/")
+        setSystemDefault("PATHS", "BINDIR", "${installDir}/bin/")
+        setSystemDefault("PATHS", "LIBEXECDIR", "${installDir}/taler/libexec/")
+        setSystemDefault("PATHS", "DOCDIR", "${installDir}/share/doc/taler/")
+        setSystemDefault("PATHS", "ICONDIR", "${installDir}/share/icons/")
+        setSystemDefault("PATHS", "LOCALEDIR", "${installDir}/share/locale/")
+        setSystemDefault("PATHS", "LIBDIR", "${installDir}/lib/taler/")
+        setSystemDefault("PATHS", "DATADIR", "${installDir}/share/taler/")
         loadDefaultsFromDir(baseConfigDir)
+    }
+
+    fun variableLookup(x: String, recursionDepth: Int = 0): String? {
+        val pathRes = this.lookupValueString("PATHS", x)
+        if (pathRes != null) {
+            return pathsub(pathRes, recursionDepth + 1)
+        }
+        val envVal = System.getenv(x)
+        if (envVal != null) {
+            return envVal
+        }
+        return null
+    }
+
+    fun pathsub(x: String, recursionDepth: Int = 0): String {
+        if (recursionDepth > 128) {
+            throw TalerConfigError("recursion limit in path substitution exceeded")
+        }
+        val result = StringBuilder()
+        var l = 0
+        val s = x
+        while (l < s.length) {
+            if (s[l] != '$') {
+                // normal character
+                result.append(s[l])
+                l++;
+                continue
+            }
+            if (l + 1 < s.length && s[l + 1] == '{') {
+                // ${var}
+                throw NotImplementedError("bracketed variables not yet supported")
+            } else {
+                // $var
+                var varEnd = l + 1
+                while (varEnd < s.length && (s[varEnd].isLetterOrDigit() || s[varEnd] == '_')) {
+                    varEnd++
+                }
+                val varName = s.substring(l + 1, varEnd)
+                val res = variableLookup(varName)
+                if (res != null) {
+                    result.append(res)
+                }
+                l = varEnd
+            }
+        }
+        return result.toString()
     }
 
     companion object {
