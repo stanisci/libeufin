@@ -762,7 +762,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         val stmt = prepare("""
             UPDATE taler_withdrawal_operations
             SET aborted = true
-            WHERE withdrawal_uuid=? AND selection_done = false
+            WHERE withdrawal_uuid=? AND confirmation_done = false
             RETURNING taler_withdrawal_id
         """
         )
