@@ -85,17 +85,17 @@ fun doBasicAuth(db: Database, encodedCredentials: String): Customer? {
 
 /**
  * This function takes a prefixed Bearer token, removes the
- * bearer-token:-prefix and returns it.  Returns null, if the
+ * secret-token:-prefix and returns it.  Returns null, if the
  * input is invalid.
  */
 private fun splitBearerToken(tok: String): String? {
     val tokenSplit = tok.split(":", limit = 2)
     if (tokenSplit.size != 2) return null
-    if (tokenSplit[0] != "bearer-token") return null
+    if (tokenSplit[0] != "secret-token") return null
     return tokenSplit[1]
 }
 
-/* Performs the bearer-token authentication.  Returns the
+/* Performs the secret-token authentication.  Returns the
  * authenticated customer on success, null otherwise. */
 fun doTokenAuth(
     db: Database,
