@@ -258,6 +258,7 @@ class TalerApiTest {
         ))
         val op = db.talerWithdrawalGet(uuid)
         assert(op?.aborted == false)
+        assert(db.talerWithdrawalSetDetails(uuid, "exchange-payto", "reserve_pub"))
         testApplication {
             application {
                 corebankWebApp(db, ctx)
@@ -268,7 +269,7 @@ class TalerApiTest {
             }
         }
         val opAbo = db.talerWithdrawalGet(uuid)
-        assert(opAbo?.aborted == true)
+        assert(opAbo?.aborted == true && opAbo.selectionDone == true)
     }
     // Testing withdrawal creation
     @Test
