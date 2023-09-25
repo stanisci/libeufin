@@ -241,6 +241,17 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         }
     }
 
+    fun customerChangePassword(customerName: String, passwordHash: String): Boolean {
+        reconnect()
+        val stmt = prepare("""
+            UPDATE customers SET password_hash=? where login=?
+        """)
+        stmt.setString(1, passwordHash)
+        stmt.setString(2, customerName)
+        stmt.executeUpdate()
+        return stmt.updateCount > 0
+    }
+
     fun customerGetFromLogin(login: String): Customer? {
         reconnect()
         val stmt = prepare("""

@@ -40,7 +40,8 @@ deb: exec-arch copy-spa
 
 .PHONY: install-bank
 install-bank:
-	@install -D contrib/libeufin-bank.conf $(config_dir)
+	install -d $(config_dir)
+	install contrib/libeufin-bank.conf $(config_dir)/
 	@./gradlew -q -Pprefix=$(prefix) bank:installToPrefix; cd ..
 
 # To reactivate after the refactoring.

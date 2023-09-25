@@ -27,6 +27,7 @@ import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
+import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.versionOption
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -294,7 +295,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit())
+        subcommands(ServeBank(), BankDbInit(), ChangePw())
     }
 
     override fun run() = Unit
@@ -446,6 +447,36 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         }) {
             corebankWebApp(db, ctx)
         }.start(wait = true)
+    }
+}
+
+class ChangePw : CliktCommand("Change account password", name = "passwd") {
+    private val configFile by option(
+        "--config", "-c",
+        help = "set the configuration file"
+    )
+    private val account by argument("account")
+    private val password by argument("password")
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+
+    override fun run() {
+        val config = TalerConfig.load(this.configFile)
+        val ctx = readBankApplicationContextFromConfig(config)
+        val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
+        val servePortLong = config.requireValueNumber("libeufin-bank", "port")
+        val db = Database(dbConnStr, ctx.currency)
+        if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
+            exitProcess(1)
+
+        if (!db.customerChangePassword(account, CryptoUtil.hashpw(password))) {
+            println("password change failed")
+        } else {
+            println("password change succeeded")
+        }
     }
 }
 
