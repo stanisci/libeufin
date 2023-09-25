@@ -105,7 +105,10 @@ data class BankApplicationContext(
      */
     val maxAuthTokenDurationUs: Long,
     /**
-     * FIXME/TBD.
+     * URL where the user should be redirected to complete the captcha.
+     * It can contain the substring "{woid}" that is going to be replaced 
+     * with the withdrawal operation id and should point to the where the 
+     * bank SPA is located.
      */
     val spaCaptchaURL: String?,
 )
