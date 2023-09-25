@@ -45,7 +45,6 @@ fun getTestContext(
         registrationBonusEnabled = false,
         registrationBonus = null,
         suggestedWithdrawalExchange = suggestedExchange,
-        maxAuthTokenDurationUs = 200 * 1000000,
         spaCaptchaURL = null,
     )
 }

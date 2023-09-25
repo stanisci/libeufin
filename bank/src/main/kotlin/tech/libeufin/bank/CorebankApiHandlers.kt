@@ -50,11 +50,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val tokenBytes = ByteArray(32).apply {
             Random().nextBytes(this)
         }
-        val maxDurationTime: Long = ctx.maxAuthTokenDurationUs
-        if (req.duration != null && req.duration.d_us > maxDurationTime) throw forbidden(
-            "Token duration bigger than bank's limit", // FIXME: define new EC for this case.
-            TalerErrorCode.TALER_EC_END
-        )
         val tokenDurationUs = req.duration?.d_us ?: TOKEN_DEFAULT_DURATION_US
         val customerDbRow = customer.dbRowId ?: throw internalServerError(
             "Could not get customer '${customer.login}' database row ID"

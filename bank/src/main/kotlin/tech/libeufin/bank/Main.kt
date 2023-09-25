@@ -102,10 +102,6 @@ data class BankApplicationContext(
      */
     val suggestedWithdrawalExchange: String?,
     /**
-     * Max token duration in microseconds.
-     */
-    val maxAuthTokenDurationUs: Long,
-    /**
      * URL where the user should be redirected to complete the captcha.
      * It can contain the substring "{woid}" that is going to be replaced 
      * with the withdrawal operation id and should point where the bank
@@ -379,7 +375,6 @@ fun readBankApplicationContextFromConfig(cfg: TalerConfig): BankApplicationConte
         registrationBonus = cfg.requireValueAmount("libeufin-bank", "registration_bonus", currency),
         suggestedWithdrawalExchange = cfg.lookupValueString("libeufin-bank", "suggested_withdrawal_exchange"),
         defaultAdminDebtLimit = cfg.requireValueAmount("libeufin-bank", "default_admin_debt_limit", currency),
-        maxAuthTokenDurationUs = cfg.requireValueDuration("libeufin-bank", "max_auth_token_duration"),
         spaCaptchaURL = cfg.lookupValueString("libeufin-bank", "spa_captcha_url"),
     )
 }
