@@ -105,7 +105,7 @@ data class BankApplicationContext(
      */
     val maxAuthTokenDurationUs: Long,
     /**
-     * Max token duration in microseconds.
+     * FIXME/TBD.
      */
     val spaCaptchaURL: String?,
 )

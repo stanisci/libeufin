@@ -145,7 +145,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             passwordHash = CryptoUtil.hashpw(req.password),
         )
         val newCustomerRowId = db.customerCreate(newCustomer)
-            ?: throw internalServerError("New customer INSERT failed despite the previous checks") // Crashing here won't break data consistency between customers // and bank accounts, because of the idempotency.  Client will // just have to retry.
+            ?: throw internalServerError("New customer INSERT failed despite the previous checks") // Crashing here won't break data consistency between customers and bank accounts, because of the idempotency.  Client will just have to retry.
         val maxDebt = ctx.defaultCustomerDebtLimit
         val newBankAccount = BankAccount(
             hasDebt = false,
@@ -192,7 +192,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized("Login failed")
         val resourceName = call.maybeUriComponent("USERNAME") ?: throw badRequest(
             hint = "No username found in the URI", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
-        ) // Checking resource name only if Basic auth was used. // Successful tokens do not need this check, they just pass.
+        ) // Checking resource name only if Basic auth was used. Successful tokens do not need this check, they just pass.
         if (((c.login != resourceName) && (c.login != "admin")) && (call.getAuthToken() == null)) throw forbidden("No rights on the resource.")
         val customerData = db.customerGetFromLogin(c.login)
             ?: throw internalServerError("Customer '${c.login} despite being authenticated.'")
@@ -370,7 +370,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val paytoWithoutParams = stripIbanPayto(txData.payto_uri)
         val subject = payto.message ?: throw badRequest("Wire transfer lacks subject")
         val debtorId = c.dbRowId
-            ?: throw internalServerError("Debtor database ID not found") // This performs already a SELECT on the bank account, // like the wire transfer will do as well later!
+            ?: throw internalServerError("Debtor database ID not found") // This performs already a SELECT on the bank account, like the wire transfer will do as well later!
         logger.info("creditor payto: $paytoWithoutParams")
         val creditorCustomerData = db.bankAccountGetFromInternalPayto(paytoWithoutParams) ?: throw notFound(
             "Creditor account not found", TalerErrorCode.TALER_EC_END // FIXME: define this EC.
