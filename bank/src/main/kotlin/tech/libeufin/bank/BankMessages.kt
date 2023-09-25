@@ -392,7 +392,7 @@ data class BankAccountTransactionInfo(
     val direction: TransactionDirection,
     val subject: String,
     val row_id: Long, // is T_ID
-    val date: Long
+    val date: TalerProtocolTimestamp
 )
 
 // Response type for histories, namely GET /transactions

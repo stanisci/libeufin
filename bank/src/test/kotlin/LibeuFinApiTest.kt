@@ -173,7 +173,7 @@ class LibeuFinApiTest {
             )
             // Testing the bearer-token:-scheme.
             client.post("/accounts/foo/token") {
-                headers.set("Authorization", "Bearer bearer-token:${Base32Crockford.encode(fooTok)}")
+                headers.set("Authorization", "Bearer secret-token:${Base32Crockford.encode(fooTok)}")
                 contentType(ContentType.Application.Json)
                 setBody("{\"scope\": \"readonly\"}")
                 expectSuccess = true

@@ -59,7 +59,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val customerDbRow = customer.dbRowId ?: throw internalServerError(
             "Could not get customer '${customer.login}' database row ID"
         )
-        val expirationTimestampUs: Long = getNowUs() + tokenDurationUs
+        val creationTime = getNowUs()
+        val expirationTimestampUs: Long = creationTime + tokenDurationUs
         if (expirationTimestampUs < tokenDurationUs) throw badRequest(
             "Token duration caused arithmetic overflow", // FIXME: need dedicate EC (?)
             talerErrorCode = TalerErrorCode.TALER_EC_END
@@ -67,7 +68,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val token = BearerToken(
             bankCustomer = customerDbRow,
             content = tokenBytes,
-            creationTime = expirationTimestampUs,
+            creationTime = creationTime,
             expirationTime = expirationTimestampUs,
             scope = req.scope,
             isRefreshable = req.refreshable
@@ -349,7 +350,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                     subject = it.subject,
                     amount = it.amount.toString(),
                     direction = it.direction,
-                    date = it.transactionDate,
+                    date = TalerProtocolTimestamp.fromMicroseconds(it.transactionDate),
                     row_id = it.dbRowId ?: throw internalServerError(
                         "Transaction timestamped with '${it.transactionDate}' did not have row ID"
                     )
@@ -424,7 +425,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                 amount = "${tx.amount.currency}:${tx.amount.value}.${tx.amount.frac}",
                 creditor_payto_uri = tx.creditorPaytoUri,
                 debtor_payto_uri = tx.debtorPaytoUri,
-                date = tx.transactionDate,
+                date = TalerProtocolTimestamp.fromMicroseconds(tx.transactionDate),
                 direction = tx.direction,
                 subject = tx.subject,
                 row_id = txRowId
