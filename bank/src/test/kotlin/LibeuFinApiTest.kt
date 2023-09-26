@@ -141,7 +141,7 @@ class LibeuFinApiTest {
             application {
                 corebankWebApp(db, ctx)
             }
-            client.post("/accounts/foo/token") {
+            val newTok = client.post("/accounts/foo/token") {
                 expectSuccess = true
                 contentType(ContentType.Application.Json)
                 basicAuth("foo", "pw")
@@ -151,6 +151,11 @@ class LibeuFinApiTest {
                 """.trimIndent()
                 )
             }
+            // Checking that the token lifetime defaulted to 24 hours.
+            val newTokObj = Json.decodeFromString<TokenSuccessResponse>(newTok.bodyAsText())
+            val newTokDb = db.bearerTokenGet(Base32Crockford.decode(newTokObj.access_token))
+            val lifeTime = newTokDb!!.expirationTime - newTokDb.creationTime
+            assert(Duration.ofHours(24).seconds * 1000000 == lifeTime)
             // foo tries on bar endpoint
             val r = client.post("/accounts/bar/token") {
                 expectSuccess = false
@@ -171,7 +176,7 @@ class LibeuFinApiTest {
                     )
                 )
             )
-            // Testing the bearer-token:-scheme.
+            // Testing the secret-token:-scheme.
             client.post("/accounts/foo/token") {
                 headers.set("Authorization", "Bearer secret-token:${Base32Crockford.encode(fooTok)}")
                 contentType(ContentType.Application.Json)
