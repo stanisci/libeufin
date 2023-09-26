@@ -322,7 +322,11 @@ class TalerConfig {
         }
 
         fun getTalerInstallPath(): String {
-            return getInstallPathFromBinary("taler-config")
+            // We use the location of the libeufin-bank
+            // binary to determine the install prefix.
+            // If for some weird reason it's now found, we
+            // fall back to "/usr" as install prefix.
+            return getInstallPathFromBinary("libeufin-bank")
         }
 
         fun getInstallPathFromBinary(name: String): String {
