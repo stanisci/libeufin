@@ -18,7 +18,8 @@
  */
 
 import tech.libeufin.bank.*
-import tech.libeufin.util.execCommand
+import java.io.ByteArrayOutputStream
+import java.util.zip.DeflaterOutputStream
 
 /**
  * Init the database and sets the currency to KUDOS.
@@ -47,4 +48,12 @@ fun getTestContext(
         suggestedWithdrawalExchange = suggestedExchange,
         spaCaptchaURL = null,
     )
+}
+
+fun deflater(reqBody: String): ByteArray {
+    val bos = ByteArrayOutputStream()
+    val ios = DeflaterOutputStream(bos)
+    ios.write(reqBody.toByteArray())
+    ios.finish()
+    return bos.toByteArray()
 }

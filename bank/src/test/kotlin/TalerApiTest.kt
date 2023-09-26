@@ -180,12 +180,13 @@ class TalerApiTest {
                 expectSuccess = true
                 contentType(ContentType.Application.Json)
                 basicAuth("foo", "pw")
-                setBody("""
+                headers.set("Content-Encoding", "deflate")
+                setBody(deflater("""
                     {"amount": "KUDOS:44",
                      "reserve_pub": "RESERVE-PUB-TEST",
                       "debit_account": "BAR-IBAN-ABC"
                       }
-                """.trimIndent())
+                """.trimIndent()))
             }
         }
     }

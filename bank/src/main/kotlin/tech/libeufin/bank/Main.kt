@@ -181,6 +181,7 @@ val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompr
     onCallReceive { call ->
         transformBody { data ->
             if (call.request.headers[HttpHeaders.ContentEncoding] == "deflate") {
+                logger.debug("Inflating request..")
                 val brc = try {
                     withContext(Dispatchers.IO) {
                         val inflated = InflaterInputStream(data.toInputStream())
