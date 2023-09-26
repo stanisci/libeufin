@@ -181,11 +181,20 @@ val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompr
     onCallReceive { call ->
         transformBody { data ->
             if (call.request.headers[HttpHeaders.ContentEncoding] == "deflate") {
-                val brc = withContext(Dispatchers.IO) {
-                    val inflated = InflaterInputStream(data.toInputStream())
-                    @Suppress("BlockingMethodInNonBlockingContext")
-                    val bytes = inflated.readAllBytes()
-                    ByteReadChannel(bytes)
+                val brc = try {
+                    withContext(Dispatchers.IO) {
+                        val inflated = InflaterInputStream(data.toInputStream())
+
+                        @Suppress("BlockingMethodInNonBlockingContext")
+                        val bytes = inflated.readAllBytes()
+                        ByteReadChannel(bytes)
+                    }
+                } catch (e: Exception) {
+                    logger.error("Deflated request failed to inflate: ${e.message}")
+                    throw badRequest(
+                        hint = "Could not inflate request",
+                        talerErrorCode = TalerErrorCode.TALER_EC_END // FIXME: provide dedicated EC.
+                    )
                 }
                 brc
             } else data
