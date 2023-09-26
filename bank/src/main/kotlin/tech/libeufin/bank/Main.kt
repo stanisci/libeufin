@@ -261,13 +261,13 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
              * to get the most detailed message, we must consider BOTH sides:
              * the 'cause' AND its root cause!
              */
+            logger.error(cause.message)
             var rootCause: Throwable? = cause.cause
             while (rootCause?.cause != null)
                 rootCause = rootCause.cause
             /* Here getting _some_ error message, by giving precedence
              * to the root cause, as otherwise JSON details would be lost. */
-            val errorMessage: String? = rootCause?.message ?: cause.message
-            logger.error(errorMessage)
+            logger.error(rootCause?.message)
             // Telling apart invalid JSON vs missing parameter vs invalid parameter.
             val talerErrorCode = when (cause) {
                 is MissingRequestParameterException ->
@@ -282,7 +282,8 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
                 status = HttpStatusCode.BadRequest,
                 message = TalerError(
                     code = talerErrorCode.code,
-                    hint = errorMessage
+                    hint = cause.message,
+                    detail = rootCause?.message
                 )
             )
         }

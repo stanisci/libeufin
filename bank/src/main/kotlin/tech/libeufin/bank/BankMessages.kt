@@ -70,7 +70,8 @@ data class TokenSuccessResponse(
 @Serializable
 data class TalerError(
     val code: Int,
-    val hint: String? = null
+    val hint: String? = null,
+    val detail: String? = null
 )
 
 /* Contains contact data to send TAN challges to the
