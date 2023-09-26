@@ -11,6 +11,7 @@ RUN ./configure --prefix=/usr/local
 RUN make install
 WORKDIR /
 COPY launch-bank.sh /launch-bank.sh
+COPY libeufin-bank.conf /libeufin-bank.conf
 RUN apt-get install -y sudo
 RUN grep -v ^host.*all /etc/postgresql/15/main/pg_hba.conf > /tmp/pg_hba_buf.txt
 RUN echo "host libeufincheck all 127.0.0.1/32 trust" >> /tmp/pg_hba_buf.txt
