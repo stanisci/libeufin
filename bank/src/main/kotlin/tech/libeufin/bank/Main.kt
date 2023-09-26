@@ -44,6 +44,10 @@ import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.utils.io.*
+import io.ktor.utils.io.jvm.javaio.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
@@ -55,6 +59,7 @@ import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import tech.libeufin.util.*
 import java.time.Duration
+import java.util.zip.InflaterInputStream
 import kotlin.system.exitProcess
 
 // GLOBALS
@@ -169,6 +174,25 @@ object TalerAmountSerializer : KSerializer<TalerAmount> {
     }
 }
 
+/**
+ * This plugin inflates the requests that have "Content-Encoding: deflate"
+ */
+val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompression") {
+    onCallReceive { call ->
+        transformBody { data ->
+            if (call.request.headers[HttpHeaders.ContentEncoding] == "deflate") {
+                val brc = withContext(Dispatchers.IO) {
+                    val inflated = InflaterInputStream(data.toInputStream())
+                    @Suppress("BlockingMethodInNonBlockingContext")
+                    val bytes = inflated.readAllBytes()
+                    ByteReadChannel(bytes)
+                }
+                brc
+            } else data
+        }
+    }
+}
+
 
 /**
  * Set up web server handlers for the Taler corebank API.
@@ -190,6 +214,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
         allowMethod(HttpMethod.Delete)
         allowCredentials = true
     }
+    install(corebankDecompressionPlugin)
     install(IgnoreTrailingSlash)
     install(ContentNegotiation) {
         json(Json {
