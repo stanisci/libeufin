@@ -38,11 +38,15 @@ get-spa:
 deb: exec-arch copy-spa
 	@dpkg-buildpackage -rfakeroot -b -uc -us
 
+
+# Absolute DESTDIR or empty string if DESTDIR unset/empty
+abs_destdir=$(abspath $(DESTDIR))
+
 .PHONY: install-bank
 install-bank:
-	install -d $(config_dir)
-	install contrib/libeufin-bank.conf $(config_dir)/
-	@./gradlew -q -Pprefix=$(prefix) bank:installToPrefix; cd ..
+	install -d $(abs_destdir)$(config_dir)
+	install contrib/libeufin-bank.conf $(abs_destdir)$(config_dir)/
+	./gradlew -q -Pprefix=$(abs_destdir)$(prefix) bank:installToPrefix
 
 # To reactivate after the refactoring.
 # .PHONY: install-nexus
