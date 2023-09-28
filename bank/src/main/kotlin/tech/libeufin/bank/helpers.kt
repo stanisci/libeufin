@@ -30,6 +30,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import java.net.URL
+import java.time.Instant
 import java.util.*
 
 const val FRACTION_BASE = 100000000
@@ -438,3 +439,6 @@ fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean 
     }
     return true
 }
+
+fun getNowUs(): Long = Instant.now().toDbMicros()
+    ?: throw internalServerError("Could not get micros out of Instant.now()")

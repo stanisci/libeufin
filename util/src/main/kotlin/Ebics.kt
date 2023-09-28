@@ -45,8 +45,6 @@ import javax.xml.bind.JAXBElement
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
-
 data class EbicsProtocolError(
     val httpStatusCode: HttpStatusCode,
     val reason: String,

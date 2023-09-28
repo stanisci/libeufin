@@ -33,8 +33,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.net.URI
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.DB")
-
 fun getCurrentUser(): String = System.getProperty("user.name")
 
 fun isPostgres(): Boolean {

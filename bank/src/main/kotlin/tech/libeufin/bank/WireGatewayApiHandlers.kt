@@ -27,7 +27,6 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
-import tech.libeufin.util.getNowUs
 
 fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) {
     get("/taler-wire-gateway/config") {

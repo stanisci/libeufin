@@ -20,7 +20,6 @@
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
-import tech.libeufin.util.getNowUs
 import java.util.Random
 import java.util.UUID
 
@@ -136,7 +135,7 @@ class DatabaseTest {
         val token = BearerToken(
             bankCustomer = 1L,
             content = tokenBytes,
-            creationTime = getNowUs(), // make .toMicro()? implicit?
+            creationTime = getNowUs(),
             expirationTime = getNowUs(),
             scope = TokenScope.readonly
         )

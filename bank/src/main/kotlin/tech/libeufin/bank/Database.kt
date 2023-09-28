@@ -318,7 +318,6 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             FROM bearer_tokens
             WHERE content=?;            
         """)
-
         stmt.setBytes(1, token)
         stmt.executeQuery().use {
             if (!it.next()) return null

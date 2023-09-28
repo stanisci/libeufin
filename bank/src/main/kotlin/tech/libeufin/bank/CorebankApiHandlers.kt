@@ -10,6 +10,9 @@ import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
+import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
@@ -50,29 +53,38 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val tokenBytes = ByteArray(32).apply {
             Random().nextBytes(this)
         }
-        val tokenDurationUs = req.duration?.d_us ?: TOKEN_DEFAULT_DURATION_US
+        val tokenDuration: Duration = req.duration?.d_us ?: TOKEN_DEFAULT_DURATION
+
+        val creationTime = Instant.now()
+        val expirationTimestamp = if (tokenDuration == ChronoUnit.FOREVER.duration) {
+            Instant.MAX
+        } else {
+            try {
+                creationTime.plus(tokenDuration)
+            } catch (e: Exception) {
+                logger.error("Could not add token duration to current time: ${e.message}")
+                throw badRequest("Bad token duration: ${e.message}")
+            }
+        }
         val customerDbRow = customer.dbRowId ?: throw internalServerError(
             "Could not get customer '${customer.login}' database row ID"
-        )
-        val creationTime = getNowUs()
-        val expirationTimestampUs: Long = creationTime + tokenDurationUs
-        if (expirationTimestampUs < tokenDurationUs) throw badRequest(
-            "Token duration caused arithmetic overflow", // FIXME: need dedicate EC (?)
-            talerErrorCode = TalerErrorCode.TALER_EC_END
         )
         val token = BearerToken(
             bankCustomer = customerDbRow,
             content = tokenBytes,
-            creationTime = creationTime,
-            expirationTime = expirationTimestampUs,
+            creationTime = creationTime.toDbMicros()
+                ?: throw internalServerError("Could not get micros out of token creationTime Instant."),
+            expirationTime = expirationTimestamp.toDbMicros()
+                ?: throw internalServerError("Could not get micros out of token expirationTime Instant."),
             scope = req.scope,
             isRefreshable = req.refreshable
         )
-        if (!db.bearerTokenCreate(token)) throw internalServerError("Failed at inserting new token in the database")
+        if (!db.bearerTokenCreate(token))
+            throw internalServerError("Failed at inserting new token in the database")
         call.respond(
             TokenSuccessResponse(
                 access_token = Base32Crockford.encode(tokenBytes), expiration = TalerProtocolTimestamp(
-                    t_s = expirationTimestampUs / 1000000L
+                    t_s = expirationTimestamp
                 )
             )
         )
@@ -295,10 +307,11 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         // Note: 'when' helps not to omit more result codes, should more
         // be added.
         when (db.talerWithdrawalConfirm(op.withdrawalUuid, getNowUs())) {
-            WithdrawalConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
-                "Insufficient funds", TalerErrorCode.TALER_EC_END // FIXME: define EC for this.
-            )
-
+            WithdrawalConfirmationResult.BALANCE_INSUFFICIENT ->
+                throw conflict(
+                "Insufficient funds",
+                    TalerErrorCode.TALER_EC_END // FIXME: define EC for this.
+                )
             WithdrawalConfirmationResult.OP_NOT_FOUND ->
                 /**
                  * Despite previous checks, the database _still_ did not

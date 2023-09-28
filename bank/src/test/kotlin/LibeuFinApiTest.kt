@@ -8,8 +8,8 @@ import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
-import tech.libeufin.util.getNowUs
 import java.time.Duration
+import java.time.Instant
 import kotlin.random.Random
 
 class LibeuFinApiTest {
@@ -131,6 +131,30 @@ class LibeuFinApiTest {
         }
     }
 
+    // Creating token with "forever" duration.
+    @Test
+    fun tokenForeverTest() {
+        val db = initDb()
+        val ctx = getTestContext()
+        assert(db.customerCreate(customerFoo) != null)
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
+            }
+            val newTok = client.post("/accounts/foo/token") {
+                expectSuccess = true
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "pw")
+                setBody(
+                    """
+                    {"duration": {"d_us": "forever"}, "scope": "readonly"}
+                """.trimIndent()
+                )
+            }
+            val newTokObj = Json.decodeFromString<TokenSuccessResponse>(newTok.bodyAsText())
+            assert(newTokObj.expiration.t_s == Instant.MAX)
+        }
+    }
     // Checking the POST /token handling.
     @Test
     fun tokenTest() {

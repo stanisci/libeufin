@@ -1,12 +1,11 @@
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.modules.SerializersModule
 import org.junit.Test
-import tech.libeufin.bank.RelativeTime
-import tech.libeufin.bank.RelativeTimeSerializer
-import tech.libeufin.bank.TokenRequest
-import tech.libeufin.bank.TokenScope
+import tech.libeufin.bank.*
+import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 @Serializable
 data class MyJsonType(
@@ -27,23 +26,24 @@ class JsonTest {
         """.trimIndent()
         Json.decodeFromString<MyJsonType>(serialized)
     }
+
+    /**
+     * Testing the custom absolute and relative time serializers.
+     */
     @Test
-    fun unionTypeTest() {
-        val jsonCfg = Json {
-            serializersModule = SerializersModule {
-                contextual(RelativeTime::class) {
-                    RelativeTimeSerializer
-                }
-            }
-        }
-        assert(jsonCfg.decodeFromString<RelativeTime>("{\"d_us\": 3}").d_us == 3L)
-        assert(jsonCfg.decodeFromString<RelativeTime>("{\"d_us\": \"forever\"}").d_us == Long.MAX_VALUE)
-        val tokenReq = jsonCfg.decodeFromString<TokenRequest>("""
-            {
-              "scope": "readonly",
-              "duration": {"d_us": 30}
-            }
-        """.trimIndent())
-        assert(tokenReq.scope == TokenScope.readonly && tokenReq.duration?.d_us == 30L)
+    fun timeSerializers() {
+        // from JSON to time types
+        assert(Json.decodeFromString<RelativeTime>("{\"d_us\": 3}").d_us.toNanos() == 3000L)
+        assert(Json.decodeFromString<RelativeTime>("{\"d_us\": \"forever\"}").d_us == ChronoUnit.FOREVER.duration)
+        assert(Json.decodeFromString<TalerProtocolTimestamp>("{\"t_s\": 3}").t_s == Instant.ofEpochSecond(3))
+        assert(Json.decodeFromString<TalerProtocolTimestamp>("{\"t_s\": \"never\"}").t_s == Instant.MAX)
+
+        // from time types to JSON
+        val oneDay = RelativeTime(d_us = Duration.of(1, ChronoUnit.DAYS))
+        val oneDaySerial = Json.encodeToString(oneDay)
+        assert(Json.decodeFromString<RelativeTime>(oneDaySerial).d_us == oneDay.d_us)
+        val forever = RelativeTime(d_us = ChronoUnit.FOREVER.duration)
+        val foreverSerial = Json.encodeToString(forever)
+        assert(Json.decodeFromString<RelativeTime>(foreverSerial).d_us == forever.d_us)
     }
 }

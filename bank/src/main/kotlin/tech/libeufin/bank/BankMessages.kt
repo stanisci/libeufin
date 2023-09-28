@@ -21,10 +21,11 @@ package tech.libeufin.bank
 
 import io.ktor.http.*
 import io.ktor.server.application.*
-import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
+import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.*
-import kotlin.reflect.jvm.internal.impl.types.AbstractStubType
 
 /**
  * Allowed lengths for fractional digits in amounts.
@@ -38,13 +39,15 @@ enum class FracDigits(howMany: Int) {
 /**
  * Timestamp containing the number of seconds since epoch.
  */
-@Serializable
+@Serializable(with = TalerProtocolTimestampSerializer::class)
 data class TalerProtocolTimestamp(
-    val t_s: Long, // FIXME (?): not supporting "never" at the moment.
+    val t_s: Instant,
 ) {
     companion object {
         fun fromMicroseconds(uSec: Long): TalerProtocolTimestamp {
-            return TalerProtocolTimestamp(uSec / 1000000)
+            return TalerProtocolTimestamp(
+                Instant.EPOCH.plus(uSec, ChronoUnit.MICROS)
+            )
         }
     }
 }
@@ -101,8 +104,9 @@ data class RegisterAccountRequest(
  * Internal representation of relative times.  The
  * "forever" case is represented with Long.MAX_VALUE.
  */
+@Serializable(with = RelativeTimeSerializer::class)
 data class RelativeTime(
-    val d_us: Long
+    val d_us: Duration
 )
 
 /**
@@ -112,7 +116,6 @@ data class RelativeTime(
 @Serializable
 data class TokenRequest(
     val scope: TokenScope,
-    @Contextual
     val duration: RelativeTime? = null,
     val refreshable: Boolean = false
 )
@@ -169,6 +172,7 @@ data class Customer(
  * maybeCurrency is typically null when the TalerAmount object gets
  * defined by the Database class.
  */
+@Serializable(with = TalerAmountSerializer::class)
 class TalerAmount(
     val value: Long,
     val frac: Int,
@@ -592,7 +596,6 @@ data class IncomingReserveTransaction(
 @Serializable
 data class TransferRequest(
     val request_uid: String,
-    @Contextual
     val amount: TalerAmount,
     val exchange_base_url: String,
     val wtid: String,

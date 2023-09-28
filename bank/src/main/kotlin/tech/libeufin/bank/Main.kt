@@ -51,21 +51,23 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.encoding.encodeStructure
 import kotlinx.serialization.json.*
-import kotlinx.serialization.modules.SerializersModule
 import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import tech.libeufin.util.*
 import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.zip.InflaterInputStream
 import kotlin.system.exitProcess
 
 // GLOBALS
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
 const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
-val TOKEN_DEFAULT_DURATION_US = Duration.ofDays(1L).seconds * 1000000
+val TOKEN_DEFAULT_DURATION: java.time.Duration = Duration.ofDays(1L)
 
 
 /**
@@ -115,6 +117,59 @@ data class BankApplicationContext(
     val spaCaptchaURL: String?,
 )
 
+
+/**
+ * This custom (de)serializer interprets the Timestamp JSON
+ * type of the Taler common API.  In particular, it is responsible
+ * for _serializing_ timestamps, as this datatype is so far
+ * only used to respond to clients.
+ */
+object TalerProtocolTimestampSerializer : KSerializer<TalerProtocolTimestamp> {
+    override fun serialize(encoder: Encoder, value: TalerProtocolTimestamp) {
+        // Thanks: https://github.com/Kotlin/kotlinx.serialization/blob/master/docs/serializers.md#hand-written-composite-serializer
+        encoder.encodeStructure(descriptor) {
+            if (value.t_s == Instant.MAX) {
+                encodeStringElement(descriptor, 0, "never")
+                return@encodeStructure
+            }
+            val ts = value.t_s.toDbMicros() ?: throw internalServerError("Could not serialize timestamp")
+            encodeLongElement(descriptor, 0, ts)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): TalerProtocolTimestamp {
+        val jsonInput = decoder as? JsonDecoder ?: throw internalServerError("TalerProtocolTimestamp had no JsonDecoder")
+        val json = try {
+            jsonInput.decodeJsonElement().jsonObject
+        } catch (e: Exception) {
+            throw badRequest(
+                "Did not find a JSON object for TalerProtocolTimestamp: ${e.message}",
+                TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
+            )
+        }
+        val maybeTs = json["t_s"]?.jsonPrimitive ?: throw badRequest("Taler timestamp invalid: t_s field not found")
+        if (maybeTs.isString) {
+            if (maybeTs.content != "never") throw badRequest("Only 'never' allowed for t_s as string, but '${maybeTs.content}' was found")
+            return TalerProtocolTimestamp(t_s = Instant.MAX)
+        }
+        val ts: Long = maybeTs.longOrNull
+            ?: throw badRequest("Could not convert t_s '${maybeTs.content}' to a number")
+        val instant = try {
+            Instant.ofEpochSecond(ts)
+        } catch (e: Exception) {
+            logger.error("Could not get Instant from t_s: $ts: ${e.message}")
+            // Bank's fault.  API doesn't allow clients to pass this datatype.
+            throw internalServerError("Could not serialize this t_s: ${ts}")
+        }
+        return TalerProtocolTimestamp(instant)
+    }
+
+    override val descriptor: SerialDescriptor =
+        buildClassSerialDescriptor("TalerProtocolTimestamp") {
+            element<JsonElement>("t_s")
+        }
+}
+
 /**
  * This custom (de)serializer interprets the RelativeTime JSON
  * type.  In particular, it is responsible for converting the
@@ -122,10 +177,30 @@ data class BankApplicationContext(
  * is passed as is.
  */
 object RelativeTimeSerializer : KSerializer<RelativeTime> {
+    /**
+     * Internal representation to JSON.
+     */
     override fun serialize(encoder: Encoder, value: RelativeTime) {
-        throw internalServerError("Encoding of RelativeTime not implemented.") // API doesn't require this.
+        // Thanks: https://github.com/Kotlin/kotlinx.serialization/blob/master/docs/serializers.md#hand-written-composite-serializer
+        encoder.encodeStructure(descriptor) {
+            if (value.d_us == ChronoUnit.FOREVER.duration) {
+                encodeStringElement(descriptor, 0, "forever")
+                return@encodeStructure
+            }
+            val dUs = try {
+                value.d_us.toNanos()
+            } catch (e: Exception) {
+                logger.error(e.message)
+                // Bank's fault, as each numeric value should be checked before entering the system.
+                throw internalServerError("Could not convert java.time.Duration to JSON")
+            }
+            encodeLongElement(descriptor, 0, dUs / 1000L)
+        }
     }
 
+    /**
+     * JSON to internal representation.
+     */
     override fun deserialize(decoder: Decoder): RelativeTime {
         val jsonInput = decoder as? JsonDecoder ?: throw internalServerError("RelativeTime had no JsonDecoder")
         val json = try {
@@ -139,15 +214,22 @@ object RelativeTimeSerializer : KSerializer<RelativeTime> {
         val maybeDUs = json["d_us"]?.jsonPrimitive ?: throw badRequest("Relative time invalid: d_us field not found")
         if (maybeDUs.isString) {
             if (maybeDUs.content != "forever") throw badRequest("Only 'forever' allowed for d_us as string, but '${maybeDUs.content}' was found")
-            return RelativeTime(d_us = Long.MAX_VALUE)
+            return RelativeTime(d_us = ChronoUnit.FOREVER.duration)
         }
-        val dUs: Long =
-            maybeDUs.longOrNull ?: throw badRequest("Could not convert d_us: '${maybeDUs.content}' to a number")
-        return RelativeTime(d_us = dUs)
+        val dUs: Long = maybeDUs.longOrNull
+            ?: throw badRequest("Could not convert d_us: '${maybeDUs.content}' to a number")
+        val duration = try {
+            Duration.ofNanos(dUs * 1000L)
+        } catch (e: Exception) {
+            logger.error("Could not get Duration out of d_us content: ${dUs}. ${e.message}")
+            throw badRequest("Could not get Duration out of d_us content: ${dUs}")
+        }
+        return RelativeTime(d_us = duration)
     }
 
     override val descriptor: SerialDescriptor =
         buildClassSerialDescriptor("RelativeTime") {
+            // JsonElement helps to obtain "union" type Long|String
             element<JsonElement>("d_us")
         }
 }
@@ -232,15 +314,6 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
             encodeDefaults = true
             prettyPrint = true
             ignoreUnknownKeys = true
-            // Registering custom parser for RelativeTime
-            serializersModule = SerializersModule {
-                contextual(RelativeTime::class) {
-                    RelativeTimeSerializer
-                }
-                contextual(TalerAmount::class) {
-                    TalerAmountSerializer
-                }
-            }
         })
     }
     install(RequestValidation)
