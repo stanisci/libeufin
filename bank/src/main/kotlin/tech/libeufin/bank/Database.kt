@@ -810,7 +810,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
     }
 
     /**
-     *
+     * Confirms a Taler withdrawal: flags the operation as
+     * confirmed and performs the related wire transfer.
      */
     fun talerWithdrawalConfirm(
         opUuid: UUID,
@@ -846,6 +847,9 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         return WithdrawalConfirmationResult.SUCCESS
     }
 
+    /**
+     * Creates a cashout operation in the database.
+     */
     fun cashoutCreate(op: Cashout): Boolean {
         reconnect()
         val stmt = prepare("""
@@ -903,6 +907,11 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         return myExecute(stmt)
     }
 
+    /**
+     * Flags one cashout operation as confirmed.  The backing
+     * payment should already have taken place, before calling
+     * this function.
+     */
     fun cashoutConfirm(
         opUuid: UUID,
         tanConfirmationTimestamp: Long,
@@ -919,11 +928,18 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setObject(3, opUuid)
         return myExecute(stmt)
     }
-    // used by /abort
+
+    /**
+     * This type is used by the cashout /abort handler.
+     */
     enum class CashoutDeleteResult {
         SUCCESS,
         CONFLICT_ALREADY_CONFIRMED
     }
+
+    /**
+     * Deletes a cashout operation from the database.
+     */
     fun cashoutDelete(opUuid: UUID): CashoutDeleteResult {
         val stmt = prepare("""
            SELECT out_already_confirmed
@@ -938,6 +954,11 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             return CashoutDeleteResult.SUCCESS
         }
     }
+
+    /**
+     * Gets a cashout operation from the database, according
+     * to its uuid.
+     */
     fun cashoutGetFromUuid(opUuid: UUID): Cashout? {
         val stmt = prepare("""
            SELECT
@@ -1012,8 +1033,12 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             )
         }
     }
+
+    /**
+     * Represents the database row related to one payment
+     * that was requested by the Taler exchange.
+     */
     data class TalerTransferFromDb(
-        // Only used when this type if defined from a DB record
         val timestamp: Long,
         val debitTxRowId: Long,
         val requestUid: String,
@@ -1022,7 +1047,9 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         val wtid: String,
         val creditAccount: String
     )
-    // Gets a Taler transfer request, given its UID.
+    /**
+     * Gets a Taler transfer request, given its UID.
+     */
     fun talerTransferGetFromUid(requestUid: String): TalerTransferFromDb? {
         reconnect()
         val stmt = prepare("""
@@ -1059,10 +1086,15 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         }
     }
 
+    /**
+     * Holds the result of inserting a Taler transfer request
+     * into the database.
+     */
     data class TalerTransferCreationResult(
         val txResult: BankTransactionResult,
-        // Row ID of the debit bank transaction
-        // of a successful case.  Null upon errors
+        /**
+         * bank transaction that backs this Taler transfer request.
+         */
         val txRowId: Long? = null
     )
     /**

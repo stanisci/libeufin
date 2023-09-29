@@ -155,6 +155,7 @@ class LibeuFinApiTest {
             assert(newTokObj.expiration.t_s == Instant.MAX)
         }
     }
+
     // Checking the POST /token handling.
     @Test
     fun tokenTest() {
