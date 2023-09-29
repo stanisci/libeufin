@@ -275,7 +275,7 @@ val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompr
                     logger.error("Deflated request failed to inflate: ${e.message}")
                     throw badRequest(
                         hint = "Could not inflate request",
-                        talerErrorCode = TalerErrorCode.TALER_EC_END // FIXME: provide dedicated EC.
+                        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_COMPRESSION_INVALID
                     )
                 }
                 brc
@@ -283,7 +283,6 @@ val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompr
         }
     }
 }
-
 
 /**
  * Set up web server handlers for the Taler corebank API.
@@ -309,6 +308,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
     install(IgnoreTrailingSlash)
     install(ContentNegotiation) {
         json(Json {
+            @OptIn(ExperimentalSerializationApi::class)
             explicitNulls = false
             encodeDefaults = true
             prettyPrint = true
@@ -443,17 +443,6 @@ fun durationFromPretty(s: String): Long {
     return durationUs
 }
 
-/**
- * FIXME: Introduce a datatype for this instead of using Long
- */
-fun TalerConfig.requireValueDuration(section: String, option: String): Long {
-    val durationStr = lookupValueString(section, option)
-    if (durationStr == null) {
-        throw TalerConfigError("expected duration for section $section, option $option, but config value is empty")
-    }
-    return durationFromPretty(durationStr)
-}
-
 fun TalerConfig.requireValueAmount(section: String, option: String, currency: String): TalerAmount {
     val amountStr = lookupValueString(section, option)
     if (amountStr == null) {
@@ -573,7 +562,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val config = TalerConfig.load(this.configFile)
         val ctx = readBankApplicationContextFromConfig(config)
         val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
-        val servePortLong = config.requireValueNumber("libeufin-bank", "port")
+        config.requireValueNumber("libeufin-bank", "port")
         val db = Database(dbConnStr, ctx.currency)
         if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)

@@ -141,7 +141,6 @@ fun doTokenAuth(
 
 fun forbidden(
     hint: String = "No rights on the resource",
-    // FIXME: create a 'generic forbidden' Taler EC.
     talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_END
 ): LibeufinBankException = LibeufinBankException(
     httpStatus = HttpStatusCode.Forbidden, talerError = TalerError(
@@ -151,7 +150,7 @@ fun forbidden(
 
 fun unauthorized(hint: String = "Login failed"): LibeufinBankException = LibeufinBankException(
     httpStatus = HttpStatusCode.Unauthorized, talerError = TalerError(
-        code = TalerErrorCode.TALER_EC_BANK_LOGIN_FAILED.code, hint = hint
+        code = TalerErrorCode.TALER_EC_GENERIC_UNAUTHORIZED.code, hint = hint
     )
 )
 

@@ -33,7 +33,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             call.authenticateBankRequest(db, TokenScope.refreshable) ?: throw unauthorized("Authentication failed")
         val endpointOwner = call.maybeUriComponent("USERNAME")
         if (customer.login != endpointOwner) throw forbidden(
-            "User has no rights on this enpoint", TalerErrorCode.TALER_EC_END // FIXME: need generic forbidden
+            "User has no rights on this enpoint",
+            TalerErrorCode.TALER_EC_GENERIC_FORBIDDEN
         )
         val maybeAuthToken = call.getAuthToken()
         val req = call.receive<TokenRequest>()
@@ -93,16 +94,18 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         if (ctx.restrictRegistration) {
             val customer: Customer? = call.authenticateBankRequest(db, TokenScope.readwrite)
             if (customer == null || customer.login != "admin") throw LibeufinBankException(
-                httpStatus = HttpStatusCode.Unauthorized, talerError = TalerError(
-                    code = TalerErrorCode.TALER_EC_BANK_LOGIN_FAILED.code,
+                httpStatus = HttpStatusCode.Unauthorized,
+                talerError = TalerError(
+                    code = TalerErrorCode.TALER_EC_GENERIC_UNAUTHORIZED.code,
                     hint = "Either 'admin' not authenticated or an ordinary user tried this operation."
                 )
             )
         } // auth passed, proceed with activity.
         val req = call.receive<RegisterAccountRequest>() // Prohibit reserved usernames:
         if (req.username == "admin" || req.username == "bank") throw LibeufinBankException(
-            httpStatus = HttpStatusCode.Conflict, talerError = TalerError(
-                code = GENERIC_UNDEFINED, // FIXME: this waits GANA.
+            httpStatus = HttpStatusCode.Conflict,
+            talerError = TalerError(
+                code = TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT.code,
                 hint = "Username '${req.username}' is reserved."
             )
         ) // Checking idempotency.
@@ -242,7 +245,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             )
         ) throw forbidden(
             hint = "Insufficient funds to withdraw with Taler",
-            talerErrorCode = TalerErrorCode.TALER_EC_NONE // FIXME: need EC.
+            talerErrorCode = TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
         ) // Auth and funds passed, create the operation now!
         val opId = UUID.randomUUID()
         if (!db.talerWithdrawalCreate(
@@ -308,7 +311,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             WithdrawalConfirmationResult.BALANCE_INSUFFICIENT ->
                 throw conflict(
                 "Insufficient funds",
-                    TalerErrorCode.TALER_EC_END // FIXME: define EC for this.
+                    TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
                 )
             WithdrawalConfirmationResult.OP_NOT_FOUND ->
                 /**
@@ -324,7 +327,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                  * bank account got removed before this confirmation.
                  */
                 throw conflict(
-                    hint = "Exchange to withdraw from not found", talerEc = TalerErrorCode.TALER_EC_END // FIXME
+                    hint = "Exchange to withdraw from not found",
+                    talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
                 )
 
             WithdrawalConfirmationResult.CONFLICT -> throw internalServerError("Bank didn't check for idempotency")
@@ -380,7 +384,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             ?: throw internalServerError("Debtor database ID not found") // This performs already a SELECT on the bank account, like the wire transfer will do as well later!
         logger.info("creditor payto: $paytoWithoutParams")
         val creditorCustomerData = db.bankAccountGetFromInternalPayto(paytoWithoutParams) ?: throw notFound(
-            "Creditor account not found", TalerErrorCode.TALER_EC_END // FIXME: define this EC.
+            "Creditor account not found",
+            TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
         )
         if (txData.amount.currency != ctx.currency) throw badRequest(
             "Wrong currency: ${txData.amount.currency}", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
@@ -395,13 +400,11 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val res = db.bankTransactionCreate(dbInstructions)
         when (res) {
             Database.BankTransactionResult.CONFLICT -> throw conflict(
-                "Insufficient funds", TalerErrorCode.TALER_EC_END // FIXME: need bank 'insufficient funds' EC.
+                "Insufficient funds",
+                TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
             )
-
             Database.BankTransactionResult.NO_CREDITOR -> throw internalServerError("Creditor not found despite previous checks.")
-
             Database.BankTransactionResult.NO_DEBTOR -> throw internalServerError("Debtor not found despite the request was authenticated.")
-
             Database.BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.OK)
         }
         return@post
@@ -420,7 +423,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         }
         val customerRowId = c.dbRowId ?: throw internalServerError("Authenticated client lacks database entry")
         val tx = db.bankTransactionGetFromInternalId(txRowId) ?: throw notFound(
-            "Bank transaction '$tId' not found", TalerErrorCode.TALER_EC_NONE // FIXME: need def.
+            "Bank transaction '$tId' not found",
+            TalerErrorCode.TALER_EC_BANK_TRANSACTION_NOT_FOUND
         )
         val customerBankAccount = db.bankAccountGetFromOwnerId(customerRowId)
             ?: throw internalServerError("Customer '${c.login}' lacks bank account.")

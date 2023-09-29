@@ -170,6 +170,14 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
+   * The body in the request could not be decompressed by the server.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  TALER_EC_GENERIC_COMPRESSION_INVALID(28),
+
+
+  /**
    * The currencies involved in the operation do not match.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
@@ -199,6 +207,38 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   TALER_EC_GENERIC_UNAUTHORIZED(40),
+
+
+  /**
+   * The service refused the request as the given authorization token is unknown.
+   * Returned with an HTTP status code of #MHD_HTTP_UNAUTHORIZED (401).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  TALER_EC_GENERIC_TOKEN_UNKNOWN(41),
+
+
+  /**
+   * The service refused the request as the given authorization token expired.
+   * Returned with an HTTP status code of #MHD_HTTP_UNAUTHORIZED (401).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  TALER_EC_GENERIC_TOKEN_EXPIRED(42),
+
+
+  /**
+   * The service refused the request as the given authorization token is malformed.
+   * Returned with an HTTP status code of #MHD_HTTP_UNAUTHORIZED (401).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  TALER_EC_GENERIC_TOKEN_MALFORMED(43),
+
+
+  /**
+   * The service refused the request due to lack of proper rights on the resource.
+   * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  TALER_EC_GENERIC_FORBIDDEN(44),
 
 
   /**
@@ -479,6 +519,14 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   TALER_EC_EXCHANGE_GENERIC_NEW_DENOMS_ARRAY_SIZE_EXCESSIVE(1018),
+
+
+  /**
+   * The coin is not known to the exchange (yet).
+   * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  TALER_EC_EXCHANGE_GENERIC_COIN_UNKNOWN(1019),
 
 
   /**
@@ -890,19 +938,11 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The reserve balance, status or history was requested for a reserve which is not known to the exchange.
-   * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
-   * (A value of 0 indicates that the error is generated client-side).
-   */
-  TALER_EC_EXCHANGE_RESERVES_STATUS_UNKNOWN(1250),
-
-
-  /**
-   * The reserve status was requested with a bad signature.
+   * The coin history was requested with a bad signature.
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_STATUS_BAD_SIGNATURE(1251),
+  TALER_EC_EXCHANGE_COIN_HISTORY_BAD_SIGNATURE(1251),
 
 
   /**
@@ -910,7 +950,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_HISTORY_BAD_SIGNATURE(1252),
+  TALER_EC_EXCHANGE_RESERVE_HISTORY_BAD_SIGNATURE(1252),
 
 
   /**
@@ -3146,14 +3186,6 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * Could not login for the requested operation.
-   * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
-   * (A value of 0 indicates that the error is generated client-side).
-   */
-  TALER_EC_BANK_LOGIN_FAILED(5105),
-
-
-  /**
    * The bank account referenced in the requested operation was not found.
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
@@ -3263,6 +3295,14 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   TALER_EC_BANK_POST_WITHDRAWAL_OPERATION_REQUIRED(5119),
+
+
+  /**
+   * The client tried to register a new account under a reserved username (like 'admin' for example).
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  TALER_EC_BANK_RESERVED_USERNAME_CONFLICT(5120),
 
 
   /**
@@ -4295,4 +4335,6 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   TALER_EC_END(9999),
+
+
 }

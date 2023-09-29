@@ -371,7 +371,6 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             throw internalServerError(
                 "Do not pass a balance upon bank account creation, do a wire transfer instead."
             )
-        // FIXME: likely to be changed to only do internal_payto_uri
         val stmt = prepare("""
             INSERT INTO bank_accounts
               (internal_payto_uri
@@ -1116,6 +1115,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         val txResult: BankTransactionResult,
         /**
          * bank transaction that backs this Taler transfer request.
+         * This is the debit transactions associated to the exchange
+         * bank account.
          */
         val txRowId: Long? = null
     )
@@ -1139,7 +1140,6 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         endToEndId: String = "not used",
         ): TalerTransferCreationResult {
         reconnect()
-        // FIXME: future versions should return the exchange's latest bank transaction ID
         val stmt = prepare("""
             SELECT
               out_exchange_balance_insufficient

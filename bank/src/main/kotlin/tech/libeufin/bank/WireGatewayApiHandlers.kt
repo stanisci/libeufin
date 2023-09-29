@@ -93,7 +93,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             }
             throw conflict(
                 hint = "request_uid used already",
-                talerEc = TalerErrorCode.TALER_EC_END // FIXME: need appropriate Taler EC.
+                talerEc = TalerErrorCode.TALER_EC_BANK_TRANSFER_REQUEST_UID_REUSED
             )
         }
         // Legitimate request, go on.
@@ -111,12 +111,12 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         if (dbRes.txResult == Database.BankTransactionResult.CONFLICT)
             throw conflict(
                 "Insufficient balance for exchange",
-                TalerErrorCode.TALER_EC_END // FIXME
+                TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
             )
         if (dbRes.txResult == Database.BankTransactionResult.NO_CREDITOR)
             throw notFound(
                 "Creditor account was not found",
-                TalerErrorCode.TALER_EC_END // FIXME
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
         val debitRowId = dbRes.txRowId
             ?: throw internalServerError("Database did not return the debit tx row ID")

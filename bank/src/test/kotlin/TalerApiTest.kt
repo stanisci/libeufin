@@ -72,7 +72,7 @@ class TalerApiTest {
                       "credit_account": "BAR-IBAN-ABC"
                     }
                 """.trimIndent()
-            val resp = client.post("/accounts/foo/taler-wire-gateway/transfer") {
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
                 contentType(ContentType.Application.Json)
                 expectSuccess = true
@@ -80,7 +80,7 @@ class TalerApiTest {
             }
             // println(resp.bodyAsText())
             // check idempotency
-            val idemResp = client.post("/accounts/foo/taler-wire-gateway/transfer") {
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
                 contentType(ContentType.Application.Json)
                 expectSuccess = true

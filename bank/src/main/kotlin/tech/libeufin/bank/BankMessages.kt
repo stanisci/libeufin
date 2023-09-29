@@ -31,11 +31,9 @@ import java.util.*
 /**
  * Allowed lengths for fractional digits in amounts.
  */
-enum class FracDigits(howMany: Int) {
-    TWO(2),
-    EIGHT(8)
+enum class FracDigits {
+    TWO, EIGHT
 }
-
 
 /**
  * Timestamp containing the number of seconds since epoch.
@@ -437,8 +435,6 @@ typealias ResourceName = String
 
 /**
  * Checks if the input Customer has the rights over ResourceName.
- * FIXME: myAuth() gives null on failures, but this gives false.
- * Should they return the same, for consistency?
  */
 fun ResourceName.canI(c: Customer, withAdmin: Boolean = true): Boolean {
     if (c.login == this) return true
