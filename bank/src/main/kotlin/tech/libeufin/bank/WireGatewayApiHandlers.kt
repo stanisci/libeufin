@@ -27,6 +27,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
+import tech.libeufin.util.stripIbanPayto
 import java.time.Instant
 
 fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) {
@@ -76,10 +77,11 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         val req = call.receive<TransferRequest>()
         // Checking for idempotency.
         val maybeDoneAlready = db.talerTransferGetFromUid(req.request_uid)
+        val creditAccount = stripIbanPayto(req.credit_account)
         if (maybeDoneAlready != null) {
             val isIdempotent =
                 maybeDoneAlready.amount == req.amount
-                        && maybeDoneAlready.creditAccount == req.credit_account
+                        && maybeDoneAlready.creditAccount == creditAccount
                         && maybeDoneAlready.exchangeBaseUrl == req.exchange_base_url
                         && maybeDoneAlready.wtid == req.wtid
             if (isIdempotent) {
