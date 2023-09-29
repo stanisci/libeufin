@@ -27,6 +27,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
+import java.time.Instant
 
 fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) {
     get("/taler-wire-gateway/config") {
@@ -59,7 +60,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                 IncomingReserveTransaction(
                     row_id = it.expectRowId(),
                     amount = it.amount.toString(),
-                    date = TalerProtocolTimestamp.fromMicroseconds(it.transactionDate),
+                    date = TalerProtocolTimestamp(it.transactionDate),
                     debit_account = it.debtorPaytoUri,
                     reserve_pub = it.subject
                 )
@@ -101,7 +102,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             throw badRequest("Currency mismatch: $internalCurrency vs ${req.amount.currency}")
         val exchangeBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
             ?: throw internalServerError("Exchange does not have a bank account")
-        val transferTimestamp = getNowUs()
+        val transferTimestamp = Instant.now()
         val dbRes = db.talerTransferCreate(
             req = req,
             exchangeBankAccountId = exchangeBankAccount.expectRowId(),
@@ -121,7 +122,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             ?: throw internalServerError("Database did not return the debit tx row ID")
         call.respond(
             TransferResponse(
-                timestamp = TalerProtocolTimestamp.fromMicroseconds(transferTimestamp),
+                timestamp = TalerProtocolTimestamp(transferTimestamp),
                 row_id = debitRowId
             )
         )
@@ -151,7 +152,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             )
         val exchangeAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
             ?: throw internalServerError("exchange bank account not found, despite it's a customer")
-        val txTimestamp = getNowUs()
+        val txTimestamp = Instant.now()
         val op = BankInternalTransaction(
             debtorAccountId = walletAccount.expectRowId(),
             amount = amount,
@@ -174,7 +175,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         call.respond(
             AddIncomingResponse(
                 row_id = rowId,
-                timestamp = TalerProtocolTimestamp.fromMicroseconds(txTimestamp)
+                timestamp = TalerProtocolTimestamp(txTimestamp)
             )
         )
         return@post

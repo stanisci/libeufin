@@ -24,11 +24,14 @@ import org.postgresql.jdbc.PgConnection
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.getJdbcConnectionFromPg
+import tech.libeufin.util.microsToJavaInstant
+import tech.libeufin.util.toDbMicros
 import java.io.File
 import java.sql.DriverManager
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
+import java.time.Instant
 import java.util.*
 import kotlin.math.abs
 
@@ -40,6 +43,25 @@ fun BankAccount.expectRowId(): Long = this.bankAccountId ?: throw internalServer
 fun BankAccountTransaction.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Bank account transaction (${this.subject}) lacks database row ID.")
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
+
+/**
+ * This error occurs in case the timestamp took by the bank for some
+ * event could not be converted in microseconds.  Note: timestamp are
+ * taken via the Instant.now(), then converted to nanos, and then divided
+ * by 1000 to obtain the micros.
+ *
+ * It could be that a legitimate timestamp overflows in the process of
+ * being converted to micros - as described above.  In the case of a timestamp,
+ * the fault lies to the bank, because legitimate timestamps must (at the
+ * time of writing!) go through the conversion to micros.
+ *
+ * On the other hand (and for the sake of completeness), in the case of a
+ * timestamp that was calculated after a client-submitted duration, the overflow
+ * lies to the client, because they must have specified a gigantic amount of time
+ * that overflew the conversion to micros and should simply have specified "forever".
+ */
+private fun faultyTimestampByBank() = internalServerError("Bank took overflowing timestamp")
+private fun faultyDurationByClient() = badRequest("Overflowing duration, please specify 'forever' instead.")
 
 fun initializeDatabaseTables(dbConfig: String, sqlDir: String) {
     logger.info("doing DB initialization, sqldir $sqlDir, dbConfig $dbConfig")
@@ -299,8 +321,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                (?, ?, ?, ?::token_scope_enum, ?, ?)
         """)
         stmt.setBytes(1, token.content)
-        stmt.setLong(2, token.creationTime)
-        stmt.setLong(3, token.expirationTime)
+        stmt.setLong(2, token.creationTime.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(3, token.expirationTime.toDbMicros() ?: throw faultyDurationByClient())
         stmt.setString(4, token.scope.name)
         stmt.setLong(5, token.bankCustomer)
         stmt.setBoolean(6, token.isRefreshable)
@@ -323,8 +345,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             if (!it.next()) return null
             return BearerToken(
                 content = token,
-                creationTime = it.getLong("creation_time"),
-                expirationTime = it.getLong("expiration_time"),
+                creationTime = it.getLong("creation_time").microsToJavaInstant() ?: throw faultyTimestampByBank(),
+                expirationTime = it.getLong("expiration_time").microsToJavaInstant() ?: throw faultyDurationByClient(),
                 bankCustomer = it.getLong("bank_customer"),
                 scope = it.getString("scope").run {
                     if (this == TokenScope.readwrite.name) return@run TokenScope.readwrite
@@ -511,7 +533,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setString(3, tx.subject)
         stmt.setLong(4, tx.amount.value)
         stmt.setInt(5, tx.amount.frac)
-        stmt.setLong(6, tx.transactionDate)
+        stmt.setLong(6, tx.transactionDate.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.setString(7, tx.accountServicerReference)
         stmt.setString(8, tx.paymentInformationId)
         stmt.setString(9, tx.endToEndId)
@@ -603,7 +625,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                 bankAccountId = it.getLong("bank_account_id"),
                 paymentInformationId = it.getString("payment_information_id"),
                 subject = it.getString("subject"),
-                transactionDate = it.getLong("transaction_date")
+                transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()
             )
         }
     }
@@ -699,7 +721,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                         bankAccountId = it.getLong("bank_account_id"),
                         paymentInformationId = it.getString("payment_information_id"),
                         subject = it.getString("subject"),
-                        transactionDate = it.getLong("transaction_date"),
+                        transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
                         dbRowId = it.getLong("bank_transaction_id")
                 ))
             } while (it.next())
@@ -815,7 +837,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
      */
     fun talerWithdrawalConfirm(
         opUuid: UUID,
-        timestamp: Long,
+        timestamp: Instant,
         accountServicerReference: String = "NOT-USED",
         endToEndId: String = "NOT-USED",
         paymentInfId: String = "NOT-USED"
@@ -831,7 +853,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         """
         )
         stmt.setObject(1, opUuid)
-        stmt.setLong(2, timestamp)
+        stmt.setLong(2, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.setString(3, accountServicerReference)
         stmt.setString(4, endToEndId)
         stmt.setString(5, paymentInfId)
@@ -898,7 +920,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setLong(10, op.sellOutFee.value)
         stmt.setInt(11, op.sellOutFee.frac)
         stmt.setString(12, op.subject)
-        stmt.setLong(13, op.creationTime)
+        stmt.setLong(13, op.creationTime.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.setString(14, op.tanChannel.name)
         stmt.setString(15, op.tanCode)
         stmt.setLong(16, op.bankAccount)
@@ -1008,7 +1030,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                 credit_payto_uri = it.getString("credit_payto_uri"),
                 cashoutCurrency = it.getString("cashout_currency"),
                 cashoutUuid = opUuid,
-                creationTime = it.getLong("creation_time"),
+                creationTime = it.getLong("creation_time").microsToJavaInstant() ?: throw faultyTimestampByBank(),
                 sellAtRatio = it.getInt("sell_at_ratio"),
                 sellOutFee = TalerAmount(
                     value = it.getLong("sell_out_fee_val"),
@@ -1028,7 +1050,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                 localTransaction = it.getLong("local_transaction"),
                 tanConfirmationTime = it.getLong("tan_confirmation_time").run {
                     if (this == 0L) return@run null
-                    return@run this
+                    return@run this.microsToJavaInstant() ?: throw faultyTimestampByBank()
                 }
             )
         }
@@ -1111,7 +1133,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
     fun talerTransferCreate(
         req: TransferRequest,
         exchangeBankAccountId: Long,
-        timestamp: Long,
+        timestamp: Instant,
         acctSvcrRef: String = "not used",
         pmtInfId: String = "not used",
         endToEndId: String = "not used",
@@ -1144,7 +1166,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setString(5, req.exchange_base_url)
         stmt.setString(6, req.credit_account)
         stmt.setLong(7, exchangeBankAccountId)
-        stmt.setLong(8, timestamp)
+        stmt.setLong(8, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.setString(9, acctSvcrRef)
         stmt.setString(10, pmtInfId)
         stmt.setString(11, endToEndId)

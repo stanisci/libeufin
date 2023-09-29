@@ -118,7 +118,7 @@ fun doTokenAuth(
         logger.error("Auth token not found")
         return null
     }
-    if (maybeToken.expirationTime - getNowUs() < 0) {
+    if (maybeToken.expirationTime.isBefore(Instant.now())) {
         logger.error("Auth token is expired")
         return null
     }
@@ -439,6 +439,3 @@ fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean 
     }
     return true
 }
-
-fun getNowUs(): Long = Instant.now().toDbMicros()
-    ?: throw internalServerError("Could not get micros out of Instant.now()")

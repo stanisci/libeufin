@@ -20,6 +20,7 @@
 package tech.libeufin.util
 
 import java.time.*
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 
 /**
@@ -28,13 +29,17 @@ import java.util.concurrent.TimeUnit
  * if one arithmetic overflow occurred.
  */
 private fun Instant.toNanos(): Long? {
-    val oneSecNanos = TimeUnit.SECONDS.toNanos(1)
+    val oneSecNanos = ChronoUnit.SECONDS.duration.toNanos()
     val nanoBase: Long = this.epochSecond * oneSecNanos
-    if (nanoBase != 0L && nanoBase / this.epochSecond != oneSecNanos)
+    if (nanoBase != 0L && nanoBase / this.epochSecond != oneSecNanos) {
+        logger.error("Multiplication overflow: could not convert Instant to nanos.")
         return null
+    }
     val res = nanoBase + this.nano
-    if (res < nanoBase)
+    if (res < nanoBase) {
+        logger.error("Addition overflow: could not convert Instant to nanos.")
         return null
+    }
     return res
 }
 
@@ -55,4 +60,20 @@ fun Instant.toDbMicros(): Long? {
         return Long.MAX_VALUE
     val nanos = this.toNanos() ?: return null
     return nanos / 1000L
+}
+
+/**
+ * This helper is typically used to convert a timestamp expressed
+ * in microseconds from the DB back to the Web application.  In case
+ * of _any_ error, it logs it and returns null.
+ */
+fun Long.microsToJavaInstant(): Instant? {
+    if (this == Long.MAX_VALUE)
+        return Instant.MAX
+    return try {
+        Instant.EPOCH.plus(this, ChronoUnit.MICROS)
+    } catch (e: Exception) {
+        logger.error(e.message)
+        return null
+    }
 }

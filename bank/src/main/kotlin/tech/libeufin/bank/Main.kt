@@ -132,8 +132,7 @@ object TalerProtocolTimestampSerializer : KSerializer<TalerProtocolTimestamp> {
                 encodeStringElement(descriptor, 0, "never")
                 return@encodeStructure
             }
-            val ts = value.t_s.toDbMicros() ?: throw internalServerError("Could not serialize timestamp")
-            encodeLongElement(descriptor, 0, ts)
+            encodeLongElement(descriptor, 0, value.t_s.epochSecond)
         }
     }
 
@@ -368,6 +367,9 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
          */
         exception<LibeufinBankException> { call, cause ->
             logger.error(cause.talerError.hint)
+            // Stacktrace if bank's fault
+            if (cause.httpStatus.toString().startsWith('5'))
+                cause.printStackTrace()
             call.respond(
                 status = cause.httpStatus,
                 message = cause.talerError

@@ -245,8 +245,8 @@ data class BearerToken(
     val content: ByteArray,
     val scope: TokenScope,
     val isRefreshable: Boolean = false,
-    val creationTime: Long,
-    val expirationTime: Long,
+    val creationTime: Instant,
+    val expirationTime: Instant,
     /**
      * Serial ID of the database row that hosts the bank customer
      * that is associated with this token.  NOTE: if the token is
@@ -270,7 +270,7 @@ data class BankInternalTransaction(
     val debtorAccountId: Long,
     val subject: String,
     val amount: TalerAmount,
-    val transactionDate: Long,
+    val transactionDate: Instant,
     val accountServicerReference: String = "not used", // ISO20022
     val endToEndId: String = "not used", // ISO20022
     val paymentInformationId: String = "not used" // ISO20022
@@ -288,7 +288,7 @@ data class BankAccountTransaction(
     val debtorName: String,
     val subject: String,
     val amount: TalerAmount,
-    val transactionDate: Long, // microseconds
+    val transactionDate: Instant,
     /**
      * Is the transaction debit, or credit for the
      * bank account pointed by this object?
@@ -338,8 +338,8 @@ data class Cashout(
     val sellAtRatio: Int,
     val sellOutFee: TalerAmount,
     val subject: String,
-    val creationTime: Long,
-    val tanConfirmationTime: Long? = null,
+    val creationTime: Instant,
+    val tanConfirmationTime: Instant? = null,
     val tanChannel: TanChannel,
     val tanCode: String,
     val bankAccount: Long,

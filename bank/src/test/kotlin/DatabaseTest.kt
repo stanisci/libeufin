@@ -20,6 +20,7 @@
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
+import java.time.Instant
 import java.util.Random
 import java.util.UUID
 
@@ -37,7 +38,7 @@ fun genTx(
         accountServicerReference = "acct-svcr-ref",
         endToEndId = "end-to-end-id",
         paymentInformationId = "pmtinfid",
-        transactionDate = 100000L
+        transactionDate = Instant.now()
     )
 
 class DatabaseTest {
@@ -122,7 +123,7 @@ class DatabaseTest {
         val res = db.talerTransferCreate(
             req = exchangeReq,
             exchangeBankAccountId = 1L,
-            timestamp = getNowUs()
+            timestamp = Instant.now()
         )
         assert(res.txResult == Database.BankTransactionResult.SUCCESS)
     }
@@ -135,8 +136,8 @@ class DatabaseTest {
         val token = BearerToken(
             bankCustomer = 1L,
             content = tokenBytes,
-            creationTime = getNowUs(),
-            expirationTime = getNowUs(),
+            creationTime = Instant.now(),
+            expirationTime = Instant.now().plusSeconds(10),
             scope = TokenScope.readonly
         )
         assert(db.bearerTokenGet(token.content) == null)
@@ -196,7 +197,7 @@ class DatabaseTest {
             accountServicerReference = "acct-svcr-ref",
             endToEndId = "end-to-end-id",
             paymentInformationId = "pmtinfid",
-            transactionDate = 100000L
+            transactionDate = Instant.now()
         )
         val barPays = db.bankTransactionCreate(barPaysFoo)
         assert(barPays == Database.BankTransactionResult.SUCCESS)
@@ -272,7 +273,7 @@ class DatabaseTest {
         ))
         val opSelected = db.talerWithdrawalGet(uuid)
         assert(opSelected?.selectionDone == true && !opSelected.confirmationDone)
-        assert(db.talerWithdrawalConfirm(uuid, 1L) == WithdrawalConfirmationResult.SUCCESS)
+        assert(db.talerWithdrawalConfirm(uuid, Instant.now()) == WithdrawalConfirmationResult.SUCCESS)
         // Finally confirming the operation (means customer wired funds to the exchange.)
         assert(db.talerWithdrawalGet(uuid)?.confirmationDone == true)
     }
@@ -315,10 +316,10 @@ class DatabaseTest {
             sellOutFee = TalerAmount(0, 44, currency),
             credit_payto_uri = "IBAN",
             cashoutCurrency = "KUDOS",
-            creationTime = 3L,
+            creationTime = Instant.now(),
             subject = "31st",
             tanChannel = TanChannel.sms,
-            tanCode = "secret",
+            tanCode = "secret"
         )
         val fooId = db.customerCreate(customerFoo)
         assert(fooId != null)
@@ -343,7 +344,7 @@ class DatabaseTest {
             accountServicerReference = "acct-svcr-ref",
             endToEndId = "end-to-end-id",
             paymentInformationId = "pmtinfid",
-            transactionDate = 100000L
+            transactionDate = Instant.now()
         )
         ) == Database.BankTransactionResult.SUCCESS)
         // Confirming the cash-out

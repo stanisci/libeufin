@@ -72,10 +72,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val token = BearerToken(
             bankCustomer = customerDbRow,
             content = tokenBytes,
-            creationTime = creationTime.toDbMicros()
-                ?: throw internalServerError("Could not get micros out of token creationTime Instant."),
-            expirationTime = expirationTimestamp.toDbMicros()
-                ?: throw internalServerError("Could not get micros out of token expirationTime Instant."),
+            creationTime = creationTime,
+            expirationTime = expirationTimestamp,
             scope = req.scope,
             isRefreshable = req.refreshable
         )
@@ -179,7 +177,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                 debtorAccountId = adminBankAccount.expectRowId(),
                 amount = bonusAmount,
                 subject = "Registration bonus.",
-                transactionDate = getNowUs()
+                transactionDate = Instant.now()
             )
             when (db.bankTransactionCreate(adminPaysBonus)) {
                 Database.BankTransactionResult.NO_CREDITOR -> throw internalServerError("Bonus impossible: creditor not found, despite its recent creation.")
@@ -306,7 +304,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         // to the selected state _and_ wire the funds to the exchange.
         // Note: 'when' helps not to omit more result codes, should more
         // be added.
-        when (db.talerWithdrawalConfirm(op.withdrawalUuid, getNowUs())) {
+        when (db.talerWithdrawalConfirm(op.withdrawalUuid, Instant.now())) {
             WithdrawalConfirmationResult.BALANCE_INSUFFICIENT ->
                 throw conflict(
                 "Insufficient funds",
@@ -358,7 +356,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                     subject = it.subject,
                     amount = it.amount.toString(),
                     direction = it.direction,
-                    date = TalerProtocolTimestamp.fromMicroseconds(it.transactionDate),
+                    date = TalerProtocolTimestamp(it.transactionDate),
                     row_id = it.dbRowId ?: throw internalServerError(
                         "Transaction timestamped with '${it.transactionDate}' did not have row ID"
                     )
@@ -393,7 +391,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             creditorAccountId = creditorCustomerData.owningCustomerId,
             subject = subject,
             amount = amount,
-            transactionDate = getNowUs()
+            transactionDate = Instant.now()
         )
         val res = db.bankTransactionCreate(dbInstructions)
         when (res) {
@@ -433,7 +431,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                 amount = "${tx.amount.currency}:${tx.amount.value}.${tx.amount.frac}",
                 creditor_payto_uri = tx.creditorPaytoUri,
                 debtor_payto_uri = tx.debtorPaytoUri,
-                date = TalerProtocolTimestamp.fromMicroseconds(tx.transactionDate),
+                date = TalerProtocolTimestamp(tx.transactionDate),
                 direction = tx.direction,
                 subject = tx.subject,
                 row_id = txRowId

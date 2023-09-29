@@ -10,6 +10,7 @@ import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
 import java.time.Duration
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import kotlin.random.Random
 
 class LibeuFinApiTest {
@@ -179,8 +180,8 @@ class LibeuFinApiTest {
             // Checking that the token lifetime defaulted to 24 hours.
             val newTokObj = Json.decodeFromString<TokenSuccessResponse>(newTok.bodyAsText())
             val newTokDb = db.bearerTokenGet(Base32Crockford.decode(newTokObj.access_token))
-            val lifeTime = newTokDb!!.expirationTime - newTokDb.creationTime
-            assert(Duration.ofHours(24).seconds * 1000000 == lifeTime)
+            val lifeTime = Duration.between(newTokDb!!.creationTime, newTokDb.expirationTime)
+            assert(lifeTime == Duration.ofDays(1))
             // foo tries on bar endpoint
             val r = client.post("/accounts/bar/token") {
                 expectSuccess = false
@@ -195,9 +196,9 @@ class LibeuFinApiTest {
                         content = fooTok,
                         bankCustomer = 1L, // only foo exists.
                         scope = TokenScope.readonly,
-                        creationTime = getNowUs(),
+                        creationTime = Instant.now(),
                         isRefreshable = true,
-                        expirationTime = getNowUs() + (Duration.ofHours(1).toMillis() * 1000)
+                        expirationTime = Instant.now().plus(1, ChronoUnit.DAYS)
                     )
                 )
             )
