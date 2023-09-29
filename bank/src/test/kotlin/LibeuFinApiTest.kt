@@ -3,6 +3,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
@@ -249,6 +250,18 @@ class LibeuFinApiTest {
                 setBody("{\"scope\": \"readonly\"}")
                 expectSuccess = true
             }
+            // Testing the 'forever' case.
+            val forever = client.post("/accounts/foo/token") {
+                expectSuccess = true
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "pw")
+                setBody("""{
+                    "scope": "readonly",
+                    "duration": {"d_us": "forever"}
+                }""".trimIndent())
+            }
+            val never: TokenSuccessResponse = Json.decodeFromString(forever.bodyAsText())
+            assert(never.expiration.t_s == Instant.MAX)
         }
     }
 
