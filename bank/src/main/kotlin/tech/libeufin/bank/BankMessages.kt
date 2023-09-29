@@ -19,6 +19,7 @@
 
 package tech.libeufin.bank
 
+import CreditDebitIndicator
 import io.ktor.http.*
 import io.ktor.server.application.*
 import kotlinx.serialization.Serializable
@@ -357,12 +358,14 @@ data class Config(
     val fiat_currency: String? = null
 )
 
+enum class CorebankCreditDebitInfo {
+    credit, debit
+}
+
 @Serializable
 data class Balance(
-    // FIXME: Should not be a string
-    val amount: String,
-    // FIXME: Should not be a string
-    val credit_debit_indicator: String,
+    val amount: TalerAmount,
+    val credit_debit_indicator: CorebankCreditDebitInfo,
 )
 
 /**
@@ -384,7 +387,7 @@ data class AccountData(
 @Serializable
 data class BankAccountTransactionCreate(
     val payto_uri: String,
-    val amount: String
+    val amount: TalerAmount
 )
 
 /* History element, either from GET /transactions/T_ID
@@ -393,7 +396,7 @@ data class BankAccountTransactionCreate(
 data class BankAccountTransactionInfo(
     val creditor_payto_uri: String,
     val debtor_payto_uri: String,
-    val amount: String,
+    val amount: TalerAmount,
     val direction: TransactionDirection,
     val subject: String,
     val row_id: Long, // is T_ID
@@ -409,7 +412,7 @@ data class BankAccountTransactionsResponse(
 // Taler withdrawal request.
 @Serializable
 data class BankAccountCreateWithdrawalRequest(
-    val amount: String
+    val amount: TalerAmount
 )
 
 // Taler withdrawal response.
@@ -422,7 +425,7 @@ data class BankAccountCreateWithdrawalResponse(
 // Taler withdrawal details response
 @Serializable
 data class BankAccountGetWithdrawalResponse(
-    val amount: String,
+    val amount: TalerAmount,
     val aborted: Boolean,
     val confirmation_done: Boolean,
     val selection_done: Boolean,
@@ -504,7 +507,7 @@ data class BankWithdrawalOperationStatus(
 
     /* Amount that will be withdrawn with this operation
        (raw amount without fee considerations). */
-    val amount: String,
+    val amount: TalerAmount,
 
     /* Bank account of the customer that is withdrawing, as a
       ``payto`` URI. */
@@ -547,7 +550,7 @@ data class BankWithdrawalOperationPostResponse(
  */
 @Serializable
 data class AddIncomingRequest(
-    val amount: String,
+    val amount: TalerAmount,
     val reserve_pub: String,
     val debit_account: String
 )
@@ -585,7 +588,7 @@ data class IncomingReserveTransaction(
     val type: String = "RESERVE",
     val row_id: Long, // DB row ID of the payment.
     val date: TalerProtocolTimestamp,
-    val amount: String,
+    val amount: TalerAmount,
     val debit_account: String, // Payto of the sender.
     val reserve_pub: String
 )

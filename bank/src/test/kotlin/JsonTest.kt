@@ -46,4 +46,10 @@ class JsonTest {
         val foreverSerial = Json.encodeToString(forever)
         assert(Json.decodeFromString<RelativeTime>(foreverSerial).d_us == forever.d_us)
     }
+
+    @Test
+    fun enumSerializer() {
+        assert("\"credit\"" == Json.encodeToString(CorebankCreditDebitInfo.credit))
+        assert("\"debit\"" == Json.encodeToString(CorebankCreditDebitInfo.debit))
+    }
 }

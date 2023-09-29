@@ -239,7 +239,7 @@ object TalerAmountSerializer : KSerializer<TalerAmount> {
         PrimitiveSerialDescriptor("TalerAmount", PrimitiveKind.STRING)
 
     override fun serialize(encoder: Encoder, value: TalerAmount) {
-        throw internalServerError("Encoding of TalerAmount not implemented.") // API doesn't require this.
+        encoder.encodeString(value.toString())
     }
 
     override fun deserialize(decoder: Decoder): TalerAmount {

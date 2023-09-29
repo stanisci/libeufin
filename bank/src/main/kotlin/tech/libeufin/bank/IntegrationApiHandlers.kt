@@ -40,11 +40,8 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
         val wopid = call.expectUriComponent("wopid")
         val op = getWithdrawal(db, wopid) // throws 404 if not found.
         val relatedBankAccount = db.bankAccountGetFromOwnerId(op.walletBankAccount)
-        if (relatedBankAccount == null) throw internalServerError("Bank has a withdrawal not related to any bank account.")
+            ?: throw internalServerError("Bank has a withdrawal not related to any bank account.")
         val suggestedExchange = ctx.suggestedWithdrawalExchange
-        val walletCustomer = db.customerGetFromRowId(relatedBankAccount.owningCustomerId)
-        if (walletCustomer == null)
-            throw internalServerError("Could not get the username that owns this withdrawal")
         val confirmUrl = if (ctx.spaCaptchaURL == null) null else
             getWithdrawalConfirmUrl(
                 baseUrl = ctx.spaCaptchaURL,
@@ -55,7 +52,7 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
                 aborted = op.aborted,
                 selection_done = op.selectionDone,
                 transfer_done = op.confirmationDone,
-                amount = op.amount.toString(),
+                amount = op.amount,
                 sender_wire = relatedBankAccount.internalPaytoUri,
                 suggested_exchange = suggestedExchange,
                 confirm_transfer_url = confirmUrl

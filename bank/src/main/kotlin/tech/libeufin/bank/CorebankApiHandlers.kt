@@ -207,10 +207,11 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val bankAccountData = db.bankAccountGetFromOwnerId(customerInternalId)
             ?: throw internalServerError("Customer '${c.login} had no bank account despite they are customer.'")
         val balance = Balance(
-            amount = bankAccountData.balance.toString(), credit_debit_indicator = if (bankAccountData.hasDebt) {
-                "debit"
+            amount = bankAccountData.balance ?: throw internalServerError("Account '${c.login}' lacks balance!"),
+            credit_debit_indicator = if (bankAccountData.hasDebt) {
+                CorebankCreditDebitInfo.debit
             } else {
-                "credit"
+                CorebankCreditDebitInfo.credit
             }
         )
         call.respond(
@@ -236,9 +237,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val req = call.receive<BankAccountCreateWithdrawalRequest>() // Checking that the user has enough funds.
         val b = db.bankAccountGetFromOwnerId(c.expectRowId())
             ?: throw internalServerError("Customer '${c.login}' lacks bank account.")
-        val withdrawalAmount = parseTalerAmount(req.amount)
         if (!isBalanceEnough(
-                balance = b.expectBalance(), due = withdrawalAmount, maxDebt = b.maxDebt, hasBalanceDebt = b.hasDebt
+                balance = b.expectBalance(), due = req.amount, maxDebt = b.maxDebt, hasBalanceDebt = b.hasDebt
             )
         ) throw forbidden(
             hint = "Insufficient funds to withdraw with Taler",
@@ -246,7 +246,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         ) // Auth and funds passed, create the operation now!
         val opId = UUID.randomUUID()
         if (!db.talerWithdrawalCreate(
-                opId, b.expectRowId(), withdrawalAmount
+                opId, b.expectRowId(), req.amount
             )
         ) throw internalServerError("Bank failed at creating the withdraw operation.")
 
@@ -263,7 +263,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))
         call.respond(
             BankAccountGetWithdrawalResponse(
-                amount = op.amount.toString(),
+                amount = op.amount,
                 aborted = op.aborted,
                 confirmation_done = op.confirmationDone,
                 selection_done = op.selectionDone,
@@ -354,7 +354,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                     debtor_payto_uri = it.debtorPaytoUri,
                     creditor_payto_uri = it.creditorPaytoUri,
                     subject = it.subject,
-                    amount = it.amount.toString(),
+                    amount = it.amount,
                     direction = it.direction,
                     date = TalerProtocolTimestamp(it.transactionDate),
                     row_id = it.dbRowId ?: throw internalServerError(
@@ -382,15 +382,14 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val creditorCustomerData = db.bankAccountGetFromInternalPayto(paytoWithoutParams) ?: throw notFound(
             "Creditor account not found", TalerErrorCode.TALER_EC_END // FIXME: define this EC.
         )
-        val amount = parseTalerAmount(txData.amount)
-        if (amount.currency != ctx.currency) throw badRequest(
-            "Wrong currency: ${amount.currency}", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+        if (txData.amount.currency != ctx.currency) throw badRequest(
+            "Wrong currency: ${txData.amount.currency}", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
         )
         val dbInstructions = BankInternalTransaction(
             debtorAccountId = debtorId,
             creditorAccountId = creditorCustomerData.owningCustomerId,
             subject = subject,
-            amount = amount,
+            amount = txData.amount,
             transactionDate = Instant.now()
         )
         val res = db.bankTransactionCreate(dbInstructions)
@@ -428,7 +427,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         if (tx.bankAccountId != customerBankAccount.bankAccountId) throw forbidden("Client has no rights over the bank transaction: $tId") // auth and rights, respond.
         call.respond(
             BankAccountTransactionInfo(
-                amount = "${tx.amount.currency}:${tx.amount.value}.${tx.amount.frac}",
+                amount = tx.amount,
                 creditor_payto_uri = tx.creditorPaytoUri,
                 debtor_payto_uri = tx.debtorPaytoUri,
                 date = TalerProtocolTimestamp(tx.transactionDate),

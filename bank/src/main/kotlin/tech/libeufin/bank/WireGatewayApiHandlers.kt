@@ -59,7 +59,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             resp.incoming_transactions.add(
                 IncomingReserveTransaction(
                     row_id = it.expectRowId(),
-                    amount = it.amount.toString(),
+                    amount = it.amount,
                     date = TalerProtocolTimestamp(it.transactionDate),
                     debit_account = it.debtorPaytoUri,
                     reserve_pub = it.subject
@@ -133,9 +133,8 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
         if (!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
         val req = call.receive<AddIncomingRequest>()
-        val amount = parseTalerAmount(req.amount)
         val internalCurrency = ctx.currency
-        if (amount.currency != internalCurrency)
+        if (req.amount.currency != internalCurrency)
             throw badRequest(
                 "Currency mismatch",
                 TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
@@ -155,7 +154,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         val txTimestamp = Instant.now()
         val op = BankInternalTransaction(
             debtorAccountId = walletAccount.expectRowId(),
-            amount = amount,
+            amount = req.amount,
             creditorAccountId = exchangeAccount.expectRowId(),
             transactionDate = txTimestamp,
             subject = req.reserve_pub
@@ -181,4 +180,3 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         return@post
     }
 }
-
