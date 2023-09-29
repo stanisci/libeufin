@@ -21,6 +21,7 @@
 package tech.libeufin.bank
 
 import org.postgresql.jdbc.PgConnection
+import org.postgresql.util.PSQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.getJdbcConnectionFromPg
@@ -176,10 +177,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             stmt.execute()
         } catch (e: SQLException) {
             logger.error(e.message)
-            // NOTE: it seems that _every_ error gets the 0 code.
-            if (e.errorCode == 0) return false
-            // rethrowing, not to hide other types of errors.
-            throw e
+            if (e.sqlState == "23505") return false // unique_violation
+            throw e // rethrowing, not to hide other types of errors.
         }
         return true
     }

@@ -53,11 +53,6 @@ class TalerApiTest {
         assert(db.bankAccountCreate(bankAccountFoo) != null)
         assert(db.customerCreate(customerBar) != null)
         assert(db.bankAccountCreate(bankAccountBar) != null)
-        // Give the exchange reasonable debt allowance:
-        assert(db.bankAccountSetMaxDebt(
-            1L,
-            TalerAmount(1000, 0, "KUDOS")
-        ))
         // Do POST /transfer.
         testApplication {
             application {
@@ -68,17 +63,29 @@ class TalerApiTest {
                       "request_uid": "entropic 0",
                       "wtid": "entropic 1",
                       "exchange_base_url": "http://exchange.example.com/",
-                      "amount": "KUDOS:33",
+                      "amount": "KUDOS:55",
                       "credit_account": "BAR-IBAN-ABC"
                     }
                 """.trimIndent()
+            // Checking exchange debt constraint.
+            val resp = client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "pw")
+                contentType(ContentType.Application.Json)
+                expectSuccess = false
+                setBody(req)
+            }
+            assert(resp.status == HttpStatusCode.Conflict)
+            // Giving debt allowance and checking the OK case.
+            assert(db.bankAccountSetMaxDebt(
+                1L,
+                TalerAmount(1000, 0, "KUDOS")
+            ))
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
                 contentType(ContentType.Application.Json)
                 expectSuccess = true
                 setBody(req)
             }
-            // println(resp.bodyAsText())
             // check idempotency
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
@@ -86,7 +93,6 @@ class TalerApiTest {
                 expectSuccess = true
                 setBody(req)
             }
-            // println(idemResp.bodyAsText())
             // Trigger conflict due to reused request_uid
             val r = client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
@@ -103,8 +109,7 @@ class TalerApiTest {
                 """.trimIndent())
             }
             assert(r.status == HttpStatusCode.Conflict)
-            /* Triggering currency mismatch.  This mainly tests
-             * the TalerAmount "@Contextual" parser.  */
+            // Triggering currency mismatch
             val currencyMismatchResp = client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
                 contentType(ContentType.Application.Json)

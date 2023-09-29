@@ -240,6 +240,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val accountName = call.expectUriComponent("USERNAME")
         if (c.login != accountName) throw unauthorized("User ${c.login} not allowed to withdraw for account '${accountName}'")
         val req = call.receive<BankAccountCreateWithdrawalRequest>() // Checking that the user has enough funds.
+        if(req.amount.currency != ctx.currency)
+            throw badRequest("Wrong currency: ${req.amount.currency}")
         val b = db.bankAccountGetFromOwnerId(c.expectRowId())
             ?: throw internalServerError("Customer '${c.login}' lacks bank account.")
         if (!isBalanceEnough(
@@ -375,26 +377,34 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
 
     // Creates a bank transaction.
     post("/accounts/{USERNAME}/transactions") {
-        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
+        val c: Customer = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
         val resourceName = call.expectUriComponent("USERNAME") // admin has no rights here.
         if ((c.login != resourceName) && (call.getAuthToken() == null)) throw forbidden()
         val txData = call.receive<BankAccountTransactionCreate>()
         val payto = parsePayto(txData.payto_uri) ?: throw badRequest("Invalid creditor Payto")
         val paytoWithoutParams = stripIbanPayto(txData.payto_uri)
         val subject = payto.message ?: throw badRequest("Wire transfer lacks subject")
-        val debtorId = c.dbRowId
-            ?: throw internalServerError("Debtor database ID not found") // This performs already a SELECT on the bank account, like the wire transfer will do as well later!
+        val debtorBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
+            ?: throw internalServerError("Debtor bank account not found")
+        if (txData.amount.currency != ctx.currency) throw badRequest(
+            "Wrong currency: ${txData.amount.currency}",
+            talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+        )
+        if (!isBalanceEnough(
+            balance = debtorBankAccount.expectBalance(),
+            due = txData.amount,
+            hasBalanceDebt = debtorBankAccount.hasDebt,
+            maxDebt = debtorBankAccount.maxDebt
+        ))
+            throw conflict(hint = "Insufficient balance.", talerEc = TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
         logger.info("creditor payto: $paytoWithoutParams")
-        val creditorCustomerData = db.bankAccountGetFromInternalPayto(paytoWithoutParams) ?: throw notFound(
+        val creditorBankAccount = db.bankAccountGetFromInternalPayto(paytoWithoutParams) ?: throw notFound(
             "Creditor account not found",
             TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
         )
-        if (txData.amount.currency != ctx.currency) throw badRequest(
-            "Wrong currency: ${txData.amount.currency}", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-        )
         val dbInstructions = BankInternalTransaction(
-            debtorAccountId = debtorId,
-            creditorAccountId = creditorCustomerData.owningCustomerId,
+            debtorAccountId = debtorBankAccount.expectRowId(),
+            creditorAccountId = creditorBankAccount.expectRowId(),
             subject = subject,
             amount = txData.amount,
             transactionDate = Instant.now()

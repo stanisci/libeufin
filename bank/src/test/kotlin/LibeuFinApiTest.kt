@@ -130,6 +130,50 @@ class LibeuFinApiTest {
             }
             val obj: BankAccountTransactionInfo = Json.decodeFromString(r.bodyAsText())
             assert(obj.subject == "payout")
+            // Testing the wrong currency.
+            val wrongCurrencyResp = client.post("/accounts/foo/transactions") {
+                expectSuccess = false
+                basicAuth("foo", "pw")
+                contentType(ContentType.Application.Json)
+                // expectSuccess = true
+                setBody(
+                    """{
+                    "payto_uri": "payto://iban/AC${barId}?message=payout", 
+                    "amount": "EUR:3.3"
+                }
+                """.trimIndent()
+                )
+            }
+            assert(wrongCurrencyResp.status == HttpStatusCode.BadRequest)
+            // Surpassing the debt limit.
+            val unallowedDebtResp = client.post("/accounts/foo/transactions") {
+                expectSuccess = false
+                basicAuth("foo", "pw")
+                contentType(ContentType.Application.Json)
+                // expectSuccess = true
+                setBody(
+                    """{
+                    "payto_uri": "payto://iban/AC${barId}?message=payout", 
+                    "amount": "KUDOS:555"
+                }
+                """.trimIndent()
+                )
+            }
+            assert(unallowedDebtResp.status == HttpStatusCode.Conflict)
+            val bigAmount = client.post("/accounts/foo/transactions") {
+                expectSuccess = false
+                basicAuth("foo", "pw")
+                contentType(ContentType.Application.Json)
+                // expectSuccess = true
+                setBody(
+                    """{
+                    "payto_uri": "payto://iban/AC${barId}?message=payout", 
+                    "amount": "KUDOS:${"5".repeat(200)}"
+                }
+                """.trimIndent()
+                )
+            }
+            assert(bigAmount.status == HttpStatusCode.BadRequest)
         }
     }
 

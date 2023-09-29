@@ -146,6 +146,7 @@ SELECT
 IF (maybe_balance_insufficient)
 THEN
   out_exchange_balance_insufficient=TRUE;
+  RETURN;
 END IF;
 out_exchange_balance_insufficient=FALSE;
 INSERT
