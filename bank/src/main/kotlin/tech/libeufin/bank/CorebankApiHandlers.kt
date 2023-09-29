@@ -58,9 +58,11 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
 
         val creationTime = Instant.now()
         val expirationTimestamp = if (tokenDuration == ChronoUnit.FOREVER.duration) {
+            logger.debug("Creating 'forever' token.")
             Instant.MAX
         } else {
             try {
+                logger.debug("Creating token with days duration: ${tokenDuration.toDays()}")
                 creationTime.plus(tokenDuration)
             } catch (e: Exception) {
                 logger.error("Could not add token duration to current time: ${e.message}")

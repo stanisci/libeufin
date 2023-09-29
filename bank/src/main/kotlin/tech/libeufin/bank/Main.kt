@@ -153,6 +153,9 @@ object TalerProtocolTimestampSerializer : KSerializer<TalerProtocolTimestamp> {
         }
         val ts: Long = maybeTs.longOrNull
             ?: throw badRequest("Could not convert t_s '${maybeTs.content}' to a number")
+        // Not allowing negative values, despite java.time allowance.
+        if (ts < 0)
+            throw badRequest("Negative timestamp not allowed.")
         val instant = try {
             Instant.ofEpochSecond(ts)
         } catch (e: Exception) {
@@ -217,8 +220,10 @@ object RelativeTimeSerializer : KSerializer<RelativeTime> {
         }
         val dUs: Long = maybeDUs.longOrNull
             ?: throw badRequest("Could not convert d_us: '${maybeDUs.content}' to a number")
+        if (dUs < 0)
+            throw badRequest("Negative duration specified.")
         val duration = try {
-            Duration.ofNanos(dUs * 1000L)
+            Duration.of(dUs, ChronoUnit.MICROS)
         } catch (e: Exception) {
             logger.error("Could not get Duration out of d_us content: ${dUs}. ${e.message}")
             throw badRequest("Could not get Duration out of d_us content: ${dUs}")

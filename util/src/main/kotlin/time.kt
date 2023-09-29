@@ -58,7 +58,10 @@ private fun Instant.toNanos(): Long? {
 fun Instant.toDbMicros(): Long? {
     if (this == Instant.MAX)
         return Long.MAX_VALUE
-    val nanos = this.toNanos() ?: return null
+    val nanos = this.toNanos() ?: run {
+        logger.error("Could not obtain micros to store to database, convenience conversion to nanos overflew.")
+        return null
+    }
     return nanos / 1000L
 }
 

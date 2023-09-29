@@ -157,6 +157,45 @@ class LibeuFinApiTest {
         }
     }
 
+    // Testing that too big or invalid durations fail the request.
+    @Test
+    fun tokenInvalidDurationTest() {
+        val db = initDb()
+        val ctx = getTestContext()
+        assert(db.customerCreate(customerFoo) != null)
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
+            }
+            var r = client.post("/accounts/foo/token") {
+                expectSuccess = false
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "pw")
+                setBody("""{
+                    "duration": {"d_us": "invalid"},
+                    "scope": "readonly"}""".trimIndent())
+            }
+            assert(r.status == HttpStatusCode.BadRequest)
+            r = client.post("/accounts/foo/token") {
+                expectSuccess = false
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "pw")
+                setBody("""{
+                    "duration": {"d_us": ${Long.MAX_VALUE}},
+                    "scope": "readonly"}""".trimIndent())
+            }
+            assert(r.status == HttpStatusCode.BadRequest)
+            r = client.post("/accounts/foo/token") {
+                expectSuccess = false
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "pw")
+                setBody("""{
+                    "duration": {"d_us": -1},
+                    "scope": "readonly"}""".trimIndent())
+            }
+            assert(r.status == HttpStatusCode.BadRequest)
+        }
+    }
     // Checking the POST /token handling.
     @Test
     fun tokenTest() {
@@ -182,7 +221,8 @@ class LibeuFinApiTest {
             val newTokDb = db.bearerTokenGet(Base32Crockford.decode(newTokObj.access_token))
             val lifeTime = Duration.between(newTokDb!!.creationTime, newTokDb.expirationTime)
             assert(lifeTime == Duration.ofDays(1))
-            // foo tries on bar endpoint
+
+            // foo tries to create a token on behalf of bar, expect 403.
             val r = client.post("/accounts/bar/token") {
                 expectSuccess = false
                 basicAuth("foo", "pw")
