@@ -74,7 +74,7 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
             if (db.bankTransactionCheckExists(req.reserve_pub) != null) throw conflict(
                 "Reserve pub. already used", TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
             )
-            val exchangePayto = stripIbanPayto(req.selected_exchange)
+            val exchangePayto = stripIbanPayto(req.selected_exchange) ?: throw badRequest("selected_exchange payto is invalid")
             db.talerWithdrawalSetDetails(
                 op.withdrawalUuid, exchangePayto, req.reserve_pub
             )

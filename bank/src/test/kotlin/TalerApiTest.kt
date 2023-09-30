@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
+import tech.libeufin.util.stripIbanPayto
 import java.util.*
 
 class TalerApiTest {
@@ -20,14 +21,14 @@ class TalerApiTest {
         cashoutCurrency = "KUDOS"
     )
     private val bankAccountFoo = BankAccount(
-        internalPaytoUri = "FOO-IBAN-XYZ",
+        internalPaytoUri = "payto://iban/FOO-IBAN-XYZ".lowercase(),
         lastNexusFetchRowId = 1L,
         owningCustomerId = 1L,
         hasDebt = false,
         maxDebt = TalerAmount(10, 1, "KUDOS")
     )
     val bankAccountBar = BankAccount(
-        internalPaytoUri = "BAR-IBAN-ABC",
+        internalPaytoUri = stripIbanPayto("payto://iban/BAR-IBAN-ABC")!!,
         lastNexusFetchRowId = 1L,
         owningCustomerId = 2L,
         hasDebt = false,
@@ -64,7 +65,7 @@ class TalerApiTest {
                       "wtid": "entropic 1",
                       "exchange_base_url": "http://exchange.example.com/",
                       "amount": "KUDOS:55",
-                      "credit_account": "BAR-IBAN-ABC"
+                      "credit_account": "${stripIbanPayto(bankAccountBar.internalPaytoUri)}"
                     }
                 """.trimIndent()
             // Checking exchange debt constraint.
@@ -74,6 +75,7 @@ class TalerApiTest {
                 expectSuccess = false
                 setBody(req)
             }
+            println(resp.bodyAsText())
             assert(resp.status == HttpStatusCode.Conflict)
             // Giving debt allowance and checking the OK case.
             assert(db.bankAccountSetMaxDebt(
@@ -189,7 +191,7 @@ class TalerApiTest {
                 setBody(deflater("""
                     {"amount": "KUDOS:44",
                      "reserve_pub": "RESERVE-PUB-TEST",
-                      "debit_account": "BAR-IBAN-ABC"
+                      "debit_account": "${"payto://iban/BAR-IBAN-ABC".lowercase()}"
                       }
                 """.trimIndent()))
             }
@@ -326,7 +328,7 @@ class TalerApiTest {
         // Specifying Bar as the exchange, via its Payto URI.
         assert(db.talerWithdrawalSetDetails(
             opUuid = uuid,
-            exchangePayto = "BAR-IBAN-ABC",
+            exchangePayto = "payto://iban/BAR-IBAN-ABC".lowercase(),
             reservePub = "UNCHECKED-RESERVE-PUB"
         ))
 

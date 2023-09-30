@@ -369,6 +369,17 @@ data class Balance(
 )
 
 /**
+ * GET /accounts response.
+ */
+@Serializable
+data class AccountMinimalData(
+    val username: String,
+    val name: String,
+    val balance: Balance,
+    val debit_threshold: TalerAmount
+)
+
+/**
  * GET /accounts/$USERNAME response.
  */
 @Serializable

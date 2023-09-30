@@ -61,14 +61,14 @@ class DatabaseTest {
         cashoutCurrency = "KUDOS"
     )
     private val bankAccountFoo = BankAccount(
-        internalPaytoUri = "FOO-IBAN-XYZ",
+        internalPaytoUri = "payto://iban/FOO-IBAN-XYZ".lowercase(),
         lastNexusFetchRowId = 1L,
         owningCustomerId = 1L,
         hasDebt = false,
         maxDebt = TalerAmount(10, 1, "KUDOS")
     )
     private val bankAccountBar = BankAccount(
-        internalPaytoUri = "BAR-IBAN-ABC",
+        internalPaytoUri = "payto://iban/BAR-IBAN-ABC".lowercase(),
         lastNexusFetchRowId = 1L,
         owningCustomerId = 2L,
         hasDebt = false,
@@ -108,7 +108,7 @@ class DatabaseTest {
     fun talerTransferTest() {
         val exchangeReq = TransferRequest(
             amount = TalerAmount(9, 0, "KUDOS"),
-            credit_account = "BAR-IBAN-ABC", // foo pays bar
+            credit_account = "payto://iban/BAR-IBAN-ABC".lowercase(), // foo pays bar
             exchange_base_url = "example.com/exchange",
             request_uid = "entropic 0",
             wtid = "entropic 1"
@@ -268,7 +268,7 @@ class DatabaseTest {
         // Setting the details.
         assert(db.talerWithdrawalSetDetails(
             opUuid = uuid,
-            exchangePayto = "BAR-IBAN-ABC",
+            exchangePayto = "payto://iban/BAR-IBAN-ABC".lowercase(),
             reservePub = "UNCHECKED-RESERVE-PUB"
         ))
         val opSelected = db.talerWithdrawalGet(uuid)
@@ -355,4 +355,18 @@ class DatabaseTest {
         assert(db.cashoutDelete(op.cashoutUuid) == Database.CashoutDeleteResult.CONFLICT_ALREADY_CONFIRMED)
         assert(db.cashoutGetFromUuid(op.cashoutUuid) != null) // previous didn't delete.
      }
+
+    // Tests the retrieval of many accounts, used along GET /accounts
+    @Test
+    fun accountsForAdmin() {
+        val db = initDb()
+        assert(db.accountsGetForAdmin().isEmpty()) // No data exists yet.
+        assert(db.customerCreate(customerFoo) != null)
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
+        assert(db.customerCreate(customerBar) != null)
+        assert(db.bankAccountCreate(bankAccountBar) != null)
+        assert(db.accountsGetForAdmin().size == 2)
+        assert(db.accountsGetForAdmin("F%").size == 1) // gets Foo only
+        assert(db.accountsGetForAdmin("%ar").size == 1) // gets Bar only
+    }
 }

@@ -26,6 +26,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.getJdbcConnectionFromPg
 import tech.libeufin.util.microsToJavaInstant
+import tech.libeufin.util.stripIbanPayto
 import tech.libeufin.util.toDbMicros
 import java.io.File
 import java.sql.DriverManager
@@ -355,6 +356,58 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                 isRefreshable = it.getBoolean("is_refreshable")
             )
         }
+    }
+
+    // MIXED CUSTOMER AND BANK ACCOUNT DATA
+
+    /**
+     * Gets a minimal set of account data, as outlined in the GET /accounts
+     * endpoint.
+     */
+    fun accountsGetForAdmin(nameFilter: String = "%"): List<AccountMinimalData> {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+              login,
+              name,
+              (b.balance).val AS balance_val,
+              (b.balance).frac AS balance_frac,
+              (b).has_debt AS balance_has_debt,
+              (max_debt).val as max_debt_val,
+              (max_debt).frac as max_debt_frac
+              FROM customers JOIN bank_accounts AS b
+                ON customer_id = b.owning_customer_id
+              WHERE name LIKE ?;
+        """)
+        stmt.setString(1, nameFilter)
+        val res = stmt.executeQuery()
+        val ret = mutableListOf<AccountMinimalData>()
+        res.use {
+            if (!it.next()) return ret
+            do {
+                ret.add(AccountMinimalData(
+                    username = it.getString("login"),
+                    name = it.getString("name"),
+                    balance = Balance(
+                        amount = TalerAmount(
+                            value = it.getLong("balance_val"),
+                            frac = it.getInt("balance_frac"),
+                            currency = getCurrency()
+                        ),
+                        credit_debit_indicator = it.getBoolean("balance_has_debt").run {
+                            if (this) return@run CorebankCreditDebitInfo.debit
+                            return@run CorebankCreditDebitInfo.credit
+                        }
+                    ),
+                    debit_threshold = TalerAmount(
+                        value = it.getLong("max_debt_val"),
+                        frac = it.getInt("max_debt_frac"),
+                        currency = getCurrency()
+                    )
+                ))
+            } while (it.next())
+        }
+        return ret
     }
 
     // BANK ACCOUNTS
@@ -1158,12 +1211,13 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                   ?
                 );
         """)
+
         stmt.setString(1, req.request_uid)
         stmt.setString(2, req.wtid)
         stmt.setLong(3, req.amount.value)
         stmt.setInt(4, req.amount.frac)
         stmt.setString(5, req.exchange_base_url)
-        stmt.setString(6, req.credit_account)
+        stmt.setString(6, stripIbanPayto(req.credit_account) ?: throw badRequest("credit_account payto URI is invalid"))
         stmt.setLong(7, exchangeBankAccountId)
         stmt.setLong(8, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.setString(9, acctSvcrRef)

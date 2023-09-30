@@ -98,14 +98,12 @@ fun buildIbanPaytoUri(
 }
 
 /**
- * Strip a payto://iban URI of everything
- * except the IBAN.
+ * Strip a payto://iban URI of everything except the IBAN.
+ * Return null on an invalid URI, letting the caller decide
+ * how to handle the problem.
  */
-fun stripIbanPayto(paytoUri: String): String {
-    val parsedPayto = parsePayto(paytoUri)
-    if (parsedPayto == null) {
-        throw Error("invalid payto://iban URI")
-    }
+fun stripIbanPayto(paytoUri: String): String? {
+    val parsedPayto = parsePayto(paytoUri) ?: return null
     val canonIban = parsedPayto.iban.lowercase()
     return "payto://iban/${canonIban}"
 }

@@ -118,9 +118,9 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             db.bankAccountGetFromOwnerId(this.expectRowId())
         }
         val internalPayto: String = if (req.internal_payto_uri != null) {
-            stripIbanPayto(req.internal_payto_uri)
+            stripIbanPayto(req.internal_payto_uri) ?: throw badRequest("internal_payto_uri is invalid")
         } else {
-            stripIbanPayto(genIbanPaytoUri())
+            stripIbanPayto(genIbanPaytoUri()) ?: throw internalServerError("Bank generated an invalid internal payto URI")
         }
         if (maybeCustomerExists != null && maybeHasBankAccount != null) {
             logger.debug("Registering username was found: ${maybeCustomerExists.login}") // Checking _all_ the details are the same.
@@ -382,7 +382,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         if ((c.login != resourceName) && (call.getAuthToken() == null)) throw forbidden()
         val txData = call.receive<BankAccountTransactionCreate>()
         val payto = parsePayto(txData.payto_uri) ?: throw badRequest("Invalid creditor Payto")
-        val paytoWithoutParams = stripIbanPayto(txData.payto_uri)
         val subject = payto.message ?: throw badRequest("Wire transfer lacks subject")
         val debtorBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
             ?: throw internalServerError("Debtor bank account not found")
@@ -397,11 +396,12 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             maxDebt = debtorBankAccount.maxDebt
         ))
             throw conflict(hint = "Insufficient balance.", talerEc = TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
-        logger.info("creditor payto: $paytoWithoutParams")
-        val creditorBankAccount = db.bankAccountGetFromInternalPayto(paytoWithoutParams) ?: throw notFound(
-            "Creditor account not found",
-            TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
-        )
+        logger.info("creditor payto: ${txData.payto_uri}")
+        val creditorBankAccount = db.bankAccountGetFromInternalPayto("payto://iban/${payto.iban.lowercase()}")
+            ?: throw notFound(
+                "Creditor account not found",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
         val dbInstructions = BankInternalTransaction(
             debtorAccountId = debtorBankAccount.expectRowId(),
             creditorAccountId = creditorBankAccount.expectRowId(),
