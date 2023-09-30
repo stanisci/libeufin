@@ -75,7 +75,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                         amount = it.amount,
                         date = TalerProtocolTimestamp(it.transactionDate),
                         debit_account = it.debtorPaytoUri,
-                        reserve_pub = it.subject
+                        reserve_pub = reservePub
                     )
                 )
             }
