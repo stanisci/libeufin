@@ -129,7 +129,10 @@ class TalerApiTest {
             assert(currencyMismatchResp.status == HttpStatusCode.BadRequest)
         }
     }
-    // Testing the /history/incoming call from the TWG API.
+
+    /**
+     * Testing the /history/incoming call from the TWG API.
+     */
     @Test
     fun historyIncoming() {
         val db = initDb()
@@ -144,8 +147,12 @@ class TalerApiTest {
             TalerAmount(1000, 0, "KUDOS")
         ))
         // Foo pays Bar (the exchange) twice.
-        assert(db.bankTransactionCreate(genTx("withdrawal 1")) == Database.BankTransactionResult.SUCCESS)
-        assert(db.bankTransactionCreate(genTx("withdrawal 2")) == Database.BankTransactionResult.SUCCESS)
+        val reservePubOne = "5ZFS98S1K4Y083W95GVZK638TSRE44RABVASB3AFA3R95VCW17V0"
+        val reservePubTwo = "TFBT5NEVT8D2GETZ4DRF7C69XZHKHJ15296HRGB1R5ARNK0SP8A0"
+        assert(db.bankTransactionCreate(genTx(reservePubOne)) == Database.BankTransactionResult.SUCCESS)
+        assert(db.bankTransactionCreate(genTx(reservePubTwo)) == Database.BankTransactionResult.SUCCESS)
+        // Should not show up in the taler wire gateway API history
+        assert(db.bankTransactionCreate(genTx("bogus foobar")) == Database.BankTransactionResult.SUCCESS)
         // Bar pays Foo once, but that should not appear in the result.
         assert(
             db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)) ==

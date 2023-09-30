@@ -27,8 +27,13 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import tech.libeufin.util.extractReservePubFromSubject
 import tech.libeufin.util.stripIbanPayto
 import java.time.Instant
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
 fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) {
     get("/taler-wire-gateway/config") {
@@ -57,15 +62,23 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         }
         val resp = IncomingHistory(credit_account = bankAccount.internalPaytoUri)
         history.forEach {
-            resp.incoming_transactions.add(
-                IncomingReserveTransaction(
-                    row_id = it.expectRowId(),
-                    amount = it.amount,
-                    date = TalerProtocolTimestamp(it.transactionDate),
-                    debit_account = it.debtorPaytoUri,
-                    reserve_pub = it.subject
+            val reservePub = extractReservePubFromSubject(it.subject)
+            if (reservePub == null) {
+                // This should usually not happen in the first place,
+                // because transactions to the exchange without a valid
+                // reserve pub should be bounced.
+                logger.warn("exchange account ${c.login} contains invalid incoming transaction ${it.expectRowId()}")
+            } else {
+                resp.incoming_transactions.add(
+                    IncomingReserveTransaction(
+                        row_id = it.expectRowId(),
+                        amount = it.amount,
+                        date = TalerProtocolTimestamp(it.transactionDate),
+                        debit_account = it.debtorPaytoUri,
+                        reserve_pub = it.subject
+                    )
                 )
-            )
+            }
         }
         call.respond(resp)
         return@get
