@@ -185,7 +185,9 @@ class TalerAmount(
     }
 
     override fun toString(): String {
-        return "$currency:$value.$frac"
+        val fracNoTrailingZero = this.frac.toString().dropLastWhile { it == '0' }
+        if (fracNoTrailingZero.isEmpty()) return "$currency:$value"
+        return "$currency:$value.$fracNoTrailingZero"
     }
 }
 
@@ -374,7 +376,7 @@ data class AccountData(
     val name: String,
     val balance: Balance,
     val payto_uri: String,
-    val debit_threshold: String,
+    val debit_threshold: TalerAmount,
     val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: String? = null,
 )

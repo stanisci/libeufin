@@ -160,8 +160,7 @@ object TalerProtocolTimestampSerializer : KSerializer<TalerProtocolTimestamp> {
             Instant.ofEpochSecond(ts)
         } catch (e: Exception) {
             logger.error("Could not get Instant from t_s: $ts: ${e.message}")
-            // Bank's fault.  API doesn't allow clients to pass this datatype.
-            throw internalServerError("Could not serialize this t_s: ${ts}")
+            throw badRequest("Could not serialize this t_s: ${ts}")
         }
         return TalerProtocolTimestamp(instant)
     }
@@ -190,13 +189,13 @@ object RelativeTimeSerializer : KSerializer<RelativeTime> {
                 return@encodeStructure
             }
             val dUs = try {
-                value.d_us.toNanos()
+                value.d_us.toNanos() / 1000L
             } catch (e: Exception) {
                 logger.error(e.message)
                 // Bank's fault, as each numeric value should be checked before entering the system.
                 throw internalServerError("Could not convert java.time.Duration to JSON")
             }
-            encodeLongElement(descriptor, 0, dUs / 1000L)
+            encodeLongElement(descriptor, 0, dUs)
         }
     }
 

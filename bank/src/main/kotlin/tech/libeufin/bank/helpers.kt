@@ -33,7 +33,8 @@ import java.net.URL
 import java.time.Instant
 import java.util.*
 
-const val FRACTION_BASE = 100000000
+
+const val AMOUNT_FRACTION_BASE = 100000000
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers")
 
@@ -201,7 +202,7 @@ fun parseTalerAmount2(
     // Fraction is at most 8 digits, so it's always < than MAX_INT.
     val fraction: Int = match.destructured.component3().run {
         var frac = 0
-        var power = FRACTION_BASE
+        var power = AMOUNT_FRACTION_BASE
         if (this.isNotEmpty())
         // Skips the dot and processes the fractional chars.
             this.substring(1).forEach { chr ->
@@ -229,7 +230,7 @@ fun parseTalerAmount2(
  * responded to the client.
  */
 fun parseTalerAmount(
-    amount: String, fracDigits: FracDigits = FracDigits.EIGHT
+    amount: String, fracDigits: FracDigits = FracDigits.EIGHT // FIXME: fracDigits should come from config.
 ): TalerAmount {
     val maybeAmount = parseTalerAmount2(amount, fracDigits) ?: throw LibeufinBankException(
         httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
@@ -240,9 +241,9 @@ fun parseTalerAmount(
 }
 
 private fun normalizeAmount(amt: TalerAmount): TalerAmount {
-    if (amt.frac > FRACTION_BASE) {
-        val normalValue = amt.value + (amt.frac / FRACTION_BASE)
-        val normalFrac = amt.frac % FRACTION_BASE
+    if (amt.frac > AMOUNT_FRACTION_BASE) {
+        val normalValue = amt.value + (amt.frac / AMOUNT_FRACTION_BASE)
+        val normalFrac = amt.frac % AMOUNT_FRACTION_BASE
         return TalerAmount(
             value = normalValue, frac = normalFrac, currency = amt.currency
         )

@@ -223,7 +223,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             AccountData(
                 name = customerData.name,
                 balance = balance,
-                debit_threshold = bankAccountData.maxDebt.toString(),
+                debit_threshold = bankAccountData.maxDebt,
                 payto_uri = bankAccountData.internalPaytoUri,
                 contact_data = ChallengeContactData(
                     email = customerData.email, phone = customerData.phone

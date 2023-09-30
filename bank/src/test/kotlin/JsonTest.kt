@@ -52,4 +52,11 @@ class JsonTest {
         assert("\"credit\"" == Json.encodeToString(CorebankCreditDebitInfo.credit))
         assert("\"debit\"" == Json.encodeToString(CorebankCreditDebitInfo.debit))
     }
+
+    // Testing JSON <--> TalerAmount
+    @Test
+    fun amountSerializer() {
+        val amt = Json.decodeFromString<TalerAmount>("\"KUDOS:4.4\"")
+        assert(Json.encodeToString(amt) == "\"KUDOS:4.4\"")
+    }
 }
