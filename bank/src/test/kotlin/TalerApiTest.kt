@@ -142,10 +142,12 @@ class TalerApiTest {
         assert(db.customerCreate(customerBar) != null)
         assert(db.bankAccountCreate(bankAccountBar) != null)
         // Give Foo reasonable debt allowance:
-        assert(db.bankAccountSetMaxDebt(
-            1L,
-            TalerAmount(1000, 0, "KUDOS")
-        ))
+        assert(
+            db.bankAccountSetMaxDebt(
+                1L,
+                TalerAmount(1000000, 0, "KUDOS")
+            )
+        )
         // Foo pays Bar (the exchange) twice.
         val reservePubOne = "5ZFS98S1K4Y083W95GVZK638TSRE44RABVASB3AFA3R95VCW17V0"
         val reservePubTwo = "TFBT5NEVT8D2GETZ4DRF7C69XZHKHJ15296HRGB1R5ARNK0SP8A0"
@@ -157,7 +159,7 @@ class TalerApiTest {
         assert(
             db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)) ==
                     Database.BankTransactionResult.SUCCESS
-            )
+        )
         // Bar expects two entries in the incoming history
         testApplication {
             application {
@@ -169,6 +171,25 @@ class TalerApiTest {
             }
             val j: IncomingHistory = Json.decodeFromString(resp.bodyAsText())
             assert(j.incoming_transactions.size == 2)
+            // Testing ranges.
+            val mockReservePub = "X".repeat(52)
+            for (i in 1..400)
+                assert(db.bankTransactionCreate(genTx(mockReservePub)) == Database.BankTransactionResult.SUCCESS)
+            val range = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=10&start=30") {
+                basicAuth("bar", "secret")
+                expectSuccess = true
+            }
+            val rangeObj = Json.decodeFromString<IncomingHistory>(range.bodyAsText())
+            // testing the size is like expected.
+            assert(rangeObj.incoming_transactions.size == 10) {
+                println("incoming_transaction has wrong size: ${rangeObj.incoming_transactions.size}")
+                println("Response was: ${range.bodyAsText()}")
+            }
+            // testing that the first row_id is at least the 'start' query param.
+            assert(rangeObj.incoming_transactions[0].row_id >= 30)
+            // testing that the row_id increases.
+            for (idx in 1..9)
+                assert(rangeObj.incoming_transactions[idx].row_id > rangeObj.incoming_transactions[idx - 1].row_id)
         }
     }
 
