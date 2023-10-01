@@ -175,6 +175,7 @@ class TalerApiTest {
             val mockReservePub = "X".repeat(52)
             for (i in 1..400)
                 assert(db.bankTransactionCreate(genTx(mockReservePub)) == Database.BankTransactionResult.SUCCESS)
+            // forward range:
             val range = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=10&start=30") {
                 basicAuth("bar", "secret")
                 expectSuccess = true
@@ -190,6 +191,29 @@ class TalerApiTest {
             // testing that the row_id increases.
             for (idx in 1..9)
                 assert(rangeObj.incoming_transactions[idx].row_id > rangeObj.incoming_transactions[idx - 1].row_id)
+            // backward range:
+            val rangeBackward = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-10&start=300") {
+                basicAuth("bar", "secret")
+                expectSuccess = true
+            }
+            val rangeBackwardObj = Json.decodeFromString<IncomingHistory>(rangeBackward.bodyAsText())
+            // testing the size is like expected.
+            assert(rangeBackwardObj.incoming_transactions.size == 10) {
+                println("incoming_transaction has wrong size: ${rangeBackwardObj.incoming_transactions.size}")
+                println("Response was: ${rangeBackward.bodyAsText()}")
+            }
+            // testing that the first row_id is at most the 'start' query param.
+            assert(rangeBackwardObj.incoming_transactions[0].row_id <= 300)
+            // testing that the row_id increases.
+            for (idx in 1..9)
+                assert(
+                    rangeBackwardObj.incoming_transactions[idx].row_id < rangeBackwardObj.incoming_transactions[idx - 1].row_id
+                ) {
+                    println("negative delta didn't return decreasing row_id's in idx: $idx")
+                    println("[$idx] -> ${rangeBackwardObj.incoming_transactions[idx].row_id}")
+                    println("[${idx - 1}] -> ${rangeBackwardObj.incoming_transactions[idx - 1].row_id}")
+                    println(rangeBackward.bodyAsText())
+                }
         }
     }
 
