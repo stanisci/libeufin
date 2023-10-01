@@ -293,13 +293,13 @@ class DatabaseTest {
             delta = 2L,
             bankAccountId = 1L // asking as Foo
         )
-        assert(forward.size == 2 && forward[0].dbRowId!! < forward[1].dbRowId!!)
+        assert(forward[0].expectRowId() >= 50 && forward.size == 2 && forward[0].dbRowId!! < forward[1].dbRowId!!)
         val backward = db.bankTransactionGetHistory(
             start = 50L,
             delta = -2L,
             bankAccountId = 1L // asking as Foo
         )
-        assert(backward.size == 2 && backward[0].dbRowId!! > backward[1].dbRowId!!)
+        assert(backward[0].expectRowId() <= 50 && backward.size == 2 && backward[0].dbRowId!! > backward[1].dbRowId!!)
     }
     @Test
     fun cashoutTest() {
