@@ -204,7 +204,7 @@ class TalerApiTest {
             }
             // testing that the first row_id is at most the 'start' query param.
             assert(rangeBackwardObj.incoming_transactions[0].row_id <= 300)
-            // testing that the row_id increases.
+            // testing that the row_id decreases.
             for (idx in 1..9)
                 assert(
                     rangeBackwardObj.incoming_transactions[idx].row_id < rangeBackwardObj.incoming_transactions[idx - 1].row_id
