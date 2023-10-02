@@ -424,9 +424,14 @@ fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean 
     if (maybeAdminBankAccount == null) {
         logger.info("Creating admin bank account")
         val adminMaxDebtObj = ctx.defaultAdminDebtLimit
+        val adminInternalPayto = stripIbanPayto(genIbanPaytoUri())
+        if (adminInternalPayto == null) {
+            logger.error("Bank generated invalid payto URI for admin")
+            return false
+        }
         val adminBankAccount = BankAccount(
             hasDebt = false,
-            internalPaytoUri = genIbanPaytoUri(),
+            internalPaytoUri = adminInternalPayto,
             owningCustomerId = adminCustomerId,
             isPublic = false,
             isTalerExchange = false,
