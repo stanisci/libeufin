@@ -159,7 +159,8 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                 "Reserve pub. already used",
                 TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
             )
-        val walletAccount = db.bankAccountGetFromInternalPayto(req.debit_account)
+        val strippedIbanPayto: String = stripIbanPayto(req.debit_account) ?: throw badRequest("Invalid debit_account payto URI")
+        val walletAccount = db.bankAccountGetFromInternalPayto(strippedIbanPayto)
             ?: throw notFound(
                 "debit_account not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
