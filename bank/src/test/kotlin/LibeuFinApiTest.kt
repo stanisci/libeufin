@@ -516,4 +516,66 @@ class LibeuFinApiTest {
             assert(resp.status == HttpStatusCode.Created)
         }
     }
+
+    /**
+     * Tests the GET /accounts endpoint.
+     */
+    @Test
+    fun getAccountsList() {
+        val db = initDb()
+        val ctx = getTestContext()
+        val adminCustomer = Customer(
+            "admin",
+            CryptoUtil.hashpw("pass"),
+            "CFO"
+        )
+        assert(db.customerCreate(adminCustomer) != null)
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
+            }
+            // No users registered, expect no data.
+            client.get("/accounts") {
+                basicAuth("admin", "pass")
+                expectSuccess = true
+            }.apply {
+                assert(this.status == HttpStatusCode.NoContent)
+            }
+            // foo account
+            db.customerCreate(customerFoo).apply {
+                assert(this != null)
+                db.bankAccountCreate(genBankAccount(this!!)) != null
+            }
+            // bar account
+            db.customerCreate(customerBar).apply {
+                assert(this != null)
+                db.bankAccountCreate(genBankAccount(this!!)) != null
+            }
+            // Two users registered, requesting all of them.
+            client.get("/accounts") {
+                basicAuth("admin", "pass")
+                expectSuccess = true
+            }.apply {
+                println(this.bodyAsText())
+                assert(this.status == HttpStatusCode.OK)
+                val obj = Json.decodeFromString<ListBankAccountsResponse>(this.bodyAsText())
+                assert(obj.accounts.size == 2)
+                // Order unreliable, just checking they're different.
+                assert(obj.accounts[0].username != obj.accounts[1].username)
+            }
+            // Filtering on bar.
+            client.get("/accounts?filter_name=ar") {
+                basicAuth("admin", "pass")
+                expectSuccess = true
+            }.apply {
+                assert(this.status == HttpStatusCode.OK)
+                val obj = Json.decodeFromString<ListBankAccountsResponse>(this.bodyAsText())
+                assert(obj.accounts.size == 1) {
+                    println("Wrong size of filtered query: ${obj.accounts.size}")
+                }
+                assert(obj.accounts[0].username == "bar")
+            }
+        }
+    }
+
 }

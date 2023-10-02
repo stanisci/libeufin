@@ -362,7 +362,9 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
 
     /**
      * Gets a minimal set of account data, as outlined in the GET /accounts
-     * endpoint.
+     * endpoint.  The nameFilter parameter will be passed AS IS to the SQL
+     * LIKE operator.  If it's null, it defaults to the "%" wildcard, meaning
+     * that it returns ALL the existing accounts.
      */
     fun accountsGetForAdmin(nameFilter: String = "%"): List<AccountMinimalData> {
         reconnect()

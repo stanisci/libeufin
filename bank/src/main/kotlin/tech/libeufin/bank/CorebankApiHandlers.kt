@@ -199,6 +199,30 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         return@post
     }
 
+    get("/accounts") {
+        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
+        if (c.login != "admin") throw forbidden("Only admin allowed.")
+        // Get optional param.
+        val maybeFilter: String? = call.request.queryParameters["filter_name"]
+        logger.debug("Filtering on '${maybeFilter}'")
+        val queryParam = if (maybeFilter != null) {
+            "%${maybeFilter}%"
+        } else "%"
+        val dbRes = db.accountsGetForAdmin(queryParam)
+        if (dbRes.isEmpty()) {
+            call.respond(HttpStatusCode.NoContent)
+            return@get
+        }
+        call.respond(
+            ListBankAccountsResponse().apply {
+                dbRes.forEach { element ->
+                    this.accounts.add(element)
+                }
+            }
+        )
+        return@get
+    }
+
     get("/accounts/{USERNAME}") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized("Login failed")
         val resourceName = call.maybeUriComponent("USERNAME") ?: throw badRequest(

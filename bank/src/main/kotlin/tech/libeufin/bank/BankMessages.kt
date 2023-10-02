@@ -380,6 +380,14 @@ data class AccountMinimalData(
 )
 
 /**
+ * Response type of GET /accounts.
+ */
+@Serializable
+data class ListBankAccountsResponse(
+    val accounts: MutableList<AccountMinimalData> = mutableListOf()
+)
+
+/**
  * GET /accounts/$USERNAME response.
  */
 @Serializable
