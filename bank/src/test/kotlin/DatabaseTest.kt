@@ -18,8 +18,10 @@
  */
 
 import org.junit.Test
+import org.postgresql.jdbc.PgConnection
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
+import java.sql.DriverManager
 import java.time.Instant
 import java.util.Random
 import java.util.UUID
@@ -125,7 +127,7 @@ class DatabaseTest {
             exchangeBankAccountId = 1L,
             timestamp = Instant.now()
         )
-        assert(res.txResult == Database.BankTransactionResult.SUCCESS)
+        assert(res.txResult == BankTransactionResult.SUCCESS)
     }
 
     @Test
@@ -167,13 +169,13 @@ class DatabaseTest {
             TalerAmount(50, 0, currency)
         )
         val firstSpending = db.bankTransactionCreate(fooPaysBar) // Foo pays Bar and goes debit.
-        assert(firstSpending == Database.BankTransactionResult.SUCCESS)
+        assert(firstSpending == BankTransactionResult.SUCCESS)
         fooAccount = db.bankAccountGetFromOwnerId(fooId)
         // Foo: credit -> debit
         assert(fooAccount?.hasDebt == true) // Asserting Foo's debit.
         // Now checking that more spending doesn't get Foo out of debit.
         val secondSpending = db.bankTransactionCreate(fooPaysBar)
-        assert(secondSpending == Database.BankTransactionResult.SUCCESS)
+        assert(secondSpending == BankTransactionResult.SUCCESS)
         fooAccount = db.bankAccountGetFromOwnerId(fooId)
         // Checking that Foo's debit is two times the paid amount
         // Foo: debit -> debit
@@ -200,14 +202,14 @@ class DatabaseTest {
             transactionDate = Instant.now()
         )
         val barPays = db.bankTransactionCreate(barPaysFoo)
-        assert(barPays == Database.BankTransactionResult.SUCCESS)
+        assert(barPays == BankTransactionResult.SUCCESS)
         barAccount = db.bankAccountGetFromOwnerId(barId)
         val barBalanceTen: TalerAmount? = barAccount?.balance
         // Bar: credit -> credit
         assert(barAccount?.hasDebt == false && barBalanceTen?.value == 10L && barBalanceTen.frac == 0)
         // Bar pays again to let Foo return in credit.
         val barPaysAgain = db.bankTransactionCreate(barPaysFoo)
-        assert(barPaysAgain == Database.BankTransactionResult.SUCCESS)
+        assert(barPaysAgain == BankTransactionResult.SUCCESS)
         // Refreshing the two accounts.
         barAccount = db.bankAccountGetFromOwnerId(barId)
         fooAccount = db.bankAccountGetFromOwnerId(fooId)
@@ -218,13 +220,39 @@ class DatabaseTest {
         assert(barAccount?.balance?.equals(TalerAmount(0, 0, "KUDOS")) == true)
         // Bringing Bar to debit.
         val barPaysMore = db.bankTransactionCreate(barPaysFoo)
-        assert(barPaysMore == Database.BankTransactionResult.SUCCESS)
+        assert(barPaysMore == BankTransactionResult.SUCCESS)
         barAccount = db.bankAccountGetFromOwnerId(barId)
         fooAccount = db.bankAccountGetFromOwnerId(fooId)
         // Bar: credit -> debit
         assert(fooAccount?.hasDebt == false && barAccount?.hasDebt == true)
         assert(fooAccount?.balance?.equals(TalerAmount(10, 0, "KUDOS")) == true)
         assert(barAccount?.balance?.equals(TalerAmount(10, 0, "KUDOS")) == true)
+    }
+
+    // Testing customer(+bank account) deletion logic.
+    @Test
+    fun customerDeletionTest() {
+        val db = initDb()
+        // asserting false, as foo doesn't exist yet.
+        assert(db.customerDeleteIfBalanceIsZero("foo") == CustomerDeletionResult.CUSTOMER_NOT_FOUND)
+        // Creating foo.
+        db.customerCreate(customerFoo).apply {
+            assert(this != null)
+            assert(db.bankAccountCreate(bankAccountFoo) != null)
+        }
+        // foo has zero balance, deletion should succeed.
+        assert(db.customerDeleteIfBalanceIsZero("foo") == CustomerDeletionResult.SUCCESS)
+        val db2 = initDb()
+        // Creating foo again, artificially setting its balance != zero.
+        db2.customerCreate(customerFoo).apply {
+            assert(this != null)
+            db2.bankAccountCreate(bankAccountFoo).apply {
+                assert(this != null)
+                val conn = DriverManager.getConnection("jdbc:postgresql:///libeufincheck").unwrap(PgConnection::class.java)
+                conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.frac = 1 WHERE bank_account_id = $this")
+            }
+        }
+        assert(db.customerDeleteIfBalanceIsZero("foo") == CustomerDeletionResult.BALANCE_NOT_ZERO)
     }
     @Test
     fun customerCreationTest() {
@@ -346,7 +374,7 @@ class DatabaseTest {
             paymentInformationId = "pmtinfid",
             transactionDate = Instant.now()
         )
-        ) == Database.BankTransactionResult.SUCCESS)
+        ) == BankTransactionResult.SUCCESS)
         // Confirming the cash-out
         assert(db.cashoutConfirm(op.cashoutUuid, 1L, 1L))
         // Checking the confirmation took place.

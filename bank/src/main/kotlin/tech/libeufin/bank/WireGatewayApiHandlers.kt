@@ -123,12 +123,12 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             exchangeBankAccountId = exchangeBankAccount.expectRowId(),
             timestamp = transferTimestamp
         )
-        if (dbRes.txResult == Database.BankTransactionResult.CONFLICT)
+        if (dbRes.txResult == BankTransactionResult.CONFLICT)
             throw conflict(
                 "Insufficient balance for exchange",
                 TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
             )
-        if (dbRes.txResult == Database.BankTransactionResult.NO_CREDITOR)
+        if (dbRes.txResult == BankTransactionResult.NO_CREDITOR)
             throw notFound(
                 "Creditor account was not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
@@ -179,7 +179,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
          * Other possible errors are highly unlikely, because of the
          * previous checks on the existence of the involved bank accounts.
          */
-        if (res == Database.BankTransactionResult.CONFLICT)
+        if (res == BankTransactionResult.CONFLICT)
             throw conflict(
                 "Insufficient balance",
                 TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT

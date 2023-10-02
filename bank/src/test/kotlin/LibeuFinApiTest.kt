@@ -2,13 +2,16 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.server.engine.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
+import org.postgresql.jdbc.PgConnection
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
+import java.sql.DriverManager
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -518,6 +521,66 @@ class LibeuFinApiTest {
     }
 
     /**
+     * Tests DELETE /accounts/foo
+     */
+    @Test
+    fun deleteAccount() {
+        val db = initDb()
+        val ctx = getTestContext()
+        val adminCustomer = Customer(
+            "admin",
+            CryptoUtil.hashpw("pass"),
+            "CFO"
+        )
+        db.customerCreate(adminCustomer)
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
+            }
+            // account to delete doesn't exist.
+            client.delete("/accounts/foo") {
+                basicAuth("admin", "pass")
+                expectSuccess = false
+            }.apply {
+                assert(this.status == HttpStatusCode.NotFound)
+            }
+            // account to delete is reserved.
+            client.delete("/accounts/admin") {
+                basicAuth("admin", "pass")
+                expectSuccess = false
+            }.apply {
+                assert(this.status == HttpStatusCode.Forbidden)
+            }
+            // successful deletion
+            db.customerCreate(customerFoo).apply {
+                assert(this != null)
+                assert(db.bankAccountCreate(genBankAccount(this!!)) != null)
+            }
+            client.delete("/accounts/foo") {
+                basicAuth("admin", "pass")
+                expectSuccess = false
+            }.apply {
+                assert(this.status == HttpStatusCode.NoContent)
+            }
+            // fail to delete, due to a non-zero balance.
+            db.customerCreate(customerBar).apply {
+                assert(this != null)
+                db.bankAccountCreate(genBankAccount(this!!)).apply {
+                    assert(this != null)
+                    val conn = DriverManager.getConnection("jdbc:postgresql:///libeufincheck").unwrap(PgConnection::class.java)
+                    conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 1 WHERE bank_account_id = $this")
+                }
+            }
+            client.delete("/accounts/bar") {
+                basicAuth("admin", "pass")
+                expectSuccess = false
+            }.apply {
+                assert(this.status == HttpStatusCode.PreconditionFailed)
+            }
+        }
+    }
+
+    /**
      * Tests the GET /accounts endpoint.
      */
     @Test
@@ -544,12 +607,12 @@ class LibeuFinApiTest {
             // foo account
             db.customerCreate(customerFoo).apply {
                 assert(this != null)
-                db.bankAccountCreate(genBankAccount(this!!)) != null
+                assert(db.bankAccountCreate(genBankAccount(this!!)) != null)
             }
             // bar account
             db.customerCreate(customerBar).apply {
                 assert(this != null)
-                db.bankAccountCreate(genBankAccount(this!!)) != null
+                assert(db.bankAccountCreate(genBankAccount(this!!)) != null)
             }
             // Two users registered, requesting all of them.
             client.get("/accounts") {

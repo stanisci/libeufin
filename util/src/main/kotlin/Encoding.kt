@@ -53,6 +53,10 @@ object Base32Crockford {
         return sb.toString()
     }
 
+    /**
+     * Decodes the input to its binary representation, throws
+     * net.taler.wallet.crypto.EncodingException on invalid encodings.
+     */
     fun decode(encoded: String, out: ByteArrayOutputStream) {
         val size = encoded.length
         var bitpos = 0

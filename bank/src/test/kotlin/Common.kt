@@ -47,6 +47,7 @@ fun getTestContext(
         registrationBonus = null,
         suggestedWithdrawalExchange = suggestedExchange,
         spaCaptchaURL = null,
+        restrictAccountDeletion = true
     )
 }
 

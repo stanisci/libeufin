@@ -4,6 +4,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
+import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
@@ -151,14 +152,14 @@ class TalerApiTest {
         // Foo pays Bar (the exchange) twice.
         val reservePubOne = "5ZFS98S1K4Y083W95GVZK638TSRE44RABVASB3AFA3R95VCW17V0"
         val reservePubTwo = "TFBT5NEVT8D2GETZ4DRF7C69XZHKHJ15296HRGB1R5ARNK0SP8A0"
-        assert(db.bankTransactionCreate(genTx(reservePubOne)) == Database.BankTransactionResult.SUCCESS)
-        assert(db.bankTransactionCreate(genTx(reservePubTwo)) == Database.BankTransactionResult.SUCCESS)
+        assert(db.bankTransactionCreate(genTx(reservePubOne)) == BankTransactionResult.SUCCESS)
+        assert(db.bankTransactionCreate(genTx(reservePubTwo)) == BankTransactionResult.SUCCESS)
         // Should not show up in the taler wire gateway API history
-        assert(db.bankTransactionCreate(genTx("bogus foobar")) == Database.BankTransactionResult.SUCCESS)
+        assert(db.bankTransactionCreate(genTx("bogus foobar")) == BankTransactionResult.SUCCESS)
         // Bar pays Foo once, but that should not appear in the result.
         assert(
             db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)) ==
-                    Database.BankTransactionResult.SUCCESS
+                    BankTransactionResult.SUCCESS
         )
         // Bar expects two entries in the incoming history
         testApplication {
@@ -172,9 +173,9 @@ class TalerApiTest {
             val j: IncomingHistory = Json.decodeFromString(resp.bodyAsText())
             assert(j.incoming_transactions.size == 2)
             // Testing ranges.
-            val mockReservePub = "X".repeat(52)
+            val mockReservePub = Base32Crockford.encode(ByteArray(32))
             for (i in 1..400)
-                assert(db.bankTransactionCreate(genTx(mockReservePub)) == Database.BankTransactionResult.SUCCESS)
+                assert(db.bankTransactionCreate(genTx(mockReservePub)) == BankTransactionResult.SUCCESS)
             // forward range:
             val range = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=10&start=30") {
                 basicAuth("bar", "secret")

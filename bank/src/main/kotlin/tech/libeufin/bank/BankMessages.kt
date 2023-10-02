@@ -19,7 +19,6 @@
 
 package tech.libeufin.bank
 
-import CreditDebitIndicator
 import io.ktor.http.*
 import io.ktor.server.application.*
 import kotlinx.serialization.Serializable
@@ -476,6 +475,16 @@ fun ApplicationCall.getResourceName(param: String): ResourceName =
     this.expectUriComponent(param)
 
 /**
+ * This type communicates the result of deleting an account
+ * from the database.
+ */
+enum class CustomerDeletionResult {
+    SUCCESS,
+    CUSTOMER_NOT_FOUND,
+    BALANCE_NOT_ZERO
+}
+
+/**
  * This type communicates the result of a database operation
  * to confirm one withdrawal operation.
  */
@@ -494,6 +503,16 @@ enum class WithdrawalConfirmationResult {
      * this regard.
      */
     CONFLICT
+}
+
+/**
+ * Communicates the result of creating a bank transaction in the database.
+ */
+enum class BankTransactionResult {
+    NO_CREDITOR,
+    NO_DEBTOR,
+    SUCCESS,
+    CONFLICT // balance insufficient
 }
 
 // GET /config response from the Taler Integration API.

@@ -21,7 +21,6 @@
 package tech.libeufin.bank
 
 import org.postgresql.jdbc.PgConnection
-import org.postgresql.util.PSQLException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.getJdbcConnectionFromPg
@@ -231,6 +230,27 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         }
     }
 
+    /**
+     * Deletes a customer (including its bank account row) from
+     * the database.  The bank account gets deleted by the cascade.
+     */
+    fun customerDeleteIfBalanceIsZero(login: String): CustomerDeletionResult {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+              out_nx_customer,
+              out_balance_not_zero
+              FROM customer_delete(?);
+        """)
+        stmt.setString(1, login)
+        stmt.executeQuery().apply {
+            if (!this.next()) throw internalServerError("Deletion returned nothing.")
+            if (this.getBoolean("out_nx_customer")) return CustomerDeletionResult.CUSTOMER_NOT_FOUND
+            if (this.getBoolean("out_balance_not_zero")) return CustomerDeletionResult.BALANCE_NOT_ZERO
+            return CustomerDeletionResult.SUCCESS
+        }
+    }
+
     // Mostly used to get customers out of bearer tokens.
     fun customerGetFromRowId(customer_id: Long): Customer? {
         reconnect()
@@ -304,6 +324,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             )
         }
     }
+
     // Possibly more "customerGetFrom*()" to come.
 
     // BEARER TOKEN
@@ -566,12 +587,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
     }
 
     // BANK ACCOUNT TRANSACTIONS
-    enum class BankTransactionResult {
-        NO_CREDITOR,
-        NO_DEBTOR,
-        SUCCESS,
-        CONFLICT // balance insufficient
-    }
+
     fun bankTransactionCreate(
         tx: BankInternalTransaction
     ): BankTransactionResult {

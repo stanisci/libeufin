@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS bank_accounts
   ,internal_payto_uri TEXT NOT NULL UNIQUE
   ,owning_customer_id BIGINT NOT NULL UNIQUE -- UNIQUE enforces 1-1 map with customers
     REFERENCES customers(customer_id)
+    ON DELETE CASCADE
   ,is_public BOOLEAN DEFAULT FALSE NOT NULL -- privacy by default
   ,is_taler_exchange BOOLEAN DEFAULT FALSE NOT NULL
   ,last_nexus_fetch_row_id BIGINT

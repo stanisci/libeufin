@@ -86,6 +86,57 @@ END $$;
 COMMENT ON PROCEDURE bank_set_config(TEXT, TEXT)
   IS 'Update or insert configuration values';
 
+CREATE OR REPLACE FUNCTION customer_delete(
+  IN in_login TEXT,
+  OUT out_nx_customer BOOLEAN,
+  OUT out_balance_not_zero BOOLEAN
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+my_customer_id BIGINT;
+my_balance_val INT8;
+my_balance_frac INT4;
+BEGIN
+-- check if login exists
+SELECT customer_id
+  INTO my_customer_id
+  FROM customers
+  WHERE login = in_login;
+IF NOT FOUND
+THEN
+  out_nx_customer=TRUE;
+  RETURN;
+END IF;
+out_nx_customer=FALSE;
+
+-- get the balance
+SELECT
+  (balance).val as balance_val,
+  (balance).frac as balance_frac
+  INTO
+    my_balance_val,
+    my_balance_frac
+  FROM bank_accounts
+  WHERE owning_customer_id = my_customer_id;
+IF NOT FOUND
+THEN
+  RAISE EXCEPTION 'Invariant failed: customer lacks bank account';
+END IF;
+-- check that balance is zero.
+IF my_balance_val != 0 OR my_balance_frac != 0
+THEN
+  out_balance_not_zero=TRUE;
+  RETURN;
+END IF;
+out_balance_not_zero=FALSE;
+
+-- actual deletion
+DELETE FROM customers WHERE login = in_login;
+END $$;
+COMMENT ON FUNCTION customer_delete(TEXT)
+  IS 'Deletes a customer (and its bank account via cascade) if the balance is zero';
+
 CREATE OR REPLACE FUNCTION taler_transfer(
   IN in_request_uid TEXT,
   IN in_wtid TEXT,

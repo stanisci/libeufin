@@ -185,13 +185,10 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                 transactionDate = Instant.now()
             )
             when (db.bankTransactionCreate(adminPaysBonus)) {
-                Database.BankTransactionResult.NO_CREDITOR -> throw internalServerError("Bonus impossible: creditor not found, despite its recent creation.")
-
-                Database.BankTransactionResult.NO_DEBTOR -> throw internalServerError("Bonus impossible: admin not found.")
-
-                Database.BankTransactionResult.CONFLICT -> throw internalServerError("Bonus impossible: admin has insufficient balance.")
-
-                Database.BankTransactionResult.SUCCESS -> {/* continue the execution */
+                BankTransactionResult.NO_CREDITOR -> throw internalServerError("Bonus impossible: creditor not found, despite its recent creation.")
+                BankTransactionResult.NO_DEBTOR -> throw internalServerError("Bonus impossible: admin not found.")
+                BankTransactionResult.CONFLICT -> throw internalServerError("Bonus impossible: admin has insufficient balance.")
+                BankTransactionResult.SUCCESS -> {/* continue the execution */
                 }
             }
         }
@@ -256,6 +253,36 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             )
         )
         return@get
+    }
+    delete("/accounts/{USERNAME}") {
+        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
+        val resourceName = call.expectUriComponent("USERNAME")
+        // Checking rights.
+        if (c.login != "admin" && ctx.restrictAccountDeletion)
+            throw forbidden("Only admin allowed.")
+        if (!resourceName.canI(c, withAdmin = true))
+            throw forbidden("Insufficient rights on this account.")
+        // Not deleting reserved names.
+        if (resourceName == "bank" || resourceName == "admin")
+            throw forbidden("Cannot delete reserved accounts.")
+        val res = db.customerDeleteIfBalanceIsZero(resourceName)
+        when (res) {
+            CustomerDeletionResult.CUSTOMER_NOT_FOUND ->
+                throw notFound(
+                    "Customer '$resourceName' not found",
+                    talerEc = TalerErrorCode.TALER_EC_NONE // FIXME: need EC.
+                    )
+            CustomerDeletionResult.BALANCE_NOT_ZERO ->
+                throw LibeufinBankException(
+                    httpStatus = HttpStatusCode.PreconditionFailed,
+                    talerError = TalerError(
+                        hint = "Balance is not zero.",
+                        code = TalerErrorCode.TALER_EC_NONE.code // FIXME: need EC.
+                    )
+                )
+            CustomerDeletionResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+        }
+        return@delete
     }
 
     post("/accounts/{USERNAME}/withdrawals") {
@@ -435,13 +462,13 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         )
         val res = db.bankTransactionCreate(dbInstructions)
         when (res) {
-            Database.BankTransactionResult.CONFLICT -> throw conflict(
+            BankTransactionResult.CONFLICT -> throw conflict(
                 "Insufficient funds",
                 TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
             )
-            Database.BankTransactionResult.NO_CREDITOR -> throw internalServerError("Creditor not found despite previous checks.")
-            Database.BankTransactionResult.NO_DEBTOR -> throw internalServerError("Debtor not found despite the request was authenticated.")
-            Database.BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.OK)
+            BankTransactionResult.NO_CREDITOR -> throw internalServerError("Creditor not found despite previous checks.")
+            BankTransactionResult.NO_DEBTOR -> throw internalServerError("Debtor not found despite the request was authenticated.")
+            BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.OK)
         }
         return@post
     }

@@ -83,6 +83,10 @@ data class BankApplicationContext(
      */
     val restrictRegistration: Boolean,
     /**
+     * Restrict account deletion to the administrator.
+     */
+    val restrictAccountDeletion: Boolean,
+    /**
      * Cashout currency, if cashouts are supported.
      */
     val cashoutCurrency: String?,
@@ -480,6 +484,7 @@ fun readBankApplicationContextFromConfig(cfg: TalerConfig): BankApplicationConte
         suggestedWithdrawalExchange = cfg.lookupValueString("libeufin-bank", "suggested_withdrawal_exchange"),
         defaultAdminDebtLimit = cfg.requireValueAmount("libeufin-bank", "default_admin_debt_limit", currency),
         spaCaptchaURL = cfg.lookupValueString("libeufin-bank", "spa_captcha_url"),
+        restrictAccountDeletion = cfg.lookupValueBooleanDefault("libeufin-bank", "restrict_account_deletion", true)
     )
 }
 
