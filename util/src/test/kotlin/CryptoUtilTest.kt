@@ -18,6 +18,7 @@
  */
 
 import net.taler.wallet.crypto.Base32Crockford
+import net.taler.wallet.crypto.EncodingException
 import org.bouncycastle.asn1.edec.EdECObjectIdentifiers
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
@@ -154,11 +155,12 @@ class CryptoUtilTest {
         assertFalse(CryptoUtil.checkValidEddsaPublicKey(non32bytes))
     }
 
-    @Test
+    @Test(expected = EncodingException::class)
     // from Crockford32 encoding to binary.
     fun base32ToBytesTest() {
         val expectedEncoding = "C9P6YRG"
         assert(Base32Crockford.decode(expectedEncoding).toString(Charsets.UTF_8) == "blob")
+        Base32Crockford.decode("-".repeat(52)) // fulfills the "expected = .." above.
     }
 
     @Test
