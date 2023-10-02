@@ -558,9 +558,16 @@ class LibeuFinApiTest {
             }
             client.delete("/accounts/foo") {
                 basicAuth("admin", "pass")
-                expectSuccess = false
+                expectSuccess = true
             }.apply {
                 assert(this.status == HttpStatusCode.NoContent)
+            }
+            // Trying again must yield 404
+            client.delete("/accounts/foo") {
+                basicAuth("admin", "pass")
+                expectSuccess = false
+            }.apply {
+                assert(this.status == HttpStatusCode.NotFound)
             }
             // fail to delete, due to a non-zero balance.
             db.customerCreate(customerBar).apply {

@@ -244,7 +244,7 @@ class TalerApiTest {
                 setBody(deflater("""
                     {"amount": "KUDOS:44",
                      "reserve_pub": "RESERVE-PUB-TEST",
-                      "debit_account": "${"payto://iban/BAR-IBAN-ABC".lowercase()}"
+                      "debit_account": "${"payto://iban/BAR-IBAN-ABC"}"
                       }
                 """.trimIndent()))
             }
