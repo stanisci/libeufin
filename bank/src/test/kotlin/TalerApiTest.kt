@@ -10,6 +10,30 @@ import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.stripIbanPayto
 import java.util.*
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+
+private fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {
+    assertEquals(status, this.status);
+    return this
+}
+
+private fun HttpResponse.assertOk(): HttpResponse = assertStatus(HttpStatusCode.OK)
+
+private inline fun <reified B> HttpRequestBuilder.jsonBody(b: B, deflate: Boolean = false) {
+    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b);
+    contentType(ContentType.Application.Json)
+    if (deflate) {
+        headers.set("Content-Encoding", "deflate")
+        setBody(deflater(json))
+    } else {
+        setBody(json)
+    }
+}
+
+private fun BankTransactionResult.assertSuccess() {
+    assertEquals(BankTransactionResult.SUCCESS, this)
+}
 
 class TalerApiTest {
     private val customerFoo = Customer(
@@ -45,39 +69,55 @@ class TalerApiTest {
         cashoutPayto = "payto://external-IBAN",
         cashoutCurrency = "KUDOS"
     )
+
     // Testing the POST /transfer call from the TWG API.
     @Test
     fun transfer() {
         val db = initDb()
         val ctx = getTestContext()
         // Creating the exchange and merchant accounts first.
-        assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo) != null)
-        assert(db.customerCreate(customerBar) != null)
-        assert(db.bankAccountCreate(bankAccountBar) != null)
+        assertNotNull(db.customerCreate(customerFoo))
+        assertNotNull(db.bankAccountCreate(bankAccountFoo))
+        assertNotNull(db.customerCreate(customerBar))
+        assertNotNull(db.bankAccountCreate(bankAccountBar))
         // Do POST /transfer.
         testApplication {
             application {
                 corebankWebApp(db, ctx)
             }
-            val req = """
-                    {
-                      "request_uid": "entropic 0",
-                      "wtid": "entropic 1",
-                      "exchange_base_url": "http://exchange.example.com/",
-                      "amount": "KUDOS:55",
-                      "credit_account": "${stripIbanPayto(bankAccountBar.internalPaytoUri)}"
-                    }
-                """.trimIndent()
+
+            val req2 = TransferRequest(
+                request_uid = "entropic 0", 
+                amount = TalerAmount(55, 0, "KUDOS"), 
+                exchange_base_url = "http://exchange.example.com/",
+                wtid = "entropic 0", 
+                credit_account = "${stripIbanPayto(bankAccountBar.internalPaytoUri)}"
+            );
+
+            // Unkown account
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("unknown", "password")
+                jsonBody(req2)
+            }.assertStatus(HttpStatusCode.Unauthorized)
+
+            // Wrong password
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "password")
+                jsonBody(req2)
+            }.assertStatus(HttpStatusCode.Unauthorized)
+
+            // Wrong account
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
+                jsonBody(req2)
+            }.assertStatus(HttpStatusCode.Forbidden)
+
             // Checking exchange debt constraint.
-            val resp = client.post("/accounts/foo/taler-wire-gateway/transfer") {
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                expectSuccess = false
-                setBody(req)
-            }
-            println(resp.bodyAsText())
-            assert(resp.status == HttpStatusCode.Conflict)
+                jsonBody(req2)
+            }.assertStatus(HttpStatusCode.Conflict)
+
             // Giving debt allowance and checking the OK case.
             assert(db.bankAccountSetMaxDebt(
                 1L,
@@ -85,49 +125,37 @@ class TalerApiTest {
             ))
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                expectSuccess = true
-                setBody(req)
-            }
+                jsonBody(req2)
+            }.assertOk()
+
             // check idempotency
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                expectSuccess = true
-                setBody(req)
-            }
+                jsonBody(req2)
+            }.assertOk()
+
             // Trigger conflict due to reused request_uid
-            val r = client.post("/accounts/foo/taler-wire-gateway/transfer") {
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                expectSuccess = false
-                setBody("""
-                    {
-                      "request_uid": "entropic 0",
-                      "wtid": "entropic 1",
-                      "exchange_base_url": "http://different-exchange.example.com/",
-                      "amount": "KUDOS:33",
-                      "credit_account": "BAR-IBAN-ABC"
-                    }
-                """.trimIndent())
-            }
-            assert(r.status == HttpStatusCode.Conflict)
+                jsonBody(
+                    req2.copy(
+                        wtid = "entropic 1",
+                        exchange_base_url = "http://different-exchange.example.com/",
+                    )
+                )
+            }.assertStatus(HttpStatusCode.Conflict)
+
             // Triggering currency mismatch
-            val currencyMismatchResp = client.post("/accounts/foo/taler-wire-gateway/transfer") {
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                expectSuccess = false
-                setBody("""
-                    {
-                      "request_uid": "entropic 3",
-                      "wtid": "entropic 4",
-                      "exchange_base_url": "http://different-exchange.example.com/",
-                      "amount": "EUR:33",
-                      "credit_account": "BAR-IBAN-ABC"
-                    }
-                """.trimIndent())
-            }
-            assert(currencyMismatchResp.status == HttpStatusCode.BadRequest)
+                jsonBody(
+                    req2.copy(
+                        request_uid = "entropic 4",
+                        wtid = "entropic 5",
+                        amount = TalerAmount(value = 33, frac = 0, currency = "EUR")
+                    )
+                )
+            }.assertStatus(HttpStatusCode.BadRequest)
         }
     }
 
@@ -138,10 +166,10 @@ class TalerApiTest {
     fun historyIncoming() {
         val db = initDb()
         val ctx = getTestContext()
-        assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo) != null)
-        assert(db.customerCreate(customerBar) != null)
-        assert(db.bankAccountCreate(bankAccountBar) != null)
+        assertNotNull(db.customerCreate(customerFoo))
+        assertNotNull(db.bankAccountCreate(bankAccountFoo))
+        assertNotNull(db.customerCreate(customerBar))
+        assertNotNull(db.bankAccountCreate(bankAccountBar))
         // Give Foo reasonable debt allowance:
         assert(
             db.bankAccountSetMaxDebt(
@@ -152,15 +180,13 @@ class TalerApiTest {
         // Foo pays Bar (the exchange) twice.
         val reservePubOne = "5ZFS98S1K4Y083W95GVZK638TSRE44RABVASB3AFA3R95VCW17V0"
         val reservePubTwo = "TFBT5NEVT8D2GETZ4DRF7C69XZHKHJ15296HRGB1R5ARNK0SP8A0"
-        assert(db.bankTransactionCreate(genTx(reservePubOne)) == BankTransactionResult.SUCCESS)
-        assert(db.bankTransactionCreate(genTx(reservePubTwo)) == BankTransactionResult.SUCCESS)
+        db.bankTransactionCreate(genTx(reservePubOne)).assertSuccess()
+        db.bankTransactionCreate(genTx(reservePubTwo)).assertSuccess()
         // Should not show up in the taler wire gateway API history
-        assert(db.bankTransactionCreate(genTx("bogus foobar")) == BankTransactionResult.SUCCESS)
+        db.bankTransactionCreate(genTx("bogus foobar")).assertSuccess()
         // Bar pays Foo once, but that should not appear in the result.
-        assert(
-            db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)) ==
-                    BankTransactionResult.SUCCESS
-        )
+        db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)).assertSuccess()
+
         // Bar expects two entries in the incoming history
         testApplication {
             application {
@@ -168,19 +194,17 @@ class TalerApiTest {
             }
             val resp = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=5") {
                 basicAuth("bar", "secret")
-                expectSuccess = true
-            }
+            }.assertOk()
             val j: IncomingHistory = Json.decodeFromString(resp.bodyAsText())
-            assert(j.incoming_transactions.size == 2)
+            assertEquals(2, j.incoming_transactions.size)
             // Testing ranges.
             val mockReservePub = Base32Crockford.encode(ByteArray(32))
             for (i in 1..400)
-                assert(db.bankTransactionCreate(genTx(mockReservePub)) == BankTransactionResult.SUCCESS)
+                db.bankTransactionCreate(genTx(mockReservePub)).assertSuccess()
             // forward range:
             val range = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=10&start=30") {
                 basicAuth("bar", "secret")
-                expectSuccess = true
-            }
+            }.assertOk()
             val rangeObj = Json.decodeFromString<IncomingHistory>(range.bodyAsText())
             // testing the size is like expected.
             assert(rangeObj.incoming_transactions.size == 10) {
@@ -195,8 +219,7 @@ class TalerApiTest {
             // backward range:
             val rangeBackward = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-10&start=300") {
                 basicAuth("bar", "secret")
-                expectSuccess = true
-            }
+            }.assertOk()
             val rangeBackwardObj = Json.decodeFromString<IncomingHistory>(rangeBackward.bodyAsText())
             // testing the size is like expected.
             assert(rangeBackwardObj.incoming_transactions.size == 10) {
@@ -223,10 +246,10 @@ class TalerApiTest {
     fun addIncoming() {
         val db = initDb()
         val ctx = getTestContext()
-        assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo) != null)
-        assert(db.customerCreate(customerBar) != null)
-        assert(db.bankAccountCreate(bankAccountBar) != null)
+        assertNotNull(db.customerCreate(customerFoo))
+        assertNotNull(db.bankAccountCreate(bankAccountFoo))
+        assertNotNull(db.customerCreate(customerBar))
+        assertNotNull(db.bankAccountCreate(bankAccountBar))
         // Give Bar reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             2L,
@@ -237,17 +260,13 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
             client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
-                expectSuccess = true
-                contentType(ContentType.Application.Json)
                 basicAuth("foo", "pw")
-                headers.set("Content-Encoding", "deflate")
-                setBody(deflater("""
-                    {"amount": "KUDOS:44",
-                     "reserve_pub": "RESERVE-PUB-TEST",
-                      "debit_account": "${"payto://iban/BAR-IBAN-ABC"}"
-                      }
-                """.trimIndent()))
-            }
+                jsonBody(AddIncomingRequest(
+                    amount = TalerAmount(value = 44, frac = 0, currency = "KUDOS"), 
+                    reserve_pub = "RESERVE-PUB-TEST", 
+                    debit_account = "${"payto://iban/BAR-IBAN-ABC"}"
+                ), deflate = true)
+            }.assertOk()
         }
     }
     // Selecting withdrawal details from the Integration API endpoint.
@@ -256,8 +275,8 @@ class TalerApiTest {
         val db = initDb()
         val ctx = getTestContext(suggestedExchange = "payto://iban/ABC123")
         val uuid = UUID.randomUUID()
-        assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo) != null)
+        assertNotNull(db.customerCreate(customerFoo))
+        assertNotNull(db.bankAccountCreate(bankAccountFoo))
         // insert new.
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,
@@ -269,13 +288,11 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
             val r = client.post("/taler-integration/withdrawal-operation/${uuid}") {
-                expectSuccess = true
-                contentType(ContentType.Application.Json)
-                setBody("""
-                    {"reserve_pub": "RESERVE-FOO", 
-                     "selected_exchange": "payto://iban/ABC123" }
-                """.trimIndent())
-            }
+                jsonBody(BankWithdrawalOperationPostRequest(
+                    reserve_pub = "RESERVE-FOO",
+                    selected_exchange = "payto://iban/ABC123"
+                ))
+            }.assertOk()
             println(r.bodyAsText())
         }
     }
@@ -297,9 +314,7 @@ class TalerApiTest {
             application {
                 corebankWebApp(db, ctx)
             }
-            val r = client.get("/taler-integration/withdrawal-operation/${uuid}") {
-                expectSuccess = true
-            }
+            val r = client.get("/taler-integration/withdrawal-operation/${uuid}").assertOk()
             println(r.bodyAsText())
         }
     }
@@ -325,9 +340,8 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
             client.post("/withdrawals/${uuid}/abort") {
-                expectSuccess = true
                 basicAuth("foo", "pw")
-            }
+            }.assertOk()
         }
         val opAbo = db.talerWithdrawalGet(uuid)
         assert(opAbo?.aborted == true && opAbo.selectionDone == true)
@@ -337,8 +351,8 @@ class TalerApiTest {
     fun withdrawalCreation() {
         val db = initDb()
         val ctx = getTestContext()
-        assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo) != null)
+        assertNotNull(db.customerCreate(customerFoo))
+        assertNotNull(db.bankAccountCreate(bankAccountFoo))
         testApplication {
             application {
                 corebankWebApp(db, ctx)
@@ -346,18 +360,13 @@ class TalerApiTest {
             // Creating the withdrawal as if the SPA did it.
             val r = client.post("/accounts/foo/withdrawals") {
                 basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                expectSuccess = true
-                setBody("""
-                    {"amount": "KUDOS:9"}
-                """.trimIndent())
-            }
+                jsonBody(BankAccountCreateWithdrawalRequest(TalerAmount(value = 9, frac = 0, currency = "KUDOS"))) 
+            }.assertOk()
             val opId = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(r.bodyAsText())
             // Getting the withdrawal from the bank.  Throws (failing the test) if not found.
             client.get("/withdrawals/${opId.withdrawal_id}") {
-                expectSuccess = true
                 basicAuth("foo", "pw")
-            }
+            }.assertOk()
         }
     }
     // Testing withdrawal confirmation
@@ -366,10 +375,10 @@ class TalerApiTest {
         val db = initDb()
         val ctx = getTestContext()
         // Creating Foo as the wallet owner and Bar as the exchange.
-        assert(db.customerCreate(customerFoo) != null)
-        assert(db.bankAccountCreate(bankAccountFoo) != null)
-        assert(db.customerCreate(customerBar) != null)
-        assert(db.bankAccountCreate(bankAccountBar) != null)
+        assertNotNull(db.customerCreate(customerFoo))
+        assertNotNull(db.bankAccountCreate(bankAccountFoo))
+        assertNotNull(db.customerCreate(customerBar))
+        assertNotNull(db.bankAccountCreate(bankAccountBar))
 
         // Artificially making a withdrawal operation for Foo.
         val uuid = UUID.randomUUID()
@@ -391,9 +400,8 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
             client.post("/withdrawals/${uuid}/confirm") {
-                expectSuccess = true // Sufficient to assert on success.
                 basicAuth("foo", "pw")
-            }
+            }.assertOk()
         }
     }
     // Testing the generation of taler://withdraw-URIs.
@@ -404,25 +412,25 @@ class TalerApiTest {
             "http://example.com",
             "my-id"
         )
-        assert(withHttp == "taler+http://withdraw/example.com/taler-integration/my-id")
+        assertEquals(withHttp, "taler+http://withdraw/example.com/taler-integration/my-id")
         // Checking the taler://-style
         val onlyTaler = getTalerWithdrawUri(
             "https://example.com/",
             "my-id"
         )
         // Note: this tests as well that no double slashes belong to the result
-        assert(onlyTaler == "taler://withdraw/example.com/taler-integration/my-id")
+        assertEquals(onlyTaler, "taler://withdraw/example.com/taler-integration/my-id")
         // Checking the removal of subsequent slashes
         val manySlashes = getTalerWithdrawUri(
             "https://www.example.com//////",
             "my-id"
         )
-        assert(manySlashes == "taler://withdraw/www.example.com/taler-integration/my-id")
+        assertEquals(manySlashes, "taler://withdraw/www.example.com/taler-integration/my-id")
         // Checking with specified port number
         val withPort = getTalerWithdrawUri(
             "https://www.example.com:9876",
             "my-id"
         )
-        assert(withPort == "taler://withdraw/www.example.com:9876/taler-integration/my-id")
+        assertEquals(withPort, "taler://withdraw/www.example.com:9876/taler-integration/my-id")
     }
 }
