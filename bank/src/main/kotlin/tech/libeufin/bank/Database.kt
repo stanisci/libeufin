@@ -243,10 +243,10 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
               FROM customer_delete(?);
         """)
         stmt.setString(1, login)
-        stmt.executeQuery().apply {
-            if (!this.next()) throw internalServerError("Deletion returned nothing.")
-            if (this.getBoolean("out_nx_customer")) return CustomerDeletionResult.CUSTOMER_NOT_FOUND
-            if (this.getBoolean("out_balance_not_zero")) return CustomerDeletionResult.BALANCE_NOT_ZERO
+        stmt.executeQuery().use {
+            if (!it.next()) throw internalServerError("Deletion returned nothing.")
+            if (it.getBoolean("out_nx_customer")) return CustomerDeletionResult.CUSTOMER_NOT_FOUND
+            if (it.getBoolean("out_balance_not_zero")) return CustomerDeletionResult.BALANCE_NOT_ZERO
             return CustomerDeletionResult.SUCCESS
         }
     }
@@ -376,6 +376,24 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                 },
                 isRefreshable = it.getBoolean("is_refreshable")
             )
+        }
+    }
+    /**
+     * Deletes a bearer token from the database.  Returns true,
+     * if deletion succeeds or false if the token could not be
+     * deleted (= not found).
+     */
+    fun bearerTokenDelete(token: ByteArray): Boolean {
+        reconnect()
+        val stmt = prepare("""
+            DELETE FROM bearer_tokens
+              WHERE content = ?
+              RETURNING bearer_token_id;
+        """)
+        stmt.setBytes(1, token)
+        stmt.executeQuery().use {
+            if (!it.next()) return false;
+            return true
         }
     }
 

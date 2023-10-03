@@ -25,6 +25,7 @@ import java.sql.DriverManager
 import java.time.Instant
 import java.util.Random
 import java.util.UUID
+import kotlin.experimental.inv
 
 // Foo pays Bar with custom subject.
 fun genTx(
@@ -143,10 +144,36 @@ class DatabaseTest {
             scope = TokenScope.readonly
         )
         assert(db.bearerTokenGet(token.content) == null)
-        db.customerCreate(customerBar) // Tokens need owners.
+        assert(db.customerCreate(customerBar) != null) // Tokens need owners.
         assert(db.bearerTokenCreate(token))
         assert(db.bearerTokenGet(tokenBytes) != null)
     }
+
+    @Test
+    fun tokenDeletionTest() {
+        val db = initDb()
+        val token = ByteArray(32)
+        // Token not there, must fail.
+        assert(!db.bearerTokenDelete(token))
+        assert(db.customerCreate(customerBar) != null) // Tokens need owners.
+        assert(db.bearerTokenCreate(
+            BearerToken(
+                bankCustomer = 1L,
+                content = token,
+                creationTime = Instant.now(),
+                expirationTime = Instant.now().plusSeconds(10),
+                scope = TokenScope.readwrite
+            )
+        ))
+        // Wrong token given, must fail
+        val anotherToken = token.map {
+            it.inv() // flipping every bit.
+        }
+        assert(!db.bearerTokenDelete(anotherToken.toByteArray()))
+        // Token there, must succeed.
+        assert(db.bearerTokenDelete(token))
+    }
+
     @Test
     fun bankTransactionsTest() {
         val db = initDb()

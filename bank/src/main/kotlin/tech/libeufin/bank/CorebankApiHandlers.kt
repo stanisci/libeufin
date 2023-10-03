@@ -25,7 +25,32 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.account
 fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
 
     delete("/accounts/{USERNAME}/token") {
-        throw internalServerError("Token deletion not implemented.")
+        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
+        /**
+         * The following command ensures that this call was
+         * authenticated with the bearer token and NOT with
+         * basic auth. FIXME: this "409 Conflict" case is not documented.
+         */
+        val token = call.getAuthToken() ?: throw badRequest("Basic auth not supported here.")
+        val resourceName = call.getResourceName("USERNAME")
+        /**
+         * The following check makes sure that the token belongs
+         * to the username contained in {USERNAME}.
+         */
+        if (!resourceName.canI(c, withAdmin = true)) throw forbidden()
+
+        /**
+         * Not sanity-checking the token, as it was used by the authentication already.
+         * If harder errors happen, then they'll get Ktor respond with 500.
+         */
+        db.bearerTokenDelete(Base32Crockford.decode(token))
+        /**
+         * Responding 204 regardless of it being actually deleted or not.
+         * If it wasn't found, then it must have been deleted before we
+         * reached here, but the token was valid as it served the authentication
+         * => no reason to fail the request.
+         */
+        call.respond(HttpStatusCode.NoContent)
     }
 
     post("/accounts/{USERNAME}/token") {

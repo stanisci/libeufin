@@ -180,6 +180,56 @@ class LibeuFinApiTest {
         }
     }
 
+    @Test
+    fun tokenDeletionTest() {
+        val db = initDb()
+        val ctx = getTestContext()
+        assert(db.customerCreate(customerFoo) != null)
+        val token = ByteArray(32)
+        Random.nextBytes(token)
+        assert(db.bearerTokenCreate(
+            BearerToken(
+                bankCustomer = 1L,
+                content = token,
+                creationTime = Instant.now(),
+                expirationTime = Instant.now().plusSeconds(10),
+                scope = TokenScope.readwrite
+            )
+        ))
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
+            }
+            // Legitimate first attempt, should succeed
+            client.delete("/accounts/foo/token") {
+                expectSuccess = true
+                headers["Authorization"] = "Bearer secret-token:${Base32Crockford.encode(token)}"
+            }.apply {
+                assert(this.status == HttpStatusCode.NoContent)
+            }
+            // Trying after deletion should hit 404.
+            client.delete("/accounts/foo/token") {
+                expectSuccess = false
+                headers["Authorization"] = "Bearer secret-token:${Base32Crockford.encode(token)}"
+            }.apply {
+                assert(this.status == HttpStatusCode.Unauthorized)
+            }
+            // Checking foo can still be served by basic auth, after token deletion.
+            assert(db.bankAccountCreate(
+                BankAccount(
+                    hasDebt = false,
+                    internalPaytoUri = "payto://iban/DE1234",
+                    maxDebt = TalerAmount(100, 0, "KUDOS"),
+                    owningCustomerId = 1
+                )
+            ) != null)
+            client.get("/accounts/foo") {
+                expectSuccess = true
+                basicAuth("foo", "pw")
+            }
+        }
+    }
+
     // Creating token with "forever" duration.
     @Test
     fun tokenForeverTest() {

@@ -105,7 +105,8 @@ fun doTokenAuth(
     requiredScope: TokenScope,
 ): Customer? {
     val bareToken = splitBearerToken(token) ?: throw badRequest(
-        "Bearer token malformed", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+        "Bearer token malformed",
+        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
     )
     val tokenBytes = try {
         Base32Crockford.decode(bareToken)
