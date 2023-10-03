@@ -24,6 +24,7 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.account
  */
 fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
 
+    // TOKEN ENDPOINTS
     delete("/accounts/{USERNAME}/token") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
         /**
@@ -52,7 +53,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
          */
         call.respond(HttpStatusCode.NoContent)
     }
-
     post("/accounts/{USERNAME}/token") {
         val customer =
             call.authenticateBankRequest(db, TokenScope.refreshable) ?: throw unauthorized("Authentication failed")
@@ -116,7 +116,46 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         )
         return@post
     }
-
+    // ACCOUNT ENDPOINTS
+    get("/public-accounts") {
+        // no authentication here.
+        val publicAccounts = db.accountsGetPublic(ctx.currency)
+        if (publicAccounts.isEmpty()) {
+            call.respond(HttpStatusCode.NoContent)
+            return@get
+        }
+        call.respond(
+            PublicAccountsResponse().apply {
+                publicAccounts.forEach {
+                    this.public_accounts.add(it)
+                }
+            }
+        )
+        return@get
+    }
+    get("/accounts") {
+        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
+        if (c.login != "admin") throw forbidden("Only admin allowed.")
+        // Get optional param.
+        val maybeFilter: String? = call.request.queryParameters["filter_name"]
+        logger.debug("Filtering on '${maybeFilter}'")
+        val queryParam = if (maybeFilter != null) {
+            "%${maybeFilter}%"
+        } else "%"
+        val dbRes = db.accountsGetForAdmin(queryParam)
+        if (dbRes.isEmpty()) {
+            call.respond(HttpStatusCode.NoContent)
+            return@get
+        }
+        call.respond(
+            ListBankAccountsResponse().apply {
+                dbRes.forEach { element ->
+                    this.accounts.add(element)
+                }
+            }
+        )
+        return@get
+    }
     post("/accounts") { // check if only admin is allowed to create new accounts
         if (ctx.restrictRegistration) {
             val customer: Customer? = call.authenticateBankRequest(db, TokenScope.readwrite)
@@ -220,46 +259,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         call.respond(HttpStatusCode.Created)
         return@post
     }
-    get("/public-accounts") {
-        // no authentication here.
-        val publicAccounts = db.accountsGetPublic(ctx.currency)
-        if (publicAccounts.isEmpty()) {
-            call.respond(HttpStatusCode.NoContent)
-            return@get
-        }
-        call.respond(
-            PublicAccountsResponse().apply {
-                publicAccounts.forEach {
-                    this.public_accounts.add(it)
-                }
-            }
-        )
-        return@get
-    }
-    get("/accounts") {
-        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        if (c.login != "admin") throw forbidden("Only admin allowed.")
-        // Get optional param.
-        val maybeFilter: String? = call.request.queryParameters["filter_name"]
-        logger.debug("Filtering on '${maybeFilter}'")
-        val queryParam = if (maybeFilter != null) {
-            "%${maybeFilter}%"
-        } else "%"
-        val dbRes = db.accountsGetForAdmin(queryParam)
-        if (dbRes.isEmpty()) {
-            call.respond(HttpStatusCode.NoContent)
-            return@get
-        }
-        call.respond(
-            ListBankAccountsResponse().apply {
-                dbRes.forEach { element ->
-                    this.accounts.add(element)
-                }
-            }
-        )
-        return@get
-    }
-
     get("/accounts/{USERNAME}") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized("Login failed")
         val resourceName = call.maybeUriComponent("USERNAME") ?: throw badRequest(
@@ -324,7 +323,24 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         }
         return@delete
     }
-
+    patch("/accounts/{USERNAME}/auth") {
+        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
+        val accountName = call.getResourceName("USERNAME")
+        if (!accountName.canI(c, withAdmin = true)) throw forbidden()
+        val req = call.receive<AccountPasswordChange>()
+        val hashedPassword = CryptoUtil.hashpw(req.new_password)
+        if (!db.customerChangePassword(
+                accountName,
+                hashedPassword
+        ))
+            throw notFound(
+                "Account '$accountName' not found",
+                talerEc = TalerErrorCode.TALER_EC_END // FIXME: need at least GENERIC_NOT_FOUND.
+            )
+        call.respond(HttpStatusCode.NoContent)
+        return@patch
+    }
+    // WITHDRAWAL ENDPOINTS
     post("/accounts/{USERNAME}/withdrawals") {
         val c = call.authenticateBankRequest(db, TokenScope.readwrite)
             ?: throw unauthorized() // Admin not allowed to withdraw in the name of customers:
@@ -356,7 +372,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         )
         return@post
     }
-
     get("/withdrawals/{withdrawal_id}") {
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))
         call.respond(
@@ -371,7 +386,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         )
         return@get
     }
-
     post("/withdrawals/{withdrawal_id}/abort") {
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id")) // Idempotency:
         if (op.aborted) {
@@ -384,7 +398,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         call.respondText("{}", ContentType.Application.Json)
         return@post
     }
-
     post("/withdrawals/{withdrawal_id}/confirm") {
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id")) // Checking idempotency:
         if (op.confirmationDone) {
@@ -434,7 +447,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         }
         return@post
     }
-
+    // TRANSACTION ENDPOINT
     get("/accounts/{USERNAME}/transactions") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
         val resourceName = call.expectUriComponent("USERNAME")
@@ -465,7 +478,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         call.respond(res)
         return@get
     }
-
     // Creates a bank transaction.
     post("/accounts/{USERNAME}/transactions") {
         val c: Customer = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
@@ -512,7 +524,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         }
         return@post
     }
-
     get("/accounts/{USERNAME}/transactions/{T_ID}") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
         val accountOwner = call.expectUriComponent("USERNAME") // auth ok, check rights.

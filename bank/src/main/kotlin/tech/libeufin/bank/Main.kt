@@ -578,6 +578,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
 
         if (!db.customerChangePassword(account, CryptoUtil.hashpw(password))) {
             println("password change failed")
+            exitProcess(1)
         } else {
             println("password change succeeded")
         }

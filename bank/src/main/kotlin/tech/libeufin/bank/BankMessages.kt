@@ -657,9 +657,18 @@ data class TransferResponse(
 data class PublicAccountsResponse(
     val public_accounts: MutableList<PublicAccount> = mutableListOf()
 )
+
+/**
+ * Single element of GET /public-accounts list.
+ */
 @Serializable
 data class PublicAccount(
     val payto_uri: String,
     val balance: Balance,
     val account_name: String
+)
+
+@Serializable
+data class AccountPasswordChange(
+    val new_password: String
 )

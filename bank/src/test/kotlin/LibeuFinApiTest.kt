@@ -182,6 +182,40 @@ class LibeuFinApiTest {
     }
 
     @Test
+    fun passwordChangeTest() {
+        val db = initDb()
+        val ctx = getTestContext()
+        assert(db.customerCreate(customerFoo) != null)
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
+            }
+            // Changing the password.
+            client.patch("/accounts/foo/auth") {
+                expectSuccess = true
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "pw")
+                setBody("""{"new_password": "bar"}""")
+            }
+            // Previous password should fail.
+            client.patch("/accounts/foo/auth") {
+                expectSuccess = false
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "pw")
+                setBody("""{"new_password": "not-even-parsed"}""")
+            }.apply {
+                assert(this.status == HttpStatusCode.Unauthorized)
+            }
+            // New password should succeed.
+            client.patch("/accounts/foo/auth") {
+                expectSuccess = true
+                contentType(ContentType.Application.Json)
+                basicAuth("foo", "bar")
+                setBody("""{"new_password": "not-used"}""")
+            }
+        }
+    }
+    @Test
     fun tokenDeletionTest() {
         val db = initDb()
         val ctx = getTestContext()

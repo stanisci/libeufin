@@ -426,6 +426,17 @@ class DatabaseTest {
     }
 
     @Test
+    fun passwordChangeTest() {
+        val db = initDb()
+        // foo not found, this fails.
+        assert(!db.customerChangePassword("foo", "won't make it"))
+        // creating foo.
+        assert(db.customerCreate(customerFoo) != null)
+        // foo exists, this succeeds.
+        assert(db.customerChangePassword("foo", CryptoUtil.hashpw("new-pw")))
+    }
+
+    @Test
     fun getPublicAccountsTest() {
         val db = initDb()
         // Expecting empty, no accounts exist yet.
