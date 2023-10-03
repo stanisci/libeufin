@@ -203,7 +203,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             }
             throw LibeufinBankException(
                 httpStatus = HttpStatusCode.Conflict, talerError = TalerError(
-                    code = GENERIC_UNDEFINED, // GANA needs this.
+                    code = GENERIC_UNDEFINED, // FIXME: provide appropriate EC.
                     hint = "Idempotency check failed."
                 )
             )
@@ -261,18 +261,16 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
     }
     get("/accounts/{USERNAME}") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized("Login failed")
-        val resourceName = call.maybeUriComponent("USERNAME") ?: throw badRequest(
-            hint = "No username found in the URI", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
-        ) // Checking resource name only if Basic auth was used. Successful tokens do not need this check, they just pass.
-        if (((c.login != resourceName) && (c.login != "admin")) && (call.getAuthToken() == null)) throw forbidden("No rights on the resource.")
-        val customerData = db.customerGetFromLogin(c.login)
-            ?: throw internalServerError("Customer '${c.login} despite being authenticated.'")
-        val customerInternalId = customerData.dbRowId
-            ?: throw internalServerError("Customer '${c.login} had no row ID despite it was found in the database.'")
-        val bankAccountData = db.bankAccountGetFromOwnerId(customerInternalId)
-            ?: throw internalServerError("Customer '${c.login} had no bank account despite they are customer.'")
+        val resourceName = call.expectUriComponent("USERNAME")
+        if (!resourceName.canI(c, withAdmin = true)) throw forbidden()
+        val customerData = db.customerGetFromLogin(resourceName) ?: throw notFound(
+                "Customer '$resourceName' not found in the database.",
+                talerEc = TalerErrorCode.TALER_EC_END
+        )
+        val bankAccountData = db.bankAccountGetFromOwnerId(customerData.expectRowId())
+            ?: throw internalServerError("Customer '$resourceName' had no bank account despite they are customer.'")
         val balance = Balance(
-            amount = bankAccountData.balance ?: throw internalServerError("Account '${c.login}' lacks balance!"),
+            amount = bankAccountData.balance ?: throw internalServerError("Account '${customerData.login}' lacks balance!"),
             credit_debit_indicator = if (bankAccountData.hasDebt) {
                 CorebankCreditDebitInfo.debit
             } else {
@@ -329,16 +327,57 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         if (!accountName.canI(c, withAdmin = true)) throw forbidden()
         val req = call.receive<AccountPasswordChange>()
         val hashedPassword = CryptoUtil.hashpw(req.new_password)
+        /**
+         * FIXME: should it check if the password used to authenticate
+         * FIXME: this request _is_ the one being overridden in the database?
+         */
         if (!db.customerChangePassword(
                 accountName,
                 hashedPassword
         ))
             throw notFound(
-                "Account '$accountName' not found",
+                "Account '$accountName' not found (despite it being authenticated by this call)",
                 talerEc = TalerErrorCode.TALER_EC_END // FIXME: need at least GENERIC_NOT_FOUND.
             )
         call.respond(HttpStatusCode.NoContent)
         return@patch
+    }
+    patch("/accounts/{USERNAME}") {
+        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
+        val accountName = call.getResourceName("USERNAME")
+        // preventing user non-admin X trying on resource Y.
+        if (!accountName.canI(c, withAdmin = true)) throw forbidden()
+        // admin is not allowed itself to change its own details.
+        if (accountName == "admin") throw forbidden("admin account not patchable")
+        // authentication OK, go on.
+        val req = call.receive<AccountReconfiguration>()
+        /**
+         * This object holds the details of the customer that's affected
+         * by this operation, as it MAY differ from the one being authenticated.
+         * This typically happens when admin did the request.
+         */
+        val accountCustomer = db.customerGetFromLogin(accountName) ?: throw notFound(
+            "Account $accountName not found",
+            talerEc = TalerErrorCode.TALER_EC_END // FIXME, define EC.
+        )
+        // Check if a non-admin user tried to change their legal name
+        if (c.login != "admin" && req.name != accountCustomer.name)
+            throw forbidden("non-admin user cannot change their legal name")
+        // Preventing identical data to be overridden.
+        val bankAccount = db.bankAccountGetFromOwnerId(accountCustomer.expectRowId())
+            ?: throw internalServerError("Customer '${accountCustomer.login}' lacks bank account.")
+        if (
+            (req.is_exchange == bankAccount.isTalerExchange) &&
+            (req.cashout_address == accountCustomer.cashoutPayto) &&
+            (req.name == c.name) &&
+            (req.challenge_contact_data?.phone == accountCustomer.phone) &&
+            (req.challenge_contact_data?.email == accountCustomer.email)
+            ) {
+            call.respond(HttpStatusCode.NoContent)
+            return@patch
+        }
+        // Not identical, go on writing the DB.
+        throw NotImplementedError("DB part missing.")
     }
     // WITHDRAWAL ENDPOINTS
     post("/accounts/{USERNAME}/withdrawals") {
@@ -450,14 +489,19 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
     // TRANSACTION ENDPOINT
     get("/accounts/{USERNAME}/transactions") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        val resourceName = call.expectUriComponent("USERNAME")
-        if (c.login != resourceName && c.login != "admin") throw forbidden() // Collecting params.
-        val historyParams = getHistoryParams(call.request) // Making the query.
-        val bankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
-            ?: throw internalServerError("Customer '${c.login}' lacks bank account.")
-        val bankAccountId = bankAccount.expectRowId()
+        val resourceName = call.getResourceName("USERNAME")
+        if (!resourceName.canI(c, withAdmin = true)) throw forbidden()
+        val historyParams = getHistoryParams(call.request)
+        val resourceCustomer = db.customerGetFromLogin(resourceName) ?: throw notFound(
+            hint = "Customer '$resourceName' not found in the database",
+            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
+        )
+        val bankAccount = db.bankAccountGetFromOwnerId(resourceCustomer.expectRowId())
+            ?: throw internalServerError("Customer '${resourceCustomer.login}' lacks bank account.")
         val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
-            start = historyParams.start, delta = historyParams.delta, bankAccountId = bankAccountId
+            start = historyParams.start,
+            delta = historyParams.delta,
+            bankAccountId = bankAccount.expectRowId()
         )
         val res = BankAccountTransactionsResponse(transactions = mutableListOf())
         history.forEach {
@@ -526,8 +570,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
     }
     get("/accounts/{USERNAME}/transactions/{T_ID}") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        val accountOwner = call.expectUriComponent("USERNAME") // auth ok, check rights.
-        if (c.login != "admin" && c.login != accountOwner) throw forbidden() // rights ok, check tx exists.
+        val accountName = call.getResourceName("USERNAME")
+        if (!accountName.canI(c, withAdmin = true)) throw forbidden()
         val tId = call.expectUriComponent("T_ID")
         val txRowId = try {
             tId.toLong()
@@ -535,14 +579,17 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             logger.error(e.message)
             throw badRequest("TRANSACTION_ID is not a number: ${tId}")
         }
-        val customerRowId = c.dbRowId ?: throw internalServerError("Authenticated client lacks database entry")
         val tx = db.bankTransactionGetFromInternalId(txRowId) ?: throw notFound(
             "Bank transaction '$tId' not found",
             TalerErrorCode.TALER_EC_BANK_TRANSACTION_NOT_FOUND
         )
-        val customerBankAccount = db.bankAccountGetFromOwnerId(customerRowId)
-            ?: throw internalServerError("Customer '${c.login}' lacks bank account.")
-        if (tx.bankAccountId != customerBankAccount.bankAccountId) throw forbidden("Client has no rights over the bank transaction: $tId") // auth and rights, respond.
+        val accountCustomer = db.customerGetFromLogin(accountName) ?: throw notFound(
+            hint = "Customer $accountName not found",
+            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
+        )
+        val customerBankAccount = db.bankAccountGetFromOwnerId(accountCustomer.expectRowId())
+            ?: throw internalServerError("Customer '${accountCustomer.login}' lacks bank account.")
+        if (tx.bankAccountId != customerBankAccount.bankAccountId) throw forbidden("Client has no rights over the bank transaction: $tId")
         call.respond(
             BankAccountTransactionInfo(
                 amount = tx.amount,

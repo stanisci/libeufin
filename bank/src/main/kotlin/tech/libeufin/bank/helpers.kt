@@ -164,7 +164,8 @@ fun internalServerError(hint: String?): LibeufinBankException = LibeufinBankExce
 
 
 fun notFound(
-    hint: String?, talerEc: TalerErrorCode
+    hint: String?,
+    talerEc: TalerErrorCode
 ): LibeufinBankException = LibeufinBankException(
     httpStatus = HttpStatusCode.NotFound, talerError = TalerError(
         code = talerEc.code, hint = hint

@@ -43,17 +43,21 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
 
     get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        if (!call.getResourceName("USERNAME").canI(c, withAdmin = true)) throw forbidden()
+        val accountName = call.getResourceName("USERNAME")
+        if (!accountName.canI(c, withAdmin = true)) throw forbidden()
         val params = getHistoryParams(call.request)
-        val bankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
-            ?: throw internalServerError("Customer '${c.login}' lacks bank account.")
+        val accountCustomer = db.customerGetFromLogin(accountName) ?: throw notFound(
+            hint = "Customer $accountName not found",
+            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
+        )
+        val bankAccount = db.bankAccountGetFromOwnerId(accountCustomer.expectRowId())
+            ?: throw internalServerError("Customer '$accountName' lacks bank account.")
         if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
-        val bankAccountId = bankAccount.expectRowId()
 
         val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
             start = params.start,
             delta = params.delta,
-            bankAccountId = bankAccountId,
+            bankAccountId = bankAccount.expectRowId(),
             withDirection = TransactionDirection.credit
         )
         if (history.isEmpty()) {

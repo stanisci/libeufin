@@ -668,7 +668,21 @@ data class PublicAccount(
     val account_name: String
 )
 
+/**
+ * Request of PATCH /accounts/{USERNAME}/auth
+ */
 @Serializable
 data class AccountPasswordChange(
     val new_password: String
+)
+
+/**
+ * Request of PATCH /accounts/{USERNAME}
+ */
+@Serializable
+data class AccountReconfiguration(
+    val challenge_contact_data: ChallengeContactData?,
+    val cashout_address: String?,
+    val name: String?,
+    val is_exchange: Boolean
 )
