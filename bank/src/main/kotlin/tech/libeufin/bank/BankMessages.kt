@@ -655,7 +655,7 @@ data class TransferResponse(
  */
 @Serializable
 data class PublicAccountsResponse(
-    val public_accounts: MutableList<PublicAccount>
+    val public_accounts: MutableList<PublicAccount> = mutableListOf()
 )
 @Serializable
 data class PublicAccount(

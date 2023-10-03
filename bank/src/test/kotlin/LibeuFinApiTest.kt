@@ -2,6 +2,7 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.server.engine.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.decodeFromString
@@ -230,6 +231,41 @@ class LibeuFinApiTest {
         }
     }
 
+    @Test
+    fun publicAccountsTest() {
+        val db = initDb()
+        val ctx = getTestContext()
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
+            }
+            client.get("/public-accounts").apply {
+                assert(this.status == HttpStatusCode.NoContent)
+            }
+            // Make one public account.
+            db.customerCreate(customerBar).apply {
+                assert(this != null)
+                assert(
+                    db.bankAccountCreate(
+                        BankAccount(
+                            isPublic = true,
+                            internalPaytoUri = "payto://iban/non-used",
+                            lastNexusFetchRowId = 1L,
+                            owningCustomerId = this!!,
+                            hasDebt = false,
+                            maxDebt = TalerAmount(10, 1, "KUDOS")
+                        )
+                    ) != null
+                )
+            }
+            client.get("/public-accounts").apply {
+                assert(this.status == HttpStatusCode.OK)
+                val obj = Json.decodeFromString<PublicAccountsResponse>(this.bodyAsText())
+                assert(obj.public_accounts.size == 1)
+                assert(obj.public_accounts[0].account_name == "bar")
+            }
+        }
+    }
     // Creating token with "forever" duration.
     @Test
     fun tokenForeverTest() {

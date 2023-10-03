@@ -222,7 +222,19 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
     }
     get("/public-accounts") {
         // no authentication here.
-        // val publicAccounts = db.accountsGetPublic()
+        val publicAccounts = db.accountsGetPublic(ctx.currency)
+        if (publicAccounts.isEmpty()) {
+            call.respond(HttpStatusCode.NoContent)
+            return@get
+        }
+        call.respond(
+            PublicAccountsResponse().apply {
+                publicAccounts.forEach {
+                    this.public_accounts.add(it)
+                }
+            }
+        )
+        return@get
     }
     get("/accounts") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
