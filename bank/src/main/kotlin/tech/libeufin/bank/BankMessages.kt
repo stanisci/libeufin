@@ -649,3 +649,17 @@ data class TransferResponse(
     val timestamp: TalerProtocolTimestamp,
     val row_id: Long
 )
+
+/**
+ * Response to GET /public-accounts
+ */
+@Serializable
+data class PublicAccountsResponse(
+    val public_accounts: MutableList<PublicAccount>
+)
+@Serializable
+data class PublicAccount(
+    val payto_uri: String,
+    val balance: Balance,
+    val account_name: String
+)

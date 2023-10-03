@@ -220,7 +220,10 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         call.respond(HttpStatusCode.Created)
         return@post
     }
-
+    get("/public-accounts") {
+        // no authentication here.
+        // val publicAccounts = db.accountsGetPublic()
+    }
     get("/accounts") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
         if (c.login != "admin") throw forbidden("Only admin allowed.")

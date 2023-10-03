@@ -413,7 +413,7 @@ class DatabaseTest {
 
     // Tests the retrieval of many accounts, used along GET /accounts
     @Test
-    fun accountsForAdmin() {
+    fun accountsForAdminTest() {
         val db = initDb()
         assert(db.accountsGetForAdmin().isEmpty()) // No data exists yet.
         assert(db.customerCreate(customerFoo) != null)
@@ -423,5 +423,37 @@ class DatabaseTest {
         assert(db.accountsGetForAdmin().size == 2)
         assert(db.accountsGetForAdmin("F%").size == 1) // gets Foo only
         assert(db.accountsGetForAdmin("%ar").size == 1) // gets Bar only
+    }
+
+    @Test
+    fun getPublicAccountsTest() {
+        val db = initDb()
+        // Expecting empty, no accounts exist yet.
+        assert(db.accountsGetPublic("KUDOS").isEmpty())
+        // Make a NON-public account, so expecting still an empty result.
+        assert(db.customerCreate(customerFoo) != null)
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
+        assert(db.accountsGetPublic("KUDOS").isEmpty())
+
+        // Make a public account, so expecting one result.
+        db.customerCreate(customerBar).apply {
+            assert(this != null)
+            assert(db.bankAccountCreate(
+                BankAccount(
+                    isPublic = true,
+                    internalPaytoUri = "payto://iban/non-used",
+                    lastNexusFetchRowId = 1L,
+                    owningCustomerId = this!!,
+                    hasDebt = false,
+                    maxDebt = TalerAmount(10, 1, "KUDOS")
+                )
+            ) != null)
+        }
+        assert(db.accountsGetPublic("KUDOS").size == 1)
+
+        // Same expectation, filtering on the login "bar"
+        assert(db.accountsGetPublic("KUDOS", "b%").size == 1)
+        // Expecting empty, as the filter should match nothing.
+        assert(db.accountsGetPublic("KUDOS", "x").isEmpty())
     }
 }

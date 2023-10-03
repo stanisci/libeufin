@@ -398,6 +398,51 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
     }
 
     // MIXED CUSTOMER AND BANK ACCOUNT DATA
+    /**
+     * Gets the list of public accounts in the system.
+     * internalCurrency is the bank's currency and loginFilter is
+     * an optional filter on the account's login.
+     *
+     * Returns an empty list, if no public account was found.
+     */
+    fun accountsGetPublic(internalCurrency: String, loginFilter: String = "%"): List<PublicAccount> {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+              (balance).val AS balance_val,
+              (balance).frac AS balance_frac,
+              has_debt,
+              internal_payto_uri,
+              c.login      
+              FROM bank_accounts JOIN customers AS c
+                ON owning_customer_id = c.customer_id
+                WHERE is_public=true AND c.login LIKE ?;
+        """)
+        stmt.setString(1, loginFilter)
+        val res = stmt.executeQuery()
+        val ret = mutableListOf<PublicAccount>()
+        res.use {
+            if (!it.next()) return ret
+            do {
+                ret.add(PublicAccount(
+                    account_name = it.getString("login"),
+                    payto_uri = it.getString("internal_payto_uri"),
+                    balance = Balance(
+                        amount = TalerAmount(
+                            value = it.getLong("balance_val"),
+                            frac = it.getInt("balance_frac"),
+                            currency = internalCurrency
+                        ),
+                        credit_debit_indicator = it.getBoolean("has_debt").run {
+                            if (this) return@run CorebankCreditDebitInfo.debit
+                            return@run CorebankCreditDebitInfo.credit
+                        }
+                    )
+                ))
+            } while (it.next())
+        }
+        return ret
+    }
 
     /**
      * Gets a minimal set of account data, as outlined in the GET /accounts
