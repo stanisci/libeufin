@@ -86,6 +86,57 @@ END $$;
 COMMENT ON PROCEDURE bank_set_config(TEXT, TEXT)
   IS 'Update or insert configuration values';
 
+CREATE OR REPLACE FUNCTION account_reconfig(
+  IN in_login TEXT,
+  IN in_name TEXT,
+  IN in_phone TEXT,
+  IN in_email TEXT,
+  IN in_cashout_payto TEXT,
+  IN in_is_taler_exchange BOOLEAN,
+  OUT out_nx_customer BOOLEAN,
+  OUT out_nx_bank_account BOOLEAN
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+my_customer_id INT8;
+BEGIN
+SELECT
+  customer_id
+  INTO my_customer_id
+  FROM customers
+  WHERE login=in_login;
+IF NOT FOUND
+THEN
+  out_nx_customer=TRUE;
+  RETURN;
+END IF;
+out_nx_customer=FALSE;
+
+UPDATE bank_accounts
+  SET is_taler_exchange = in_is_taler_exchange
+  WHERE owning_customer_id = my_customer_id;
+IF NOT FOUND
+THEN
+  out_nx_bank_account=TRUE;
+  RETURN;
+END IF;
+out_nx_bank_account=FALSE;
+-- bank account patching worked, custom must as well
+-- since this runs in a DB transaction and the customer
+-- was found earlier in this function.
+UPDATE customers
+SET
+  name=in_name,
+  cashout_payto=in_cashout_payto,
+  phone=in_phone,
+  email=in_email
+WHERE customer_id = my_customer_id;
+END $$;
+
+COMMENT ON FUNCTION account_reconfig(TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN)
+  IS 'Updates values on customer and bank account rows based on the input data.';
+
 CREATE OR REPLACE FUNCTION customer_delete(
   IN in_login TEXT,
   OUT out_nx_customer BOOLEAN,

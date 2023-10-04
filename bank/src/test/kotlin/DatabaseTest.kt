@@ -26,6 +26,9 @@ import java.time.Instant
 import java.util.Random
 import java.util.UUID
 import kotlin.experimental.inv
+import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 // Foo pays Bar with custom subject.
 fun genTx(
@@ -467,4 +470,63 @@ class DatabaseTest {
         // Expecting empty, as the filter should match nothing.
         assert(db.accountsGetPublic("KUDOS", "x").isEmpty())
     }
+
+    /**
+     * Tests the UPDATE-based SQL function that backs the
+     * PATCH /accounts/foo endpoint.
+     */
+    @Test
+    fun accountReconfigTest() {
+        val db = initDb()
+        // asserting for the customer not being found.
+        db.accountReconfig(
+            "foo",
+            "Foo",
+            "payto://cashout",
+            "+99",
+            "foo@example.com",
+            true
+        ).apply { assertEquals(this, AccountReconfigDBResult.CUSTOMER_NOT_FOUND) }
+        // creating the customer
+        assertNotEquals(db.customerCreate(customerFoo), null)
+
+        // asserting for the bank account not being found.
+        db.accountReconfig(
+            "foo",
+            "Foo",
+            "payto://cashout",
+            "+99",
+            "foo@example.com",
+            true
+        ).apply { assertEquals(this, AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND) }
+        // Giving foo a bank account
+        assert(db.bankAccountCreate(bankAccountFoo) != null)
+        // asserting for success.
+        db.accountReconfig(
+            "foo",
+            "Bar",
+            "payto://cashout",
+            "+99",
+            "foo@example.com",
+            true
+        ).apply { assertEquals(this, AccountReconfigDBResult.SUCCESS) }
+        // Getting the updated account from the database and checking values.
+        db.customerGetFromLogin("foo").apply {
+            assertNotEquals(this, null)
+            assert((this!!.login == "foo") &&
+                    (this.name == "Bar") &&
+                    (this.cashoutPayto) == "payto://cashout" &&
+                    (this.email) == "foo@example.com" &&
+                    this.phone == "+99"
+            )
+            db.bankAccountGetFromOwnerId(this.expectRowId()).apply {
+                assertNotEquals(this, null)
+                assertTrue(this!!.isTalerExchange)
+            }
+        }
+    }
 }
+
+
+
+

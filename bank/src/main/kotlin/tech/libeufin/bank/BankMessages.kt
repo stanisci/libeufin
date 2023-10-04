@@ -743,3 +743,30 @@ data class AccountReconfiguration(
     val name: String?,
     val is_exchange: Boolean
 )
+
+/**
+ * This type expresses the outcome of updating the account
+ * data in the database.
+ */
+enum class AccountReconfigDBResult {
+    /**
+     * This indicates that despite the customer row was
+     * found in the database, its related bank account was not.
+     * This condition is a hard failure of the bank, since
+     * every customer must have one (and only one) bank account.
+     */
+    BANK_ACCOUNT_NOT_FOUND,
+
+    /**
+     * The customer row wasn't found in the database.  This error
+     * should be rare, as the client got authenticated in the first
+     * place, before the handler could try the reconfiguration in
+     * the database.
+     */
+    CUSTOMER_NOT_FOUND,
+
+    /**
+     * Reconfiguration successful.
+     */
+    SUCCESS
+}

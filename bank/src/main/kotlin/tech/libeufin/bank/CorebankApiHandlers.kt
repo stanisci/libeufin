@@ -27,11 +27,6 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
     // TOKEN ENDPOINTS
     delete("/accounts/{USERNAME}/token") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        /**
-         * The following command ensures that this call was
-         * authenticated with the bearer token and NOT with
-         * basic auth. FIXME: this "409 Conflict" case is not documented.
-         */
         val token = call.getAuthToken() ?: throw badRequest("Basic auth not supported here.")
         val resourceName = call.getResourceName("USERNAME")
         /**
@@ -327,18 +322,13 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         if (!accountName.canI(c, withAdmin = true)) throw forbidden()
         val req = call.receive<AccountPasswordChange>()
         val hashedPassword = CryptoUtil.hashpw(req.new_password)
-        /**
-         * FIXME: should it check if the password used to authenticate
-         * FIXME: this request _is_ the one being overridden in the database?
-         */
         if (!db.customerChangePassword(
                 accountName,
                 hashedPassword
-        ))
-            throw notFound(
-                "Account '$accountName' not found (despite it being authenticated by this call)",
-                talerEc = TalerErrorCode.TALER_EC_END // FIXME: need at least GENERIC_NOT_FOUND.
-            )
+        )) throw notFound(
+            "Account '$accountName' not found (despite it being authenticated by this call)",
+            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need at least GENERIC_NOT_FOUND.
+        )
         call.respond(HttpStatusCode.NoContent)
         return@patch
     }

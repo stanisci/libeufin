@@ -398,6 +398,45 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
     }
 
     // MIXED CUSTOMER AND BANK ACCOUNT DATA
+
+    /**
+     * Updates accounts according to the PATCH /accounts/foo endpoint.
+     * The 'login' parameter decides which customer and bank account rows
+     * will get the update.
+     *
+     * The return type expresses either success, or that the target rows
+     * could not be found.
+     */
+    fun accountReconfig(
+        login: String,
+        name: String,
+        cashoutPayto: String,
+        phoneNumber: String,
+        emailAddress: String,
+        isTalerExchange: Boolean
+    ): AccountReconfigDBResult {
+        reconnect()
+        val stmt = prepare("""
+            SELECT
+              out_nx_customer,
+              out_nx_bank_account
+              FROM account_reconfig(?, ?, ?, ?, ?, ?)
+        """)
+        stmt.setString(1, login)
+        stmt.setString(2, name)
+        stmt.setString(3, phoneNumber)
+        stmt.setString(4, emailAddress)
+        stmt.setString(5, cashoutPayto)
+        stmt.setBoolean(6, isTalerExchange)
+        val res = stmt.executeQuery()
+        res.use {
+            if (!it.next()) throw internalServerError("accountReconfig() returned nothing")
+            if (it.getBoolean("out_nx_customer")) return AccountReconfigDBResult.CUSTOMER_NOT_FOUND
+            if (it.getBoolean("out_nx_bank_account")) return AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND
+            return AccountReconfigDBResult.SUCCESS
+        }
+    }
+
     /**
      * Gets the list of public accounts in the system.
      * internalCurrency is the bank's currency and loginFilter is
