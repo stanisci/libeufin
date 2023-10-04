@@ -22,10 +22,56 @@ package tech.libeufin.bank
 import io.ktor.http.*
 import io.ktor.server.application.*
 import kotlinx.serialization.Serializable
+import net.taler.wallet.crypto.Base32Crockford
+import net.taler.wallet.crypto.EncodingException
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
+
+/**
+ * 32-byte hash code.
+ */
+@Serializable()
+@JvmInline
+value class ShortHashCode(val encoded: String) {
+    init {
+        val decoded = try {
+            Base32Crockford.decode(encoded) 
+        } catch (e: EncodingException) {
+            null
+        }
+        
+        require(decoded != null) {
+            "Data should be encoded using Crockford's Base32"
+        }
+        require(decoded.size == 32) {
+            "Encoded data should be 32 bytes long"
+        }
+    }
+}
+
+/**
+ * 64-byte hash code.
+ */
+@Serializable()
+@JvmInline
+value class HashCode(val encoded: String) {
+    init {
+        val decoded = try {
+            Base32Crockford.decode(encoded) 
+        } catch (e: EncodingException) {
+            null
+        }
+        
+        require(decoded != null) {
+            "Data should be encoded using Crockford's Base32"
+        }
+        require(decoded.size == 64) {
+            "Encoded data should be 64 bytes long"
+        }
+    }
+}
 
 /**
  * Allowed lengths for fractional digits in amounts.
@@ -634,10 +680,10 @@ data class IncomingReserveTransaction(
  */
 @Serializable
 data class TransferRequest(
-    val request_uid: String,
+    val request_uid: HashCode,
     val amount: TalerAmount,
     val exchange_base_url: String,
-    val wtid: String,
+    val wtid: ShortHashCode,
     val credit_account: String
 )
 

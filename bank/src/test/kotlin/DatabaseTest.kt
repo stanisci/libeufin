@@ -113,8 +113,8 @@ class DatabaseTest {
             amount = TalerAmount(9, 0, "KUDOS"),
             credit_account = "payto://iban/BAR-IBAN-ABC".lowercase(), // foo pays bar
             exchange_base_url = "example.com/exchange",
-            request_uid = "entropic 0",
-            wtid = "entropic 1"
+            request_uid = randHashCode(),
+            wtid = randShortHashCode()
         )
         val db = initDb()
         val fooId = db.customerCreate(customerFoo)

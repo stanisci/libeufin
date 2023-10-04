@@ -1293,8 +1293,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                 );
         """)
 
-        stmt.setString(1, req.request_uid)
-        stmt.setString(2, req.wtid)
+        stmt.setString(1, req.request_uid.encoded)
+        stmt.setString(2, req.wtid.encoded)
         stmt.setLong(3, req.amount.value)
         stmt.setInt(4, req.amount.frac)
         stmt.setString(5, req.exchange_base_url)

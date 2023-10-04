@@ -46,14 +46,14 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         if (!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
         val req = call.receive<TransferRequest>()
         // Checking for idempotency.
-        val maybeDoneAlready = db.talerTransferGetFromUid(req.request_uid)
+        val maybeDoneAlready = db.talerTransferGetFromUid(req.request_uid.encoded)
         val creditAccount = stripIbanPayto(req.credit_account)
         if (maybeDoneAlready != null) {
             val isIdempotent =
                 maybeDoneAlready.amount == req.amount
                         && maybeDoneAlready.creditAccount == creditAccount
                         && maybeDoneAlready.exchangeBaseUrl == req.exchange_base_url
-                        && maybeDoneAlready.wtid == req.wtid
+                        && maybeDoneAlready.wtid == req.wtid.encoded
             if (isIdempotent) {
                 call.respond(
                     TransferResponse(

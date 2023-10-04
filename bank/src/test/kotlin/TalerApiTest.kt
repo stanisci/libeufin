@@ -4,6 +4,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import tech.libeufin.bank.*
@@ -12,28 +13,7 @@ import tech.libeufin.util.stripIbanPayto
 import java.util.*
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-
-private fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {
-    assertEquals(status, this.status);
-    return this
-}
-
-private fun HttpResponse.assertOk(): HttpResponse = assertStatus(HttpStatusCode.OK)
-
-private inline fun <reified B> HttpRequestBuilder.jsonBody(b: B, deflate: Boolean = false) {
-    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b);
-    contentType(ContentType.Application.Json)
-    if (deflate) {
-        headers.set("Content-Encoding", "deflate")
-        setBody(deflater(json))
-    } else {
-        setBody(json)
-    }
-}
-
-private fun BankTransactionResult.assertSuccess() {
-    assertEquals(BankTransactionResult.SUCCESS, this)
-}
+import randHashCode
 
 class TalerApiTest {
     private val customerFoo = Customer(
@@ -86,36 +66,36 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
 
-            val req2 = TransferRequest(
-                request_uid = "entropic 0", 
-                amount = TalerAmount(55, 0, "KUDOS"), 
-                exchange_base_url = "http://exchange.example.com/",
-                wtid = "entropic 0", 
-                credit_account = "${stripIbanPayto(bankAccountBar.internalPaytoUri)}"
-            );
+            val valid_req = json {
+                put("request_uid", randHashCode())
+                put("amount", "KUDOS:55")
+                put("exchange_base_url", "http://exchange.example.com/")
+                put("wtid", randShortHashCode())
+                put("credit_account", "${stripIbanPayto(bankAccountBar.internalPaytoUri)}")
+            };
 
             // Unkown account
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("unknown", "password")
-                jsonBody(req2)
+                jsonBody(valid_req)
             }.assertStatus(HttpStatusCode.Unauthorized)
 
             // Wrong password
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "password")
-                jsonBody(req2)
+                jsonBody(valid_req)
             }.assertStatus(HttpStatusCode.Unauthorized)
 
             // Wrong account
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("bar", "secret")
-                jsonBody(req2)
+                jsonBody(valid_req)
             }.assertStatus(HttpStatusCode.Forbidden)
 
             // Checking exchange debt constraint.
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
-                jsonBody(req2)
+                jsonBody(valid_req)
             }.assertStatus(HttpStatusCode.Conflict)
 
             // Giving debt allowance and checking the OK case.
@@ -125,23 +105,23 @@ class TalerApiTest {
             ))
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
-                jsonBody(req2)
+                jsonBody(valid_req)
             }.assertOk()
 
             // check idempotency
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
-                jsonBody(req2)
+                jsonBody(valid_req)
             }.assertOk()
 
             // Trigger conflict due to reused request_uid
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
                 jsonBody(
-                    req2.copy(
-                        wtid = "entropic 1",
-                        exchange_base_url = "http://different-exchange.example.com/",
-                    )
+                    json(valid_req) { 
+                        put("wtid", randShortHashCode())
+                        put("exchange_base_url", "http://different-exchange.example.com/")
+                    }
                 )
             }.assertStatus(HttpStatusCode.Conflict)
 
@@ -149,11 +129,51 @@ class TalerApiTest {
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
                 jsonBody(
-                    req2.copy(
-                        request_uid = "entropic 4",
-                        wtid = "entropic 5",
-                        amount = TalerAmount(value = 33, frac = 0, currency = "EUR")
-                    )
+                    json(valid_req) { 
+                        put("request_uid", randHashCode())
+                        put("wtid", randShortHashCode())
+                        put("amount", "EUR:33")
+                    }
+                )
+            }.assertStatus(HttpStatusCode.BadRequest)
+
+            // Bad BASE32 wtid
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "pw")
+                jsonBody(
+                    json(valid_req) { 
+                        put("wtid", "I love chocolate")
+                    }
+                )
+            }.assertStatus(HttpStatusCode.BadRequest)
+            
+            // Bad BASE32 len wtid
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "pw")
+                jsonBody(
+                    json(valid_req) { 
+                        put("wtid", randBase32Crockford(31))
+                    }
+                )
+            }.assertStatus(HttpStatusCode.BadRequest)
+
+            // Bad BASE32 request_uid
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "pw")
+                jsonBody(
+                    json(valid_req) { 
+                        put("request_uid", "I love chocolate")
+                    }
+                )
+            }.assertStatus(HttpStatusCode.BadRequest)
+
+            // Bad BASE32 len wtid
+            client.post("/accounts/foo/taler-wire-gateway/transfer") {
+                basicAuth("foo", "pw")
+                jsonBody(
+                    json(valid_req) { 
+                        put("request_uid", randBase32Crockford(65))
+                    }
                 )
             }.assertStatus(HttpStatusCode.BadRequest)
         }
