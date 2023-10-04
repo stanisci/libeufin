@@ -351,7 +351,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             talerEc = TalerErrorCode.TALER_EC_END // FIXME, define EC.
         )
         // Check if a non-admin user tried to change their legal name
-        if (c.login != "admin" && req.name != accountCustomer.name)
+        if ((c.login != "admin") && (req.name != null) && (req.name != accountCustomer.name))
             throw forbidden("non-admin user cannot change their legal name")
         // Preventing identical data to be overridden.
         val bankAccount = db.bankAccountGetFromOwnerId(accountCustomer.expectRowId())
@@ -366,8 +366,27 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             call.respond(HttpStatusCode.NoContent)
             return@patch
         }
-        // Not identical, go on writing the DB.
-        throw NotImplementedError("DB part missing.")
+        val dbRes = db.accountReconfig(
+            login = accountCustomer.login,
+            name = req.name,
+            cashoutPayto = req.cashout_address,
+            emailAddress = req.challenge_contact_data?.email,
+            isTalerExchange = req.is_exchange,
+            phoneNumber = req.challenge_contact_data?.phone
+            )
+        when (dbRes) {
+            AccountReconfigDBResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+            AccountReconfigDBResult.CUSTOMER_NOT_FOUND -> {
+                // Rare case.  Only possible if a deletion happened before the flow reaches here.
+                logger.warn("Authenticated customer wasn't found any more in the database")
+                throw notFound("Customer not found", TalerErrorCode.TALER_EC_END) // FIXME: needs EC
+            }
+            AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND -> {
+                // Bank's fault: no customer should lack a bank account.
+                throw internalServerError("Customer '${accountCustomer.login}' lacks bank account")
+            }
+        }
+        return@patch
     }
     // WITHDRAWAL ENDPOINTS
     post("/accounts/{USERNAME}/withdrawals") {

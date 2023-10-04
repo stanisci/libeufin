@@ -28,6 +28,7 @@ import java.util.UUID
 import kotlin.experimental.inv
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 // Foo pays Bar with custom subject.
@@ -486,9 +487,9 @@ class DatabaseTest {
             "+99",
             "foo@example.com",
             true
-        ).apply { assertEquals(this, AccountReconfigDBResult.CUSTOMER_NOT_FOUND) }
+        ).apply { assertEquals(AccountReconfigDBResult.CUSTOMER_NOT_FOUND, this) }
         // creating the customer
-        assertNotEquals(db.customerCreate(customerFoo), null)
+        assertNotNull(db.customerCreate(customerFoo))
 
         // asserting for the bank account not being found.
         db.accountReconfig(
@@ -498,7 +499,7 @@ class DatabaseTest {
             "+99",
             "foo@example.com",
             true
-        ).apply { assertEquals(this, AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND) }
+        ).apply { assertEquals(AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND, this) }
         // Giving foo a bank account
         assert(db.bankAccountCreate(bankAccountFoo) != null)
         // asserting for success.
@@ -512,21 +513,44 @@ class DatabaseTest {
         ).apply { assertEquals(this, AccountReconfigDBResult.SUCCESS) }
         // Getting the updated account from the database and checking values.
         db.customerGetFromLogin("foo").apply {
-            assertNotEquals(this, null)
-            assert((this!!.login == "foo") &&
+            assertNotNull(this)
+            assert((this.login == "foo") &&
                     (this.name == "Bar") &&
                     (this.cashoutPayto) == "payto://cashout" &&
                     (this.email) == "foo@example.com" &&
                     this.phone == "+99"
             )
             db.bankAccountGetFromOwnerId(this.expectRowId()).apply {
-                assertNotEquals(this, null)
-                assertTrue(this!!.isTalerExchange)
+                assertNotNull(this)
+                assertTrue(this.isTalerExchange)
+            }
+        }
+        // Testing the null cases.
+        // Sets everything to null, leaving name and the Taler exchange flag untouched.
+        assertEquals(db.accountReconfig(
+            "foo",
+            null,
+            null,
+            null,
+            null,
+            null),
+            AccountReconfigDBResult.SUCCESS
+        )
+        db.customerGetFromLogin("foo").apply {
+            assertNotNull(this)
+            assert((this.login == "foo") &&
+                    (this.name == "Bar") &&
+                    (this.cashoutPayto) == null &&
+                    (this.email) == null &&
+                    this.phone == null
+            )
+            db.bankAccountGetFromOwnerId(this.expectRowId()).apply {
+                assertNotNull(this)
+                assertTrue(this.isTalerExchange)
             }
         }
     }
 }
-
 
 
 

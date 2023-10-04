@@ -113,25 +113,34 @@ THEN
 END IF;
 out_nx_customer=FALSE;
 
-UPDATE bank_accounts
-  SET is_taler_exchange = in_is_taler_exchange
-  WHERE owning_customer_id = my_customer_id;
-IF NOT FOUND
+-- optionally updating the Taler exchange flag
+IF in_is_taler_exchange IS NOT NULL
+THEN
+  UPDATE bank_accounts
+    SET is_taler_exchange = in_is_taler_exchange
+    WHERE owning_customer_id = my_customer_id;
+END IF;
+IF in_is_taler_exchange IS NOT NULL AND NOT FOUND
 THEN
   out_nx_bank_account=TRUE;
   RETURN;
 END IF;
 out_nx_bank_account=FALSE;
+
 -- bank account patching worked, custom must as well
 -- since this runs in a DB transaction and the customer
 -- was found earlier in this function.
 UPDATE customers
 SET
-  name=in_name,
   cashout_payto=in_cashout_payto,
   phone=in_phone,
   email=in_email
 WHERE customer_id = my_customer_id;
+-- optionally updating the name
+IF in_name IS NOT NULL
+THEN
+  UPDATE customers SET name=in_name WHERE customer_id = my_customer_id;
+END IF;
 END $$;
 
 COMMENT ON FUNCTION account_reconfig(TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN)

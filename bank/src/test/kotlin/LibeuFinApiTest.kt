@@ -17,6 +17,9 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.random.Random
+import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 
 class LibeuFinApiTest {
     private val customerFoo = Customer(
@@ -704,6 +707,66 @@ class LibeuFinApiTest {
             }.apply {
                 assert(this.status == HttpStatusCode.PreconditionFailed)
             }
+        }
+    }
+
+    /**
+     * Tests reconfiguration of account data.
+     */
+    @Test
+    fun accountReconfig() {
+        val db = initDb()
+        val ctx = getTestContext()
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
+            }
+            assertNotNull(db.customerCreate(customerFoo))
+            val validReq = json {
+                put("is_exchange", true)
+            }
+            // First call expects 500, because foo lacks a bank account
+            client.patch("/accounts/foo") {
+                basicAuth("foo", "pw")
+                jsonBody(validReq)
+            }.assertStatus(HttpStatusCode.InternalServerError)
+            // Creating foo's bank account.
+            assertNotNull(db.bankAccountCreate(genBankAccount(1L)))
+            // Successful attempt now.
+            client.patch("/accounts/foo") {
+                basicAuth("foo", "pw")
+                jsonBody(AccountReconfiguration(
+                    cashout_address = "payto://new-cashout-address",
+                    challenge_contact_data = ChallengeContactData(
+                        email = "new@example.com",
+                        phone = "+987"
+                    ),
+                    is_exchange = true,
+                    name = null
+                ))
+            }.assertStatus(HttpStatusCode.NoContent)
+            // Checking ordinary user doesn't get to patch their name.
+            client.patch("/accounts/foo") {
+                basicAuth("foo", "pw")
+                jsonBody(json {
+                    put("name", "Another Foo")
+                })
+            }.assertStatus(HttpStatusCode.Forbidden)
+            // Finally checking that admin does get to patch foo's name.
+            assertNotNull(db.customerCreate(Customer(
+                login = "admin",
+                passwordHash = CryptoUtil.hashpw("secret"),
+                name = "CFO"
+            )))
+            client.patch("/accounts/foo") {
+                basicAuth("admin", "secret")
+                jsonBody(json {
+                    put("name", "Another Foo")
+                })
+            }.assertStatus(HttpStatusCode.NoContent)
+            val fooFromDb = db.customerGetFromLogin("foo")
+            assertNotNull(fooFromDb)
+            assertEquals("Another Foo", fooFromDb.name)
         }
     }
 

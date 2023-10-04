@@ -741,7 +741,7 @@ data class AccountReconfiguration(
     val challenge_contact_data: ChallengeContactData?,
     val cashout_address: String?,
     val name: String?,
-    val is_exchange: Boolean
+    val is_exchange: Boolean?
 )
 
 /**

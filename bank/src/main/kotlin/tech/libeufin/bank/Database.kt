@@ -28,10 +28,7 @@ import tech.libeufin.util.microsToJavaInstant
 import tech.libeufin.util.stripIbanPayto
 import tech.libeufin.util.toDbMicros
 import java.io.File
-import java.sql.DriverManager
-import java.sql.PreparedStatement
-import java.sql.ResultSet
-import java.sql.SQLException
+import java.sql.*
 import java.time.Instant
 import java.util.*
 import kotlin.math.abs
@@ -404,16 +401,22 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
      * The 'login' parameter decides which customer and bank account rows
      * will get the update.
      *
+     * Meaning of null in the parameters: when 'name' and 'isTalerExchange'
+     * are null, NOTHING gets changed.  If any of the other values are null,
+     * WARNING: their value will be overridden with null.  No parameter gets
+     * null as the default, as to always keep the caller aware of what gets in
+     * the database.
+     *
      * The return type expresses either success, or that the target rows
      * could not be found.
      */
     fun accountReconfig(
         login: String,
-        name: String,
-        cashoutPayto: String,
-        phoneNumber: String,
-        emailAddress: String,
-        isTalerExchange: Boolean
+        name: String?,
+        cashoutPayto: String?,
+        phoneNumber: String?,
+        emailAddress: String?,
+        isTalerExchange: Boolean?
     ): AccountReconfigDBResult {
         reconnect()
         val stmt = prepare("""
@@ -427,7 +430,11 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setString(3, phoneNumber)
         stmt.setString(4, emailAddress)
         stmt.setString(5, cashoutPayto)
-        stmt.setBoolean(6, isTalerExchange)
+
+        if (isTalerExchange == null)
+            stmt.setNull(6, Types.NULL)
+        else stmt.setBoolean(6, isTalerExchange)
+
         val res = stmt.executeQuery()
         res.use {
             if (!it.next()) throw internalServerError("accountReconfig() returned nothing")
