@@ -135,7 +135,7 @@ class TalerApiTest {
                         put("amount", "EUR:33")
                     }
                 )
-            }.assertStatus(HttpStatusCode.BadRequest)
+            }.assertBadRequest()
 
             // Bad BASE32 wtid
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
@@ -145,7 +145,7 @@ class TalerApiTest {
                         put("wtid", "I love chocolate")
                     }
                 )
-            }.assertStatus(HttpStatusCode.BadRequest)
+            }.assertBadRequest()
             
             // Bad BASE32 len wtid
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
@@ -155,7 +155,7 @@ class TalerApiTest {
                         put("wtid", randBase32Crockford(31))
                     }
                 )
-            }.assertStatus(HttpStatusCode.BadRequest)
+            }.assertBadRequest()
 
             // Bad BASE32 request_uid
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
@@ -165,7 +165,7 @@ class TalerApiTest {
                         put("request_uid", "I love chocolate")
                     }
                 )
-            }.assertStatus(HttpStatusCode.BadRequest)
+            }.assertBadRequest()
 
             // Bad BASE32 len wtid
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
@@ -175,7 +175,7 @@ class TalerApiTest {
                         put("request_uid", randBase32Crockford(65))
                     }
                 )
-            }.assertStatus(HttpStatusCode.BadRequest)
+            }.assertBadRequest()
         }
     }
 
@@ -279,14 +279,31 @@ class TalerApiTest {
             application {
                 corebankWebApp(db, ctx)
             }
+            val valid_req = json {
+                put("amount", "KUDOS:44")
+                put("reserve_pub", randEddsaPublicKey())
+                put("debit_account", "${"payto://iban/BAR-IBAN-ABC"}")
+            };
             client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
                 basicAuth("foo", "pw")
-                jsonBody(AddIncomingRequest(
-                    amount = TalerAmount(value = 44, frac = 0, currency = "KUDOS"), 
-                    reserve_pub = "RESERVE-PUB-TEST", 
-                    debit_account = "${"payto://iban/BAR-IBAN-ABC"}"
-                ), deflate = true)
+                jsonBody(valid_req, deflate = true)
             }.assertOk()
+
+            // Bad BASE32 reserve_pub
+            client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
+                basicAuth("foo", "pw")
+                jsonBody(json(valid_req) { 
+                    put("reserve_pub", "I love chocolate")
+                })
+            }.assertBadRequest()
+            
+            // Bad BASE32 len reserve_pub
+            client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
+                basicAuth("foo", "pw")
+                jsonBody(json(valid_req) { 
+                    put("reserve_pub", randBase32Crockford(31))
+                })
+            }.assertBadRequest()
         }
     }
     // Selecting withdrawal details from the Integration API endpoint.

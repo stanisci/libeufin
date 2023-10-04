@@ -30,11 +30,11 @@ import java.time.temporal.ChronoUnit
 import java.util.*
 
 /**
- * 32-byte hash code.
+ * 32-byte Crockford's Base32 encoded data.
  */
 @Serializable()
 @JvmInline
-value class ShortHashCode(val encoded: String) {
+value class Base32Crockford32B(val encoded: String) {
     init {
         val decoded = try {
             Base32Crockford.decode(encoded) 
@@ -52,11 +52,11 @@ value class ShortHashCode(val encoded: String) {
 }
 
 /**
- * 64-byte hash code.
+ * 64-byte Crockford's Base32 encoded data.
  */
 @Serializable()
 @JvmInline
-value class HashCode(val encoded: String) {
+value class Base32Crockford64B(val encoded: String) {
     init {
         val decoded = try {
             Base32Crockford.decode(encoded) 
@@ -72,6 +72,17 @@ value class HashCode(val encoded: String) {
         }
     }
 }
+
+/** 32-byte hash code. */
+typealias ShortHashCode = Base32Crockford32B;
+/** 64-byte hash code. */
+typealias HashCode = Base32Crockford64B;
+/**
+ * EdDSA and ECDHE public keys always point on Curve25519
+ * and represented  using the standard 256 bits Ed25519 compact format,
+ * converted to Crockford Base32.
+ */
+typealias EddsaPublicKey = Base32Crockford32B;
 
 /**
  * Allowed lengths for fractional digits in amounts.
@@ -633,7 +644,7 @@ data class BankWithdrawalOperationPostResponse(
 @Serializable
 data class AddIncomingRequest(
     val amount: TalerAmount,
-    val reserve_pub: String,
+    val reserve_pub: EddsaPublicKey,
     val debit_account: String
 )
 

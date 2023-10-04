@@ -158,7 +158,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                 "Currency mismatch",
                 TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
             )
-        if (db.bankTransactionCheckExists(req.reserve_pub) != null)
+        if (db.bankTransactionCheckExists(req.reserve_pub.encoded) != null)
             throw conflict(
                 "Reserve pub. already used",
                 TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
@@ -177,7 +177,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             amount = req.amount,
             creditorAccountId = exchangeAccount.expectRowId(),
             transactionDate = txTimestamp,
-            subject = req.reserve_pub
+            subject = req.reserve_pub.encoded
         )
         val res = db.bankTransactionCreate(op)
         /**
@@ -189,7 +189,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                 "Insufficient balance",
                 TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
             )
-        val rowId = db.bankTransactionCheckExists(req.reserve_pub)
+        val rowId = db.bankTransactionCheckExists(req.reserve_pub.encoded)
             ?: throw internalServerError("Could not find the just inserted bank transaction")
         call.respond(
             AddIncomingResponse(

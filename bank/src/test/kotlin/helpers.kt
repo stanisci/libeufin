@@ -16,8 +16,8 @@ fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {
     assertEquals(status, this.status);
     return this
 }
-
 fun HttpResponse.assertOk(): HttpResponse = assertStatus(HttpStatusCode.OK)
+fun HttpResponse.assertBadRequest(): HttpResponse = assertStatus(HttpStatusCode.BadRequest)
 
 
 fun BankTransactionResult.assertSuccess() {
@@ -39,14 +39,13 @@ inline fun <reified B> HttpRequestBuilder.jsonBody(b: B, deflate: Boolean = fals
 
 /* ----- Json DSL ----- */
 
-inline fun json(from: JsonObject = JsonObject(emptyMap()), builderAction: JsonBuilder2.() -> Unit): JsonObject {
-    val builder = JsonBuilder2(from)
+inline fun json(from: JsonObject = JsonObject(emptyMap()), builderAction: JsonBuilder.() -> Unit): JsonObject {
+    val builder = JsonBuilder(from)
     builder.apply(builderAction)
-    println(builder.content)
     return JsonObject(builder.content)
 }
 
-class JsonBuilder2(from: JsonObject) {
+class JsonBuilder(from: JsonObject) {
     val content: MutableMap<String, JsonElement> = from.toMutableMap()
 
     inline fun <reified B> put(name: String, b: B) {
@@ -69,4 +68,8 @@ fun randHashCode(): HashCode {
 
 fun randShortHashCode(): ShortHashCode {
     return ShortHashCode(randBase32Crockford(32))
+}
+
+fun randEddsaPublicKey(): EddsaPublicKey {
+    return EddsaPublicKey(randBase32Crockford(32))
 }
