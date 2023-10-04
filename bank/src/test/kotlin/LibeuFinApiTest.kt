@@ -723,7 +723,7 @@ class LibeuFinApiTest {
             }
             assertNotNull(db.customerCreate(customerFoo))
             val validReq = json {
-                put("is_exchange", true)
+                "is_exchange" to true
             }
             // First call expects 500, because foo lacks a bank account
             client.patch("/accounts/foo") {
@@ -749,7 +749,7 @@ class LibeuFinApiTest {
             client.patch("/accounts/foo") {
                 basicAuth("foo", "pw")
                 jsonBody(json {
-                    put("name", "Another Foo")
+                    "name" to "Another Foo"
                 })
             }.assertStatus(HttpStatusCode.Forbidden)
             // Finally checking that admin does get to patch foo's name.
@@ -761,7 +761,7 @@ class LibeuFinApiTest {
             client.patch("/accounts/foo") {
                 basicAuth("admin", "secret")
                 jsonBody(json {
-                    put("name", "Another Foo")
+                    "name" to "Another Foo"
                 })
             }.assertStatus(HttpStatusCode.NoContent)
             val fooFromDb = db.customerGetFromLogin("foo")

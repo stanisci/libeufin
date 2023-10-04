@@ -67,11 +67,11 @@ class TalerApiTest {
             }
 
             val valid_req = json {
-                put("request_uid", randHashCode())
-                put("amount", "KUDOS:55")
-                put("exchange_base_url", "http://exchange.example.com/")
-                put("wtid", randShortHashCode())
-                put("credit_account", "${stripIbanPayto(bankAccountBar.internalPaytoUri)}")
+                "request_uid" to randHashCode()
+                "amount" to "KUDOS:55"
+                "exchange_base_url" to "http://exchange.example.com/"
+                "wtid" to randShortHashCode()
+                "credit_account" to "${stripIbanPayto(bankAccountBar.internalPaytoUri)}"
             };
 
             // Unkown account
@@ -119,8 +119,8 @@ class TalerApiTest {
                 basicAuth("foo", "pw")
                 jsonBody(
                     json(valid_req) { 
-                        put("wtid", randShortHashCode())
-                        put("exchange_base_url", "http://different-exchange.example.com/")
+                        "wtid" to randShortHashCode()
+                        "exchange_base_url" to "http://different-exchange.example.com/"
                     }
                 )
             }.assertStatus(HttpStatusCode.Conflict)
@@ -130,9 +130,9 @@ class TalerApiTest {
                 basicAuth("foo", "pw")
                 jsonBody(
                     json(valid_req) { 
-                        put("request_uid", randHashCode())
-                        put("wtid", randShortHashCode())
-                        put("amount", "EUR:33")
+                        "request_uid" to randHashCode()
+                        "wtid" to randShortHashCode()
+                        "amount" to "EUR:33"
                     }
                 )
             }.assertBadRequest()
@@ -142,7 +142,7 @@ class TalerApiTest {
                 basicAuth("foo", "pw")
                 jsonBody(
                     json(valid_req) { 
-                        put("wtid", "I love chocolate")
+                        "wtid" to "I love chocolate"
                     }
                 )
             }.assertBadRequest()
@@ -152,7 +152,7 @@ class TalerApiTest {
                 basicAuth("foo", "pw")
                 jsonBody(
                     json(valid_req) { 
-                        put("wtid", randBase32Crockford(31))
+                        "wtid" to randBase32Crockford(31)
                     }
                 )
             }.assertBadRequest()
@@ -162,7 +162,7 @@ class TalerApiTest {
                 basicAuth("foo", "pw")
                 jsonBody(
                     json(valid_req) { 
-                        put("request_uid", "I love chocolate")
+                        "request_uid" to "I love chocolate"
                     }
                 )
             }.assertBadRequest()
@@ -172,7 +172,7 @@ class TalerApiTest {
                 basicAuth("foo", "pw")
                 jsonBody(
                     json(valid_req) { 
-                        put("request_uid", randBase32Crockford(65))
+                        "request_uid" to randBase32Crockford(65)
                     }
                 )
             }.assertBadRequest()
@@ -280,9 +280,9 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
             val valid_req = json {
-                put("amount", "KUDOS:44")
-                put("reserve_pub", randEddsaPublicKey())
-                put("debit_account", "${"payto://iban/BAR-IBAN-ABC"}")
+                "amount" to "KUDOS:44"
+                "reserve_pub" to randEddsaPublicKey()
+                "debit_account" to "${"payto://iban/BAR-IBAN-ABC"}"
             };
             client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
                 basicAuth("foo", "pw")
@@ -293,7 +293,7 @@ class TalerApiTest {
             client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
                 basicAuth("foo", "pw")
                 jsonBody(json(valid_req) { 
-                    put("reserve_pub", "I love chocolate")
+                    "reserve_pub" to "I love chocolate"
                 })
             }.assertBadRequest()
             
@@ -301,7 +301,7 @@ class TalerApiTest {
             client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
                 basicAuth("foo", "pw")
                 jsonBody(json(valid_req) { 
-                    put("reserve_pub", randBase32Crockford(31))
+                    "reserve_pub" to randBase32Crockford(31)
                 })
             }.assertBadRequest()
         }

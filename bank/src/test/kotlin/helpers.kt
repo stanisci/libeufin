@@ -48,9 +48,9 @@ inline fun json(from: JsonObject = JsonObject(emptyMap()), builderAction: JsonBu
 class JsonBuilder(from: JsonObject) {
     val content: MutableMap<String, JsonElement> = from.toMutableMap()
 
-    inline fun <reified B> put(name: String, b: B) {
-        val json = Json.encodeToJsonElement(kotlinx.serialization.serializer<B>(), b);
-        content.put(name, json)
+    infix inline fun <reified T> String.to(v: T) {
+        val json = Json.encodeToJsonElement(kotlinx.serialization.serializer<T>(), v);
+        content.put(this, json)
     }
 }
 
