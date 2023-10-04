@@ -11,39 +11,10 @@ Standards-Version: 4.1.0
 Vcs-Git: https://git.taler.net/libeufin.git
 Homepage: https://taler.net/
 
-Package: libeufin-common
-Architecture: all
-Depends: openjdk-11-jdk-headless | openjdk-11-jdk | openjdk-12-jdk-headless | openjdk-12-jdk | openjdk-13-jdk-headless | openjdk-13-jdk | openjdk-14-jdk-headless | openjdk-14-jdk | openjdk-15-jdk-headless | openjdk-15-jdk | openjdk-16-jdk-headless | openjdk-16-jdk | openjdk-17-jdk-headless | openjdk-17-jdk | openjdk-18-jdk-headless | openjdk-18-jdk | openjdk-19-jdk-headless | openjdk-19-jdk | openjdk-20-jdk-headless | openjdk-20-jdk | openjdk-21-jdk-headless | openjdk-21-jdk,
-         python3 (>= 3.7),
-         python3-click,
-         python3-requests,
-         ${misc:Depends}
-Recommends:
-Description: Resources shared between libeufin-nexus and libeufin-bank.
-
-Package: libeufin-nexus
-Architecture: all
-Depends: openjdk-11-jdk-headless | openjdk-11-jdk | openjdk-12-jdk-headless | openjdk-12-jdk | openjdk-13-jdk-headless | openjdk-13-jdk | openjdk-14-jdk-headless | openjdk-14-jdk | openjdk-15-jdk-headless | openjdk-15-jdk | openjdk-16-jdk-headless | openjdk-16-jdk | openjdk-17-jdk-headless | openjdk-17-jdk | openjdk-18-jdk-headless | openjdk-18-jdk | openjdk-19-jdk-headless | openjdk-19-jdk | openjdk-20-jdk-headless | openjdk-20-jdk | openjdk-21-jdk-headless | openjdk-21-jdk,
-         python3 (>= 3.7),
-         python3-click,
-         python3-requests,
-         libeufin-common,
-         ${misc:Depends}
-Recommends: apache2 | nginx | httpd,
-	 postgresql (>= 13.0)
-Description: Software package to access FinTS/EBICS based
- core banking systems.
-
-
 Package: libeufin-bank
 Architecture: all
 Depends: openjdk-11-jdk-headless | openjdk-11-jdk | openjdk-12-jdk-headless | openjdk-12-jdk | openjdk-13-jdk-headless | openjdk-13-jdk | openjdk-14-jdk-headless | openjdk-14-jdk | openjdk-15-jdk-headless | openjdk-15-jdk | openjdk-16-jdk-headless | openjdk-16-jdk | openjdk-17-jdk-headless | openjdk-17-jdk | openjdk-18-jdk-headless | openjdk-18-jdk | openjdk-19-jdk-headless | openjdk-19-jdk | openjdk-20-jdk-headless | openjdk-20-jdk | openjdk-21-jdk-headless | openjdk-21-jdk,
-         python3 (>= 3.7),
-         python3-click,
-         python3-requests,
-         libeufin-common,
          ${misc:Depends}
 Recommends: apache2 | nginx | httpd,
 	 postgresql (>= 13.0)
-Description: Software package to provide a reference
- implementation of a FinTS/EBICS based core banking system.
+Description: Software package to provide a regional bank with optional EBICS access.
