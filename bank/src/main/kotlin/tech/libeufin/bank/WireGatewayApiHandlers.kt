@@ -37,14 +37,33 @@ import kotlin.math.abs
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
 fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) {
+    /** Authenticate and check access rights */
+    suspend fun ApplicationCall.authCheck(scope: TokenScope, withAdmin: Boolean): String {
+        val authCustomer = authenticateBankRequest(db, scope) ?: throw unauthorized()
+        val username = getResourceName("USERNAME")
+        if (!username.canI(authCustomer, withAdmin)) throw forbidden()
+        return username
+    }
+
+    /** Retrieve the bank account for the selected username*/
+    suspend fun ApplicationCall.bankAccount(): BankAccount {
+        val username = getResourceName("USERNAME")
+        val customer = db.customerGetFromLogin(username) ?: throw notFound(
+            hint = "Customer $username not found",
+            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
+        )
+        val bankAccount = db.bankAccountGetFromOwnerId(customer.expectRowId())
+        ?: throw internalServerError("Exchange does not have a bank account")
+        return bankAccount
+    }
+
     get("/taler-wire-gateway/config") {
         call.respond(TWGConfigResponse(currency = ctx.currency))
         return@get
     }
 
     post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
-        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
-        if (!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
+        call.authCheck(TokenScope.readwrite, true)
         val req = call.receive<TransferRequest>()
         // Checking for idempotency.
         val maybeDoneAlready = db.talerTransferGetFromUid(req.request_uid.encoded)
@@ -73,8 +92,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         val internalCurrency = ctx.currency
         if (internalCurrency != req.amount.currency)
             throw badRequest("Currency mismatch: $internalCurrency vs ${req.amount.currency}")
-        val exchangeBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
-            ?: throw internalServerError("Exchange does not have a bank account")
+        val exchangeBankAccount = call.bankAccount()
         val transferTimestamp = Instant.now()
         val dbRes = db.talerTransferCreate(
             req = req,
@@ -103,18 +121,11 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
     }
 
     get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {
-        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        val accountName = call.getResourceName("USERNAME")
-        if (!accountName.canI(c, withAdmin = true)) throw forbidden()
+        val username = call.authCheck(TokenScope.readonly, true)
         val params = getHistoryParams(call.request)
-        val accountCustomer = db.customerGetFromLogin(accountName) ?: throw notFound(
-            hint = "Customer $accountName not found",
-            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
-        )
-        val bankAccount = db.bankAccountGetFromOwnerId(accountCustomer.expectRowId())
-            ?: throw internalServerError("Customer '$accountName' lacks bank account.")
+        val bankAccount = call.bankAccount()
         if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
-
+        
         val resp = IncomingHistory(credit_account = bankAccount.internalPaytoUri)
         var start = params.start
         var delta = params.delta
@@ -135,7 +146,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                     // This should usually not happen in the first place,
                     // because transactions to the exchange without a valid
                     // reserve pub should be bounced.
-                    logger.warn("exchange account ${c.login} contains invalid incoming transaction ${it.expectRowId()}")
+                    logger.warn("exchange account $username contains invalid incoming transaction ${it.expectRowId()}")
                 } else {
                     // Register new transacation
                     resp.incoming_transactions.add(
@@ -162,8 +173,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
     }
 
     post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {
-        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
-        if (!call.getResourceName("USERNAME").canI(c, withAdmin = false)) throw forbidden()
+         call.authCheck(TokenScope.readwrite, false);
         val req = call.receive<AddIncomingRequest>()
         val internalCurrency = ctx.currency
         if (req.amount.currency != internalCurrency)
@@ -182,8 +192,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                 "debit_account not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
-        val exchangeAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
-            ?: throw internalServerError("exchange bank account not found, despite it's a customer")
+        val exchangeAccount = call.bankAccount()
         val txTimestamp = Instant.now()
         val op = BankInternalTransaction(
             debtorAccountId = walletAccount.expectRowId(),

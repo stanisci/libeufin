@@ -1,6 +1,7 @@
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.client.HttpClient
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
@@ -50,9 +51,7 @@ class TalerApiTest {
         cashoutCurrency = "KUDOS"
     )
 
-    // Testing the POST /transfer call from the TWG API.
-    @Test
-    fun transfer() {
+    fun commonSetup(): Pair<Database, BankApplicationContext> {
         val db = initDb()
         val ctx = getTestContext()
         // Creating the exchange and merchant accounts first.
@@ -60,11 +59,43 @@ class TalerApiTest {
         assertNotNull(db.bankAccountCreate(bankAccountFoo))
         assertNotNull(db.customerCreate(customerBar))
         assertNotNull(db.bankAccountCreate(bankAccountBar))
+        return Pair(db, ctx)
+    }
+
+    // Test endpoint is correctly authenticated 
+    suspend fun authRoutine(client: HttpClient, path: String, method: HttpMethod = HttpMethod.Post) {
+        // No body because authentication must happen before parsing the body
+        
+        // Unknown account
+        client.request(path) {
+            this.method = method
+            basicAuth("unknown", "password")
+        }.assertStatus(HttpStatusCode.Unauthorized)
+
+        // Wrong password
+        client.request(path) {
+            this.method = method
+            basicAuth("foo", "wrong_password")
+        }.assertStatus(HttpStatusCode.Unauthorized)
+
+        // Wrong account
+        client.request(path) {
+            this.method = method
+            basicAuth("bar", "secret")
+        }.assertStatus(HttpStatusCode.Forbidden)
+    }
+
+    // Testing the POST /transfer call from the TWG API.
+    @Test
+    fun transfer() {
+        val (db, ctx) = commonSetup()
         // Do POST /transfer.
         testApplication {
             application {
                 corebankWebApp(db, ctx)
             }
+
+            authRoutine(client, "/accounts/foo/taler-wire-gateway/transfer")
 
             val valid_req = json {
                 "request_uid" to randHashCode()
@@ -73,24 +104,6 @@ class TalerApiTest {
                 "wtid" to randShortHashCode()
                 "credit_account" to "${stripIbanPayto(bankAccountBar.internalPaytoUri)}"
             };
-
-            // Unkown account
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("unknown", "password")
-                jsonBody(valid_req)
-            }.assertStatus(HttpStatusCode.Unauthorized)
-
-            // Wrong password
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "password")
-                jsonBody(valid_req)
-            }.assertStatus(HttpStatusCode.Unauthorized)
-
-            // Wrong account
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("bar", "secret")
-                jsonBody(valid_req)
-            }.assertStatus(HttpStatusCode.Forbidden)
 
             // Checking exchange debt constraint.
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
@@ -184,12 +197,7 @@ class TalerApiTest {
      */
     @Test
     fun historyIncoming() {
-        val db = initDb()
-        val ctx = getTestContext()
-        assertNotNull(db.customerCreate(customerFoo))
-        assertNotNull(db.bankAccountCreate(bankAccountFoo))
-        assertNotNull(db.customerCreate(customerBar))
-        assertNotNull(db.bankAccountCreate(bankAccountBar))
+        val (db, ctx) = commonSetup()
         // Give Foo reasonable debt allowance:
         assert(
             db.bankAccountSetMaxDebt(
@@ -203,6 +211,8 @@ class TalerApiTest {
             application {
                 corebankWebApp(db, ctx)
             }
+
+            authRoutine(client, "/accounts/foo/taler-wire-gateway/history/incoming", HttpMethod.Get)
 
             // Check error when no transactions
             client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=7") {
@@ -283,12 +293,7 @@ class TalerApiTest {
     // Testing the /admin/add-incoming call from the TWG API.
     @Test
     fun addIncoming() {
-        val db = initDb()
-        val ctx = getTestContext()
-        assertNotNull(db.customerCreate(customerFoo))
-        assertNotNull(db.bankAccountCreate(bankAccountFoo))
-        assertNotNull(db.customerCreate(customerBar))
-        assertNotNull(db.bankAccountCreate(bankAccountBar))
+        val (db, ctx) = commonSetup()
         // Give Bar reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             2L,
@@ -298,6 +303,9 @@ class TalerApiTest {
             application {
                 corebankWebApp(db, ctx)
             }
+
+            authRoutine(client, "/accounts/foo/taler-wire-gateway/admin/add-incoming")
+
             val valid_req = json {
                 "amount" to "KUDOS:44"
                 "reserve_pub" to randEddsaPublicKey()
@@ -428,13 +436,7 @@ class TalerApiTest {
     // Testing withdrawal confirmation
     @Test
     fun withdrawalConfirmation() {
-        val db = initDb()
-        val ctx = getTestContext()
-        // Creating Foo as the wallet owner and Bar as the exchange.
-        assertNotNull(db.customerCreate(customerFoo))
-        assertNotNull(db.bankAccountCreate(bankAccountFoo))
-        assertNotNull(db.customerCreate(customerBar))
-        assertNotNull(db.bankAccountCreate(bankAccountBar))
+        val (db, ctx) = commonSetup()
 
         // Artificially making a withdrawal operation for Foo.
         val uuid = UUID.randomUUID()
