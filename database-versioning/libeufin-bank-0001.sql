@@ -48,7 +48,7 @@ CREATE TYPE subscriber_state_enum
   AS ENUM ('new', 'confirmed');
 
 CREATE TYPE stat_timeframe_enum
-  AS ENUM ('hour', 'day', 'month', 'year', '10years');
+  AS ENUM ('hour', 'day', 'month', 'year', 'decade');
 
 -- FIXME: comments on types (see exchange for example)!
 
@@ -404,19 +404,17 @@ CREATE TABLE IF NOT EXISTS regional_stats (
   ,cashout_volume_in_fiat taler_amount NOT NULL
   ,internal_taler_payments_count BIGINT NOT NULL
   ,internal_taler_payments_volume taler_amount NOT NULL
-  ,taler_exchange_balance taler_amount NOT NULL -- FIXME: this can't be accurate, as balance changes continuously.
   ,timeframe stat_timeframe_enum NOT NULL
 );
 
 COMMENT ON TABLE regional_stats IS
-  'Stores statistics about the regional currency usage.  At any given time, this table stores at most: 23 hour rows, 29 day rows, 11 month rows, 9 year rows, and any number of 10year rows';
+  'Stores statistics about the regional currency usage.  At any given time, this table stores at most: 24 hour rows, N day rows (with N being the highest day number of the current month), 12 month rows, 9 year rows, and any number of decade rows';
 COMMENT ON COLUMN regional_stats.cashin_count IS 'how many cashin operations took place in the timeframe';
 COMMENT ON COLUMN regional_stats.cashin_volume_in_fiat IS 'how much fiat currency was cashed in in the timeframe';
 COMMENT ON COLUMN regional_stats.cashout_count IS 'how many cashout operations took place in the timeframe';
 COMMENT ON COLUMN regional_stats.cashout_volume_in_fiat IS 'how much fiat currency was payed by the bank to customers in the timeframe';
 COMMENT ON COLUMN regional_stats.internal_taler_payments_count IS 'how many internal payments were made by a Taler exchange';
 COMMENT ON COLUMN regional_stats.internal_taler_payments_volume IS 'how much internal currency was paid by a Taler exchange';
-COMMENT ON COLUMN regional_stats.taler_exchange_balance IS 'balance of the Taler exchange at the given timeframe'; -- FIXME: see FIXME above.
 COMMENT ON COLUMN regional_stats.timeframe IS 'particular timeframe that this row accounts for';
 
 COMMIT;
