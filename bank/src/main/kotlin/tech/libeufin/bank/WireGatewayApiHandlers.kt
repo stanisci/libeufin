@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory
 import tech.libeufin.util.extractReservePubFromSubject
 import tech.libeufin.util.stripIbanPayto
 import java.time.Instant
+import kotlin.math.abs
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
@@ -114,38 +115,50 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             ?: throw internalServerError("Customer '$accountName' lacks bank account.")
         if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
 
-        val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
-            start = params.start,
-            delta = params.delta,
-            bankAccountId = bankAccount.expectRowId(),
-            withDirection = TransactionDirection.credit
-        )
-        if (history.isEmpty()) {
-            call.respond(HttpStatusCode.NoContent)
-            return@get
-        }
         val resp = IncomingHistory(credit_account = bankAccount.internalPaytoUri)
-        history.forEach {
-            val reservePub = extractReservePubFromSubject(it.subject)
-            if (reservePub == null) {
-                // This should usually not happen in the first place,
-                // because transactions to the exchange without a valid
-                // reserve pub should be bounced.
-                logger.warn("exchange account ${c.login} contains invalid incoming transaction ${it.expectRowId()}")
-            } else {
-                resp.incoming_transactions.add(
-                    IncomingReserveTransaction(
-                        row_id = it.expectRowId(),
-                        amount = it.amount,
-                        date = TalerProtocolTimestamp(it.transactionDate),
-                        debit_account = it.debtorPaytoUri,
-                        reserve_pub = reservePub
+        var start = params.start
+        var delta = params.delta
+
+        // As we may ignore rows containing incorrect subjects, we may have to run several queries.
+        while (delta != 0L) {
+            val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
+                start = start,
+                delta = delta,
+                bankAccountId = bankAccount.expectRowId(),
+                withDirection = TransactionDirection.credit
+            )
+            if (history.isEmpty())
+                break;
+            history.forEach {
+                val reservePub = extractReservePubFromSubject(it.subject)
+                if (reservePub == null) {
+                    // This should usually not happen in the first place,
+                    // because transactions to the exchange without a valid
+                    // reserve pub should be bounced.
+                    logger.warn("exchange account ${c.login} contains invalid incoming transaction ${it.expectRowId()}")
+                } else {
+                    // Register new transacation
+                    resp.incoming_transactions.add(
+                        IncomingReserveTransaction(
+                            row_id = it.expectRowId(),
+                            amount = it.amount,
+                            date = TalerProtocolTimestamp(it.transactionDate),
+                            debit_account = it.debtorPaytoUri,
+                            reserve_pub = reservePub
+                        )
                     )
-                )
+                    // Advance cursor
+                    start = it.expectRowId()
+                    if (delta < 0) delta++ else delta--;
+                }
             }
         }
-        call.respond(resp)
-        return@get
+
+        if (resp.incoming_transactions.isEmpty()) {
+            call.respond(HttpStatusCode.NoContent)
+        } else {
+            call.respond(resp)
+        }
     }
 
     post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {

@@ -197,67 +197,86 @@ class TalerApiTest {
                 TalerAmount(1000000, 0, "KUDOS")
             )
         )
-        // Foo pays Bar (the exchange) twice.
-        val reservePubOne = "5ZFS98S1K4Y083W95GVZK638TSRE44RABVASB3AFA3R95VCW17V0"
-        val reservePubTwo = "TFBT5NEVT8D2GETZ4DRF7C69XZHKHJ15296HRGB1R5ARNK0SP8A0"
-        db.bankTransactionCreate(genTx(reservePubOne)).assertSuccess()
-        db.bankTransactionCreate(genTx(reservePubTwo)).assertSuccess()
-        // Should not show up in the taler wire gateway API history
-        db.bankTransactionCreate(genTx("bogus foobar")).assertSuccess()
-        // Bar pays Foo once, but that should not appear in the result.
-        db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)).assertSuccess()
 
         // Bar expects two entries in the incoming history
         testApplication {
             application {
                 corebankWebApp(db, ctx)
             }
-            val resp = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=5") {
+
+            // Check error when no transactions
+            client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=7") {
                 basicAuth("bar", "secret")
-            }.assertOk()
-            val j: IncomingHistory = Json.decodeFromString(resp.bodyAsText())
-            assertEquals(2, j.incoming_transactions.size)
+            }.assertStatus(HttpStatusCode.NoContent)
+
+            // Foo pays Bar (the exchange) three time
+            repeat(3) {
+                db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
+            }
+            // Should not show up in the taler wire gateway API history
+            db.bankTransactionCreate(genTx("bogus foobar")).assertSuccess()
+            // Bar pays Foo once, but that should not appear in the result.
+            db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)).assertSuccess()
+            // Foo pays Bar (the exchange) twice, we should see five valid transactions
+            repeat(2) {
+                db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
+            }
+
+            // Check ignore bogus subject
+            client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=7") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
+                assertEquals(5, j.incoming_transactions.size)
+            }
+           
+            // Check skip bogus subject
+            client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=5") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
+                assertEquals(5, j.incoming_transactions.size)
+            }
+
             // Testing ranges.
-            val mockReservePub = Base32Crockford.encode(ByteArray(32))
+            val mockReservePub = randShortHashCode().encoded
             for (i in 1..400)
                 db.bankTransactionCreate(genTx(mockReservePub)).assertSuccess()
+
             // forward range:
-            val range = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=10&start=30") {
+            client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=10&start=30") {
                 basicAuth("bar", "secret")
-            }.assertOk()
-            val rangeObj = Json.decodeFromString<IncomingHistory>(range.bodyAsText())
-            // testing the size is like expected.
-            assert(rangeObj.incoming_transactions.size == 10) {
-                println("incoming_transaction has wrong size: ${rangeObj.incoming_transactions.size}")
-                println("Response was: ${range.bodyAsText()}")
-            }
-            // testing that the first row_id is at least the 'start' query param.
-            assert(rangeObj.incoming_transactions[0].row_id >= 30)
-            // testing that the row_id increases.
-            for (idx in 1..9)
-                assert(rangeObj.incoming_transactions[idx].row_id > rangeObj.incoming_transactions[idx - 1].row_id)
-            // backward range:
-            val rangeBackward = client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-10&start=300") {
-                basicAuth("bar", "secret")
-            }.assertOk()
-            val rangeBackwardObj = Json.decodeFromString<IncomingHistory>(rangeBackward.bodyAsText())
-            // testing the size is like expected.
-            assert(rangeBackwardObj.incoming_transactions.size == 10) {
-                println("incoming_transaction has wrong size: ${rangeBackwardObj.incoming_transactions.size}")
-                println("Response was: ${rangeBackward.bodyAsText()}")
-            }
-            // testing that the first row_id is at most the 'start' query param.
-            assert(rangeBackwardObj.incoming_transactions[0].row_id <= 300)
-            // testing that the row_id decreases.
-            for (idx in 1..9)
-                assert(
-                    rangeBackwardObj.incoming_transactions[idx].row_id < rangeBackwardObj.incoming_transactions[idx - 1].row_id
-                ) {
-                    println("negative delta didn't return decreasing row_id's in idx: $idx")
-                    println("[$idx] -> ${rangeBackwardObj.incoming_transactions[idx].row_id}")
-                    println("[${idx - 1}] -> ${rangeBackwardObj.incoming_transactions[idx - 1].row_id}")
-                    println(rangeBackward.bodyAsText())
+            }.assertOk().run {
+                val txt = this.bodyAsText()
+                val history = Json.decodeFromString<IncomingHistory>(txt)
+                // testing the size is like expected.
+                assert(history.incoming_transactions.size == 10) {
+                    println("incoming_transaction has wrong size: ${history.incoming_transactions.size}")
+                    println("Response was: ${txt}")
                 }
+                // testing that the first row_id is at least the 'start' query param.
+                assert(history.incoming_transactions[0].row_id >= 30)
+                // testing that the row_id increases.
+                assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+            }
+
+            // backward range:
+            client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-10&start=300") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val txt = this.bodyAsText()
+                val history = Json.decodeFromString<IncomingHistory>(txt)
+                // testing the size is like expected.
+                assert(history.incoming_transactions.size == 10) {
+                    println("incoming_transaction has wrong size: ${history.incoming_transactions.size}")
+                    println("Response was: ${txt}")
+                }
+                // testing that the first row_id is at most the 'start' query param.
+                assert(history.incoming_transactions[0].row_id <= 300)
+                // testing that the row_id decreases.
+                assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
+            }
+            
         }
     }
 
