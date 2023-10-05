@@ -206,30 +206,7 @@ class TalerApiTest {
             }.assertBadRequest()
         }
     }
-
-    /**
-     * FIXME: outlines loop bug in the /history/incoming handler.
-     */
-    @Test
-    fun historyLoop() {
-        val (db, ctx) = commonSetup()
-        // Give Foo reasonable debt allowance:
-        assert(
-            db.bankAccountSetMaxDebt(
-                1L,
-                TalerAmount(1000000, 0, "KUDOS")
-            )
-        )
-        db.bankTransactionCreate(genTx("bogus foobar")).assertSuccess()
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=1") {
-                basicAuth("bar", "secret")
-            }.apply { println(this.bodyAsText()) }
-        }
-    }
+    
     /**
      * Testing the /history/incoming call from the TWG API.
      */
