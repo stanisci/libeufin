@@ -669,7 +669,7 @@ data class TWGConfigResponse(
  */
 @Serializable
 data class IncomingHistory(
-    val incoming_transactions: MutableList<IncomingReserveTransaction> = mutableListOf(),
+    val incoming_transactions: List<IncomingReserveTransaction>,
     val credit_account: String // Receiver's Payto URI.
 )
 
@@ -691,7 +691,7 @@ data class IncomingReserveTransaction(
  */
 @Serializable
 data class OutgoingHistory(
-    val outgoing_transactions: MutableList<OutgoingTransaction> = mutableListOf(),
+    val outgoing_transactions: List<OutgoingTransaction>,
     val debit_account: String // Debitor's Payto URI.
 )
 

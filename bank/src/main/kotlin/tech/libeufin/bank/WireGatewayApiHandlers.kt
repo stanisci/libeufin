@@ -120,122 +120,84 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         return@post
     }
 
-    get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {
-        val username = call.authCheck(TokenScope.readonly, true)
+    suspend fun <T> historyEndpoint(call: ApplicationCall, direction: TransactionDirection, reduce: (List<T>, String) -> Any, map: (BankAccountTransaction) -> T?) {
+        call.authCheck(TokenScope.readonly, true)
         val params = getHistoryParams(call.request)
         val bankAccount = call.bankAccount()
         if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
         
-        val resp = IncomingHistory(credit_account = bankAccount.internalPaytoUri)
         var start = params.start
         var delta = params.delta
-
-        // As we may ignore rows containing incorrect subjects, we may have to run several queries.
+        val items = mutableListOf<T>()
+        
         while (delta != 0L) {
-            val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
+            val history = db.bankTransactionGetHistory(
                 start = start,
                 delta = delta,
                 bankAccountId = bankAccount.expectRowId(),
-                withDirection = TransactionDirection.credit
+                withDirection = direction
             )
             if (history.isEmpty())
-                break;
+                break; // TODO long polling here
             history.forEach {
-                val reservePub = try {
-                    EddsaPublicKey(it.subject)
-                } catch (e: Exception) {
-                    logger.debug("Not containing a reserve pub: ${it.subject}")
-                    null
-                }
-                if (reservePub == null) {
-                    // This should usually not happen in the first place,
-                    // because transactions to the exchange without a valid
-                    // reserve pub should be bounced.
-                    logger.warn("exchange account $username contains invalid incoming transaction ${it.expectRowId()}")
-                    // Skip row
-                    start = it.expectRowId()
-                } else {
-                    // Register new transacation
-                    resp.incoming_transactions.add(
-                        IncomingReserveTransaction(
-                            row_id = it.expectRowId(),
-                            amount = it.amount,
-                            date = TalerProtocolTimestamp(it.transactionDate),
-                            debit_account = it.debtorPaytoUri,
-                            reserve_pub = reservePub
-                        )
-                    )
-                    // Advance cursor
-                    start = it.expectRowId()
+                val item = map(it);
+                // Advance cursor
+                start = it.expectRowId()
+    
+                if (item != null) {
+                    items.add(item)
+                    // Reduce delta
                     if (delta < 0) delta++ else delta--;
                 }
             }
         }
-
-        if (resp.incoming_transactions.isEmpty()) {
+    
+        if (items.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
         } else {
-            call.respond(resp)
+            call.respond(reduce(items, bankAccount.internalPaytoUri))
+        }
+    }
+
+    get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {
+        historyEndpoint(call, TransactionDirection.credit, ::IncomingHistory) {
+            try {
+                val reservePub = EddsaPublicKey(it.subject)
+                IncomingReserveTransaction(
+                    row_id = it.expectRowId(),
+                    amount = it.amount,
+                    date = TalerProtocolTimestamp(it.transactionDate),
+                    debit_account = it.debtorPaytoUri,
+                    reserve_pub = reservePub
+                )
+            } catch (e: Exception) {
+                // This should usually not happen in the first place,
+                // because transactions to the exchange without a valid
+                // reserve pub should be bounced.
+                logger.warn("Invalid incoming transaction ${it.expectRowId()}: ${it.subject}")
+                null
+            }
         }
     }
 
     get("/accounts/{USERNAME}/taler-wire-gateway/history/outgoing") {
-        val username = call.authCheck(TokenScope.readonly, true)
-        val params = getHistoryParams(call.request)
-        val bankAccount = call.bankAccount()
-        if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
-        
-        val resp = OutgoingHistory(debit_account = bankAccount.internalPaytoUri)
-        var start = params.start
-        var delta = params.delta
-
-        // As we may ignore rows containing incorrect subjects, we may have to run several queries.
-        while (delta != 0L) {
-            val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
-                start = start,
-                delta = delta,
-                bankAccountId = bankAccount.expectRowId(),
-                withDirection = TransactionDirection.debit
-            )
-            if (history.isEmpty())
-                break;
-            history.forEach {
-                val metadata = try {
-                    val split = it.subject.split(" ")
-                    Pair(ShortHashCode(split[0]), split[1])
-                } catch (e: Exception) {
-                    logger.debug("Not containing metadata: ${it.subject}")
-                    null
-                }
-                if (metadata == null) {
-                    // This should usually not happen in the first place,
-                    // because transactions from the exchange should be well formed
-                    logger.warn("exchange account $username contains invalid outgoing transaction ${it.expectRowId()}")
-                    // Skip row
-                    start = it.expectRowId()
-                } else {
-                    // Register new transacation
-                    resp.outgoing_transactions.add(
-                        OutgoingTransaction(
-                            row_id = it.expectRowId(),
-                            date = TalerProtocolTimestamp(it.transactionDate),
-                            amount = it.amount,
-                            credit_account = it.creditorPaytoUri,
-                            wtid = metadata.first,
-                            exchange_base_url = metadata.second
-                        )
-                    )
-                    // Advance cursor
-                    start = it.expectRowId()
-                    if (delta < 0) delta++ else delta--;
-                }
+        historyEndpoint(call, TransactionDirection.debit, ::OutgoingHistory) {
+            try {
+                val split = it.subject.split(" ")
+                OutgoingTransaction(
+                    row_id = it.expectRowId(),
+                    date = TalerProtocolTimestamp(it.transactionDate),
+                    amount = it.amount,
+                    credit_account = it.creditorPaytoUri,
+                    wtid = ShortHashCode(split[0]),
+                    exchange_base_url = split[1]
+                )
+            } catch (e: Exception) {
+                // This should usually not happen in the first place,
+                // because transactions from the exchange should be well formed
+                logger.warn("Invalid outgoing transaction ${it.expectRowId()}: ${it.subject}")
+                null
             }
-        }
-
-        if (resp.outgoing_transactions.isEmpty()) {
-            call.respond(HttpStatusCode.NoContent)
-        } else {
-            call.respond(resp)
         }
     }
 

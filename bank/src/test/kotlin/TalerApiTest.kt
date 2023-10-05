@@ -360,7 +360,6 @@ class TalerApiTest {
             }
 
             // Testing ranges.
-            val mockReservePub = randShortHashCode().encoded
             for (i in 1..400)
                 transfer(db, 2, bankAccountFoo)
 
