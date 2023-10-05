@@ -683,7 +683,29 @@ data class IncomingReserveTransaction(
     val date: TalerProtocolTimestamp,
     val amount: TalerAmount,
     val debit_account: String, // Payto of the sender.
-    val reserve_pub: String
+    val reserve_pub: EddsaPublicKey
+)
+
+/**
+ * Response of a TWG /history/outgoing call.
+ */
+@Serializable
+data class OutgoingHistory(
+    val outgoing_transactions: MutableList<OutgoingTransaction> = mutableListOf(),
+    val debit_account: String // Debitor's Payto URI.
+)
+
+/**
+ * TWG's outgoinf payment record.
+ */
+@Serializable
+data class OutgoingTransaction(
+    val row_id: Long, // DB row ID of the payment.
+    val date: TalerProtocolTimestamp,
+    val amount: TalerAmount,
+    val credit_account: String, // Payto of the receiver.
+    val wtid: ShortHashCode,
+    val exchange_base_url: String,
 )
 
 /**

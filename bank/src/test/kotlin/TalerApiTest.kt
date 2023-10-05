@@ -12,6 +12,7 @@ import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.stripIbanPayto
 import java.util.*
+import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import randHashCode
@@ -50,6 +51,20 @@ class TalerApiTest {
         cashoutPayto = "payto://external-IBAN",
         cashoutCurrency = "KUDOS"
     )
+
+    suspend fun transfer(db: Database, from: Long, to: BankAccount) {
+        db.talerTransferCreate(
+            req = TransferRequest(
+                request_uid = randHashCode(),
+                amount = TalerAmount(10, 0, "Kudos"),
+                exchange_base_url = "http://exchange.example.com/",
+                wtid = randShortHashCode(),
+                credit_account ="${stripIbanPayto(to.internalPaytoUri)}"
+            ),
+            exchangeBankAccountId = from,
+            timestamp = Instant.now()
+        )
+    }
 
     fun commonSetup(): Pair<Database, BankApplicationContext> {
         val db = initDb()
@@ -206,7 +221,6 @@ class TalerApiTest {
             )
         )
 
-        // Bar expects two entries in the incoming history
         testApplication {
             application {
                 corebankWebApp(db, ctx)
@@ -285,8 +299,104 @@ class TalerApiTest {
                 assert(history.incoming_transactions[0].row_id <= 300)
                 // testing that the row_id decreases.
                 assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
+            } 
+        }
+    }
+
+    
+    /**
+     * Testing the /history/outgoing call from the TWG API.
+     */
+    @Test
+    fun historyOutgoing() {
+        val (db, ctx) = commonSetup()
+        // Give Bar reasonable debt allowance:
+        assert(
+            db.bankAccountSetMaxDebt(
+                2L,
+                TalerAmount(1000000, 0, "KUDOS")
+            )
+        )
+
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
             }
-            
+
+            authRoutine(client, "/accounts/foo/taler-wire-gateway/history/outgoing", HttpMethod.Get)
+
+            // Check error when no transactions
+            client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=7") {
+                basicAuth("bar", "secret")
+            }.assertStatus(HttpStatusCode.NoContent)
+
+            // Bar pays Foo three time
+            repeat(3) {
+                transfer(db, 2, bankAccountFoo)
+            }
+            // Should not show up in the taler wire gateway API history
+            db.bankTransactionCreate(genTx("bogus foobar", 1, 2)).assertSuccess()
+            // Foo pays Bar once, but that should not appear in the result.
+            db.bankTransactionCreate(genTx("payout")).assertSuccess()
+            // Bar pays Foo twice, we should see five valid transactions
+            repeat(2) {
+                transfer(db, 2, bankAccountFoo)
+            }
+
+            // Check ignore bogus subject
+            client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=7") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
+                assertEquals(5, j.outgoing_transactions.size)
+            }
+           
+            // Check skip bogus subject
+            client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=5") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
+                assertEquals(5, j.outgoing_transactions.size)
+            }
+
+            // Testing ranges.
+            val mockReservePub = randShortHashCode().encoded
+            for (i in 1..400)
+                transfer(db, 2, bankAccountFoo)
+
+            // forward range:
+            client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=10&start=30") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val txt = this.bodyAsText()
+                val history = Json.decodeFromString<OutgoingHistory>(txt)
+                // testing the size is like expected.
+                assert(history.outgoing_transactions.size == 10) {
+                    println("outgoing_transactions has wrong size: ${history.outgoing_transactions.size}")
+                    println("Response was: ${txt}")
+                }
+                // testing that the first row_id is at least the 'start' query param.
+                assert(history.outgoing_transactions[0].row_id >= 30)
+                // testing that the row_id increases.
+                assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+            }
+
+            // backward range:
+            client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-10&start=300") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val txt = this.bodyAsText()
+                val history = Json.decodeFromString<OutgoingHistory>(txt)
+                // testing the size is like expected.
+                assert(history.outgoing_transactions.size == 10) {
+                    println("outgoing_transactions has wrong size: ${history.outgoing_transactions.size}")
+                    println("Response was: ${txt}")
+                }
+                // testing that the first row_id is at most the 'start' query param.
+                assert(history.outgoing_transactions[0].row_id <= 300)
+                // testing that the row_id decreases.
+                assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
+            } 
         }
     }
 

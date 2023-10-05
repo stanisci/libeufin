@@ -141,12 +141,19 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             if (history.isEmpty())
                 break;
             history.forEach {
-                val reservePub = extractReservePubFromSubject(it.subject)
+                val reservePub = try {
+                    EddsaPublicKey(it.subject)
+                } catch (e: Exception) {
+                    logger.debug("Not containing a reserve pub: ${it.subject}")
+                    null
+                }
                 if (reservePub == null) {
                     // This should usually not happen in the first place,
                     // because transactions to the exchange without a valid
                     // reserve pub should be bounced.
                     logger.warn("exchange account $username contains invalid incoming transaction ${it.expectRowId()}")
+                    // Skip row
+                    start = it.expectRowId()
                 } else {
                     // Register new transacation
                     resp.incoming_transactions.add(
@@ -166,6 +173,66 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         }
 
         if (resp.incoming_transactions.isEmpty()) {
+            call.respond(HttpStatusCode.NoContent)
+        } else {
+            call.respond(resp)
+        }
+    }
+
+    get("/accounts/{USERNAME}/taler-wire-gateway/history/outgoing") {
+        val username = call.authCheck(TokenScope.readonly, true)
+        val params = getHistoryParams(call.request)
+        val bankAccount = call.bankAccount()
+        if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
+        
+        val resp = OutgoingHistory(debit_account = bankAccount.internalPaytoUri)
+        var start = params.start
+        var delta = params.delta
+
+        // As we may ignore rows containing incorrect subjects, we may have to run several queries.
+        while (delta != 0L) {
+            val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
+                start = start,
+                delta = delta,
+                bankAccountId = bankAccount.expectRowId(),
+                withDirection = TransactionDirection.debit
+            )
+            if (history.isEmpty())
+                break;
+            history.forEach {
+                val metadata = try {
+                    val split = it.subject.split(" ")
+                    Pair(ShortHashCode(split[0]), split[1])
+                } catch (e: Exception) {
+                    logger.debug("Not containing metadata: ${it.subject}")
+                    null
+                }
+                if (metadata == null) {
+                    // This should usually not happen in the first place,
+                    // because transactions from the exchange should be well formed
+                    logger.warn("exchange account $username contains invalid outgoing transaction ${it.expectRowId()}")
+                    // Skip row
+                    start = it.expectRowId()
+                } else {
+                    // Register new transacation
+                    resp.outgoing_transactions.add(
+                        OutgoingTransaction(
+                            row_id = it.expectRowId(),
+                            date = TalerProtocolTimestamp(it.transactionDate),
+                            amount = it.amount,
+                            credit_account = it.creditorPaytoUri,
+                            wtid = metadata.first,
+                            exchange_base_url = metadata.second
+                        )
+                    )
+                    // Advance cursor
+                    start = it.expectRowId()
+                    if (delta < 0) delta++ else delta--;
+                }
+            }
+        }
+
+        if (resp.outgoing_transactions.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
         } else {
             call.respond(resp)
