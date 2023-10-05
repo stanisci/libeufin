@@ -722,28 +722,33 @@ class LibeuFinApiTest {
                 corebankWebApp(db, ctx)
             }
             assertNotNull(db.customerCreate(customerFoo))
-            val validReq = json {
-                "is_exchange" to true
-            }
             // First call expects 500, because foo lacks a bank account
             client.patch("/accounts/foo") {
                 basicAuth("foo", "pw")
-                jsonBody(validReq)
+                jsonBody(json {
+                    "is_exchange" to true
+                })
             }.assertStatus(HttpStatusCode.InternalServerError)
             // Creating foo's bank account.
             assertNotNull(db.bankAccountCreate(genBankAccount(1L)))
             // Successful attempt now.
+            val validReq = AccountReconfiguration(
+                cashout_address = "payto://new-cashout-address",
+                challenge_contact_data = ChallengeContactData(
+                    email = "new@example.com",
+                    phone = "+987"
+                ),
+                is_exchange = true,
+                name = null
+            )
             client.patch("/accounts/foo") {
                 basicAuth("foo", "pw")
-                jsonBody(AccountReconfiguration(
-                    cashout_address = "payto://new-cashout-address",
-                    challenge_contact_data = ChallengeContactData(
-                        email = "new@example.com",
-                        phone = "+987"
-                    ),
-                    is_exchange = true,
-                    name = null
-                ))
+                jsonBody(validReq)
+            }.assertStatus(HttpStatusCode.NoContent)
+            // Checking idempotence.
+            client.patch("/accounts/foo") {
+                basicAuth("foo", "pw")
+                jsonBody(validReq)
             }.assertStatus(HttpStatusCode.NoContent)
             // Checking ordinary user doesn't get to patch their name.
             client.patch("/accounts/foo") {
