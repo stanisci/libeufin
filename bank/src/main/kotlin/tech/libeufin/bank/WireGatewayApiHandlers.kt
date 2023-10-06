@@ -125,29 +125,8 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         val params = getHistoryParams(call.request)
         val bankAccount = call.bankAccount()
         if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
-        
-        var start = params.start
-        var delta = params.delta
-        val items = mutableListOf<T>()
-        val dbx = HistoryDatabaseCtx(db, delta, bankAccount.expectRowId(), direction, params.poll_ms);
-        dbx.use {
-            while (delta != 0L) {
-                val history = dbx.bankTransactionGetHistory(start, delta)
-                if (history.isEmpty() && !dbx.pool(start, delta))
-                    break;
-                history.forEach {
-                    val item = map(it);
-                    // Advance cursor
-                    start = it.expectRowId()
-        
-                    if (item != null) {
-                        items.add(item)
-                        // Reduce delta
-                        if (delta < 0) delta++ else delta--;
-                    }
-                }
-            }
-        }
+
+        val items = bankTransactionPoolHistory(db, params, bankAccount.expectRowId(), direction, map);
     
         if (items.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
