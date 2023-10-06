@@ -17,8 +17,8 @@ configure)
       --system \
       --disabled-password \
       --no-create-home \
-      --shell /bin/bash
-    --ingroup libeufin-bank \
+      --shell /bin/bash \
+      --ingroup libeufin-bank \
       --home /var/lib/libeufin-bank \
       libeufin-bank
   fi
