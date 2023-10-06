@@ -67,15 +67,17 @@ class TalerApiTest {
         )
     }
 
-    fun commonSetup(): Pair<Database, BankApplicationContext> {
+    fun commonSetup(lambda: (Database, BankApplicationContext) -> Unit){
         val db = initDb()
         val ctx = getTestContext()
-        // Creating the exchange and merchant accounts first.
-        assertNotNull(db.customerCreate(customerFoo))
-        assertNotNull(db.bankAccountCreate(bankAccountFoo))
-        assertNotNull(db.customerCreate(customerBar))
-        assertNotNull(db.bankAccountCreate(bankAccountBar))
-        return Pair(db, ctx)
+        db.use {
+            // Creating the exchange and merchant accounts first.
+            assertNotNull(db.customerCreate(customerFoo))
+            assertNotNull(db.bankAccountCreate(bankAccountFoo))
+            assertNotNull(db.customerCreate(customerBar))
+            assertNotNull(db.bankAccountCreate(bankAccountBar))
+            lambda(db, ctx)
+        }
     }
 
     // Test endpoint is correctly authenticated 
@@ -103,8 +105,7 @@ class TalerApiTest {
 
     // Testing the POST /transfer call from the TWG API.
     @Test
-    fun transfer() {
-        val (db, ctx) = commonSetup()
+    fun transfer() = commonSetup { db, ctx -> 
         // Do POST /transfer.
         testApplication {
             application {
@@ -212,8 +213,7 @@ class TalerApiTest {
      * Testing the /history/incoming call from the TWG API.
      */
     @Test
-    fun historyIncoming() {
-        val (db, ctx) = commonSetup()
+    fun historyIncoming() = commonSetup { db, ctx -> 
         // Give Foo reasonable debt allowance:
         assert(
             db.bankAccountSetMaxDebt(
@@ -354,8 +354,7 @@ class TalerApiTest {
      * Testing the /history/outgoing call from the TWG API.
      */
     @Test
-    fun historyOutgoing() {
-        val (db, ctx) = commonSetup()
+    fun historyOutgoing() = commonSetup { db, ctx -> 
         // Give Bar reasonable debt allowance:
         assert(
             db.bankAccountSetMaxDebt(
@@ -492,8 +491,7 @@ class TalerApiTest {
 
     // Testing the /admin/add-incoming call from the TWG API.
     @Test
-    fun addIncoming() {
-        val (db, ctx) = commonSetup()
+    fun addIncoming() = commonSetup { db, ctx -> 
         // Give Bar reasonable debt allowance:
         assert(db.bankAccountSetMaxDebt(
             2L,
@@ -635,8 +633,7 @@ class TalerApiTest {
     }
     // Testing withdrawal confirmation
     @Test
-    fun withdrawalConfirmation() {
-        val (db, ctx) = commonSetup()
+    fun withdrawalConfirmation() = commonSetup { db, ctx -> 
 
         // Artificially making a withdrawal operation for Foo.
         val uuid = UUID.randomUUID()
