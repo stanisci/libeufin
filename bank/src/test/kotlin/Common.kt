@@ -25,7 +25,9 @@ import java.util.zip.DeflaterOutputStream
  * Init the database and sets the currency to KUDOS.
  */
 fun initDb(): Database {
-    val config = TalerConfig.load()
+    // We assume that libeufin-bank is installed. We could also try to locate the source tree here.
+    val config = TalerConfig(ConfigSource("libeufin-bank", "libeufin-bank"))
+    config.load()
     val sqlPath = config.requireValuePath("libeufin-bankdb-postgres", "SQL_DIR")
     val dbConnStr = "postgresql:///libeufincheck"
     resetDatabaseTables(dbConnStr, sqlPath)

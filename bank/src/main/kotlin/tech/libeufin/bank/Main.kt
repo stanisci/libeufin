@@ -20,6 +20,7 @@
 
 package tech.libeufin.bank
 
+import ConfigSource
 import TalerConfig
 import TalerConfigError
 import com.github.ajalt.clikt.core.CliktCommand
@@ -69,6 +70,7 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
 const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 val TOKEN_DEFAULT_DURATION: java.time.Duration = Duration.ofDays(1L)
 
+val BANK_CONFIG_SOURCE = ConfigSource("libeufin-bank", "libeufin-bank")
 
 /**
  * Application context with the parsed configuration.
@@ -410,7 +412,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), ChangePw())
+        subcommands(ServeBank(), BankDbInit(), ChangePw(), BankConfig())
     }
 
     override fun run() = Unit
@@ -507,7 +509,8 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
     }
 
     override fun run() {
-        val config = TalerConfig.load(this.configFile)
+        val config = TalerConfig(BANK_CONFIG_SOURCE)
+        config.load(this.configFile)
         val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
         val sqlDir = config.requireValuePath("libeufin-bankdb-postgres", "sql_dir")
         if (requestReset) {
@@ -529,7 +532,8 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
     }
 
     override fun run() {
-        val config = TalerConfig.load(this.configFile)
+        val config = TalerConfig(BANK_CONFIG_SOURCE)
+        config.load(this.configFile)
         val ctx = readBankApplicationContextFromConfig(config)
         val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
         logger.info("using database '$dbConnStr'")
@@ -568,7 +572,8 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     }
 
     override fun run() {
-        val config = TalerConfig.load(this.configFile)
+        val config = TalerConfig(BANK_CONFIG_SOURCE)
+        config.load(this.configFile)
         val ctx = readBankApplicationContextFromConfig(config)
         val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
         config.requireValueNumber("libeufin-bank", "port")
@@ -582,6 +587,25 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         } else {
             println("password change succeeded")
         }
+    }
+}
+
+class BankConfig : CliktCommand("Dump the configuration", name = "debug-config-dump") {
+    private val configFile by option(
+        "--config", "-c",
+        help = "set the configuration file"
+    )
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+
+    override fun run() {
+        val config = TalerConfig(BANK_CONFIG_SOURCE)
+        println("# install path: ${config.getInstallPath()}")
+        config.load(this.configFile)
+        println(config.stringify())
     }
 }
 

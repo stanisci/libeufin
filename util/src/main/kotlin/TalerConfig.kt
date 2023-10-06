@@ -25,7 +25,7 @@ import kotlin.io.path.listDirectoryEntries
 private data class Entry(val value: String)
 
 private data class Section(
-    val entries: MutableMap<String, Entry>
+    val entries: MutableMap<String, Entry>,
 )
 
 private val reEmptyLine = Regex("^\\s*$")
@@ -36,14 +36,26 @@ private val reDirective = Regex("^\\s*@([a-zA-Z-_]+)@\\s*(.*?)\\s*$")
 
 class TalerConfigError(m: String) : Exception(m)
 
+data class ConfigSource(
+    val componentName: String = "taler",
+    val installPathBinary: String = "taler-config",
+)
+
 /**
  * Reader and writer for Taler-style configuration files.
  *
  * The configuration file format is similar to INI files
  * and fully described in the taler.conf man page.
+ *
+ * @param configSource information about where to load configuration defaults from
  */
-class TalerConfig {
+class TalerConfig(
+    private val configSource: ConfigSource
+) {
     private val sectionMap: MutableMap<String, Section> = mutableMapOf()
+
+    private val componentName = configSource.componentName
+    private val installPathBinary = configSource.installPathBinary
 
     private fun internalLoadFromString(s: String) {
         val lines = s.lines()
@@ -212,16 +224,16 @@ class TalerConfig {
     }
 
     fun loadDefaults() {
-        val installDir = getTalerInstallPath()
-        val baseConfigDir = Paths.get(installDir, "share/taler/config.d").toString()
+        val installDir = getInstallPath()
+        val baseConfigDir = Paths.get(installDir, "share/$componentName/config.d").toString()
         setSystemDefault("PATHS", "PREFIX", "${installDir}/")
         setSystemDefault("PATHS", "BINDIR", "${installDir}/bin/")
-        setSystemDefault("PATHS", "LIBEXECDIR", "${installDir}/taler/libexec/")
-        setSystemDefault("PATHS", "DOCDIR", "${installDir}/share/doc/taler/")
+        setSystemDefault("PATHS", "LIBEXECDIR", "${installDir}/$componentName/libexec/")
+        setSystemDefault("PATHS", "DOCDIR", "${installDir}/share/doc/$componentName/")
         setSystemDefault("PATHS", "ICONDIR", "${installDir}/share/icons/")
         setSystemDefault("PATHS", "LOCALEDIR", "${installDir}/share/locale/")
-        setSystemDefault("PATHS", "LIBDIR", "${installDir}/lib/taler/")
-        setSystemDefault("PATHS", "DATADIR", "${installDir}/share/taler/")
+        setSystemDefault("PATHS", "LIBDIR", "${installDir}/lib/$componentName/")
+        setSystemDefault("PATHS", "DATADIR", "${installDir}/share/$componentName/")
         loadDefaultsFromDir(baseConfigDir)
     }
 
@@ -271,74 +283,70 @@ class TalerConfig {
         return result.toString()
     }
 
-    companion object {
-        /**
-         * Load configuration values from the file system.
-         * If no entrypoint is specified, the default entrypoint
-         * is used.
-         */
-        fun load(entrypoint: String? = null): TalerConfig {
-            val cfg = TalerConfig()
-            cfg.loadDefaults()
-            if (entrypoint != null) {
-                cfg.loadFromFilename(entrypoint)
-            } else {
-                val defaultFilename = findDefaultConfigFilename()
-                if (defaultFilename != null) {
-                    cfg.loadFromFilename(defaultFilename)
-                }
+    /**
+     * Load configuration values from the file system.
+     * If no entrypoint is specified, the default entrypoint
+     * is used.
+     */
+    fun load(entrypoint: String? = null) {
+        loadDefaults()
+        if (entrypoint != null) {
+            loadFromFilename(entrypoint)
+        } else {
+            val defaultFilename = findDefaultConfigFilename()
+            if (defaultFilename != null) {
+                loadFromFilename(defaultFilename)
             }
-            return cfg
         }
+    }
 
 
-        /**
-         * Determine the filename of the default configuration file.
-         *
-         * If no such file can be found, return null.
-         */
-        private fun findDefaultConfigFilename(): String? {
-            val xdg = System.getenv("XDG_CONFIG_HOME")
-            val home = System.getenv("HOME")
+    /**
+     * Determine the filename of the default configuration file.
+     *
+     * If no such file can be found, return null.
+     */
+    private fun findDefaultConfigFilename(): String? {
+        val xdg = System.getenv("XDG_CONFIG_HOME")
+        val home = System.getenv("HOME")
 
-            var filename: String? = null
-            if (xdg != null) {
-                filename = Paths.get(xdg, "taler.conf").toString()
-            } else if (home != null) {
-                filename = Paths.get(home, ".config/taler.conf").toString()
-            }
-            if (filename != null && File(filename).exists()) {
-                return filename
-            }
-            val etc1 = "/etc/taler.conf"
-            if (File(etc1).exists()) {
-                return etc1
-            }
-            val etc2 = "/etc/taler/taler.conf"
-            if (File(etc2).exists()) {
-                return etc2
-            }
-            return null
+        var filename: String? = null
+        if (xdg != null) {
+            filename = Paths.get(xdg, "$componentName.conf").toString()
+        } else if (home != null) {
+            filename = Paths.get(home, ".config/$componentName.conf").toString()
         }
-
-        fun getTalerInstallPath(): String {
-            // We use the location of the libeufin-bank
-            // binary to determine the install prefix.
-            // If for some weird reason it's now found, we
-            // fall back to "/usr" as install prefix.
-            return getInstallPathFromBinary("libeufin-bank")
+        if (filename != null && File(filename).exists()) {
+            return filename
         }
+        val etc1 = "/etc/$componentName.conf"
+        if (File(etc1).exists()) {
+            return etc1
+        }
+        val etc2 = "/etc/$componentName/$componentName.conf"
+        if (File(etc2).exists()) {
+            return etc2
+        }
+        return null
+    }
 
-        fun getInstallPathFromBinary(name: String): String {
-            val pathEnv = System.getenv("PATH")
-            val paths = pathEnv.split(":")
-            for (p in paths) {
-                val possiblePath = Paths.get(p, name).toString()
-                if (File(possiblePath).exists()) {
-                    return Paths.get(p, "..").toRealPath().toString()
-                }
+    fun getInstallPath(): String {
+        // We use the location of the libeufin-bank
+        // binary to determine the installation prefix.
+        // If for some weird reason it's now found, we
+        // fall back to "/usr" as install prefix.
+        return getInstallPathFromBinary(installPathBinary)
+    }
+
+    private fun getInstallPathFromBinary(name: String): String {
+        val pathEnv = System.getenv("PATH")
+        val paths = pathEnv.split(":")
+        for (p in paths) {
+            val possiblePath = Paths.get(p, name).toString()
+            if (File(possiblePath).exists()) {
+                return Paths.get(p, "..").toRealPath().toString()
             }
-            return "/usr"
         }
+        return "/usr"
     }
 }

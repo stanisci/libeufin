@@ -18,14 +18,14 @@
  */
 
 import org.junit.Test
-import java.nio.file.FileSystems
 import kotlin.test.assertEquals
 
 class TalerConfigTest {
 
     @Test
     fun parsing() {
-        val conf = TalerConfig()
+        // We assume that libeufin-bank is installed. We could also try to locate the source tree here.
+        val conf = TalerConfig(ConfigSource("libeufin-bank", "libeufin-bank"))
         conf.loadDefaults()
         conf.loadFromString(
             """
@@ -41,12 +41,13 @@ class TalerConfigTest {
 
         assertEquals("baz", conf.lookupValueString("foo", "bar"))
 
-        println(TalerConfig.getTalerInstallPath())
+        println(conf.getInstallPath())
     }
 
     @Test
     fun substitution() {
-        val conf = TalerConfig()
+        // We assume that libeufin-bank is installed. We could also try to locate the source tree here.
+        val conf = TalerConfig(ConfigSource("libeufin-bank", "libeufin-bank"))
         conf.putValueString("PATHS", "DATADIR", "mydir")
         conf.putValueString("foo", "bar", "baz")
         conf.putValueString("foo", "bar2", "baz")
