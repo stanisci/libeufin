@@ -130,6 +130,50 @@ fun resetDatabaseTables(dbConfig: String, sqlDir: String) {
     dbConn.execSQLUpdate(sqlDrop)
 }
 
+
+private fun <T> PreparedStatement.oneOrNull(lambda: (ResultSet) -> T): T? {
+    executeQuery().use {
+        if (!it.next()) return null
+        return lambda(it)
+    }
+}
+
+private fun <T> PreparedStatement.all(lambda: (ResultSet) -> T): List<T> {
+    executeQuery().use {
+        val ret = mutableListOf<T>()
+        while (it.next()) {
+            ret.add(lambda(it))
+        }
+        return ret
+    }
+}
+
+private fun PreparedStatement.executeQueryCheck(): Boolean {
+    executeQuery().use {
+        return it.next()
+    }
+}
+
+private fun PreparedStatement.executeUpdateCheck(): Boolean {
+    executeUpdate()
+    return updateCount > 0
+}
+
+/**
+ * Helper that returns false if the row to be inserted
+ * hits a unique key constraint violation, true when it
+ * succeeds.  Any other error (re)throws exception.
+ */
+private fun PreparedStatement.executeUpdateViolation(): Boolean {
+    return try {
+        executeUpdateCheck()
+    } catch (e: SQLException) {
+        logger.error(e.message)
+        if (e.sqlState == "23505") return false // unique_violation
+        throw e // rethrowing, not to hide other types of errors.
+    }
+}
+
 class Database(private val dbConfig: String, private val bankCurrency: String) {
     private var dbConn: PgConnection? = null
     private var dbCtr: Int = 0
@@ -167,22 +211,6 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         ps = myDbConn.prepareStatement(sql)
         preparedStatements[sql] = ps
         return ps
-    }
-
-    /**
-     * Helper that returns false if the row to be inserted
-     * hits a unique key constraint violation, true when it
-     * succeeds.  Any other error (re)throws exception.
-     */
-    private fun myExecute(stmt: PreparedStatement): Boolean {
-        try {
-            stmt.execute()
-        } catch (e: SQLException) {
-            logger.error(e.message)
-            if (e.sqlState == "23505") return false // unique_violation
-            throw e // rethrowing, not to hide other types of errors.
-        }
-        return true
     }
 
     // CUSTOMERS
@@ -245,11 +273,13 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
               FROM customer_delete(?);
         """)
         stmt.setString(1, login)
-        stmt.executeQuery().use {
-            if (!it.next()) throw internalServerError("Deletion returned nothing.")
-            if (it.getBoolean("out_nx_customer")) return CustomerDeletionResult.CUSTOMER_NOT_FOUND
-            if (it.getBoolean("out_balance_not_zero")) return CustomerDeletionResult.BALANCE_NOT_ZERO
-            return CustomerDeletionResult.SUCCESS
+        return stmt.executeQuery().use {
+            when {
+                !it.next() -> throw internalServerError("Deletion returned nothing.")
+                it.getBoolean("out_nx_customer") -> CustomerDeletionResult.CUSTOMER_NOT_FOUND
+                it.getBoolean("out_balance_not_zero") -> CustomerDeletionResult.BALANCE_NOT_ZERO
+                else -> CustomerDeletionResult.SUCCESS
+            }
         }
     }
 
@@ -269,10 +299,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             WHERE customer_id=?
         """)
         stmt.setLong(1, customer_id)
-        val rs = stmt.executeQuery()
-        rs.use {
-            if (!rs.next()) return null
-            return Customer(
+        return stmt.oneOrNull { 
+            Customer(
                 login = it.getString("login"),
                 passwordHash = it.getString("password_hash"),
                 name = it.getString("name"),
@@ -292,8 +320,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         """)
         stmt.setString(1, passwordHash)
         stmt.setString(2, customerName)
-        stmt.executeUpdate()
-        return stmt.updateCount > 0
+        return stmt.executeUpdateCheck()
     }
 
     fun customerGetFromLogin(login: String): Customer? {
@@ -311,10 +338,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             WHERE login=?
         """)
         stmt.setString(1, login)
-        val rs = stmt.executeQuery()
-        rs.use {
-            if (!rs.next()) return null
-            return Customer(
+        return stmt.oneOrNull { 
+            Customer(
                 login = login,
                 passwordHash = it.getString("password_hash"),
                 name = it.getString("name"),
@@ -349,7 +374,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setString(4, token.scope.name)
         stmt.setLong(5, token.bankCustomer)
         stmt.setBoolean(6, token.isRefreshable)
-        return myExecute(stmt)
+        return stmt.executeUpdateViolation()
     }
     fun bearerTokenGet(token: ByteArray): BearerToken? {
         reconnect()
@@ -364,17 +389,16 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             WHERE content=?;            
         """)
         stmt.setBytes(1, token)
-        stmt.executeQuery().use {
-            if (!it.next()) return null
-            return BearerToken(
+        return stmt.oneOrNull { 
+            BearerToken(
                 content = token,
                 creationTime = it.getLong("creation_time").microsToJavaInstant() ?: throw faultyTimestampByBank(),
                 expirationTime = it.getLong("expiration_time").microsToJavaInstant() ?: throw faultyDurationByClient(),
                 bankCustomer = it.getLong("bank_customer"),
-                scope = it.getString("scope").run {
-                    if (this == TokenScope.readwrite.name) return@run TokenScope.readwrite
-                    if (this == TokenScope.readonly.name) return@run TokenScope.readonly
-                    else throw internalServerError("Wrong token scope found in the database: $this")
+                scope = when (it.getString("scope")) {
+                    TokenScope.readwrite.name -> TokenScope.readwrite
+                    TokenScope.readonly.name -> TokenScope.readonly
+                    else -> throw internalServerError("Wrong token scope found in the database: $this")
                 },
                 isRefreshable = it.getBoolean("is_refreshable")
             )
@@ -393,10 +417,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
               RETURNING bearer_token_id;
         """)
         stmt.setBytes(1, token)
-        stmt.executeQuery().use {
-            if (!it.next()) return false;
-            return true
-        }
+        return stmt.executeQueryCheck()
     }
 
     // MIXED CUSTOMER AND BANK ACCOUNT DATA
@@ -440,12 +461,13 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             stmt.setNull(6, Types.NULL)
         else stmt.setBoolean(6, isTalerExchange)
 
-        val res = stmt.executeQuery()
-        res.use {
-            if (!it.next()) throw internalServerError("accountReconfig() returned nothing")
-            if (it.getBoolean("out_nx_customer")) return AccountReconfigDBResult.CUSTOMER_NOT_FOUND
-            if (it.getBoolean("out_nx_bank_account")) return AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND
-            return AccountReconfigDBResult.SUCCESS
+        return stmt.executeQuery().use {
+            when {
+                !it.next() -> throw internalServerError("accountReconfig() returned nothing")
+                it.getBoolean("out_nx_customer") -> AccountReconfigDBResult.CUSTOMER_NOT_FOUND
+                it.getBoolean("out_nx_bank_account") -> AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND
+                else -> AccountReconfigDBResult.SUCCESS
+            }
         }
     }
 
@@ -470,29 +492,24 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                 WHERE is_public=true AND c.login LIKE ?;
         """)
         stmt.setString(1, loginFilter)
-        val res = stmt.executeQuery()
-        val ret = mutableListOf<PublicAccount>()
-        res.use {
-            if (!it.next()) return ret
-            do {
-                ret.add(PublicAccount(
-                    account_name = it.getString("login"),
-                    payto_uri = it.getString("internal_payto_uri"),
-                    balance = Balance(
-                        amount = TalerAmount(
-                            value = it.getLong("balance_val"),
-                            frac = it.getInt("balance_frac"),
-                            currency = internalCurrency
-                        ),
-                        credit_debit_indicator = it.getBoolean("has_debt").run {
-                            if (this) return@run CorebankCreditDebitInfo.debit
-                            return@run CorebankCreditDebitInfo.credit
-                        }
-                    )
-                ))
-            } while (it.next())
+        return stmt.all {
+            PublicAccount(
+                account_name = it.getString("login"),
+                payto_uri = it.getString("internal_payto_uri"),
+                balance = Balance(
+                    amount = TalerAmount(
+                        value = it.getLong("balance_val"),
+                        frac = it.getInt("balance_frac"),
+                        currency = internalCurrency
+                    ),
+                    credit_debit_indicator = if (it.getBoolean("has_debt")) {
+                        CorebankCreditDebitInfo.debit 
+                    } else {
+                        CorebankCreditDebitInfo.credit
+                    }
+                )
+            )
         }
-        return ret
     }
 
     /**
@@ -517,34 +534,29 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
               WHERE name LIKE ?;
         """)
         stmt.setString(1, nameFilter)
-        val res = stmt.executeQuery()
-        val ret = mutableListOf<AccountMinimalData>()
-        res.use {
-            if (!it.next()) return ret
-            do {
-                ret.add(AccountMinimalData(
-                    username = it.getString("login"),
-                    name = it.getString("name"),
-                    balance = Balance(
-                        amount = TalerAmount(
-                            value = it.getLong("balance_val"),
-                            frac = it.getInt("balance_frac"),
-                            currency = getCurrency()
-                        ),
-                        credit_debit_indicator = it.getBoolean("balance_has_debt").run {
-                            if (this) return@run CorebankCreditDebitInfo.debit
-                            return@run CorebankCreditDebitInfo.credit
-                        }
-                    ),
-                    debit_threshold = TalerAmount(
-                        value = it.getLong("max_debt_val"),
-                        frac = it.getInt("max_debt_frac"),
+        return stmt.all {
+            AccountMinimalData(
+                username = it.getString("login"),
+                name = it.getString("name"),
+                balance = Balance(
+                    amount = TalerAmount(
+                        value = it.getLong("balance_val"),
+                        frac = it.getInt("balance_frac"),
                         currency = getCurrency()
-                    )
-                ))
-            } while (it.next())
+                    ),
+                    credit_debit_indicator = if (it.getBoolean("balance_has_debt")) {
+                        CorebankCreditDebitInfo.debit
+                    } else {
+                        CorebankCreditDebitInfo.credit
+                    }
+                ),
+                debit_threshold = TalerAmount(
+                    value = it.getLong("max_debt_val"),
+                    frac = it.getInt("max_debt_frac"),
+                    currency = getCurrency()
+                )
+            )
         }
-        return ret
     }
 
     // BANK ACCOUNTS
@@ -606,7 +618,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setLong(1, maxDebt.value)
         stmt.setInt(2, maxDebt.frac)
         stmt.setLong(3, owningCustomerId)
-        return myExecute(stmt)
+        return stmt.executeUpdateViolation()
     }
 
     private fun getCurrency(): String {
@@ -633,10 +645,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         """)
         stmt.setLong(1, ownerId)
 
-        val rs = stmt.executeQuery()
-        rs.use {
-            if (!it.next()) return null
-            return BankAccount(
+        return stmt.oneOrNull {
+            BankAccount(
                 internalPaytoUri = it.getString("internal_payto_uri"),
                 balance = TalerAmount(
                     it.getLong("balance_val"),
@@ -657,6 +667,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             )
         }
     }
+
     fun bankAccountGetFromInternalPayto(internalPayto: String): BankAccount? {
         reconnect()
         val stmt = prepare("""
@@ -676,10 +687,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         """)
         stmt.setString(1, internalPayto)
 
-        val rs = stmt.executeQuery()
-        rs.use {
-            if (!it.next()) return null
-            return BankAccount(
+        return stmt.oneOrNull {
+            BankAccount(
                 internalPaytoUri = internalPayto,
                 balance = TalerAmount(
                     it.getLong("balance_val"),
@@ -720,22 +729,23 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setString(7, tx.accountServicerReference)
         stmt.setString(8, tx.paymentInformationId)
         stmt.setString(9, tx.endToEndId)
-        val rs = stmt.executeQuery()
-        rs.use {
-            if (!rs.next()) throw internalServerError("Bank transaction didn't properly return")
-            if (rs.getBoolean("out_nx_debtor")) {
-                logger.error("No debtor account found")
-                return BankTransactionResult.NO_DEBTOR
+        return stmt.executeQuery().use {
+            when {
+                !it.next() -> throw internalServerError("Bank transaction didn't properly return")
+                it.getBoolean("out_nx_debtor") -> {
+                    logger.error("No debtor account found")
+                    BankTransactionResult.NO_DEBTOR
+                }
+                it.getBoolean("out_nx_creditor") -> {
+                    logger.error("No creditor account found")
+                    BankTransactionResult.NO_CREDITOR
+                }
+                it.getBoolean("out_balance_insufficient") -> {
+                    logger.error("Balance insufficient")
+                    BankTransactionResult.CONFLICT
+                }
+                else -> BankTransactionResult.SUCCESS
             }
-            if (rs.getBoolean("out_nx_creditor")) {
-                logger.error("No creditor account found")
-                return BankTransactionResult.NO_CREDITOR
-            }
-            if (rs.getBoolean("out_balance_insufficient")) {
-                logger.error("Balance insufficient")
-                return BankTransactionResult.CONFLICT
-            }
-            return BankTransactionResult.SUCCESS
         }
     }
 
@@ -754,11 +764,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             WHERE subject = ?;           
         """)
         stmt.setString(1, subject)
-        val res = stmt.executeQuery()
-        res.use {
-            if (!it.next()) return null
-            return it.getLong("bank_transaction_id")
-        }
+        return stmt.oneOrNull { it.getLong("bank_transaction_id") }
     }
 
     // Get the bank transaction whose row ID is rowId
@@ -783,10 +789,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
 	        WHERE bank_transaction_id=?
         """)
         stmt.setLong(1, rowId)
-        val rs = stmt.executeQuery()
-        rs.use {
-            if (!it.next()) return null
-            return BankAccountTransaction(
+        return stmt.oneOrNull {
+            BankAccountTransaction(
                 creditorPaytoUri = it.getString("creditor_payto_uri"),
                 creditorName = it.getString("creditor_name"),
                 debtorPaytoUri = it.getString("debtor_payto_uri"),
@@ -866,33 +870,26 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             stmt.setLong(2, bankAccountId)
             stmt.setString(3, direction.name)
             stmt.setLong(4, abs(delta))
-            val rs = stmt.executeQuery()
-            rs.use {
-                val ret = mutableListOf<BankAccountTransaction>()
-                if (!it.next()) return ret
-                do {
-                    ret.add(
-                        BankAccountTransaction(
-                            creditorPaytoUri = it.getString("creditor_payto_uri"),
-                            creditorName = it.getString("creditor_name"),
-                            debtorPaytoUri = it.getString("debtor_payto_uri"),
-                            debtorName = it.getString("debtor_name"),
-                            amount = TalerAmount(
-                                it.getLong("amount_val"),
-                                it.getInt("amount_frac"),
-                                getCurrency()
-                            ),
-                            accountServicerReference = it.getString("account_servicer_reference"),
-                            endToEndId = it.getString("end_to_end_id"),
-                            direction = direction,
-                            bankAccountId = it.getLong("bank_account_id"),
-                            paymentInformationId = it.getString("payment_information_id"),
-                            subject = it.getString("subject"),
-                            transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
-                            dbRowId = it.getLong("bank_transaction_id")
-                    ))
-                } while (it.next())
-                return ret
+            return stmt.all {
+                BankAccountTransaction(
+                    creditorPaytoUri = it.getString("creditor_payto_uri"),
+                    creditorName = it.getString("creditor_name"),
+                    debtorPaytoUri = it.getString("debtor_payto_uri"),
+                    debtorName = it.getString("debtor_name"),
+                    amount = TalerAmount(
+                        it.getLong("amount_val"),
+                        it.getInt("amount_frac"),
+                        getCurrency()
+                    ),
+                    accountServicerReference = it.getString("account_servicer_reference"),
+                    endToEndId = it.getString("end_to_end_id"),
+                    direction = direction,
+                    bankAccountId = it.getLong("bank_account_id"),
+                    paymentInformationId = it.getString("payment_information_id"),
+                    subject = it.getString("subject"),
+                    transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
+                    dbRowId = it.getLong("bank_transaction_id")
+                )
             }
         }
 
@@ -1003,44 +1000,31 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         else
             3
         stmt.setLong(limitParamIndex, abs(delta))
-        val rs = stmt.executeQuery()
-        rs.use {
-            val ret = mutableListOf<BankAccountTransaction>()
-            if (!it.next()) return ret
-            do {
-                val direction = if (withDirection == null) {
-                    it.getString("direction").run {
-                        when (this) {
-                            "credit" -> TransactionDirection.credit
-                            "debit" -> TransactionDirection.debit
-                            else -> throw internalServerError("Wrong direction in transaction: $this")
-                        }
-                    }
+        return stmt.all {
+            val direction = withDirection ?: when (it.getString("direction")) {
+                    "credit" -> TransactionDirection.credit
+                    "debit" -> TransactionDirection.debit
+                    else -> throw internalServerError("Wrong direction in transaction: $this")
                 }
-                else
-                    withDirection
-                ret.add(
-                    BankAccountTransaction(
-                        creditorPaytoUri = it.getString("creditor_payto_uri"),
-                        creditorName = it.getString("creditor_name"),
-                        debtorPaytoUri = it.getString("debtor_payto_uri"),
-                        debtorName = it.getString("debtor_name"),
-                        amount = TalerAmount(
-                            it.getLong("amount_val"),
-                            it.getInt("amount_frac"),
-                            getCurrency()
-                        ),
-                        accountServicerReference = it.getString("account_servicer_reference"),
-                        endToEndId = it.getString("end_to_end_id"),
-                        direction = direction,
-                        bankAccountId = it.getLong("bank_account_id"),
-                        paymentInformationId = it.getString("payment_information_id"),
-                        subject = it.getString("subject"),
-                        transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
-                        dbRowId = it.getLong("bank_transaction_id")
-                ))
-            } while (it.next())
-            return ret
+            BankAccountTransaction(
+                creditorPaytoUri = it.getString("creditor_payto_uri"),
+                creditorName = it.getString("creditor_name"),
+                debtorPaytoUri = it.getString("debtor_payto_uri"),
+                debtorName = it.getString("debtor_name"),
+                amount = TalerAmount(
+                    it.getLong("amount_val"),
+                    it.getInt("amount_frac"),
+                    getCurrency()
+                ),
+                accountServicerReference = it.getString("account_servicer_reference"),
+                endToEndId = it.getString("end_to_end_id"),
+                direction = direction,
+                bankAccountId = it.getLong("bank_account_id"),
+                paymentInformationId = it.getString("payment_information_id"),
+                subject = it.getString("subject"),
+                transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
+                dbRowId = it.getLong("bank_transaction_id")
+            )
         }
     }
 
@@ -1061,8 +1045,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setLong(2, walletBankAccount)
         stmt.setLong(3, amount.value)
         stmt.setInt(4, amount.frac)
-
-        return myExecute(stmt)
+        return stmt.executeUpdateViolation()
     }
     fun talerWithdrawalGet(opUUID: UUID): TalerWithdrawalOperation? {
         reconnect()
@@ -1081,21 +1064,20 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
             WHERE withdrawal_uuid=?
         """)
         stmt.setObject(1, opUUID)
-        stmt.executeQuery().use {
-            if (!it.next()) return null
-            return TalerWithdrawalOperation(
-               amount = TalerAmount(
-                   it.getLong("amount_val"),
-                   it.getInt("amount_frac"),
-                   getCurrency()
-               ),
-               selectionDone = it.getBoolean("selection_done"),
-               selectedExchangePayto = it.getString("selected_exchange_payto"),
-               walletBankAccount = it.getLong("wallet_bank_account"),
-               confirmationDone = it.getBoolean("confirmation_done"),
-               aborted = it.getBoolean("aborted"),
-               reservePub = it.getString("reserve_pub"),
-               withdrawalUuid = it.getObject("withdrawal_uuid") as UUID
+        return stmt.oneOrNull {
+            TalerWithdrawalOperation(
+                amount = TalerAmount(
+                    it.getLong("amount_val"),
+                    it.getInt("amount_frac"),
+                    getCurrency()
+                ),
+                selectionDone = it.getBoolean("selection_done"),
+                selectedExchangePayto = it.getString("selected_exchange_payto"),
+                walletBankAccount = it.getLong("wallet_bank_account"),
+                confirmationDone = it.getBoolean("confirmation_done"),
+                aborted = it.getBoolean("aborted"),
+                reservePub = it.getString("reserve_pub"),
+                withdrawalUuid = it.getObject("withdrawal_uuid") as UUID
             )
         }
     }
@@ -1114,11 +1096,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         """
         )
         stmt.setObject(1, opUUID)
-        val res = stmt.executeQuery()
-        res.use {
-            if (!it.next()) return false
-        }
-        return true
+        return stmt.executeQueryCheck()
     }
 
     /**
@@ -1143,7 +1121,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setString(1, exchangePayto)
         stmt.setString(2, reservePub)
         stmt.setObject(3, opUuid)
-        return myExecute(stmt)
+        return stmt.executeUpdateViolation()
     }
 
     /**
@@ -1172,16 +1150,17 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setString(3, accountServicerReference)
         stmt.setString(4, endToEndId)
         stmt.setString(5, paymentInfId)
-        val res = stmt.executeQuery()
-        res.use {
-            if (!res.next())
-                throw internalServerError("No result from DB procedure confirm_taler_withdrawal")
-            if (it.getBoolean("out_nx_op")) return WithdrawalConfirmationResult.OP_NOT_FOUND
-            if (it.getBoolean("out_nx_exchange")) return WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND
-            if (it.getBoolean("out_insufficient_funds")) return WithdrawalConfirmationResult.BALANCE_INSUFFICIENT
-            if (it.getBoolean("out_already_confirmed_conflict")) return WithdrawalConfirmationResult.CONFLICT
+        return stmt.executeQuery().use {
+            when {
+                !it.next() ->
+                    throw internalServerError("No result from DB procedure confirm_taler_withdrawal")
+                it.getBoolean("out_nx_op") -> WithdrawalConfirmationResult.OP_NOT_FOUND
+                it.getBoolean("out_nx_exchange") -> WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND
+                it.getBoolean("out_insufficient_funds") -> WithdrawalConfirmationResult.BALANCE_INSUFFICIENT
+                it.getBoolean("out_already_confirmed_conflict") -> WithdrawalConfirmationResult.CONFLICT
+                else -> WithdrawalConfirmationResult.SUCCESS
+            }
         }
-        return WithdrawalConfirmationResult.SUCCESS
     }
 
     /**
@@ -1241,7 +1220,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setLong(16, op.bankAccount)
         stmt.setString(17, op.credit_payto_uri)
         stmt.setString(18, op.cashoutCurrency)
-        return myExecute(stmt)
+        return stmt.executeUpdateViolation()
     }
 
     /**
@@ -1263,7 +1242,7 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setLong(1, tanConfirmationTimestamp)
         stmt.setLong(2, bankTransaction)
         stmt.setObject(3, opUuid)
-        return myExecute(stmt)
+        return stmt.executeUpdateViolation()
     }
 
     /**
@@ -1283,12 +1262,12 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
              FROM cashout_delete(?)
         """)
         stmt.setObject(1, opUuid)
-        stmt.executeQuery().use {
-            if (!it.next()) {
-                throw internalServerError("Cashout deletion gave no result")
-            }
-            if (it.getBoolean("out_already_confirmed")) return CashoutDeleteResult.CONFLICT_ALREADY_CONFIRMED
-            return CashoutDeleteResult.SUCCESS
+        return stmt.executeQuery().use {
+            when {
+                !it.next() -> throw internalServerError("Cashout deletion gave no result")
+                it.getBoolean("out_already_confirmed") -> CashoutDeleteResult.CONFLICT_ALREADY_CONFIRMED
+                else -> CashoutDeleteResult.SUCCESS
+            }   
         }
     }
 
@@ -1298,33 +1277,32 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
      */
     fun cashoutGetFromUuid(opUuid: UUID): Cashout? {
         val stmt = prepare("""
-           SELECT
-             (amount_debit).val as amount_debit_val
-             ,(amount_debit).frac as amount_debit_frac
-             ,(amount_credit).val as amount_credit_val
-             ,(amount_credit).frac as amount_credit_frac
-             ,buy_at_ratio
-             ,(buy_in_fee).val as buy_in_fee_val
-             ,(buy_in_fee).frac as buy_in_fee_frac
-             ,sell_at_ratio
-             ,(sell_out_fee).val as sell_out_fee_val
-             ,(sell_out_fee).frac as sell_out_fee_frac
-             ,subject
-             ,creation_time
-             ,tan_channel
-             ,tan_code
-             ,bank_account
-             ,credit_payto_uri
-             ,cashout_currency
-	     ,tan_confirmation_time
-	     ,local_transaction
-	      FROM cashout_operations
-	      WHERE cashout_uuid=?;
+            SELECT
+                (amount_debit).val as amount_debit_val
+                ,(amount_debit).frac as amount_debit_frac
+                ,(amount_credit).val as amount_credit_val
+                ,(amount_credit).frac as amount_credit_frac
+                ,buy_at_ratio
+                ,(buy_in_fee).val as buy_in_fee_val
+                ,(buy_in_fee).frac as buy_in_fee_frac
+                ,sell_at_ratio
+                ,(sell_out_fee).val as sell_out_fee_val
+                ,(sell_out_fee).frac as sell_out_fee_frac
+                ,subject
+                ,creation_time
+                ,tan_channel
+                ,tan_code
+                ,bank_account
+                ,credit_payto_uri
+                ,cashout_currency
+                ,tan_confirmation_time
+                ,local_transaction
+            FROM cashout_operations
+            WHERE cashout_uuid=?;
         """)
         stmt.setObject(1, opUuid)
-        stmt.executeQuery().use {
-            if (!it.next()) return null
-            return Cashout(
+        return stmt.oneOrNull {
+            Cashout(
                 amountDebit = TalerAmount(
                     value = it.getLong("amount_debit_val"),
                     frac = it.getInt("amount_debit_frac"),
@@ -1353,19 +1331,17 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
                     getCurrency()
                 ),
                 subject = it.getString("subject"),
-                tanChannel = it.getString("tan_channel").run {
-                    when(this) {
-                        "sms" -> TanChannel.sms
-                        "email" -> TanChannel.email
-                        "file" -> TanChannel.file
-                        else -> throw internalServerError("TAN channel $this unsupported")
-                    }
+                tanChannel = when(it.getString("tan_channel")) {
+                    "sms" -> TanChannel.sms
+                    "email" -> TanChannel.email
+                    "file" -> TanChannel.file
+                    else -> throw internalServerError("TAN channel $this unsupported")
                 },
                 tanCode = it.getString("tan_code"),
                 localTransaction = it.getLong("local_transaction"),
-                tanConfirmationTime = it.getLong("tan_confirmation_time").run {
-                    if (this == 0L) return@run null
-                    return@run this.microsToJavaInstant() ?: throw faultyTimestampByBank()
+                tanConfirmationTime = when (val timestamp = it.getLong("tan_confirmation_time")) {
+                    0L -> null
+                    else -> timestamp.microsToJavaInstant() ?: throw faultyTimestampByBank()
                 }
             )
         }
@@ -1404,10 +1380,8 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
               WHERE request_uid = ?;
         """)
         stmt.setString(1, requestUid)
-        val res = stmt.executeQuery()
-        res.use {
-            if (!it.next()) return null
-            return TalerTransferFromDb(
+        return stmt.oneOrNull {
+            TalerTransferFromDb(
                 wtid = it.getString("wtid"),
                 amount = TalerAmount(
                     value = it.getLong("amount_value"),
@@ -1488,19 +1462,22 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         stmt.setString(10, pmtInfId)
         stmt.setString(11, endToEndId)
 
-        val res = stmt.executeQuery()
-        res.use {
-            if (!it.next())
-                throw internalServerError("SQL function taler_transfer did not return anything.")
-            if (it.getBoolean("out_nx_creditor"))
-                return TalerTransferCreationResult(BankTransactionResult.NO_CREDITOR)
-            if (it.getBoolean("out_exchange_balance_insufficient"))
-                return TalerTransferCreationResult(BankTransactionResult.CONFLICT)
-            val txRowId = it.getLong("out_tx_row_id")
-            return TalerTransferCreationResult(
-                txResult = BankTransactionResult.SUCCESS,
-                txRowId = txRowId
-            )
+        return stmt.executeQuery().use {
+            when {
+                !it.next() ->
+                    throw internalServerError("SQL function taler_transfer did not return anything.")
+                it.getBoolean("out_nx_creditor") ->
+                    TalerTransferCreationResult(BankTransactionResult.NO_CREDITOR)
+                it.getBoolean("out_exchange_balance_insufficient") ->
+                    TalerTransferCreationResult(BankTransactionResult.CONFLICT)
+                else -> {
+                    val txRowId = it.getLong("out_tx_row_id")
+                    return TalerTransferCreationResult(
+                        txResult = BankTransactionResult.SUCCESS,
+                        txRowId = txRowId
+                    )
+                }
+            }
         }
     }
 }
