@@ -48,41 +48,6 @@ task libeufinVersion {
     }
 }
 
-task replaceVersionCli(type: Copy) {
-    from file("cli/bin/libeufin-cli")
-    into file("${project.buildDir}/generated/python")
-    filter(ReplaceTokens, tokens: [version: getRootProject().version])
-}
-
 classes {
     dependsOn versionFile
-    dependsOn replaceVersionCli
-}
-
-task execArch(type: Zip) {
-    dependsOn versionFile
-    dependsOn replaceVersionCli
-    // evaluationDependsOn("nexus")
-    evaluationDependsOn("bank")
-    def topDir = "${getRootProject().name}-${getRootProject().version}"
-    archiveFileName = "${topDir}.zip"
-    subprojects.each {
-        if (it.name == "nexus" || it.name == "bank") {
-            Task t = it.tasks.getByName("installShadowDist")
-            dependsOn(t) // invokes the task 't'
-        }
-    }
-    //from("nexus/build/install/nexus-shadow") {
-    //  include("**/libeufin-nexus")
-    //  include("**/*.jar")
-    //}
-    from("bank/build/install/bank-shadow") {
-        include("**/libeufin-bank")
-        include("**/*.jar")
-    }
-    from("${project.buildDir}/generated/python") {
-      include("libeufin-cli")
-      rename { "bin/libeufin-cli" }
-    }
-    into(topDir)
 }
