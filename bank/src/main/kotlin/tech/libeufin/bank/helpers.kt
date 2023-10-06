@@ -365,7 +365,7 @@ fun getWithdrawal(db: Database, opIdParam: String): TalerWithdrawalOperation {
 }
 
 data class HistoryParams(
-    val delta: Long, val start: Long
+    val delta: Long, val start: Long, val poll_ms: Long
 )
 
 /**
@@ -391,7 +391,16 @@ fun getHistoryParams(req: ApplicationRequest): HistoryParams {
             throw badRequest("Param 'start' not a number")
         }
     }
-    return HistoryParams(delta = delta, start = start)
+    val poll_ms: Long = when (val param = req.queryParameters["long_poll_ms"]) {
+        null -> 0
+        else -> try {
+            param.toLong()
+        } catch (e: Exception) {
+            logger.error(e.message)
+            throw badRequest("Param 'long_poll_ms' not a number")
+        }
+    }
+    return HistoryParams(delta = delta, start = start, poll_ms = poll_ms)
 }
 
 /**

@@ -6,6 +6,7 @@ import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.coroutines.*
 import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import tech.libeufin.bank.*
@@ -261,6 +262,50 @@ class TalerApiTest {
                 val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
                 assertEquals(5, j.incoming_transactions.size)
             }
+            
+            // Check no useless polling
+            client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&long_poll_ms=6000000") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
+                assertEquals(5, j.incoming_transactions.size)
+            }
+
+            // Check polling end
+            client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=60") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
+                assertEquals(5, j.incoming_transactions.size)
+            }
+
+            // Check polling succedd
+            runBlocking {
+                launch {
+                    delay(300)
+                    db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
+                }
+                client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=6000000") {
+                    basicAuth("bar", "secret")
+                }.assertOk().run {
+                    val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
+                    assertEquals(6, j.incoming_transactions.size)
+                }
+            }
+
+            // Check polling timeout
+            runBlocking {
+                launch {
+                    delay(300)
+                    db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
+                }
+                client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=8&long_poll_ms=1000") {
+                    basicAuth("bar", "secret")
+                }.assertOk().run {
+                    val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
+                    assertEquals(7, j.incoming_transactions.size)
+                }
+            }
 
             // Testing ranges.
             val mockReservePub = randShortHashCode().encoded
@@ -357,6 +402,50 @@ class TalerApiTest {
             }.assertOk().run {
                 val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
                 assertEquals(5, j.outgoing_transactions.size)
+            }
+
+            // Check no useless polling
+            client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&long_poll_ms=6000000") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
+                assertEquals(5, j.outgoing_transactions.size)
+            }
+
+            // Check polling end
+            client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=6&long_poll_ms=60") {
+                basicAuth("bar", "secret")
+            }.assertOk().run {
+                val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
+                assertEquals(5, j.outgoing_transactions.size)
+            }
+
+            // Check polling succedd
+            runBlocking {
+                launch {
+                    delay(300)
+                    transfer(db, 2, bankAccountFoo)
+                }
+                client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=6&long_poll_ms=6000000") {
+                    basicAuth("bar", "secret")
+                }.assertOk().run {
+                    val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
+                    assertEquals(6, j.outgoing_transactions.size)
+                }
+            }
+
+            // Check polling timeout
+            runBlocking {
+                launch {
+                    delay(300)
+                    transfer(db, 2, bankAccountFoo)
+                }
+                client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=8&long_poll_ms=1000") {
+                    basicAuth("bar", "secret")
+                }.assertOk().run {
+                    val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
+                    assertEquals(7, j.outgoing_transactions.size)
+                }
             }
 
             // Testing ranges.
