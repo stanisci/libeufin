@@ -7,32 +7,32 @@ if [ -d /run/systemd/system ]; then
 fi
 if [ "$1" = "remove" ]; then
         if [ -x "/usr/bin/deb-systemd-helper" ]; then
-                deb-systemd-helper mask 'libeufin-sandbox.service' >/dev/null || true
+                deb-systemd-helper mask 'libeufin-bank.service' >/dev/null || true
         fi
 fi
 
 if [ "$1" = "purge" ]; then
         if [ -x "/usr/bin/deb-systemd-helper" ]; then
-                deb-systemd-helper purge 'libeufin-sandbox.service' >/dev/null || true
-                deb-systemd-helper unmask 'libeufin-sandbox.service' >/dev/null || true
+                deb-systemd-helper purge 'libeufin-bank.service' >/dev/null || true
+                deb-systemd-helper unmask 'libeufin-bank.service' >/dev/null || true
         fi
 fi
-sandbox_user=libeufin-sandbox
-sandbox_group=libeufin-sandbox
-libeufin_home=/var/lib/libeufin
+libeufin_bank_home=/var/lib/libeufin-bank
+bank_user=bank
+bank_group=bank
 
 . /usr/share/debconf/confmodule
 
 case "${1}" in
   configure)
 
-    if ! getent group $sandbox_group >/dev/null; then
-      addgroup --quiet --system $sandbox_group
+    if ! getent group $bank_group >/dev/null; then
+      addgroup --quiet --system $bank_group
     fi
 
     # Create users if needed
-    if ! getent passwd $sandbox_user >/dev/null; then
-      adduser --quiet --system --no-create-home --ingroup $sandbox_group --home $libeufin_home $sandbox_user
+    if ! getent passwd $bank_user >/dev/null; then
+      adduser --quiet --system --no-create-home --ingroup $bank_group --home $libeufin_bank_home $bank_user
     fi
     ;;
   abort-upgrade|abort-remove|abort-deconfigure)

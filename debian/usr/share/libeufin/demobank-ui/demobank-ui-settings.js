@@ -4,5 +4,5 @@ globalThis.talerDemobankSettings = {
   bankName: "Taler Bank",
   // Show explainer text and navbar to other demo sites
   showDemoNav: false,
-  backendBaseURL: "http://localhost/demobanks/default/"
+  backendBaseURL: "http://localhost/"
 };

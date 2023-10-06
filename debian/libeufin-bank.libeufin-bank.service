@@ -2,9 +2,8 @@
 Description=LibEuFin Bank service.
 
 [Service]
-EnvironmentFile=/etc/libeufin/bank.env
 User=libeufin-bank
-ExecStart=/usr/bin/libeufin-bank serve --port=${LIBEUFIN_BANK_PORT}
+ExecStart=/usr/bin/libeufin-bank serve
 Restart=on-failure
 RestartSec=1s
 RuntimeMaxSec=3600s
