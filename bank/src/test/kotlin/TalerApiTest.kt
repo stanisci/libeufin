@@ -282,7 +282,7 @@ class TalerApiTest {
             }.assertHistory(5)
             
             // Check no useless polling
-            assertTime(1000) {
+            assertTime(0, 1000) {
                 client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&start=20&long_poll_ms=1000") {
                     basicAuth("bar", "secret")
                 }.assertHistory(5)
@@ -293,16 +293,29 @@ class TalerApiTest {
                 basicAuth("bar", "secret")
             }.assertHistory(5)
 
-            // Check polling succeed
+            // Check polling succeed forward
             runBlocking {
-                launch {
+                async {
                     delay(200)
                     db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
                 }
-                assertTime(1000) {
-                    client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&long_poll_ms=1000") {
+                assertTime(200, 1000) {
+                    client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=1000") {
                         basicAuth("bar", "secret")
                     }.assertHistory(6)
+                }
+            }
+
+            // Check polling succeed backward
+            runBlocking {
+                async {
+                    delay(200)
+                    db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
+                }
+                assertTime(200, 1000) {
+                    client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-7&long_poll_ms=1000") {
+                        basicAuth("bar", "secret")
+                    }.assertHistory(7)
                 }
             }
 
@@ -312,9 +325,11 @@ class TalerApiTest {
                     delay(200)
                     db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
                 }
-                client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=8&long_poll_ms=300") {
-                    basicAuth("bar", "secret")
-                }.assertHistory(7)
+                assertTime(200, 400) {
+                    client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=9&long_poll_ms=300") {
+                        basicAuth("bar", "secret")
+                    }.assertHistory(8)
+                }
             }
 
             // Testing ranges.
@@ -409,8 +424,8 @@ class TalerApiTest {
             }.assertHistory(5)
 
             // Check no useless polling
-            assertTime(3000) {
-                client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&start=20&long_poll_ms=3000") {
+            assertTime(0, 1000) {
+                client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&start=20&long_poll_ms=1000") {
                     basicAuth("bar", "secret")
                 }.assertHistory(5)
             }
@@ -420,16 +435,29 @@ class TalerApiTest {
                 basicAuth("bar", "secret")
             }.assertHistory(5)
 
-            // Check polling succeed
+            // Check polling succeed forward
             runBlocking {
-                launch {
+                async {
                     delay(200)
                     transfer(db, 2, bankAccountFoo)
                 }
-                assertTime(3000) {
-                    client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&long_poll_ms=3000") {
+                assertTime(200, 1000) {
+                    client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=6&long_poll_ms=1000") {
                         basicAuth("bar", "secret")
                     }.assertHistory(6)
+                }
+            }
+
+            // Check polling succeed backward
+            runBlocking {
+                async {
+                    delay(200)
+                    transfer(db, 2, bankAccountFoo)
+                }
+                assertTime(200, 1000) {
+                    client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-7&long_poll_ms=1000") {
+                        basicAuth("bar", "secret")
+                    }.assertHistory(7)
                 }
             }
 
@@ -439,9 +467,11 @@ class TalerApiTest {
                     delay(200)
                     transfer(db, 2, bankAccountFoo)
                 }
-                client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=8&long_poll_ms=300") {
-                    basicAuth("bar", "secret")
-                }.assertHistory(7)
+                assertTime(200, 400) {
+                    client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=8&long_poll_ms=300") {
+                        basicAuth("bar", "secret")
+                    }.assertHistory(8)
+                }
             }
 
             // Testing ranges.

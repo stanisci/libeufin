@@ -24,12 +24,13 @@ fun BankTransactionResult.assertSuccess() {
     assertEquals(BankTransactionResult.SUCCESS, this)
 }
 
-suspend fun assertTime(ms: Int, lambda: suspend () -> Unit) {
+suspend fun assertTime(min: Int, max: Int, lambda: suspend () -> Unit) {
     val start = System.currentTimeMillis()
     lambda()
     val end = System.currentTimeMillis()
     val time = end - start
-    assert(time < ms) { "Expected to last at most $ms ms, lasted $time" }
+    assert(time >= min) { "Expected to last at least $min ms, lasted $time" }
+    assert(time <= max) { "Expected to last at most $max ms, lasted $time" }
 }
 
 /* ----- Body helper ----- */
