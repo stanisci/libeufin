@@ -2,45 +2,34 @@
 
 set -e
 
-if [ -d /run/systemd/system ]; then
-        systemctl --system daemon-reload >/dev/null || true
-fi
-if [ "$1" = "remove" ]; then
-        if [ -x "/usr/bin/deb-systemd-helper" ]; then
-                deb-systemd-helper mask 'libeufin-bank.service' >/dev/null || true
-        fi
-fi
-
-if [ "$1" = "purge" ]; then
-        if [ -x "/usr/bin/deb-systemd-helper" ]; then
-                deb-systemd-helper purge 'libeufin-bank.service' >/dev/null || true
-                deb-systemd-helper unmask 'libeufin-bank.service' >/dev/null || true
-        fi
-fi
-libeufin_bank_home=/var/lib/libeufin-bank
-bank_user=libeufin-bank
-bank_group=libeufin-bank
-
 . /usr/share/debconf/confmodule
 
 case "${1}" in
-  configure)
+configure)
 
-    if ! getent group $bank_group >/dev/null; then
-      addgroup --quiet --system $bank_group
-    fi
+  if ! getent group libeufin-bank >/dev/null; then
+    addgroup --quiet --system libeufin-bank
+  fi
 
-    # Create users if needed
-    if ! getent passwd $bank_user >/dev/null; then
-      adduser --quiet --system --no-create-home --ingroup $bank_group --home $libeufin_bank_home $bank_user
-    fi
-    ;;
-  abort-upgrade|abort-remove|abort-deconfigure)
-    ;;
-  *)
-    echo "postinst called with unknown argument \`${1}'" >&2
-    exit 1
-    ;;
+  # Create users if needed
+  if ! getent passwd libeufin-bank >/dev/null; then
+    adduser --quiet \
+      --system \
+      --disabled-password \
+      --no-create-home \
+      --shell /bin/bash
+    --ingroup libeufin-bank \
+      --home /var/lib/libeufin-bank \
+      libeufin-bank
+  fi
+  ;;
+
+abort-upgrade | abort-remove | abort-deconfigure) ;;
+
+*)
+  echo "postinst called with unknown argument \`${1}'" >&2
+  exit 1
+  ;;
 esac
 
 #DEBHELPER#
