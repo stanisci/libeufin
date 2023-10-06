@@ -24,6 +24,14 @@ fun BankTransactionResult.assertSuccess() {
     assertEquals(BankTransactionResult.SUCCESS, this)
 }
 
+suspend fun assertTime(ms: Int, lambda: suspend () -> Unit) {
+    val start = System.currentTimeMillis()
+    lambda()
+    val end = System.currentTimeMillis()
+    val time = end - start
+    assert(time < ms) { "Expected to last at most $ms ms, lasted $time" }
+}
+
 /* ----- Body helper ----- */
 
 inline fun <reified B> HttpRequestBuilder.jsonBody(b: B, deflate: Boolean = false) {

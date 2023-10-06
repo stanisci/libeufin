@@ -945,6 +945,9 @@ class Database(private val dbConfig: String, private val bankCurrency: String) {
         }
 
         conn.execSQLUpdate("UNLISTEN $channel");
+        conn.getNotifications(); // Clear pending notifications
+
+        conn.close()
 
         return items.toList();
     }

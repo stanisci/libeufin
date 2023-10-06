@@ -282,24 +282,28 @@ class TalerApiTest {
             }.assertHistory(5)
             
             // Check no useless polling
-            client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&start=20&long_poll_ms=6000000") {
-                basicAuth("bar", "secret")
-            }.assertHistory(5)
+            assertTime(1000) {
+                client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&start=20&long_poll_ms=1000") {
+                    basicAuth("bar", "secret")
+                }.assertHistory(5)
+            }
 
             // Check polling end
             client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=60") {
                 basicAuth("bar", "secret")
             }.assertHistory(5)
 
-            // Check polling succedd
+            // Check polling succeed
             runBlocking {
                 launch {
                     delay(200)
                     db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
                 }
-                client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&long_poll_ms=6000000") {
-                    basicAuth("bar", "secret")
-                }.assertHistory(6)
+                assertTime(1000) {
+                    client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&long_poll_ms=1000") {
+                        basicAuth("bar", "secret")
+                    }.assertHistory(6)
+                }
             }
 
             // Check polling timeout
@@ -405,24 +409,28 @@ class TalerApiTest {
             }.assertHistory(5)
 
             // Check no useless polling
-            client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&start=20&long_poll_ms=6000000") {
-                basicAuth("bar", "secret")
-            }.assertHistory(5)
+            assertTime(3000) {
+                client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&start=20&long_poll_ms=3000") {
+                    basicAuth("bar", "secret")
+                }.assertHistory(5)
+            }
 
             // Check polling end
             client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=6&long_poll_ms=60") {
                 basicAuth("bar", "secret")
             }.assertHistory(5)
 
-            // Check polling succedd
+            // Check polling succeed
             runBlocking {
                 launch {
                     delay(200)
                     transfer(db, 2, bankAccountFoo)
                 }
-                client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&long_poll_ms=6000000") {
-                    basicAuth("bar", "secret")
-                }.assertHistory(6)
+                assertTime(3000) {
+                    client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&long_poll_ms=3000") {
+                        basicAuth("bar", "secret")
+                    }.assertHistory(6)
+                }
             }
 
             // Check polling timeout
