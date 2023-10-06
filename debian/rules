@@ -23,11 +23,6 @@ override_dh_auto_test:
 	true
 override_dh_auto_configure:
 	true
-override_dh_auto_install:
-	unzip bank/build/distributions/libeufin-bank-$(FULLVER).zip
-	dh_install libeufin-bank-$(FULLVER)/bin/* $(LIBEUFIN_HOME)/bin
-	dh_install libeufin-bank-$(FULLVER)/lib/* $(LIBEUFIN_HOME)/lib
-	dh_link $(LIBEUFIN_HOME)/bin/libeufin-bank /usr/bin/libeufin-bank
 
 # Override this step because it's very slow and likely
 # unnecessary for us.
