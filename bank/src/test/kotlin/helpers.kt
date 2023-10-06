@@ -10,6 +10,35 @@ import net.taler.wallet.crypto.Base32Crockford
 import kotlin.test.assertEquals
 import tech.libeufin.bank.*
 
+/* ----- Setup ----- */
+
+fun setupDb(lambda: (Database) -> Unit) {
+    initDb().use(lambda)
+}
+
+fun setup(
+    restrictRegistration: Boolean = false,
+    suggestedExchange: String = "https://exchange.example.com",
+    lambda: (Database, BankApplicationContext) -> Unit
+){
+    val db = initDb()
+    val ctx = BankApplicationContext(
+        currency = "KUDOS",
+        restrictRegistration = restrictRegistration,
+        cashoutCurrency = "EUR",
+        defaultCustomerDebtLimit = TalerAmount(100, 0, "KUDOS"),
+        defaultAdminDebtLimit = TalerAmount(10000, 0, "KUDOS"),
+        registrationBonusEnabled = false,
+        registrationBonus = null,
+        suggestedWithdrawalExchange = suggestedExchange,
+        spaCaptchaURL = null,
+        restrictAccountDeletion = true
+    )
+    db.use {
+        lambda(db, ctx)
+    }
+}
+
 /* ----- Assert ----- */
 
 fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {

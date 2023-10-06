@@ -85,9 +85,7 @@ class DatabaseTest {
 
     // Testing the helper that creates the admin account.
     @Test
-    fun createAdminTest() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun createAdminTest() = setup { db, ctx ->
         // No admin accounts is expected.
         val noAdminCustomer = db.customerGetFromLogin("admin")
         assert(noAdminCustomer == null)
@@ -112,7 +110,7 @@ class DatabaseTest {
      * given by the exchange to pay one merchant.
      */
     @Test
-    fun talerTransferTest() {
+    fun talerTransferTest() = setupDb { db ->
         val exchangeReq = TransferRequest(
             amount = TalerAmount(9, 0, "KUDOS"),
             credit_account = "payto://iban/BAR-IBAN-ABC".lowercase(), // foo pays bar
@@ -120,7 +118,6 @@ class DatabaseTest {
             request_uid = randHashCode(),
             wtid = randShortHashCode()
         )
-        val db = initDb()
         val fooId = db.customerCreate(customerFoo)
         assert(fooId != null)
         val barId = db.customerCreate(customerBar)
@@ -136,8 +133,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun bearerTokenTest() {
-        val db = initDb()
+    fun bearerTokenTest() = setupDb { db ->
         val tokenBytes = ByteArray(32)
         Random().nextBytes(tokenBytes)
         val token = BearerToken(
@@ -154,8 +150,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun tokenDeletionTest() {
-        val db = initDb()
+    fun tokenDeletionTest() = setupDb { db ->
         val token = ByteArray(32)
         // Token not there, must fail.
         assert(!db.bearerTokenDelete(token))
@@ -179,8 +174,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun bankTransactionsTest() {
-        val db = initDb()
+    fun bankTransactionsTest() = setupDb { db ->
         val fooId = db.customerCreate(customerFoo)
         assert(fooId != null)
         val barId = db.customerCreate(customerBar)
@@ -262,8 +256,7 @@ class DatabaseTest {
 
     // Testing customer(+bank account) deletion logic.
     @Test
-    fun customerDeletionTest() {
-        val db = initDb()
+    fun customerDeletionTest() = setupDb { db ->
         // asserting false, as foo doesn't exist yet.
         assert(db.customerDeleteIfBalanceIsZero("foo") == CustomerDeletionResult.CUSTOMER_NOT_FOUND)
         // Creating foo.
@@ -273,11 +266,11 @@ class DatabaseTest {
         }
         // foo has zero balance, deletion should succeed.
         assert(db.customerDeleteIfBalanceIsZero("foo") == CustomerDeletionResult.SUCCESS)
-        val db2 = initDb()
+
         // Creating foo again, artificially setting its balance != zero.
-        db2.customerCreate(customerFoo).apply {
+        db.customerCreate(customerFoo).apply {
             assert(this != null)
-            db2.bankAccountCreate(bankAccountFoo).apply {
+            db.bankAccountCreate(bankAccountFoo).apply {
                 assert(this != null)
                 val conn = DriverManager.getConnection("jdbc:postgresql:///libeufincheck").unwrap(PgConnection::class.java)
                 conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.frac = 1 WHERE bank_account_id = $this")
@@ -285,9 +278,9 @@ class DatabaseTest {
         }
         assert(db.customerDeleteIfBalanceIsZero("foo") == CustomerDeletionResult.BALANCE_NOT_ZERO)
     }
+
     @Test
-    fun customerCreationTest() {
-        val db = initDb()
+    fun customerCreationTest() = setupDb { db ->
         assert(db.customerGetFromLogin("foo") == null)
         db.customerCreate(customerFoo)
         assert(db.customerGetFromLogin("foo")?.name == "Foo")
@@ -296,8 +289,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun bankAccountTest() {
-        val db = initDb()
+    fun bankAccountTest() = setupDb { db ->
         val currency = "KUDOS"
         assert(db.bankAccountGetFromOwnerId(1L) == null)
         assert(db.customerCreate(customerFoo) != null)
@@ -307,8 +299,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun withdrawalTest() {
-        val db = initDb()
+    fun withdrawalTest() = setupDb { db ->
         val uuid = UUID.randomUUID()
         val currency = "KUDOS"
         assert(db.customerCreate(customerFoo) != null)
@@ -338,8 +329,7 @@ class DatabaseTest {
     }
     // Only testing the interaction between Kotlin and the DBMS.  No actual logic tested.
     @Test
-    fun historyTest() {
-        val db = initDb()
+    fun historyTest() = setupDb { db ->
         val currency = "KUDOS"
         db.customerCreate(customerFoo); db.bankAccountCreate(bankAccountFoo)
         db.customerCreate(customerBar); db.bankAccountCreate(bankAccountBar)
@@ -361,8 +351,7 @@ class DatabaseTest {
         assert(backward[0].expectRowId() <= 50 && backward.size == 2 && backward[0].dbRowId!! > backward[1].dbRowId!!)
     }
     @Test
-    fun cashoutTest() {
-        val db = initDb()
+    fun cashoutTest() = setupDb { db ->
         val currency = "KUDOS"
         val op = Cashout(
             cashoutUuid = UUID.randomUUID(),
@@ -417,8 +406,7 @@ class DatabaseTest {
 
     // Tests the retrieval of many accounts, used along GET /accounts
     @Test
-    fun accountsForAdminTest() {
-        val db = initDb()
+    fun accountsForAdminTest() = setupDb { db ->
         assert(db.accountsGetForAdmin().isEmpty()) // No data exists yet.
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
@@ -430,8 +418,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun passwordChangeTest() {
-        val db = initDb()
+    fun passwordChangeTest() = setupDb { db ->
         // foo not found, this fails.
         assert(!db.customerChangePassword("foo", "won't make it"))
         // creating foo.
@@ -441,8 +428,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun getPublicAccountsTest() {
-        val db = initDb()
+    fun getPublicAccountsTest() = setupDb { db ->
         // Expecting empty, no accounts exist yet.
         assert(db.accountsGetPublic("KUDOS").isEmpty())
         // Make a NON-public account, so expecting still an empty result.
@@ -477,8 +463,7 @@ class DatabaseTest {
      * PATCH /accounts/foo endpoint.
      */
     @Test
-    fun accountReconfigTest() {
-        val db = initDb()
+    fun accountReconfigTest() = setupDb { db ->
         // asserting for the customer not being found.
         db.accountReconfig(
             "foo",

@@ -177,12 +177,11 @@ private fun PreparedStatement.executeUpdateViolation(): Boolean {
 
 class Database(dbConfig: String, private val bankCurrency: String): java.io.Closeable {
     private val dbPool: HikariDataSource
+    private val jdbcConnStr = getJdbcConnectionFromPg(dbConfig)
 
     init {
         val config = HikariConfig();
-        config.jdbcUrl = getJdbcConnectionFromPg(dbConfig)
-        config.driverClassName = "org.postgresql.Driver"
-        config.maximumPoolSize = 2
+        config.jdbcUrl = jdbcConnStr
         config.connectionInitSql = "SET search_path TO libeufin_bank;"
         config.validate()
         dbPool = HikariDataSource(config);
@@ -195,6 +194,13 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
     private fun <R> conn(lambda: (Connection) -> R): R {
         val conn = dbPool.getConnection()
         return conn.use(lambda)
+    }
+
+    /** Create new connection outside the pool */
+    private fun freshConn(): PgConnection {
+        val conn = DriverManager.getConnection(jdbcConnStr).unwrap(PgConnection::class.java)
+        conn?.execSQLUpdate("SET search_path TO libeufin_bank;")
+        return conn
     }
 
     // CUSTOMERS
@@ -793,133 +799,140 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         bankAccountId: Long, 
         direction: TransactionDirection,
         map: (BankAccountTransaction) -> T?
-    ): List<T> = conn { conn ->
-        // TODO listening for notification is blocking a connection and postgres support a limited amount of connections
-        // We should use a single connection to listen for notification and dispatch them with kotlin code
-        val pg = conn.unwrap(PgConnection::class.java)
-        val channel = "${direction.name}_$bankAccountId";
+    ): List<T> {
         var start = params.start
         var delta = params.delta
         var poll_ms = params.poll_ms;
-
-        val (cmpOp, orderBy) = if (delta < 0) Pair("<", "DESC") else Pair(">", "ASC")
-        val stmt = conn.prepareStatement("""
-            SELECT 
-                creditor_payto_uri
-                ,creditor_name
-                ,debtor_payto_uri
-                ,debtor_name
-                ,subject
-                ,(amount).val AS amount_val
-                ,(amount).frac AS amount_frac
-                ,transaction_date
-                ,account_servicer_reference
-                ,payment_information_id
-                ,end_to_end_id
-                ,bank_account_id
-                ,bank_transaction_id
-            FROM bank_account_transactions
-            WHERE bank_transaction_id ${cmpOp} ? 
-                AND bank_account_id=?
-                AND direction=?::direction_enum
-            ORDER BY bank_transaction_id ${orderBy}
-            LIMIT ?
-        """)
+        val channel = "${direction.name}_$bankAccountId";
+        val items = mutableListOf<T>()
 
         // If going backward with a starting point, it is useless to poll
         if (delta < 0 && start != Long.MAX_VALUE) {
             poll_ms = 0;
         }
 
-        // Only start expensive listening if we intend to poll
+        // TODO listening for notification is blocking a connection and postgres support a limited amount of connections
+        // TODO we should use a single connection to listen for notification and dispatch them with kotlin code
+
+        val conn: Connection; // Generic connection to close and query
+        val pg: PgConnection; // Postgres connection for notifications
+
+        // Only start expensive listening and connection creation if we intend to poll
         if (poll_ms > 0) {
+            pg = freshConn()
+            conn = pg
             pg.execSQLUpdate("LISTEN $channel");
+        } else {
+            conn = dbPool.getConnection()
+            pg = conn.unwrap(PgConnection::class.java)
         }
 
-        val items = mutableListOf<T>()
-
-        fun bankTransactionGetHistory(): List<BankAccountTransaction> {
-            stmt.setLong(1, start)
+        conn.use {
+            // Prepare statement
+            val (cmpOp, orderBy) = if (delta < 0) Pair("<", "DESC") else Pair(">", "ASC")
+            val stmt = conn.prepareStatement("""
+                SELECT 
+                    creditor_payto_uri
+                    ,creditor_name
+                    ,debtor_payto_uri
+                    ,debtor_name
+                    ,subject
+                    ,(amount).val AS amount_val
+                    ,(amount).frac AS amount_frac
+                    ,transaction_date
+                    ,account_servicer_reference
+                    ,payment_information_id
+                    ,end_to_end_id
+                    ,bank_account_id
+                    ,bank_transaction_id
+                FROM bank_account_transactions
+                WHERE bank_transaction_id ${cmpOp} ? 
+                    AND bank_account_id=?
+                    AND direction=?::direction_enum
+                ORDER BY bank_transaction_id ${orderBy}
+                LIMIT ?
+            """)
             stmt.setLong(2, bankAccountId)
             stmt.setString(3, direction.name)
-            stmt.setLong(4, abs(delta))
-            return stmt.all {
-                BankAccountTransaction(
-                    creditorPaytoUri = it.getString("creditor_payto_uri"),
-                    creditorName = it.getString("creditor_name"),
-                    debtorPaytoUri = it.getString("debtor_payto_uri"),
-                    debtorName = it.getString("debtor_name"),
-                    amount = TalerAmount(
-                        it.getLong("amount_val"),
-                        it.getInt("amount_frac"),
-                        getCurrency()
-                    ),
-                    accountServicerReference = it.getString("account_servicer_reference"),
-                    endToEndId = it.getString("end_to_end_id"),
-                    direction = direction,
-                    bankAccountId = it.getLong("bank_account_id"),
-                    paymentInformationId = it.getString("payment_information_id"),
-                    subject = it.getString("subject"),
-                    transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
-                    dbRowId = it.getLong("bank_transaction_id")
-                )
-            }
-        }
 
-        fun loadBankHistory() {
-            while (delta != 0L) {
-                val history = bankTransactionGetHistory()
-                if (history.isEmpty())
-                    break;
-                history.forEach {
-                    val item = map(it);
-                    // Advance cursor
-                    start = it.expectRowId()
-        
-                    if (item != null) {
-                        items.add(item)
-                        // Reduce delta
-                        if (delta < 0) delta++ else delta--;
+            fun bankTransactionGetHistory(): List<BankAccountTransaction> {
+                stmt.setLong(1, start)
+                stmt.setLong(4, abs(delta))
+                return stmt.all {
+                    BankAccountTransaction(
+                        creditorPaytoUri = it.getString("creditor_payto_uri"),
+                        creditorName = it.getString("creditor_name"),
+                        debtorPaytoUri = it.getString("debtor_payto_uri"),
+                        debtorName = it.getString("debtor_name"),
+                        amount = TalerAmount(
+                            it.getLong("amount_val"),
+                            it.getInt("amount_frac"),
+                            getCurrency()
+                        ),
+                        accountServicerReference = it.getString("account_servicer_reference"),
+                        endToEndId = it.getString("end_to_end_id"),
+                        direction = direction,
+                        bankAccountId = it.getLong("bank_account_id"),
+                        paymentInformationId = it.getString("payment_information_id"),
+                        subject = it.getString("subject"),
+                        transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
+                        dbRowId = it.getLong("bank_transaction_id")
+                    )
+                }
+            }
+
+            fun loadBankHistory() {
+                while (delta != 0L) {
+                    val history = bankTransactionGetHistory()
+                    if (history.isEmpty())
+                        break;
+                    history.forEach {
+                        val item = map(it);
+                        // Advance cursor
+                        start = it.expectRowId()
+            
+                        if (item != null) {
+                            items.add(item)
+                            // Reduce delta
+                            if (delta < 0) delta++ else delta--;
+                        }
                     }
                 }
             }
-        }
 
-        loadBankHistory()
-
-        // Long polling
-        while (delta != 0L && poll_ms > 0) {
-            var remaining = abs(delta);
-            do {
-                val pollStart = System.currentTimeMillis()
-                logger.debug("POOL")
-                pg.getNotifications(poll_ms.toInt()).forEach {
-                    val id = it.parameter.toLong()
-                    val new = when {
-                        params.start == Long.MAX_VALUE -> true
-                        delta < 0 -> id < start
-                        else -> id > start
-                    }
-                    logger.debug("NOTIF $id $new")
-                    if (new) remaining -= 1
-                }
-                val pollEnd = System.currentTimeMillis()
-                poll_ms -= pollEnd - pollStart
-            } while (poll_ms > 0 && remaining > 0L)
-
-            // If going backward without a starting point, we reset loading progress
-            if (params.start == Long.MAX_VALUE) {
-                start = params.start
-                delta = params.delta
-                items.clear()
-            }
             loadBankHistory()
+
+            // Long polling
+            while (delta != 0L && poll_ms > 0) {
+                var remaining = abs(delta);
+                do {
+                    val pollStart = System.currentTimeMillis()
+                    pg.getNotifications(poll_ms.toInt()).forEach {
+                        val id = it.parameter.toLong()
+                        val new = when {
+                            params.start == Long.MAX_VALUE -> true
+                            delta < 0 -> id < start
+                            else -> id > start
+                        }
+                        if (new) remaining -= 1
+                    }
+                    val pollEnd = System.currentTimeMillis()
+                    poll_ms -= pollEnd - pollStart
+                } while (poll_ms > 0 && remaining > 0L)
+
+                // If going backward without a starting point, we reset loading progress
+                if (params.start == Long.MAX_VALUE) {
+                    start = params.start
+                    delta = params.delta
+                    items.clear()
+                }
+                loadBankHistory()
+            }
+
+            // No need to unlisten or clear notifications as we close the connection when polling is used
+
+            return items.toList();
         }
-
-        pg.execSQLUpdate("UNLISTEN $channel");
-        pg.getNotifications(); // Clear pending notifications
-
-        items.toList()
     }
 
     /**

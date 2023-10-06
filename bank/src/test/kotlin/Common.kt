@@ -35,24 +35,6 @@ fun initDb(): Database {
     return Database(dbConnStr, "KUDOS")
 }
 
-fun getTestContext(
-    restrictRegistration: Boolean = false,
-    suggestedExchange: String = "https://exchange.example.com"
-): BankApplicationContext {
-    return BankApplicationContext(
-        currency = "KUDOS",
-        restrictRegistration = restrictRegistration,
-        cashoutCurrency = "EUR",
-        defaultCustomerDebtLimit = TalerAmount(100, 0, "KUDOS"),
-        defaultAdminDebtLimit = TalerAmount(10000, 0, "KUDOS"),
-        registrationBonusEnabled = false,
-        registrationBonus = null,
-        suggestedWithdrawalExchange = suggestedExchange,
-        spaCaptchaURL = null,
-        restrictAccountDeletion = true
-    )
-}
-
 fun deflater(reqBody: String): ByteArray {
     val bos = ByteArrayOutputStream()
     val ios = DeflaterOutputStream(bos)

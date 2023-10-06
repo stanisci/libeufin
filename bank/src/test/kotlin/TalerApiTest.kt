@@ -67,10 +67,8 @@ class TalerApiTest {
         )
     }
 
-    fun commonSetup(lambda: (Database, BankApplicationContext) -> Unit){
-        val db = initDb()
-        val ctx = getTestContext()
-        db.use {
+    fun commonSetup(lambda: (Database, BankApplicationContext) -> Unit) {
+        setup { db, ctx -> 
             // Creating the exchange and merchant accounts first.
             assertNotNull(db.customerCreate(customerFoo))
             assertNotNull(db.bankAccountCreate(bankAccountFoo))
@@ -533,9 +531,7 @@ class TalerApiTest {
     }
     // Selecting withdrawal details from the Integration API endpoint.
     @Test
-    fun intSelect() {
-        val db = initDb()
-        val ctx = getTestContext(suggestedExchange = "payto://iban/ABC123")
+    fun intSelect() = setup(suggestedExchange = "payto://iban/ABC123") { db, ctx ->
         val uuid = UUID.randomUUID()
         assertNotNull(db.customerCreate(customerFoo))
         assertNotNull(db.bankAccountCreate(bankAccountFoo))
@@ -560,12 +556,10 @@ class TalerApiTest {
     }
     // Showing withdrawal details from the Integrtion API endpoint.
     @Test
-    fun intGet() {
-        val db = initDb()
+    fun intGet() = setup(suggestedExchange = "payto://iban/ABC123") { db, ctx ->
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
-        val ctx = getTestContext(suggestedExchange = "payto://iban/ABC123")
         // insert new.
         assert(db.talerWithdrawalCreate(
             opUUID = uuid,
@@ -582,10 +576,8 @@ class TalerApiTest {
     }
     // Testing withdrawal abort
     @Test
-    fun withdrawalAbort() {
-        val db = initDb()
+    fun withdrawalAbort() = setup { db, ctx ->
         val uuid = UUID.randomUUID()
-        val ctx = getTestContext()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
         // insert new.
@@ -610,9 +602,7 @@ class TalerApiTest {
     }
     // Testing withdrawal creation
     @Test
-    fun withdrawalCreation() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun withdrawalCreation() = setup { db, ctx ->
         assertNotNull(db.customerCreate(customerFoo))
         assertNotNull(db.bankAccountCreate(bankAccountFoo))
         testApplication {

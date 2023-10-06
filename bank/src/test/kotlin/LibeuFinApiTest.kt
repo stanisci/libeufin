@@ -49,9 +49,7 @@ class LibeuFinApiTest {
     )
 
     @Test
-    fun getConfig() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun getConfig() = setup { db, ctx -> 
         testApplication {
             application { corebankWebApp(db, ctx) }
             val r = client.get("/config") {
@@ -59,6 +57,7 @@ class LibeuFinApiTest {
             }
             println(r.bodyAsText())
         }
+        
     }
 
     /**
@@ -68,9 +67,7 @@ class LibeuFinApiTest {
      * of delta.
      */
     @Test
-    fun testHistory() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun testHistory() = setup { db, ctx -> 
         val fooId = db.customerCreate(customerFoo); assert(fooId != null)
         assert(db.bankAccountCreate(genBankAccount(fooId!!)) != null)
         val barId = db.customerCreate(customerBar); assert(barId != null)
@@ -101,9 +98,7 @@ class LibeuFinApiTest {
 
     // Testing the creation of bank transactions.
     @Test
-    fun postTransactionsTest() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun postTransactionsTest() = setup { db, ctx -> 
         // foo account
         val fooId = db.customerCreate(customerFoo);
         assert(fooId != null)
@@ -185,9 +180,7 @@ class LibeuFinApiTest {
     }
 
     @Test
-    fun passwordChangeTest() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun passwordChangeTest() = setup { db, ctx -> 
         assert(db.customerCreate(customerFoo) != null)
         testApplication {
             application {
@@ -219,9 +212,7 @@ class LibeuFinApiTest {
         }
     }
     @Test
-    fun tokenDeletionTest() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun tokenDeletionTest() = setup { db, ctx -> 
         assert(db.customerCreate(customerFoo) != null)
         val token = ByteArray(32)
         Random.nextBytes(token)
@@ -269,9 +260,7 @@ class LibeuFinApiTest {
     }
 
     @Test
-    fun publicAccountsTest() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun publicAccountsTest() = setup { db, ctx -> 
         testApplication {
             application {
                 corebankWebApp(db, ctx)
@@ -305,9 +294,7 @@ class LibeuFinApiTest {
     }
     // Creating token with "forever" duration.
     @Test
-    fun tokenForeverTest() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun tokenForeverTest() = setup { db, ctx -> 
         assert(db.customerCreate(customerFoo) != null)
         testApplication {
             application {
@@ -330,9 +317,7 @@ class LibeuFinApiTest {
 
     // Testing that too big or invalid durations fail the request.
     @Test
-    fun tokenInvalidDurationTest() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun tokenInvalidDurationTest() = setup { db, ctx -> 
         assert(db.customerCreate(customerFoo) != null)
         testApplication {
             application {
@@ -369,9 +354,7 @@ class LibeuFinApiTest {
     }
     // Checking the POST /token handling.
     @Test
-    fun tokenTest() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun tokenTest() = setup { db, ctx -> 
         assert(db.customerCreate(customerFoo) != null)
         testApplication {
             application {
@@ -441,10 +424,8 @@ class LibeuFinApiTest {
      * to show customers their status.
      */
     @Test
-    fun getAccountTest() {
+    fun getAccountTest() = setup { db, ctx -> 
         // Artificially insert a customer and bank account in the database.
-        val db = initDb()
-        val ctx = getTestContext()
         val customerRowId = db.customerCreate(
             Customer(
                 "foo",
@@ -508,10 +489,8 @@ class LibeuFinApiTest {
      * Testing the account creation and its idempotency
      */
     @Test
-    fun createAccountTest() {
+    fun createAccountTest() = setup { db, ctx -> 
         testApplication {
-            val db = initDb()
-            val ctx = getTestContext()
             val ibanPayto = genIbanPaytoUri()
             application {
                 corebankWebApp(db, ctx)
@@ -552,10 +531,8 @@ class LibeuFinApiTest {
      * Testing the account creation and its idempotency
      */
     @Test
-    fun createTwoAccountsTest() {
+    fun createTwoAccountsTest() = setup { db, ctx -> 
         testApplication {
-            val db = initDb()
-            val ctx = getTestContext()
             application {
                 corebankWebApp(db, ctx)
             }
@@ -591,12 +568,8 @@ class LibeuFinApiTest {
      * Test admin-only account creation
      */
     @Test
-    fun createAccountRestrictedTest() {
+    fun createAccountRestrictedTest() = setup(restrictRegistration = true) { db, ctx -> 
         testApplication {
-            val db = initDb()
-            // For this test, we restrict registrations
-            val ctx = getTestContext(restrictRegistration = true)
-
             application {
                 corebankWebApp(db, ctx)
             }
@@ -647,9 +620,7 @@ class LibeuFinApiTest {
      * Tests DELETE /accounts/foo
      */
     @Test
-    fun deleteAccount() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun deleteAccount() = setup { db, ctx -> 
         val adminCustomer = Customer(
             "admin",
             CryptoUtil.hashpw("pass"),
@@ -714,9 +685,7 @@ class LibeuFinApiTest {
      * Tests reconfiguration of account data.
      */
     @Test
-    fun accountReconfig() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun accountReconfig() = setup { db, ctx -> 
         testApplication {
             application {
                 corebankWebApp(db, ctx)
@@ -779,9 +748,7 @@ class LibeuFinApiTest {
      * Tests the GET /accounts endpoint.
      */
     @Test
-    fun getAccountsList() {
-        val db = initDb()
-        val ctx = getTestContext()
+    fun getAccountsList() = setup { db, ctx -> 
         val adminCustomer = Customer(
             "admin",
             CryptoUtil.hashpw("pass"),
