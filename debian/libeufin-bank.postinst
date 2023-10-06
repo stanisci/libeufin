@@ -18,8 +18,8 @@ if [ "$1" = "purge" ]; then
         fi
 fi
 libeufin_bank_home=/var/lib/libeufin-bank
-bank_user=bank
-bank_group=bank
+bank_user=libeufin-bank
+bank_group=libeufin-bank
 
 . /usr/share/debconf/confmodule
 
