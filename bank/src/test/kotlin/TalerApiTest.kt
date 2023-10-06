@@ -222,6 +222,30 @@ class TalerApiTest {
             )
         )
 
+        suspend fun HttpResponse.assertHistory(size: Int) {
+            assertOk()
+            val txt = this.bodyAsText()
+            val history = Json.decodeFromString<IncomingHistory>(txt)
+            val params = getHistoryParams(this.call.request.url.parameters)
+       
+            // testing the size is like expected.
+            assert(history.incoming_transactions.size == size) {
+                println("incoming_transactions has wrong size: ${history.incoming_transactions.size}")
+                println("Response was: ${txt}")
+            }
+            if (params.delta < 0) {
+                // testing that the first row_id is at most the 'start' query param.
+                assert(history.incoming_transactions[0].row_id <= params.start)
+                // testing that the row_id decreases.
+                assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
+            } else {
+                // testing that the first row_id is at least the 'start' query param.
+                assert(history.incoming_transactions[0].row_id >= params.start)
+                // testing that the row_id increases.
+                assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+            }
+        }
+
         testApplication {
             application {
                 corebankWebApp(db, ctx)
@@ -250,34 +274,22 @@ class TalerApiTest {
             // Check ignore bogus subject
             client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=7") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
-                assertEquals(5, j.incoming_transactions.size)
-            }
+            }.assertHistory(5)
            
             // Check skip bogus subject
             client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=5") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
-                assertEquals(5, j.incoming_transactions.size)
-            }
+            }.assertHistory(5)
             
             // Check no useless polling
             client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&start=20&long_poll_ms=6000000") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
-                assertEquals(5, j.incoming_transactions.size)
-            }
+            }.assertHistory(5)
 
             // Check polling end
             client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=60") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
-                assertEquals(5, j.incoming_transactions.size)
-            }
+            }.assertHistory(5)
 
             // Check polling succedd
             runBlocking {
@@ -287,10 +299,7 @@ class TalerApiTest {
                 }
                 client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&long_poll_ms=6000000") {
                     basicAuth("bar", "secret")
-                }.assertOk().run {
-                    val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
-                    assertEquals(6, j.incoming_transactions.size)
-                }
+                }.assertHistory(6)
             }
 
             // Check polling timeout
@@ -301,10 +310,7 @@ class TalerApiTest {
                 }
                 client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=8&long_poll_ms=300") {
                     basicAuth("bar", "secret")
-                }.assertOk().run {
-                    val j: IncomingHistory = Json.decodeFromString(this.bodyAsText())
-                    assertEquals(7, j.incoming_transactions.size)
-                }
+                }.assertHistory(7)
             }
 
             // Testing ranges.
@@ -315,36 +321,12 @@ class TalerApiTest {
             // forward range:
             client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=10&start=30") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val txt = this.bodyAsText()
-                val history = Json.decodeFromString<IncomingHistory>(txt)
-                // testing the size is like expected.
-                assert(history.incoming_transactions.size == 10) {
-                    println("incoming_transaction has wrong size: ${history.incoming_transactions.size}")
-                    println("Response was: ${txt}")
-                }
-                // testing that the first row_id is at least the 'start' query param.
-                assert(history.incoming_transactions[0].row_id >= 30)
-                // testing that the row_id increases.
-                assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
-            }
+            }.assertHistory(10)
 
             // backward range:
             client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-10&start=300") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val txt = this.bodyAsText()
-                val history = Json.decodeFromString<IncomingHistory>(txt)
-                // testing the size is like expected.
-                assert(history.incoming_transactions.size == 10) {
-                    println("incoming_transaction has wrong size: ${history.incoming_transactions.size}")
-                    println("Response was: ${txt}")
-                }
-                // testing that the first row_id is at most the 'start' query param.
-                assert(history.incoming_transactions[0].row_id <= 300)
-                // testing that the row_id decreases.
-                assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
-            } 
+            }.assertHistory(10)
         }
     }
 
@@ -362,6 +344,30 @@ class TalerApiTest {
                 TalerAmount(1000000, 0, "KUDOS")
             )
         )
+
+        suspend fun HttpResponse.assertHistory(size: Int) {
+            assertOk()
+            val txt = this.bodyAsText()
+            val history = Json.decodeFromString<OutgoingHistory>(txt)
+            val params = getHistoryParams(this.call.request.url.parameters)
+       
+            // testing the size is like expected.
+            assert(history.outgoing_transactions.size == size) {
+                println("outgoing_transactions has wrong size: ${history.outgoing_transactions.size}")
+                println("Response was: ${txt}")
+            }
+            if (params.delta < 0) {
+                // testing that the first row_id is at most the 'start' query param.
+                assert(history.outgoing_transactions[0].row_id <= params.start)
+                // testing that the row_id decreases.
+                assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
+            } else {
+                // testing that the first row_id is at least the 'start' query param.
+                assert(history.outgoing_transactions[0].row_id >= params.start)
+                // testing that the row_id increases.
+                assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+            }
+        }
 
         testApplication {
             application {
@@ -391,34 +397,22 @@ class TalerApiTest {
             // Check ignore bogus subject
             client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=7") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
-                assertEquals(5, j.outgoing_transactions.size)
-            }
+            }.assertHistory(5)
            
             // Check skip bogus subject
             client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=5") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
-                assertEquals(5, j.outgoing_transactions.size)
-            }
+            }.assertHistory(5)
 
             // Check no useless polling
             client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&start=20&long_poll_ms=6000000") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
-                assertEquals(5, j.outgoing_transactions.size)
-            }
+            }.assertHistory(5)
 
             // Check polling end
             client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=6&long_poll_ms=60") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
-                assertEquals(5, j.outgoing_transactions.size)
-            }
+            }.assertHistory(5)
 
             // Check polling succedd
             runBlocking {
@@ -428,10 +422,7 @@ class TalerApiTest {
                 }
                 client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&long_poll_ms=6000000") {
                     basicAuth("bar", "secret")
-                }.assertOk().run {
-                    val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
-                    assertEquals(6, j.outgoing_transactions.size)
-                }
+                }.assertHistory(6)
             }
 
             // Check polling timeout
@@ -442,10 +433,7 @@ class TalerApiTest {
                 }
                 client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=8&long_poll_ms=300") {
                     basicAuth("bar", "secret")
-                }.assertOk().run {
-                    val j: OutgoingHistory = Json.decodeFromString(this.bodyAsText())
-                    assertEquals(7, j.outgoing_transactions.size)
-                }
+                }.assertHistory(7)
             }
 
             // Testing ranges.
@@ -455,36 +443,12 @@ class TalerApiTest {
             // forward range:
             client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=10&start=30") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val txt = this.bodyAsText()
-                val history = Json.decodeFromString<OutgoingHistory>(txt)
-                // testing the size is like expected.
-                assert(history.outgoing_transactions.size == 10) {
-                    println("outgoing_transactions has wrong size: ${history.outgoing_transactions.size}")
-                    println("Response was: ${txt}")
-                }
-                // testing that the first row_id is at least the 'start' query param.
-                assert(history.outgoing_transactions[0].row_id >= 30)
-                // testing that the row_id increases.
-                assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
-            }
+            }.assertHistory(10)
 
             // backward range:
             client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-10&start=300") {
                 basicAuth("bar", "secret")
-            }.assertOk().run {
-                val txt = this.bodyAsText()
-                val history = Json.decodeFromString<OutgoingHistory>(txt)
-                // testing the size is like expected.
-                assert(history.outgoing_transactions.size == 10) {
-                    println("outgoing_transactions has wrong size: ${history.outgoing_transactions.size}")
-                    println("Response was: ${txt}")
-                }
-                // testing that the first row_id is at most the 'start' query param.
-                assert(history.outgoing_transactions[0].row_id <= 300)
-                // testing that the row_id decreases.
-                assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
-            } 
+            }.assertHistory(10)
         }
     }
 

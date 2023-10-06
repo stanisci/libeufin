@@ -122,11 +122,11 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
 
     suspend fun <T> historyEndpoint(call: ApplicationCall, direction: TransactionDirection, reduce: (List<T>, String) -> Any, map: (BankAccountTransaction) -> T?) {
         call.authCheck(TokenScope.readonly, true)
-        val params = getHistoryParams(call.request)
+        val params = getHistoryParams(call.request.queryParameters)
         val bankAccount = call.bankAccount()
         if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
 
-        val items = bankTransactionPoolHistory(db, params, bankAccount.expectRowId(), direction, map);
+        val items = db.bankTransactionPoolHistory(params, bankAccount.expectRowId(), direction, map);
     
         if (items.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)

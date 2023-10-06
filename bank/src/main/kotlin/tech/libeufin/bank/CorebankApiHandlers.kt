@@ -500,7 +500,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
         val resourceName = call.getResourceName("USERNAME")
         if (!resourceName.canI(c, withAdmin = true)) throw forbidden()
-        val historyParams = getHistoryParams(call.request)
+        val historyParams = getHistoryParams(call.request.queryParameters)
         val resourceCustomer = db.customerGetFromLogin(resourceName) ?: throw notFound(
             hint = "Customer '$resourceName' not found in the database",
             talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.

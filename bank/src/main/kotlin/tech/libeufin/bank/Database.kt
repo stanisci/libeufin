@@ -130,7 +130,7 @@ fun resetDatabaseTables(dbConfig: String, sqlDir: String) {
     dbConn.execSQLUpdate(sqlDrop)
 }
 
-class Database(private val dbConfig: String, internal val bankCurrency: String) {
+class Database(private val dbConfig: String, private val bankCurrency: String) {
     private var dbConn: PgConnection? = null
     private var dbCtr: Int = 0
     private val preparedStatements: MutableMap<String, PreparedStatement> = mutableMapOf()
@@ -813,6 +813,142 @@ class Database(private val dbConfig: String, internal val bankCurrency: String) 
         }
     }
 
+    suspend fun <T> bankTransactionPoolHistory(
+        params: HistoryParams, 
+        bankAccountId: Long, 
+        direction: TransactionDirection,
+        map: (BankAccountTransaction) -> T?
+    ): List<T> {
+        val conn = conn() ?: throw internalServerError("DB connection down");
+        val channel = "${direction.name}_$bankAccountId";
+        var start = params.start
+        var delta = params.delta
+        var poll_ms = params.poll_ms;
+
+        val (cmpOp, orderBy) = if (delta < 0) Pair("<", "DESC") else Pair(">", "ASC")
+        val stmt = conn.prepareStatement("""
+            SELECT 
+                creditor_payto_uri
+                ,creditor_name
+                ,debtor_payto_uri
+                ,debtor_name
+                ,subject
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,transaction_date
+                ,account_servicer_reference
+                ,payment_information_id
+                ,end_to_end_id
+                ,bank_account_id
+                ,bank_transaction_id
+            FROM bank_account_transactions
+            WHERE bank_transaction_id ${cmpOp} ? 
+                AND bank_account_id=?
+                AND direction=?::direction_enum
+            ORDER BY bank_transaction_id ${orderBy}
+            LIMIT ?
+        """)
+
+        // If going backward with a starting point, it is useless to poll
+        if (delta < 0 && start != Long.MAX_VALUE) {
+            poll_ms = 0;
+        }
+
+        // Only start expensive listening if we intend to poll
+        if (poll_ms > 0) {
+            conn.execSQLUpdate("LISTEN $channel");
+        }
+
+        val items = mutableListOf<T>()
+
+        fun bankTransactionGetHistory(): List<BankAccountTransaction> {
+            stmt.setLong(1, start)
+            stmt.setLong(2, bankAccountId)
+            stmt.setString(3, direction.name)
+            stmt.setLong(4, abs(delta))
+            val rs = stmt.executeQuery()
+            rs.use {
+                val ret = mutableListOf<BankAccountTransaction>()
+                if (!it.next()) return ret
+                do {
+                    ret.add(
+                        BankAccountTransaction(
+                            creditorPaytoUri = it.getString("creditor_payto_uri"),
+                            creditorName = it.getString("creditor_name"),
+                            debtorPaytoUri = it.getString("debtor_payto_uri"),
+                            debtorName = it.getString("debtor_name"),
+                            amount = TalerAmount(
+                                it.getLong("amount_val"),
+                                it.getInt("amount_frac"),
+                                getCurrency()
+                            ),
+                            accountServicerReference = it.getString("account_servicer_reference"),
+                            endToEndId = it.getString("end_to_end_id"),
+                            direction = direction,
+                            bankAccountId = it.getLong("bank_account_id"),
+                            paymentInformationId = it.getString("payment_information_id"),
+                            subject = it.getString("subject"),
+                            transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
+                            dbRowId = it.getLong("bank_transaction_id")
+                    ))
+                } while (it.next())
+                return ret
+            }
+        }
+
+        fun loadBankHistory() {
+            while (delta != 0L) {
+                val history = bankTransactionGetHistory()
+                if (history.isEmpty())
+                    break;
+                history.forEach {
+                    val item = map(it);
+                    // Advance cursor
+                    start = it.expectRowId()
+        
+                    if (item != null) {
+                        items.add(item)
+                        // Reduce delta
+                        if (delta < 0) delta++ else delta--;
+                    }
+                }
+            }
+        }
+
+        loadBankHistory()
+
+        // Long polling
+        while (delta != 0L && poll_ms > 0) {
+            var remaining = abs(delta);
+            do {
+                val pollStart = System.currentTimeMillis()
+                conn.getNotifications(poll_ms.toInt()).forEach {
+                    val id = it.parameter.toLong()
+                    val new = when {
+                        params.start == Long.MAX_VALUE -> true
+                        delta < 0 -> id < start
+                        else -> id > start
+                    }
+                    if (new) remaining -= 1
+                }
+                val pollEnd = System.currentTimeMillis()
+                poll_ms -= pollEnd - pollStart
+            } while (poll_ms > 0 && remaining > 0L)
+
+            // If going backward without a starting point, we reset loading progress
+            if (params.start == Long.MAX_VALUE) {
+                start = params.start
+                delta = params.delta
+                items.clear()
+            }
+            loadBankHistory()
+        }
+
+        conn.execSQLUpdate("UNLISTEN $channel");
+
+        return items.toList();
+    }
+
     /**
      * The following function returns the list of transactions, according
      * to the history parameters.  The parameters take at least the 'start'
@@ -820,11 +956,6 @@ class Database(private val dbConfig: String, internal val bankCurrency: String) 
      * moment, only the TWG uses the direction, to provide the /incoming
      * and /outgoing endpoints.
      */
-    // Helper type to collect the history parameters.
-    private data class HistoryParams(
-        val cmpOp: String, // < or >
-        val orderBy: String // ASC or DESC
-    )
     fun bankTransactionGetHistory(
         start: Long,
         delta: Long,
@@ -832,9 +963,7 @@ class Database(private val dbConfig: String, internal val bankCurrency: String) 
         withDirection: TransactionDirection? = null
     ): List<BankAccountTransaction> {
         reconnect()
-        val ops = if (delta < 0)
-            HistoryParams("<", "DESC") else
-                HistoryParams(">", "ASC")
+        val (cmpOp, orderBy) = if (delta < 0) Pair("<", "DESC") else Pair(">", "ASC")
         val stmt = prepare("""
             SELECT 
               creditor_payto_uri
@@ -852,10 +981,10 @@ class Database(private val dbConfig: String, internal val bankCurrency: String) 
               ,bank_account_id
               ,bank_transaction_id
             FROM bank_account_transactions
-	        WHERE bank_transaction_id ${ops.cmpOp} ? 
+	        WHERE bank_transaction_id ${cmpOp} ? 
               AND bank_account_id=?
               ${if (withDirection != null) "AND direction=?::direction_enum" else ""}
-            ORDER BY bank_transaction_id ${ops.orderBy}
+            ORDER BY bank_transaction_id ${orderBy}
             LIMIT ?
         """)
         stmt.setLong(1, start)
@@ -1371,143 +1500,4 @@ class Database(private val dbConfig: String, internal val bankCurrency: String) 
             )
         }
     }
-}
-
-// TODO perf, merge with Database to reuse connection and prepared statement
-suspend fun <T> bankTransactionPoolHistory(
-    db: Database, 
-    params: HistoryParams, 
-    bankAccountId: Long, 
-    direction: TransactionDirection,
-    map: (BankAccountTransaction) -> T?
-): List<T> {
-    val conn = db.conn() ?: throw internalServerError("DB connection down");
-    val channel = "${direction.name}_$bankAccountId";
-    var start = params.start
-    var delta = params.delta
-    var poll_ms = params.poll_ms;
-
-    val (cmpOp, orderBy) = if (delta < 0) Pair("<", "DESC") else Pair(">", "ASC")
-    val stmt = conn.prepareStatement("""
-        SELECT 
-            creditor_payto_uri
-            ,creditor_name
-            ,debtor_payto_uri
-            ,debtor_name
-            ,subject
-            ,(amount).val AS amount_val
-            ,(amount).frac AS amount_frac
-            ,transaction_date
-            ,account_servicer_reference
-            ,payment_information_id
-            ,end_to_end_id
-            ,bank_account_id
-            ,bank_transaction_id
-        FROM bank_account_transactions
-        WHERE bank_transaction_id ${cmpOp} ? 
-            AND bank_account_id=?
-            AND direction=?::direction_enum
-        ORDER BY bank_transaction_id ${orderBy}
-        LIMIT ?
-    """)
-
-    // If going backward with a starting point, it is useless to poll
-    if (delta < 0 && start != Long.MAX_VALUE) {
-        poll_ms = 0;
-    }
-
-    // Only start expensive listening if we intend to poll
-    if (poll_ms > 0) {
-        conn.execSQLUpdate("LISTEN $channel");
-    }
-
-    val items = mutableListOf<T>()
-
-    fun bankTransactionGetHistory(): List<BankAccountTransaction> {
-        stmt.setLong(1, start)
-        stmt.setLong(2, bankAccountId)
-        stmt.setString(3, direction.name)
-        stmt.setLong(4, abs(delta))
-        val rs = stmt.executeQuery()
-        rs.use {
-            val ret = mutableListOf<BankAccountTransaction>()
-            if (!it.next()) return ret
-            do {
-                ret.add(
-                    BankAccountTransaction(
-                        creditorPaytoUri = it.getString("creditor_payto_uri"),
-                        creditorName = it.getString("creditor_name"),
-                        debtorPaytoUri = it.getString("debtor_payto_uri"),
-                        debtorName = it.getString("debtor_name"),
-                        amount = TalerAmount(
-                            it.getLong("amount_val"),
-                            it.getInt("amount_frac"),
-                            db.bankCurrency
-                        ),
-                        accountServicerReference = it.getString("account_servicer_reference"),
-                        endToEndId = it.getString("end_to_end_id"),
-                        direction = direction,
-                        bankAccountId = it.getLong("bank_account_id"),
-                        paymentInformationId = it.getString("payment_information_id"),
-                        subject = it.getString("subject"),
-                        transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
-                        dbRowId = it.getLong("bank_transaction_id")
-                ))
-            } while (it.next())
-            return ret
-        }
-    }
-
-    fun loadBankHistory() {
-        while (delta != 0L) {
-            val history = bankTransactionGetHistory()
-            if (history.isEmpty())
-                break;
-            history.forEach {
-                val item = map(it);
-                // Advance cursor
-                start = it.expectRowId()
-    
-                if (item != null) {
-                    items.add(item)
-                    // Reduce delta
-                    if (delta < 0) delta++ else delta--;
-                }
-            }
-        }
-    }
-
-    loadBankHistory()
-
-    // Long polling
-    while (delta != 0L && poll_ms > 0) {
-        var remaining = abs(delta);
-        do {
-            val pollStart = System.currentTimeMillis()
-            conn.getNotifications(poll_ms.toInt()).forEach {
-                val id = it.parameter.toLong()
-                val new = when {
-                    params.start == Long.MAX_VALUE -> true
-                    delta < 0 -> id < start
-                    else -> id > start
-                }
-                if (new) remaining -= 1
-            }
-            val pollEnd = System.currentTimeMillis()
-            poll_ms -= pollEnd - pollStart
-        } while (poll_ms > 0 && remaining > 0L)
-
-        // If going backward without a starting point, we reset loading progress
-        if (params.start == Long.MAX_VALUE) {
-            start = params.start
-            delta = params.delta
-            items.clear()
-        }
-        loadBankHistory()
-    }
-
-    conn.execSQLUpdate("UNLISTEN $channel");
-    conn.close()
-
-    return items.toList();
 }

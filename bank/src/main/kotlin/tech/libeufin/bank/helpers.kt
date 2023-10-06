@@ -372,9 +372,9 @@ data class HistoryParams(
  * Extracts the query parameters from "history-like" endpoints,
  * providing the defaults according to the API specification.
  */
-fun getHistoryParams(req: ApplicationRequest): HistoryParams {
+fun getHistoryParams(params: Parameters): HistoryParams {
     val deltaParam: String =
-        req.queryParameters["delta"] ?: throw MissingRequestParameterException(parameterName = "delta")
+        params["delta"] ?: throw MissingRequestParameterException(parameterName = "delta")
     val delta: Long = try {
         deltaParam.toLong()
     } catch (e: Exception) {
@@ -382,7 +382,7 @@ fun getHistoryParams(req: ApplicationRequest): HistoryParams {
         throw badRequest("Param 'delta' not a number")
     }
     // Note: minimum 'start' is zero, as database IDs start from 1.
-    val start: Long = when (val param = req.queryParameters["start"]) {
+    val start: Long = when (val param = params["start"]) {
         null -> if (delta >= 0) 0L else Long.MAX_VALUE
         else -> try {
             param.toLong()
@@ -391,7 +391,7 @@ fun getHistoryParams(req: ApplicationRequest): HistoryParams {
             throw badRequest("Param 'start' not a number")
         }
     }
-    val poll_ms: Long = when (val param = req.queryParameters["long_poll_ms"]) {
+    val poll_ms: Long = when (val param = params["long_poll_ms"]) {
         null -> 0
         else -> try {
             param.toLong()
