@@ -20,6 +20,7 @@
 import java.io.File
 import java.nio.file.Paths
 import kotlin.io.path.Path
+import kotlin.io.path.isReadable
 import kotlin.io.path.listDirectoryEntries
 
 private data class Entry(val value: String)
@@ -50,14 +51,14 @@ data class ConfigSource(
  * @param configSource information about where to load configuration defaults from
  */
 class TalerConfig(
-    private val configSource: ConfigSource
+    private val configSource: ConfigSource,
 ) {
     private val sectionMap: MutableMap<String, Section> = mutableMapOf()
 
     private val componentName = configSource.componentName
     private val installPathBinary = configSource.installPathBinary
 
-    private fun internalLoadFromString(s: String) {
+    private fun internalLoadFromString(s: String, sourceFilename: String?) {
         val lines = s.lines()
         var lineNum = 0
         var currentSection: String? = null
@@ -72,7 +73,38 @@ class TalerConfig(
 
             val directiveMatch = reDirective.matchEntire(line)
             if (directiveMatch != null) {
-                throw NotImplementedError("config directives are not implemented yet")
+                if (sourceFilename == null) {
+                    throw TalerConfigError("Directives are only supported when loading from file")
+                }
+                val directiveName = directiveMatch.groups[1]!!.value.lowercase()
+                val directiveArg = directiveMatch.groups[2]!!.value
+                when (directiveName) {
+                    "inline" -> {
+                        val innerFilename = normalizeInlineFilename(sourceFilename, directiveArg.trim())
+                        this.loadFromFilename(innerFilename)
+                    }
+
+                    "inline-matching" -> {
+                        val glob = directiveArg.trim()
+                        this.loadFromGlob(sourceFilename, glob)
+                    }
+
+                    "inline-secret" -> {
+                        val arg = directiveArg.trim()
+                        val sp = arg.split(" ")
+                        if (sp.size != 2) {
+                            throw TalerConfigError("invalid configuration, @inline-secret@ directive requires exactly two arguments")
+                        }
+                        val sectionName = sp[0]
+                        val secretFilename = normalizeInlineFilename(sourceFilename, sp[1])
+                        loadSecret(sectionName, secretFilename)
+                    }
+
+                    else -> {
+                        throw TalerConfigError("unsupported directive '$directiveName'")
+                    }
+                }
+                continue
             }
 
             val secMatch = reSection.matchEntire(line)
@@ -98,7 +130,41 @@ class TalerConfig(
                 )
                 continue
             }
-            throw TalerConfigError("expected section header, option assignment or directive in line $lineNum")
+            throw TalerConfigError("expected section header, option assignment or directive in line $lineNum file ${sourceFilename ?: "<input>"}")
+        }
+    }
+
+    private fun loadFromGlob(parentFilename: String, glob: String) {
+        val fullFileglob: String
+        val parentDir = Path(parentFilename).parent!!.toString()
+        if (glob.startsWith("/")) {
+            fullFileglob = glob
+        } else {
+            fullFileglob = Paths.get(parentDir, glob).toString()
+        }
+
+        val head = Path(fullFileglob).parent.toString()
+        val tail = Path(fullFileglob).fileName.toString()
+
+        // FIXME: Check that the Kotlin glob matches the glob from our spec
+        for (entry in Path(head).listDirectoryEntries(tail)) {
+            loadFromFilename(entry.toString())
+        }
+    }
+
+    private fun normalizeInlineFilename(parentFilename: String, f: String): String {
+        if (f[0] == '/') {
+            return f
+        }
+        val parentDir = Path(parentFilename).parent!!.toString()
+        return Paths.get(parentDir, f).toRealPath().toString()
+    }
+
+    private fun loadSecret(sectionName: String, secretFilename: String) {
+        if (!Path(secretFilename).isReadable()) {
+            logger.warn("unable to read secrets from $secretFilename")
+        } else {
+            this.loadFromFilename(secretFilename)
         }
     }
 
@@ -114,7 +180,7 @@ class TalerConfig(
     }
 
     fun loadFromString(s: String) {
-        internalLoadFromString(s)
+        internalLoadFromString(s, null)
     }
 
     private fun lookupEntry(section: String, option: String): Entry? {
@@ -214,7 +280,7 @@ class TalerConfig(
     fun loadFromFilename(filename: String) {
         val f = File(filename)
         val contents = f.readText()
-        loadFromString(contents)
+        internalLoadFromString(contents, filename)
     }
 
     private fun loadDefaultsFromDir(dirname: String) {
@@ -237,7 +303,7 @@ class TalerConfig(
         loadDefaultsFromDir(baseConfigDir)
     }
 
-    fun variableLookup(x: String, recursionDepth: Int = 0): String? {
+    private fun variableLookup(x: String, recursionDepth: Int = 0): String? {
         val pathRes = this.lookupValueString("PATHS", x)
         if (pathRes != null) {
             return pathsub(pathRes, recursionDepth + 1)
@@ -265,7 +331,54 @@ class TalerConfig(
             }
             if (l + 1 < s.length && s[l + 1] == '{') {
                 // ${var}
-                throw NotImplementedError("bracketed variables not yet supported")
+                var depth = 1
+                val start = l
+                var p = start + 2;
+                var hasDefault = false
+                var insideNamePath = true
+                // Find end of the ${...} expression
+                while (p < s.length) {
+                    if (s[p] == '}') {
+                        insideNamePath = false
+                        depth--
+                    } else if (s.length > p + 1 && s[p] == '$' && s[p + 1] == '{') {
+                        depth++
+                        insideNamePath = false
+                    } else if (s.length > p + 1 && insideNamePath && s[p] == ':' && s[p + 1] == '-') {
+                        hasDefault = true
+                    }
+                    p++
+                    if (depth == 0) {
+                        break
+                    }
+                }
+                if (depth == 0) {
+                    val inner = s.substring(start + 2, p - 1)
+                    val varName: String
+                    val varDefault: String?
+                    if (hasDefault) {
+                        val res = inner.split(":-", limit = 2)
+                        varName = res[0]
+                        varDefault = res[1]
+                    } else {
+                        varName = inner
+                        varDefault = null
+                    }
+                    val r = variableLookup(varName, recursionDepth + 1)
+                    if (r != null) {
+                        result.append(r)
+                        l = p
+                        continue
+                    } else if (varDefault != null) {
+                        val resolvedDefault = pathsub(varDefault, recursionDepth + 1)
+                        result.append(resolvedDefault)
+                        l = p
+                        continue
+                    } else {
+                        throw TalerConfigError("malformed variable expression can't resolve variable '$varName'")
+                    }
+                }
+                throw TalerConfigError("malformed variable expression (unbalanced)")
             } else {
                 // $var
                 var varEnd = l + 1

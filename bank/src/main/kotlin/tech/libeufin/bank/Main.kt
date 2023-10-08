@@ -24,23 +24,23 @@ import ConfigSource
 import TalerConfig
 import TalerConfigError
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import io.ktor.http.*
-import io.ktor.server.application.*
-import io.ktor.server.plugins.*
-import io.ktor.server.plugins.requestvalidation.*
-import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.ktor.server.plugins.*
 import io.ktor.server.plugins.callloging.*
-import kotlinx.serialization.*
+import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
+import io.ktor.server.plugins.requestvalidation.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -49,6 +49,8 @@ import io.ktor.utils.io.*
 import io.ktor.utils.io.jvm.javaio.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
@@ -58,7 +60,8 @@ import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
-import tech.libeufin.util.*
+import tech.libeufin.util.CryptoUtil
+import tech.libeufin.util.getVersion
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -116,7 +119,7 @@ data class BankApplicationContext(
     val suggestedWithdrawalExchange: String?,
     /**
      * URL where the user should be redirected to complete the captcha.
-     * It can contain the substring "{woid}" that is going to be replaced 
+     * It can contain the substring "{woid}" that is going to be replaced
      * with the withdrawal operation id and should point where the bank
      * SPA is located.
      */
@@ -143,7 +146,8 @@ object TalerProtocolTimestampSerializer : KSerializer<TalerProtocolTimestamp> {
     }
 
     override fun deserialize(decoder: Decoder): TalerProtocolTimestamp {
-        val jsonInput = decoder as? JsonDecoder ?: throw internalServerError("TalerProtocolTimestamp had no JsonDecoder")
+        val jsonInput =
+            decoder as? JsonDecoder ?: throw internalServerError("TalerProtocolTimestamp had no JsonDecoder")
         val json = try {
             jsonInput.decodeJsonElement().jsonObject
         } catch (e: Exception) {
@@ -441,11 +445,25 @@ fun durationFromPretty(s: String): Long {
         }
         val n = currentNum.toInt(10)
         durationUs += when (c) {
-            's' -> { n * 1000000 }
-            'm' -> { n * 1000000 * 60 }
-            'h' -> { n * 1000000 * 60 * 60 }
-            'd' -> { n * 1000000 * 60 * 60 * 24 }
-            else -> { throw Error("invalid duration, unsupported unit '$c'") }
+            's' -> {
+                n * 1000000
+            }
+
+            'm' -> {
+                n * 1000000 * 60
+            }
+
+            'h' -> {
+                n * 1000000 * 60 * 60
+            }
+
+            'd' -> {
+                n * 1000000 * 60 * 60 * 24
+            }
+
+            else -> {
+                throw Error("invalid duration, unsupported unit '$c'")
+            }
         }
         parsingNum = true
         currentNum = ""
@@ -525,6 +543,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         "--config", "-c",
         help = "set the configuration file"
     )
+
     init {
         context {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
@@ -565,6 +584,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     )
     private val account by argument("account")
     private val password by argument("password")
+
     init {
         context {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
@@ -590,11 +610,12 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     }
 }
 
-class BankConfig : CliktCommand("Dump the configuration", name = "debug-config-dump") {
+class BankConfigDump : CliktCommand("Dump the configuration", name = "dump") {
     private val configFile by option(
         "--config", "-c",
         help = "set the configuration file"
     )
+
     init {
         context {
             helpFormatter = CliktHelpFormatter(showDefaultValues = true)
@@ -607,6 +628,77 @@ class BankConfig : CliktCommand("Dump the configuration", name = "debug-config-d
         config.load(this.configFile)
         println(config.stringify())
     }
+}
+
+class BankConfigPathsub : CliktCommand("Substitute variables in a path", name = "pathsub") {
+    private val configFile by option(
+        "--config", "-c",
+        help = "set the configuration file"
+    )
+
+    private val pathExpr by argument()
+
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+
+    override fun run() {
+        val config = TalerConfig(BANK_CONFIG_SOURCE)
+        config.load(this.configFile)
+        println(config.pathsub(pathExpr))
+    }
+}
+
+class BankConfigGet : CliktCommand("Lookup config value", name = "get") {
+    private val configFile by option(
+        "--config", "-c",
+        help = "set the configuration file"
+    )
+
+    private val isPath by option(
+        "--filename", "-f",
+        help = "interpret value as path with dollar-expansion"
+    ).flag()
+
+    private val sectionName by argument()
+    private val optionName by argument()
+
+
+    init {
+        context {
+            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
+        }
+    }
+
+    override fun run() {
+        val config = TalerConfig(BANK_CONFIG_SOURCE)
+        config.load(this.configFile)
+        if (isPath) {
+            val res = config.lookupValuePath(sectionName, optionName)
+            if (res == null) {
+                logger.info("value not found in config")
+                exitProcess(2)
+            }
+            println(res)
+        } else {
+            val res = config.lookupValueString(sectionName, optionName)
+            if (res == null) {
+                logger.info("value not found in config")
+                exitProcess(2)
+            }
+            println(res)
+        }
+    }
+}
+
+class BankConfig : CliktCommand("Dump the configuration", name = "config") {
+    init {
+        subcommands(BankConfigDump(), BankConfigPathsub(), BankConfigGet())
+    }
+
+    override fun run() = Unit
 }
 
 fun main(args: Array<String>) {
