@@ -319,6 +319,13 @@ class TalerConfig(
         return null
     }
 
+    /**
+     * Substitute ${...} and $... placeholders in a string
+     * with values from the PATHS section in the
+     * configuration and environment variables
+     *
+     * This substitution is typically only done for paths.
+     */
     fun pathsub(x: String, recursionDepth: Int = 0): String {
         if (recursionDepth > 128) {
             throw TalerConfigError("recursion limit in path substitution exceeded")
