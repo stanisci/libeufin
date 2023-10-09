@@ -624,9 +624,8 @@ SET
   has_debt=will_creditor_have_debt
 WHERE bank_account_id=in_creditor_account_id;
 
--- notify transactions
-PERFORM pg_notify('debit_' || in_debtor_account_id, out_debit_row_id::text);
-PERFORM pg_notify('credit_' || in_creditor_account_id, out_credit_row_id::text);
+-- notify new transaction
+PERFORM pg_notify('bank_tx', in_debtor_account_id || ' ' || in_creditor_account_id || ' ' || out_debit_row_id || ' ' || out_credit_row_id)
 
 RETURN;
 END $$;

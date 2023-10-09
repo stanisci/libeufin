@@ -33,7 +33,10 @@ import java.io.File
 import java.sql.*
 import java.time.Instant
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.*
 import com.zaxxer.hikari.*
 
 private const val DB_CTR_LIMIT = 1000000
@@ -175,6 +178,7 @@ private fun PreparedStatement.executeUpdateViolation(): Boolean {
 class Database(dbConfig: String, private val bankCurrency: String): java.io.Closeable {
     private val pgSource: PGSimpleDataSource
     private val dbPool: HikariDataSource
+    private val notifWatcher: NotificationWatcher
 
     init {
         pgSource = pgDataSource(dbConfig)
@@ -183,6 +187,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         config.connectionInitSql = "SET search_path TO libeufin_bank;"
         config.validate()
         dbPool = HikariDataSource(config);
+        notifWatcher = NotificationWatcher(pgSource)
     }
 
     override fun close() {
@@ -682,6 +687,8 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
     fun bankTransactionCreate(
         tx: BankInternalTransaction
     ): BankTransactionResult = conn { conn ->
+        // TODO register incoming transaction if creditor is taler exchange and subject is well formed else bounce
+        // TODO register outgoing transaction if debitor is taler exchange else ignore
         val stmt = conn.prepareStatement("""
             SELECT out_nx_creditor, out_nx_debtor, out_balance_insufficient
             FROM bank_wire_transfer(?,?,TEXT(?),(?,?)::taler_amount,?,TEXT(?),TEXT(?),TEXT(?))
@@ -711,10 +718,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                     logger.error("Balance insufficient")
                     BankTransactionResult.CONFLICT
                 }
-                else -> {
-                    logger.debug("New transaction ${tx.creditorAccountId} -> ${tx.debtorAccountId}")
-                    BankTransactionResult.SUCCESS
-                }    
+                else -> BankTransactionResult.SUCCESS
             }
         }
     }
@@ -794,7 +798,6 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         var start = params.start
         var delta = params.delta
         var poll_ms = params.poll_ms;
-        val channel = "${direction.name}_$bankAccountId";
         val items = mutableListOf<T>()
 
         // If going backward with a starting point, it is useless to poll
@@ -802,23 +805,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             poll_ms = 0;
         }
 
-        // TODO listening for notification is blocking a connection and postgres support a limited amount of connections
-        // TODO we should use a single connection to listen for notification and dispatch them with kotlin code
-
-        val conn: Connection; // Generic connection to close and query
-        val pg: PgConnection; // Postgres connection for notifications
-
-        // Only start expensive listening and connection creation if we intend to poll
-        if (poll_ms > 0) {
-            pg = pgSource.pgConnection()
-            conn = pg
-            pg.execSQLUpdate("LISTEN $channel");
-        } else {
-            conn = dbPool.getConnection()
-            pg = conn.unwrap(PgConnection::class.java)
-        }
-
-        conn.use {
+        dbPool.getConnection().use { conn ->
             // Prepare statement
             val (cmpOp, orderBy) = if (delta < 0) Pair("<", "DESC") else Pair(">", "ASC")
             val stmt = conn.prepareStatement("""
@@ -891,39 +878,43 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                 }
             }
 
-            loadBankHistory()
-
-            // Long polling
-            while (delta != 0L && poll_ms > 0) {
-                var remaining = abs(delta);
-                do {
-                    val pollStart = System.currentTimeMillis()
-                    pg.getNotifications(poll_ms.toInt()).forEach {
-                        val id = it.parameter.toLong()
-                        val new = when {
-                            params.start == Long.MAX_VALUE -> true
-                            delta < 0 -> id < start
-                            else -> id > start
+            // Start expensive listening process only if we intend to poll
+            if (poll_ms > 0) {
+                notifWatcher.listen(NotificationTopic(bankAccountId, direction)) { flow ->
+                    // Start buffering notification to not miss any
+                    val buffered = flow.buffer()
+                    // Initial load
+                    loadBankHistory()
+                    // Long polling while necessary
+                    while (delta != 0L && poll_ms > 0) {
+                        val pollStart = System.currentTimeMillis()
+                        withTimeoutOrNull(poll_ms) {
+                            buffered.filter {
+                                when {
+                                    params.start == Long.MAX_VALUE -> true
+                                    delta < 0 -> it.rowId < start
+                                    else -> it.rowId > start
+                                }
+                            }.take(abs(delta).toInt()).count()
                         }
-                        if (new) remaining -= 1
-                    }
-                    val pollEnd = System.currentTimeMillis()
-                    poll_ms -= pollEnd - pollStart
-                } while (poll_ms > 0 && remaining > 0L)
+                        val pollEnd = System.currentTimeMillis()
+                        poll_ms -= pollEnd - pollStart
 
-                // If going backward without a starting point, we reset loading progress
-                if (params.start == Long.MAX_VALUE) {
-                    start = params.start
-                    delta = params.delta
-                    items.clear()
+                        // If going backward without a starting point, we reset loading progress
+                        if (params.start == Long.MAX_VALUE) {
+                            start = params.start
+                            delta = params.delta
+                            items.clear()
+                        }
+                        loadBankHistory()
+                    }
                 }
+            } else {
                 loadBankHistory()
             }
-
-            // No need to unlisten or clear notifications as we close the connection when polling is used
-
-            return items.toList();
         }
+
+        return items.toList();
     }
 
     /**
@@ -1444,6 +1435,67 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                         txRowId = txRowId
                     )
                 }
+            }
+        }
+    }
+}
+
+private data class Notification(val rowId: Long)
+private data class NotificationTopic(val account: Long, val direction: TransactionDirection)
+
+private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
+    private class CountedSharedFlow(val flow: MutableSharedFlow<Notification>, var count: Int)
+
+    private val bankTxFlows = ConcurrentHashMap<NotificationTopic, CountedSharedFlow>()
+
+    init {
+        kotlin.concurrent.thread(isDaemon = true) { 
+            runBlocking {
+                while (true) {
+                    try {
+                        val conn = pgSource.pgConnection()
+                        conn.execSQLUpdate("LISTEN bank_tx")
+
+                        while (true) {
+                            conn.getNotifications().forEach {
+                                val info = it.parameter.split(' ', limit = 4).map { it.toLong() }
+                                val debtorAccount = info[0];
+                                val creditorAccount = info[1];
+                                val debitRow = info[2];
+                                val creditRow = info[3];
+                                
+                                bankTxFlows.get(NotificationTopic(debtorAccount, TransactionDirection.debit))?.run {
+                                    flow.emit(Notification(debitRow))
+                                }
+                                bankTxFlows.get(NotificationTopic(creditorAccount, TransactionDirection.credit))?.run {
+                                    flow.emit(Notification(creditRow))
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        logger.warn("notification_watcher failed: $e")
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun listen(topic: NotificationTopic, lambda: suspend (Flow<Notification>) -> Unit) {
+        // Register listener
+        val flow = bankTxFlows.compute(topic) { _, v ->
+            val tmp = v ?: CountedSharedFlow(MutableSharedFlow(), 0);
+            tmp.count++;
+            tmp
+        }!!.flow;
+
+        try {
+            lambda(flow)
+        } finally {
+            // Unregister listener
+            bankTxFlows.compute(topic) { _, v ->
+                v!!;
+                v.count--;
+                if (v.count > 0) v else null
             }
         }
     }

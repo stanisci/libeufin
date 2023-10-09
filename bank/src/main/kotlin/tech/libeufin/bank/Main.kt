@@ -566,12 +566,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val db = Database(dbConnStr, ctx.currency)
         if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
-        embeddedServer(Netty, port = servePort, configure = {
-            // Disable threads for now, the DB isn't thread safe yet.
-            connectionGroupSize = 1
-            workerGroupSize = 1
-            callGroupSize = 1
-        }) {
+        embeddedServer(Netty, port = servePort) {
             corebankWebApp(db, ctx)
         }.start(wait = true)
     }
