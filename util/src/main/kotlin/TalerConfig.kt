@@ -156,7 +156,11 @@ class TalerConfig(
         if (f[0] == '/') {
             return f
         }
-        val parentDir = Path(parentFilename).parent!!.toString()
+        val parentDirPath = Path(parentFilename).toRealPath().parent
+        if (parentDirPath == null) {
+            throw TalerConfigError("unable to normalize inline path, cannot resolve parent directory of $parentFilename")
+        }
+        val parentDir = parentDirPath.toString()
         return Paths.get(parentDir, f).toRealPath().toString()
     }
 
@@ -412,7 +416,6 @@ class TalerConfig(
             }
         }
     }
-
 
     /**
      * Determine the filename of the default configuration file.
