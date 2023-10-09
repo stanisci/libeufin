@@ -281,6 +281,10 @@ class TalerConfig(
         return outStr.toString()
     }
 
+    /**
+     * Read values into the configuration from the given entry point
+     * filename.  Defaults are *not* loaded automatically.
+     */
     fun loadFromFilename(filename: String) {
         val f = File(filename)
         val contents = f.readText()
@@ -293,6 +297,10 @@ class TalerConfig(
         }
     }
 
+    /**
+     * Load configuration defaults from the file system
+     * and populate the PATHS section based on the installation path.
+     */
     fun loadDefaults() {
         val installDir = getInstallPath()
         val baseConfigDir = Paths.get(installDir, "share/$componentName/config.d").toString()
@@ -453,6 +461,9 @@ class TalerConfig(
         return null
     }
 
+    /**
+     * Guess the path that the component was installed to.
+     */
     fun getInstallPath(): String {
         // We use the location of the libeufin-bank
         // binary to determine the installation prefix.
