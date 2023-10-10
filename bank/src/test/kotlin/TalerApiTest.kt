@@ -328,10 +328,9 @@ class TalerApiTest {
                 )
             }
 
-            // Testing ranges.
-            val mockReservePub = randShortHashCode().encoded
+            // Testing ranges. 
             repeat(300) {
-                db.bankTransactionCreate(genTx(mockReservePub)).assertSuccess()
+                db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
             }
 
             // forward range:

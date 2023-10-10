@@ -120,13 +120,17 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         return@post
     }
 
-    suspend fun <T> historyEndpoint(call: ApplicationCall, direction: TransactionDirection, reduce: (List<T>, String) -> Any, map: (BankAccountTransaction) -> T?) {
+    suspend fun <T> historyEndpoint(
+        call: ApplicationCall, 
+        reduce: (List<T>, String) -> Any, 
+        dbLambda: suspend Database.(HistoryParams, Long) -> List<T>
+    ) {
         call.authCheck(TokenScope.readonly, true)
         val params = getHistoryParams(call.request.queryParameters)
         val bankAccount = call.bankAccount()
         if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
 
-        val items = db.bankTransactionPoolHistory(params, bankAccount.expectRowId(), direction, map);
+        val items = db.dbLambda(params, bankAccount.expectRowId());
     
         if (items.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
@@ -136,45 +140,11 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
     }
 
     get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {
-        historyEndpoint(call, TransactionDirection.credit, ::IncomingHistory) {
-            try {
-                val reservePub = EddsaPublicKey(it.subject)
-                IncomingReserveTransaction(
-                    row_id = it.expectRowId(),
-                    amount = it.amount,
-                    date = TalerProtocolTimestamp(it.transactionDate),
-                    debit_account = it.debtorPaytoUri,
-                    reserve_pub = reservePub
-                )
-            } catch (e: Exception) {
-                // This should usually not happen in the first place,
-                // because transactions to the exchange without a valid
-                // reserve pub should be bounced.
-                logger.warn("Invalid incoming transaction ${it.expectRowId()}: ${it.subject}")
-                null
-            }
-        }
+        historyEndpoint(call, ::IncomingHistory, Database::exchangeIncomingPoolHistory)
     }
 
     get("/accounts/{USERNAME}/taler-wire-gateway/history/outgoing") {
-        historyEndpoint(call, TransactionDirection.debit, ::OutgoingHistory) {
-            try {
-                val split = it.subject.split(" ")
-                OutgoingTransaction(
-                    row_id = it.expectRowId(),
-                    date = TalerProtocolTimestamp(it.transactionDate),
-                    amount = it.amount,
-                    credit_account = it.creditorPaytoUri,
-                    wtid = ShortHashCode(split[0]),
-                    exchange_base_url = split[1]
-                )
-            } catch (e: Exception) {
-                // This should usually not happen in the first place,
-                // because transactions from the exchange should be well formed
-                logger.warn("Invalid outgoing transaction ${it.expectRowId()}: ${it.subject}")
-                null
-            }
-        }
+        historyEndpoint(call, ::OutgoingHistory, Database::exchangeOutgoingPoolHistory)
     }
 
     post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {
@@ -186,6 +156,8 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                 "Currency mismatch",
                 TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
             )
+        
+        // TODO check conflict in transaction
         if (db.bankTransactionCheckExists(req.reserve_pub.encoded) != null)
             throw conflict(
                 "Reserve pub. already used",

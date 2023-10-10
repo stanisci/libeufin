@@ -82,6 +82,20 @@ private fun PGSimpleDataSource.pgConnection(): PgConnection {
     return conn
 }
 
+private fun <R> PgConnection.transaction(lambda: (PgConnection) -> R): R {
+    try {
+        setAutoCommit(false);
+        val result = lambda(this)
+        commit();
+        setAutoCommit(true);
+        return result
+    } catch(e: Exception){
+        rollback();
+        setAutoCommit(true); 
+        throw e;
+    }
+}
+
 fun initializeDatabaseTables(dbConfig: String, sqlDir: String) {
     logger.info("doing DB initialization, sqldir $sqlDir, dbConfig $dbConfig")
     pgDataSource(dbConfig).pgConnection().use { conn ->
@@ -127,7 +141,11 @@ fun resetDatabaseTables(dbConfig: String, sqlDir: String) {
         }
 
         val sqlDrop = File("$sqlDir/libeufin-bank-drop.sql").readText()
+        try {
         conn.execSQLUpdate(sqlDrop)
+        } catch (e: Exception) {
+            
+        }
     }
 }
 
@@ -194,9 +212,9 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         dbPool.close()
     }
 
-    private fun <R> conn(lambda: (Connection) -> R): R {
+    private fun <R> conn(lambda: (PgConnection) -> R): R {
         val conn = dbPool.getConnection()
-        return conn.use(lambda)
+        return conn.use{ it -> lambda(it.unwrap(PgConnection::class.java)) }
     }
 
     // CUSTOMERS
@@ -687,38 +705,92 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
     fun bankTransactionCreate(
         tx: BankInternalTransaction
     ): BankTransactionResult = conn { conn ->
-        // TODO register incoming transaction if creditor is taler exchange and subject is well formed else bounce
-        // TODO register outgoing transaction if debitor is taler exchange else ignore
-        val stmt = conn.prepareStatement("""
-            SELECT out_nx_creditor, out_nx_debtor, out_balance_insufficient
-            FROM bank_wire_transfer(?,?,TEXT(?),(?,?)::taler_amount,?,TEXT(?),TEXT(?),TEXT(?))
-        """
-        )
-        stmt.setLong(1, tx.creditorAccountId)
-        stmt.setLong(2, tx.debtorAccountId)
-        stmt.setString(3, tx.subject)
-        stmt.setLong(4, tx.amount.value)
-        stmt.setInt(5, tx.amount.frac)
-        stmt.setLong(6, tx.transactionDate.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setString(7, tx.accountServicerReference)
-        stmt.setString(8, tx.paymentInformationId)
-        stmt.setString(9, tx.endToEndId)
-        stmt.executeQuery().use {
-            when {
-                !it.next() -> throw internalServerError("Bank transaction didn't properly return")
-                it.getBoolean("out_nx_debtor") -> {
-                    logger.error("No debtor account found")
-                    BankTransactionResult.NO_DEBTOR
+        conn.transaction {
+            val stmt = conn.prepareStatement("""
+                SELECT 
+                    out_nx_creditor
+                    ,out_nx_debtor
+                    ,out_balance_insufficient
+                    ,out_credit_row_id
+                    ,out_debit_row_id
+                    ,out_creditor_is_exchange
+                    ,out_debtor_is_exchange
+                FROM bank_wire_transfer(?,?,TEXT(?),(?,?)::taler_amount,?,TEXT(?),TEXT(?),TEXT(?))
+            """
+            )
+            stmt.setLong(1, tx.creditorAccountId)
+            stmt.setLong(2, tx.debtorAccountId)
+            stmt.setString(3, tx.subject)
+            stmt.setLong(4, tx.amount.value)
+            stmt.setInt(5, tx.amount.frac)
+            stmt.setLong(6, tx.transactionDate.toDbMicros() ?: throw faultyTimestampByBank())
+            stmt.setString(7, tx.accountServicerReference)
+            stmt.setString(8, tx.paymentInformationId)
+            stmt.setString(9, tx.endToEndId)
+            stmt.executeQuery().use {
+                when {
+                    !it.next() -> throw internalServerError("Bank transaction didn't properly return")
+                    it.getBoolean("out_nx_debtor") -> {
+                        logger.error("No debtor account found")
+                        BankTransactionResult.NO_DEBTOR
+                    }
+                    it.getBoolean("out_nx_creditor") -> {
+                        logger.error("No creditor account found")
+                        BankTransactionResult.NO_CREDITOR
+                    }
+                    it.getBoolean("out_balance_insufficient") -> {
+                        logger.error("Balance insufficient")
+                        BankTransactionResult.CONFLICT
+                    }
+                    else -> {
+                        if (it.getBoolean("out_creditor_is_exchange")) {
+                            // Parse subject
+                            val reservePub = try {
+                                EddsaPublicKey(tx.subject)
+                            } catch (e: Exception) {
+                                null
+                            }
+                            if (reservePub != null) {
+                                val rowId = it.getLong("out_credit_row_id")
+                                val stmt = conn.prepareStatement("""
+                                    INSERT INTO taler_exchange_incoming 
+                                        (reserve_pub, bank_transaction) 
+                                    VALUES (?, ?)
+                                """)
+                                stmt.setString(1, reservePub.encoded)
+                                stmt.setLong(2, rowId)
+                                stmt.executeUpdate()
+                                conn.execSQLUpdate("NOTIFY incoming_tx, '${"${tx.creditorAccountId} $rowId"}'")
+                            } else {
+                                // TODO bounce
+                            }
+                        } else if (it.getBoolean("out_debtor_is_exchange")) {
+                            // Parse subject
+                            val metadata = try {
+                                val split = tx.subject.split(" ", limit=2) ;
+                                Pair(ShortHashCode(split[0]), split[2])
+                            } catch (e: Exception) {
+                                null
+                            }
+                            if (metadata != null) {
+                                val rowId = it.getLong("out_debit_row_id")
+                                val stmt = conn.prepareStatement("""
+                                    INSERT INTO taler_exchange_outgoing 
+                                        (wtid, exchange_base_url, bank_transaction) 
+                                    VALUES (?, ?, ?)
+                                """)
+                                stmt.setString(1, metadata.first.encoded)
+                                stmt.setString(2, metadata.second)
+                                stmt.setLong(3, rowId)
+                                stmt.executeUpdate()
+                                conn.execSQLUpdate("NOTIFY outgoing_tx, '${"${tx.debtorAccountId} $rowId"}'")
+                            } else {
+                                // TODO log ?
+                            }
+                        }
+                        BankTransactionResult.SUCCESS
+                    }
                 }
-                it.getBoolean("out_nx_creditor") -> {
-                    logger.error("No creditor account found")
-                    BankTransactionResult.NO_CREDITOR
-                }
-                it.getBoolean("out_balance_insufficient") -> {
-                    logger.error("Balance insufficient")
-                    BankTransactionResult.CONFLICT
-                }
-                else -> BankTransactionResult.SUCCESS
             }
         }
     }
@@ -789,11 +861,12 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         }
     }
 
-    suspend fun <T> bankTransactionPoolHistory(
+    private suspend fun <T> poolHistory(
         params: HistoryParams, 
-        bankAccountId: Long, 
-        direction: TransactionDirection,
-        map: (BankAccountTransaction) -> T?
+        bankAccountId: Long,
+        listen: suspend NotificationWatcher.(Long, suspend (Flow<Notification>) -> Unit) -> Unit,
+        query: String,
+        map: (ResultSet) -> T
     ): List<T> {
         var start = params.start
         var delta = params.delta
@@ -809,85 +882,33 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             // Prepare statement
             val (cmpOp, orderBy) = if (delta < 0) Pair("<", "DESC") else Pair(">", "ASC")
             val stmt = conn.prepareStatement("""
-                SELECT 
-                    creditor_payto_uri
-                    ,creditor_name
-                    ,debtor_payto_uri
-                    ,debtor_name
-                    ,subject
-                    ,(amount).val AS amount_val
-                    ,(amount).frac AS amount_frac
-                    ,transaction_date
-                    ,account_servicer_reference
-                    ,payment_information_id
-                    ,end_to_end_id
-                    ,bank_account_id
-                    ,bank_transaction_id
-                FROM bank_account_transactions
+                $query
                 WHERE bank_transaction_id ${cmpOp} ? 
                     AND bank_account_id=?
-                    AND direction=?::direction_enum
                 ORDER BY bank_transaction_id ${orderBy}
                 LIMIT ?
             """)
             stmt.setLong(2, bankAccountId)
-            stmt.setString(3, direction.name)
 
-            fun bankTransactionGetHistory(): List<BankAccountTransaction> {
+            fun load() {
                 stmt.setLong(1, start)
-                stmt.setLong(4, abs(delta))
-                return stmt.all {
-                    BankAccountTransaction(
-                        creditorPaytoUri = it.getString("creditor_payto_uri"),
-                        creditorName = it.getString("creditor_name"),
-                        debtorPaytoUri = it.getString("debtor_payto_uri"),
-                        debtorName = it.getString("debtor_name"),
-                        amount = TalerAmount(
-                            it.getLong("amount_val"),
-                            it.getInt("amount_frac"),
-                            getCurrency()
-                        ),
-                        accountServicerReference = it.getString("account_servicer_reference"),
-                        endToEndId = it.getString("end_to_end_id"),
-                        direction = direction,
-                        bankAccountId = it.getLong("bank_account_id"),
-                        paymentInformationId = it.getString("payment_information_id"),
-                        subject = it.getString("subject"),
-                        transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
-                        dbRowId = it.getLong("bank_transaction_id")
-                    )
-                }
-            }
-
-            fun loadBankHistory() {
-                while (delta != 0L) {
-                    val history = bankTransactionGetHistory()
-                    if (history.isEmpty())
-                        break;
-                    history.forEach {
-                        val item = map(it);
-                        // Advance cursor
-                        start = it.expectRowId()
-            
-                        if (item != null) {
-                            items.add(item)
-                            // Reduce delta
-                            if (delta < 0) delta++ else delta--;
-                        }
-                    }
-                }
+                stmt.setLong(3, abs(delta))
+                items.addAll(stmt.all {
+                    start = it.getLong("bank_transaction_id")
+                    if (delta < 0) delta ++ else delta --
+                    map(it)
+                }) 
             }
 
             // Start expensive listening process only if we intend to poll
             if (poll_ms > 0) {
-                notifWatcher.listen(NotificationTopic(bankAccountId, direction)) { flow ->
+                notifWatcher.(listen)(bankAccountId) { flow ->
                     // Start buffering notification to not miss any
                     val buffered = flow.buffer()
                     // Initial load
-                    loadBankHistory()
+                    load()
                     // Long polling while necessary
-                    while (delta != 0L && poll_ms > 0) {
-                        val pollStart = System.currentTimeMillis()
+                    if (delta != 0L) {
                         withTimeoutOrNull(poll_ms) {
                             buffered.filter {
                                 when {
@@ -897,8 +918,6 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                                 }
                             }.take(abs(delta).toInt()).count()
                         }
-                        val pollEnd = System.currentTimeMillis()
-                        poll_ms -= pollEnd - pollStart
 
                         // If going backward without a starting point, we reset loading progress
                         if (params.start == Long.MAX_VALUE) {
@@ -906,15 +925,81 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                             delta = params.delta
                             items.clear()
                         }
-                        loadBankHistory()
+                        load()
                     }
                 }
             } else {
-                loadBankHistory()
+                load()
             }
         }
 
         return items.toList();
+    }
+
+    suspend fun exchangeIncomingPoolHistory(
+        params: HistoryParams, 
+        bankAccountId: Long
+    ): List<IncomingReserveTransaction> {
+        return poolHistory(params, bankAccountId, NotificationWatcher::listenIncoming,  """
+            SELECT
+                bank_transaction_id
+                ,transaction_date
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,debtor_payto_uri
+                ,reserve_pub
+            FROM taler_exchange_incoming AS tfr
+                JOIN bank_account_transactions AS txs
+                    ON bank_transaction=txs.bank_transaction_id
+        """) {
+            IncomingReserveTransaction(
+                row_id = it.getLong("bank_transaction_id"),
+                date = TalerProtocolTimestamp(
+                    it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()
+                ),
+                amount = TalerAmount(
+                    it.getLong("amount_val"),
+                    it.getInt("amount_frac"),
+                    getCurrency()
+                ),
+                debit_account = it.getString("debtor_payto_uri"),
+                reserve_pub = EddsaPublicKey(it.getString("reserve_pub")),
+            )
+        }
+    }
+
+    suspend fun exchangeOutgoingPoolHistory(
+        params: HistoryParams, 
+        bankAccountId: Long
+    ): List<OutgoingTransaction> {
+        return poolHistory(params, bankAccountId, NotificationWatcher::listenOutgoing,  """
+            SELECT
+                bank_transaction_id
+                ,transaction_date
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,creditor_payto_uri
+                ,wtid
+                ,exchange_base_url
+            FROM taler_exchange_outgoing AS tfr
+                JOIN bank_account_transactions AS txs
+                    ON bank_transaction=txs.bank_transaction_id
+        """) {
+            OutgoingTransaction(
+                row_id = it.getLong("bank_transaction_id"),
+                date = TalerProtocolTimestamp(
+                    it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()
+                ),
+                amount = TalerAmount(
+                    it.getLong("amount_val"),
+                    it.getInt("amount_frac"),
+                    getCurrency()
+                ),
+                credit_account = it.getString("creditor_payto_uri"),
+                wtid = ShortHashCode(it.getString("wtid")),
+                exchange_base_url = it.getString("exchange_base_url")
+            )
+        }
     }
 
     /**
@@ -1328,12 +1413,12 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             SELECT
               wtid
               ,exchange_base_url
-              ,(tfr.amount).val AS amount_value
-              ,(tfr.amount).frac AS amount_frac
-              ,tfr.credit_account_payto
+              ,(txs.amount).val AS amount_value
+              ,(txs.amount).frac AS amount_frac
+              ,txs.creditor_payto_uri
               ,tfr.bank_transaction
               ,txs.transaction_date AS timestamp
-              FROM taler_exchange_transfers AS tfr
+              FROM taler_exchange_outgoing AS tfr
                 JOIN bank_account_transactions AS txs
                   ON bank_transaction=txs.bank_transaction_id
               WHERE request_uid = ?;
@@ -1347,7 +1432,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                     frac = it.getInt("amount_frac"),
                     getCurrency()
                 ),
-                creditAccount = it.getString("credit_account_payto"),
+                creditAccount = it.getString("creditor_payto_uri"),
                 exchangeBaseUrl = it.getString("exchange_base_url"),
                 requestUid = requestUid,
                 debitTxRowId = it.getLong("bank_transaction"),
@@ -1441,12 +1526,13 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
 }
 
 private data class Notification(val rowId: Long)
-private data class NotificationTopic(val account: Long, val direction: TransactionDirection)
 
 private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
     private class CountedSharedFlow(val flow: MutableSharedFlow<Notification>, var count: Int)
 
-    private val bankTxFlows = ConcurrentHashMap<NotificationTopic, CountedSharedFlow>()
+    private val bankTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
+    private val outgoingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
+    private val incomingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
 
     init {
         kotlin.concurrent.thread(isDaemon = true) { 
@@ -1455,20 +1541,39 @@ private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                     try {
                         val conn = pgSource.pgConnection()
                         conn.execSQLUpdate("LISTEN bank_tx")
+                        conn.execSQLUpdate("LISTEN outgoing_tx")
+                        conn.execSQLUpdate("LISTEN incoming_tx")
 
                         while (true) {
                             conn.getNotifications().forEach {
-                                val info = it.parameter.split(' ', limit = 4).map { it.toLong() }
-                                val debtorAccount = info[0];
-                                val creditorAccount = info[1];
-                                val debitRow = info[2];
-                                val creditRow = info[3];
-                                
-                                bankTxFlows.get(NotificationTopic(debtorAccount, TransactionDirection.debit))?.run {
-                                    flow.emit(Notification(debitRow))
-                                }
-                                bankTxFlows.get(NotificationTopic(creditorAccount, TransactionDirection.credit))?.run {
-                                    flow.emit(Notification(creditRow))
+                                if (it.name == "bank_tx") {
+                                    val info = it.parameter.split(' ', limit = 4).map { it.toLong() }
+                                    val debtorAccount = info[0];
+                                    val creditorAccount = info[1];
+                                    val debitRow = info[2];
+                                    val creditRow = info[3];
+                                    
+                                    bankTxFlows.get(debtorAccount)?.run {
+                                        flow.emit(Notification(debitRow))
+                                        flow.emit(Notification(creditRow))
+                                    }
+                                    bankTxFlows.get(creditorAccount)?.run {
+                                        flow.emit(Notification(debitRow))
+                                        flow.emit(Notification(creditRow))
+                                    }
+                                } else {
+                                    val info = it.parameter.split(' ', limit = 2).map { it.toLong() }
+                                    val account = info[0];
+                                    val row = info[1];
+                                    if (it.name == "outgoing_tx") {
+                                        outgoingTxFlows.get(account)?.run {
+                                            flow.emit(Notification(row))
+                                        }
+                                    } else {
+                                        incomingTxFlows.get(account)?.run {
+                                            flow.emit(Notification(row))
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1480,9 +1585,9 @@ private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         }
     }
 
-    suspend fun listen(topic: NotificationTopic, lambda: suspend (Flow<Notification>) -> Unit) {
+    private suspend fun listen(map: ConcurrentHashMap<Long, CountedSharedFlow>, account: Long, lambda: suspend (Flow<Notification>) -> Unit) {
         // Register listener
-        val flow = bankTxFlows.compute(topic) { _, v ->
+        val flow = map.compute(account) { _, v ->
             val tmp = v ?: CountedSharedFlow(MutableSharedFlow(), 0);
             tmp.count++;
             tmp
@@ -1492,11 +1597,23 @@ private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
             lambda(flow)
         } finally {
             // Unregister listener
-            bankTxFlows.compute(topic) { _, v ->
+            map.compute(account) { _, v ->
                 v!!;
                 v.count--;
                 if (v.count > 0) v else null
             }
         }
+    } 
+
+    suspend fun listenBank(account: Long, lambda: suspend (Flow<Notification>) -> Unit) {
+        listen(bankTxFlows, account, lambda)
+    }
+
+    suspend fun listenOutgoing(account: Long, lambda: suspend (Flow<Notification>) -> Unit) {
+        listen(outgoingTxFlows, account, lambda)
+    }
+
+    suspend fun listenIncoming(account: Long, lambda: suspend (Flow<Notification>) -> Unit) {
+        listen(incomingTxFlows, account, lambda)
     }
 }

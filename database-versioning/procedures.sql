@@ -28,7 +28,6 @@ BEGIN
   THEN
     RAISE EXCEPTION 'addition overflow';
   END IF;
-  RETURN;
 END $$;
 COMMENT ON PROCEDURE amount_add
   IS 'Returns the normalized sum of two amounts. It raises an exception when the resulting .val is larger than 2^52';
@@ -64,7 +63,6 @@ ELSE
     ok = FALSE;
   END IF;
 END IF;
-RETURN;
 END $$;
 COMMENT ON FUNCTION amount_left_minus_right
   IS 'Subtracts the right amount from the left and returns the difference and TRUE, if the left amount is larger than the right, or an invalid amount and FALSE otherwise.';
@@ -215,10 +213,8 @@ CREATE OR REPLACE FUNCTION taler_transfer(
 LANGUAGE plpgsql
 AS $$
 DECLARE
-maybe_balance_insufficient BOOLEAN;
 receiver_bank_account_id BIGINT;
 payment_subject TEXT;
-exchange_debit_tx_id BIGINT;
 BEGIN
 
 -- First creating the bank transaction, then updating
@@ -242,8 +238,8 @@ SELECT
   out_balance_insufficient,
   out_debit_row_id
   INTO
-    maybe_balance_insufficient,
-    exchange_debit_tx_id
+    out_exchange_balance_insufficient,
+    out_tx_row_id
   FROM bank_wire_transfer(
     receiver_bank_account_id,
     in_exchange_bank_account_id,
@@ -254,29 +250,23 @@ SELECT
     in_payment_information_id,
     in_end_to_end_id
   );
-IF (maybe_balance_insufficient)
-THEN
-  out_exchange_balance_insufficient=TRUE;
+IF out_exchange_balance_insufficient THEN
   RETURN;
 END IF;
-out_exchange_balance_insufficient=FALSE;
 INSERT
-  INTO taler_exchange_transfers (
+  INTO taler_exchange_outgoing (
     request_uid,
     wtid,
     exchange_base_url,
-    credit_account_payto,
-    amount,
     bank_transaction
 ) VALUES (
   in_request_uid,
   in_wtid,
   in_exchange_base_url,
-  in_credit_account_payto,
-  in_amount,
-  exchange_debit_tx_id
+  out_tx_row_id
 );
-out_tx_row_id = exchange_debit_tx_id;
+-- notify new transaction
+PERFORM pg_notify('outgoing_tx', in_exchange_bank_account_id || ' ' || out_tx_row_id);
 END $$;
 COMMENT ON FUNCTION taler_transfer(
   text,
@@ -397,7 +387,9 @@ CREATE OR REPLACE FUNCTION bank_wire_transfer(
   OUT out_nx_debtor BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
   OUT out_credit_row_id BIGINT,
-  OUT out_debit_row_id BIGINT
+  OUT out_debit_row_id BIGINT,
+  OUT out_creditor_is_exchange BOOLEAN,
+  OUT out_debtor_is_exchange BOOLEAN
 )
 LANGUAGE plpgsql
 AS $$
@@ -428,12 +420,14 @@ SELECT
   has_debt,
   (balance).val, (balance).frac,
   (max_debt).val, (max_debt).frac,
-  internal_payto_uri, customers.name
+  internal_payto_uri, customers.name,
+  is_taler_exchange
   INTO
     debtor_has_debt,
     debtor_balance.val, debtor_balance.frac,
     debtor_max_debt.val, debtor_max_debt.frac,
-    debtor_payto_uri, debtor_name
+    debtor_payto_uri, debtor_name,
+    out_debtor_is_exchange
   FROM bank_accounts
   JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
   WHERE bank_account_id=in_debtor_account_id;
@@ -448,11 +442,13 @@ out_nx_debtor=FALSE;
 SELECT
   has_debt,
   (balance).val, (balance).frac,
-  internal_payto_uri, customers.name
+  internal_payto_uri, customers.name,
+  is_taler_exchange
   INTO
     creditor_has_debt,
     creditor_balance.val, creditor_balance.frac,
-    creditor_payto_uri, creditor_name
+    creditor_payto_uri, creditor_name,
+    out_creditor_is_exchange
   FROM bank_accounts
   JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
   WHERE bank_account_id=in_creditor_account_id;
@@ -625,9 +621,7 @@ SET
 WHERE bank_account_id=in_creditor_account_id;
 
 -- notify new transaction
-PERFORM pg_notify('bank_tx', in_debtor_account_id || ' ' || in_creditor_account_id || ' ' || out_debit_row_id || ' ' || out_credit_row_id)
-
-RETURN;
+PERFORM pg_notify('bank_tx', in_debtor_account_id || ' ' || in_creditor_account_id || ' ' || out_debit_row_id || ' ' || out_credit_row_id);
 END $$;
 
 CREATE OR REPLACE FUNCTION cashout_delete(
