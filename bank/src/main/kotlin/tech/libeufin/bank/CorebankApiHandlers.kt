@@ -507,29 +507,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         )
         val bankAccount = db.bankAccountGetFromOwnerId(resourceCustomer.expectRowId())
             ?: throw internalServerError("Customer '${resourceCustomer.login}' lacks bank account.")
-        val history: List<BankAccountTransaction> = db.bankTransactionGetHistory(
-            start = historyParams.start,
-            delta = historyParams.delta,
-            bankAccountId = bankAccount.expectRowId()
-        )
-        val res = BankAccountTransactionsResponse(transactions = mutableListOf())
-        history.forEach {
-            res.transactions.add(
-                BankAccountTransactionInfo(
-                    debtor_payto_uri = it.debtorPaytoUri,
-                    creditor_payto_uri = it.creditorPaytoUri,
-                    subject = it.subject,
-                    amount = it.amount,
-                    direction = it.direction,
-                    date = TalerProtocolTimestamp(it.transactionDate),
-                    row_id = it.dbRowId ?: throw internalServerError(
-                        "Transaction timestamped with '${it.transactionDate}' did not have row ID"
-                    )
-                )
-            )
-        }
-        call.respond(res)
-        return@get
+        val history: List<BankAccountTransactionInfo> = db.bankPoolHistory(historyParams, bankAccount.expectRowId())
+        call.respond(BankAccountTransactionsResponse(history))
     }
     // Creates a bank transaction.
     post("/accounts/{USERNAME}/transactions") {

@@ -542,7 +542,7 @@ data class BankAccountTransactionInfo(
 // Response type for histories, namely GET /transactions
 @Serializable
 data class BankAccountTransactionsResponse(
-    val transactions: MutableList<BankAccountTransactionInfo>
+    val transactions: List<BankAccountTransactionInfo>
 )
 
 // Taler withdrawal request.

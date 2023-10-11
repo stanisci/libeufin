@@ -296,7 +296,7 @@ class TalerApiTest {
             
             // Check no useless polling
             assertTime(0, 300) {
-                client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&start=20&long_poll_ms=1000") {
+                client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=-6&start=15&long_poll_ms=1000") {
                     basicAuth("bar", "secret")
                 }.assertHistory(5)
             }
@@ -435,7 +435,7 @@ class TalerApiTest {
 
             // Check no useless polling
             assertTime(0, 300) {
-                client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&start=20&long_poll_ms=1000") {
+                client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=-6&start=15&long_poll_ms=1000") {
                     basicAuth("bar", "secret")
                 }.assertHistory(5)
             }

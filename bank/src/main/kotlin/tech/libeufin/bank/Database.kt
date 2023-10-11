@@ -868,72 +868,110 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         query: String,
         map: (ResultSet) -> T
     ): List<T> {
-        var start = params.start
-        var delta = params.delta
+        var lastSeenId = 0L;
         var poll_ms = params.poll_ms;
-        val items = mutableListOf<T>()
+        var delta = params.delta
+        val backward = delta < 0
+        var (min, max) = if (backward) Pair(0L, params.start) else Pair(params.start, Long.MAX_VALUE)
 
-        // If going backward with a starting point, it is useless to poll
-        if (delta < 0 && start != Long.MAX_VALUE) {
-            poll_ms = 0;
-        }
-
-        dbPool.getConnection().use { conn ->
+        return dbPool.getConnection().use { conn ->
             // Prepare statement
-            val (cmpOp, orderBy) = if (delta < 0) Pair("<", "DESC") else Pair(">", "ASC")
+            val orderBy = if (backward) "DESC" else "ASC";
             val stmt = conn.prepareStatement("""
                 $query
-                WHERE bank_transaction_id ${cmpOp} ? 
-                    AND bank_account_id=?
-                ORDER BY bank_transaction_id ${orderBy}
+                WHERE bank_account_id=? AND
+                bank_transaction_id > ? AND  bank_transaction_id < ?
+                ORDER BY bank_transaction_id $orderBy
                 LIMIT ?
             """)
-            stmt.setLong(2, bankAccountId)
+            stmt.setLong(1, bankAccountId)
 
-            fun load() {
-                stmt.setLong(1, start)
-                stmt.setLong(3, abs(delta))
-                items.addAll(stmt.all {
-                    start = it.getLong("bank_transaction_id")
-                    if (delta < 0) delta ++ else delta --
+            fun load(): List<T> {
+                stmt.setLong(2, min)
+                stmt.setLong(3, max)
+                stmt.setInt(4, abs(delta))
+                return stmt.all {
+                    lastSeenId = kotlin.math.max(it.getLong("bank_transaction_id"), lastSeenId)
                     map(it)
-                }) 
+                }
             }
 
             // Start expensive listening process only if we intend to poll
             if (poll_ms > 0) {
+                var items = listOf<T>()
                 notifWatcher.(listen)(bankAccountId) { flow ->
+                    val maxId = conn.prepareStatement("SELECT MAX(bank_transaction_id) FROM bank_account_transactions")
+                                    .oneOrNull { it.getLong(1) } ?: 0;
                     // Start buffering notification to not miss any
                     val buffered = flow.buffer()
                     // Initial load
-                    load()
-                    // Long polling while necessary
-                    if (delta != 0L) {
+                    items += load()
+                    if (backward) delta += items.size else delta -= items.size
+
+                    // Long polling if we want more item and we could have more
+                    if (delta != 0 && !(backward && params.start <= maxId + 1)) {
                         withTimeoutOrNull(poll_ms) {
-                            buffered.filter {
-                                when {
-                                    params.start == Long.MAX_VALUE -> true
-                                    delta < 0 -> it.rowId < start
-                                    else -> it.rowId > start
-                                }
-                            }.take(abs(delta).toInt()).count()
+                            buffered
+                                .filter { it.rowId > lastSeenId } // Skip transactions we already have processed
+                                .take(abs(delta).toInt()).count()
                         }
 
-                        // If going backward without a starting point, we reset loading progress
-                        if (params.start == Long.MAX_VALUE) {
-                            start = params.start
+                        if (backward) {
+                            min = lastSeenId
+                            // When going backward we might found more items that they are missing
                             delta = params.delta
-                            items.clear()
+                            items = (load() + items).take(abs(delta))
+                        } else {
+                            min = lastSeenId
+                            items += load()
                         }
-                        load()
                     }
                 }
+                items
             } else {
                 load()
             }
         }
+    }
 
-        return items.toList();
+    suspend fun bankPoolHistory(
+        params: HistoryParams, 
+        bankAccountId: Long
+    ): List<BankAccountTransactionInfo> {
+        return poolHistory(params, bankAccountId, NotificationWatcher::listenBank,  """
+            SELECT
+                bank_transaction_id
+                ,transaction_date
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,debtor_payto_uri
+                ,creditor_payto_uri
+                ,subject
+                ,direction
+            FROM bank_account_transactions
+        """) {
+            BankAccountTransactionInfo(
+                row_id = it.getLong("bank_transaction_id"),
+                date = TalerProtocolTimestamp(
+                    it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()
+                ),
+                debtor_payto_uri = it.getString("debtor_payto_uri"),
+                creditor_payto_uri = it.getString("creditor_payto_uri"),
+                amount = TalerAmount(
+                    it.getLong("amount_val"),
+                    it.getInt("amount_frac"),
+                    getCurrency()
+                ),
+                subject = it.getString("subject"),
+                direction = it.getString("direction").run {
+                    when(this) {
+                        "credit" -> TransactionDirection.credit
+                        "debit" -> TransactionDirection.debit
+                        else -> throw internalServerError("Wrong direction in transaction: $this")
+                    }
+                }
+            )
+        }
     }
 
     suspend fun exchangeIncomingPoolHistory(
@@ -1011,7 +1049,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
      */
     fun bankTransactionGetHistory(
         start: Long,
-        delta: Long,
+        delta: Int,
         bankAccountId: Long,
         withDirection: TransactionDirection? = null
     ): List<BankAccountTransaction> = conn { conn ->
@@ -1051,7 +1089,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         }
         else
             3
-        stmt.setLong(limitParamIndex, abs(delta))
+        stmt.setInt(limitParamIndex, abs(delta))
         stmt.all {
             val direction = withDirection ?: when (it.getString("direction")) {
                     "credit" -> TransactionDirection.credit
@@ -1548,7 +1586,8 @@ private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                         conn.execSQLUpdate("LISTEN incoming_tx")
 
                         while (true) {
-                            conn.getNotifications().forEach {
+                            conn.getNotifications(0) // Block until we receive at least one notification
+                                .forEach {
                                 if (it.name == "bank_tx") {
                                     val info = it.parameter.split(' ', limit = 4).map { it.toLong() }
                                     val debtorAccount = info[0];

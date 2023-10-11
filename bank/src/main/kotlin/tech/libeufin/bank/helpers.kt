@@ -365,7 +365,7 @@ fun getWithdrawal(db: Database, opIdParam: String): TalerWithdrawalOperation {
 }
 
 data class HistoryParams(
-    val delta: Long, val start: Long, val poll_ms: Long
+    val delta: Int, val start: Long, val poll_ms: Long
 )
 
 /**
@@ -375,8 +375,8 @@ data class HistoryParams(
 fun getHistoryParams(params: Parameters): HistoryParams {
     val deltaParam: String =
         params["delta"] ?: throw MissingRequestParameterException(parameterName = "delta")
-    val delta: Long = try {
-        deltaParam.toLong()
+    val delta: Int = try {
+        deltaParam.toInt()
     } catch (e: Exception) {
         logger.error(e.message)
         throw badRequest("Param 'delta' not a number")

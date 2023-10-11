@@ -339,13 +339,13 @@ class DatabaseTest {
         // Testing positive delta:
         val forward = db.bankTransactionGetHistory(
             start = 50L,
-            delta = 2L,
+            delta = 2,
             bankAccountId = 1L // asking as Foo
         )
         assert(forward[0].expectRowId() >= 50 && forward.size == 2 && forward[0].dbRowId!! < forward[1].dbRowId!!)
         val backward = db.bankTransactionGetHistory(
             start = 50L,
-            delta = -2L,
+            delta = -2,
             bankAccountId = 1L // asking as Foo
         )
         assert(backward[0].expectRowId() <= 50 && backward.size == 2 && backward[0].dbRowId!! > backward[1].dbRowId!!)

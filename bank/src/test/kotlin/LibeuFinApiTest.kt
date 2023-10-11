@@ -68,6 +68,7 @@ class LibeuFinApiTest {
      */
     @Test
     fun testHistory() = setup { db, ctx -> 
+        // TODO add better tests with lon polling like Wire Gateway API
         val fooId = db.customerCreate(customerFoo); assert(fooId != null)
         assert(db.bankAccountCreate(genBankAccount(fooId!!)) != null)
         val barId = db.customerCreate(customerBar); assert(barId != null)
