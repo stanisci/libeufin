@@ -569,7 +569,7 @@ class LibeuFinApiTest {
      * Test admin-only account creation
      */
     @Test
-    fun createAccountRestrictedTest() = setup(restrictRegistration = true) { db, ctx -> 
+    fun createAccountRestrictedTest() = setup(conf = "test_restrict.conf") { db, ctx -> 
         testApplication {
             application {
                 corebankWebApp(db, ctx)

@@ -39,7 +39,7 @@ class TalerConfigTest {
 
         println(conf.stringify())
 
-        assertEquals("baz", conf.lookupValueString("foo", "bar"))
+        assertEquals("baz", conf.lookupString("foo", "bar"))
 
         println(conf.getInstallPath())
     }
@@ -52,11 +52,11 @@ class TalerConfigTest {
         conf.putValueString("foo", "bar", "baz")
         conf.putValueString("foo", "bar2", "baz")
 
-        assertEquals("baz", conf.lookupValueString("foo", "bar"))
-        assertEquals("baz", conf.lookupValuePath("foo", "bar"))
+        assertEquals("baz", conf.lookupString("foo", "bar"))
+        assertEquals("baz", conf.lookupPath("foo", "bar"))
 
         conf.putValueString("foo", "dir1", "foo/\$DATADIR/bar")
 
-        assertEquals("foo/mydir/bar", conf.lookupValuePath("foo", "dir1"))
+        assertEquals("foo/mydir/bar", conf.lookupPath("foo", "dir1"))
     }
 }

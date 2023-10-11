@@ -23,10 +23,8 @@ import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.listDirectoryEntries
 
-private data class Entry(val value: String)
-
 private data class Section(
-    val entries: MutableMap<String, Entry>,
+    val entries: MutableMap<String, String>,
 )
 
 private val reEmptyLine = Regex("^\\s*$")
@@ -57,6 +55,7 @@ class TalerConfig(
 
     private val componentName = configSource.componentName
     private val installPathBinary = configSource.installPathBinary
+    val sections: Set<String> get() = sectionMap.keys
 
     private fun internalLoadFromString(s: String, sourceFilename: String?) {
         val lines = s.lines()
@@ -125,9 +124,7 @@ class TalerConfig(
                     optVal = optVal.substring(1, optVal.length - 1)
                 }
                 val section = provideSection(currentSection)
-                section.entries[optName] = Entry(
-                    value = optVal
-                )
+                section.entries[optName] = optVal
                 continue
             }
             throw TalerConfigError("expected section header, option assignment or directive in line $lineNum file ${sourceFilename ?: "<input>"}")
@@ -187,77 +184,15 @@ class TalerConfig(
         internalLoadFromString(s, null)
     }
 
-    private fun lookupEntry(section: String, option: String): Entry? {
-        val canonSection = section.uppercase()
-        val canonOption = option.uppercase()
-        return this.sectionMap[canonSection]?.entries?.get(canonOption)
-    }
-
-    /**
-     * Look up a string value from the configuration.
-     *
-     * Return null if the value was not found in the configuration.
-     */
-    fun lookupValueString(section: String, option: String): String? {
-        return lookupEntry(section, option)?.value
-    }
-
-    fun requireValueString(section: String, option: String): String {
-        val entry = lookupEntry(section, option)
-        if (entry == null) {
-            throw TalerConfigError("expected string in configuration section $section option $option")
-        }
-        return entry.value
-    }
-
-    fun requireValueNumber(section: String, option: String): Long {
-        val entry = lookupEntry(section, option)
-        if (entry == null) {
-            throw TalerConfigError("expected string in configuration section $section option $option")
-        }
-        return entry.value.toLong(10)
-    }
-
-    fun lookupValueBooleanDefault(section: String, option: String, default: Boolean): Boolean {
-        val entry = lookupEntry(section, option)
-        if (entry == null) {
-            return default
-        }
-        val v = entry.value.lowercase()
-        if (v == "yes") {
-            return true;
-        }
-        if (v == "false") {
-            return false;
-        }
-        throw TalerConfigError("expected yes/no in configuration section $section option $option but got $v")
-    }
-
     private fun setSystemDefault(section: String, option: String, value: String) {
         // FIXME: The value should be marked as a system default for diagnostics pretty printing
         val sec = provideSection(section)
-        sec.entries[option.uppercase()] = Entry(value = value)
+        sec.entries[option.uppercase()] = value
     }
 
     fun putValueString(section: String, option: String, value: String) {
         val sec = provideSection(section)
-        sec.entries[option.uppercase()] = Entry(value = value)
-    }
-
-    fun lookupValuePath(section: String, option: String): String? {
-        val entry = lookupEntry(section, option)
-        if (entry == null) {
-            return null
-        }
-        return pathsub(entry.value)
-    }
-
-    fun requireValuePath(section: String, option: String): String {
-        val res = lookupValuePath(section, option)
-        if (res == null) {
-            throw TalerConfigError("expected path for section $section option $option")
-        }
-        return res
+        sec.entries[option.uppercase()] = value
     }
 
     /**
@@ -272,7 +207,7 @@ class TalerConfig(
                     outStr.appendLine("[$sectionName]")
                     headerWritten = true
                 }
-                outStr.appendLine("$optionName = ${entry.value}")
+                outStr.appendLine("$optionName = $entry")
             }
             if (headerWritten) {
                 outStr.appendLine()
@@ -316,7 +251,7 @@ class TalerConfig(
     }
 
     private fun variableLookup(x: String, recursionDepth: Int = 0): String? {
-        val pathRes = this.lookupValueString("PATHS", x)
+        val pathRes = this.lookupString("PATHS", x)
         if (pathRes != null) {
             return pathsub(pathRes, recursionDepth + 1)
         }
@@ -483,4 +418,47 @@ class TalerConfig(
         }
         return "/usr"
     }
+
+    /* ----- Lookup ----- */
+
+     /**
+     * Look up a string value from the configuration.
+     *
+     * Return null if the value was not found in the configuration.
+     */
+    fun lookupString(section: String, option: String): String? {
+        val canonSection = section.uppercase()
+        val canonOption = option.uppercase()
+        return this.sectionMap[canonSection]?.entries?.get(canonOption)
+    }
+
+    fun requireString(section: String, option: String): String  =
+        lookupString(section, option) ?:
+            throw TalerConfigError("expected string in configuration section $section option $option")
+
+    fun requireNumber(section: String, option: String): Int = 
+        lookupString(section, option)?.toInt() ?:
+            throw TalerConfigError("expected number in configuration section $section option $option")
+
+    fun lookupBoolean(section: String, option: String): Boolean? {
+        val entry = lookupString(section, option) ?: return null
+        return when (val v = entry.lowercase()) {
+            "yes" -> true
+            "no" -> false
+            else -> throw TalerConfigError("expected yes/no in configuration section $section option $option but got $v")
+        }
+    }
+
+    fun requireBoolean(section: String, option: String): Boolean =
+        lookupBoolean(section, option) ?:
+            throw TalerConfigError("expected boolean in configuration section $section option $option")
+
+    fun lookupPath(section: String, option: String): String? {
+        val entry = lookupString(section, option) ?: return null
+        return pathsub(entry)
+    }
+
+    fun requirePath(section: String, option: String): String  =
+        lookupPath(section, option) ?:
+            throw TalerConfigError("expected path for section $section option $option")
 }

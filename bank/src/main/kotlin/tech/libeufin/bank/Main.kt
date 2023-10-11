@@ -83,6 +83,7 @@ data class BankApplicationContext(
      * Main, internal currency of the bank.
      */
     val currency: String,
+    val currencySpecification: CurrencySpecification,
     /**
      * Restrict account registration to the administrator.
      */
@@ -124,7 +125,43 @@ data class BankApplicationContext(
      * SPA is located.
      */
     val spaCaptchaURL: String?,
-)
+) {
+    companion object {
+        /**
+        * Read the configuration of the bank from a config file.
+        * Throws an exception if the configuration is malformed.
+        */
+        fun readFromConfig(cfg: TalerConfig): BankApplicationContext {
+            val currency = cfg.requireString("libeufin-bank", "currency")
+            val currencySpecification = cfg.sections.find {
+                it.startsWith("CURRENCY-") && cfg.requireBoolean(it, "enabled") && cfg.requireString(it, "code") == currency
+            }?.let {
+                CurrencySpecification(
+                    name = cfg.requireString(it, "name"),
+                    decimal_separator = cfg.requireString(it, "decimal_separator"),
+                    num_fractional_input_digits = cfg.requireNumber(it, "fractional_input_digits"),
+                    num_fractional_normal_digits = cfg.requireNumber(it, "fractional_normal_digits"),
+                    num_fractional_trailing_zero_digits = cfg.requireNumber(it, "fractional_trailing_zero_digits"),
+                    is_currency_name_leading = cfg.requireBoolean(it, "is_currency_name_leading"),
+                    alt_unit_names = Json.decodeFromString(cfg.requireString(it, "alt_unit_names"))
+                )
+            } ?: throw TalerConfigError("missing currency config for $currency")
+            return BankApplicationContext(
+                currency = currency,
+                restrictRegistration = cfg.lookupBoolean("libeufin-bank", "restrict_registration") ?: false,
+                cashoutCurrency = cfg.lookupString("libeufin-bank", "cashout_currency"),
+                defaultCustomerDebtLimit = cfg.requireAmount("libeufin-bank", "default_customer_debt_limit", currency),
+                registrationBonusEnabled = cfg.lookupBoolean("libeufin-bank", "registration_bonus_enabled") ?: false,
+                registrationBonus = cfg.requireAmount("libeufin-bank", "registration_bonus", currency),
+                suggestedWithdrawalExchange = cfg.lookupString("libeufin-bank", "suggested_withdrawal_exchange"),
+                defaultAdminDebtLimit = cfg.requireAmount("libeufin-bank", "default_admin_debt_limit", currency),
+                spaCaptchaURL = cfg.lookupString("libeufin-bank", "spa_captcha_url"),
+                restrictAccountDeletion = cfg.lookupBoolean("libeufin-bank", "restrict_account_deletion") ?: true,
+                currencySpecification = currencySpecification
+            )
+        }
+    }
+}
 
 
 /**
@@ -404,7 +441,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
     }
     routing {
         get("/config") {
-            call.respond(Config())
+            call.respond(Config(ctx.currencySpecification))
             return@get
         }
         this.accountsMgmtHandlers(db, ctx)
@@ -471,15 +508,12 @@ fun durationFromPretty(s: String): Long {
     return durationUs
 }
 
-fun TalerConfig.requireValueAmount(section: String, option: String, currency: String): TalerAmount {
-    val amountStr = lookupValueString(section, option)
-    if (amountStr == null) {
+fun TalerConfig.requireAmount(section: String, option: String, currency: String): TalerAmount {
+    val amountStr = lookupString(section, option) ?:
         throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
-    }
-    val amount = parseTalerAmount2(amountStr, FracDigits.EIGHT)
-    if (amount == null) {
+    val amount = parseTalerAmount2(amountStr, FracDigits.EIGHT) ?:
         throw TalerConfigError("expected amount for section $section, option $option, but amount is malformed")
-    }
+
     if (amount.currency != currency) {
         throw TalerConfigError(
             "expected amount for section $section, option $option, but currency is wrong (got ${amount.currency} expected $currency"
@@ -487,27 +521,6 @@ fun TalerConfig.requireValueAmount(section: String, option: String, currency: St
     }
     return amount
 }
-
-/**
- * Read the configuration of the bank from a config file.
- * Throws an exception if the configuration is malformed.
- */
-fun readBankApplicationContextFromConfig(cfg: TalerConfig): BankApplicationContext {
-    val currency = cfg.requireValueString("libeufin-bank", "currency")
-    return BankApplicationContext(
-        currency = currency,
-        restrictRegistration = cfg.lookupValueBooleanDefault("libeufin-bank", "restrict_registration", false),
-        cashoutCurrency = cfg.lookupValueString("libeufin-bank", "cashout_currency"),
-        defaultCustomerDebtLimit = cfg.requireValueAmount("libeufin-bank", "default_customer_debt_limit", currency),
-        registrationBonusEnabled = cfg.lookupValueBooleanDefault("libeufin-bank", "registration_bonus_enabled", false),
-        registrationBonus = cfg.requireValueAmount("libeufin-bank", "registration_bonus", currency),
-        suggestedWithdrawalExchange = cfg.lookupValueString("libeufin-bank", "suggested_withdrawal_exchange"),
-        defaultAdminDebtLimit = cfg.requireValueAmount("libeufin-bank", "default_admin_debt_limit", currency),
-        spaCaptchaURL = cfg.lookupValueString("libeufin-bank", "spa_captcha_url"),
-        restrictAccountDeletion = cfg.lookupValueBooleanDefault("libeufin-bank", "restrict_account_deletion", true)
-    )
-}
-
 
 class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = "dbinit") {
     private val configFile by option(
@@ -529,8 +542,8 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
     override fun run() {
         val config = TalerConfig(BANK_CONFIG_SOURCE)
         config.load(this.configFile)
-        val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
-        val sqlDir = config.requireValuePath("libeufin-bankdb-postgres", "sql_dir")
+        val dbConnStr = config.requireString("libeufin-bankdb-postgres", "config")
+        val sqlDir = config.requirePath("libeufin-bankdb-postgres", "sql_dir")
         if (requestReset) {
             resetDatabaseTables(dbConnStr, sqlDir)
         }
@@ -553,15 +566,15 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
     override fun run() {
         val config = TalerConfig(BANK_CONFIG_SOURCE)
         config.load(this.configFile)
-        val ctx = readBankApplicationContextFromConfig(config)
-        val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
+        val ctx = BankApplicationContext.readFromConfig(config)
+        val dbConnStr = config.requireString("libeufin-bankdb-postgres", "config")
         logger.info("using database '$dbConnStr'")
-        val serveMethod = config.requireValueString("libeufin-bank", "serve")
+        val serveMethod = config.requireString("libeufin-bank", "serve")
         if (serveMethod.lowercase() != "tcp") {
             logger.info("Can only serve libeufin-bank via TCP")
             exitProcess(1)
         }
-        val servePortLong = config.requireValueNumber("libeufin-bank", "port")
+        val servePortLong = config.requireNumber("libeufin-bank", "port")
         val servePort = servePortLong.toInt()
         val db = Database(dbConnStr, ctx.currency)
         if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
@@ -589,9 +602,9 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     override fun run() {
         val config = TalerConfig(BANK_CONFIG_SOURCE)
         config.load(this.configFile)
-        val ctx = readBankApplicationContextFromConfig(config)
-        val dbConnStr = config.requireValueString("libeufin-bankdb-postgres", "config")
-        config.requireValueNumber("libeufin-bank", "port")
+        val ctx = BankApplicationContext.readFromConfig(config)
+        val dbConnStr = config.requireString("libeufin-bankdb-postgres", "config")
+        config.requireNumber("libeufin-bank", "port")
         val db = Database(dbConnStr, ctx.currency)
         if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
@@ -671,14 +684,14 @@ class BankConfigGet : CliktCommand("Lookup config value", name = "get") {
         val config = TalerConfig(BANK_CONFIG_SOURCE)
         config.load(this.configFile)
         if (isPath) {
-            val res = config.lookupValuePath(sectionName, optionName)
+            val res = config.lookupPath(sectionName, optionName)
             if (res == null) {
                 logger.info("value not found in config")
                 exitProcess(2)
             }
             println(res)
         } else {
-            val res = config.lookupValueString(sectionName, optionName)
+            val res = config.lookupString(sectionName, optionName)
             if (res == null) {
                 logger.info("value not found in config")
                 exitProcess(2)

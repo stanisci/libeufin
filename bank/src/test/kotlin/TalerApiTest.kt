@@ -543,7 +543,7 @@ class TalerApiTest {
     }
     // Selecting withdrawal details from the Integration API endpoint.
     @Test
-    fun intSelect() = setup(suggestedExchange = "payto://iban/ABC123") { db, ctx ->
+    fun intSelect() = setup { db, ctx ->
         val uuid = UUID.randomUUID()
         assertNotNull(db.customerCreate(customerFoo))
         assertNotNull(db.bankAccountCreate(bankAccountFoo))
@@ -568,7 +568,7 @@ class TalerApiTest {
     }
     // Showing withdrawal details from the Integrtion API endpoint.
     @Test
-    fun intGet() = setup(suggestedExchange = "payto://iban/ABC123") { db, ctx ->
+    fun intGet() = setup { db, ctx ->
         val uuid = UUID.randomUUID()
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)

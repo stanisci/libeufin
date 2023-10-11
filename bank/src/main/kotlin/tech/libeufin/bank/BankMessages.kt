@@ -468,12 +468,14 @@ data class Cashout(
 // Type to return as GET /config response
 @Serializable // Never used to parse JSON.
 data class Config(
-    val name: String = "libeufin-bank",
-    val version: String = "0:0:0",
-    val have_cashout: Boolean = false,
+    val currency: CurrencySpecification,
+) {
+    val name: String = "libeufin-bank"
+    val version: String = "0:0:0"
+    val have_cashout: Boolean = false
     // Following might probably get renamed:
     val fiat_currency: String? = null
-)
+}
 
 enum class CorebankCreditDebitInfo {
     credit, debit
@@ -636,9 +638,22 @@ enum class BankTransactionResult {
 // GET /config response from the Taler Integration API.
 @Serializable
 data class TalerIntegrationConfigResponse(
-    val name: String = "taler-bank-integration",
-    val version: String = "0:0:0",
-    val currency: String
+    val currency: String,
+    val currency_specification: CurrencySpecification,
+) {
+    val name: String = "taler-bank-integration";
+    val version: String = "0:0:0";
+}
+
+@Serializable
+data class CurrencySpecification(
+    val name: String,
+    val decimal_separator: String,
+    val num_fractional_input_digits: Int,
+    val num_fractional_normal_digits: Int,
+    val num_fractional_trailing_zero_digits: Int,
+    val is_currency_name_leading: Boolean,
+    val alt_unit_names: Map<String, String>
 )
 
 /**

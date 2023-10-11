@@ -31,7 +31,10 @@ import tech.libeufin.util.stripIbanPayto
 fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) {
     get("/taler-integration/config") {
         val internalCurrency: String = ctx.currency
-        call.respond(TalerIntegrationConfigResponse(currency = internalCurrency))
+        call.respond(TalerIntegrationConfigResponse(
+            currency = internalCurrency,
+            currency_specification = ctx.currencySpecification
+        ))
         return@get
     }
 
