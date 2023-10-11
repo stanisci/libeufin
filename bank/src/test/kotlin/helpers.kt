@@ -9,24 +9,29 @@ import kotlinx.serialization.json.JsonPrimitive
 import net.taler.wallet.crypto.Base32Crockford
 import kotlin.test.assertEquals
 import tech.libeufin.bank.*
+import java.io.ByteArrayOutputStream
+import java.util.zip.DeflaterOutputStream
 
 /* ----- Setup ----- */
-
-fun setupDb(lambda: (Database) -> Unit) {
-    initDb().use(lambda)
-}
 
 fun setup(
     conf: String = "test.conf",
     lambda: (Database, BankApplicationContext) -> Unit
 ){
-    val db = initDb()
     val config = TalerConfig(BANK_CONFIG_SOURCE)
     config.load("conf/$conf")
+    val dbConnStr = config.requireString("libeufin-bankdb-postgres", "config")
+    val sqlPath = config.requirePath("libeufin-bankdb-postgres", "SQL_DIR")
+    resetDatabaseTables(dbConnStr, sqlPath)
+    initializeDatabaseTables(dbConnStr, sqlPath)
     val ctx = BankApplicationContext.readFromConfig(config)
-    db.use {
-        lambda(db, ctx)
+    Database(dbConnStr, ctx.currency).use {
+        lambda(it, ctx)
     }
+}
+
+fun setupDb(lambda: (Database) -> Unit) {
+    setup() { db, _ -> lambda(db) }
 }
 
 /* ----- Assert ----- */
@@ -59,7 +64,11 @@ inline fun <reified B> HttpRequestBuilder.jsonBody(b: B, deflate: Boolean = fals
     contentType(ContentType.Application.Json)
     if (deflate) {
         headers.set("Content-Encoding", "deflate")
-        setBody(deflater(json))
+        val bos = ByteArrayOutputStream()
+        val ios = DeflaterOutputStream(bos)
+        ios.write(json.toByteArray())
+        ios.finish()
+        setBody(bos.toByteArray())
     } else {
         setBody(json)
     }
