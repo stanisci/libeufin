@@ -196,8 +196,9 @@ COMMENT ON FUNCTION customer_delete(TEXT)
   IS 'Deletes a customer (and its bank account via cascade) if the balance is zero';
 
 CREATE OR REPLACE FUNCTION taler_transfer(
-  IN in_request_uid TEXT,
-  IN in_wtid TEXT,
+  IN in_request_uid BYTEA,
+  IN in_wtid BYTEA,
+  IN in_subject TEXT,
   IN in_amount taler_amount,
   IN in_exchange_base_url TEXT,
   IN in_credit_account_payto TEXT,
@@ -214,7 +215,6 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
 receiver_bank_account_id BIGINT;
-payment_subject TEXT;
 BEGIN
 
 -- First creating the bank transaction, then updating
@@ -232,8 +232,6 @@ THEN
   RETURN;
 END IF;
 out_nx_creditor=FALSE;
-SELECT CONCAT(in_wtid, ' ', in_exchange_base_url)
-  INTO payment_subject;
 SELECT
   out_balance_insufficient,
   out_debit_row_id
@@ -243,7 +241,7 @@ SELECT
   FROM bank_wire_transfer(
     receiver_bank_account_id,
     in_exchange_bank_account_id,
-    payment_subject,
+    in_subject,
     in_amount,
     in_timestamp,
     in_account_servicer_reference,
@@ -269,7 +267,8 @@ INSERT
 PERFORM pg_notify('outgoing_tx', in_exchange_bank_account_id || ' ' || out_tx_row_id);
 END $$;
 COMMENT ON FUNCTION taler_transfer(
-  text,
+  bytea,
+  bytea,
   text,
   taler_amount,
   text,

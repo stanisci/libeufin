@@ -28,14 +28,19 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 
 /**
  * 32-byte Crockford's Base32 encoded data.
  */
-@Serializable()
-@JvmInline
-value class Base32Crockford32B(val encoded: String) {
-    init {
+@Serializable(with = Base32Crockford32B.Serializer::class)
+class Base32Crockford32B {
+    private var encoded: String? = null
+    val raw: ByteArray
+
+    constructor(encoded: String) {
         val decoded = try {
             Base32Crockford.decode(encoded) 
         } catch (e: EncodingException) {
@@ -48,16 +53,45 @@ value class Base32Crockford32B(val encoded: String) {
         require(decoded.size == 32) {
             "Encoded data should be 32 bytes long"
         }
+        this.raw = decoded
+        this.encoded = encoded
+    }
+    constructor(raw: ByteArray) {
+        require(raw.size == 32) {
+            "Encoded data should be 32 bytes long"
+        }
+        this.raw = raw
+    }
+
+    fun encoded(): String {
+        encoded = encoded ?: Base32Crockford.encode(raw)
+        return encoded!!
+    }
+
+    override fun equals(other: Any?) = (other is Base32Crockford32B) && Arrays.equals(raw, other.raw)
+
+    internal object Serializer : KSerializer<Base32Crockford32B> {
+        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford32B", PrimitiveKind.STRING)
+    
+        override fun serialize(encoder: Encoder, value: Base32Crockford32B) {
+            encoder.encodeString(value.encoded())
+        }
+    
+        override fun deserialize(decoder: Decoder): Base32Crockford32B {
+            return Base32Crockford32B(decoder.decodeString())
+        }
     }
 }
 
 /**
  * 64-byte Crockford's Base32 encoded data.
  */
-@Serializable()
-@JvmInline
-value class Base32Crockford64B(val encoded: String) {
-    init {
+@Serializable(with = Base32Crockford64B.Serializer::class)
+class Base32Crockford64B {
+    private var encoded: String? = null
+    val raw: ByteArray
+
+    constructor(encoded: String) {
         val decoded = try {
             Base32Crockford.decode(encoded) 
         } catch (e: EncodingException) {
@@ -68,7 +102,34 @@ value class Base32Crockford64B(val encoded: String) {
             "Data should be encoded using Crockford's Base32"
         }
         require(decoded.size == 64) {
-            "Encoded data should be 64 bytes long"
+            "Encoded data should be 32 bytes long"
+        }
+        this.raw = decoded
+        this.encoded = encoded
+    }
+    constructor(raw: ByteArray) {
+        require(raw.size == 64) {
+            "Encoded data should be 32 bytes long"
+        }
+        this.raw = raw
+    }
+
+    fun encoded(): String {
+        encoded = encoded ?: Base32Crockford.encode(raw)
+        return encoded!!
+    }
+
+    override fun equals(other: Any?) = (other is Base32Crockford64B) && Arrays.equals(raw, other.raw)
+
+    internal object Serializer : KSerializer<Base32Crockford64B> {
+        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford64B", PrimitiveKind.STRING)
+    
+        override fun serialize(encoder: Encoder, value: Base32Crockford64B) {
+            encoder.encodeString(value.encoded())
+        }
+    
+        override fun deserialize(decoder: Decoder): Base32Crockford64B {
+            return Base32Crockford64B(decoder.decodeString())
         }
     }
 }

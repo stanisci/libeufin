@@ -757,7 +757,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                                         (reserve_pub, bank_transaction) 
                                     VALUES (?, ?)
                                 """)
-                                stmt.setString(1, reservePub.encoded)
+                                stmt.setBytes(1, reservePub.raw)
                                 stmt.setLong(2, rowId)
                                 stmt.executeUpdate()
                                 conn.execSQLUpdate("NOTIFY incoming_tx, '${"${tx.creditorAccountId} $rowId"}'")
@@ -779,7 +779,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                                         (wtid, exchange_base_url, bank_transaction) 
                                     VALUES (?, ?, ?)
                                 """)
-                                stmt.setString(1, metadata.first.encoded)
+                                stmt.setBytes(1, metadata.first.raw)
                                 stmt.setString(2, metadata.second)
                                 stmt.setLong(3, rowId)
                                 stmt.executeUpdate()
@@ -963,7 +963,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                     getCurrency()
                 ),
                 debit_account = it.getString("debtor_payto_uri"),
-                reserve_pub = EddsaPublicKey(it.getString("reserve_pub")),
+                reserve_pub = EddsaPublicKey(it.getBytes("reserve_pub")),
             )
         }
     }
@@ -996,7 +996,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                     getCurrency()
                 ),
                 credit_account = it.getString("creditor_payto_uri"),
-                wtid = ShortHashCode(it.getString("wtid")),
+                wtid = ShortHashCode(it.getBytes("wtid")),
                 exchange_base_url = it.getString("exchange_base_url")
             )
         }
@@ -1399,16 +1399,16 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
     data class TalerTransferFromDb(
         val timestamp: Long,
         val debitTxRowId: Long,
-        val requestUid: String,
+        val requestUid: HashCode,
         val amount: TalerAmount,
         val exchangeBaseUrl: String,
-        val wtid: String,
+        val wtid: ShortHashCode,
         val creditAccount: String
     )
     /**
      * Gets a Taler transfer request, given its UID.
      */
-    fun talerTransferGetFromUid(requestUid: String): TalerTransferFromDb? = conn { conn ->
+    fun talerTransferGetFromUid(requestUid: HashCode): TalerTransferFromDb? = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
               wtid
@@ -1423,10 +1423,10 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                   ON bank_transaction=txs.bank_transaction_id
               WHERE request_uid = ?;
         """)
-        stmt.setString(1, requestUid)
+        stmt.setBytes(1, requestUid.raw)
         stmt.oneOrNull {
             TalerTransferFromDb(
-                wtid = it.getString("wtid"),
+                wtid = ShortHashCode(it.getBytes("wtid")),
                 amount = TalerAmount(
                     value = it.getLong("amount_value"),
                     frac = it.getInt("amount_frac"),
@@ -1473,6 +1473,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         pmtInfId: String = "not used",
         endToEndId: String = "not used",
         ): TalerTransferCreationResult = conn { conn ->
+        val subject = "${req.wtid.encoded()} ${req.exchange_base_url}"
         val stmt = conn.prepareStatement("""
             SELECT
               out_exchange_balance_insufficient
@@ -1480,6 +1481,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
               ,out_tx_row_id
               FROM
                 taler_transfer (
+                  ?,
                   ?,
                   ?,
                   (?,?)::taler_amount,
@@ -1493,17 +1495,18 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                 );
         """)
 
-        stmt.setString(1, req.request_uid.encoded)
-        stmt.setString(2, req.wtid.encoded)
-        stmt.setLong(3, req.amount.value)
-        stmt.setInt(4, req.amount.frac)
-        stmt.setString(5, req.exchange_base_url)
-        stmt.setString(6, stripIbanPayto(req.credit_account) ?: throw badRequest("credit_account payto URI is invalid"))
-        stmt.setLong(7, exchangeBankAccountId)
-        stmt.setLong(8, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setString(9, acctSvcrRef)
-        stmt.setString(10, pmtInfId)
-        stmt.setString(11, endToEndId)
+        stmt.setBytes(1, req.request_uid.raw)
+        stmt.setBytes(2, req.wtid.raw)
+        stmt.setString(3, subject)
+        stmt.setLong(4, req.amount.value)
+        stmt.setInt(5, req.amount.frac)
+        stmt.setString(6, req.exchange_base_url)
+        stmt.setString(7, stripIbanPayto(req.credit_account) ?: throw badRequest("credit_account payto URI is invalid"))
+        stmt.setLong(8, exchangeBankAccountId)
+        stmt.setLong(9, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setString(10, acctSvcrRef)
+        stmt.setString(11, pmtInfId)
+        stmt.setString(12, endToEndId)
 
         stmt.executeQuery().use {
             when {

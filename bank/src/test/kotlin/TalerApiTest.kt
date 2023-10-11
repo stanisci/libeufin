@@ -53,11 +53,11 @@ class TalerApiTest {
         cashoutCurrency = "KUDOS"
     )
 
-    suspend fun transfer(db: Database, from: Long, to: BankAccount) {
-        db.talerTransferCreate(
+    suspend fun Database.genTransfer(from: Long, to: BankAccount) {
+        talerTransferCreate(
             req = TransferRequest(
                 request_uid = randHashCode(),
-                amount = TalerAmount(10, 0, "Kudos"),
+                amount = TalerAmount(10, 0, "KUDOS"),
                 exchange_base_url = "http://exchange.example.com/",
                 wtid = randShortHashCode(),
                 credit_account ="${stripIbanPayto(to.internalPaytoUri)}"
@@ -65,6 +65,21 @@ class TalerApiTest {
             exchangeBankAccountId = from,
             timestamp = Instant.now()
         )
+    }
+
+    suspend fun Database.genIncoming(from: Long, to: Long) {
+        bankTransactionCreate(
+            BankInternalTransaction(
+                creditorAccountId = from,
+                debtorAccountId = to,
+                subject = randShortHashCode().encoded(),
+                amount = TalerAmount( 10, 0, "KUDOS"),
+                accountServicerReference = "acct-svcr-ref",
+                endToEndId = "end-to-end-id",
+                paymentInformationId = "pmtinfid",
+                transactionDate = Instant.now()
+            )
+        ).assertSuccess()
     }
 
     fun commonSetup(lambda: (Database, BankApplicationContext) -> Unit) {
@@ -258,7 +273,7 @@ class TalerApiTest {
 
             // Foo pays Bar (the exchange) three time
             repeat(3) {
-                db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
+                db.genIncoming(2, 1)
             }
             // Should not show up in the taler wire gateway API history
             db.bankTransactionCreate(genTx("bogus foobar")).assertSuccess()
@@ -266,7 +281,7 @@ class TalerApiTest {
             db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)).assertSuccess()
             // Foo pays Bar (the exchange) twice, we should see five valid transactions
             repeat(2) {
-                db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
+                db.genIncoming(2, 1)
             }
 
             // Check ignore bogus subject
@@ -323,14 +338,14 @@ class TalerApiTest {
                     },
                     launch {
                         delay(200)
-                        db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
+                        db.genIncoming(2, 1)
                     }
                 )
             }
 
             // Testing ranges. 
             repeat(300) {
-                db.bankTransactionCreate(genTx(randShortHashCode().encoded)).assertSuccess()
+                db.genIncoming(2, 1)
             }
 
             // forward range:
@@ -397,7 +412,7 @@ class TalerApiTest {
 
             // Bar pays Foo three time
             repeat(3) {
-                transfer(db, 2, bankAccountFoo)
+                db.genTransfer(2, bankAccountFoo)
             }
             // Should not show up in the taler wire gateway API history
             db.bankTransactionCreate(genTx("bogus foobar", 1, 2)).assertSuccess()
@@ -405,7 +420,7 @@ class TalerApiTest {
             db.bankTransactionCreate(genTx("payout")).assertSuccess()
             // Bar pays Foo twice, we should see five valid transactions
             repeat(2) {
-                transfer(db, 2, bankAccountFoo)
+                db.genTransfer(2, bankAccountFoo)
             }
 
             // Check ignore bogus subject
@@ -462,14 +477,14 @@ class TalerApiTest {
                     },
                     launch {
                         delay(200)
-                        transfer(db, 2, bankAccountFoo)
+                        db.genTransfer(2, bankAccountFoo)
                     }
                 )
             }
 
             // Testing ranges.
             repeat(300) {
-                transfer(db, 2, bankAccountFoo)
+                db.genTransfer(2, bankAccountFoo)
             }
 
             // forward range:

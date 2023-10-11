@@ -66,14 +66,14 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         call.authCheck(TokenScope.readwrite, true)
         val req = call.receive<TransferRequest>()
         // Checking for idempotency.
-        val maybeDoneAlready = db.talerTransferGetFromUid(req.request_uid.encoded)
+        val maybeDoneAlready = db.talerTransferGetFromUid(req.request_uid)
         val creditAccount = stripIbanPayto(req.credit_account)
         if (maybeDoneAlready != null) {
             val isIdempotent =
                 maybeDoneAlready.amount == req.amount
                         && maybeDoneAlready.creditAccount == creditAccount
                         && maybeDoneAlready.exchangeBaseUrl == req.exchange_base_url
-                        && maybeDoneAlready.wtid == req.wtid.encoded
+                        && maybeDoneAlready.wtid == req.wtid
             if (isIdempotent) {
                 call.respond(
                     TransferResponse(
@@ -158,7 +158,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             )
         
         // TODO check conflict in transaction
-        if (db.bankTransactionCheckExists(req.reserve_pub.encoded) != null)
+        if (db.bankTransactionCheckExists(req.reserve_pub.encoded()) != null)
             throw conflict(
                 "Reserve pub. already used",
                 TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
@@ -176,7 +176,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             amount = req.amount,
             creditorAccountId = exchangeAccount.expectRowId(),
             transactionDate = txTimestamp,
-            subject = req.reserve_pub.encoded
+            subject = req.reserve_pub.encoded()
         )
         val res = db.bankTransactionCreate(op)
         /**
@@ -188,7 +188,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                 "Insufficient balance",
                 TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
             )
-        val rowId = db.bankTransactionCheckExists(req.reserve_pub.encoded)
+        val rowId = db.bankTransactionCheckExists(req.reserve_pub.encoded())
             ?: throw internalServerError("Could not find the just inserted bank transaction")
         call.respond(
             AddIncomingResponse(
