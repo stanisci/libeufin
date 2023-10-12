@@ -33,9 +33,6 @@ import java.net.URL
 import java.time.Instant
 import java.util.*
 
-
-const val AMOUNT_FRACTION_BASE = 100000000
-
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers")
 
 fun ApplicationCall.expectUriComponent(componentName: String) =
@@ -191,86 +188,6 @@ fun badRequest(
 // Generates a new Payto-URI with IBAN scheme.
 fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
 
-// Parses Taler amount, returning null if the input is invalid.
-fun parseTalerAmount2(
-    amount: String, fracDigits: FracDigits
-): TalerAmount? {
-    val format = when (fracDigits) {
-        FracDigits.TWO -> "^([A-Z]+):([0-9]+)(\\.[0-9][0-9]?)?$"
-        FracDigits.EIGHT -> "^([A-Z]+):([0-9]+)(\\.[0-9][0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?[0-9]?)?$"
-    }
-    val match = Regex(format).find(amount) ?: return null
-    val _value = match.destructured.component2()
-    // Fraction is at most 8 digits, so it's always < than MAX_INT.
-    val fraction: Int = match.destructured.component3().run {
-        var frac = 0
-        var power = AMOUNT_FRACTION_BASE
-        if (this.isNotEmpty())
-        // Skips the dot and processes the fractional chars.
-            this.substring(1).forEach { chr ->
-                power /= 10
-                frac += power * chr.digitToInt()
-            }
-        return@run frac
-    }
-    val value: Long = try {
-        _value.toLong()
-    } catch (e: NumberFormatException) {
-        return null
-    }
-    return TalerAmount(
-        value = value, frac = fraction, currency = match.destructured.component1()
-    )
-}
-
-/**
- * This helper takes the serialized version of a Taler Amount
- * type and parses it into Libeufin's internal representation.
- * It returns a TalerAmount type, or throws a LibeufinBankException
- * it the input is invalid.  Such exception will be then caught by
- * Ktor, transformed into the appropriate HTTP error type, and finally
- * responded to the client.
- */
-fun parseTalerAmount(
-    amount: String, fracDigits: FracDigits = FracDigits.EIGHT // FIXME: fracDigits should come from config.
-): TalerAmount {
-    val maybeAmount = parseTalerAmount2(amount, fracDigits) ?: throw LibeufinBankException(
-        httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
-            code = TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT.code, hint = "Invalid amount: $amount"
-        )
-    )
-    return maybeAmount
-}
-
-private fun normalizeAmount(amt: TalerAmount): TalerAmount {
-    if (amt.frac > AMOUNT_FRACTION_BASE) {
-        val normalValue = amt.value + (amt.frac / AMOUNT_FRACTION_BASE)
-        val normalFrac = amt.frac % AMOUNT_FRACTION_BASE
-        return TalerAmount(
-            value = normalValue, frac = normalFrac, currency = amt.currency
-        )
-    }
-    return amt
-}
-
-
-// Adds two amounts and returns the normalized version.
-private fun amountAdd(first: TalerAmount, second: TalerAmount): TalerAmount {
-    if (first.currency != second.currency) throw badRequest(
-        "Currency mismatch, balance '${first.currency}', price '${second.currency}'",
-        TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-    )
-    val valueAdd = first.value + second.value
-    if (valueAdd < first.value) throw badRequest("Amount value overflowed")
-    val fracAdd = first.frac + second.frac
-    if (fracAdd < first.frac) throw badRequest("Amount fraction overflowed")
-    return normalizeAmount(
-        TalerAmount(
-            value = valueAdd, frac = fracAdd, currency = first.currency
-        )
-    )
-}
-
 /**
  * Checks whether the balance could cover the due amount.  Returns true
  * when it does, false otherwise.  Note: this function is only a checker,
@@ -281,9 +198,9 @@ private fun amountAdd(first: TalerAmount, second: TalerAmount): TalerAmount {
 fun isBalanceEnough(
     balance: TalerAmount, due: TalerAmount, maxDebt: TalerAmount, hasBalanceDebt: Boolean
 ): Boolean {
-    val normalMaxDebt = normalizeAmount(maxDebt) // Very unlikely to be needed.
+    val normalMaxDebt = maxDebt.normalize() // Very unlikely to be needed.
     if (hasBalanceDebt) {
-        val chargedBalance = amountAdd(balance, due)
+        val chargedBalance = balance + due
         if (chargedBalance.value > normalMaxDebt.value) return false // max debt surpassed
         if ((chargedBalance.value == normalMaxDebt.value) && (chargedBalance.frac > maxDebt.frac)) return false
         return true
@@ -300,7 +217,7 @@ fun isBalanceEnough(
     val valueDiff = if (balance.value < due.value) due.value - balance.value else 0L
     val fracDiff = if (balance.frac < due.frac) due.frac - balance.frac else 0
     // Getting the normalized version of such diff.
-    val normalDiff = normalizeAmount(TalerAmount(valueDiff, fracDiff, balance.currency))
+    val normalDiff = TalerAmount(valueDiff, fracDiff, balance.currency).normalize()
     // Failing if the normalized diff surpasses the max debt.
     if (normalDiff.value > normalMaxDebt.value) return false
     if ((normalDiff.value == normalMaxDebt.value) && (normalDiff.frac > normalMaxDebt.frac)) return false

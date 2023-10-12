@@ -33,139 +33,17 @@ import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.*
 
 /**
- * 32-byte Crockford's Base32 encoded data.
- */
-@Serializable(with = Base32Crockford32B.Serializer::class)
-class Base32Crockford32B {
-    private var encoded: String? = null
-    val raw: ByteArray
-
-    constructor(encoded: String) {
-        val decoded = try {
-            Base32Crockford.decode(encoded) 
-        } catch (e: EncodingException) {
-            null
-        }
-        
-        require(decoded != null) {
-            "Data should be encoded using Crockford's Base32"
-        }
-        require(decoded.size == 32) {
-            "Encoded data should be 32 bytes long"
-        }
-        this.raw = decoded
-        this.encoded = encoded
-    }
-    constructor(raw: ByteArray) {
-        require(raw.size == 32) {
-            "Encoded data should be 32 bytes long"
-        }
-        this.raw = raw
-    }
-
-    fun encoded(): String {
-        encoded = encoded ?: Base32Crockford.encode(raw)
-        return encoded!!
-    }
-
-    override fun equals(other: Any?) = (other is Base32Crockford32B) && Arrays.equals(raw, other.raw)
-
-    internal object Serializer : KSerializer<Base32Crockford32B> {
-        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford32B", PrimitiveKind.STRING)
-    
-        override fun serialize(encoder: Encoder, value: Base32Crockford32B) {
-            encoder.encodeString(value.encoded())
-        }
-    
-        override fun deserialize(decoder: Decoder): Base32Crockford32B {
-            return Base32Crockford32B(decoder.decodeString())
-        }
-    }
-}
-
-/**
- * 64-byte Crockford's Base32 encoded data.
- */
-@Serializable(with = Base32Crockford64B.Serializer::class)
-class Base32Crockford64B {
-    private var encoded: String? = null
-    val raw: ByteArray
-
-    constructor(encoded: String) {
-        val decoded = try {
-            Base32Crockford.decode(encoded) 
-        } catch (e: EncodingException) {
-            null
-        }
-        
-        require(decoded != null) {
-            "Data should be encoded using Crockford's Base32"
-        }
-        require(decoded.size == 64) {
-            "Encoded data should be 32 bytes long"
-        }
-        this.raw = decoded
-        this.encoded = encoded
-    }
-    constructor(raw: ByteArray) {
-        require(raw.size == 64) {
-            "Encoded data should be 32 bytes long"
-        }
-        this.raw = raw
-    }
-
-    fun encoded(): String {
-        encoded = encoded ?: Base32Crockford.encode(raw)
-        return encoded!!
-    }
-
-    override fun equals(other: Any?) = (other is Base32Crockford64B) && Arrays.equals(raw, other.raw)
-
-    internal object Serializer : KSerializer<Base32Crockford64B> {
-        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford64B", PrimitiveKind.STRING)
-    
-        override fun serialize(encoder: Encoder, value: Base32Crockford64B) {
-            encoder.encodeString(value.encoded())
-        }
-    
-        override fun deserialize(decoder: Decoder): Base32Crockford64B {
-            return Base32Crockford64B(decoder.decodeString())
-        }
-    }
-}
-
-/** 32-byte hash code. */
-typealias ShortHashCode = Base32Crockford32B;
-/** 64-byte hash code. */
-typealias HashCode = Base32Crockford64B;
-/**
- * EdDSA and ECDHE public keys always point on Curve25519
- * and represented  using the standard 256 bits Ed25519 compact format,
- * converted to Crockford Base32.
- */
-typealias EddsaPublicKey = Base32Crockford32B;
-
-/**
  * Allowed lengths for fractional digits in amounts.
  */
 enum class FracDigits {
     TWO, EIGHT
 }
 
-/**
- * Timestamp containing the number of seconds since epoch.
- */
-@Serializable(with = TalerProtocolTimestampSerializer::class)
-data class TalerProtocolTimestamp(
-    val t_s: Instant,
-) {
-    companion object {
-        fun fromMicroseconds(uSec: Long): TalerProtocolTimestamp {
-            return TalerProtocolTimestamp(
-                Instant.EPOCH.plus(uSec, ChronoUnit.MICROS)
-            )
-        }
-    }
+
+// Allowed values for bank transactions directions.
+enum class TransactionDirection {
+    credit,
+    debit
 }
 
 /**
@@ -216,14 +94,6 @@ data class RegisterAccountRequest(
     val internal_payto_uri: String? = null
 )
 
-/**
- * Internal representation of relative times.  The
- * "forever" case is represented with Long.MAX_VALUE.
- */
-@Serializable(with = RelativeTimeSerializer::class)
-data class RelativeTime(
-    val d_us: Duration
-)
 
 /**
  * Type expected at POST /accounts/{USERNAME}/token
@@ -277,38 +147,6 @@ data class Customer(
 )
 
 /**
- * Represents a Taler amount.  This type can be used both
- * to hold database records and amounts coming from the parser.
- * If maybeCurrency is null, then the constructor defaults it
- * to be the "internal currency".  Internal currency is the one
- * with which Libeufin-Bank moves funds within itself, therefore
- * not to be mistaken with the cashout currency, which is the one
- * that gets credited to Libeufin-Bank users to their cashout_payto_uri.
- *
- * maybeCurrency is typically null when the TalerAmount object gets
- * defined by the Database class.
- */
-@Serializable(with = TalerAmountSerializer::class)
-class TalerAmount(
-    val value: Long,
-    val frac: Int,
-    val currency: String
-) {
-    override fun equals(other: Any?): Boolean {
-        return other is TalerAmount &&
-                other.value == this.value &&
-                other.frac == this.frac &&
-                other.currency == this.currency
-    }
-
-    override fun toString(): String {
-        val fracNoTrailingZero = this.frac.toString().dropLastWhile { it == '0' }
-        if (fracNoTrailingZero.isEmpty()) return "$currency:$value"
-        return "$currency:$value.$fracNoTrailingZero"
-    }
-}
-
-/**
  * Convenience type to get and set bank account information
  * from/to the database.
  */
@@ -334,12 +172,6 @@ data class BankAccount(
     val hasDebt: Boolean,
     val maxDebt: TalerAmount
 )
-
-// Allowed values for bank transactions directions.
-enum class TransactionDirection {
-    credit,
-    debit
-}
 
 // Allowed values for cashout TAN channels.
 enum class TanChannel {

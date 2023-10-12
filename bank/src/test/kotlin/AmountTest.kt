@@ -20,6 +20,7 @@
 
 import org.junit.Test
 import tech.libeufin.bank.*
+import kotlin.test.assertEquals
 
 class AmountTest {
     @Test
@@ -71,22 +72,37 @@ class AmountTest {
     }
 
     @Test
-    fun parseTalerAmountTest() {
-        val one = "EUR:1"
-        var obj = parseTalerAmount2(one, FracDigits.TWO)
-        assert(obj!!.value == 1L && obj.frac == 0 && obj.currency == "EUR")
-        val onePointZero = "EUR:1.00"
-        obj = parseTalerAmount2(onePointZero, FracDigits.TWO)
-        assert(obj!!.value == 1L && obj.frac == 0)
-        val onePointZeroOne = "EUR:1.01"
-        obj = parseTalerAmount2(onePointZeroOne, FracDigits.TWO)
-        assert(obj!!.value == 1L && obj.frac == 1000000)
-        obj = parseTalerAmount2("EUR:0.00000001", FracDigits.EIGHT)
-        assert(obj!!.value == 0L && obj.frac == 1)
-        // Setting two fractional digits.
-        obj = parseTalerAmount2("EUR:0.01", FracDigits.TWO) // one cent
-        assert(obj!!.value == 0L && obj.frac == 1000000)
-        obj = parseTalerAmount2("EUR:0.1", FracDigits.TWO) // ten cents
-        assert(obj!!.value == 0L && obj.frac == 10000000)
+    fun parseValid() {
+        assertEquals(TalerAmount("EUR:4"), TalerAmount(4L, 0, "EUR"))
+        assertEquals(TalerAmount("EUR:0.02"), TalerAmount(0L, 2000000, "EUR"))
+        assertEquals(TalerAmount(" EUR:4.12"), TalerAmount(4L, 12000000, "EUR"))
+        assertEquals(TalerAmount(" *LOCAL:4444.1000"), TalerAmount(4444L, 10000000, "*LOCAL"))
+    }
+
+    @Test
+    fun parseInvalid() {
+        assertException("Empty amount") {TalerAmount("")}
+        assertException("Missing value") {TalerAmount("EUR")}
+        assertException("Currency too big") {TalerAmount("AZERTYUIOPQSD:")}
+        assertException("Value specified in amount is too large") {TalerAmount("EUR:${Long.MAX_VALUE}")}
+        assertException("Fractional value too precise") {TalerAmount("EUR:4.000000000")}
+        assertException("Invalid fractional value") {TalerAmount("EUR:4.4a")}
+    }
+
+    @Test
+    fun normalize() {
+        assertEquals(TalerAmount("EUR:6"), TalerAmount(4L, 2 * TalerAmount.FRACTION_BASE, "EUR").normalize())
+        assertEquals(TalerAmount("EUR:6.00000001"), TalerAmount(4L, 2 * TalerAmount.FRACTION_BASE + 1, "EUR").normalize())
+        assertException("Amount value overflowed") { TalerAmount(Long.MAX_VALUE, 2 * TalerAmount.FRACTION_BASE + 1, "EUR").normalize() }
+        assertException("Amount value overflowed") { TalerAmount(MAX_SAFE_INTEGER, 2 * TalerAmount.FRACTION_BASE + 1, "EUR").normalize() }
+    }
+
+    @Test
+    fun add() {
+        assertEquals(TalerAmount("EUR:6.41") + TalerAmount("EUR:4.69"), TalerAmount("EUR:11.1"))
+        assertException("Amount value overflowed") { TalerAmount(MAX_SAFE_INTEGER - 5, 0, "EUR") + TalerAmount(6, 0, "EUR") }
+        assertException("Amount value overflowed") { TalerAmount(Long.MAX_VALUE, 0, "EUR") + TalerAmount(1, 0, "EUR") }
+        assertException("Amount value overflowed") { TalerAmount(MAX_SAFE_INTEGER - 5, TalerAmount.FRACTION_BASE - 1, "EUR") + TalerAmount(5, 2, "EUR") }
+        assertException("Amount fraction overflowed") { TalerAmount(0, Int.MAX_VALUE, "EUR") + TalerAmount(0, 1, "EUR") }
     }
 }

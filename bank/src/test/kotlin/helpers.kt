@@ -43,7 +43,6 @@ fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {
 fun HttpResponse.assertOk(): HttpResponse = assertStatus(HttpStatusCode.OK)
 fun HttpResponse.assertBadRequest(): HttpResponse = assertStatus(HttpStatusCode.BadRequest)
 
-
 fun BankTransactionResult.assertSuccess() {
     assertEquals(BankTransactionResult.SUCCESS, this)
 }
@@ -55,6 +54,15 @@ suspend fun assertTime(min: Int, max: Int, lambda: suspend () -> Unit) {
     val time = end - start
     assert(time >= min) { "Expected to last at least $min ms, lasted $time" }
     assert(time <= max) { "Expected to last at most $max ms, lasted $time" }
+}
+
+fun assertException(msg: String, lambda: () -> Unit) {
+    try {
+        lambda()
+        throw Exception("Expected failure")
+    } catch (e: Exception) {
+        assertEquals(msg, e.message)
+    }
 }
 
 /* ----- Body helper ----- */

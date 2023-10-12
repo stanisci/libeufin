@@ -163,149 +163,6 @@ data class BankApplicationContext(
     }
 }
 
-
-/**
- * This custom (de)serializer interprets the Timestamp JSON
- * type of the Taler common API.  In particular, it is responsible
- * for _serializing_ timestamps, as this datatype is so far
- * only used to respond to clients.
- */
-object TalerProtocolTimestampSerializer : KSerializer<TalerProtocolTimestamp> {
-    override fun serialize(encoder: Encoder, value: TalerProtocolTimestamp) {
-        // Thanks: https://github.com/Kotlin/kotlinx.serialization/blob/master/docs/serializers.md#hand-written-composite-serializer
-        encoder.encodeStructure(descriptor) {
-            if (value.t_s == Instant.MAX) {
-                encodeStringElement(descriptor, 0, "never")
-                return@encodeStructure
-            }
-            encodeLongElement(descriptor, 0, value.t_s.epochSecond)
-        }
-    }
-
-    override fun deserialize(decoder: Decoder): TalerProtocolTimestamp {
-        val jsonInput =
-            decoder as? JsonDecoder ?: throw internalServerError("TalerProtocolTimestamp had no JsonDecoder")
-        val json = try {
-            jsonInput.decodeJsonElement().jsonObject
-        } catch (e: Exception) {
-            throw badRequest(
-                "Did not find a JSON object for TalerProtocolTimestamp: ${e.message}",
-                TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
-            )
-        }
-        val maybeTs = json["t_s"]?.jsonPrimitive ?: throw badRequest("Taler timestamp invalid: t_s field not found")
-        if (maybeTs.isString) {
-            if (maybeTs.content != "never") throw badRequest("Only 'never' allowed for t_s as string, but '${maybeTs.content}' was found")
-            return TalerProtocolTimestamp(t_s = Instant.MAX)
-        }
-        val ts: Long = maybeTs.longOrNull
-            ?: throw badRequest("Could not convert t_s '${maybeTs.content}' to a number")
-        // Not allowing negative values, despite java.time allowance.
-        if (ts < 0)
-            throw badRequest("Negative timestamp not allowed.")
-        val instant = try {
-            Instant.ofEpochSecond(ts)
-        } catch (e: Exception) {
-            logger.error("Could not get Instant from t_s: $ts: ${e.message}")
-            throw badRequest("Could not serialize this t_s: ${ts}")
-        }
-        return TalerProtocolTimestamp(instant)
-    }
-
-    override val descriptor: SerialDescriptor =
-        buildClassSerialDescriptor("TalerProtocolTimestamp") {
-            element<JsonElement>("t_s")
-        }
-}
-
-/**
- * This custom (de)serializer interprets the RelativeTime JSON
- * type.  In particular, it is responsible for converting the
- * "forever" string into Long.MAX_VALUE.  Any other numeric value
- * is passed as is.
- */
-object RelativeTimeSerializer : KSerializer<RelativeTime> {
-    /**
-     * Internal representation to JSON.
-     */
-    override fun serialize(encoder: Encoder, value: RelativeTime) {
-        // Thanks: https://github.com/Kotlin/kotlinx.serialization/blob/master/docs/serializers.md#hand-written-composite-serializer
-        encoder.encodeStructure(descriptor) {
-            if (value.d_us == ChronoUnit.FOREVER.duration) {
-                encodeStringElement(descriptor, 0, "forever")
-                return@encodeStructure
-            }
-            val dUs = try {
-                value.d_us.toNanos() / 1000L
-            } catch (e: Exception) {
-                logger.error(e.message)
-                // Bank's fault, as each numeric value should be checked before entering the system.
-                throw internalServerError("Could not convert java.time.Duration to JSON")
-            }
-            encodeLongElement(descriptor, 0, dUs)
-        }
-    }
-
-    /**
-     * JSON to internal representation.
-     */
-    override fun deserialize(decoder: Decoder): RelativeTime {
-        val jsonInput = decoder as? JsonDecoder ?: throw internalServerError("RelativeTime had no JsonDecoder")
-        val json = try {
-            jsonInput.decodeJsonElement().jsonObject
-        } catch (e: Exception) {
-            throw badRequest(
-                "Did not find a RelativeTime JSON object: ${e.message}",
-                TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
-            )
-        }
-        val maybeDUs = json["d_us"]?.jsonPrimitive ?: throw badRequest("Relative time invalid: d_us field not found")
-        if (maybeDUs.isString) {
-            if (maybeDUs.content != "forever") throw badRequest("Only 'forever' allowed for d_us as string, but '${maybeDUs.content}' was found")
-            return RelativeTime(d_us = ChronoUnit.FOREVER.duration)
-        }
-        val dUs: Long = maybeDUs.longOrNull
-            ?: throw badRequest("Could not convert d_us: '${maybeDUs.content}' to a number")
-        if (dUs < 0)
-            throw badRequest("Negative duration specified.")
-        val duration = try {
-            Duration.of(dUs, ChronoUnit.MICROS)
-        } catch (e: Exception) {
-            logger.error("Could not get Duration out of d_us content: ${dUs}. ${e.message}")
-            throw badRequest("Could not get Duration out of d_us content: ${dUs}")
-        }
-        return RelativeTime(d_us = duration)
-    }
-
-    override val descriptor: SerialDescriptor =
-        buildClassSerialDescriptor("RelativeTime") {
-            // JsonElement helps to obtain "union" type Long|String
-            element<JsonElement>("d_us")
-        }
-}
-
-object TalerAmountSerializer : KSerializer<TalerAmount> {
-
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("TalerAmount", PrimitiveKind.STRING)
-
-    override fun serialize(encoder: Encoder, value: TalerAmount) {
-        encoder.encodeString(value.toString())
-    }
-
-    override fun deserialize(decoder: Decoder): TalerAmount {
-        val maybeAmount = try {
-            decoder.decodeString()
-        } catch (e: Exception) {
-            throw badRequest(
-                "Did not find any Taler amount as string: ${e.message}",
-                TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
-            )
-        }
-        return parseTalerAmount(maybeAmount)
-    }
-}
-
 /**
  * This plugin inflates the requests that have "Content-Encoding: deflate"
  */
@@ -511,8 +368,11 @@ fun durationFromPretty(s: String): Long {
 fun TalerConfig.requireAmount(section: String, option: String, currency: String): TalerAmount {
     val amountStr = lookupString(section, option) ?:
         throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
-    val amount = parseTalerAmount2(amountStr, FracDigits.EIGHT) ?:
+    val amount = try {
+        TalerAmount(amountStr)
+    } catch (e: Exception) {
         throw TalerConfigError("expected amount for section $section, option $option, but amount is malformed")
+    }
 
     if (amount.currency != currency) {
         throw TalerConfigError(
