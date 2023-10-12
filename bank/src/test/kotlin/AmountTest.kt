@@ -75,18 +75,20 @@ class AmountTest {
     fun parseValid() {
         assertEquals(TalerAmount("EUR:4"), TalerAmount(4L, 0, "EUR"))
         assertEquals(TalerAmount("EUR:0.02"), TalerAmount(0L, 2000000, "EUR"))
-        assertEquals(TalerAmount(" EUR:4.12"), TalerAmount(4L, 12000000, "EUR"))
-        assertEquals(TalerAmount(" *LOCAL:4444.1000"), TalerAmount(4444L, 10000000, "*LOCAL"))
+        assertEquals(TalerAmount("EUR:4.12"), TalerAmount(4L, 12000000, "EUR"))
+        assertEquals(TalerAmount("LOCAL:4444.1000"), TalerAmount(4444L, 10000000, "LOCAL"))
     }
 
     @Test
     fun parseInvalid() {
-        assertException("Empty amount") {TalerAmount("")}
-        assertException("Missing value") {TalerAmount("EUR")}
-        assertException("Currency too big") {TalerAmount("AZERTYUIOPQSD:")}
+        assertException("Invalid amount format") {TalerAmount("")}
+        assertException("Invalid amount format") {TalerAmount("EUR")}
+        assertException("Invalid amount format") {TalerAmount("eur:12")}
+        assertException("Invalid amount format") {TalerAmount(" EUR:12")}
+        assertException("Invalid amount format") {TalerAmount("AZERTYUIOPQSD:12")}
         assertException("Value specified in amount is too large") {TalerAmount("EUR:${Long.MAX_VALUE}")}
-        assertException("Fractional value too precise") {TalerAmount("EUR:4.000000000")}
-        assertException("Invalid fractional value") {TalerAmount("EUR:4.4a")}
+        assertException("Invalid amount format") {TalerAmount("EUR:4.000000000")}
+        assertException("Invalid amount format") {TalerAmount("EUR:4.4a")}
     }
 
     @Test

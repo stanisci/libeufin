@@ -235,26 +235,20 @@ class TalerAmount {
     constructor(encoded: String) {
         fun badAmount(hint: String): Exception = 
             badRequest(hint, TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT)
-
-        if (encoded.isEmpty()) throw badAmount("Empty amount")
-        val currencySplit: List<String> = encoded.split(':', limit = 2)
-        if (currencySplit.size != 2) throw badAmount("Missing value")
-        currency = currencySplit[0].trimStart()
-        if (currency.length > 12) throw badAmount("Currency too big")
-        val dotSplit: List<String> = currencySplit[1].split('.', limit = 2)
-
-        value = dotSplit[0].toLongOrNull() ?: throw badAmount("Invalid value")
-        if (value > MAX_SAFE_INTEGER) throw badAmount("Value specified in amount is too large")
-
-        if (dotSplit.size == 2) {
-            if (dotSplit[1].length > 8) throw badAmount("Fractional value too precise")
-            var tmp: Int =  dotSplit[1].toIntOrNull() ?: throw badAmount("Invalid fractional value")
-            repeat(8 - dotSplit[1].length) {
+        
+        val match = PATTERN.matchEntire(encoded) ?: throw badAmount("Invalid amount format");
+        val (currency, value, frac) = match.destructured
+        this.currency = currency
+        this.value = value.toLongOrNull() ?: throw badAmount("Invalid value")
+        if (this.value > MAX_SAFE_INTEGER) throw badAmount("Value specified in amount is too large")
+        this.frac = if (frac.isEmpty()) {
+            0
+        } else {
+            var tmp = frac.toIntOrNull() ?: throw badAmount("Invalid fractional value")
+            repeat(8 - frac.length) {
                 tmp *= 10
             }
-            frac = tmp
-        } else {
-            frac = 0
+            tmp
         }
     }
 
@@ -314,6 +308,7 @@ class TalerAmount {
 
     companion object {
         const val FRACTION_BASE = 100000000
+        private val PATTERN = Regex("([A-Z]{1,11}):([0-9]+)(?:\\.([0-9]{0,8}))?");
     }
 }
 
