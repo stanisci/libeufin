@@ -140,7 +140,6 @@ THEN
   UPDATE customers SET name=in_name WHERE customer_id = my_customer_id;
 END IF;
 END $$;
-
 COMMENT ON FUNCTION account_reconfig(TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN)
   IS 'Updates values on customer and bank account rows based on the input data.';
 
@@ -202,25 +201,56 @@ CREATE OR REPLACE FUNCTION taler_transfer(
   IN in_amount taler_amount,
   IN in_exchange_base_url TEXT,
   IN in_credit_account_payto TEXT,
-  IN in_exchange_bank_account_id BIGINT,
+  IN in_username TEXT,
   IN in_timestamp BIGINT,
   IN in_account_servicer_reference TEXT,
   IN in_payment_information_id TEXT,
   IN in_end_to_end_id TEXT,
+  OUT out_request_uid_reuse BOOLEAN,
   OUT out_exchange_balance_insufficient BOOLEAN,
+  OUT out_nx_debitor BOOLEAN,
+  OUT out_nx_exchange BOOLEAN,
   OUT out_nx_creditor BOOLEAN,
-  OUT out_tx_row_id BIGINT
+  OUT out_tx_row_id BIGINT,
+  OUT out_timestamp BIGINT
 )
 LANGUAGE plpgsql
 AS $$
 DECLARE
+exchange_bank_account_id BIGINT;
 receiver_bank_account_id BIGINT;
 BEGIN
-
--- First creating the bank transaction, then updating
--- the transfer request table, because that needs to point
--- at the bank transaction.
-
+-- Check for idempotence and conflict
+SELECT (amount != in_amount 
+          OR creditor_payto_uri != in_credit_account_payto
+          OR exchange_base_url != in_exchange_base_url
+          OR wtid != in_wtid)
+        ,bank_transaction_id, transaction_date
+  INTO out_request_uid_reuse, out_tx_row_id, out_timestamp
+  FROM taler_exchange_outgoing
+      JOIN bank_account_transactions AS txs
+        ON bank_transaction=txs.bank_transaction_id 
+  WHERE request_uid = in_request_uid;
+IF found THEN
+  RETURN;
+END IF;
+-- Find exchange bank account id
+SELECT
+  bank_account_id, NOT is_taler_exchange
+  INTO exchange_bank_account_id, out_nx_exchange
+  FROM bank_accounts 
+      JOIN customers 
+        ON customer_id=owning_customer_id
+  WHERE login = in_username;
+IF NOT FOUND THEN
+  out_nx_debitor=TRUE;
+  RETURN;
+ELSIF out_nx_exchange THEN
+  RETURN;
+END IF;
+-- Find receiver bank account id 
+-- TODO handle bounce when receiver is exchange ?
+-- TODO handle transfer to self ?
 SELECT
   bank_account_id
   INTO receiver_bank_account_id
@@ -231,7 +261,7 @@ THEN
   out_nx_creditor=TRUE;
   RETURN;
 END IF;
-out_nx_creditor=FALSE;
+-- Perform bank transfer
 SELECT
   out_balance_insufficient,
   out_debit_row_id
@@ -240,7 +270,7 @@ SELECT
     out_tx_row_id
   FROM bank_wire_transfer(
     receiver_bank_account_id,
-    in_exchange_bank_account_id,
+    exchange_bank_account_id,
     in_subject,
     in_amount,
     in_timestamp,
@@ -251,6 +281,7 @@ SELECT
 IF out_exchange_balance_insufficient THEN
   RETURN;
 END IF;
+-- Register outgoing transaction
 INSERT
   INTO taler_exchange_outgoing (
     request_uid,
@@ -263,8 +294,9 @@ INSERT
   in_exchange_base_url,
   out_tx_row_id
 );
+out_timestamp=in_timestamp;
 -- notify new transaction
-PERFORM pg_notify('outgoing_tx', in_exchange_bank_account_id || ' ' || out_tx_row_id);
+PERFORM pg_notify('outgoing_tx', exchange_bank_account_id || ' ' || out_tx_row_id);
 END $$;
 COMMENT ON FUNCTION taler_transfer(
   bytea,
@@ -273,7 +305,7 @@ COMMENT ON FUNCTION taler_transfer(
   taler_amount,
   text,
   text,
-  bigint,
+  text,
   bigint,
   text,
   text,

@@ -72,7 +72,8 @@ class DatabaseTest {
         lastNexusFetchRowId = 1L,
         owningCustomerId = 1L,
         hasDebt = false,
-        maxDebt = TalerAmount(10, 1, "KUDOS")
+        maxDebt = TalerAmount(10, 1, "KUDOS"),
+        isTalerExchange = true
     )
     private val bankAccountBar = BankAccount(
         internalPaytoUri = "payto://iban/BAR-IBAN-ABC".lowercase(),
@@ -126,10 +127,10 @@ class DatabaseTest {
         assert(db.bankAccountCreate(bankAccountBar) != null)
         val res = db.talerTransferCreate(
             req = exchangeReq,
-            exchangeBankAccountId = 1L,
+            username = "foo",
             timestamp = Instant.now()
         )
-        assert(res.txResult == BankTransactionResult.SUCCESS)
+        assert(res.txResult == TalerTransferResult.SUCCESS)
     }
 
     @Test

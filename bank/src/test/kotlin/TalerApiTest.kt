@@ -33,15 +33,8 @@ class TalerApiTest {
         lastNexusFetchRowId = 1L,
         owningCustomerId = 1L,
         hasDebt = false,
-        maxDebt = TalerAmount(10, 1, "KUDOS")
-    )
-    val bankAccountBar = BankAccount(
-        internalPaytoUri = stripIbanPayto("payto://iban/BAR-IBAN-ABC")!!,
-        lastNexusFetchRowId = 1L,
-        owningCustomerId = 2L,
-        hasDebt = false,
         maxDebt = TalerAmount(10, 1, "KUDOS"),
-        isTalerExchange = true
+        isTalerExchange = false
     )
     val customerBar = Customer(
         login = "bar",
@@ -52,8 +45,17 @@ class TalerApiTest {
         cashoutPayto = "payto://external-IBAN",
         cashoutCurrency = "KUDOS"
     )
+    val bankAccountBar = BankAccount(
+        internalPaytoUri = stripIbanPayto("payto://iban/BAR-IBAN-ABC")!!,
+        lastNexusFetchRowId = 1L,
+        owningCustomerId = 2L,
+        hasDebt = false,
+        maxDebt = TalerAmount(10, 1, "KUDOS"),
+        isTalerExchange = true
+    )
+    
 
-    suspend fun Database.genTransfer(from: Long, to: BankAccount) {
+    suspend fun Database.genTransfer(from: String, to: BankAccount) {
         talerTransferCreate(
             req = TransferRequest(
                 request_uid = randHashCode(),
@@ -62,7 +64,7 @@ class TalerApiTest {
                 wtid = randShortHashCode(),
                 credit_account ="${stripIbanPayto(to.internalPaytoUri)}"
             ),
-            exchangeBankAccountId = from,
+            username = from,
             timestamp = Instant.now()
         )
     }
@@ -125,6 +127,8 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
 
+            // TODO what to do when creditor and debtor are both exchanges
+
             authRoutine(client, "/accounts/foo/taler-wire-gateway/transfer")
 
             val valid_req = json {
@@ -132,34 +136,40 @@ class TalerApiTest {
                 "amount" to "KUDOS:55"
                 "exchange_base_url" to "http://exchange.example.com/"
                 "wtid" to randShortHashCode()
-                "credit_account" to "${stripIbanPayto(bankAccountBar.internalPaytoUri)}"
+                "credit_account" to "${stripIbanPayto(bankAccountFoo.internalPaytoUri)}"
             };
 
-            // Checking exchange debt constraint.
+            // Checking exchange account constraint.
             client.post("/accounts/foo/taler-wire-gateway/transfer") {
                 basicAuth("foo", "pw")
+                jsonBody(valid_req)
+            }.assertStatus(HttpStatusCode.Forbidden)
+
+            // Checking exchange debt constraint.
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
                 jsonBody(valid_req)
             }.assertStatus(HttpStatusCode.Conflict)
 
             // Giving debt allowance and checking the OK case.
             assert(db.bankAccountSetMaxDebt(
-                1L,
+                2L,
                 TalerAmount(1000, 0, "KUDOS")
             ))
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
                 jsonBody(valid_req)
             }.assertOk()
 
             // check idempotency
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
                 jsonBody(valid_req)
             }.assertOk()
 
             // Trigger conflict due to reused request_uid
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
                 jsonBody(
                     json(valid_req) { 
                         "wtid" to randShortHashCode()
@@ -169,8 +179,8 @@ class TalerApiTest {
             }.assertStatus(HttpStatusCode.Conflict)
 
             // Triggering currency mismatch
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
                 jsonBody(
                     json(valid_req) { 
                         "request_uid" to randHashCode()
@@ -180,9 +190,21 @@ class TalerApiTest {
                 )
             }.assertBadRequest()
 
+            // Unknown account currency mismatch
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
+                jsonBody(
+                    json(valid_req) { 
+                        "request_uid" to randHashCode()
+                        "wtid" to randShortHashCode()
+                        "credit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
+                    }
+                )
+            }.assertStatus(HttpStatusCode.NotFound)
+
             // Bad BASE32 wtid
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
                 jsonBody(
                     json(valid_req) { 
                         "wtid" to "I love chocolate"
@@ -191,8 +213,8 @@ class TalerApiTest {
             }.assertBadRequest()
             
             // Bad BASE32 len wtid
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
                 jsonBody(
                     json(valid_req) { 
                         "wtid" to randBase32Crockford(31)
@@ -201,8 +223,8 @@ class TalerApiTest {
             }.assertBadRequest()
 
             // Bad BASE32 request_uid
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
                 jsonBody(
                     json(valid_req) { 
                         "request_uid" to "I love chocolate"
@@ -211,8 +233,8 @@ class TalerApiTest {
             }.assertBadRequest()
 
             // Bad BASE32 len wtid
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/transfer") {
+                basicAuth("bar", "secret")
                 jsonBody(
                     json(valid_req) { 
                         "request_uid" to randBase32Crockford(65)
@@ -412,7 +434,7 @@ class TalerApiTest {
 
             // Bar pays Foo three time
             repeat(3) {
-                db.genTransfer(2, bankAccountFoo)
+                db.genTransfer("bar", bankAccountFoo)
             }
             // Should not show up in the taler wire gateway API history
             db.bankTransactionCreate(genTx("bogus foobar", 1, 2)).assertSuccess()
@@ -420,7 +442,7 @@ class TalerApiTest {
             db.bankTransactionCreate(genTx("payout")).assertSuccess()
             // Bar pays Foo twice, we should see five valid transactions
             repeat(2) {
-                db.genTransfer(2, bankAccountFoo)
+                db.genTransfer("bar", bankAccountFoo)
             }
 
             // Check ignore bogus subject
@@ -477,14 +499,14 @@ class TalerApiTest {
                     },
                     launch {
                         delay(200)
-                        db.genTransfer(2, bankAccountFoo)
+                        db.genTransfer("bar", bankAccountFoo)
                     }
                 )
             }
 
             // Testing ranges.
             repeat(300) {
-                db.genTransfer(2, bankAccountFoo)
+                db.genTransfer("bar", bankAccountFoo)
             }
 
             // forward range:
@@ -519,22 +541,28 @@ class TalerApiTest {
                 "reserve_pub" to randEddsaPublicKey()
                 "debit_account" to "${"payto://iban/BAR-IBAN-ABC"}"
             };
+            
             client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
                 basicAuth("foo", "pw")
+                jsonBody(valid_req, deflate = true)
+            }.assertStatus(HttpStatusCode.Forbidden)
+
+            client.post("/accounts/bar/taler-wire-gateway/admin/add-incoming") {
+                basicAuth("bar", "secret")
                 jsonBody(valid_req, deflate = true)
             }.assertOk()
 
             // Bad BASE32 reserve_pub
-            client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/admin/add-incoming") {
+                basicAuth("bar", "secret")
                 jsonBody(json(valid_req) { 
                     "reserve_pub" to "I love chocolate"
                 })
             }.assertBadRequest()
             
             // Bad BASE32 len reserve_pub
-            client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
-                basicAuth("foo", "pw")
+            client.post("/accounts/bar/taler-wire-gateway/admin/add-incoming") {
+                basicAuth("bar", "secret")
                 jsonBody(json(valid_req) { 
                     "reserve_pub" to randBase32Crockford(31)
                 })

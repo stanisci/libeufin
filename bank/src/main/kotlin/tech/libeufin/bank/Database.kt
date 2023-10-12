@@ -659,6 +659,33 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         }
     }
 
+    data class BankInfo(
+        val id: Long,
+        val isTalerExchange: Boolean,
+        val internalPaytoUri: String
+    )
+    
+    fun bankAccountInfoFromCustomerLogin(login: String): BankInfo? = conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT
+                bank_account_id
+                ,is_taler_exchange
+                ,internal_payto_uri
+            FROM bank_accounts
+                JOIN customers 
+                ON customer_id=owning_customer_id
+            WHERE login=?
+        """)
+        stmt.setString(1, login)
+        stmt.oneOrNull { 
+            BankInfo(
+                id = it.getLong(1),
+                isTalerExchange = it.getBoolean(2),
+                internalPaytoUri = it.getString(3),
+            )
+        }
+    }
+
     fun bankAccountGetFromInternalPayto(internalPayto: String): BankAccount? = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
@@ -1437,54 +1464,20 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         val wtid: ShortHashCode,
         val creditAccount: String
     )
-    /**
-     * Gets a Taler transfer request, given its UID.
-     */
-    fun talerTransferGetFromUid(requestUid: HashCode): TalerTransferFromDb? = conn { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT
-              wtid
-              ,exchange_base_url
-              ,(txs.amount).val AS amount_value
-              ,(txs.amount).frac AS amount_frac
-              ,txs.creditor_payto_uri
-              ,tfr.bank_transaction
-              ,txs.transaction_date AS timestamp
-              FROM taler_exchange_outgoing AS tfr
-                JOIN bank_account_transactions AS txs
-                  ON bank_transaction=txs.bank_transaction_id
-              WHERE request_uid = ?;
-        """)
-        stmt.setBytes(1, requestUid.raw)
-        stmt.oneOrNull {
-            TalerTransferFromDb(
-                wtid = ShortHashCode(it.getBytes("wtid")),
-                amount = TalerAmount(
-                    value = it.getLong("amount_value"),
-                    frac = it.getInt("amount_frac"),
-                    getCurrency()
-                ),
-                creditAccount = it.getString("creditor_payto_uri"),
-                exchangeBaseUrl = it.getString("exchange_base_url"),
-                requestUid = requestUid,
-                debitTxRowId = it.getLong("bank_transaction"),
-                timestamp = it.getLong("timestamp")
-            )
-        }
-    }
 
     /**
      * Holds the result of inserting a Taler transfer request
      * into the database.
      */
     data class TalerTransferCreationResult(
-        val txResult: BankTransactionResult,
+        val txResult: TalerTransferResult,
         /**
          * bank transaction that backs this Taler transfer request.
          * This is the debit transactions associated to the exchange
          * bank account.
          */
-        val txRowId: Long? = null
+        val txRowId: Long? = null,
+        val timestamp: TalerProtocolTimestamp? = null
     )
     /**
      * This function calls the SQL function that (1) inserts the TWG
@@ -1499,7 +1492,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
      */
     fun talerTransferCreate(
         req: TransferRequest,
-        exchangeBankAccountId: Long,
+        username: String,
         timestamp: Instant,
         acctSvcrRef: String = "not used",
         pmtInfId: String = "not used",
@@ -1509,10 +1502,14 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         val stmt = conn.prepareStatement("""
             SELECT
               out_exchange_balance_insufficient
+              ,out_nx_debitor
+              ,out_nx_exchange
               ,out_nx_creditor
               ,out_tx_row_id
+              ,out_request_uid_reuse
+              ,out_timestamp
               FROM
-                taler_transfer (
+              taler_transfer (
                   ?,
                   ?,
                   ?,
@@ -1534,7 +1531,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         stmt.setInt(5, req.amount.frac)
         stmt.setString(6, req.exchange_base_url)
         stmt.setString(7, stripIbanPayto(req.credit_account) ?: throw badRequest("credit_account payto URI is invalid"))
-        stmt.setLong(8, exchangeBankAccountId)
+        stmt.setString(8, username)
         stmt.setLong(9, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.setString(10, acctSvcrRef)
         stmt.setString(11, pmtInfId)
@@ -1544,20 +1541,37 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             when {
                 !it.next() ->
                     throw internalServerError("SQL function taler_transfer did not return anything.")
-                it.getBoolean("out_nx_creditor") ->
-                    TalerTransferCreationResult(BankTransactionResult.NO_CREDITOR)
+                it.getBoolean("out_nx_debitor") ->
+                    TalerTransferCreationResult(TalerTransferResult.NO_DEBITOR)
+                it.getBoolean("out_nx_exchange") ->
+                    TalerTransferCreationResult(TalerTransferResult.NOT_EXCHANGE)
+                it.getBoolean("out_request_uid_reuse") ->
+                    TalerTransferCreationResult(TalerTransferResult.REQUEST_UID_REUSE)
                 it.getBoolean("out_exchange_balance_insufficient") ->
-                    TalerTransferCreationResult(BankTransactionResult.CONFLICT)
+                    TalerTransferCreationResult(TalerTransferResult.BALANCE_INSUFFICIENT)
+                it.getBoolean("out_nx_creditor") ->
+                    TalerTransferCreationResult(TalerTransferResult.NO_CREDITOR)
                 else -> {
-                    val txRowId = it.getLong("out_tx_row_id")
                     TalerTransferCreationResult(
-                        txResult = BankTransactionResult.SUCCESS,
-                        txRowId = txRowId
+                        txResult = TalerTransferResult.SUCCESS,
+                        txRowId = it.getLong("out_tx_row_id"),
+                        timestamp = TalerProtocolTimestamp(
+                            it.getLong("out_timestamp").microsToJavaInstant() ?: throw faultyTimestampByBank()
+                        )
                     )
                 }
             }
         }
     }
+}
+
+enum class TalerTransferResult {
+    NO_DEBITOR,
+    NOT_EXCHANGE,
+    NO_CREDITOR,
+    REQUEST_UID_REUSE,
+    BALANCE_INSUFFICIENT,
+    SUCCESS
 }
 
 private data class Notification(val rowId: Long)
