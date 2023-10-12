@@ -55,11 +55,11 @@ class TalerApiTest {
     )
     
 
-    suspend fun Database.genTransfer(from: String, to: BankAccount) {
+    suspend fun Database.genTransfer(from: String, to: BankAccount, amount: String = "KUDOS:10") {
         talerTransferCreate(
             req = TransferRequest(
                 request_uid = randHashCode(),
-                amount = TalerAmount(10, 0, "KUDOS"),
+                amount = TalerAmount(amount),
                 exchange_base_url = "http://exchange.example.com/",
                 wtid = randShortHashCode(),
                 credit_account ="${stripIbanPayto(to.internalPaytoUri)}"

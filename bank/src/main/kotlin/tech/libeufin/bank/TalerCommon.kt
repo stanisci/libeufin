@@ -288,9 +288,12 @@ class TalerAmount {
     }
 
     override fun toString(): String {
-        val fracNoTrailingZero = this.frac.toString().dropLastWhile { it == '0' }
-        if (fracNoTrailingZero.isEmpty()) return "$currency:$value"
-        return "$currency:$value.$fracNoTrailingZero"
+        if (frac == 0) {
+            return "$currency:$value"
+        } else {
+            return "$currency:$value.${frac.toString().padStart(8, '0')}"
+                .dropLastWhile { it == '0' } // Trim useless fractional trailing 0
+        }
     }
 
     internal object Serializer : KSerializer<TalerAmount> {

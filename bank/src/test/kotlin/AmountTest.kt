@@ -92,6 +92,13 @@ class AmountTest {
     }
 
     @Test
+    fun parseRoundTrip() {
+        for (amount in listOf("EUR:4", "EUR:0.02", "EUR:4.12")) {
+            assertEquals(amount, TalerAmount(amount).toString())
+        }
+    }
+
+    @Test
     fun normalize() {
         assertEquals(TalerAmount("EUR:6"), TalerAmount(4L, 2 * TalerAmount.FRACTION_BASE, "EUR").normalize())
         assertEquals(TalerAmount("EUR:6.00000001"), TalerAmount(4L, 2 * TalerAmount.FRACTION_BASE + 1, "EUR").normalize())
