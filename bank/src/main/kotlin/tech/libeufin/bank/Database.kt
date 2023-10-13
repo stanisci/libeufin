@@ -768,49 +768,40 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                         BankTransactionResult.CONFLICT
                     }
                     else -> {
+                        val metadata = TxMetadata.parse(tx.subject)
                         if (it.getBoolean("out_creditor_is_exchange")) {
-                            // Parse subject
-                            val reservePub = try {
-                                EddsaPublicKey(tx.subject)
-                            } catch (e: Exception) {
-                                null
-                            }
-                            if (reservePub != null) {
-                                val rowId = it.getLong("out_credit_row_id")
+                            val rowId = it.getLong("out_credit_row_id")
+                            if (metadata is IncomingTxMetadata) {
+                              
                                 val stmt = conn.prepareStatement("""
                                     INSERT INTO taler_exchange_incoming 
                                         (reserve_pub, bank_transaction) 
                                     VALUES (?, ?)
                                 """)
-                                stmt.setBytes(1, reservePub.raw)
+                                stmt.setBytes(1, metadata.reservePub.raw)
                                 stmt.setLong(2, rowId)
                                 stmt.executeUpdate()
                                 conn.execSQLUpdate("NOTIFY incoming_tx, '${"${tx.creditorAccountId} $rowId"}'")
                             } else {
                                 // TODO bounce
+                                logger.warn("exchange account ${tx.creditorAccountId} received a transaction $rowId with malformed metadata, will bounce in future version")
                             }
-                        } else if (it.getBoolean("out_debtor_is_exchange")) {
-                            // Parse subject
-                            val metadata = try {
-                                val split = tx.subject.split(" ", limit=2) ;
-                                Pair(ShortHashCode(split[0]), split[2])
-                            } catch (e: Exception) {
-                                null
-                            }
-                            if (metadata != null) {
-                                val rowId = it.getLong("out_debit_row_id")
+                        }
+                        if (it.getBoolean("out_debtor_is_exchange")) {
+                            val rowId = it.getLong("out_debit_row_id")
+                            if (metadata is OutgoingTxMetadata) {
                                 val stmt = conn.prepareStatement("""
                                     INSERT INTO taler_exchange_outgoing 
                                         (wtid, exchange_base_url, bank_transaction) 
                                     VALUES (?, ?, ?)
                                 """)
-                                stmt.setBytes(1, metadata.first.raw)
-                                stmt.setString(2, metadata.second)
+                                stmt.setBytes(1, metadata.wtid.raw)
+                                stmt.setString(2, metadata.exchangeBaseUrl)
                                 stmt.setLong(3, rowId)
                                 stmt.executeUpdate()
                                 conn.execSQLUpdate("NOTIFY outgoing_tx, '${"${tx.debtorAccountId} $rowId"}'")
                             } else {
-                                // TODO log ?
+                                logger.warn("exchange account ${tx.debtorAccountId} sent a transaction $rowId with malformed metadata")
                             }
                         }
                         BankTransactionResult.SUCCESS
@@ -1498,7 +1489,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         pmtInfId: String = "not used",
         endToEndId: String = "not used",
         ): TalerTransferCreationResult = conn { conn ->
-        val subject = "${req.wtid.encoded()} ${req.exchange_base_url}"
+        val subject = OutgoingTxMetadata(req.wtid, req.exchange_base_url).toString()
         val stmt = conn.prepareStatement("""
             SELECT
               out_exchange_balance_insufficient

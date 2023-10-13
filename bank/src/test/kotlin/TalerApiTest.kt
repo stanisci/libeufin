@@ -74,7 +74,7 @@ class TalerApiTest {
             BankInternalTransaction(
                 creditorAccountId = from,
                 debtorAccountId = to,
-                subject = randShortHashCode().encoded(),
+                subject = IncomingTxMetadata(randShortHashCode()).toString(),
                 amount = TalerAmount( 10, 0, "KUDOS"),
                 accountServicerReference = "acct-svcr-ref",
                 endToEndId = "end-to-end-id",

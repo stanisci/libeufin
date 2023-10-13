@@ -136,9 +136,11 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
                 "Currency mismatch",
                 TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
             )
+
+        val subject = IncomingTxMetadata(req.reserve_pub).toString()
         
         // TODO check conflict in transaction
-        if (db.bankTransactionCheckExists(req.reserve_pub.encoded()) != null)
+        if (db.bankTransactionCheckExists(subject) != null)
             throw conflict(
                 "Reserve pub. already used",
                 TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
@@ -158,7 +160,7 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             amount = req.amount,
             creditorAccountId = exchangeAccount.id,
             transactionDate = txTimestamp,
-            subject = req.reserve_pub.encoded()
+            subject = subject
         )
         val res = db.bankTransactionCreate(op)
         /**
