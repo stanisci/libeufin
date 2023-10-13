@@ -4,8 +4,7 @@ import io.ktor.client.statement.*
 import io.ktor.client.HttpClient
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.*
 import kotlinx.coroutines.*
 import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
@@ -96,8 +95,8 @@ class TalerApiTest {
     }
 
     // Test endpoint is correctly authenticated 
-    suspend fun authRoutine(client: HttpClient, path: String, method: HttpMethod = HttpMethod.Post) {
-        // No body because authentication must happen before parsing the body
+    suspend fun authRoutine(client: HttpClient, path: String, body: JsonObject? = null, method: HttpMethod = HttpMethod.Post) {
+        // No body when authentication must happen before parsing the body
         
         // Unknown account
         client.request(path) {
@@ -115,7 +114,14 @@ class TalerApiTest {
         client.request(path) {
             this.method = method
             basicAuth("bar", "secret")
-        }.assertStatus(HttpStatusCode.Forbidden)
+        }.assertStatus(HttpStatusCode.Unauthorized)
+
+        // Not exchange account
+        client.request(path) {
+            this.method = method
+            if (body != null) jsonBody(body)
+            basicAuth("foo", "pw")
+        }.assertStatus(HttpStatusCode.Conflict)
     }
 
     // Testing the POST /transfer call from the TWG API.
@@ -127,23 +133,15 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
 
-            // TODO what to do when creditor and debtor are both exchanges
-
-            authRoutine(client, "/accounts/foo/taler-wire-gateway/transfer")
-
             val valid_req = json {
                 "request_uid" to randHashCode()
                 "amount" to "KUDOS:55"
                 "exchange_base_url" to "http://exchange.example.com/"
                 "wtid" to randShortHashCode()
-                "credit_account" to "${stripIbanPayto(bankAccountFoo.internalPaytoUri)}"
+                "credit_account" to stripIbanPayto(bankAccountFoo.internalPaytoUri)
             };
 
-            // Checking exchange account constraint.
-            client.post("/accounts/foo/taler-wire-gateway/transfer") {
-                basicAuth("foo", "pw")
-                jsonBody(valid_req)
-            }.assertStatus(HttpStatusCode.Forbidden)
+            authRoutine(client, "/accounts/foo/taler-wire-gateway/transfer", valid_req)
 
             // Checking exchange debt constraint.
             client.post("/accounts/bar/taler-wire-gateway/transfer") {
@@ -178,19 +176,17 @@ class TalerApiTest {
                 )
             }.assertStatus(HttpStatusCode.Conflict)
 
-            // Triggering currency mismatch
+            // Currency mismatch
             client.post("/accounts/bar/taler-wire-gateway/transfer") {
                 basicAuth("bar", "secret")
                 jsonBody(
-                    json(valid_req) { 
-                        "request_uid" to randHashCode()
-                        "wtid" to randShortHashCode()
+                    json(valid_req) {
                         "amount" to "EUR:33"
                     }
                 )
             }.assertBadRequest()
 
-            // Unknown account currency mismatch
+            // Unknown account
             client.post("/accounts/bar/taler-wire-gateway/transfer") {
                 basicAuth("bar", "secret")
                 jsonBody(
@@ -286,7 +282,7 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
 
-            authRoutine(client, "/accounts/foo/taler-wire-gateway/history/incoming", HttpMethod.Get)
+            authRoutine(client, "/accounts/foo/taler-wire-gateway/history/incoming?delta=7", method = HttpMethod.Get)
 
             // Check error when no transactions
             client.get("/accounts/bar/taler-wire-gateway/history/incoming?delta=7") {
@@ -425,7 +421,7 @@ class TalerApiTest {
                 corebankWebApp(db, ctx)
             }
 
-            authRoutine(client, "/accounts/foo/taler-wire-gateway/history/outgoing", HttpMethod.Get)
+            authRoutine(client, "/accounts/foo/taler-wire-gateway/history/outgoing?delta=7", method = HttpMethod.Get)
 
             // Check error when no transactions
             client.get("/accounts/bar/taler-wire-gateway/history/outgoing?delta=7") {
@@ -524,33 +520,62 @@ class TalerApiTest {
     // Testing the /admin/add-incoming call from the TWG API.
     @Test
     fun addIncoming() = commonSetup { db, ctx -> 
-        // Give Bar reasonable debt allowance:
-        assert(db.bankAccountSetMaxDebt(
-            2L,
-            TalerAmount(1000, 0, "KUDOS")
-        ))
         testApplication {
             application {
                 corebankWebApp(db, ctx)
             }
 
-            authRoutine(client, "/accounts/foo/taler-wire-gateway/admin/add-incoming")
-
             val valid_req = json {
                 "amount" to "KUDOS:44"
                 "reserve_pub" to randEddsaPublicKey()
-                "debit_account" to "${"payto://iban/BAR-IBAN-ABC"}"
+                "debit_account" to bankAccountFoo.internalPaytoUri
             };
-            
-            client.post("/accounts/foo/taler-wire-gateway/admin/add-incoming") {
-                basicAuth("foo", "pw")
-                jsonBody(valid_req, deflate = true)
-            }.assertStatus(HttpStatusCode.Forbidden)
+
+            authRoutine(client, "/accounts/foo/taler-wire-gateway/admin/add-incoming", valid_req)
+
+            // Checking exchange debt constraint.
+            client.post("/accounts/bar/taler-wire-gateway/admin/add-incoming") {
+                basicAuth("bar", "secret")
+                jsonBody(valid_req)
+            }.assertStatus(HttpStatusCode.Conflict)
+
+            // Giving debt allowance and checking the OK case.
+            assert(db.bankAccountSetMaxDebt(
+                1L,
+                TalerAmount(1000, 0, "KUDOS")
+            ))
 
             client.post("/accounts/bar/taler-wire-gateway/admin/add-incoming") {
                 basicAuth("bar", "secret")
                 jsonBody(valid_req, deflate = true)
             }.assertOk()
+
+            // Trigger conflict due to reused reserve_pub
+             client.post("/accounts/bar/taler-wire-gateway/admin/add-incoming") {
+                basicAuth("bar", "secret")
+                jsonBody(valid_req)
+            }.assertStatus(HttpStatusCode.Conflict)
+
+            // Currency mismatch
+            client.post("/accounts/bar/taler-wire-gateway/admin/add-incoming") {
+                basicAuth("bar", "secret")
+                jsonBody(
+                    json(valid_req) {
+                        "amount" to "EUR:33"
+                    }
+                )
+            }.assertBadRequest()
+
+            // Unknown account
+            client.post("/accounts/bar/taler-wire-gateway/admin/add-incoming") {
+                basicAuth("bar", "secret")
+                jsonBody(
+                    json(valid_req) { 
+                        "reserve_pub" to randEddsaPublicKey()
+                        "debit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
+                    }
+                )
+            }.assertStatus(HttpStatusCode.NotFound)
 
             // Bad BASE32 reserve_pub
             client.post("/accounts/bar/taler-wire-gateway/admin/add-incoming") {

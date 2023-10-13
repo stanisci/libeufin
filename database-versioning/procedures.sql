@@ -206,11 +206,15 @@ CREATE OR REPLACE FUNCTION taler_transfer(
   IN in_account_servicer_reference TEXT,
   IN in_payment_information_id TEXT,
   IN in_end_to_end_id TEXT,
+  -- Error status
+  OUT out_debtor_not_found BOOLEAN,
+  OUT out_debtor_not_exchange BOOLEAN,
+  OUT out_creditor_not_found BOOLEAN,
+  OUT out_same_account BOOLEAN,
+  OUT out_both_exchanges BOOLEAN,
   OUT out_request_uid_reuse BOOLEAN,
   OUT out_exchange_balance_insufficient BOOLEAN,
-  OUT out_nx_debitor BOOLEAN,
-  OUT out_nx_exchange BOOLEAN,
-  OUT out_nx_creditor BOOLEAN,
+  -- Success return
   OUT out_tx_row_id BIGINT,
   OUT out_timestamp BIGINT
 )
@@ -237,37 +241,38 @@ END IF;
 -- Find exchange bank account id
 SELECT
   bank_account_id, NOT is_taler_exchange
-  INTO exchange_bank_account_id, out_nx_exchange
+  INTO exchange_bank_account_id, out_debtor_not_exchange
   FROM bank_accounts 
       JOIN customers 
         ON customer_id=owning_customer_id
   WHERE login = in_username;
 IF NOT FOUND THEN
-  out_nx_debitor=TRUE;
+  out_debtor_not_found=TRUE;
   RETURN;
-ELSIF out_nx_exchange THEN
+ELSIF out_debtor_not_exchange THEN
   RETURN;
 END IF;
--- Find receiver bank account id 
--- TODO handle bounce when receiver is exchange ?
--- TODO handle transfer to self ?
+-- Find receiver bank account id
 SELECT
-  bank_account_id
-  INTO receiver_bank_account_id
+  bank_account_id, is_taler_exchange
+  INTO receiver_bank_account_id, out_both_exchanges
   FROM bank_accounts
   WHERE internal_payto_uri = in_credit_account_payto;
-IF NOT FOUND
-THEN
-  out_nx_creditor=TRUE;
+IF NOT FOUND THEN
+  out_creditor_not_found=TRUE;
+  RETURN;
+ELSIF out_both_exchanges THEN
   RETURN;
 END IF;
 -- Perform bank transfer
 SELECT
   out_balance_insufficient,
-  out_debit_row_id
+  out_debit_row_id,
+  transfer.out_same_account
   INTO
     out_exchange_balance_insufficient,
-    out_tx_row_id
+    out_tx_row_id,
+    out_same_account
   FROM bank_wire_transfer(
     receiver_bank_account_id,
     exchange_bank_account_id,
@@ -277,7 +282,7 @@ SELECT
     in_account_servicer_reference,
     in_payment_information_id,
     in_end_to_end_id
-  );
+  ) as transfer;
 IF out_exchange_balance_insufficient THEN
   RETURN;
 END IF;
@@ -310,10 +315,124 @@ COMMENT ON FUNCTION taler_transfer(
   text,
   text,
   text
-  )
+  )-- TODO new comment
   IS 'function that (1) inserts the TWG requests'
      'details into the database and (2) performs '
      'the actual bank transaction to pay the merchant';
+
+
+CREATE OR REPLACE FUNCTION taler_add_incoming(
+  IN in_reserve_pub BYTEA,
+  IN in_subject TEXT,
+  IN in_amount taler_amount,
+  IN in_debit_account_payto TEXT,
+  IN in_username TEXT,
+  IN in_timestamp BIGINT,
+  IN in_account_servicer_reference TEXT,
+  IN in_payment_information_id TEXT,
+  IN in_end_to_end_id TEXT,
+  -- Error status
+  OUT out_creditor_not_found BOOLEAN,
+  OUT out_creditor_not_exchange BOOLEAN,
+  OUT out_debtor_not_found BOOLEAN,
+  OUT out_same_account BOOLEAN,
+  OUT out_both_exchanges BOOLEAN,
+  OUT out_reserve_pub_reuse BOOLEAN,
+  OUT out_debitor_balance_insufficient BOOLEAN,
+  -- Success return
+  OUT out_tx_row_id BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+exchange_bank_account_id BIGINT;
+sender_bank_account_id BIGINT;
+BEGIN
+-- Check for idempotence and conflict
+SELECT true
+  FROM taler_exchange_incoming
+      JOIN bank_account_transactions AS txs
+        ON bank_transaction=txs.bank_transaction_id 
+  WHERE reserve_pub = in_reserve_pub
+  INTO out_reserve_pub_reuse;
+IF out_reserve_pub_reuse THEN
+  RETURN;
+END IF;
+-- Find exchange bank account id
+SELECT
+  bank_account_id, NOT is_taler_exchange
+  INTO exchange_bank_account_id, out_creditor_not_exchange
+  FROM bank_accounts 
+      JOIN customers 
+        ON customer_id=owning_customer_id
+  WHERE login = in_username;
+IF NOT FOUND THEN
+  out_creditor_not_found=TRUE;
+  RETURN;
+ELSIF out_creditor_not_exchange THEN
+  RETURN;
+END IF;
+-- Find sender bank account id
+SELECT
+  bank_account_id, is_taler_exchange
+  INTO sender_bank_account_id, out_both_exchanges
+  FROM bank_accounts
+  WHERE internal_payto_uri = in_debit_account_payto;
+IF NOT FOUND THEN
+  out_debtor_not_found=TRUE;
+  RETURN;
+ELSIF out_both_exchanges THEN
+  RETURN;
+END IF;
+-- Perform bank transfer
+SELECT
+  out_balance_insufficient,
+  out_debit_row_id,
+  transfer.out_same_account
+  INTO
+    out_debitor_balance_insufficient,
+    out_tx_row_id,
+    out_same_account
+  FROM bank_wire_transfer(
+    exchange_bank_account_id,
+    sender_bank_account_id,
+    in_subject,
+    in_amount,
+    in_timestamp,
+    in_account_servicer_reference,
+    in_payment_information_id,
+    in_end_to_end_id
+  ) as transfer;
+IF out_debitor_balance_insufficient THEN
+  RETURN;
+END IF;
+-- Register incoming transaction
+INSERT
+  INTO taler_exchange_incoming (
+    reserve_pub,
+    bank_transaction
+) VALUES (
+  in_reserve_pub,
+  out_tx_row_id
+);
+-- notify new transaction
+PERFORM pg_notify('incoming_tx', exchange_bank_account_id || ' ' || out_tx_row_id);
+END $$;
+COMMENT ON FUNCTION taler_add_incoming(
+  bytea,
+  text,
+  taler_amount,
+  text,
+  text,
+  bigint,
+  text,
+  text,
+  text
+  ) -- TODO new comment
+  IS 'function that (1) inserts the TWG requests'
+     'details into the database and (2) performs '
+     'the actual bank transaction to pay the merchant';
+  
 
 CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
@@ -321,12 +440,9 @@ CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_acct_svcr_ref TEXT,
   IN in_pmt_inf_id TEXT,
   IN in_end_to_end_id TEXT,
-  OUT out_nx_op BOOLEAN,
-  -- can't use out_balance_insufficient, because
-  -- it conflicts with the return column of the called
-  -- function that moves the funds.  FIXME?
-  OUT out_insufficient_funds BOOLEAN,
-  OUT out_nx_exchange BOOLEAN,
+  OUT out_no_op BOOLEAN,
+  OUT out_balance_insufficient BOOLEAN,
+  OUT out_exchange_not_found BOOLEAN,
   OUT out_already_confirmed_conflict BOOLEAN
 )
 LANGUAGE plpgsql
@@ -356,10 +472,10 @@ SELECT -- Really no-star policy and instead DECLARE almost one var per column?
   WHERE withdrawal_uuid=in_withdrawal_uuid;
 IF NOT FOUND
 THEN
-  out_nx_op=TRUE;
+  out_no_op=TRUE;
   RETURN;
 END IF;
-out_nx_op=FALSE;
+out_no_op=FALSE;
 IF (confirmation_done_local)
 THEN
   out_already_confirmed_conflict=TRUE
@@ -378,14 +494,14 @@ SELECT
   WHERE internal_payto_uri = selected_exchange_payto_local;
 IF NOT FOUND
 THEN
-  out_nx_exchange=TRUE;
+  out_exchange_not_found=TRUE;
   RETURN;
 END IF;
-out_nx_exchange=FALSE;
+out_exchange_not_found=FALSE;
 SELECT -- not checking for accounts existence, as it was done above.
-  out_balance_insufficient
+  transfer.out_balance_insufficient
   INTO
-    maybe_balance_insufficient
+    out_balance_insufficient
 FROM bank_wire_transfer(
   exchange_bank_account_id,
   wallet_bank_account_local,
@@ -395,12 +511,12 @@ FROM bank_wire_transfer(
   in_acct_svcr_ref,
   in_pmt_inf_id,
   in_end_to_end_id
-);
+) as transfer;
 IF (maybe_balance_insufficient)
 THEN
-  out_insufficient_funds=TRUE;
+  out_balance_insufficient=TRUE;
 END IF;
-out_insufficient_funds=FALSE;
+out_balance_insufficient=FALSE;
 END $$;
 COMMENT ON FUNCTION confirm_taler_withdrawal(uuid, bigint, text, text, text)
   IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';
@@ -414,9 +530,12 @@ CREATE OR REPLACE FUNCTION bank_wire_transfer(
   IN in_account_servicer_reference TEXT,
   IN in_payment_information_id TEXT,
   IN in_end_to_end_id TEXT,
-  OUT out_nx_creditor BOOLEAN,
-  OUT out_nx_debtor BOOLEAN,
+  -- Error status
+  OUT out_same_account BOOLEAN,
+  OUT out_debtor_not_found BOOLEAN,
+  OUT out_creditor_not_found BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
+  -- Success return
   OUT out_credit_row_id BIGINT,
   OUT out_debit_row_id BIGINT,
   OUT out_creditor_is_exchange BOOLEAN,
@@ -446,6 +565,13 @@ potential_balance_ok BOOLEAN;
 new_debit_row_id BIGINT;
 new_credit_row_id BIGINT;
 BEGIN
+
+IF in_creditor_account_id=in_debtor_account_id THEN
+  out_same_account=TRUE;
+  RETURN;
+END IF;
+out_same_account=FALSE;
+
 -- check debtor exists.
 SELECT
   has_debt,
@@ -462,12 +588,11 @@ SELECT
   FROM bank_accounts
   JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
   WHERE bank_account_id=in_debtor_account_id;
-IF NOT FOUND
-THEN
-  out_nx_debtor=TRUE;
+IF NOT FOUND THEN
+  out_debtor_not_found=TRUE;
   RETURN;
 END IF;
-out_nx_debtor=FALSE;
+out_debtor_not_found=FALSE;
 -- check creditor exists.  Future versions may skip this
 -- due to creditors being hosted at other banks.
 SELECT
@@ -483,16 +608,16 @@ SELECT
   FROM bank_accounts
   JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
   WHERE bank_account_id=in_creditor_account_id;
-IF NOT FOUND
-THEN
-  out_nx_creditor=TRUE;
+IF NOT FOUND THEN
+  out_creditor_not_found=TRUE;
   RETURN;
 END IF;
-out_nx_creditor=FALSE;
+out_creditor_not_found=FALSE;
+
 -- DEBTOR SIDE
 -- check debtor has enough funds.
-IF (debtor_has_debt)
-THEN -- debt case: simply checking against the max debt allowed.
+IF debtor_has_debt THEN 
+  -- debt case: simply checking against the max debt allowed.
   CALL amount_add(debtor_balance,
 	          in_amount,
 		  potential_balance);
@@ -500,8 +625,7 @@ THEN -- debt case: simply checking against the max debt allowed.
     INTO potential_balance_check
     FROM amount_left_minus_right(debtor_max_debt,
                                  potential_balance);
-  IF (NOT potential_balance_check)
-  THEN
+  IF NOT potential_balance_check THEN
     out_balance_insufficient=TRUE;
     RETURN;
   END IF;
@@ -517,8 +641,7 @@ ELSE -- not a debt account
       potential_balance.frac
     FROM amount_left_minus_right(debtor_balance,
                                  in_amount);
-  IF (potential_balance_ok) -- debtor has enough funds in the (positive) balance.
-  THEN
+  IF potential_balance_ok THEN -- debtor has enough funds in the (positive) balance.
     new_debtor_balance=potential_balance;
     will_debtor_have_debt=FALSE;
   ELSE -- debtor will switch to debt: determine their new negative balance.
@@ -533,8 +656,7 @@ ELSE -- not a debt account
       INTO potential_balance_check
       FROM amount_left_minus_right(debtor_max_debt,
                                    new_debtor_balance);
-    IF (NOT potential_balance_check)
-    THEN
+    IF NOT potential_balance_check THEN
       out_balance_insufficient=TRUE;
       RETURN;
     END IF;
@@ -545,8 +667,7 @@ END IF;
 -- Here we figure out whether the creditor would switch
 -- from debit to a credit situation, and adjust the balance
 -- accordingly.
-IF (NOT creditor_has_debt) -- easy case.
-THEN
+IF NOT creditor_has_debt THEN -- easy case.
   CALL amount_add(creditor_balance, in_amount, new_creditor_balance);
   will_creditor_have_debt=FALSE;
 ELSE -- creditor had debit but MIGHT switch to credit.
@@ -558,9 +679,8 @@ ELSE -- creditor had debit but MIGHT switch to credit.
       amount_at_least_debit
     FROM amount_left_minus_right(in_amount,
                                  creditor_balance);
-  IF (amount_at_least_debit)
-  -- the amount is at least as big as the debit, can switch to credit then.
-  THEN
+  IF amount_at_least_debit THEN
+    -- the amount is at least as big as the debit, can switch to credit then.
     will_creditor_have_debt=FALSE;
     -- compute new balance.
   ELSE

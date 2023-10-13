@@ -733,12 +733,13 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         conn.transaction {
             val stmt = conn.prepareStatement("""
                 SELECT 
-                    out_nx_creditor
-                    ,out_nx_debtor
-                    ,out_balance_insufficient
+                    out_same_account 
+                    ,out_debtor_not_found 
+                    ,out_creditor_not_found 
+                    ,out_balance_insufficient 
                     ,out_credit_row_id
                     ,out_debit_row_id
-                    ,out_creditor_is_exchange
+                    ,out_creditor_is_exchange 
                     ,out_debtor_is_exchange
                 FROM bank_wire_transfer(?,?,TEXT(?),(?,?)::taler_amount,?,TEXT(?),TEXT(?),TEXT(?))
             """
@@ -755,24 +756,24 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             stmt.executeQuery().use {
                 when {
                     !it.next() -> throw internalServerError("Bank transaction didn't properly return")
-                    it.getBoolean("out_nx_debtor") -> {
+                    it.getBoolean("out_debtor_not_found") -> {
                         logger.error("No debtor account found")
                         BankTransactionResult.NO_DEBTOR
                     }
-                    it.getBoolean("out_nx_creditor") -> {
+                    it.getBoolean("out_creditor_not_found") -> {
                         logger.error("No creditor account found")
                         BankTransactionResult.NO_CREDITOR
                     }
+                    it.getBoolean("out_same_account") ->  BankTransactionResult.SAME_ACCOUNT
                     it.getBoolean("out_balance_insufficient") -> {
                         logger.error("Balance insufficient")
-                        BankTransactionResult.CONFLICT
+                        BankTransactionResult.BALANCE_INSUFFICIENT
                     }
                     else -> {
                         val metadata = TxMetadata.parse(tx.subject)
                         if (it.getBoolean("out_creditor_is_exchange")) {
                             val rowId = it.getLong("out_credit_row_id")
                             if (metadata is IncomingTxMetadata) {
-                              
                                 val stmt = conn.prepareStatement("""
                                     INSERT INTO taler_exchange_incoming 
                                         (reserve_pub, bank_transaction) 
@@ -884,7 +885,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
     private suspend fun <T> poolHistory(
         params: HistoryParams, 
         bankAccountId: Long,
-        listen: suspend NotificationWatcher.(Long, suspend (Flow<Notification>) -> Unit) -> Unit,
+        listen: suspend NotificationWatcher.(Long, suspend (Flow<Long>) -> Unit) -> Unit,
         query: String,
         map: (ResultSet) -> T
     ): List<T> {
@@ -940,7 +941,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                 if (missing > 0) {
                     withTimeoutOrNull(params.poll_ms) {
                         buffered
-                            .filter { it.rowId > min } // Skip transactions already checked
+                            .filter { it > min } // Skip transactions already checked
                             .take(missing).count() // Wait for missing transactions
                     }
 
@@ -1235,9 +1236,9 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
     ): WithdrawalConfirmationResult = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
-              out_nx_op,
-              out_nx_exchange,
-              out_insufficient_funds,
+              out_no_op,
+              out_exchange_not_found,
+              out_balance_insufficient,
               out_already_confirmed_conflict
             FROM confirm_taler_withdrawal(?, ?, ?, ?, ?);
         """
@@ -1251,9 +1252,9 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             when {
                 !it.next() ->
                     throw internalServerError("No result from DB procedure confirm_taler_withdrawal")
-                it.getBoolean("out_nx_op") -> WithdrawalConfirmationResult.OP_NOT_FOUND
-                it.getBoolean("out_nx_exchange") -> WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND
-                it.getBoolean("out_insufficient_funds") -> WithdrawalConfirmationResult.BALANCE_INSUFFICIENT
+                it.getBoolean("out_no_op") -> WithdrawalConfirmationResult.OP_NOT_FOUND
+                it.getBoolean("out_exchange_not_found") -> WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND
+                it.getBoolean("out_balance_insufficient") -> WithdrawalConfirmationResult.BALANCE_INSUFFICIENT
                 it.getBoolean("out_already_confirmed_conflict") -> WithdrawalConfirmationResult.CONFLICT
                 else -> WithdrawalConfirmationResult.SUCCESS
             }
@@ -1470,7 +1471,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         val txRowId: Long? = null,
         val timestamp: TalerProtocolTimestamp? = null
     )
-    /**
+    /** TODO better doc
      * This function calls the SQL function that (1) inserts the TWG
      * requests details into the database and (2) performs the actual
      * bank transaction to pay the merchant according to the 'req' parameter.
@@ -1492,26 +1493,20 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         val subject = OutgoingTxMetadata(req.wtid, req.exchange_base_url).toString()
         val stmt = conn.prepareStatement("""
             SELECT
-              out_exchange_balance_insufficient
-              ,out_nx_debitor
-              ,out_nx_exchange
-              ,out_nx_creditor
-              ,out_tx_row_id
-              ,out_request_uid_reuse
-              ,out_timestamp
+                out_debtor_not_found
+                ,out_debtor_not_exchange
+                ,out_creditor_not_found
+                ,out_same_account
+                ,out_both_exchanges
+                ,out_request_uid_reuse
+                ,out_exchange_balance_insufficient
+                ,out_tx_row_id
+                ,out_timestamp
               FROM
               taler_transfer (
-                  ?,
-                  ?,
-                  ?,
+                  ?, ?, ?,
                   (?,?)::taler_amount,
-                  ?,
-                  ?,
-                  ?,
-                  ?,
-                  ?,
-                  ?,
-                  ?
+                  ?, ?, ?, ?, ?, ?, ?
                 );
         """)
 
@@ -1532,16 +1527,20 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             when {
                 !it.next() ->
                     throw internalServerError("SQL function taler_transfer did not return anything.")
-                it.getBoolean("out_nx_debitor") ->
+                it.getBoolean("out_debtor_not_found") ->
                     TalerTransferCreationResult(TalerTransferResult.NO_DEBITOR)
-                it.getBoolean("out_nx_exchange") ->
+                it.getBoolean("out_debtor_not_exchange") ->
                     TalerTransferCreationResult(TalerTransferResult.NOT_EXCHANGE)
-                it.getBoolean("out_request_uid_reuse") ->
-                    TalerTransferCreationResult(TalerTransferResult.REQUEST_UID_REUSE)
+                it.getBoolean("out_creditor_not_found") ->
+                    TalerTransferCreationResult(TalerTransferResult.NO_CREDITOR)
+                it.getBoolean("out_same_account") ->
+                    TalerTransferCreationResult(TalerTransferResult.SAME_ACCOUNT)
+                it.getBoolean("out_both_exchanges") ->
+                    TalerTransferCreationResult(TalerTransferResult.BOTH_EXCHANGE)
                 it.getBoolean("out_exchange_balance_insufficient") ->
                     TalerTransferCreationResult(TalerTransferResult.BALANCE_INSUFFICIENT)
-                it.getBoolean("out_nx_creditor") ->
-                    TalerTransferCreationResult(TalerTransferResult.NO_CREDITOR)
+                it.getBoolean("out_request_uid_reuse") ->
+                    TalerTransferCreationResult(TalerTransferResult.REQUEST_UID_REUSE)
                 else -> {
                     TalerTransferCreationResult(
                         txResult = TalerTransferResult.SUCCESS,
@@ -1554,21 +1553,153 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             }
         }
     }
+
+    data class TalerAddIncomingCreationResult(
+        val txResult: TalerAddIncomingResult,
+        val txRowId: Long? = null
+    )
+
+     /** TODO better doc
+     * This function calls the SQL function that (1) inserts the TWG
+     * requests details into the database and (2) performs the actual
+     * bank transaction to pay the merchant according to the 'req' parameter.
+     *
+     * 'req' contains the same data that was POSTed by the exchange
+     * to the TWG /transfer endpoint.  The exchangeBankAccountId parameter
+     * is the row ID of the exchange's bank account.  The return type
+     * is the same returned by "bank_wire_transfer()" where however
+     * the NO_DEBTOR error will hardly take place.
+     */
+    suspend fun talerAddIncomingCreate(
+        req: AddIncomingRequest,
+        username: String,
+        timestamp: Instant,
+        acctSvcrRef: String = "not used",
+        pmtInfId: String = "not used",
+        endToEndId: String = "not used",
+        ): TalerAddIncomingCreationResult = conn { conn ->
+        val subject = IncomingTxMetadata(req.reserve_pub).toString()
+        val stmt = conn.prepareStatement("""
+            SELECT
+                out_creditor_not_found
+                ,out_creditor_not_exchange
+                ,out_debtor_not_found
+                ,out_same_account
+                ,out_both_exchanges
+                ,out_reserve_pub_reuse
+                ,out_debitor_balance_insufficient
+                ,out_tx_row_id
+              FROM
+              taler_add_incoming (
+                  ?, ?,
+                  (?,?)::taler_amount,
+                  ?, ?, ?, ?, ?, ?
+                );
+        """)
+
+        stmt.setBytes(1, req.reserve_pub.raw)
+        stmt.setString(2, subject)
+        stmt.setLong(3, req.amount.value)
+        stmt.setInt(4, req.amount.frac)
+        stmt.setString(5, stripIbanPayto(req.debit_account) ?: throw badRequest("debit_account payto URI is invalid"))
+        stmt.setString(6, username)
+        stmt.setLong(7, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setString(8, acctSvcrRef)
+        stmt.setString(9, pmtInfId)
+        stmt.setString(10, endToEndId)
+
+        stmt.executeQuery().use {
+            when {
+                !it.next() ->
+                    throw internalServerError("SQL function taler_add_incoming did not return anything.")
+                it.getBoolean("out_creditor_not_found") ->
+                    TalerAddIncomingCreationResult(TalerAddIncomingResult.NO_CREDITOR)
+                it.getBoolean("out_creditor_not_exchange") ->
+                    TalerAddIncomingCreationResult(TalerAddIncomingResult.NOT_EXCHANGE)
+                it.getBoolean("out_debtor_not_found") ->
+                    TalerAddIncomingCreationResult(TalerAddIncomingResult.NO_DEBITOR)
+                it.getBoolean("out_same_account") ->
+                    TalerAddIncomingCreationResult(TalerAddIncomingResult.SAME_ACCOUNT)
+                it.getBoolean("out_both_exchanges") ->
+                    TalerAddIncomingCreationResult(TalerAddIncomingResult.BOTH_EXCHANGE)
+                it.getBoolean("out_debitor_balance_insufficient") ->
+                    TalerAddIncomingCreationResult(TalerAddIncomingResult.BALANCE_INSUFFICIENT)
+                it.getBoolean("out_reserve_pub_reuse") ->
+                    TalerAddIncomingCreationResult(TalerAddIncomingResult.RESERVE_PUB_REUSE)
+                else -> {
+                    TalerAddIncomingCreationResult(
+                        txResult = TalerAddIncomingResult.SUCCESS,
+                        txRowId = it.getLong("out_tx_row_id")
+                    )
+                }
+            }
+        }
+    }
 }
 
+/** Result status of customer account deletion */
+enum class CustomerDeletionResult {
+    SUCCESS,
+    CUSTOMER_NOT_FOUND,
+    BALANCE_NOT_ZERO
+}
+
+/** Result status of bank transaction creation .*/
+enum class BankTransactionResult {
+    NO_CREDITOR,
+    NO_DEBTOR,
+    SAME_ACCOUNT,
+    BALANCE_INSUFFICIENT,
+    SUCCESS,
+}
+
+/** Result status of taler transfer transaction */
 enum class TalerTransferResult {
     NO_DEBITOR,
     NOT_EXCHANGE,
     NO_CREDITOR,
+    SAME_ACCOUNT,
+    BOTH_EXCHANGE,
     REQUEST_UID_REUSE,
     BALANCE_INSUFFICIENT,
     SUCCESS
 }
 
-private data class Notification(val rowId: Long)
+/** Result status of taler add incoming transaction */
+enum class TalerAddIncomingResult {
+    NO_DEBITOR,
+    NOT_EXCHANGE,
+    NO_CREDITOR,
+    SAME_ACCOUNT,
+    BOTH_EXCHANGE,
+    RESERVE_PUB_REUSE,
+    BALANCE_INSUFFICIENT,
+    SUCCESS
+}
+
+/**
+ * This type communicates the result of a database operation
+ * to confirm one withdrawal operation.
+ */
+enum class WithdrawalConfirmationResult {
+    SUCCESS,
+    OP_NOT_FOUND,
+    EXCHANGE_NOT_FOUND,
+    BALANCE_INSUFFICIENT,
+
+    /**
+     * This state indicates that the withdrawal was already
+     * confirmed BUT Kotlin did not detect it and still invoked
+     * the SQL procedure to confirm the withdrawal.  This is
+     * conflictual because only Kotlin is responsible to check
+     * for idempotency, and this state witnesses a failure in
+     * this regard.
+     */
+    CONFLICT
+}
 
 private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
-    private class CountedSharedFlow(val flow: MutableSharedFlow<Notification>, var count: Int)
+    private class CountedSharedFlow(val flow: MutableSharedFlow<Long>, var count: Int)
 
     private val bankTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
     private val outgoingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
@@ -1595,12 +1726,12 @@ private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                                     val creditRow = info[3];
                                     
                                     bankTxFlows[debtorAccount]?.run {
-                                        flow.emit(Notification(debitRow))
-                                        flow.emit(Notification(creditRow))
+                                        flow.emit(debitRow)
+                                        flow.emit(creditRow)
                                     }
                                     bankTxFlows[creditorAccount]?.run {
-                                        flow.emit(Notification(debitRow))
-                                        flow.emit(Notification(creditRow))
+                                        flow.emit(debitRow)
+                                        flow.emit(creditRow)
                                     }
                                 } else {
                                     val info = it.parameter.split(' ', limit = 2).map { it.toLong() }
@@ -1608,11 +1739,11 @@ private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                                     val row = info[1];
                                     if (it.name == "outgoing_tx") {
                                         outgoingTxFlows[account]?.run {
-                                            flow.emit(Notification(row))
+                                            flow.emit(row)
                                         }
                                     } else {
                                         incomingTxFlows[account]?.run {
-                                            flow.emit(Notification(row))
+                                            flow.emit(row)
                                         }
                                     }
                                 }
@@ -1626,7 +1757,7 @@ private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         }
     }
 
-    private suspend fun listen(map: ConcurrentHashMap<Long, CountedSharedFlow>, account: Long, lambda: suspend (Flow<Notification>) -> Unit) {
+    private suspend fun listen(map: ConcurrentHashMap<Long, CountedSharedFlow>, account: Long, lambda: suspend (Flow<Long>) -> Unit) {
         // Register listener
         val flow = map.compute(account) { _, v ->
             val tmp = v ?: CountedSharedFlow(MutableSharedFlow(), 0);
@@ -1646,15 +1777,15 @@ private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         }
     } 
 
-    suspend fun listenBank(account: Long, lambda: suspend (Flow<Notification>) -> Unit) {
+    suspend fun listenBank(account: Long, lambda: suspend (Flow<Long>) -> Unit) {
         listen(bankTxFlows, account, lambda)
     }
 
-    suspend fun listenOutgoing(account: Long, lambda: suspend (Flow<Notification>) -> Unit) {
+    suspend fun listenOutgoing(account: Long, lambda: suspend (Flow<Long>) -> Unit) {
         listen(outgoingTxFlows, account, lambda)
     }
 
-    suspend fun listenIncoming(account: Long, lambda: suspend (Flow<Notification>) -> Unit) {
+    suspend fun listenIncoming(account: Long, lambda: suspend (Flow<Long>) -> Unit) {
         listen(incomingTxFlows, account, lambda)
     }
 }

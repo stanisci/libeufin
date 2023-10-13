@@ -39,9 +39,9 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) {
     /** Authenticate and check access rights */
     suspend fun ApplicationCall.authCheck(scope: TokenScope, withAdmin: Boolean): String {
-        val authCustomer = authenticateBankRequest(db, scope) ?: throw unauthorized()
+        val authCustomer = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
         val username = getResourceName("USERNAME")
-        if (!username.canI(authCustomer, withAdmin)) throw forbidden()
+        if (!username.canI(authCustomer, withAdmin)) throw unauthorized("No right on $username account")
         return username
     }
 
@@ -73,20 +73,29 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
             timestamp = Instant.now()
         )
         when (dbRes.txResult) {
-            TalerTransferResult.NO_DEBITOR -> 
-                throw notFound(
-                    hint = "Customer $username not found",
-                    talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
-                )
-            TalerTransferResult.NOT_EXCHANGE -> 
-                throw forbidden("$username is not an exchange account.")
+            TalerTransferResult.NO_DEBITOR -> throw notFound(
+                "Customer $username not found",
+                TalerErrorCode.TALER_EC_END // FIXME: need EC.
+            )
+            TalerTransferResult.NOT_EXCHANGE -> throw conflict(
+                "$username is not an exchange account.",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
             TalerTransferResult.NO_CREDITOR -> throw notFound(
                 "Creditor account was not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
+            TalerTransferResult.SAME_ACCOUNT -> throw conflict(
+                "Wire transfer attempted with credit and debit party being the same bank account",
+                TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+            )
+            TalerTransferResult.BOTH_EXCHANGE -> throw conflict(
+                "Wire transfer attempted with credit and debit party being both exchange account",
+                TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+            )
             TalerTransferResult.REQUEST_UID_REUSE -> throw conflict(
-                hint = "request_uid used already",
-                talerEc = TalerErrorCode.TALER_EC_BANK_TRANSFER_REQUEST_UID_REUSED
+                "request_uid used already",
+                TalerErrorCode.TALER_EC_BANK_TRANSFER_REQUEST_UID_REUSED
             )
             TalerTransferResult.BALANCE_INSUFFICIENT -> throw conflict(
                 "Insufficient balance for exchange",
@@ -106,10 +115,15 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
         reduce: (List<T>, String) -> Any, 
         dbLambda: suspend Database.(HistoryParams, Long) -> List<T>
     ) {
-        call.authCheck(TokenScope.readonly, true)
+        val username = call.authCheck(TokenScope.readonly, true)
         val params = getHistoryParams(call.request.queryParameters)
         val bankAccount = call.bankAccount()
-        if (!bankAccount.isTalerExchange) throw forbidden("History is not related to a Taler exchange.")
+        
+        if (!bankAccount.isTalerExchange)
+            throw conflict(
+                "$username is not an exchange account.",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
 
         val items = db.dbLambda(params, bankAccount.id);
     
@@ -129,57 +143,54 @@ fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) 
     }
 
     post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {
-        call.authCheck(TokenScope.readwrite, false);
+        val username = call.authCheck(TokenScope.readwrite, false)
         val req = call.receive<AddIncomingRequest>()
         if (req.amount.currency != ctx.currency)
             throw badRequest(
                 "Currency mismatch",
                 TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
             )
-
-        val subject = IncomingTxMetadata(req.reserve_pub).toString()
-        
-        // TODO check conflict in transaction
-        if (db.bankTransactionCheckExists(subject) != null)
-            throw conflict(
-                "Reserve pub. already used",
-                TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
+        val timestamp = Instant.now()
+        val dbRes = db.talerAddIncomingCreate(
+            req = req,
+            username = username,
+            timestamp = timestamp
+        )
+        when (dbRes.txResult) {
+            TalerAddIncomingResult.NO_CREDITOR -> throw notFound(
+                "Customer $username not found",
+                TalerErrorCode.TALER_EC_END // FIXME: need EC.
             )
-        val strippedIbanPayto: String = stripIbanPayto(req.debit_account) ?: throw badRequest("Invalid debit_account payto URI")
-        val walletAccount = db.bankAccountGetFromInternalPayto(strippedIbanPayto)
-            ?: throw notFound(
-                "debit_account not found",
+            TalerAddIncomingResult.NOT_EXCHANGE -> throw conflict(
+                "$username is not an exchange account.",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
-        val exchangeAccount = call.bankAccount()
-        if (!exchangeAccount.isTalerExchange) throw forbidden("Expected taler exchange bank account.")
-
-        val txTimestamp = Instant.now()
-        val op = BankInternalTransaction(
-            debtorAccountId = walletAccount.expectRowId(),
-            amount = req.amount,
-            creditorAccountId = exchangeAccount.id,
-            transactionDate = txTimestamp,
-            subject = subject
-        )
-        val res = db.bankTransactionCreate(op)
-        /**
-         * Other possible errors are highly unlikely, because of the
-         * previous checks on the existence of the involved bank accounts.
-         */
-        if (res == BankTransactionResult.CONFLICT)
-            throw conflict(
-                "Insufficient balance",
+            TalerAddIncomingResult.NO_DEBITOR -> throw notFound(
+                "Debitor account was not found",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
+            TalerAddIncomingResult.SAME_ACCOUNT -> throw conflict(
+                "Wire transfer attempted with credit and debit party being the same bank account",
+                TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+            )
+            TalerAddIncomingResult.BOTH_EXCHANGE -> throw conflict(
+                "Wire transfer attempted with credit and debit party being both exchange account",
+                TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+            )
+            TalerAddIncomingResult.RESERVE_PUB_REUSE -> throw conflict(
+                "reserve_pub used already",
+                TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
+            )
+            TalerAddIncomingResult.BALANCE_INSUFFICIENT -> throw conflict(
+                "Insufficient balance for debitor",
                 TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
             )
-        val rowId = db.bankTransactionCheckExists(req.reserve_pub.encoded())
-            ?: throw internalServerError("Could not find the just inserted bank transaction")
-        call.respond(
-            AddIncomingResponse(
-                row_id = rowId,
-                timestamp = TalerProtocolTimestamp(txTimestamp)
+            TalerAddIncomingResult.SUCCESS -> call.respond(
+                AddIncomingResponse(
+                    timestamp = TalerProtocolTimestamp(timestamp),
+                    row_id = dbRes.txRowId!!
+                )
             )
-        )
-        return@post
+        }
     }
 }

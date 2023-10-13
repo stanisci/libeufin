@@ -426,46 +426,6 @@ fun ResourceName.canI(c: Customer, withAdmin: Boolean = true): Boolean {
 fun ApplicationCall.getResourceName(param: String): ResourceName =
     this.expectUriComponent(param)
 
-/**
- * This type communicates the result of deleting an account
- * from the database.
- */
-enum class CustomerDeletionResult {
-    SUCCESS,
-    CUSTOMER_NOT_FOUND,
-    BALANCE_NOT_ZERO
-}
-
-/**
- * This type communicates the result of a database operation
- * to confirm one withdrawal operation.
- */
-enum class WithdrawalConfirmationResult {
-    SUCCESS,
-    OP_NOT_FOUND,
-    EXCHANGE_NOT_FOUND,
-    BALANCE_INSUFFICIENT,
-
-    /**
-     * This state indicates that the withdrawal was already
-     * confirmed BUT Kotlin did not detect it and still invoked
-     * the SQL procedure to confirm the withdrawal.  This is
-     * conflictual because only Kotlin is responsible to check
-     * for idempotency, and this state witnesses a failure in
-     * this regard.
-     */
-    CONFLICT
-}
-
-/**
- * Communicates the result of creating a bank transaction in the database.
- */
-enum class BankTransactionResult {
-    NO_CREDITOR,
-    NO_DEBTOR,
-    SUCCESS,
-    CONFLICT // balance insufficient
-}
 
 // GET /config response from the Taler Integration API.
 @Serializable

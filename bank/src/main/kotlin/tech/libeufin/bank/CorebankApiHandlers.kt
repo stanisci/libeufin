@@ -246,7 +246,8 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             when (db.bankTransactionCreate(adminPaysBonus)) {
                 BankTransactionResult.NO_CREDITOR -> throw internalServerError("Bonus impossible: creditor not found, despite its recent creation.")
                 BankTransactionResult.NO_DEBTOR -> throw internalServerError("Bonus impossible: admin not found.")
-                BankTransactionResult.CONFLICT -> throw internalServerError("Bonus impossible: admin has insufficient balance.")
+                BankTransactionResult.BALANCE_INSUFFICIENT -> throw internalServerError("Bonus impossible: admin has insufficient balance.")
+                BankTransactionResult.SAME_ACCOUNT -> throw internalServerError("Bonus impossible: admin should not be creditor.")
                 BankTransactionResult.SUCCESS -> {/* continue the execution */
                 }
             }
@@ -546,9 +547,13 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         )
         val res = db.bankTransactionCreate(dbInstructions)
         when (res) {
-            BankTransactionResult.CONFLICT -> throw conflict(
+            BankTransactionResult.BALANCE_INSUFFICIENT -> throw conflict(
                 "Insufficient funds",
                 TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+            )
+            BankTransactionResult.SAME_ACCOUNT -> throw conflict(
+                "Wire transfer attempted with credit and debit party being the same bank account",
+                TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
             )
             BankTransactionResult.NO_CREDITOR -> throw internalServerError("Creditor not found despite previous checks.")
             BankTransactionResult.NO_DEBTOR -> throw internalServerError("Debtor not found despite the request was authenticated.")
