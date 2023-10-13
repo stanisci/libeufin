@@ -58,7 +58,7 @@ fun ApplicationCall.getAuthToken(): String? {
  * Performs the HTTP basic authentication.  Returns the
  * authenticated customer on success, or null otherwise.
  */
-fun doBasicAuth(db: Database, encodedCredentials: String): Customer? {
+suspend fun doBasicAuth(db: Database, encodedCredentials: String): Customer? {
     val plainUserAndPass = String(base64ToBytes(encodedCredentials), Charsets.UTF_8) // :-separated
     val userAndPassSplit = plainUserAndPass.split(
         ":",
@@ -96,7 +96,7 @@ private fun splitBearerToken(tok: String): String? {
 
 /* Performs the secret-token authentication.  Returns the
  * authenticated customer on success, null otherwise. */
-fun doTokenAuth(
+suspend fun doTokenAuth(
     db: Database,
     token: String,
     requiredScope: TokenScope,
@@ -268,7 +268,7 @@ fun getWithdrawalConfirmUrl(
  * if the query param doesn't parse into a UUID.  Currently
  * used by the Taler Web/SPA and Integration API handlers.
  */
-fun getWithdrawal(db: Database, opIdParam: String): TalerWithdrawalOperation {
+suspend fun getWithdrawal(db: Database, opIdParam: String): TalerWithdrawalOperation {
     val opId = try {
         UUID.fromString(opIdParam)
     } catch (e: Exception) {
@@ -327,7 +327,7 @@ fun getHistoryParams(params: Parameters): HistoryParams {
  *
  * It returns false in case of problems, true otherwise.
  */
-fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean {
+suspend fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean {
     val maybeAdminCustomer = db.customerGetFromLogin("admin")
     val adminCustomerId: Long = if (maybeAdminCustomer == null) {
         logger.debug("Creating admin's customer row")

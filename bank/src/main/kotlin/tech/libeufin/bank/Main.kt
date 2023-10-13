@@ -47,8 +47,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.jvm.javaio.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.*
@@ -437,8 +436,10 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val servePortLong = config.requireNumber("libeufin-bank", "port")
         val servePort = servePortLong.toInt()
         val db = Database(dbConnStr, ctx.currency)
-        if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
-            exitProcess(1)
+        runBlocking {
+            if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
+                exitProcess(1)
+        }
         embeddedServer(Netty, port = servePort) {
             corebankWebApp(db, ctx)
         }.start(wait = true)
@@ -466,14 +467,16 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val dbConnStr = config.requireString("libeufin-bankdb-postgres", "config")
         config.requireNumber("libeufin-bank", "port")
         val db = Database(dbConnStr, ctx.currency)
-        if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
+        runBlocking {
+            if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
 
-        if (!db.customerChangePassword(account, CryptoUtil.hashpw(password))) {
-            println("password change failed")
-            exitProcess(1)
-        } else {
-            println("password change succeeded")
+            if (!db.customerChangePassword(account, CryptoUtil.hashpw(password))) {
+                println("password change failed")
+                exitProcess(1)
+            } else {
+                println("password change succeeded")
+            }
         }
     }
 }

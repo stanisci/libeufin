@@ -84,7 +84,7 @@ class TalerApiTest {
         ).assertSuccess()
     }
 
-    fun commonSetup(lambda: (Database, BankApplicationContext) -> Unit) {
+    fun commonSetup(lambda: suspend (Database, BankApplicationContext) -> Unit) {
         setup { db, ctx -> 
             // Creating the exchange and merchant accounts first.
             assertNotNull(db.customerCreate(customerFoo))

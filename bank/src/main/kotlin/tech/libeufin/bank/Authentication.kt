@@ -15,7 +15,7 @@ import tech.libeufin.util.getAuthorizationRawHeader
  *
  * Returns the authenticated customer, or null if they failed.
  */
-fun ApplicationCall.authenticateBankRequest(db: Database, requiredScope: TokenScope): Customer? {
+suspend fun ApplicationCall.authenticateBankRequest(db: Database, requiredScope: TokenScope): Customer? {
     // Extracting the Authorization header.
     val header = getAuthorizationRawHeader(this.request) ?: throw badRequest(
         "Authorization header not found.",

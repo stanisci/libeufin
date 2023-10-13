@@ -1,11 +1,8 @@
 import io.ktor.http.*
 import io.ktor.client.statement.*
 import io.ktor.client.request.*
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObjectBuilder
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
 import net.taler.wallet.crypto.Base32Crockford
 import kotlin.test.assertEquals
 import tech.libeufin.bank.*
@@ -16,7 +13,7 @@ import java.util.zip.DeflaterOutputStream
 
 fun setup(
     conf: String = "test.conf",
-    lambda: (Database, BankApplicationContext) -> Unit
+    lambda: suspend (Database, BankApplicationContext) -> Unit
 ){
     val config = TalerConfig(BANK_CONFIG_SOURCE)
     config.load("conf/$conf")
@@ -26,11 +23,13 @@ fun setup(
     initializeDatabaseTables(dbConnStr, sqlPath)
     val ctx = BankApplicationContext.readFromConfig(config)
     Database(dbConnStr, ctx.currency).use {
-        lambda(it, ctx)
+        runBlocking {
+            lambda(it, ctx)
+        }
     }
 }
 
-fun setupDb(lambda: (Database) -> Unit) {
+fun setupDb(lambda: suspend (Database) -> Unit) {
     setup() { db, _ -> lambda(db) }
 }
 
