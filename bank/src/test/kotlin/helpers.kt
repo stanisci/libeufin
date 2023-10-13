@@ -15,14 +15,12 @@ fun setup(
     conf: String = "test.conf",
     lambda: suspend (Database, BankApplicationContext) -> Unit
 ){
-    val config = TalerConfig(BANK_CONFIG_SOURCE)
-    config.load("conf/$conf")
-    val dbConnStr = config.requireString("libeufin-bankdb-postgres", "config")
-    val sqlPath = config.requirePath("libeufin-bankdb-postgres", "SQL_DIR")
-    resetDatabaseTables(dbConnStr, sqlPath)
-    initializeDatabaseTables(dbConnStr, sqlPath)
-    val ctx = BankApplicationContext.readFromConfig(config)
-    Database(dbConnStr, ctx.currency).use {
+    val config = talerConfig("conf/$conf")
+    val dbCfg = config.loadDbConfig()
+    resetDatabaseTables(dbCfg)
+    initializeDatabaseTables(dbCfg)
+    val ctx = config.loadBankApplicationContext()
+    Database(dbCfg.dbConnStr, ctx.currency).use {
         runBlocking {
             lambda(it, ctx)
         }

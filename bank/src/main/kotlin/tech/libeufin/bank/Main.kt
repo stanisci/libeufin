@@ -20,9 +20,6 @@
 
 package tech.libeufin.bank
 
-import ConfigSource
-import TalerConfig
-import TalerConfigError
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
@@ -71,8 +68,6 @@ import kotlin.system.exitProcess
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
 const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 val TOKEN_DEFAULT_DURATION: java.time.Duration = Duration.ofDays(1L)
-
-val BANK_CONFIG_SOURCE = ConfigSource("libeufin-bank", "libeufin-bank")
 
 /**
  * Application context with the parsed configuration.
@@ -124,43 +119,7 @@ data class BankApplicationContext(
      * SPA is located.
      */
     val spaCaptchaURL: String?,
-) {
-    companion object {
-        /**
-        * Read the configuration of the bank from a config file.
-        * Throws an exception if the configuration is malformed.
-        */
-        fun readFromConfig(cfg: TalerConfig): BankApplicationContext {
-            val currency = cfg.requireString("libeufin-bank", "currency")
-            val currencySpecification = cfg.sections.find {
-                it.startsWith("CURRENCY-") && cfg.requireBoolean(it, "enabled") && cfg.requireString(it, "code") == currency
-            }?.let {
-                CurrencySpecification(
-                    name = cfg.requireString(it, "name"),
-                    decimal_separator = cfg.requireString(it, "decimal_separator"),
-                    num_fractional_input_digits = cfg.requireNumber(it, "fractional_input_digits"),
-                    num_fractional_normal_digits = cfg.requireNumber(it, "fractional_normal_digits"),
-                    num_fractional_trailing_zero_digits = cfg.requireNumber(it, "fractional_trailing_zero_digits"),
-                    is_currency_name_leading = cfg.requireBoolean(it, "is_currency_name_leading"),
-                    alt_unit_names = Json.decodeFromString(cfg.requireString(it, "alt_unit_names"))
-                )
-            } ?: throw TalerConfigError("missing currency config for $currency")
-            return BankApplicationContext(
-                currency = currency,
-                restrictRegistration = cfg.lookupBoolean("libeufin-bank", "restrict_registration") ?: false,
-                cashoutCurrency = cfg.lookupString("libeufin-bank", "cashout_currency"),
-                defaultCustomerDebtLimit = cfg.requireAmount("libeufin-bank", "default_customer_debt_limit", currency),
-                registrationBonusEnabled = cfg.lookupBoolean("libeufin-bank", "registration_bonus_enabled") ?: false,
-                registrationBonus = cfg.requireAmount("libeufin-bank", "registration_bonus", currency),
-                suggestedWithdrawalExchange = cfg.lookupString("libeufin-bank", "suggested_withdrawal_exchange"),
-                defaultAdminDebtLimit = cfg.requireAmount("libeufin-bank", "default_admin_debt_limit", currency),
-                spaCaptchaURL = cfg.lookupString("libeufin-bank", "spa_captcha_url"),
-                restrictAccountDeletion = cfg.lookupBoolean("libeufin-bank", "restrict_account_deletion") ?: true,
-                currencySpecification = currencySpecification
-            )
-        }
-    }
-}
+)
 
 /**
  * This plugin inflates the requests that have "Content-Encoding: deflate"
@@ -364,23 +323,6 @@ fun durationFromPretty(s: String): Long {
     return durationUs
 }
 
-fun TalerConfig.requireAmount(section: String, option: String, currency: String): TalerAmount {
-    val amountStr = lookupString(section, option) ?:
-        throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
-    val amount = try {
-        TalerAmount(amountStr)
-    } catch (e: Exception) {
-        throw TalerConfigError("expected amount for section $section, option $option, but amount is malformed")
-    }
-
-    if (amount.currency != currency) {
-        throw TalerConfigError(
-            "expected amount for section $section, option $option, but currency is wrong (got ${amount.currency} expected $currency"
-        )
-    }
-    return amount
-}
-
 class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = "dbinit") {
     private val configFile by option(
         "--config", "-c",
@@ -399,14 +341,11 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
     }
 
     override fun run() {
-        val config = TalerConfig(BANK_CONFIG_SOURCE)
-        config.load(this.configFile)
-        val dbConnStr = config.requireString("libeufin-bankdb-postgres", "config")
-        val sqlDir = config.requirePath("libeufin-bankdb-postgres", "sql_dir")
+        val cfg = talerConfig(configFile).loadDbConfig()
         if (requestReset) {
-            resetDatabaseTables(dbConnStr, sqlDir)
+            resetDatabaseTables(cfg)
         }
-        initializeDatabaseTables(dbConnStr, sqlDir)
+        initializeDatabaseTables(cfg)
     }
 }
 
@@ -423,24 +362,20 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
     }
 
     override fun run() {
-        val config = TalerConfig(BANK_CONFIG_SOURCE)
-        config.load(this.configFile)
-        val ctx = BankApplicationContext.readFromConfig(config)
-        val dbConnStr = config.requireString("libeufin-bankdb-postgres", "config")
-        logger.info("using database '$dbConnStr'")
-        val serveMethod = config.requireString("libeufin-bank", "serve")
-        if (serveMethod.lowercase() != "tcp") {
+        val cfg = talerConfig(configFile)
+        val ctx = cfg.loadBankApplicationContext()
+        val dbCfg = cfg.loadDbConfig()
+        val serverCfg = cfg.loadServerConfig()
+        if (serverCfg.method.lowercase() != "tcp") {
             logger.info("Can only serve libeufin-bank via TCP")
             exitProcess(1)
         }
-        val servePortLong = config.requireNumber("libeufin-bank", "port")
-        val servePort = servePortLong.toInt()
-        val db = Database(dbConnStr, ctx.currency)
+        val db = Database(dbCfg.dbConnStr, ctx.currency)
         runBlocking {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
                 exitProcess(1)
         }
-        embeddedServer(Netty, port = servePort) {
+        embeddedServer(Netty, port = serverCfg.port) {
             corebankWebApp(db, ctx)
         }.start(wait = true)
     }
@@ -461,12 +396,10 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     }
 
     override fun run() {
-        val config = TalerConfig(BANK_CONFIG_SOURCE)
-        config.load(this.configFile)
-        val ctx = BankApplicationContext.readFromConfig(config)
-        val dbConnStr = config.requireString("libeufin-bankdb-postgres", "config")
-        config.requireNumber("libeufin-bank", "port")
-        val db = Database(dbConnStr, ctx.currency)
+        val cfg = talerConfig(configFile)
+        val ctx = cfg.loadBankApplicationContext() 
+        val dbCfg = cfg.loadDbConfig()
+        val db = Database(dbCfg.dbConnStr, ctx.currency)
         runBlocking {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
@@ -494,7 +427,7 @@ class BankConfigDump : CliktCommand("Dump the configuration", name = "dump") {
     }
 
     override fun run() {
-        val config = TalerConfig(BANK_CONFIG_SOURCE)
+        val config = talerConfig(configFile)
         println("# install path: ${config.getInstallPath()}")
         config.load(this.configFile)
         println(config.stringify())
@@ -516,8 +449,7 @@ class BankConfigPathsub : CliktCommand("Substitute variables in a path", name = 
     }
 
     override fun run() {
-        val config = TalerConfig(BANK_CONFIG_SOURCE)
-        config.load(this.configFile)
+        val config = talerConfig(configFile)
         println(config.pathsub(pathExpr))
     }
 }
@@ -544,8 +476,7 @@ class BankConfigGet : CliktCommand("Lookup config value", name = "get") {
     }
 
     override fun run() {
-        val config = TalerConfig(BANK_CONFIG_SOURCE)
-        config.load(this.configFile)
+        val config = talerConfig(configFile)
         if (isPath) {
             val res = config.lookupPath(sectionName, optionName)
             if (res == null) {

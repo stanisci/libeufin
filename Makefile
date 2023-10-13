@@ -46,6 +46,7 @@ deb: exec-arch copy-spa
 install:
 	install -d $(config_dir)
 	install contrib/libeufin-bank.conf $(config_dir)/
+	install contrib/currencies.conf $(config_dir)/
 	install -D database-versioning/libeufin-bank*.sql -t $(sql_dir)
 	install -D database-versioning/versioning.sql -t $(sql_dir)
 	install -D database-versioning/procedures.sql -t $(sql_dir)

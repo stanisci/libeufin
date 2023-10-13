@@ -96,10 +96,10 @@ private fun <R> PgConnection.transaction(lambda: (PgConnection) -> R): R {
     }
 }
 
-fun initializeDatabaseTables(dbConfig: String, sqlDir: String) {
-    logger.info("doing DB initialization, sqldir $sqlDir, dbConfig $dbConfig")
-    pgDataSource(dbConfig).pgConnection().use { conn ->
-        val sqlVersioning = File("$sqlDir/versioning.sql").readText()
+fun initializeDatabaseTables(cfg: DatabaseConfig) {
+    logger.info("doing DB initialization, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
+    pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
+        val sqlVersioning = File("${cfg.sqlDir}/versioning.sql").readText()
         conn.execSQLUpdate(sqlVersioning)
 
         val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
@@ -115,7 +115,7 @@ fun initializeDatabaseTables(dbConfig: String, sqlDir: String) {
                 continue
             }
 
-            val path = File("$sqlDir/libeufin-bank-$numStr.sql")
+            val path = File("${cfg.sqlDir}/libeufin-bank-$numStr.sql")
             if (!path.exists()) {
                 logger.info("path $path doesn't exist anymore, stopping")
                 break
@@ -124,14 +124,14 @@ fun initializeDatabaseTables(dbConfig: String, sqlDir: String) {
             val sqlPatchText = path.readText()
             conn.execSQLUpdate(sqlPatchText)
         }
-        val sqlProcedures = File("$sqlDir/procedures.sql").readText()
+        val sqlProcedures = File("${cfg.sqlDir}/procedures.sql").readText()
         conn.execSQLUpdate(sqlProcedures)
     }
 }
 
-fun resetDatabaseTables(dbConfig: String, sqlDir: String) {
-    logger.info("doing DB initialization, sqldir $sqlDir, dbConfig $dbConfig")
-    pgDataSource(dbConfig).pgConnection().use { conn ->
+fun resetDatabaseTables(cfg: DatabaseConfig) {
+    logger.info("reset DB, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
+    pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
         val count = conn.prepareStatement("SELECT count(*) FROM information_schema.schemata WHERE schema_name='_v'").oneOrNull { 
             it.getInt(1)
         } ?: 0
@@ -140,12 +140,8 @@ fun resetDatabaseTables(dbConfig: String, sqlDir: String) {
             return
         }
 
-        val sqlDrop = File("$sqlDir/libeufin-bank-drop.sql").readText()
-        try {
-        conn.execSQLUpdate(sqlDrop)
-        } catch (e: Exception) {
-            
-        }
+        val sqlDrop = File("${cfg.sqlDir}/libeufin-bank-drop.sql").readText()
+        conn.execSQLUpdate(sqlDrop) // TODO can fail ?
     }
 }
 
