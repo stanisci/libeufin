@@ -387,7 +387,7 @@ END IF;
 -- Perform bank transfer
 SELECT
   out_balance_insufficient,
-  out_debit_row_id,
+  out_credit_row_id,
   transfer.out_same_account
   INTO
     out_debitor_balance_insufficient,

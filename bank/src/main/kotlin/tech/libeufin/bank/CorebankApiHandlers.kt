@@ -176,11 +176,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             if (this == null) return@run null
             db.bankAccountGetFromOwnerId(this.expectRowId())
         }
-        val internalPayto: String = if (req.internal_payto_uri != null) {
-            stripIbanPayto(req.internal_payto_uri) ?: throw badRequest("internal_payto_uri is invalid")
-        } else {
-            stripIbanPayto(genIbanPaytoUri()) ?: throw internalServerError("Bank generated an invalid internal payto URI")
-        }
+        val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
         if (maybeCustomerExists != null && maybeHasBankAccount != null) {
             logger.debug("Registering username was found: ${maybeCustomerExists.login}") // Checking _all_ the details are the same.
             val isIdentic =
@@ -191,7 +187,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                         CryptoUtil.checkpw(req.password, maybeCustomerExists.passwordHash) &&
                         maybeHasBankAccount.isPublic == req.is_public &&
                         maybeHasBankAccount.isTalerExchange == req.is_taler_exchange &&
-                        maybeHasBankAccount.internalPaytoUri == internalPayto
+                        maybeHasBankAccount.internalPaytoUri.stripped == internalPayto.stripped
             if (isIdentic) {
                 call.respond(HttpStatusCode.Created)
                 return@post
@@ -516,24 +512,23 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
         val c: Customer = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
         val resourceName = call.expectUriComponent("USERNAME") // admin has no rights here.
         if ((c.login != resourceName) && (call.getAuthToken() == null)) throw forbidden()
-        val txData = call.receive<BankAccountTransactionCreate>()
-        val payto = parsePayto(txData.payto_uri) ?: throw badRequest("Invalid creditor Payto")
-        val subject = payto.message ?: throw badRequest("Wire transfer lacks subject")
+        val tx = call.receive<BankAccountTransactionCreate>()
+        val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
         val debtorBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
             ?: throw internalServerError("Debtor bank account not found")
-        if (txData.amount.currency != ctx.currency) throw badRequest(
-            "Wrong currency: ${txData.amount.currency}",
+        if (tx.amount.currency != ctx.currency) throw badRequest(
+            "Wrong currency: ${tx.amount.currency}",
             talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
         )
         if (!isBalanceEnough(
             balance = debtorBankAccount.expectBalance(),
-            due = txData.amount,
+            due = tx.amount,
             hasBalanceDebt = debtorBankAccount.hasDebt,
             maxDebt = debtorBankAccount.maxDebt
         ))
             throw conflict(hint = "Insufficient balance.", talerEc = TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
-        logger.info("creditor payto: ${txData.payto_uri}")
-        val creditorBankAccount = db.bankAccountGetFromInternalPayto("payto://iban/${payto.iban.lowercase()}")
+        logger.info("creditor payto: ${tx.payto_uri}")
+        val creditorBankAccount = db.bankAccountGetFromInternalPayto(tx.payto_uri)
             ?: throw notFound(
                 "Creditor account not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
@@ -542,7 +537,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             debtorAccountId = debtorBankAccount.expectRowId(),
             creditorAccountId = creditorBankAccount.expectRowId(),
             subject = subject,
-            amount = txData.amount,
+            amount = tx.amount,
             transactionDate = Instant.now()
         )
         val res = db.bankTransactionCreate(dbInstructions)

@@ -26,7 +26,6 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
-import tech.libeufin.util.stripIbanPayto
 
 fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) {
     get("/taler-integration/config") {
@@ -56,7 +55,7 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
                 selection_done = op.selectionDone,
                 transfer_done = op.confirmationDone,
                 amount = op.amount,
-                sender_wire = relatedBankAccount.internalPaytoUri,
+                sender_wire = relatedBankAccount.internalPaytoUri.stripped,
                 suggested_exchange = suggestedExchange,
                 confirm_transfer_url = confirmUrl
             )
@@ -77,9 +76,8 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
             if (db.bankTransactionCheckExists(req.reserve_pub) != null) throw conflict(
                 "Reserve pub. already used", TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
             )
-            val exchangePayto = stripIbanPayto(req.selected_exchange) ?: throw badRequest("selected_exchange payto is invalid")
             db.talerWithdrawalSetDetails(
-                op.withdrawalUuid, exchangePayto, req.reserve_pub
+                op.withdrawalUuid, req.selected_exchange, req.reserve_pub
             )
         } else { // Nothing to do in the database, i.e. we were successful
             true

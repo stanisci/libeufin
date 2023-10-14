@@ -30,7 +30,7 @@ sealed interface TxMetadata {
             // OutgoingTxMetadata
             try {
                 val (wtid, exchangeBaseUrl) = subject.split(" ", limit=2) ; 
-                return OutgoingTxMetadata(ShortHashCode(wtid), exchangeBaseUrl)
+                return OutgoingTxMetadata(ShortHashCode(wtid), ExchangeUrl(exchangeBaseUrl))
             } catch (e: Exception) { }
 
             // No well formed metadata
@@ -40,15 +40,13 @@ sealed interface TxMetadata {
         fun encode(metadata: TxMetadata): String {
             return when (metadata) {
                 is IncomingTxMetadata -> "${metadata.reservePub}"
-                is OutgoingTxMetadata -> "${metadata.wtid} ${metadata.exchangeBaseUrl}"
+                is OutgoingTxMetadata -> "${metadata.wtid} ${metadata.exchangeBaseUrl.url}"
             }
         }
     }
+    
+    fun encode(): String = TxMetadata.encode(this)
 }
 
-data class IncomingTxMetadata(val reservePub: EddsaPublicKey): TxMetadata {
-    override fun toString(): String = TxMetadata.encode(this)
-}
-data class OutgoingTxMetadata(val wtid: ShortHashCode, val exchangeBaseUrl: String): TxMetadata {
-    override fun toString(): String = TxMetadata.encode(this)
-}
+data class IncomingTxMetadata(val reservePub: EddsaPublicKey): TxMetadata
+data class OutgoingTxMetadata(val wtid: ShortHashCode, val exchangeBaseUrl: ExchangeUrl): TxMetadata

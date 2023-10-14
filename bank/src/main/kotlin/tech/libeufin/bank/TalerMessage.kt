@@ -91,7 +91,7 @@ data class RegisterAccountRequest(
     // External bank account where to send cashout amounts.
     val cashout_payto_uri: String? = null,
     // Bank account internal to Libeufin-Bank.
-    val internal_payto_uri: String? = null
+    val internal_payto_uri: IbanPayTo? = null
 )
 
 
@@ -151,7 +151,7 @@ data class Customer(
  * from/to the database.
  */
 data class BankAccount(
-    val internalPaytoUri: String,
+    val internalPaytoUri: IbanPayTo,
     // Database row ID of the customer that owns this bank account.
     val owningCustomerId: Long,
     val bankAccountId: Long? = null, // null at INSERT.
@@ -270,7 +270,7 @@ data class TalerWithdrawalOperation(
     val aborted: Boolean = false,
     val confirmationDone: Boolean = false,
     val reservePub: String?,
-    val selectedExchangePayto: String?,
+    val selectedExchangePayto: IbanPayTo?,
     val walletBankAccount: Long
 )
 
@@ -345,7 +345,7 @@ data class ListBankAccountsResponse(
 data class AccountData(
     val name: String,
     val balance: Balance,
-    val payto_uri: String,
+    val payto_uri: IbanPayTo,
     val debit_threshold: TalerAmount,
     val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: String? = null,
@@ -356,7 +356,7 @@ data class AccountData(
  */
 @Serializable
 data class BankAccountTransactionCreate(
-    val payto_uri: String,
+    val payto_uri: IbanPayTo,
     val amount: TalerAmount
 )
 
@@ -400,7 +400,7 @@ data class BankAccountGetWithdrawalResponse(
     val confirmation_done: Boolean,
     val selection_done: Boolean,
     val selected_reserve_pub: String? = null,
-    val selected_exchange_account: String? = null
+    val selected_exchange_account: IbanPayTo? = null
 )
 
 typealias ResourceName = String
@@ -492,7 +492,7 @@ data class BankWithdrawalOperationStatus(
 @Serializable
 data class BankWithdrawalOperationPostRequest(
     val reserve_pub: String,
-    val selected_exchange: String,
+    val selected_exchange: IbanPayTo,
 )
 
 /**
@@ -513,7 +513,7 @@ data class BankWithdrawalOperationPostResponse(
 data class AddIncomingRequest(
     val amount: TalerAmount,
     val reserve_pub: EddsaPublicKey,
-    val debit_account: String
+    val debit_account: IbanPayTo
 )
 
 /**
@@ -571,9 +571,9 @@ data class OutgoingTransaction(
     val row_id: Long, // DB row ID of the payment.
     val date: TalerProtocolTimestamp,
     val amount: TalerAmount,
-    val credit_account: String, // Payto of the receiver.
+    val credit_account: IbanPayTo, // Payto of the receiver.
     val wtid: ShortHashCode,
-    val exchange_base_url: String,
+    val exchange_base_url: ExchangeUrl,
 )
 
 /**
@@ -583,9 +583,9 @@ data class OutgoingTransaction(
 data class TransferRequest(
     val request_uid: HashCode,
     val amount: TalerAmount,
-    val exchange_base_url: String,
+    val exchange_base_url: ExchangeUrl,
     val wtid: ShortHashCode,
-    val credit_account: String
+    val credit_account: IbanPayTo
 )
 
 /**

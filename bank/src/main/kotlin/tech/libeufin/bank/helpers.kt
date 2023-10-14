@@ -359,7 +359,7 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): 
         }
         val adminBankAccount = BankAccount(
             hasDebt = false,
-            internalPaytoUri = adminInternalPayto,
+            internalPaytoUri = IbanPayTo(adminInternalPayto),
             owningCustomerId = adminCustomerId,
             isPublic = false,
             isTalerExchange = false,

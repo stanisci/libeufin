@@ -43,7 +43,7 @@ class LibeuFinApiTest {
 
     private fun genBankAccount(rowId: Long) = BankAccount(
         hasDebt = false,
-        internalPaytoUri = "payto://iban/ac${rowId}",
+        internalPaytoUri = IbanPayTo("payto://iban/ac${rowId}"),
         maxDebt = TalerAmount(100, 0, "KUDOS"),
         owningCustomerId = rowId
     )
@@ -248,7 +248,7 @@ class LibeuFinApiTest {
             assert(db.bankAccountCreate(
                 BankAccount(
                     hasDebt = false,
-                    internalPaytoUri = "payto://iban/DE1234",
+                    internalPaytoUri = IbanPayTo("payto://iban/DE1234"),
                     maxDebt = TalerAmount(100, 0, "KUDOS"),
                     owningCustomerId = 1
                 )
@@ -276,7 +276,7 @@ class LibeuFinApiTest {
                     db.bankAccountCreate(
                         BankAccount(
                             isPublic = true,
-                            internalPaytoUri = "payto://iban/non-used",
+                            internalPaytoUri = IbanPayTo("payto://iban/non-used"),
                             lastNexusFetchRowId = 1L,
                             owningCustomerId = this!!,
                             hasDebt = false,
@@ -439,7 +439,7 @@ class LibeuFinApiTest {
             db.bankAccountCreate(
                 BankAccount(
                     hasDebt = false,
-                    internalPaytoUri = "payto://iban/DE1234",
+                    internalPaytoUri = IbanPayTo("payto://iban/DE1234"),
                     maxDebt = TalerAmount(100, 0, "KUDOS"),
                     owningCustomerId = customerRowId!!
                 )
@@ -468,7 +468,7 @@ class LibeuFinApiTest {
                 db.bankAccountCreate(
                     BankAccount(
                         hasDebt = false,
-                        internalPaytoUri = "payto://iban/SANDBOXX/ADMIN-IBAN",
+                        internalPaytoUri = IbanPayTo("payto://iban/SANDBOXX/ADMIN-IBAN"),
                         maxDebt = TalerAmount(100, 0, "KUDOS"),
                         owningCustomerId = adminRowId!!
                     )

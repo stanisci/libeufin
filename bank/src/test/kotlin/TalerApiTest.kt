@@ -28,7 +28,7 @@ class TalerApiTest {
         cashoutCurrency = "KUDOS"
     )
     private val bankAccountFoo = BankAccount(
-        internalPaytoUri = "payto://iban/FOO-IBAN-XYZ".lowercase(),
+        internalPaytoUri = IbanPayTo("payto://iban/FOO-IBAN-XYZ"),
         lastNexusFetchRowId = 1L,
         owningCustomerId = 1L,
         hasDebt = false,
@@ -45,7 +45,7 @@ class TalerApiTest {
         cashoutCurrency = "KUDOS"
     )
     val bankAccountBar = BankAccount(
-        internalPaytoUri = stripIbanPayto("payto://iban/BAR-IBAN-ABC")!!,
+        internalPaytoUri = IbanPayTo("payto://iban/BAR-IBAN-ABC"),
         lastNexusFetchRowId = 1L,
         owningCustomerId = 2L,
         hasDebt = false,
@@ -59,28 +59,29 @@ class TalerApiTest {
             req = TransferRequest(
                 request_uid = randHashCode(),
                 amount = TalerAmount(amount),
-                exchange_base_url = "http://exchange.example.com/",
+                exchange_base_url = ExchangeUrl("http://exchange.example.com/"),
                 wtid = randShortHashCode(),
-                credit_account ="${stripIbanPayto(to.internalPaytoUri)}"
+                credit_account = to.internalPaytoUri
             ),
             username = from,
             timestamp = Instant.now()
-        )
+        ).run {
+            assertEquals(TalerTransferResult.SUCCESS, txResult)
+        }
     }
 
-    suspend fun Database.genIncoming(from: Long, to: Long) {
-        bankTransactionCreate(
-            BankInternalTransaction(
-                creditorAccountId = from,
-                debtorAccountId = to,
-                subject = IncomingTxMetadata(randShortHashCode()).toString(),
+    suspend fun Database.genIncoming(to: String, from: BankAccount) {
+        talerAddIncomingCreate(
+            req = AddIncomingRequest(
+                reserve_pub = randShortHashCode(),
                 amount = TalerAmount( 10, 0, "KUDOS"),
-                accountServicerReference = "acct-svcr-ref",
-                endToEndId = "end-to-end-id",
-                paymentInformationId = "pmtinfid",
-                transactionDate = Instant.now()
-            )
-        ).assertSuccess()
+                debit_account = from.internalPaytoUri,
+            ),
+            username = to,
+            timestamp = Instant.now()
+        ).run {
+            assertEquals(TalerAddIncomingResult.SUCCESS, txResult)
+        }
     }
 
     fun commonSetup(lambda: suspend (Database, BankApplicationContext) -> Unit) {
@@ -138,7 +139,7 @@ class TalerApiTest {
                 "amount" to "KUDOS:55"
                 "exchange_base_url" to "http://exchange.example.com/"
                 "wtid" to randShortHashCode()
-                "credit_account" to stripIbanPayto(bankAccountFoo.internalPaytoUri)
+                "credit_account" to bankAccountFoo.internalPaytoUri
             };
 
             authRoutine(client, "/accounts/foo/taler-wire-gateway/transfer", valid_req)
@@ -289,17 +290,19 @@ class TalerApiTest {
                 basicAuth("bar", "secret")
             }.assertStatus(HttpStatusCode.NoContent)
 
-            // Foo pays Bar (the exchange) three time
+            // Gen three transactions using clean add incoming logic
             repeat(3) {
-                db.genIncoming(2, 1)
+                db.genIncoming("bar", bankAccountFoo)
             }
             // Should not show up in the taler wire gateway API history
             db.bankTransactionCreate(genTx("bogus foobar")).assertSuccess()
             // Bar pays Foo once, but that should not appear in the result.
             db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)).assertSuccess()
-            // Foo pays Bar (the exchange) twice, we should see five valid transactions
+            // Gen two transactions using row bank transaction logic
             repeat(2) {
-                db.genIncoming(2, 1)
+                db.bankTransactionCreate(
+                    genTx(IncomingTxMetadata(randShortHashCode()).encode(), 2, 1)
+                ).assertSuccess()
             }
 
             // Check ignore bogus subject
@@ -356,14 +359,14 @@ class TalerApiTest {
                     },
                     launch {
                         delay(200)
-                        db.genIncoming(2, 1)
+                        db.genIncoming("bar", bankAccountFoo)
                     }
                 )
             }
 
             // Testing ranges. 
             repeat(300) {
-                db.genIncoming(2, 1)
+                db.genIncoming("bar", bankAccountFoo)
             }
 
             // forward range:
@@ -428,7 +431,7 @@ class TalerApiTest {
                 basicAuth("bar", "secret")
             }.assertStatus(HttpStatusCode.NoContent)
 
-            // Bar pays Foo three time
+            // Gen three transactions using clean transfer logic
             repeat(3) {
                 db.genTransfer("bar", bankAccountFoo)
             }
@@ -436,9 +439,11 @@ class TalerApiTest {
             db.bankTransactionCreate(genTx("bogus foobar", 1, 2)).assertSuccess()
             // Foo pays Bar once, but that should not appear in the result.
             db.bankTransactionCreate(genTx("payout")).assertSuccess()
-            // Bar pays Foo twice, we should see five valid transactions
+            // Gen two transactions using row bank transaction logic
             repeat(2) {
-                db.genTransfer("bar", bankAccountFoo)
+                db.bankTransactionCreate(
+                    genTx(OutgoingTxMetadata(randShortHashCode(), ExchangeUrl("http://exchange.example.com/")).encode(), 1, 2)
+                ).assertSuccess()
             }
 
             // Check ignore bogus subject
@@ -613,7 +618,7 @@ class TalerApiTest {
             val r = client.post("/taler-integration/withdrawal-operation/${uuid}") {
                 jsonBody(BankWithdrawalOperationPostRequest(
                     reserve_pub = "RESERVE-FOO",
-                    selected_exchange = "payto://iban/ABC123"
+                    selected_exchange = IbanPayTo("payto://iban/ABC123")
                 ))
             }.assertOk()
             println(r.bodyAsText())
@@ -653,7 +658,7 @@ class TalerApiTest {
         ))
         val op = db.talerWithdrawalGet(uuid)
         assert(op?.aborted == false)
-        assert(db.talerWithdrawalSetDetails(uuid, "exchange-payto", "reserve_pub"))
+        assert(db.talerWithdrawalSetDetails(uuid, IbanPayTo("payto://iban/exchange-payto"), "reserve_pub"))
         testApplication {
             application {
                 corebankWebApp(db, ctx)
@@ -700,7 +705,7 @@ class TalerApiTest {
         // Specifying Bar as the exchange, via its Payto URI.
         assert(db.talerWithdrawalSetDetails(
             opUuid = uuid,
-            exchangePayto = "payto://iban/BAR-IBAN-ABC".lowercase(),
+            exchangePayto = IbanPayTo("payto://iban/BAR-IBAN-ABC"),
             reservePub = "UNCHECKED-RESERVE-PUB"
         ))
 

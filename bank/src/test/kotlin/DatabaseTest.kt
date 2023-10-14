@@ -68,7 +68,7 @@ class DatabaseTest {
         cashoutCurrency = "KUDOS"
     )
     private val bankAccountFoo = BankAccount(
-        internalPaytoUri = "payto://iban/FOO-IBAN-XYZ".lowercase(),
+        internalPaytoUri = IbanPayTo("payto://iban/FOO-IBAN-XYZ"),
         lastNexusFetchRowId = 1L,
         owningCustomerId = 1L,
         hasDebt = false,
@@ -76,7 +76,7 @@ class DatabaseTest {
         isTalerExchange = true
     )
     private val bankAccountBar = BankAccount(
-        internalPaytoUri = "payto://iban/BAR-IBAN-ABC".lowercase(),
+        internalPaytoUri = IbanPayTo("payto://iban/BAR-IBAN-ABC"),
         lastNexusFetchRowId = 1L,
         owningCustomerId = 2L,
         hasDebt = false,
@@ -114,8 +114,8 @@ class DatabaseTest {
     fun talerTransferTest() = setupDb { db ->
         val exchangeReq = TransferRequest(
             amount = TalerAmount(9, 0, "KUDOS"),
-            credit_account = "payto://iban/BAR-IBAN-ABC".lowercase(), // foo pays bar
-            exchange_base_url = "example.com/exchange",
+            credit_account = IbanPayTo("payto://iban/BAR-IBAN-ABC"),
+            exchange_base_url = ExchangeUrl("https://example.com/exchange"),
             request_uid = randHashCode(),
             wtid = randShortHashCode()
         )
@@ -319,7 +319,7 @@ class DatabaseTest {
         // Setting the details.
         assert(db.talerWithdrawalSetDetails(
             opUuid = uuid,
-            exchangePayto = "payto://iban/BAR-IBAN-ABC".lowercase(),
+            exchangePayto = IbanPayTo("payto://iban/BAR-IBAN-ABC"),
             reservePub = "UNCHECKED-RESERVE-PUB"
         ))
         val opSelected = db.talerWithdrawalGet(uuid)
@@ -443,7 +443,7 @@ class DatabaseTest {
             assert(db.bankAccountCreate(
                 BankAccount(
                     isPublic = true,
-                    internalPaytoUri = "payto://iban/non-used",
+                    internalPaytoUri = IbanPayTo("payto://iban/non-used"),
                     lastNexusFetchRowId = 1L,
                     owningCustomerId = this!!,
                     hasDebt = false,
@@ -500,10 +500,10 @@ class DatabaseTest {
         // Getting the updated account from the database and checking values.
         db.customerGetFromLogin("foo").apply {
             assertNotNull(this)
-            assert((this.login == "foo") &&
-                    (this.name == "Bar") &&
-                    (this.cashoutPayto) == "payto://cashout" &&
-                    (this.email) == "foo@example.com" &&
+            assert(this.login == "foo" &&
+                    this.name == "Bar" &&
+                    this.cashoutPayto == "payto://cashout" &&
+                    this.email == "foo@example.com" &&
                     this.phone == "+99"
             )
             db.bankAccountGetFromOwnerId(this.expectRowId()).apply {

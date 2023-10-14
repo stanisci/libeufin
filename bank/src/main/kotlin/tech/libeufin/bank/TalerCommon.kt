@@ -29,6 +29,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 import java.util.*
+import java.net.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.*
@@ -351,5 +352,94 @@ data class RelativeTime(
         }
 
         override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+    }
+}
+
+
+@Serializable(with = ExchangeUrl.Serializer::class)
+class ExchangeUrl {
+    val url: String
+
+    constructor(raw: String) {
+        url = URL(raw).toString()
+    }
+
+    override fun toString(): String = url
+
+    internal object Serializer : KSerializer<ExchangeUrl> {
+        override val descriptor: SerialDescriptor =
+                PrimitiveSerialDescriptor("ExchangeUrl", PrimitiveKind.STRING)
+
+        override fun serialize(encoder: Encoder, value: ExchangeUrl) {
+            encoder.encodeString(value.toString())
+        }
+
+        override fun deserialize(decoder: Decoder): ExchangeUrl {
+            return ExchangeUrl(decoder.decodeString())
+        }
+    }
+}
+
+
+@Serializable(with = IbanPayTo.Serializer::class)
+class IbanPayTo {
+    val parsed: URI
+    val stripped: String
+    // represent query param "sender-name" or "receiver-name".
+    val receiverName: String?
+    val iban: String
+    val bic: String?
+    // Typically, a wire transfer's subject.
+    val message: String?
+    val amount: String?
+
+    constructor(raw: String) {
+        parsed = URI(raw)
+        require(parsed.scheme == "payto") { "expect a payto URI" }
+        require(parsed.host == "iban") { "expect a IBAN payto URI"  }
+        val splitPath = parsed.path.split("/").filter { it.isNotEmpty() }
+        require(splitPath.size < 3 && splitPath.isNotEmpty()) { "too many path segments" }
+        val parts = if (splitPath.size == 1) {
+            Pair(splitPath[0], null)
+        } else Pair(splitPath[1], splitPath[0])
+        // TODO normalize IBAN & BIC ?
+        iban = parts.first.uppercase()
+        bic = parts.second?.uppercase()
+        stripped = "payto://iban/$iban"
+    
+        val params: List<Pair<String, String>>? = if (parsed.query != null) {
+            val queryString: List<String> = parsed.query.split("&")
+            queryString.map {
+                val split = it.split("=");
+                require(split.size == 2) { "parameter '$it' was malformed" }
+                Pair(split[0], split[1])
+            }
+        } else null
+    
+        // Return the value of query string parameter 'name', or null if not found.
+        // 'params' is the list of key-value elements of all the query parameters found in the URI.
+        fun getQueryParamOrNull(name: String): String? {
+            if (params == null) return null
+            return params.firstNotNullOfOrNull { pair ->
+                URLDecoder.decode(pair.second, Charsets.UTF_8).takeIf { pair.first == name }
+            }
+        }
+
+        amount = getQueryParamOrNull("amount")
+        message = getQueryParamOrNull("message")
+        receiverName = getQueryParamOrNull("receiver-name")
+    }
+
+    internal object Serializer : KSerializer<IbanPayTo> {
+        override val descriptor: SerialDescriptor =
+                PrimitiveSerialDescriptor("IbanPayTo", PrimitiveKind.STRING)
+
+        override fun serialize(encoder: Encoder, value: IbanPayTo) {
+            encoder.encodeString(value.parsed.toString())
+        }
+
+        override fun deserialize(decoder: Decoder): IbanPayTo {
+            return IbanPayTo(decoder.decodeString())
+        }
     }
 }

@@ -104,6 +104,6 @@ fun buildIbanPaytoUri(
  */
 fun stripIbanPayto(paytoUri: String): String? {
     val parsedPayto = parsePayto(paytoUri) ?: return null
-    val canonIban = parsedPayto.iban.lowercase()
+    val canonIban = parsedPayto.iban.uppercase()
     return "payto://iban/${canonIban}"
 }
