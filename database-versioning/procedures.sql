@@ -1,7 +1,7 @@
 BEGIN;
 SET search_path TO libeufin_bank;
 
-CREATE OR REPLACE PROCEDURE amount_normalize(
+CREATE OR REPLACE FUNCTION amount_normalize(
     IN amount taler_amount
   ,OUT normalized taler_amount
 )
@@ -14,7 +14,7 @@ END $$;
 COMMENT ON PROCEDURE amount_normalize
   IS 'Returns the normalized amount by adding to the .val the value of (.frac / 100000000) and removing the modulus 100000000 from .frac.';
 
-CREATE OR REPLACE PROCEDURE amount_add(
+CREATE OR REPLACE FUNCTION amount_add(
    IN a taler_amount
   ,IN b taler_amount
   ,OUT sum taler_amount
