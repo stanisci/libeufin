@@ -1,6 +1,7 @@
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.client.HttpClient
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.engine.*
@@ -17,91 +18,207 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.random.Random
-import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
+import kotlin.test.*
+import kotlinx.coroutines.*
 
-class LibeuFinApiTest {
-    private val customerFoo = Customer(
-        login = "foo",
-        passwordHash = CryptoUtil.hashpw("pw"),
-        name = "Foo",
-        phone = "+00",
-        email = "foo@b.ar",
-        cashoutPayto = "payto://external-IBAN",
-        cashoutCurrency = "KUDOS"
-    )
-    private val customerBar = Customer(
-        login = "bar",
-        passwordHash = CryptoUtil.hashpw("pw"),
-        name = "Bar",
-        phone = "+99",
-        email = "bar@example.com",
-        cashoutPayto = "payto://external-IBAN",
-        cashoutCurrency = "KUDOS"
-    )
+class CoreBankTransactionsApiTest {
+    // Test endpoint is correctly authenticated 
+    suspend fun ApplicationTestBuilder.authRoutine(path: String, withAdmin: Boolean = true, method: HttpMethod = HttpMethod.Post) {
+        // No body when authentication must happen before parsing the body
+        
+        // Unknown account
+        client.request(path) {
+            this.method = method
+            basicAuth("unknown", "password")
+        }.assertStatus(HttpStatusCode.Unauthorized)
 
-    private fun genBankAccount(rowId: Long) = BankAccount(
-        hasDebt = false,
-        internalPaytoUri = IbanPayTo("payto://iban/ac${rowId}"),
-        maxDebt = TalerAmount(100, 0, "KUDOS"),
-        owningCustomerId = rowId
-    )
+        // Wrong password
+        client.request(path) {
+            this.method = method
+            basicAuth("merchant", "wrong-password")
+        }.assertStatus(HttpStatusCode.Unauthorized)
 
+        // Wrong account
+        client.request(path) {
+            this.method = method
+            basicAuth("exchange", "merchant-password")
+        }.assertStatus(HttpStatusCode.Unauthorized)
+
+        // TODO check admin rights
+    }
+
+    // GET /transactions
     @Test
-    fun getConfig() = bankSetup { _ -> 
-        val r = client.get("/config") {
-             expectSuccess = true
+    fun testHistory() = bankSetup { _ -> 
+        suspend fun HttpResponse.assertHistory(size: Int) {
+            assertOk()
+            val txt = this.bodyAsText()
+            val history = Json.decodeFromString<BankAccountTransactionsResponse>(txt)
+            val params = getHistoryParams(this.call.request.url.parameters)
+       
+            // testing the size is like expected.
+            assert(history.transactions.size == size) {
+                println("transactions has wrong size: ${history.transactions.size}")
+                println("Response was: ${txt}")
+            }
+            if (size > 0) {
+                if (params.delta < 0) {
+                    // testing that the first row_id is at most the 'start' query param.
+                    assert(history.transactions[0].row_id <= params.start)
+                    // testing that the row_id decreases.
+                    assert(history.transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
+                } else {
+                    // testing that the first row_id is at least the 'start' query param.
+                    assert(history.transactions[0].row_id >= params.start)
+                    // testing that the row_id increases.
+                    assert(history.transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+                }
+            }
+        }
+
+        authRoutine("/accounts/merchant/transactions?delta=7", method = HttpMethod.Get)
+
+        // Check empty lisy when no transactions
+        client.get("/accounts/merchant/transactions?delta=7") {
+            basicAuth("merchant", "merchant-password")
+        }.assertHistory(0)
+        
+        // Gen three transactions from merchant to exchange
+        repeat(3) {
+            client.post("/accounts/merchant/transactions") {
+                basicAuth("merchant", "merchant-password")
+                jsonBody(json {
+                    "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout$it&amount=KUDOS:0.$it"
+                })
+            }.assertOk()
+        }
+        // Gen two transactions from exchange to merchant
+        repeat(2) {
+            client.post("/accounts/exchange/transactions") {
+                basicAuth("exchange", "exchange-password")
+                jsonBody(json {
+                    "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout$it&amount=KUDOS:0.$it"
+                })
+            }.assertOk()
+        }
+
+        // Check no useless polling
+        assertTime(0, 300) {
+            client.get("/accounts/merchant/transactions?delta=-6&start=11&long_poll_ms=1000") {
+                basicAuth("merchant", "merchant-password")
+            }.assertHistory(5)
+        }
+
+        // Check polling end
+        client.get("/accounts/merchant/transactions?delta=6&long_poll_ms=60") {
+            basicAuth("merchant", "merchant-password")
+        }.assertHistory(5)
+
+        runBlocking {
+            joinAll(
+                launch {  // Check polling succeed forward
+                    assertTime(200, 1000) {
+                        client.get("/accounts/merchant/transactions?delta=6&long_poll_ms=1000") {
+                            basicAuth("merchant", "merchant-password")
+                        }.assertHistory(6)
+                    }
+                },
+                launch {  // Check polling succeed backward
+                    assertTime(200, 1000) {
+                        client.get("/accounts/merchant/transactions?delta=-6&long_poll_ms=1000") {
+                            basicAuth("merchant", "merchant-password")
+                        }.assertHistory(6)
+                    }
+                },
+                launch {  // Check polling timeout forward
+                    assertTime(200, 400) {
+                        client.get("/accounts/merchant/transactions?delta=8&long_poll_ms=300") {
+                            basicAuth("merchant", "merchant-password")
+                        }.assertHistory(6)
+                    }
+                },
+                launch {  // Check polling timeout backward
+                    assertTime(200, 400) {
+                        client.get("/accounts/merchant/transactions?delta=-8&long_poll_ms=300") {
+                            basicAuth("merchant", "merchant-password")
+                        }.assertHistory(6)
+                    }
+                },
+                launch {
+                    delay(200)
+                    client.post("/accounts/merchant/transactions") {
+                        basicAuth("merchant", "merchant-password")
+                        jsonBody(json {
+                            "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout_poll&amount=KUDOS:4.2"
+                        })
+                    }.assertOk()
+                }
+            )
+        }
+
+        // Testing ranges. 
+        repeat(30) {
+            client.post("/accounts/merchant/transactions") {
+                basicAuth("merchant", "merchant-password")
+                jsonBody(json {
+                    "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout_range&amount=KUDOS:0.001"
+                })
+            }.assertOk()
+        }
+
+        // forward range:
+        client.get("/accounts/merchant/transactions?delta=10&start=20") {
+            basicAuth("merchant", "merchant-password")
+        }.assertHistory(10)
+
+        // backward range:
+        client.get("/accounts/merchant/transactions?delta=-10&start=25") {
+            basicAuth("merchant", "merchant-password")
+        }.assertHistory(10)
+    }
+
+    // GET /transactions/T_ID
+    @Test
+    fun testById() = bankSetup { _ -> 
+        authRoutine("/accounts/merchant/transactions/1", method = HttpMethod.Get)
+
+        // Create transaction
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json {
+                "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout"
+                "amount" to "KUDOS:0.3"
+            })
         }.assertOk()
-        println(r.bodyAsText())
+        // Check OK
+        client.get("/accounts/merchant/transactions/1") {
+            basicAuth("merchant", "merchant-password")
+        }.assertOk().run {
+            val tx: BankAccountTransactionInfo = Json.decodeFromString(bodyAsText())
+            assertEquals("payout", tx.subject)
+            assertEquals(TalerAmount("KUDOS:0.3"), tx.amount)
+        }
+        // Check unknown transaction
+        client.get("/accounts/merchant/transactions/3") {
+            basicAuth("merchant", "merchant-password")
+        }.assertStatus(HttpStatusCode.NotFound)
+        // Check wrong transaction
+        client.get("/accounts/merchant/transactions/2") {
+            basicAuth("merchant", "merchant-password")
+        }.assertStatus(HttpStatusCode.Unauthorized) // Should be NOT_FOUND ?
     }
 
-    /**
-     * Testing GET /transactions.  This test checks that the sign
-     * of delta gets honored by the HTTP handler, namely that the
-     * records appear in ASC or DESC order, according to the sign
-     * of delta.
-     */
+    // POST /transactions
     @Test
-    fun testHistory() = setup { db, ctx -> 
-        // TODO add better tests with lon polling like Wire Gateway API
-        val fooId = db.customerCreate(customerFoo); assert(fooId != null)
-        assert(db.bankAccountCreate(genBankAccount(fooId!!)) != null)
-        val barId = db.customerCreate(customerBar); assert(barId != null)
-        assert(db.bankAccountCreate(genBankAccount(barId!!)) != null)
-        for (i in 1..10) {
-            db.bankTransactionCreate(genTx("test-$i"))
-        }
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            val asc = client.get("/accounts/foo/transactions?delta=2") {
-                basicAuth("foo", "pw")
-                expectSuccess = true
-            }
-            var obj = Json.decodeFromString<BankAccountTransactionsResponse>(asc.bodyAsText())
-            assert(obj.transactions.size == 2)
-            assert(obj.transactions[0].row_id < obj.transactions[1].row_id)
-            val desc = client.get("/accounts/foo/transactions?delta=-2") {
-                basicAuth("foo", "pw")
-                expectSuccess = true
-            }
-            obj = Json.decodeFromString(desc.bodyAsText())
-            assert(obj.transactions.size == 2)
-            assert(obj.transactions[0].row_id > obj.transactions[1].row_id)
-        }
-    }
-
-    // Testing the creation of bank transactions.
-    @Test
-    fun postTransactionsTest() = bankSetup { _ -> 
+    fun testCreate() = bankSetup { _ -> 
         val valid_req = json {
             "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout"
             "amount" to "KUDOS:0.3"
         }
 
-        // Check ok
+        authRoutine("/accounts/merchant/transactions", withAdmin = false)
+
+        // Check OK
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
             jsonBody(valid_req)
@@ -181,6 +298,43 @@ class LibeuFinApiTest {
                 "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout"
             })
         }.assertStatus(HttpStatusCode.Conflict)
+    }
+    
+}
+
+class LibeuFinApiTest {
+    private val customerFoo = Customer(
+        login = "foo",
+        passwordHash = CryptoUtil.hashpw("pw"),
+        name = "Foo",
+        phone = "+00",
+        email = "foo@b.ar",
+        cashoutPayto = "payto://external-IBAN",
+        cashoutCurrency = "KUDOS"
+    )
+    private val customerBar = Customer(
+        login = "bar",
+        passwordHash = CryptoUtil.hashpw("pw"),
+        name = "Bar",
+        phone = "+99",
+        email = "bar@example.com",
+        cashoutPayto = "payto://external-IBAN",
+        cashoutCurrency = "KUDOS"
+    )
+
+    private fun genBankAccount(rowId: Long) = BankAccount(
+        hasDebt = false,
+        internalPaytoUri = IbanPayTo("payto://iban/ac${rowId}"),
+        maxDebt = TalerAmount(100, 0, "KUDOS"),
+        owningCustomerId = rowId
+    )
+
+    @Test
+    fun getConfig() = bankSetup { _ -> 
+        val r = client.get("/config") {
+             expectSuccess = true
+        }.assertOk()
+        println(r.bodyAsText())
     }
 
     @Test

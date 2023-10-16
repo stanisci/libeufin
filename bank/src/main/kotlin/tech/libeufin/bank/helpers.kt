@@ -54,6 +54,23 @@ fun ApplicationCall.getAuthToken(): String? {
     return null // Not a Bearer token case.
 }
 
+/** Authenticate and check access rights */
+suspend fun ApplicationCall.authCheck(db: Database, scope: TokenScope, withAdmin: Boolean): String {
+    val authCustomer = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
+    val username = getResourceName("USERNAME")
+    if (!username.canI(authCustomer, withAdmin)) throw unauthorized("No right on $username account")
+    return username
+}
+
+/** Retrieve the bank account info for the selected username*/
+suspend fun ApplicationCall.bankAccount(db: Database): Database.BankInfo {
+    val username = getResourceName("USERNAME")
+    return db.bankAccountInfoFromCustomerLogin(username) ?: throw notFound(
+        hint = "Customer $username not found",
+        talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
+    )
+}
+
 /**
  * Performs the HTTP basic authentication.  Returns the
  * authenticated customer on success, or null otherwise.

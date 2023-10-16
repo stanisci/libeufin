@@ -37,30 +37,13 @@ import kotlin.math.abs
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
 fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
-    /** Authenticate and check access rights */
-    suspend fun ApplicationCall.authCheck(scope: TokenScope, withAdmin: Boolean): String {
-        val authCustomer = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
-        val username = getResourceName("USERNAME")
-        if (!username.canI(authCustomer, withAdmin)) throw unauthorized("No right on $username account")
-        return username
-    }
-
-    /** Retrieve the bank account info for the selected username*/
-    suspend fun ApplicationCall.bankAccount(): Database.BankInfo {
-        val username = getResourceName("USERNAME")
-        return db.bankAccountInfoFromCustomerLogin(username) ?: throw notFound(
-            hint = "Customer $username not found",
-            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
-        )
-    }
-
     get("/taler-wire-gateway/config") {
         call.respond(TWGConfigResponse(currency = ctx.currency))
         return@get
     }
 
     post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
-        val username = call.authCheck(TokenScope.readwrite, true)
+        val username = call.authCheck(db, TokenScope.readwrite, true)
         val req = call.receive<TransferRequest>()
         if (req.amount.currency != ctx.currency)
             throw badRequest(
@@ -115,9 +98,9 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
         reduce: (List<T>, String) -> Any, 
         dbLambda: suspend Database.(HistoryParams, Long) -> List<T>
     ) {
-        val username = call.authCheck(TokenScope.readonly, true)
+        val username = call.authCheck(db, TokenScope.readonly, true)
         val params = getHistoryParams(call.request.queryParameters)
-        val bankAccount = call.bankAccount()
+        val bankAccount = call.bankAccount(db)
         
         if (!bankAccount.isTalerExchange)
             throw conflict(
@@ -143,7 +126,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
     }
 
     post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {
-        val username = call.authCheck(TokenScope.readwrite, false)
+        val username = call.authCheck(db, TokenScope.readwrite, false)
         val req = call.receive<AddIncomingRequest>()
         if (req.amount.currency != ctx.currency)
             throw badRequest(

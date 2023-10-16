@@ -479,26 +479,49 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
         }
         return@post
     }
-    // TRANSACTION ENDPOINT
+}
+
+fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
     get("/accounts/{USERNAME}/transactions") {
-        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        val resourceName = call.getResourceName("USERNAME")
-        if (!resourceName.canI(c, withAdmin = true)) throw forbidden()
-        val historyParams = getHistoryParams(call.request.queryParameters)
-        val resourceCustomer = db.customerGetFromLogin(resourceName) ?: throw notFound(
-            hint = "Customer '$resourceName' not found in the database",
-            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
-        )
-        val bankAccount = db.bankAccountGetFromOwnerId(resourceCustomer.expectRowId())
-            ?: throw internalServerError("Customer '${resourceCustomer.login}' lacks bank account.")
-        val history: List<BankAccountTransactionInfo> = db.bankPoolHistory(historyParams, bankAccount.expectRowId())
+        val username = call.authCheck(db, TokenScope.readonly, true)
+        val params = getHistoryParams(call.request.queryParameters)
+        val bankAccount = call.bankAccount(db)
+
+        val history: List<BankAccountTransactionInfo> = db.bankPoolHistory(params, bankAccount.id)
         call.respond(BankAccountTransactionsResponse(history))
     }
-    // Creates a bank transaction.
+    get("/accounts/{USERNAME}/transactions/{T_ID}") {
+        val username = call.authCheck(db, TokenScope.readonly, true)
+        val tId = call.expectUriComponent("T_ID")
+        val txRowId = try {
+            tId.toLong()
+        } catch (e: Exception) {
+            logger.error(e.message)
+            throw badRequest("TRANSACTION_ID is not a number: ${tId}")
+        }
+      
+        val bankAccount = call.bankAccount(db)
+        val tx = db.bankTransactionGetFromInternalId(txRowId) ?: throw notFound(
+            "Bank transaction '$tId' not found",
+            TalerErrorCode.TALER_EC_BANK_TRANSACTION_NOT_FOUND
+        )
+        if (tx.bankAccountId != bankAccount.id) // TODO not found ?
+            throw unauthorized("Client has no rights over the bank transaction: $tId") 
+
+        call.respond(
+            BankAccountTransactionInfo(
+                amount = tx.amount,
+                creditor_payto_uri = tx.creditorPaytoUri,
+                debtor_payto_uri = tx.debtorPaytoUri,
+                date = TalerProtocolTimestamp(tx.transactionDate),
+                direction = tx.direction,
+                subject = tx.subject,
+                row_id = txRowId
+            )
+        )
+    }
     post("/accounts/{USERNAME}/transactions") {
-        val c: Customer = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
-        val resourceName = call.expectUriComponent("USERNAME") // admin has no rights here.
-        if ((c.login != resourceName) && (call.getAuthToken() == null)) throw forbidden()
+        val username = call.authCheck(db, TokenScope.readonly, false)
         val tx = call.receive<BankAccountTransactionCreate>()
 
         val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
@@ -509,15 +532,14 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
             talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
         )
         // TODO rewrite all thos database query in a single database function
-        val debtorBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
-            ?: throw internalServerError("Debtor bank account not found")
+        val debtorBankAccount = call.bankAccount(db)
         val creditorBankAccount = db.bankAccountGetFromInternalPayto(tx.payto_uri)
             ?: throw notFound(
                 "Creditor account not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
         val dbInstructions = BankInternalTransaction(
-            debtorAccountId = debtorBankAccount.expectRowId(),
+            debtorAccountId = debtorBankAccount.id,
             creditorAccountId = creditorBankAccount.expectRowId(),
             subject = subject,
             amount = amount,
@@ -536,40 +558,5 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
             BankTransactionResult.NO_DEBTOR -> throw internalServerError("Debtor not found despite the request was authenticated.")
             BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.OK)
         }
-    }
-    get("/accounts/{USERNAME}/transactions/{T_ID}") {
-        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        val accountName = call.getResourceName("USERNAME")
-        if (!accountName.canI(c, withAdmin = true)) throw forbidden()
-        val tId = call.expectUriComponent("T_ID")
-        val txRowId = try {
-            tId.toLong()
-        } catch (e: Exception) {
-            logger.error(e.message)
-            throw badRequest("TRANSACTION_ID is not a number: ${tId}")
-        }
-        val tx = db.bankTransactionGetFromInternalId(txRowId) ?: throw notFound(
-            "Bank transaction '$tId' not found",
-            TalerErrorCode.TALER_EC_BANK_TRANSACTION_NOT_FOUND
-        )
-        val accountCustomer = db.customerGetFromLogin(accountName) ?: throw notFound(
-            hint = "Customer $accountName not found",
-            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
-        )
-        val customerBankAccount = db.bankAccountGetFromOwnerId(accountCustomer.expectRowId())
-            ?: throw internalServerError("Customer '${accountCustomer.login}' lacks bank account.")
-        if (tx.bankAccountId != customerBankAccount.bankAccountId) throw forbidden("Client has no rights over the bank transaction: $tId")
-        call.respond(
-            BankAccountTransactionInfo(
-                amount = tx.amount,
-                creditor_payto_uri = tx.creditorPaytoUri,
-                debtor_payto_uri = tx.debtorPaytoUri,
-                date = TalerProtocolTimestamp(tx.transactionDate),
-                direction = tx.direction,
-                subject = tx.subject,
-                row_id = txRowId
-            )
-        )
-        return@get
     }
 }

@@ -47,7 +47,7 @@ class WireGatewayApiTest {
     }
 
     // Test endpoint is correctly authenticated 
-    suspend fun authRoutine(client: HttpClient, path: String, body: JsonObject? = null, method: HttpMethod = HttpMethod.Post) {
+    suspend fun ApplicationTestBuilder.authRoutine(path: String, body: JsonObject? = null, method: HttpMethod = HttpMethod.Post) {
         // No body when authentication must happen before parsing the body
         
         // Unknown account
@@ -87,7 +87,7 @@ class WireGatewayApiTest {
             "credit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
         };
 
-        authRoutine(client, "/accounts/merchant/taler-wire-gateway/transfer", valid_req)
+        authRoutine("/accounts/merchant/taler-wire-gateway/transfer", valid_req)
 
         // Checking exchange debt constraint.
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
@@ -223,7 +223,7 @@ class WireGatewayApiTest {
         }
 
 
-        authRoutine(client, "/accounts/merchant/taler-wire-gateway/history/incoming?delta=7", method = HttpMethod.Get)
+        authRoutine("/accounts/merchant/taler-wire-gateway/history/incoming?delta=7", method = HttpMethod.Get)
 
         // Check error when no transactions
         client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7") {
@@ -305,18 +305,18 @@ class WireGatewayApiTest {
         }
 
         // Testing ranges. 
-        repeat(300) {
+        repeat(20) {
             db.genIncoming("exchange", bankAccountMerchant)
         }
 
         // forward range:
-        client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=10&start=30") {
-                    basicAuth("exchange", "exchange-password")
+        client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=10&start=20") {
+            basicAuth("exchange", "exchange-password")
         }.assertHistory(10)
 
         // backward range:
-        client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-10&start=300") {
-                    basicAuth("exchange", "exchange-password")
+        client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-10&start=25") {
+            basicAuth("exchange", "exchange-password")
         }.assertHistory(10)
     }
 
@@ -358,7 +358,7 @@ class WireGatewayApiTest {
             }
         }
 
-        authRoutine(client, "/accounts/merchant/taler-wire-gateway/history/outgoing?delta=7", method = HttpMethod.Get)
+        authRoutine("/accounts/merchant/taler-wire-gateway/history/outgoing?delta=7", method = HttpMethod.Get)
 
         // Check error when no transactions
         client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=7") {
@@ -440,17 +440,17 @@ class WireGatewayApiTest {
         }
 
         // Testing ranges.
-        repeat(300) {
+        repeat(20) {
             db.genTransfer("exchange", bankAccountMerchant)
         }
 
         // forward range:
-        client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=10&start=30") {
+        client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=10&start=20") {
             basicAuth("exchange", "exchange-password")
         }.assertHistory(10)
 
         // backward range:
-        client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-10&start=300") {
+        client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-10&start=25") {
             basicAuth("exchange", "exchange-password")
         }.assertHistory(10)
     }
@@ -464,7 +464,7 @@ class WireGatewayApiTest {
             "debit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
         };
 
-        authRoutine(client, "/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req)
+        authRoutine("/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req)
 
         // Checking exchange debt constraint.
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {

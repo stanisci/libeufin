@@ -260,6 +260,8 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
             return@get
         }
         this.accountsMgmtApi(db, ctx)
+        this.coreBankTransactionsApi(db, ctx)
+        this.accountsMgmtApi(db, ctx)
         this.bankIntegrationApi(db, ctx)
         this.wireGatewayApi(db, ctx)
     }
