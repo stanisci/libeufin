@@ -49,15 +49,11 @@ class LibeuFinApiTest {
     )
 
     @Test
-    fun getConfig() = setup { db, ctx -> 
-        testApplication {
-            application { corebankWebApp(db, ctx) }
-            val r = client.get("/config") {
-                expectSuccess = true
-            }
-            println(r.bodyAsText())
-        }
-        
+    fun getConfig() = bankSetup { _ -> 
+        val r = client.get("/config") {
+             expectSuccess = true
+        }.assertOk()
+        println(r.bodyAsText())
     }
 
     /**
@@ -99,85 +95,92 @@ class LibeuFinApiTest {
 
     // Testing the creation of bank transactions.
     @Test
-    fun postTransactionsTest() = setup { db, ctx -> 
-        // foo account
-        val fooId = db.customerCreate(customerFoo);
-        assert(fooId != null)
-        assert(db.bankAccountCreate(genBankAccount(fooId!!)) != null)
-        // bar account
-        val barId = db.customerCreate(customerBar);
-        assert(barId != null)
-        assert(db.bankAccountCreate(genBankAccount(barId!!)) != null)
-        // accounts exist, now create one transaction.
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            client.post("/accounts/foo/transactions") {
-                expectSuccess = true
-                basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                // expectSuccess = true
-                setBody(
-                    """{
-                    "payto_uri": "payto://iban/AC${barId}?message=payout", 
-                    "amount": "KUDOS:3.3"
-                }
-                """.trimIndent()
-                )
-            }
-            // Getting the only tx that exists in the DB, hence has ID == 1.
-            val r = client.get("/accounts/foo/transactions/1") {
-                basicAuth("foo", "pw")
-                expectSuccess = true
-            }
-            val obj: BankAccountTransactionInfo = Json.decodeFromString(r.bodyAsText())
-            assert(obj.subject == "payout")
-            // Testing the wrong currency.
-            val wrongCurrencyResp = client.post("/accounts/foo/transactions") {
-                expectSuccess = false
-                basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                // expectSuccess = true
-                setBody(
-                    """{
-                    "payto_uri": "payto://iban/AC${barId}?message=payout", 
-                    "amount": "EUR:3.3"
-                }
-                """.trimIndent()
-                )
-            }
-            assert(wrongCurrencyResp.status == HttpStatusCode.BadRequest)
-            // Surpassing the debt limit.
-            val unallowedDebtResp = client.post("/accounts/foo/transactions") {
-                expectSuccess = false
-                basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                // expectSuccess = true
-                setBody(
-                    """{
-                    "payto_uri": "payto://iban/AC${barId}?message=payout", 
-                    "amount": "KUDOS:555"
-                }
-                """.trimIndent()
-                )
-            }
-            assert(unallowedDebtResp.status == HttpStatusCode.Conflict)
-            val bigAmount = client.post("/accounts/foo/transactions") {
-                expectSuccess = false
-                basicAuth("foo", "pw")
-                contentType(ContentType.Application.Json)
-                // expectSuccess = true
-                setBody(
-                    """{
-                    "payto_uri": "payto://iban/AC${barId}?message=payout", 
-                    "amount": "KUDOS:${"5".repeat(200)}"
-                }
-                """.trimIndent()
-                )
-            }
-            assert(bigAmount.status == HttpStatusCode.BadRequest)
+    fun postTransactionsTest() = bankSetup { _ -> 
+        val valid_req = json {
+            "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout"
+            "amount" to "KUDOS:0.3"
         }
+
+        // Check ok
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(valid_req)
+        }.assertOk()
+        client.get("/accounts/merchant/transactions/1") {
+            basicAuth("merchant", "merchant-password")
+        }.assertOk().run {
+            val tx: BankAccountTransactionInfo = Json.decodeFromString(bodyAsText())
+            assertEquals("payout", tx.subject)
+            assertEquals(TalerAmount("KUDOS:0.3"), tx.amount)
+        }
+        // Check amount in payto_uri
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json {
+                "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout2&amount=KUDOS:1.05"
+            })
+        }.assertOk()
+        client.get("/accounts/merchant/transactions/3") {
+            basicAuth("merchant", "merchant-password")
+        }.assertOk().run {
+            val tx: BankAccountTransactionInfo = Json.decodeFromString(bodyAsText())
+            assertEquals("payout2", tx.subject)
+            assertEquals(TalerAmount("KUDOS:1.05"), tx.amount)
+        }
+        // Check amount in payto_uri precedence
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json {
+                "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout3&amount=KUDOS:1.05"
+                "amount" to "KUDOS:10.003"
+            })
+        }.assertOk()
+        client.get("/accounts/merchant/transactions/5") {
+            basicAuth("merchant", "merchant-password")
+        }.assertOk().run {
+            val tx: BankAccountTransactionInfo = Json.decodeFromString(bodyAsText())
+            assertEquals("payout3", tx.subject)
+            assertEquals(TalerAmount("KUDOS:1.05"), tx.amount)
+        }
+        // Testing the wrong currency
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json(valid_req) {
+                "amount" to "EUR:3.3"
+            })
+        }.assertBadRequest()
+        // Surpassing the debt limit
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            contentType(ContentType.Application.Json)
+            jsonBody(json(valid_req) {
+                "amount" to "KUDOS:555"
+            })
+        }.assertStatus(HttpStatusCode.Conflict)
+        // Missing message
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            contentType(ContentType.Application.Json)
+            jsonBody(json(valid_req) {
+                "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ"
+            })
+        }.assertBadRequest()
+        // Unknown account
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            contentType(ContentType.Application.Json)
+            jsonBody(json(valid_req) {
+                "payto_uri" to "payto://iban/UNKNOWN-IBAN-XYZ?message=payout"
+            })
+        }.assertStatus(HttpStatusCode.NotFound)
+        // Transaction to self
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            contentType(ContentType.Application.Json)
+            jsonBody(json(valid_req) {
+                "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout"
+            })
+        }.assertStatus(HttpStatusCode.Conflict)
     }
 
     @Test

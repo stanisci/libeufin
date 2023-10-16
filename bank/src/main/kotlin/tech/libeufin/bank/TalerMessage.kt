@@ -335,7 +335,7 @@ data class AccountMinimalData(
  */
 @Serializable
 data class ListBankAccountsResponse(
-    val accounts: MutableList<AccountMinimalData> = mutableListOf()
+    val accounts: List<AccountMinimalData>
 )
 
 /**
@@ -357,7 +357,7 @@ data class AccountData(
 @Serializable
 data class BankAccountTransactionCreate(
     val payto_uri: IbanPayTo,
-    val amount: TalerAmount
+    val amount: TalerAmount?
 )
 
 /* History element, either from GET /transactions/T_ID
@@ -602,7 +602,7 @@ data class TransferResponse(
  */
 @Serializable
 data class PublicAccountsResponse(
-    val public_accounts: MutableList<PublicAccount> = mutableListOf()
+    val public_accounts: List<PublicAccount>
 )
 
 /**

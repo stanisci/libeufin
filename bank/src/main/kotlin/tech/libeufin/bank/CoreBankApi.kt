@@ -118,16 +118,9 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
         val publicAccounts = db.accountsGetPublic(ctx.currency)
         if (publicAccounts.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
-            return@get
+        } else {
+            call.respond(PublicAccountsResponse(publicAccounts))
         }
-        call.respond(
-            PublicAccountsResponse().apply {
-                publicAccounts.forEach {
-                    this.public_accounts.add(it)
-                }
-            }
-        )
-        return@get
     }
     get("/accounts") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
@@ -138,19 +131,12 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
         val queryParam = if (maybeFilter != null) {
             "%${maybeFilter}%"
         } else "%"
-        val dbRes = db.accountsGetForAdmin(queryParam)
-        if (dbRes.isEmpty()) {
+        val accounts = db.accountsGetForAdmin(queryParam)
+        if (accounts.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
-            return@get
+        } else {
+            call.respond(ListBankAccountsResponse(accounts))
         }
-        call.respond(
-            ListBankAccountsResponse().apply {
-                dbRes.forEach { element ->
-                    this.accounts.add(element)
-                }
-            }
-        )
-        return@get
     }
     post("/accounts") { // check if only admin is allowed to create new accounts
         if (ctx.restrictRegistration) {
@@ -514,21 +500,17 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
         val resourceName = call.expectUriComponent("USERNAME") // admin has no rights here.
         if ((c.login != resourceName) && (call.getAuthToken() == null)) throw forbidden()
         val tx = call.receive<BankAccountTransactionCreate>()
+
         val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
-        val debtorBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
-            ?: throw internalServerError("Debtor bank account not found")
-        if (tx.amount.currency != ctx.currency) throw badRequest(
-            "Wrong currency: ${tx.amount.currency}",
+        val amount = tx.payto_uri.amount ?: tx.amount
+        if (amount == null) throw badRequest("Wire transfer lacks amount")
+        if (amount.currency != ctx.currency) throw badRequest(
+            "Wrong currency: ${amount.currency}",
             talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
         )
-        if (!isBalanceEnough(
-            balance = debtorBankAccount.expectBalance(),
-            due = tx.amount,
-            hasBalanceDebt = debtorBankAccount.hasDebt,
-            maxDebt = debtorBankAccount.maxDebt
-        ))
-            throw conflict(hint = "Insufficient balance.", talerEc = TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
-        logger.info("creditor payto: ${tx.payto_uri}")
+        // TODO rewrite all thos database query in a single database function
+        val debtorBankAccount = db.bankAccountGetFromOwnerId(c.expectRowId())
+            ?: throw internalServerError("Debtor bank account not found")
         val creditorBankAccount = db.bankAccountGetFromInternalPayto(tx.payto_uri)
             ?: throw notFound(
                 "Creditor account not found",
@@ -538,11 +520,10 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
             debtorAccountId = debtorBankAccount.expectRowId(),
             creditorAccountId = creditorBankAccount.expectRowId(),
             subject = subject,
-            amount = tx.amount,
+            amount = amount,
             transactionDate = Instant.now()
         )
-        val res = db.bankTransactionCreate(dbInstructions)
-        when (res) {
+        when (db.bankTransactionCreate(dbInstructions)) {
             BankTransactionResult.BALANCE_INSUFFICIENT -> throw conflict(
                 "Insufficient funds",
                 TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
@@ -555,7 +536,6 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
             BankTransactionResult.NO_DEBTOR -> throw internalServerError("Debtor not found despite the request was authenticated.")
             BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.OK)
         }
-        return@post
     }
     get("/accounts/{USERNAME}/transactions/{T_ID}") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
