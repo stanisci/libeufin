@@ -1,7 +1,7 @@
 BEGIN;
 SET search_path TO libeufin_bank;
 
-CREATE OR REPLACE FUNCTION amount_normalize(
+CREATE OR REPLACE PROCEDURE amount_normalize(
     IN amount taler_amount
   ,OUT normalized taler_amount
 )
@@ -11,10 +11,10 @@ BEGIN
   normalized.val = amount.val + amount.frac / 100000000;
   normalized.frac = amount.frac % 100000000;
 END $$;
-COMMENT ON FUNCTION amount_normalize
+COMMENT ON PROCEDURE amount_normalize
   IS 'Returns the normalized amount by adding to the .val the value of (.frac / 100000000) and removing the modulus 100000000 from .frac.';
 
-CREATE OR REPLACE FUNCTION amount_add(
+CREATE OR REPLACE PROCEDURE amount_add(
    IN a taler_amount
   ,IN b taler_amount
   ,OUT sum taler_amount
@@ -29,7 +29,7 @@ BEGIN
     RAISE EXCEPTION 'addition overflow';
   END IF;
 END $$;
-COMMENT ON FUNCTION amount_add
+COMMENT ON PROCEDURE amount_add
   IS 'Returns the normalized sum of two amounts. It raises an exception when the resulting .val is larger than 2^52';
 
 CREATE OR REPLACE FUNCTION amount_left_minus_right(
