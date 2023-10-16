@@ -17,6 +17,7 @@ abs_destdir=$(abspath $(DESTDIR))
 
 sql_dir=$(abs_destdir)$(prefix)/share/libeufin-bank/sql
 config_dir=$(abs_destdir)$(prefix)/share/libeufin-bank/config.d
+spa_dir=$(abs_destdir)$(prefix)/share/libeufin-bank/spa
 
 .PHONY: dist
 dist:
@@ -24,21 +25,8 @@ dist:
 	mkdir -p build/distributions
 	$(git-archive-all) --include ./configure build/distributions/libeufin-$(shell ./gradlew -q libeufinVersion)-sources.tar.gz
 
-.PHONY: exec-arch
-exec-arch:
-	$(call versions_check)
-	./gradlew -q execArch
-
-.PHONY: clean-spa
-clean-spa:
-	rm -fr debian/usr/share/libeufin/demobank-ui/index.* debian/usr/share/libeufin/demobank-ui/*.svg
-
-.PHONY: copy-spa
-get-spa:
-	./contrib/copy_spa.sh
-
 .PHONY: deb
-deb: exec-arch copy-spa
+deb:
 	dpkg-buildpackage -rfakeroot -b -uc -us
 
 
@@ -50,6 +38,8 @@ install:
 	install -D database-versioning/libeufin-bank*.sql -t $(sql_dir)
 	install -D database-versioning/versioning.sql -t $(sql_dir)
 	install -D database-versioning/procedures.sql -t $(sql_dir)
+	install -d $(spa_dir)
+	cp contrib/wallet-core/demobank/* $(spa_dir)/
 	./gradlew -q -Pprefix=$(abs_destdir)$(prefix) bank:installToPrefix
 
 .PHONY: assemble
