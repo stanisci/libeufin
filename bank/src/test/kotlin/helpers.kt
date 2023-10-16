@@ -1,15 +1,67 @@
 import io.ktor.http.*
 import io.ktor.client.statement.*
 import io.ktor.client.request.*
+import io.ktor.server.testing.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import net.taler.wallet.crypto.Base32Crockford
-import kotlin.test.assertEquals
+import kotlin.test.*
 import tech.libeufin.bank.*
 import java.io.ByteArrayOutputStream
 import java.util.zip.DeflaterOutputStream
+import tech.libeufin.util.CryptoUtil
 
 /* ----- Setup ----- */
+
+val customerMerchant = Customer(
+    login = "merchant",
+    passwordHash = CryptoUtil.hashpw("merchant-password"),
+    name = "Merchant",
+    phone = "+00",
+    email = "merchant@libeufin-bank.com",
+    cashoutPayto = "payto://external-IBAN",
+    cashoutCurrency = "KUDOS"
+)
+val bankAccountMerchant = BankAccount(
+    internalPaytoUri = IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"),
+    lastNexusFetchRowId = 1L,
+    owningCustomerId = 1L,
+    hasDebt = false,
+    maxDebt = TalerAmount(10, 1, "KUDOS"),
+)
+val customerExchange = Customer(
+    login = "exchange",
+    passwordHash = CryptoUtil.hashpw("exchange-password"),
+    name = "Exchange",
+    phone = "+00",
+    email = "exchange@libeufin-bank.com",
+    cashoutPayto = "payto://external-IBAN",
+    cashoutCurrency = "KUDOS"
+)
+val bankAccountExchange = BankAccount(
+    internalPaytoUri = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
+    lastNexusFetchRowId = 1L,
+    owningCustomerId = 2L,
+    hasDebt = false,
+    maxDebt = TalerAmount(10, 1, "KUDOS"),
+    isTalerExchange = true
+)
+
+fun bankSetup(lambda: suspend ApplicationTestBuilder.(Database) -> Unit) {
+    setup { db, ctx -> 
+        // Creating the exchange and merchant accounts first.
+        assertNotNull(db.customerCreate(customerMerchant))
+        assertNotNull(db.bankAccountCreate(bankAccountMerchant))
+        assertNotNull(db.customerCreate(customerExchange))
+        assertNotNull(db.bankAccountCreate(bankAccountExchange))
+        testApplication {
+            application {
+                corebankWebApp(db, ctx)
+            }
+            lambda(db)
+        }
+    }
+}
 
 fun setup(
     conf: String = "test.conf",

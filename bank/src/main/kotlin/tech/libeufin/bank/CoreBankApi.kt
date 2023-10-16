@@ -14,6 +14,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
+import kotlin.random.Random
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
 
@@ -22,7 +23,7 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.account
  * create, update, delete, show bank accounts.  No histories
  * and wire transfers should belong here.
  */
-fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
+fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
 
     // TOKEN ENDPOINTS
     delete("/accounts/{USERNAME}/token") {
@@ -72,7 +73,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
             )
         }
         val tokenBytes = ByteArray(32).apply {
-            Random().nextBytes(this)
+            Random.nextBytes(this)
         }
         val tokenDuration: Duration = req.duration?.d_us ?: TOKEN_DEFAULT_DURATION
 
@@ -187,7 +188,7 @@ fun Routing.accountsMgmtHandlers(db: Database, ctx: BankApplicationContext) {
                         CryptoUtil.checkpw(req.password, maybeCustomerExists.passwordHash) &&
                         maybeHasBankAccount.isPublic == req.is_public &&
                         maybeHasBankAccount.isTalerExchange == req.is_taler_exchange &&
-                        maybeHasBankAccount.internalPaytoUri.stripped == internalPayto.stripped
+                        maybeHasBankAccount.internalPaytoUri.canonical == internalPayto.canonical
             if (isIdentic) {
                 call.respond(HttpStatusCode.Created)
                 return@post

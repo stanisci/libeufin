@@ -36,7 +36,7 @@ import kotlin.math.abs
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
-fun Routing.talerWireGatewayHandlers(db: Database, ctx: BankApplicationContext) {
+fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
     /** Authenticate and check access rights */
     suspend fun ApplicationCall.authCheck(scope: TokenScope, withAdmin: Boolean): String {
         val authCustomer = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")

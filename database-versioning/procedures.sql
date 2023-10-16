@@ -11,7 +11,7 @@ BEGIN
   normalized.val = amount.val + amount.frac / 100000000;
   normalized.frac = amount.frac % 100000000;
 END $$;
-COMMENT ON PROCEDURE amount_normalize
+COMMENT ON FUNCTION amount_normalize
   IS 'Returns the normalized amount by adding to the .val the value of (.frac / 100000000) and removing the modulus 100000000 from .frac.';
 
 CREATE OR REPLACE FUNCTION amount_add(
@@ -29,7 +29,7 @@ BEGIN
     RAISE EXCEPTION 'addition overflow';
   END IF;
 END $$;
-COMMENT ON PROCEDURE amount_add
+COMMENT ON FUNCTION amount_add
   IS 'Returns the normalized sum of two amounts. It raises an exception when the resulting .val is larger than 2^52';
 
 CREATE OR REPLACE FUNCTION amount_left_minus_right(

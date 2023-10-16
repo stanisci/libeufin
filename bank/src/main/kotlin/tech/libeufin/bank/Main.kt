@@ -259,9 +259,9 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
             call.respond(Config(ctx.currencySpecification))
             return@get
         }
-        this.accountsMgmtHandlers(db, ctx)
-        this.talerIntegrationHandlers(db, ctx)
-        this.talerWireGatewayHandlers(db, ctx)
+        this.accountsMgmtApi(db, ctx)
+        this.bankIntegrationApi(db, ctx)
+        this.wireGatewayApi(db, ctx)
     }
 }
 

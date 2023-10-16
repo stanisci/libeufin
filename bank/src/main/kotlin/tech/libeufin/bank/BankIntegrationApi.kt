@@ -27,7 +27,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 
-fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) {
+fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
     get("/taler-integration/config") {
         val internalCurrency: String = ctx.currency
         call.respond(TalerIntegrationConfigResponse(
@@ -55,7 +55,7 @@ fun Routing.talerIntegrationHandlers(db: Database, ctx: BankApplicationContext) 
                 selection_done = op.selectionDone,
                 transfer_done = op.confirmationDone,
                 amount = op.amount,
-                sender_wire = relatedBankAccount.internalPaytoUri.stripped,
+                sender_wire = relatedBankAccount.internalPaytoUri.canonical,
                 suggested_exchange = suggestedExchange,
                 confirm_transfer_url = confirmUrl
             )

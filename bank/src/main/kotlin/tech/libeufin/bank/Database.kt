@@ -391,11 +391,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                 creationTime = it.getLong("creation_time").microsToJavaInstant() ?: throw faultyTimestampByBank(),
                 expirationTime = it.getLong("expiration_time").microsToJavaInstant() ?: throw faultyDurationByClient(),
                 bankCustomer = it.getLong("bank_customer"),
-                scope = when (it.getString("scope")) {
-                    TokenScope.readwrite.name -> TokenScope.readwrite
-                    TokenScope.readonly.name -> TokenScope.readonly
-                    else -> throw internalServerError("Wrong token scope found in the database: $this")
-                },
+                scope = TokenScope.valueOf(it.getString("scope")),
                 isRefreshable = it.getBoolean("is_refreshable")
             )
         }
@@ -575,7 +571,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
               (?, ?, ?, ?, (?, ?)::taler_amount)
             RETURNING bank_account_id;
         """)
-        stmt.setString(1, bankAccount.internalPaytoUri.stripped)
+        stmt.setString(1, bankAccount.internalPaytoUri.canonical)
         stmt.setLong(2, bankAccount.owningCustomerId)
         stmt.setBoolean(3, bankAccount.isPublic)
         stmt.setBoolean(4, bankAccount.isTalerExchange)
@@ -701,7 +697,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             FROM bank_accounts
             WHERE internal_payto_uri=?
         """)
-        stmt.setString(1, internalPayto.stripped)
+        stmt.setString(1, internalPayto.canonical)
 
         stmt.oneOrNull {
             BankAccount(
@@ -863,13 +859,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                 ),
                 accountServicerReference = it.getString("account_servicer_reference"),
                 endToEndId = it.getString("end_to_end_id"),
-                direction = it.getString("direction").run {
-                    when(this) {
-                        "credit" -> TransactionDirection.credit
-                        "debit" -> TransactionDirection.debit
-                        else -> throw internalServerError("Wrong direction in transaction: $this")
-                    }
-                },
+                direction = TransactionDirection.valueOf(it.getString("direction")),
                 bankAccountId = it.getLong("bank_account_id"),
                 paymentInformationId = it.getString("payment_information_id"),
                 subject = it.getString("subject"),
@@ -989,13 +979,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                     getCurrency()
                 ),
                 subject = it.getString("subject"),
-                direction = it.getString("direction").run {
-                    when(this) {
-                        "credit" -> TransactionDirection.credit
-                        "debit" -> TransactionDirection.debit
-                        else -> throw internalServerError("Wrong direction in transaction: $this")
-                    }
-                }
+                direction = TransactionDirection.valueOf(it.getString("direction"))
             )
         }
     }
@@ -1117,11 +1101,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                 ),
                 accountServicerReference = it.getString("account_servicer_reference"),
                 endToEndId = it.getString("end_to_end_id"),
-                direction = when (it.getString("direction")) {
-                    "credit" -> TransactionDirection.credit
-                    "debit" -> TransactionDirection.debit
-                    else -> throw internalServerError("Wrong direction in transaction: $this")
-                },
+                direction = TransactionDirection.valueOf(it.getString("direction")),
                 bankAccountId = it.getLong("bank_account_id"),
                 paymentInformationId = it.getString("payment_information_id"),
                 subject = it.getString("subject"),
@@ -1217,7 +1197,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             WHERE withdrawal_uuid=?
         """
         )
-        stmt.setString(1, exchangePayto.stripped)
+        stmt.setString(1, exchangePayto.canonical)
         stmt.setString(2, reservePub)
         stmt.setObject(3, opUuid)
         stmt.executeUpdateViolation()
@@ -1427,12 +1407,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                     getCurrency()
                 ),
                 subject = it.getString("subject"),
-                tanChannel = when(it.getString("tan_channel")) {
-                    "sms" -> TanChannel.sms
-                    "email" -> TanChannel.email
-                    "file" -> TanChannel.file
-                    else -> throw internalServerError("TAN channel $this unsupported")
-                },
+                tanChannel = TanChannel.valueOf(it.getString("tan_channel")),
                 tanCode = it.getString("tan_code"),
                 localTransaction = it.getLong("local_transaction"),
                 tanConfirmationTime = when (val timestamp = it.getLong("tan_confirmation_time")) {
@@ -1516,7 +1491,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         stmt.setLong(4, req.amount.value)
         stmt.setInt(5, req.amount.frac)
         stmt.setString(6, req.exchange_base_url.url)
-        stmt.setString(7, req.credit_account.stripped)
+        stmt.setString(7, req.credit_account.canonical)
         stmt.setString(8, username)
         stmt.setLong(9, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.setString(10, acctSvcrRef)
@@ -1601,7 +1576,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         stmt.setString(2, subject)
         stmt.setLong(3, req.amount.value)
         stmt.setInt(4, req.amount.frac)
-        stmt.setString(5, req.debit_account.stripped)
+        stmt.setString(5, req.debit_account.canonical)
         stmt.setString(6, username)
         stmt.setLong(7, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.setString(8, acctSvcrRef)
