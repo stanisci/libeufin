@@ -274,9 +274,6 @@ fun connectWithSchema(jdbcConn: String, schemaName: String? = null) {
  * supported natively by JDBC.
  */
 fun getJdbcConnectionFromPg(pgConn: String): String {
-    if (pgConn.startsWith("postgres://")) {
-        throw Exception("only the postgresql:// URI scheme is supported, not postgres://")
-    }
     // Pass through jdbc URIs.
     if (pgConn.startsWith("jdbc:")) {
         return pgConn
@@ -317,6 +314,12 @@ fun getJdbcConnectionFromPg(pgConn: String): String {
         }
         return "jdbc:postgresql://localhost${parsed.path}?user=$pgUser&socketFactory=org.newsclub.net.unix." +
                 "AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=$socketLocation"
+    }
+    if (pgConn.startsWith("postgres://")) {
+        // The JDBC driver doesn't like postgres://, only postgresql://.
+        // For consistency with other components, we normalize the postgres:// URI
+        // into one that the JDBC driver likes.
+        return "jdbc:postgresql://" + pgConn.removePrefix("postgres://")
     }
     return "jdbc:$pgConn"
 }
