@@ -99,33 +99,35 @@ private fun <R> PgConnection.transaction(lambda: (PgConnection) -> R): R {
 fun initializeDatabaseTables(cfg: DatabaseConfig) {
     logger.info("doing DB initialization, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
     pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
-        val sqlVersioning = File("${cfg.sqlDir}/versioning.sql").readText()
-        conn.execSQLUpdate(sqlVersioning)
-
-        val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
-
-        for (n in 1..9999) {
-            val numStr = n.toString().padStart(4, '0')
-            val patchName = "libeufin-bank-$numStr"
-
-            checkStmt.setString(1, patchName)
-            val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Error("unable to query patches");
-            if (patchCount >= 1) {
-                logger.info("patch $patchName already applied")
-                continue
+        conn.transaction {
+            val sqlVersioning = File("${cfg.sqlDir}/versioning.sql").readText()
+            conn.execSQLUpdate(sqlVersioning)
+    
+            val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
+    
+            for (n in 1..9999) {
+                val numStr = n.toString().padStart(4, '0')
+                val patchName = "libeufin-bank-$numStr"
+    
+                checkStmt.setString(1, patchName)
+                val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Error("unable to query patches");
+                if (patchCount >= 1) {
+                    logger.info("patch $patchName already applied")
+                    continue
+                }
+    
+                val path = File("${cfg.sqlDir}/libeufin-bank-$numStr.sql")
+                if (!path.exists()) {
+                    logger.info("path $path doesn't exist anymore, stopping")
+                    break
+                }
+                logger.info("applying patch $path")
+                val sqlPatchText = path.readText()
+                conn.execSQLUpdate(sqlPatchText)
             }
-
-            val path = File("${cfg.sqlDir}/libeufin-bank-$numStr.sql")
-            if (!path.exists()) {
-                logger.info("path $path doesn't exist anymore, stopping")
-                break
-            }
-            logger.info("applying patch $path")
-            val sqlPatchText = path.readText()
-            conn.execSQLUpdate(sqlPatchText)
-        }
-        val sqlProcedures = File("${cfg.sqlDir}/procedures.sql").readText()
-        conn.execSQLUpdate(sqlProcedures)
+            val sqlProcedures = File("${cfg.sqlDir}/procedures.sql").readText()
+            conn.execSQLUpdate(sqlProcedures)
+        } 
     }
 }
 
@@ -723,6 +725,110 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
 
     // BANK ACCOUNT TRANSACTIONS
 
+    private fun handleExchangeTx(
+        conn: PgConnection,
+        subject: String,
+        creditorAccountId: Long,
+        debtorAccountId: Long,
+        it: ResultSet
+    ) {
+        val metadata = TxMetadata.parse(subject)
+        if (it.getBoolean("out_creditor_is_exchange")) {
+            val rowId = it.getLong("out_credit_row_id")
+            if (metadata is IncomingTxMetadata) {
+                val stmt = conn.prepareStatement("""
+                    INSERT INTO taler_exchange_incoming 
+                        (reserve_pub, bank_transaction) 
+                    VALUES (?, ?)
+                """)
+                stmt.setBytes(1, metadata.reservePub.raw)
+                stmt.setLong(2, rowId)
+                stmt.executeUpdate()
+                conn.execSQLUpdate("NOTIFY incoming_tx, '$creditorAccountId $rowId'")
+            } else {
+                // TODO bounce
+                logger.warn("exchange account $creditorAccountId received a transaction $rowId with malformed metadata, will bounce in future version")
+            }
+        }
+        if (it.getBoolean("out_debtor_is_exchange")) {
+            val rowId = it.getLong("out_debit_row_id")
+            if (metadata is OutgoingTxMetadata) {
+                val stmt = conn.prepareStatement("""
+                    INSERT INTO taler_exchange_outgoing 
+                        (wtid, exchange_base_url, bank_transaction) 
+                    VALUES (?, ?, ?)
+                """)
+                stmt.setBytes(1, metadata.wtid.raw)
+                stmt.setString(2, metadata.exchangeBaseUrl.url)
+                stmt.setLong(3, rowId)
+                stmt.executeUpdate()
+                conn.execSQLUpdate("NOTIFY outgoing_tx, '$debtorAccountId $rowId'")
+            } else {
+                logger.warn("exchange account $debtorAccountId sent a transaction $rowId with malformed metadata")
+            }
+        }
+    }
+
+    suspend fun bankTransaction(
+        creditAccountPayto: IbanPayTo,
+        debitAccountUsername: String,
+        subject: String,
+        amount: TalerAmount,
+        timestamp: Instant,
+        accountServicerReference: String = "not used", // ISO20022
+        endToEndId: String = "not used", // ISO20022
+        paymentInformationId: String = "not used" // ISO20022
+    ): BankTransactionResult = conn { conn ->
+        conn.transaction {
+            val stmt = conn.prepareStatement("""
+                SELECT 
+                    out_creditor_not_found 
+                    ,out_debtor_not_found
+                    ,out_same_account
+                    ,out_balance_insufficient
+                    ,out_credit_bank_account_id
+                    ,out_debit_bank_account_id
+                    ,out_credit_row_id
+                    ,out_debit_row_id
+                    ,out_creditor_is_exchange 
+                    ,out_debtor_is_exchange
+                FROM bank_transaction(?,?,?,(?,?)::taler_amount,?,?,?,?)
+            """
+            )
+            stmt.setString(1, creditAccountPayto.canonical)
+            stmt.setString(2, debitAccountUsername)
+            stmt.setString(3, subject)
+            stmt.setLong(4, amount.value)
+            stmt.setInt(5, amount.frac)
+            stmt.setLong(6, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
+            stmt.setString(7, accountServicerReference)
+            stmt.setString(8, paymentInformationId)
+            stmt.setString(9, endToEndId)
+            stmt.executeQuery().use {
+                when {
+                    !it.next() -> throw internalServerError("Bank transaction didn't properly return")
+                    it.getBoolean("out_creditor_not_found") -> {
+                        logger.error("No creditor account found")
+                        BankTransactionResult.NO_CREDITOR
+                    }
+                    it.getBoolean("out_debtor_not_found") -> {
+                        logger.error("No debtor account found")
+                        BankTransactionResult.NO_DEBTOR
+                    }
+                    it.getBoolean("out_same_account") -> BankTransactionResult.SAME_ACCOUNT
+                    it.getBoolean("out_balance_insufficient") -> {
+                        logger.error("Balance insufficient")
+                        BankTransactionResult.BALANCE_INSUFFICIENT
+                    }
+                    else -> {
+                        handleExchangeTx(conn, subject, it.getLong("out_credit_bank_account_id"), it.getLong("out_debit_bank_account_id"), it)
+                        BankTransactionResult.SUCCESS
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun bankTransactionCreate(
         tx: BankInternalTransaction
     ): BankTransactionResult = conn { conn ->
@@ -766,41 +872,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                         BankTransactionResult.BALANCE_INSUFFICIENT
                     }
                     else -> {
-                        val metadata = TxMetadata.parse(tx.subject)
-                        if (it.getBoolean("out_creditor_is_exchange")) {
-                            val rowId = it.getLong("out_credit_row_id")
-                            if (metadata is IncomingTxMetadata) {
-                                val stmt = conn.prepareStatement("""
-                                    INSERT INTO taler_exchange_incoming 
-                                        (reserve_pub, bank_transaction) 
-                                    VALUES (?, ?)
-                                """)
-                                stmt.setBytes(1, metadata.reservePub.raw)
-                                stmt.setLong(2, rowId)
-                                stmt.executeUpdate()
-                                conn.execSQLUpdate("NOTIFY incoming_tx, '${"${tx.creditorAccountId} $rowId"}'")
-                            } else {
-                                // TODO bounce
-                                logger.warn("exchange account ${tx.creditorAccountId} received a transaction $rowId with malformed metadata, will bounce in future version")
-                            }
-                        }
-                        if (it.getBoolean("out_debtor_is_exchange")) {
-                            val rowId = it.getLong("out_debit_row_id")
-                            if (metadata is OutgoingTxMetadata) {
-                                val stmt = conn.prepareStatement("""
-                                    INSERT INTO taler_exchange_outgoing 
-                                        (wtid, exchange_base_url, bank_transaction) 
-                                    VALUES (?, ?, ?)
-                                """)
-                                stmt.setBytes(1, metadata.wtid.raw)
-                                stmt.setString(2, metadata.exchangeBaseUrl.url)
-                                stmt.setLong(3, rowId)
-                                stmt.executeUpdate()
-                                conn.execSQLUpdate("NOTIFY outgoing_tx, '${"${tx.debtorAccountId} $rowId"}'")
-                            } else {
-                                logger.warn("exchange account ${tx.debtorAccountId} sent a transaction $rowId with malformed metadata")
-                            }
-                        }
+                        handleExchangeTx(conn, tx.subject, tx.creditorAccountId, tx.debtorAccountId, it)
                         BankTransactionResult.SUCCESS
                     }
                 }

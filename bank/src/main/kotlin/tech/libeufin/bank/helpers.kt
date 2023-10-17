@@ -67,7 +67,7 @@ suspend fun ApplicationCall.bankAccount(db: Database): Database.BankInfo {
     val username = getResourceName("USERNAME")
     return db.bankAccountInfoFromCustomerLogin(username) ?: throw notFound(
         hint = "Customer $username not found",
-        talerEc = TalerErrorCode.TALER_EC_END // FIXME: need EC.
+        talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
     )
 }
 

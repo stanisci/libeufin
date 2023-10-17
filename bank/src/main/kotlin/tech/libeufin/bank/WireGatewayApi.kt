@@ -58,7 +58,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
         when (dbRes.txResult) {
             TalerTransferResult.NO_DEBITOR -> throw notFound(
                 "Customer $username not found",
-                TalerErrorCode.TALER_EC_END // FIXME: need EC.
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
             TalerTransferResult.NOT_EXCHANGE -> throw conflict(
                 "$username is not an exchange account.",
@@ -142,7 +142,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
         when (dbRes.txResult) {
             TalerAddIncomingResult.NO_CREDITOR -> throw notFound(
                 "Customer $username not found",
-                TalerErrorCode.TALER_EC_END // FIXME: need EC.
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
             TalerAddIncomingResult.NOT_EXCHANGE -> throw conflict(
                 "$username is not an exchange account.",

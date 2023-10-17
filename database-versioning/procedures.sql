@@ -432,7 +432,81 @@ COMMENT ON FUNCTION taler_add_incoming(
   IS 'function that (1) inserts the TWG requests'
      'details into the database and (2) performs '
      'the actual bank transaction to pay the merchant';
-  
+
+CREATE OR REPLACE FUNCTION bank_transaction(
+  IN in_credit_account_payto TEXT,
+  IN in_debit_account_username TEXT,
+  IN in_subject TEXT,
+  IN in_amount taler_amount,
+  IN in_timestamp BIGINT,
+  IN in_account_servicer_reference TEXT,
+  IN in_payment_information_id TEXT,
+  IN in_end_to_end_id TEXT,
+  -- Error status
+  OUT out_creditor_not_found BOOLEAN,
+  OUT out_debtor_not_found BOOLEAN,
+  OUT out_same_account BOOLEAN,
+  OUT out_balance_insufficient BOOLEAN,
+  -- Success return
+  OUT out_credit_bank_account_id BIGINT,
+  OUT out_debit_bank_account_id BIGINT,
+  OUT out_credit_row_id BIGINT,
+  OUT out_debit_row_id BIGINT,
+  OUT out_creditor_is_exchange BOOLEAN,
+  OUT out_debtor_is_exchange BOOLEAN
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+-- Find credit bank account id
+SELECT bank_account_id
+  INTO out_credit_bank_account_id
+  FROM bank_accounts
+  WHERE internal_payto_uri = in_credit_account_payto;
+IF NOT FOUND THEN
+  out_creditor_not_found=TRUE;
+  RETURN;
+END IF;
+-- Find debit bank account id
+SELECT bank_account_id
+  INTO out_debit_bank_account_id
+  FROM bank_accounts 
+      JOIN customers 
+        ON customer_id=owning_customer_id
+  WHERE login = in_debit_account_username;
+IF NOT FOUND THEN
+  out_debtor_not_found=TRUE;
+  RETURN;
+END IF;
+-- Perform bank transfer
+SELECT
+  transfer.out_balance_insufficient,
+  transfer.out_credit_row_id,
+  transfer.out_debit_row_id,
+  transfer.out_same_account,
+  transfer.out_creditor_is_exchange,
+  transfer.out_debtor_is_exchange
+  INTO
+    out_balance_insufficient,
+    out_credit_row_id,
+    out_debit_row_id,
+    out_same_account,
+    out_creditor_is_exchange,
+    out_debtor_is_exchange
+  FROM bank_wire_transfer(
+    out_credit_bank_account_id,
+    out_debit_bank_account_id,
+    in_subject,
+    in_amount,
+    in_timestamp,
+    in_account_servicer_reference,
+    in_payment_information_id,
+    in_end_to_end_id
+  ) as transfer;
+IF out_balance_insufficient THEN
+  RETURN;
+END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,

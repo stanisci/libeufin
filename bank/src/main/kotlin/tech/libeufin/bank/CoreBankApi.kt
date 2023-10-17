@@ -483,7 +483,7 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
 
 fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
     get("/accounts/{USERNAME}/transactions") {
-        val username = call.authCheck(db, TokenScope.readonly, true)
+        call.authCheck(db, TokenScope.readonly, true)
         val params = getHistoryParams(call.request.queryParameters)
         val bankAccount = call.bankAccount(db)
 
@@ -491,7 +491,7 @@ fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
         call.respond(BankAccountTransactionsResponse(history))
     }
     get("/accounts/{USERNAME}/transactions/{T_ID}") {
-        val username = call.authCheck(db, TokenScope.readonly, true)
+        call.authCheck(db, TokenScope.readonly, true)
         val tId = call.expectUriComponent("T_ID")
         val txRowId = try {
             tId.toLong()
@@ -525,27 +525,20 @@ fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
         val tx = call.receive<BankAccountTransactionCreate>()
 
         val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
-        val amount = tx.payto_uri.amount ?: tx.amount
-        if (amount == null) throw badRequest("Wire transfer lacks amount")
+        val amount = tx.payto_uri.amount ?: tx.amount ?: throw badRequest("Wire transfer lacks amount")
         if (amount.currency != ctx.currency) throw badRequest(
             "Wrong currency: ${amount.currency}",
             talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
         )
-        // TODO rewrite all thos database query in a single database function
-        val debtorBankAccount = call.bankAccount(db)
-        val creditorBankAccount = db.bankAccountGetFromInternalPayto(tx.payto_uri)
-            ?: throw notFound(
-                "Creditor account not found",
-                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
-            )
-        val dbInstructions = BankInternalTransaction(
-            debtorAccountId = debtorBankAccount.id,
-            creditorAccountId = creditorBankAccount.expectRowId(),
+
+        val result = db.bankTransaction(
+            creditAccountPayto = tx.payto_uri,
+            debitAccountUsername = username,
             subject = subject,
             amount = amount,
-            transactionDate = Instant.now()
+            timestamp = Instant.now(),
         )
-        when (db.bankTransactionCreate(dbInstructions)) {
+        when (result) {
             BankTransactionResult.BALANCE_INSUFFICIENT -> throw conflict(
                 "Insufficient funds",
                 TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
@@ -554,8 +547,14 @@ fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
                 "Wire transfer attempted with credit and debit party being the same bank account",
                 TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
             )
-            BankTransactionResult.NO_CREDITOR -> throw internalServerError("Creditor not found despite previous checks.")
-            BankTransactionResult.NO_DEBTOR -> throw internalServerError("Debtor not found despite the request was authenticated.")
+            BankTransactionResult.NO_DEBTOR -> throw notFound(
+                "Customer $username not found",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
+            BankTransactionResult.NO_CREDITOR -> throw notFound(
+                "Creditor account was not found",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
             BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.OK)
         }
     }
