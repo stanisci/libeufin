@@ -269,7 +269,7 @@ data class TalerWithdrawalOperation(
     val selectionDone: Boolean = false,
     val aborted: Boolean = false,
     val confirmationDone: Boolean = false,
-    val reservePub: String?,
+    val reservePub: EddsaPublicKey?,
     val selectedExchangePayto: IbanPayTo?,
     val walletBankAccount: Long
 )
@@ -399,7 +399,7 @@ data class BankAccountGetWithdrawalResponse(
     val aborted: Boolean,
     val confirmation_done: Boolean,
     val selection_done: Boolean,
-    val selected_reserve_pub: String? = null,
+    val selected_reserve_pub: EddsaPublicKey? = null,
     val selected_exchange_account: IbanPayTo? = null
 )
 
@@ -467,7 +467,7 @@ data class BankWithdrawalOperationStatus(
  */
 @Serializable
 data class BankWithdrawalOperationPostRequest(
-    val reserve_pub: String,
+    val reserve_pub: EddsaPublicKey,
     val selected_exchange: IbanPayTo,
 )
 

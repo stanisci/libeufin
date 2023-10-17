@@ -238,12 +238,27 @@ class WireGatewayApiTest {
         db.bankTransactionCreate(genTx("bogus foobar")).assertSuccess()
         // Bar pays Foo once, but that should not appear in the result.
         db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)).assertSuccess()
-        // Gen two transactions using row bank transaction logic
-        repeat(2) {
-            db.bankTransactionCreate(
-                genTx(IncomingTxMetadata(randShortHashCode()).encode(), 2, 1)
-            ).assertSuccess()
+        // Gen one transaction using raw bank transaction logic
+        db.bankTransactionCreate(
+            genTx(IncomingTxMetadata(randShortHashCode()).encode(), 2, 1)
+        ).assertSuccess()
+        // Gen one transaction using withdraw logic
+        val uuid = client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:9" }) 
+        }.assertOk().run {
+            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            resp.taler_withdraw_uri.split("/").last()
         }
+        client.post("/taler-integration/withdrawal-operation/${uuid}") {
+            jsonBody(json {
+                "reserve_pub" to randEddsaPublicKey()
+                "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+            })
+        }.assertOk()
+        client.post("/withdrawals/${uuid}/confirm") {
+            basicAuth("merchant", "merchant-password")
+        }.assertOk()
 
         // Check ignore bogus subject
         client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7") {
@@ -373,7 +388,7 @@ class WireGatewayApiTest {
         db.bankTransactionCreate(genTx("bogus foobar", 1, 2)).assertSuccess()
         // Foo pays Bar once, but that should not appear in the result.
         db.bankTransactionCreate(genTx("payout")).assertSuccess()
-        // Gen two transactions using row bank transaction logic
+        // Gen two transactions using raw bank transaction logic
         repeat(2) {
             db.bankTransactionCreate(
                 genTx(OutgoingTxMetadata(randShortHashCode(), ExchangeUrl("http://exchange.example.com/")).encode(), 1, 2)

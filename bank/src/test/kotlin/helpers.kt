@@ -171,14 +171,6 @@ fun randBase32Crockford(lenght: Int): String {
     return Base32Crockford.encode(bytes)
 }
 
-fun randHashCode(): HashCode {
-    return HashCode(randBase32Crockford(64))
-}
-
-fun randShortHashCode(): ShortHashCode {
-    return ShortHashCode(randBase32Crockford(32))
-}
-
-fun randEddsaPublicKey(): EddsaPublicKey {
-    return EddsaPublicKey(randBase32Crockford(32))
-}
+fun randHashCode(): HashCode = HashCode(randBase32Crockford(64))
+fun randShortHashCode(): ShortHashCode = ShortHashCode(randBase32Crockford(32))
+fun randEddsaPublicKey(): EddsaPublicKey = EddsaPublicKey(randBase32Crockford(32))

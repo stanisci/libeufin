@@ -30,7 +30,7 @@ class BankIntegrationApiTest {
        
         val r = client.post("/taler-integration/withdrawal-operation/${uuid}") {
             jsonBody(BankWithdrawalOperationPostRequest(
-                reserve_pub = "RESERVE-FOO",
+                reserve_pub = randEddsaPublicKey(),
                 selected_exchange = IbanPayTo("payto://iban/ABC123")
             ))
         }.assertOk()
@@ -64,7 +64,7 @@ class BankIntegrationApiTest {
         ))
         val op = db.talerWithdrawalGet(uuid)
         assert(op?.aborted == false)
-        assert(db.talerWithdrawalSetDetails(uuid, IbanPayTo("payto://iban/exchange-payto"), "reserve_pub"))
+        assert(db.talerWithdrawalSetDetails(uuid, IbanPayTo("payto://iban/exchange-payto"), randEddsaPublicKey()))
        
         client.post("/withdrawals/${uuid}/abort") {
             basicAuth("merchant", "merchant-password")
@@ -103,7 +103,7 @@ class BankIntegrationApiTest {
         assert(db.talerWithdrawalSetDetails(
             opUuid = uuid,
             exchangePayto = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
-            reservePub = "UNCHECKED-RESERVE-PUB"
+            reservePub = randEddsaPublicKey()
         ))
 
         // Starting the bank and POSTing as Foo to /confirm the operation.

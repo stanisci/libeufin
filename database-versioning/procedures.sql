@@ -348,12 +348,10 @@ DECLARE
 exchange_bank_account_id BIGINT;
 sender_bank_account_id BIGINT;
 BEGIN
--- Check for idempotence and conflict
-SELECT true
-  FROM taler_exchange_incoming
-      JOIN bank_account_transactions AS txs
-        ON bank_transaction=txs.bank_transaction_id 
-  WHERE reserve_pub = in_reserve_pub
+-- Check conflict
+SELECT true FROM taler_exchange_incoming WHERE reserve_pub = in_reserve_pub
+UNION ALL
+SELECT true FROM taler_withdrawal_operations WHERE reserve_pub = in_reserve_pub
   INTO out_reserve_pub_reuse;
 IF out_reserve_pub_reuse THEN
   RETURN;
@@ -590,6 +588,7 @@ CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_end_to_end_id TEXT,
   OUT out_no_op BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
+  OUT out_creditor_not_found BOOLEAN,
   OUT out_exchange_not_found BOOLEAN,
   OUT out_already_confirmed_conflict BOOLEAN
 )
@@ -597,22 +596,23 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
   confirmation_done_local BOOLEAN;
-  reserve_pub_local TEXT;
+  subject_local TEXT;
+  reserve_pub_local BYTEA;
   selected_exchange_payto_local TEXT;
   wallet_bank_account_local BIGINT;
   amount_local taler_amount;
   exchange_bank_account_id BIGINT;
-  maybe_balance_insufficient BOOLEAN;
+  tx_row_id BIGINT;
 BEGIN
 SELECT -- Really no-star policy and instead DECLARE almost one var per column?
   confirmation_done,
-  reserve_pub,
+  reserve_pub, subject,
   selected_exchange_payto,
   wallet_bank_account,
   (amount).val, (amount).frac
   INTO
     confirmation_done_local,
-    reserve_pub_local,
+    reserve_pub_local, subject_local,
     selected_exchange_payto_local,
     wallet_bank_account_local,
     amount_local.val, amount_local.frac
@@ -647,24 +647,34 @@ THEN
 END IF;
 out_exchange_not_found=FALSE;
 SELECT -- not checking for accounts existence, as it was done above.
-  transfer.out_balance_insufficient
-  INTO
-    out_balance_insufficient
+  transfer.out_balance_insufficient,
+  out_credit_row_id
+  INTO out_balance_insufficient, tx_row_id
 FROM bank_wire_transfer(
   exchange_bank_account_id,
   wallet_bank_account_local,
-  reserve_pub_local,
+  subject_local,
   amount_local,
   in_confirmation_date,
   in_acct_svcr_ref,
   in_pmt_inf_id,
   in_end_to_end_id
 ) as transfer;
-IF (maybe_balance_insufficient)
-THEN
-  out_balance_insufficient=TRUE;
+IF out_balance_insufficient THEN
+  RETURN;
 END IF;
-out_balance_insufficient=FALSE;
+
+-- Register incoming transaction
+INSERT
+  INTO taler_exchange_incoming (
+    reserve_pub,
+    bank_transaction
+) VALUES (
+  reserve_pub_local,
+  tx_row_id
+);
+-- notify new transaction
+PERFORM pg_notify('incoming_tx', exchange_bank_account_id || ' ' || tx_row_id);
 END $$;
 COMMENT ON FUNCTION confirm_taler_withdrawal(uuid, bigint, text, text, text)
   IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';

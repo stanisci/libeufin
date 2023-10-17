@@ -63,14 +63,17 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
         val wopid = call.expectUriComponent("wopid")
         val req = call.receive<BankWithdrawalOperationPostRequest>()
         val op = getWithdrawal(db, wopid) // throws 404 if not found.
+
+        // TODO move logic into DB
         if (op.selectionDone) { // idempotency
             if (op.selectedExchangePayto != req.selected_exchange && op.reservePub != req.reserve_pub) throw conflict(
                 hint = "Cannot select different exchange and reserve pub. under the same withdrawal operation",
                 talerEc = TalerErrorCode.TALER_EC_BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT
             )
         }
+        // TODO check account is exchange
         val dbSuccess: Boolean = if (!op.selectionDone) { // Check if reserve pub. was used in _another_ withdrawal.
-            if (db.bankTransactionCheckExists(req.reserve_pub)) throw conflict(
+            if (db.checkReservePubReuse(req.reserve_pub)) throw conflict(
                 "Reserve pub. already used", TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
             )
             db.talerWithdrawalSetDetails(

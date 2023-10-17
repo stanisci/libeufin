@@ -291,8 +291,8 @@ class DatabaseTest {
         // Setting the details.
         assert(db.talerWithdrawalSetDetails(
             opUuid = uuid,
-            exchangePayto = IbanPayTo("payto://iban/BAR-IBAN-ABC"),
-            reservePub = "UNCHECKED-RESERVE-PUB"
+            exchangePayto = IbanPayTo("payto://iban/FOO-IBAN-XYZ"),
+            reservePub = randEddsaPublicKey()
         ))
         val opSelected = db.talerWithdrawalGet(uuid)
         assert(opSelected?.selectionDone == true && !opSelected.confirmationDone)

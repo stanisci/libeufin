@@ -847,20 +847,14 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         }
     }
 
-    /**
-     * Only checks if a bank transaction with the given subject
-     * exists.  That's only used in the /admin/add-incoming, to
-     * prevent a public key from being reused.
-     *
-     * Returns the row ID if found, null otherwise.
-     */
-    suspend fun bankTransactionCheckExists(subject: String): Boolean = conn { conn ->
+    suspend fun checkReservePubReuse(reservePub: EddsaPublicKey): Boolean = conn { conn ->
         val stmt = conn.prepareStatement("""
-            SELECT 1
-            FROM bank_account_transactions
-            WHERE subject = ?;           
+            SELECT 1 FROM taler_exchange_incoming WHERE reserve_pub = ?
+            UNION ALL
+            SELECT 1 FROM taler_withdrawal_operations WHERE reserve_pub = ?           
         """)
-        stmt.setString(1, subject)
+        stmt.setBytes(1, reservePub.raw)
+        stmt.setBytes(2, reservePub.raw)
         stmt.oneOrNull {  } != null
     }
 
@@ -1145,7 +1139,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                 walletBankAccount = it.getLong("wallet_bank_account"),
                 confirmationDone = it.getBoolean("confirmation_done"),
                 aborted = it.getBoolean("aborted"),
-                reservePub = it.getString("reserve_pub"),
+                reservePub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey),
                 withdrawalUuid = it.getObject("withdrawal_uuid") as UUID
             )
         }
@@ -1177,17 +1171,19 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
     suspend fun talerWithdrawalSetDetails(
         opUuid: UUID,
         exchangePayto: IbanPayTo,
-        reservePub: String
+        reservePub: EddsaPublicKey
     ): Boolean = conn { conn ->
+        val subject = IncomingTxMetadata(reservePub).encode()
         val stmt = conn.prepareStatement("""
             UPDATE taler_withdrawal_operations
-            SET selected_exchange_payto = ?, reserve_pub = ?, selection_done = true
+            SET selected_exchange_payto = ?, reserve_pub = ?, subject = ?, selection_done = true
             WHERE withdrawal_uuid=?
         """
         )
         stmt.setString(1, exchangePayto.canonical)
-        stmt.setString(2, reservePub)
-        stmt.setObject(3, opUuid)
+        stmt.setBytes(2, reservePub.raw)
+        stmt.setString(3, subject)
+        stmt.setObject(4, opUuid)
         stmt.executeUpdateViolation()
     }
 
@@ -1527,7 +1523,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         pmtInfId: String = "not used",
         endToEndId: String = "not used",
         ): TalerAddIncomingCreationResult = conn { conn ->
-        val subject = IncomingTxMetadata(req.reserve_pub).encode()
+            val subject = IncomingTxMetadata(req.reserve_pub).encode()
         val stmt = conn.prepareStatement("""
             SELECT
                 out_creditor_not_found
