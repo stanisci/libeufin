@@ -286,35 +286,6 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         }
     }
 
-    // Mostly used to get customers out of bearer tokens.
-    suspend fun customerGetFromRowId(customer_id: Long): Customer? = conn { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT
-              login,
-              password_hash,
-              name,
-              email,
-              phone,
-              cashout_payto,
-              cashout_currency
-            FROM customers
-            WHERE customer_id=?
-        """)
-        stmt.setLong(1, customer_id)
-        stmt.oneOrNull { 
-            Customer(
-                login = it.getString("login"),
-                passwordHash = it.getString("password_hash"),
-                name = it.getString("name"),
-                phone = it.getString("phone"),
-                email = it.getString("email"),
-                cashoutCurrency = it.getString("cashout_currency"),
-                cashoutPayto = it.getString("cashout_payto"),
-                dbRowId = customer_id
-            )
-        }
-    }
-
     suspend fun customerChangePassword(customerName: String, passwordHash: String): Boolean = conn { conn ->
         val stmt = conn.prepareStatement("""
             UPDATE customers SET password_hash=? where login=?
@@ -324,10 +295,30 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         stmt.executeUpdateCheck()
     }
 
+    suspend fun customerPasswordHashFromLogin(login: String): String? = conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT password_hash FROM customers WHERE login=?
+        """)
+        stmt.setString(1, login)
+        stmt.oneOrNull { 
+            it.getString(1)
+        }
+    }
+
+    suspend fun customerLoginFromId(id: Long): String? = conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT login FROM customers WHERE customer_id=?
+        """)
+        stmt.setLong(1, id)
+        stmt.oneOrNull { 
+            it.getString(1)
+        }
+    }
+
     suspend fun customerGetFromLogin(login: String): Customer? = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
-              customer_id,
+            customer_id,
               password_hash,
               name,
               email,
@@ -656,38 +647,12 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         }
     }
 
-    data class BankInfo(
-        val id: Long,
-        val isTalerExchange: Boolean,
-        val internalPaytoUri: String
-    )
-    
-    suspend fun bankAccountInfoFromCustomerLogin(login: String): BankInfo? = conn { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT
-                bank_account_id
-                ,is_taler_exchange
-                ,internal_payto_uri
-            FROM bank_accounts
-                JOIN customers 
-                ON customer_id=owning_customer_id
-            WHERE login=?
-        """)
-        stmt.setString(1, login)
-        stmt.oneOrNull { 
-            BankInfo(
-                id = it.getLong(1),
-                isTalerExchange = it.getBoolean(2),
-                internalPaytoUri = it.getString(3),
-            )
-        }
-    }
-
-    suspend fun bankAccountGetFromInternalPayto(internalPayto: IbanPayTo): BankAccount? = conn { conn ->
+    suspend fun bankAccountGetFromCustomerLogin(login: String): BankAccount? = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
              bank_account_id
              ,owning_customer_id
+             ,internal_payto_uri
              ,is_public
              ,is_taler_exchange
              ,last_nexus_fetch_row_id
@@ -697,13 +662,15 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
              ,(max_debt).val AS max_debt_val
              ,(max_debt).frac AS max_debt_frac
             FROM bank_accounts
-            WHERE internal_payto_uri=?
+                JOIN customers 
+                ON customer_id=owning_customer_id
+                WHERE login=?
         """)
-        stmt.setString(1, internalPayto.canonical)
+        stmt.setString(1, login)
 
         stmt.oneOrNull {
             BankAccount(
-                internalPaytoUri = internalPayto,
+                internalPaytoUri = IbanPayTo(it.getString("internal_payto_uri")),
                 balance = TalerAmount(
                     it.getLong("balance_val"),
                     it.getInt("balance_frac"),
@@ -887,14 +854,14 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
      *
      * Returns the row ID if found, null otherwise.
      */
-    suspend fun bankTransactionCheckExists(subject: String): Long? = conn { conn ->
+    suspend fun bankTransactionCheckExists(subject: String): Boolean = conn { conn ->
         val stmt = conn.prepareStatement("""
-            SELECT bank_transaction_id
+            SELECT 1
             FROM bank_account_transactions
             WHERE subject = ?;           
         """)
         stmt.setString(1, subject)
-        stmt.oneOrNull { it.getLong("bank_transaction_id") }
+        stmt.oneOrNull {  } != null
     }
 
     // Get the bank transaction whose row ID is rowId
@@ -1118,67 +1085,6 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                 credit_account = IbanPayTo(it.getString("creditor_payto_uri")),
                 wtid = ShortHashCode(it.getBytes("wtid")),
                 exchange_base_url = ExchangeUrl(it.getString("exchange_base_url"))
-            )
-        }
-    }
-
-    /**
-     * The following function returns the list of transactions, according
-     * to the history parameters.  The parameters take at least the 'start'
-     * and 'delta' values, and _optionally_ the payment direction.  At the
-     * moment, only the TWG uses the direction, to provide the /incoming
-     * and /outgoing endpoints.
-     */
-    suspend fun bankTransactionGetHistory(
-        start: Long,
-        delta: Int,
-        bankAccountId: Long
-    ): List<BankAccountTransaction> = conn { conn ->
-        val (cmpOp, orderBy) = if (delta < 0) Pair("<", "DESC") else Pair(">", "ASC")
-        val stmt = conn.prepareStatement("""
-            SELECT 
-              creditor_payto_uri
-              ,creditor_name
-              ,debtor_payto_uri
-              ,debtor_name
-              ,subject
-              ,(amount).val AS amount_val
-              ,(amount).frac AS amount_frac
-              ,transaction_date
-              ,account_servicer_reference
-              ,payment_information_id
-              ,end_to_end_id
-              ,direction
-              ,bank_account_id
-              ,bank_transaction_id
-            FROM bank_account_transactions
-	        WHERE bank_transaction_id ${cmpOp} ? 
-              AND bank_account_id=?
-            ORDER BY bank_transaction_id ${orderBy}
-            LIMIT ?
-        """)
-        stmt.setLong(1, start)
-        stmt.setLong(2, bankAccountId)
-        stmt.setInt(3, abs(delta))
-        stmt.all {
-            BankAccountTransaction(
-                creditorPaytoUri = it.getString("creditor_payto_uri"),
-                creditorName = it.getString("creditor_name"),
-                debtorPaytoUri = it.getString("debtor_payto_uri"),
-                debtorName = it.getString("debtor_name"),
-                amount = TalerAmount(
-                    it.getLong("amount_val"),
-                    it.getInt("amount_frac"),
-                    getCurrency()
-                ),
-                accountServicerReference = it.getString("account_servicer_reference"),
-                endToEndId = it.getString("end_to_end_id"),
-                direction = TransactionDirection.valueOf(it.getString("direction")),
-                bankAccountId = it.getLong("bank_account_id"),
-                paymentInformationId = it.getString("payment_information_id"),
-                subject = it.getString("subject"),
-                transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
-                dbRowId = it.getLong("bank_transaction_id")
             )
         }
     }
@@ -1489,20 +1395,6 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
             )
         }
     }
-
-    /**
-     * Represents the database row related to one payment
-     * that was requested by the Taler exchange.
-     */
-    data class TalerTransferFromDb(
-        val timestamp: Long,
-        val debitTxRowId: Long,
-        val requestUid: HashCode,
-        val amount: TalerAmount,
-        val exchangeBaseUrl: String,
-        val wtid: ShortHashCode,
-        val creditAccount: String
-    )
 
     /**
      * Holds the result of inserting a Taler transfer request

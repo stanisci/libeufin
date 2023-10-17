@@ -69,10 +69,10 @@ fun ApplicationCall.getResourceName(param: String): ResourceName =
 suspend fun ApplicationCall.accountLogin(): String = getResourceName("USERNAME")
 
 /** Retrieve the bank account info for the selected username*/
-suspend fun ApplicationCall.bankAccount(db: Database): Database.BankInfo {
+suspend fun ApplicationCall.bankAccount(db: Database): BankAccount {
     val login = accountLogin()
-    return db.bankAccountInfoFromCustomerLogin(login) ?: throw notFound(
-        hint = "Customer $login not found",
+    return db.bankAccountGetFromCustomerLogin(login) ?: throw notFound(
+        hint = "Bank account for customer $login not found",
         talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
     )
 }

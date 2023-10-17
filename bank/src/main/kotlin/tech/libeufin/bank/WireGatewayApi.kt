@@ -108,12 +108,12 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
 
-        val items = db.dbLambda(params, bankAccount.id);
+        val items = db.dbLambda(params, bankAccount.bankAccountId!!);
     
         if (items.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
         } else {
-            call.respond(reduce(items, bankAccount.internalPaytoUri))
+            call.respond(reduce(items, bankAccount.internalPaytoUri.canonical))
         }
     }
 

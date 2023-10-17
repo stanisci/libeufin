@@ -313,18 +313,24 @@ class DatabaseTest {
         // Foo pays Bar 100 times:
         for (i in 1..100) { db.bankTransactionCreate(genTx("test-$i")) }
         // Testing positive delta:
-        val forward = db.bankTransactionGetHistory(
-            start = 50L,
-            delta = 2,
+        val forward = db.bankPoolHistory(
+            params = HistoryParams(
+                start = 50L,
+                delta = 2,
+                poll_ms = 0
+            ),
             bankAccountId = 1L // asking as Foo
         )
-        assert(forward[0].expectRowId() >= 50 && forward.size == 2 && forward[0].dbRowId!! < forward[1].dbRowId!!)
-        val backward = db.bankTransactionGetHistory(
-            start = 50L,
-            delta = -2,
+        assert(forward[0].row_id >= 50 && forward.size == 2 && forward[0].row_id < forward[1].row_id)
+        val backward = db.bankPoolHistory(
+            params = HistoryParams(
+                start = 50L,
+                delta = -2,
+                poll_ms = 0
+            ),
             bankAccountId = 1L // asking as Foo
         )
-        assert(backward[0].expectRowId() <= 50 && backward.size == 2 && backward[0].dbRowId!! > backward[1].dbRowId!!)
+        assert(backward[0].row_id <= 50 && backward.size == 2 && backward[0].row_id > backward[1].row_id)
     }
     @Test
     fun cashoutTest() = setupDb { db ->

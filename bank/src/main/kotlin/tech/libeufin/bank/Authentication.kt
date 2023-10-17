@@ -7,6 +7,33 @@ import tech.libeufin.util.*
 import net.taler.wallet.crypto.Base32Crockford
 import java.time.Instant
 
+/** Authenticate admin */
+suspend fun ApplicationCall.authAdmin(db: Database, scope: TokenScope) {
+    // TODO when all endpoints use this function we can use an optimized database request that only query the customer login
+    val login = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
+    if (login != "admin") {
+        throw unauthorized("Only administrator allowed")
+    }
+}
+
+/** Authenticate and check access rights */
+suspend fun ApplicationCall.authCheck(db: Database, scope: TokenScope, withAdmin: Boolean = true, requireAdmin: Boolean = false): Pair<String, Boolean> {
+    // TODO when all endpoints use this function we can use an optimized database request that only query the customer login
+    val authLogin = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
+    val login = accountLogin()
+    if (requireAdmin && authLogin != "admin") {
+        if (authLogin != "admin") {
+            throw unauthorized("Only administrator allowed")
+        }
+    } else {
+        val hasRight = authLogin == login || (withAdmin && authLogin == "admin");
+        if (!hasRight) {
+            throw unauthorized("Customer $authLogin have no right on $login account")
+        }
+    }
+    return Pair(login, authLogin == "admin")
+}
+
 /**
  * This function tries to authenticate the call according
  * to the scheme that is mentioned in the Authorization header.
@@ -14,9 +41,9 @@ import java.time.Instant
  *
  * requiredScope can be either "readonly" or "readwrite".
  *
- * Returns the authenticated customer, or null if they failed.
+ * Returns the authenticated customer login, or null if they failed.
  */
-suspend fun ApplicationCall.authenticateBankRequest(db: Database, requiredScope: TokenScope): Customer? {
+private suspend fun ApplicationCall.authenticateBankRequest(db: Database, requiredScope: TokenScope): String? {
     // Extracting the Authorization header.
     val header = getAuthorizationRawHeader(this.request) ?: throw badRequest(
         "Authorization header not found.",
@@ -29,41 +56,8 @@ suspend fun ApplicationCall.authenticateBankRequest(db: Database, requiredScope:
     return when (authDetails.scheme) {
         "Basic" -> doBasicAuth(db, authDetails.content)
         "Bearer" -> doTokenAuth(db, authDetails.content, requiredScope)
-        else -> throw LibeufinBankException(
-            httpStatus = HttpStatusCode.Unauthorized,
-            talerError = TalerError(
-                code = TalerErrorCode.TALER_EC_GENERIC_UNAUTHORIZED.code,
-                hint = "Authorization method wrong or not supported."
-            )
-        )
+        else -> throw unauthorized("Authorization method wrong or not supported.")
     }
-}
-
-/** Authenticate admin */
-suspend fun ApplicationCall.authAdmin(db: Database, scope: TokenScope) {
-    // TODO when all endpoints use this function we can use an optimized database request that only query the customer login
-    val c = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
-    if (c.login != "admin") {
-        throw unauthorized("Only administrator allowed")
-    }
-}
-
-/** Authenticate and check access rights */
-suspend fun ApplicationCall.authCheck(db: Database, scope: TokenScope, withAdmin: Boolean = true, requireAdmin: Boolean = false): Pair<String, Boolean> {
-    // TODO when all endpoints use this function we can use an optimized database request that only query the customer login
-    val c = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
-    val login = accountLogin()
-    if (requireAdmin && c.login != "admin") {
-        if (c.login != "admin") {
-            throw unauthorized("Only administrator allowed")
-        }
-    } else {
-        val hasRight = c.login == login || (withAdmin && c.login == "admin");
-        if (!hasRight) {
-            throw unauthorized("No right on $login account")
-        }
-    }
-    return Pair(login, c.login == "admin")
 }
 
 // Get the auth token (stripped of the bearer-token:-prefix)
@@ -83,9 +77,9 @@ fun ApplicationCall.getAuthToken(): String? {
 
 /**
  * Performs the HTTP basic authentication.  Returns the
- * authenticated customer on success, or null otherwise.
+ * authenticated customer login on success, or null otherwise.
  */
-private suspend fun doBasicAuth(db: Database, encodedCredentials: String): Customer? {
+private suspend fun doBasicAuth(db: Database, encodedCredentials: String): String? {
     val plainUserAndPass = String(base64ToBytes(encodedCredentials), Charsets.UTF_8) // :-separated
     val userAndPassSplit = plainUserAndPass.split(
         ":",
@@ -102,11 +96,10 @@ private suspend fun doBasicAuth(db: Database, encodedCredentials: String): Custo
             "Malformed Basic auth credentials found in the Authorization header."
         )
     )
-    val login = userAndPassSplit[0]
-    val plainPassword = userAndPassSplit[1]
-    val maybeCustomer = db.customerGetFromLogin(login) ?: throw unauthorized()
-    if (!CryptoUtil.checkpw(plainPassword, maybeCustomer.passwordHash)) return null
-    return maybeCustomer
+    val (login, plainPassword) = userAndPassSplit
+    val passwordHash = db.customerPasswordHashFromLogin(login) ?: throw unauthorized()
+    if (!CryptoUtil.checkpw(plainPassword, passwordHash)) return null
+    return login
 }
 
 /**
@@ -122,12 +115,12 @@ private fun splitBearerToken(tok: String): String? {
 }
 
 /* Performs the secret-token authentication.  Returns the
- * authenticated customer on success, null otherwise. */
+ * authenticated customer login on success, null otherwise. */
 private suspend fun doTokenAuth(
     db: Database,
     token: String,
     requiredScope: TokenScope,
-): Customer? {
+): String? {
     val bareToken = splitBearerToken(token) ?: throw badRequest(
         "Bearer token malformed",
         talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
@@ -157,7 +150,7 @@ private suspend fun doTokenAuth(
         return null
     }
     // Getting the related username.
-    return db.customerGetFromRowId(maybeToken.bankCustomer) ?: throw LibeufinBankException(
+    return db.customerLoginFromId(maybeToken.bankCustomer) ?: throw LibeufinBankException(
         httpStatus = HttpStatusCode.InternalServerError, talerError = TalerError(
             code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
             hint = "Customer not found, despite token mentions it.",

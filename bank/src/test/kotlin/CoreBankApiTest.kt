@@ -264,7 +264,7 @@ class CoreBankAccountsMgmtApiTest {
 
     // GET /accounts/USERNAME
     @Test
-    fun getAccountTest() = bankSetup { db -> 
+    fun getAccountTest() = bankSetup { _ -> 
         // Check ok
         client.get("/accounts/merchant") {
             basicAuth("merchant", "merchant-password")
@@ -738,7 +738,7 @@ class LibeuFinApiTest {
                 expectSuccess = false
                 basicAuth("foo", "pw")
             }
-            assert(r.status == HttpStatusCode.Forbidden)
+            assert(r.status == HttpStatusCode.Unauthorized)
             // Make ad-hoc token for foo.
             val fooTok = ByteArray(32).apply { Random.nextBytes(this) }
             assert(

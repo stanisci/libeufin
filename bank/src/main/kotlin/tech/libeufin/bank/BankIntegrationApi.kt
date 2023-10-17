@@ -29,12 +29,10 @@ import net.taler.common.errorcodes.TalerErrorCode
 
 fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
     get("/taler-integration/config") {
-        val internalCurrency: String = ctx.currency
         call.respond(TalerIntegrationConfigResponse(
-            currency = internalCurrency,
+            currency = ctx.currency,
             currency_specification = ctx.currencySpecification
         ))
-        return@get
     }
 
     // Note: wopid acts as an authentication token.
@@ -60,7 +58,6 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
                 confirm_transfer_url = confirmUrl
             )
         )
-        return@get
     }
     post("/taler-integration/withdrawal-operation/{wopid}") {
         val wopid = call.expectUriComponent("wopid")
@@ -73,7 +70,7 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
             )
         }
         val dbSuccess: Boolean = if (!op.selectionDone) { // Check if reserve pub. was used in _another_ withdrawal.
-            if (db.bankTransactionCheckExists(req.reserve_pub) != null) throw conflict(
+            if (db.bankTransactionCheckExists(req.reserve_pub)) throw conflict(
                 "Reserve pub. already used", TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
             )
             db.talerWithdrawalSetDetails(
@@ -96,6 +93,5 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
             transfer_done = op.confirmationDone, confirm_transfer_url = confirmUrl
         )
         call.respond(resp)
-        return@post
     }
 }
