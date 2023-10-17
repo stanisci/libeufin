@@ -9,7 +9,6 @@ import java.time.Instant
 
 /** Authenticate admin */
 suspend fun ApplicationCall.authAdmin(db: Database, scope: TokenScope) {
-    // TODO when all endpoints use this function we can use an optimized database request that only query the customer login
     val login = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
     if (login != "admin") {
         throw unauthorized("Only administrator allowed")
@@ -19,7 +18,6 @@ suspend fun ApplicationCall.authAdmin(db: Database, scope: TokenScope) {
 
 /** Authenticate and check access rights */
 suspend fun ApplicationCall.authCheck(db: Database, scope: TokenScope, withAdmin: Boolean = false, requireAdmin: Boolean = false): Pair<String, Boolean> {
-    // TODO when all endpoints use this function we can use an optimized database request that only query the customer login
     val authLogin = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
     val login = accountLogin()
     if (requireAdmin && authLogin != "admin") {

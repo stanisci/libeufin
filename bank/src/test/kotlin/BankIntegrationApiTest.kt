@@ -13,8 +13,7 @@ import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.stripIbanPayto
 import java.util.*
 import java.time.Instant
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
+import kotlin.test.*
 import randHashCode
 
 class BankIntegrationApiTest {
@@ -23,9 +22,9 @@ class BankIntegrationApiTest {
     fun intSelect() = bankSetup { db ->
         val uuid = UUID.randomUUID()
         // insert new.
-        assert(db.talerWithdrawalCreate(
+        assertEquals(WithdrawalCreationResult.SUCCESS, db.talerWithdrawalCreate(
             opUUID = uuid,
-            walletBankAccount = 1L,
+            walletAccountUsername = "merchant",
             amount = TalerAmount(1, 0, "KUDOS")
         ))
        
@@ -43,9 +42,9 @@ class BankIntegrationApiTest {
     fun intGet() = bankSetup { db ->
         val uuid = UUID.randomUUID()
         // insert new.
-        assert(db.talerWithdrawalCreate(
+        assertEquals(WithdrawalCreationResult.SUCCESS, db.talerWithdrawalCreate(
             opUUID = uuid,
-            walletBankAccount = 1L,
+            walletAccountUsername = "merchant",
             amount = TalerAmount(1, 0, "KUDOS")
         ))
 
@@ -58,9 +57,9 @@ class BankIntegrationApiTest {
     fun withdrawalAbort() = bankSetup { db ->
         val uuid = UUID.randomUUID()
         // insert new.
-        assert(db.talerWithdrawalCreate(
+        assertEquals(WithdrawalCreationResult.SUCCESS, db.talerWithdrawalCreate(
             opUUID = uuid,
-            walletBankAccount = 1L,
+            walletAccountUsername = "merchant",
             amount = TalerAmount(1, 0, "KUDOS")
         ))
         val op = db.talerWithdrawalGet(uuid)
@@ -95,9 +94,9 @@ class BankIntegrationApiTest {
     fun withdrawalConfirmation() = bankSetup { db -> 
         // Artificially making a withdrawal operation for merchant.
         val uuid = UUID.randomUUID()
-        assert(db.talerWithdrawalCreate(
+        assertEquals(WithdrawalCreationResult.SUCCESS, db.talerWithdrawalCreate(
             opUUID = uuid,
-            walletBankAccount = 1L,
+            walletAccountUsername = "merchant",
             amount = TalerAmount(1, 0, "KUDOS")
         ))
         // Specifying the exchange via its Payto URI.

@@ -192,7 +192,7 @@ private fun PreparedStatement.executeUpdateViolation(): Boolean {
 }
 
 class Database(dbConfig: String, private val bankCurrency: String): java.io.Closeable {
-    private val dbPool: HikariDataSource
+    val dbPool: HikariDataSource
     private val notifWatcher: NotificationWatcher
 
     init {
@@ -1091,21 +1091,31 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
 
     // WITHDRAWALS
     suspend fun talerWithdrawalCreate(
+        walletAccountUsername: String,
         opUUID: UUID,
-        walletBankAccount: Long,
         amount: TalerAmount
-    ): Boolean = conn { conn ->
+    ): WithdrawalCreationResult = conn { conn ->
         val stmt = conn.prepareStatement("""
-            INSERT INTO
-              taler_withdrawal_operations
-              (withdrawal_uuid, wallet_bank_account, amount)
-            VALUES (?,?,(?,?)::taler_amount)
-        """) // Take all defaults from the SQL.
-        stmt.setObject(1, opUUID)
-        stmt.setLong(2, walletBankAccount)
+            SELECT
+                out_account_not_found,
+                out_account_is_exchange,
+                out_balance_insufficient
+            FROM create_taler_withdrawal(?, ?, (?,?)::taler_amount);
+        """)
+        stmt.setString(1, walletAccountUsername)
+        stmt.setObject(2, opUUID)
         stmt.setLong(3, amount.value)
         stmt.setInt(4, amount.frac)
-        stmt.executeUpdateViolation()
+        stmt.executeQuery().use {
+            when {
+                !it.next() ->
+                    throw internalServerError("No result from DB procedure create_taler_withdrawal")
+                it.getBoolean("out_account_not_found") -> WithdrawalCreationResult.ACCOUNT_NOT_FOUND
+                it.getBoolean("out_account_is_exchange") -> WithdrawalCreationResult.ACCOUNT_IS_EXCHANGE
+                it.getBoolean("out_balance_insufficient") -> WithdrawalCreationResult.BALANCE_INSUFFICIENT
+                else -> WithdrawalCreationResult.SUCCESS
+            }
+        }
     }
     suspend fun talerWithdrawalGet(opUUID: UUID): TalerWithdrawalOperation? = conn { conn ->
         val stmt = conn.prepareStatement("""
@@ -1614,6 +1624,14 @@ enum class TalerAddIncomingResult {
     RESERVE_PUB_REUSE,
     BALANCE_INSUFFICIENT,
     SUCCESS
+}
+
+/** Result status of withdrawal operation creation */
+enum class WithdrawalCreationResult {
+    SUCCESS,
+    ACCOUNT_NOT_FOUND,
+    ACCOUNT_IS_EXCHANGE,
+    BALANCE_INSUFFICIENT
 }
 
 /**

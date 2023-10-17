@@ -101,32 +101,35 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
     }
     // WITHDRAWAL ENDPOINTS
     post("/accounts/{USERNAME}/withdrawals") {
-        call.authCheck(db, TokenScope.readwrite)
+        val (login, _) = call.authCheck(db, TokenScope.readwrite)
         val req = call.receive<BankAccountCreateWithdrawalRequest>() // Checking that the user has enough funds.
+        
         if (req.amount.currency != ctx.currency)
             throw badRequest("Wrong currency: ${req.amount.currency}")
-        val b = call.bankAccount(db)
 
-        // TODO balance check only in database
-        if (!isBalanceEnough(
-                balance = b.expectBalance(), due = req.amount, maxDebt = b.maxDebt, hasBalanceDebt = b.hasDebt
-            )
-        ) throw forbidden(
-            hint = "Insufficient funds to withdraw with Taler",
-            talerErrorCode = TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
-        ) // Auth and funds passed, create the operation now!
         val opId = UUID.randomUUID()
-        if (!db.talerWithdrawalCreate(
-                opId, b.expectRowId(), req.amount
+        when (db.talerWithdrawalCreate(login, opId, req.amount)) {
+            WithdrawalCreationResult.ACCOUNT_NOT_FOUND -> throw notFound(
+                "Customer $login not found",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
-        ) throw internalServerError("Bank failed at creating the withdraw operation.")
-
-        val bankBaseUrl = call.request.getBaseUrl() ?: throw internalServerError("Bank could not find its own base URL")
-        call.respond(
-            BankAccountCreateWithdrawalResponse(
-                withdrawal_id = opId.toString(), taler_withdraw_uri = getTalerWithdrawUri(bankBaseUrl, opId.toString())
+            WithdrawalCreationResult.ACCOUNT_IS_EXCHANGE -> throw conflict(
+                "Exchange account cannot perform withdrawal operation",
+                TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
             )
-        )
+            WithdrawalCreationResult.BALANCE_INSUFFICIENT -> throw conflict(
+                "Insufficient funds to withdraw with Taler",
+                TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+            )
+            WithdrawalCreationResult.SUCCESS -> {
+                val bankBaseUrl = call.request.getBaseUrl() ?: throw internalServerError("Bank could not find its own base URL")
+                call.respond(
+                    BankAccountCreateWithdrawalResponse(
+                        withdrawal_id = opId.toString(), taler_withdraw_uri = getTalerWithdrawUri(bankBaseUrl, opId.toString())
+                    )
+                )
+            }
+        }       
     }
     get("/withdrawals/{withdrawal_id}") {
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))

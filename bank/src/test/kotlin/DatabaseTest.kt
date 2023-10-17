@@ -26,10 +26,7 @@ import java.time.Instant
 import java.util.Random
 import java.util.UUID
 import kotlin.experimental.inv
-import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 // Foo pays Bar with custom subject.
 fun genTx(
@@ -283,14 +280,14 @@ class DatabaseTest {
         assert(db.customerCreate(customerBar) != null) // plays the exchange.
         assert(db.bankAccountCreate(bankAccountBar) != null)
         // insert new.
-        assert(db.talerWithdrawalCreate(
+        assertEquals(WithdrawalCreationResult.SUCCESS, db.talerWithdrawalCreate(
+            "bar",
             uuid,
-            1L,
             TalerAmount(1, 0, currency)
         ))
         // get it.
         val op = db.talerWithdrawalGet(uuid)
-        assert(op?.walletBankAccount == 1L && op.withdrawalUuid == uuid)
+        assert(op?.walletBankAccount == 2L && op.withdrawalUuid == uuid)
         // Setting the details.
         assert(db.talerWithdrawalSetDetails(
             opUuid = uuid,

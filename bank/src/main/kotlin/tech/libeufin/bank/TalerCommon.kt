@@ -253,34 +253,6 @@ class TalerAmount {
         }
     }
 
-    fun normalize(): TalerAmount {
-        if (frac > FRACTION_BASE) {
-            val overflow = frac / FRACTION_BASE
-            val normalFrac = frac % FRACTION_BASE
-            val normalValue = value + overflow
-            if (normalValue < overflow || normalValue > MAX_SAFE_INTEGER)
-                throw badRequest("Amount value overflowed")
-            return TalerAmount(
-                value = normalValue, frac = normalFrac, currency = currency
-            )
-        }
-        return this
-    }
-
-    operator fun plus(other: TalerAmount): TalerAmount {
-        if (currency != other.currency) throw badRequest(
-            "Currency mismatch, balance '$currency', price '${other.currency}'",
-            TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-        )
-        val valueAdd = value + other.value
-        if (valueAdd < value || valueAdd > MAX_SAFE_INTEGER) throw badRequest("Amount value overflowed")
-        val fracAdd = frac + other.frac
-        if (fracAdd < frac) throw badRequest("Amount fraction overflowed")
-        return TalerAmount(
-            value = valueAdd, frac = fracAdd, currency = currency
-        ).normalize()
-    }
-
     override fun equals(other: Any?): Boolean {
         return other is TalerAmount &&
                 other.value == this.value &&

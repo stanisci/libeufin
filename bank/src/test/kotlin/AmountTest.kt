@@ -19,49 +19,103 @@
 
 
 import org.junit.Test
+import org.postgresql.jdbc.PgConnection
 import tech.libeufin.bank.*
-import kotlin.test.assertEquals
+import kotlin.test.*
+import java.time.Instant
+import java.util.*
 
 class AmountTest {
+    
+    // Test amount computation in database
     @Test
-    fun amountAdditionTest() {
+    fun computationTest() = bankSetup { db ->  
+        val conn = db.dbPool.getConnection().unwrap(PgConnection::class.java)
+        conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 100000 WHERE internal_payto_uri = '${IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ").canonical}'")
+        val stmt = conn.prepareStatement("""
+            UPDATE libeufin_bank.bank_accounts 
+                SET balance = (?, ?)::taler_amount
+                    ,has_debt = ?
+                    ,max_debt = (?, ?)::taler_amount
+            WHERE internal_payto_uri = '${IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ").canonical}'
+        """)
+        suspend fun routine(balance: TalerAmount, due: TalerAmount, hasBalanceDebt: Boolean, maxDebt: TalerAmount): Boolean {
+            stmt.setLong(1, balance.value)
+            stmt.setInt(2, balance.frac)
+            stmt.setBoolean(3, hasBalanceDebt)
+            stmt.setLong(4, maxDebt.value)
+            stmt.setInt(5, maxDebt.frac)
+
+            // Check bank transaction
+            stmt.executeUpdate()
+            val txRes = db.bankTransaction(
+                creditAccountPayto = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
+                debitAccountUsername = "merchant",
+                subject = "test",
+                amount = due,
+                timestamp = Instant.now(),
+            )
+            val txBool = when (txRes) {
+                BankTransactionResult.BALANCE_INSUFFICIENT -> false
+                BankTransactionResult.SUCCESS -> true
+                else -> throw Exception("Unexpected error $txRes")
+            }
+
+            // Check whithdraw 
+            stmt.executeUpdate()
+            val wRes = db.talerWithdrawalCreate(
+                walletAccountUsername = "merchant",
+                opUUID = UUID.randomUUID(),
+                amount = due,
+            )
+            val wBool = when (wRes) {
+                WithdrawalCreationResult.BALANCE_INSUFFICIENT -> false
+                WithdrawalCreationResult.SUCCESS -> true
+                else -> throw Exception("Unexpected error $txRes")
+            }
+
+            // Logic must be the same
+            assertEquals(wBool, txBool)
+            return txBool
+        }
+
         // Balance enough, assert for true
-        assert(isBalanceEnough(
+        assert(routine(
             balance = TalerAmount(10, 0, "KUDOS"),
             due = TalerAmount(8, 0, "KUDOS"),
             hasBalanceDebt = false,
             maxDebt = TalerAmount(100, 0, "KUDOS")
         ))
         // Balance still sufficient, thanks for big enough debt permission.  Assert true.
-        assert(isBalanceEnough(
+        assert(routine(
             balance = TalerAmount(10, 0, "KUDOS"),
             due = TalerAmount(80, 0, "KUDOS"),
             hasBalanceDebt = false,
             maxDebt = TalerAmount(100, 0, "KUDOS")
         ))
         // Balance not enough, max debt cannot cover, asserting for false.
-        assert(!isBalanceEnough(
+        assert(!routine(
             balance = TalerAmount(10, 0, "KUDOS"),
             due = TalerAmount(80, 0, "KUDOS"),
             hasBalanceDebt = true,
             maxDebt = TalerAmount(50, 0, "KUDOS")
         ))
         // Balance becomes enough, due to a larger max debt, asserting for true.
-        assert(isBalanceEnough(
+        assert(routine(
             balance = TalerAmount(10, 0, "KUDOS"),
             due = TalerAmount(80, 0, "KUDOS"),
             hasBalanceDebt = false,
             maxDebt = TalerAmount(70, 0, "KUDOS")
         ))
         // Max debt not enough for the smallest fraction, asserting for false
-        assert(!isBalanceEnough(
+        assert(!routine(
             balance = TalerAmount(0, 0, "KUDOS"),
             due = TalerAmount(0, 2, "KUDOS"),
             hasBalanceDebt = false,
             maxDebt = TalerAmount(0, 1, "KUDOS")
         ))
         // Same as above, but already in debt.
-        assert(!isBalanceEnough(
+        assert(!routine(
             balance = TalerAmount(0, 1, "KUDOS"),
             due = TalerAmount(0, 1, "KUDOS"),
             hasBalanceDebt = true,
@@ -96,22 +150,5 @@ class AmountTest {
         for (amount in listOf("EUR:4", "EUR:0.02", "EUR:4.12")) {
             assertEquals(amount, TalerAmount(amount).toString())
         }
-    }
-
-    @Test
-    fun normalize() {
-        assertEquals(TalerAmount("EUR:6"), TalerAmount(4L, 2 * TalerAmount.FRACTION_BASE, "EUR").normalize())
-        assertEquals(TalerAmount("EUR:6.00000001"), TalerAmount(4L, 2 * TalerAmount.FRACTION_BASE + 1, "EUR").normalize())
-        assertException("Amount value overflowed") { TalerAmount(Long.MAX_VALUE, 2 * TalerAmount.FRACTION_BASE + 1, "EUR").normalize() }
-        assertException("Amount value overflowed") { TalerAmount(MAX_SAFE_INTEGER, 2 * TalerAmount.FRACTION_BASE + 1, "EUR").normalize() }
-    }
-
-    @Test
-    fun add() {
-        assertEquals(TalerAmount("EUR:6.41") + TalerAmount("EUR:4.69"), TalerAmount("EUR:11.1"))
-        assertException("Amount value overflowed") { TalerAmount(MAX_SAFE_INTEGER - 5, 0, "EUR") + TalerAmount(6, 0, "EUR") }
-        assertException("Amount value overflowed") { TalerAmount(Long.MAX_VALUE, 0, "EUR") + TalerAmount(1, 0, "EUR") }
-        assertException("Amount value overflowed") { TalerAmount(MAX_SAFE_INTEGER - 5, TalerAmount.FRACTION_BASE - 1, "EUR") + TalerAmount(5, 2, "EUR") }
-        assertException("Amount fraction overflowed") { TalerAmount(0, Int.MAX_VALUE, "EUR") + TalerAmount(0, 1, "EUR") }
     }
 }

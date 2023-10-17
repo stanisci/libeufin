@@ -44,15 +44,6 @@ fun ApplicationCall.expectUriComponent(componentName: String) =
 typealias ResourceName = String
 
 /**
- * Checks if the input Customer has the rights over ResourceName.
- */
-fun ResourceName.canI(c: Customer, withAdmin: Boolean = true): Boolean {
-    if (c.login == this) return true
-    if (c.login == "admin" && withAdmin) return true
-    return false
-}
-
-/**
  * Factors out the retrieval of the resource name from
  * the URI.  The resource looked for defaults to "USERNAME"
  * as this is frequently mentioned resource along the endpoints.
@@ -125,42 +116,6 @@ fun badRequest(
 
 // Generates a new Payto-URI with IBAN scheme.
 fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
-
-/**
- * Checks whether the balance could cover the due amount.  Returns true
- * when it does, false otherwise.  Note: this function is only a checker,
- * meaning that no actual business state should change after it runs.
- * The place where business states change is in the SQL that's loaded in
- * the database.
- */
-fun isBalanceEnough(
-    balance: TalerAmount, due: TalerAmount, maxDebt: TalerAmount, hasBalanceDebt: Boolean
-): Boolean {
-    val normalMaxDebt = maxDebt.normalize() // Very unlikely to be needed.
-    if (hasBalanceDebt) {
-        val chargedBalance = balance + due
-        if (chargedBalance.value > normalMaxDebt.value) return false // max debt surpassed
-        if ((chargedBalance.value == normalMaxDebt.value) && (chargedBalance.frac > maxDebt.frac)) return false
-        return true
-    }
-    /**
-     * Balance doesn't have debt, but it MIGHT get one.  The following
-     * block calculates how much debt the balance would get, should a
-     * subtraction of 'due' occur.
-     */
-    if (balance.currency != due.currency) throw badRequest(
-        "Currency mismatch, balance '${balance.currency}', due '${due.currency}'",
-        TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-    )
-    val valueDiff = if (balance.value < due.value) due.value - balance.value else 0L
-    val fracDiff = if (balance.frac < due.frac) due.frac - balance.frac else 0
-    // Getting the normalized version of such diff.
-    val normalDiff = TalerAmount(valueDiff, fracDiff, balance.currency).normalize()
-    // Failing if the normalized diff surpasses the max debt.
-    if (normalDiff.value > normalMaxDebt.value) return false
-    if ((normalDiff.value == normalMaxDebt.value) && (normalDiff.frac > normalMaxDebt.frac)) return false
-    return true
-}
 
 /**
  *  Builds the taler://withdraw-URI.  Such URI will serve the requests

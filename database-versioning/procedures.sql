@@ -508,6 +508,80 @@ IF out_balance_insufficient THEN
 END IF;
 END $$;
 
+CREATE OR REPLACE FUNCTION create_taler_withdrawal(
+  IN in_account_username TEXT,
+  IN in_withdrawal_uuid UUID,
+  IN in_amount taler_amount,
+   -- Error status
+  OUT out_account_not_found BOOLEAN,
+  OUT out_account_is_exchange BOOLEAN,
+  OUT out_balance_insufficient BOOLEAN
+)
+LANGUAGE plpgsql AS $$ 
+DECLARE
+account_id BIGINT;
+account_has_debt BOOLEAN;
+account_balance taler_amount;
+account_max_debt taler_amount;
+BEGIN
+
+-- check account exists
+SELECT
+  has_debt, bank_account_id,
+  (balance).val, (balance).frac,
+  (max_debt).val, (max_debt).frac,
+  is_taler_exchange
+  INTO
+    account_has_debt, account_id,
+    account_balance.val, account_balance.frac,
+    account_max_debt.val, account_max_debt.frac,
+    out_account_is_exchange
+  FROM bank_accounts
+  JOIN customers ON bank_accounts.owning_customer_id = customers.customer_id
+  WHERE login=in_account_username;
+IF NOT FOUND THEN
+  out_account_not_found=TRUE;
+  RETURN;
+ELSIF out_account_is_exchange THEN
+  RETURN;
+END IF;
+
+-- check enough funds
+IF account_has_debt THEN 
+  -- debt case: simply checking against the max debt allowed.
+  CALL amount_add(account_balance, in_amount, account_balance);
+  SELECT NOT ok
+    INTO out_balance_insufficient
+    FROM amount_left_minus_right(account_max_debt, account_balance);
+  IF out_balance_insufficient THEN
+    RETURN;
+  END IF;
+ELSE -- not a debt account
+  SELECT NOT ok
+    INTO out_balance_insufficient
+    FROM amount_left_minus_right(account_balance, in_amount);
+  IF out_balance_insufficient THEN
+     -- debtor will switch to debt: determine their new negative balance.
+    SELECT
+      (diff).val, (diff).frac
+      INTO
+        account_balance.val, account_balance.frac
+      FROM amount_left_minus_right(in_amount, account_balance);
+    SELECT NOT ok
+      INTO out_balance_insufficient
+      FROM amount_left_minus_right(account_max_debt, account_balance);
+    IF out_balance_insufficient THEN
+      RETURN;
+    END IF;
+  END IF;
+END IF;
+
+-- Create withdrawal operation
+INSERT INTO taler_withdrawal_operations
+    (withdrawal_uuid, wallet_bank_account, amount)
+  VALUES (in_withdrawal_uuid, account_id, in_amount);
+END $$;
+
 CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
   IN in_confirmation_date BIGINT,
@@ -620,22 +694,19 @@ AS $$
 DECLARE
 debtor_has_debt BOOLEAN;
 debtor_balance taler_amount;
+debtor_max_debt taler_amount;
 debtor_payto_uri TEXT;
 debtor_name TEXT;
-creditor_payto_uri TEXT;
-creditor_name TEXT;
-debtor_max_debt taler_amount;
 creditor_has_debt BOOLEAN;
 creditor_balance taler_amount;
+creditor_payto_uri TEXT;
+creditor_name TEXT;
 potential_balance taler_amount;
-potential_balance_check BOOLEAN;
 new_debtor_balance taler_amount;
 new_debtor_balance_ok BOOLEAN;
 new_creditor_balance taler_amount;
 will_debtor_have_debt BOOLEAN;
 will_creditor_have_debt BOOLEAN;
-amount_at_least_debit BOOLEAN;
-potential_balance_ok BOOLEAN;
 new_debit_row_id BIGINT;
 new_credit_row_id BIGINT;
 BEGIN
@@ -695,27 +766,26 @@ IF debtor_has_debt THEN
   CALL amount_add(debtor_balance,
 	          in_amount,
 		  potential_balance);
-  SELECT ok
-    INTO potential_balance_check
+  SELECT NOT ok
+    INTO out_balance_insufficient
     FROM amount_left_minus_right(debtor_max_debt,
                                  potential_balance);
-  IF NOT potential_balance_check THEN
-    out_balance_insufficient=TRUE;
+  IF out_balance_insufficient THEN
     RETURN;
   END IF;
   new_debtor_balance=potential_balance;
   will_debtor_have_debt=TRUE;
 ELSE -- not a debt account
   SELECT
-    ok,
+    NOT ok,
     (diff).val, (diff).frac
     INTO
-      potential_balance_ok,
+      out_balance_insufficient,
       potential_balance.val,
       potential_balance.frac
     FROM amount_left_minus_right(debtor_balance,
                                  in_amount);
-  IF potential_balance_ok THEN -- debtor has enough funds in the (positive) balance.
+  IF NOT out_balance_insufficient THEN -- debtor has enough funds in the (positive) balance.
     new_debtor_balance=potential_balance;
     will_debtor_have_debt=FALSE;
   ELSE -- debtor will switch to debt: determine their new negative balance.
@@ -726,16 +796,16 @@ ELSE -- not a debt account
       FROM amount_left_minus_right(in_amount,
                                    debtor_balance);
     will_debtor_have_debt=TRUE;
-    SELECT ok
-      INTO potential_balance_check
+    SELECT NOT ok
+      INTO out_balance_insufficient
       FROM amount_left_minus_right(debtor_max_debt,
                                    new_debtor_balance);
-    IF NOT potential_balance_check THEN
-      out_balance_insufficient=TRUE;
+    IF out_balance_insufficient THEN
       RETURN;
     END IF;
   END IF;
 END IF;
+out_balance_insufficient=FALSE;
 
 -- CREDITOR SIDE.
 -- Here we figure out whether the creditor would switch
@@ -747,28 +817,23 @@ IF NOT creditor_has_debt THEN -- easy case.
 ELSE -- creditor had debit but MIGHT switch to credit.
   SELECT
     (diff).val, (diff).frac,
-    ok
+    NOT ok
     INTO
       new_creditor_balance.val, new_creditor_balance.frac,
-      amount_at_least_debit
+      will_creditor_have_debt
     FROM amount_left_minus_right(in_amount,
                                  creditor_balance);
-  IF amount_at_least_debit THEN
-    -- the amount is at least as big as the debit, can switch to credit then.
-    will_creditor_have_debt=FALSE;
-    -- compute new balance.
-  ELSE
-  -- the amount is not enough to bring the receiver
-  -- to a credit state, switch operators to calculate the new balance.
+  IF will_creditor_have_debt THEN
+    -- the amount is not enough to bring the receiver
+    -- to a credit state, switch operators to calculate the new balance.
     SELECT
       (diff).val, (diff).frac
       INTO new_creditor_balance.val, new_creditor_balance.frac
       FROM amount_left_minus_right(creditor_balance,
 	                           in_amount);
-    will_creditor_have_debt=TRUE;
   END IF;
 END IF;
-out_balance_insufficient=FALSE;
+
 -- now actually create the bank transaction.
 -- debtor side:
 INSERT INTO bank_account_transactions (
