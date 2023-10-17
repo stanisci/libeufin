@@ -14,10 +14,11 @@ suspend fun ApplicationCall.authAdmin(db: Database, scope: TokenScope) {
     if (login != "admin") {
         throw unauthorized("Only administrator allowed")
     }
+    
 }
 
 /** Authenticate and check access rights */
-suspend fun ApplicationCall.authCheck(db: Database, scope: TokenScope, withAdmin: Boolean = true, requireAdmin: Boolean = false): Pair<String, Boolean> {
+suspend fun ApplicationCall.authCheck(db: Database, scope: TokenScope, withAdmin: Boolean = false, requireAdmin: Boolean = false): Pair<String, Boolean> {
     // TODO when all endpoints use this function we can use an optimized database request that only query the customer login
     val authLogin = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
     val login = accountLogin()

@@ -290,7 +290,7 @@ fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
         call.respond(HttpStatusCode.Created)
     }
     delete("/accounts/{USERNAME}") {
-        val (login, _) = call.authCheck(db, TokenScope.readwrite, requireAdmin = ctx.restrictAccountDeletion)
+        val (login, _) = call.authCheck(db, TokenScope.readwrite, withAdmin = true, requireAdmin = ctx.restrictAccountDeletion)
         // Not deleting reserved names.
         if (reservedAccounts.contains(login)) throw conflict( 
             "Cannot delete reserved accounts",
@@ -313,7 +313,7 @@ fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
         }
     }
     patch("/accounts/{USERNAME}") {
-        val (login, isAdmin) = call.authCheck(db, TokenScope.readwrite)
+        val (login, isAdmin) = call.authCheck(db, TokenScope.readwrite, withAdmin = true)
         // admin is not allowed itself to change its own details.
         if (login == "admin") throw forbidden("admin account not patchable")
         // authentication OK, go on.
@@ -402,7 +402,7 @@ fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
         }
     }
     get("/accounts/{USERNAME}") {
-        val (login, _) = call.authCheck(db, TokenScope.readonly)
+        val (login, _) = call.authCheck(db, TokenScope.readonly, withAdmin = true)
         val customerData = db.customerGetFromLogin(login) ?: throw notFound(
                 "Customer '$login' not found in the database.",
                 talerEc = TalerErrorCode.TALER_EC_END
@@ -472,7 +472,7 @@ fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
         )
     }
     post("/accounts/{USERNAME}/transactions") {
-        val (login, _ ) = call.authCheck(db, TokenScope.readwrite, withAdmin = false)
+        val (login, _ ) = call.authCheck(db, TokenScope.readwrite)
         val tx = call.receive<BankAccountTransactionCreate>()
 
         val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")

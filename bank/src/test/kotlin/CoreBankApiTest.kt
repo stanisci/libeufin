@@ -480,7 +480,7 @@ class CoreBankTransactionsApiTest {
             "amount" to "KUDOS:0.3"
         }
 
-        authRoutine("/accounts/merchant/transactions", withAdmin = false)
+        authRoutine("/accounts/merchant/transactions")
 
         // Check OK
         client.post("/accounts/merchant/transactions") {
