@@ -66,7 +66,6 @@ import kotlin.system.exitProcess
 
 // GLOBALS
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
-const val GENERIC_UNDEFINED = -1 // Filler for ECs that don't exist yet.
 val TOKEN_DEFAULT_DURATION: java.time.Duration = Duration.ofDays(1L)
 
 /**
@@ -260,6 +259,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
             return@get
         }
         this.accountsMgmtApi(db, ctx)
+        this.coreBankAccountsMgmtApi(db, ctx)
         this.coreBankTransactionsApi(db, ctx)
         this.accountsMgmtApi(db, ctx)
         this.bankIntegrationApi(db, ctx)

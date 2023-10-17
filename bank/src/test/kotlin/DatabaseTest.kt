@@ -255,31 +255,6 @@ class DatabaseTest {
         assert(barAccount?.balance?.equals(TalerAmount(10, 0, "KUDOS")) == true)
     }
 
-    // Testing customer(+bank account) deletion logic.
-    @Test
-    fun customerDeletionTest() = setupDb { db ->
-        // asserting false, as foo doesn't exist yet.
-        assert(db.customerDeleteIfBalanceIsZero("foo") == CustomerDeletionResult.CUSTOMER_NOT_FOUND)
-        // Creating foo.
-        db.customerCreate(customerFoo).apply {
-            assert(this != null)
-            assert(db.bankAccountCreate(bankAccountFoo) != null)
-        }
-        // foo has zero balance, deletion should succeed.
-        assert(db.customerDeleteIfBalanceIsZero("foo") == CustomerDeletionResult.SUCCESS)
-
-        // Creating foo again, artificially setting its balance != zero.
-        db.customerCreate(customerFoo).apply {
-            assert(this != null)
-            db.bankAccountCreate(bankAccountFoo).apply {
-                assert(this != null)
-                val conn = DriverManager.getConnection("jdbc:postgresql:///libeufincheck").unwrap(PgConnection::class.java)
-                conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.frac = 1 WHERE bank_account_id = $this")
-            }
-        }
-        assert(db.customerDeleteIfBalanceIsZero("foo") == CustomerDeletionResult.BALANCE_NOT_ZERO)
-    }
-
     @Test
     fun customerCreationTest() = setupDb { db ->
         assert(db.customerGetFromLogin("foo") == null)

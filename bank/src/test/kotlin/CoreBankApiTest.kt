@@ -21,6 +21,270 @@ import kotlin.random.Random
 import kotlin.test.*
 import kotlinx.coroutines.*
 
+class CoreBankAccountsMgmtApiTest {
+    // Testing the account creation and its idempotency
+    @Test
+    fun createAccountTest() = bankSetup { _ -> 
+        val ibanPayto = genIbanPaytoUri()
+        val req = json {
+            "username" to "foo"
+            "password" to "password"
+            "name" to "Jane"
+            "is_public" to true
+            "internal_payto_uri" to ibanPayto
+        }
+        // Check Ok
+        client.post("/accounts") {
+            jsonBody(req)
+        }.assertCreated()
+        // Testing idempotency.
+        client.post("/accounts") {
+            jsonBody(req)
+        }.assertCreated()
+
+        // Test generate payto_uri
+        client.post("/accounts") {
+            jsonBody(json {
+                "username" to "jor"
+                "password" to "password"
+                "name" to "Joe"
+            })
+        }.assertCreated()
+
+        // Reserved account
+        reservedAccounts.forEach {
+            client.post("/accounts") {
+                jsonBody(json {
+                    "username" to it
+                    "password" to "password"
+                    "name" to "John Smith"
+                })
+            }.assertStatus(HttpStatusCode.Conflict)
+        }
+    }
+
+    // Test admin-only account creation
+    @Test
+    fun createAccountRestrictedTest() = bankSetup(conf = "test_restrict.conf") { _ -> 
+        val req = json {
+            "username" to "baz"
+            "password" to "xyz"
+            "name" to "Mallory"
+        }
+
+        // Ordinary user
+        client.post("/accounts") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(req)
+        }.assertUnauthorized()
+        // Administrator
+        client.post("/accounts") {
+            basicAuth("admin", "admin-password")
+            jsonBody(req)
+        }.assertCreated()
+    }
+
+    // DELETE /accounts/USERNAME
+    @Test
+    fun deleteAccount() = bankSetup { _ -> 
+        // Unknown account
+        client.delete("/accounts/unknown") {
+            basicAuth("admin", "admin-password")
+        }.assertStatus(HttpStatusCode.NotFound)
+
+        // Reserved account
+        reservedAccounts.forEach {
+            client.delete("/accounts/$it") {
+                basicAuth("admin", "admin-password")
+                expectSuccess = false
+            }.assertStatus(HttpStatusCode.Conflict)
+        }
+       
+        // successful deletion
+        client.post("/accounts") {
+            jsonBody(json {
+                "username" to "john"
+                "password" to "password"
+                "name" to "John Smith"
+            })
+        }.assertCreated()
+        client.delete("/accounts/john") {
+            basicAuth("admin", "admin-password")
+        }.assertNoContent()
+        // Trying again must yield 404
+        client.delete("/accounts/john") {
+            basicAuth("admin", "admin-password")
+        }.assertStatus(HttpStatusCode.NotFound)
+
+        
+        // fail to delete, due to a non-zero balance.
+        client.post("/accounts/exchange/transactions") {
+            basicAuth("exchange", "exchange-password")
+            jsonBody(json {
+                "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout&amount=KUDOS:1"
+            })
+        }.assertOk()
+        client.delete("/accounts/merchant") {
+            basicAuth("admin", "admin-password")
+        }.assertStatus(HttpStatusCode.PreconditionFailed)
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json {
+                "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout&amount=KUDOS:1"
+            })
+        }.assertOk()
+        client.delete("/accounts/merchant") {
+            basicAuth("admin", "admin-password")
+        }.assertNoContent()
+    }
+
+    // PATCH /accounts/USERNAME
+    @Test
+    fun accountReconfig() = bankSetup { db -> 
+        // Successful attempt now.
+        val req = json {
+            "cashout_address" to "payto://new-cashout-address"
+            "challenge_contact_data" to json {
+                "email" to "new@example.com"
+                "phone" to "+987"
+            }
+            "is_exchange" to true
+        }
+        client.patch("/accounts/merchant") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(req)
+        }.assertNoContent()
+        // Checking idempotence.
+        client.patch("/accounts/merchant") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(req)
+        }.assertNoContent()
+
+        val nameReq = json {
+            "name" to "Another Foo"
+        }
+        // Checking ordinary user doesn't get to patch their name.
+        client.patch("/accounts/merchant") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(nameReq)
+        }.assertStatus(HttpStatusCode.Forbidden)
+        // Finally checking that admin does get to patch foo's name.
+        client.patch("/accounts/merchant") {
+            basicAuth("admin", "admin-password")
+            jsonBody(nameReq)
+        }.assertNoContent()
+
+        val fooFromDb = db.customerGetFromLogin("merchant")
+        assertEquals("Another Foo", fooFromDb?.name)
+    }
+
+    // PATCH /accounts/USERNAME/auth
+    @Test
+    fun passwordChangeTest() = bankSetup { _ -> 
+        // Changing the password.
+        client.patch("/accounts/merchant/auth") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json {
+                "new_password" to "new-password"
+            })
+        }.assertNoContent()
+        // Previous password should fail.
+        client.patch("/accounts/merchant/auth") {
+            basicAuth("merchant", "merchant-password")
+        }.assertUnauthorized()
+        // New password should succeed.
+        client.patch("/accounts/merchant/auth") {
+            basicAuth("merchant", "new-password")
+            jsonBody(json {
+                "new_password" to "merchant-password"
+            })
+        }.assertNoContent()
+    }
+
+    // GET /public-accounts and GET /accounts
+    @Test
+    fun accountsListTest() = bankSetup { _ -> 
+        // Remove default accounts
+        listOf("merchant", "exchange").forEach {
+            client.delete("/accounts/$it") {
+                basicAuth("admin", "admin-password")
+            }.assertNoContent()
+        }
+        // Check error when no public accounts
+        client.get("/public-accounts").assertNoContent()
+        client.get("/accounts") {
+            basicAuth("admin", "admin-password")
+        }.assertOk()
+        
+        // Gen some public and private accounts
+        repeat(5) {
+            client.post("/accounts") {
+                jsonBody(json {
+                    "username" to "$it"
+                    "password" to "password"
+                    "name" to "Mr $it"
+                    "is_public" to (it%2 == 0)
+                })
+            }.assertCreated()
+        }
+        // All public
+        client.get("/public-accounts").run {
+            assertOk()
+            val obj = Json.decodeFromString<PublicAccountsResponse>(bodyAsText())
+            assertEquals(3, obj.public_accounts.size)
+            obj.public_accounts.forEach {
+                assertEquals(0, it.account_name.toInt() % 2)
+            }
+        }
+        // All accounts
+        client.get("/accounts"){
+            basicAuth("admin", "admin-password")
+        }.run {
+            assertOk()
+            val obj = Json.decodeFromString<ListBankAccountsResponse>(bodyAsText())
+            assertEquals(6, obj.accounts.size)
+            obj.accounts.forEachIndexed { idx, it ->
+                if (idx == 0) {
+                    assertEquals("admin", it.username)
+                } else {
+                    assertEquals(idx - 1, it.username.toInt())
+                }
+            }
+        }
+        // Filtering
+         client.get("/accounts?filter_name=3"){
+            basicAuth("admin", "admin-password")
+        }.run {
+            assertOk()
+            val obj = Json.decodeFromString<ListBankAccountsResponse>(bodyAsText())
+            assertEquals(1, obj.accounts.size)
+            assertEquals("3", obj.accounts[0].username)
+        }
+    }
+
+    // GET /accounts/USERNAME
+    @Test
+    fun getAccountTest() = bankSetup { db -> 
+        // Check ok
+        client.get("/accounts/merchant") {
+            basicAuth("merchant", "merchant-password")
+        }.assertOk().run {
+            val obj: AccountData = Json.decodeFromString(bodyAsText())
+            assertEquals("Merchant", obj.name)
+        }
+
+        // Check admin ok
+        client.get("/accounts/merchant") {
+            basicAuth("admin", "admin-password")
+        }.assertOk()
+
+        // Check wrong user
+        client.get("/accounts/exchange") {
+            basicAuth("merchanr", "merchanr-password")
+        }.assertStatus(HttpStatusCode.Unauthorized)
+    }
+}
+
 class CoreBankTransactionsApiTest {
     // Test endpoint is correctly authenticated 
     suspend fun ApplicationTestBuilder.authRoutine(path: String, withAdmin: Boolean = true, method: HttpMethod = HttpMethod.Post) {
@@ -299,7 +563,6 @@ class CoreBankTransactionsApiTest {
             })
         }.assertStatus(HttpStatusCode.Conflict)
     }
-    
 }
 
 class LibeuFinApiTest {
@@ -337,38 +600,7 @@ class LibeuFinApiTest {
         println(r.bodyAsText())
     }
 
-    @Test
-    fun passwordChangeTest() = setup { db, ctx -> 
-        assert(db.customerCreate(customerFoo) != null)
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            // Changing the password.
-            client.patch("/accounts/foo/auth") {
-                expectSuccess = true
-                contentType(ContentType.Application.Json)
-                basicAuth("foo", "pw")
-                setBody("""{"new_password": "bar"}""")
-            }
-            // Previous password should fail.
-            client.patch("/accounts/foo/auth") {
-                expectSuccess = false
-                contentType(ContentType.Application.Json)
-                basicAuth("foo", "pw")
-                setBody("""{"new_password": "not-even-parsed"}""")
-            }.apply {
-                assert(this.status == HttpStatusCode.Unauthorized)
-            }
-            // New password should succeed.
-            client.patch("/accounts/foo/auth") {
-                expectSuccess = true
-                contentType(ContentType.Application.Json)
-                basicAuth("foo", "bar")
-                setBody("""{"new_password": "not-used"}""")
-            }
-        }
-    }
+   
     @Test
     fun tokenDeletionTest() = setup { db, ctx -> 
         assert(db.customerCreate(customerFoo) != null)
@@ -417,39 +649,6 @@ class LibeuFinApiTest {
         }
     }
 
-    @Test
-    fun publicAccountsTest() = setup { db, ctx -> 
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            client.get("/public-accounts").apply {
-                assert(this.status == HttpStatusCode.NoContent)
-            }
-            // Make one public account.
-            db.customerCreate(customerBar).apply {
-                assert(this != null)
-                assert(
-                    db.bankAccountCreate(
-                        BankAccount(
-                            isPublic = true,
-                            internalPaytoUri = IbanPayTo("payto://iban/non-used"),
-                            lastNexusFetchRowId = 1L,
-                            owningCustomerId = this!!,
-                            hasDebt = false,
-                            maxDebt = TalerAmount(10, 1, "KUDOS")
-                        )
-                    ) != null
-                )
-            }
-            client.get("/public-accounts").apply {
-                assert(this.status == HttpStatusCode.OK)
-                val obj = Json.decodeFromString<PublicAccountsResponse>(this.bodyAsText())
-                assert(obj.public_accounts.size == 1)
-                assert(obj.public_accounts[0].account_name == "bar")
-            }
-        }
-    }
     // Creating token with "forever" duration.
     @Test
     fun tokenForeverTest() = setup { db, ctx -> 
@@ -575,390 +774,4 @@ class LibeuFinApiTest {
             assert(never.expiration.t_s == Instant.MAX)
         }
     }
-
-    /**
-     * Testing the retrieval of account information.
-     * The tested logic is the one usually needed by SPAs
-     * to show customers their status.
-     */
-    @Test
-    fun getAccountTest() = setup { db, ctx -> 
-        // Artificially insert a customer and bank account in the database.
-        val customerRowId = db.customerCreate(
-            Customer(
-                "foo",
-                CryptoUtil.hashpw("pw"),
-                "Foo"
-            )
-        )
-        assert(customerRowId != null)
-        assert(
-            db.bankAccountCreate(
-                BankAccount(
-                    hasDebt = false,
-                    internalPaytoUri = IbanPayTo("payto://iban/DE1234"),
-                    maxDebt = TalerAmount(100, 0, "KUDOS"),
-                    owningCustomerId = customerRowId!!
-                )
-            ) != null
-        )
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            val r = client.get("/accounts/foo") {
-                expectSuccess = true
-                basicAuth("foo", "pw")
-            }
-            val obj: AccountData = Json.decodeFromString(r.bodyAsText())
-            assert(obj.name == "Foo")
-            // Checking admin can.
-            val adminRowId = db.customerCreate(
-                Customer(
-                    "admin",
-                    CryptoUtil.hashpw("admin"),
-                    "Admin"
-                )
-            )
-            assert(adminRowId != null)
-            assert(
-                db.bankAccountCreate(
-                    BankAccount(
-                        hasDebt = false,
-                        internalPaytoUri = IbanPayTo("payto://iban/SANDBOXX/ADMIN-IBAN"),
-                        maxDebt = TalerAmount(100, 0, "KUDOS"),
-                        owningCustomerId = adminRowId!!
-                    )
-                ) != null
-            )
-            client.get("/accounts/foo") {
-                expectSuccess = true
-                basicAuth("admin", "admin")
-            }
-            val shouldNot = client.get("/accounts/foo") {
-                basicAuth("not", "not")
-                expectSuccess = false
-            }
-            assert(shouldNot.status == HttpStatusCode.Unauthorized)
-        }
-    }
-
-    /**
-     * Testing the account creation and its idempotency
-     */
-    @Test
-    fun createAccountTest() = setup { db, ctx -> 
-        testApplication {
-            val ibanPayto = genIbanPaytoUri()
-            application {
-                corebankWebApp(db, ctx)
-            }
-            var resp = client.post("/accounts") {
-                expectSuccess = false
-                contentType(ContentType.Application.Json)
-                setBody(
-                    """{
-                    "username": "foo",
-                    "password": "bar",
-                    "name": "Jane",
-                    "is_public": true,
-                    "internal_payto_uri": "$ibanPayto"
-                }""".trimIndent()
-                )
-            }
-            assert(resp.status == HttpStatusCode.Created)
-            // Testing idempotency.
-            resp = client.post("/accounts") {
-                expectSuccess = false
-                contentType(ContentType.Application.Json)
-                setBody(
-                    """{
-                    "username": "foo",
-                    "password": "bar",
-                    "name": "Jane",
-                    "is_public": true,
-                    "internal_payto_uri": "$ibanPayto"
-                }""".trimIndent()
-                )
-            }
-            assert(resp.status == HttpStatusCode.Created)
-        }
-    }
-
-    /**
-     * Testing the account creation and its idempotency
-     */
-    @Test
-    fun createTwoAccountsTest() = setup { db, ctx -> 
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            var resp = client.post("/accounts") {
-                expectSuccess = false
-                contentType(ContentType.Application.Json)
-                setBody(
-                    """{
-                    "username": "foo",
-                    "password": "bar",
-                    "name": "Jane"
-                }""".trimIndent()
-                )
-            }
-            assert(resp.status == HttpStatusCode.Created)
-            // Test creating another account.
-            resp = client.post("/accounts") {
-                expectSuccess = false
-                contentType(ContentType.Application.Json)
-                setBody(
-                    """{
-                    "username": "joe",
-                    "password": "bar",
-                    "name": "Joe"
-                }""".trimIndent()
-                )
-            }
-            assert(resp.status == HttpStatusCode.Created)
-        }
-    }
-
-    /**
-     * Test admin-only account creation
-     */
-    @Test
-    fun createAccountRestrictedTest() = setup(conf = "test_restrict.conf") { db, ctx -> 
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-
-            // Ordinary user tries, should fail.
-            var resp = client.post("/accounts") {
-                expectSuccess = false
-                basicAuth("foo", "bar")
-                contentType(ContentType.Application.Json)
-                setBody(
-                    """{
-                    "username": "baz",
-                    "password": "xyz",
-                    "name": "Mallory"
-                }""".trimIndent()
-                )
-            }
-            assert(resp.status == HttpStatusCode.Unauthorized)
-            // Creating the administrator.
-            assert(
-                db.customerCreate(
-                    Customer(
-                        "admin",
-                        CryptoUtil.hashpw("pass"),
-                        "CFO"
-                    )
-                ) != null
-            )
-            // customer exists, this makes only the bank account:
-            assert(maybeCreateAdminAccount(db, ctx))
-            resp = client.post("/accounts") {
-                expectSuccess = false
-                basicAuth("admin", "pass")
-                contentType(ContentType.Application.Json)
-                setBody(
-                    """{
-                    "username": "baz",
-                    "password": "xyz",
-                    "name": "Mallory"
-                }""".trimIndent()
-                )
-            }
-            assert(resp.status == HttpStatusCode.Created)
-        }
-    }
-
-    /**
-     * Tests DELETE /accounts/foo
-     */
-    @Test
-    fun deleteAccount() = setup { db, ctx -> 
-        val adminCustomer = Customer(
-            "admin",
-            CryptoUtil.hashpw("pass"),
-            "CFO"
-        )
-        db.customerCreate(adminCustomer)
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            // account to delete doesn't exist.
-            client.delete("/accounts/foo") {
-                basicAuth("admin", "pass")
-                expectSuccess = false
-            }.apply {
-                assert(this.status == HttpStatusCode.NotFound)
-            }
-            // account to delete is reserved.
-            client.delete("/accounts/admin") {
-                basicAuth("admin", "pass")
-                expectSuccess = false
-            }.apply {
-                assert(this.status == HttpStatusCode.Forbidden)
-            }
-            // successful deletion
-            db.customerCreate(customerFoo).apply {
-                assert(this != null)
-                assert(db.bankAccountCreate(genBankAccount(this!!)) != null)
-            }
-            client.delete("/accounts/foo") {
-                basicAuth("admin", "pass")
-                expectSuccess = true
-            }.apply {
-                assert(this.status == HttpStatusCode.NoContent)
-            }
-            // Trying again must yield 404
-            client.delete("/accounts/foo") {
-                basicAuth("admin", "pass")
-                expectSuccess = false
-            }.apply {
-                assert(this.status == HttpStatusCode.NotFound)
-            }
-            // fail to delete, due to a non-zero balance.
-            db.customerCreate(customerBar).apply {
-                assert(this != null)
-                db.bankAccountCreate(genBankAccount(this!!)).apply {
-                    assert(this != null)
-                    val conn = DriverManager.getConnection("jdbc:postgresql:///libeufincheck").unwrap(PgConnection::class.java)
-                    conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 1 WHERE bank_account_id = $this")
-                }
-            }
-            client.delete("/accounts/bar") {
-                basicAuth("admin", "pass")
-                expectSuccess = false
-            }.apply {
-                assert(this.status == HttpStatusCode.PreconditionFailed)
-            }
-        }
-    }
-
-    /**
-     * Tests reconfiguration of account data.
-     */
-    @Test
-    fun accountReconfig() = setup { db, ctx -> 
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            assertNotNull(db.customerCreate(customerFoo))
-            // First call expects 500, because foo lacks a bank account
-            client.patch("/accounts/foo") {
-                basicAuth("foo", "pw")
-                jsonBody(json {
-                    "is_exchange" to true
-                })
-            }.assertStatus(HttpStatusCode.InternalServerError)
-            // Creating foo's bank account.
-            assertNotNull(db.bankAccountCreate(genBankAccount(1L)))
-            // Successful attempt now.
-            val validReq = AccountReconfiguration(
-                cashout_address = "payto://new-cashout-address",
-                challenge_contact_data = ChallengeContactData(
-                    email = "new@example.com",
-                    phone = "+987"
-                ),
-                is_exchange = true,
-                name = null
-            )
-            client.patch("/accounts/foo") {
-                basicAuth("foo", "pw")
-                jsonBody(validReq)
-            }.assertStatus(HttpStatusCode.NoContent)
-            // Checking idempotence.
-            client.patch("/accounts/foo") {
-                basicAuth("foo", "pw")
-                jsonBody(validReq)
-            }.assertStatus(HttpStatusCode.NoContent)
-            // Checking ordinary user doesn't get to patch their name.
-            client.patch("/accounts/foo") {
-                basicAuth("foo", "pw")
-                jsonBody(json {
-                    "name" to "Another Foo"
-                })
-            }.assertStatus(HttpStatusCode.Forbidden)
-            // Finally checking that admin does get to patch foo's name.
-            assertNotNull(db.customerCreate(Customer(
-                login = "admin",
-                passwordHash = CryptoUtil.hashpw("secret"),
-                name = "CFO"
-            )))
-            client.patch("/accounts/foo") {
-                basicAuth("admin", "secret")
-                jsonBody(json {
-                    "name" to "Another Foo"
-                })
-            }.assertStatus(HttpStatusCode.NoContent)
-            val fooFromDb = db.customerGetFromLogin("foo")
-            assertNotNull(fooFromDb)
-            assertEquals("Another Foo", fooFromDb.name)
-        }
-    }
-
-    /**
-     * Tests the GET /accounts endpoint.
-     */
-    @Test
-    fun getAccountsList() = setup { db, ctx -> 
-        val adminCustomer = Customer(
-            "admin",
-            CryptoUtil.hashpw("pass"),
-            "CFO"
-        )
-        assert(db.customerCreate(adminCustomer) != null)
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            // No users registered, expect no data.
-            client.get("/accounts") {
-                basicAuth("admin", "pass")
-                expectSuccess = true
-            }.apply {
-                assert(this.status == HttpStatusCode.NoContent)
-            }
-            // foo account
-            db.customerCreate(customerFoo).apply {
-                assert(this != null)
-                assert(db.bankAccountCreate(genBankAccount(this!!)) != null)
-            }
-            // bar account
-            db.customerCreate(customerBar).apply {
-                assert(this != null)
-                assert(db.bankAccountCreate(genBankAccount(this!!)) != null)
-            }
-            // Two users registered, requesting all of them.
-            client.get("/accounts") {
-                basicAuth("admin", "pass")
-                expectSuccess = true
-            }.apply {
-                println(this.bodyAsText())
-                assert(this.status == HttpStatusCode.OK)
-                val obj = Json.decodeFromString<ListBankAccountsResponse>(this.bodyAsText())
-                assert(obj.accounts.size == 2)
-                // Order unreliable, just checking they're different.
-                assert(obj.accounts[0].username != obj.accounts[1].username)
-            }
-            // Filtering on bar.
-            client.get("/accounts?filter_name=ar") {
-                basicAuth("admin", "pass")
-                expectSuccess = true
-            }.apply {
-                assert(this.status == HttpStatusCode.OK)
-                val obj = Json.decodeFromString<ListBankAccountsResponse>(this.bodyAsText())
-                assert(obj.accounts.size == 1) {
-                    println("Wrong size of filtered query: ${obj.accounts.size}")
-                }
-                assert(obj.accounts[0].username == "bar")
-            }
-        }
-    }
-
 }

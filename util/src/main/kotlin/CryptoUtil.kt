@@ -310,25 +310,21 @@ object CryptoUtil {
 
     fun checkpw(pw: String, storedPwHash: String): Boolean {
         val components = storedPwHash.split('$')
-        if (components.size < 2) {
-            throw Exception("bad password hash")
-        }
-        val algo = components[0]
-        // Support legacy unsalted passwords
-        if (algo == "sha256") {
-            val hash = components[1]
-            val pwh = bytesToBase64(CryptoUtil.hashStringSHA256(pw))
-            return pwh == hash
-        }
-        if (algo == "sha256-salted") {
-            if (components.size != 3) {
-                throw Exception("bad password hash")
+        when (val algo = components[0]) {
+            "sha256" -> {  // Support legacy unsalted passwords
+                if (components.size != 2) throw Exception("bad password hash")
+                val hash = components[1]
+                val pwh = bytesToBase64(CryptoUtil.hashStringSHA256(pw))
+                return pwh == hash
             }
-            val salt = components[1]
-            val hash = components[2]
-            val pwh = bytesToBase64(CryptoUtil.hashStringSHA256("$salt|$pw"))
-            return pwh == hash
+            "sha256-salted" -> {
+                if (components.size != 3) throw Exception("bad password hash")
+                val salt = components[1]
+                val hash = components[2]
+                val pwh = bytesToBase64(CryptoUtil.hashStringSHA256("$salt|$pw"))
+                return pwh == hash
+            }
+            else -> throw Exception("unsupported hash algo: '$algo'")
         }
-        throw Exception("unsupported hash algo: '$algo'")
     }
 }

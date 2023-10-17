@@ -43,7 +43,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
     }
 
     post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
-        val username = call.authCheck(db, TokenScope.readwrite, true)
+        val (login, _) = call.authCheck(db, TokenScope.readwrite, withAdmin = false)
         val req = call.receive<TransferRequest>()
         if (req.amount.currency != ctx.currency)
             throw badRequest(
@@ -52,16 +52,16 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
             )
         val dbRes = db.talerTransferCreate(
             req = req,
-            username = username,
+            username = login,
             timestamp = Instant.now()
         )
         when (dbRes.txResult) {
             TalerTransferResult.NO_DEBITOR -> throw notFound(
-                "Customer $username not found",
+                "Customer $login not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
             TalerTransferResult.NOT_EXCHANGE -> throw conflict(
-                "$username is not an exchange account.",
+                "$login is not an exchange account.",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
             TalerTransferResult.NO_CREDITOR -> throw notFound(
@@ -98,13 +98,13 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
         reduce: (List<T>, String) -> Any, 
         dbLambda: suspend Database.(HistoryParams, Long) -> List<T>
     ) {
-        val username = call.authCheck(db, TokenScope.readonly, true)
+        val (login, _) = call.authCheck(db, TokenScope.readonly)
         val params = getHistoryParams(call.request.queryParameters)
         val bankAccount = call.bankAccount(db)
         
         if (!bankAccount.isTalerExchange)
             throw conflict(
-                "$username is not an exchange account.",
+                "$login is not an exchange account.",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
 
@@ -126,7 +126,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
     }
 
     post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {
-        val username = call.authCheck(db, TokenScope.readwrite, false)
+        val (login, _) = call.authCheck(db, TokenScope.readwrite, withAdmin = false)
         val req = call.receive<AddIncomingRequest>()
         if (req.amount.currency != ctx.currency)
             throw badRequest(
@@ -136,16 +136,16 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
         val timestamp = Instant.now()
         val dbRes = db.talerAddIncomingCreate(
             req = req,
-            username = username,
+            username = login,
             timestamp = timestamp
         )
         when (dbRes.txResult) {
             TalerAddIncomingResult.NO_CREDITOR -> throw notFound(
-                "Customer $username not found",
+                "Customer $login not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
             TalerAddIncomingResult.NOT_EXCHANGE -> throw conflict(
-                "$username is not an exchange account.",
+                "$login is not an exchange account.",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
             TalerAddIncomingResult.NO_DEBITOR -> throw notFound(

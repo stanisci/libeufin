@@ -47,13 +47,25 @@ val bankAccountExchange = BankAccount(
     isTalerExchange = true
 )
 
-fun bankSetup(lambda: suspend ApplicationTestBuilder.(Database) -> Unit) {
-    setup { db, ctx -> 
+fun bankSetup(
+    conf: String = "test.conf",    
+    lambda: suspend ApplicationTestBuilder.(Database) -> Unit
+) {
+    setup(conf) { db, ctx -> 
         // Creating the exchange and merchant accounts first.
         assertNotNull(db.customerCreate(customerMerchant))
         assertNotNull(db.bankAccountCreate(bankAccountMerchant))
         assertNotNull(db.customerCreate(customerExchange))
         assertNotNull(db.bankAccountCreate(bankAccountExchange))
+        // Create admin account
+        assertNotNull(db.customerCreate(
+            Customer(
+                "admin",
+                CryptoUtil.hashpw("admin-password"),
+                "CFO"
+            )
+        ))
+        assert(maybeCreateAdminAccount(db, ctx))
         testApplication {
             application {
                 corebankWebApp(db, ctx)
@@ -90,6 +102,9 @@ fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {
     return this
 }
 fun HttpResponse.assertOk(): HttpResponse = assertStatus(HttpStatusCode.OK)
+fun HttpResponse.assertCreated(): HttpResponse = assertStatus(HttpStatusCode.Created)
+fun HttpResponse.assertNoContent(): HttpResponse = assertStatus(HttpStatusCode.NoContent)
+fun HttpResponse.assertUnauthorized(): HttpResponse = assertStatus(HttpStatusCode.Unauthorized)
 fun HttpResponse.assertBadRequest(): HttpResponse = assertStatus(HttpStatusCode.BadRequest)
 
 fun BankTransactionResult.assertSuccess() {

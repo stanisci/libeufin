@@ -24,7 +24,6 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.account
  * and wire transfers should belong here.
  */
 fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
-
     // TOKEN ENDPOINTS
     delete("/accounts/{USERNAME}/token") {
         val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
@@ -111,266 +110,6 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
             )
         )
         return@post
-    }
-    // ACCOUNT ENDPOINTS
-    get("/public-accounts") {
-        // no authentication here.
-        val publicAccounts = db.accountsGetPublic(ctx.currency)
-        if (publicAccounts.isEmpty()) {
-            call.respond(HttpStatusCode.NoContent)
-        } else {
-            call.respond(PublicAccountsResponse(publicAccounts))
-        }
-    }
-    get("/accounts") {
-        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized()
-        if (c.login != "admin") throw forbidden("Only admin allowed.")
-        // Get optional param.
-        val maybeFilter: String? = call.request.queryParameters["filter_name"]
-        logger.debug("Filtering on '${maybeFilter}'")
-        val queryParam = if (maybeFilter != null) {
-            "%${maybeFilter}%"
-        } else "%"
-        val accounts = db.accountsGetForAdmin(queryParam)
-        if (accounts.isEmpty()) {
-            call.respond(HttpStatusCode.NoContent)
-        } else {
-            call.respond(ListBankAccountsResponse(accounts))
-        }
-    }
-    post("/accounts") { // check if only admin is allowed to create new accounts
-        if (ctx.restrictRegistration) {
-            val customer: Customer? = call.authenticateBankRequest(db, TokenScope.readwrite)
-            if (customer == null || customer.login != "admin") throw LibeufinBankException(
-                httpStatus = HttpStatusCode.Unauthorized,
-                talerError = TalerError(
-                    code = TalerErrorCode.TALER_EC_GENERIC_UNAUTHORIZED.code,
-                    hint = "Either 'admin' not authenticated or an ordinary user tried this operation."
-                )
-            )
-        } // auth passed, proceed with activity.
-        val req = call.receive<RegisterAccountRequest>() // Prohibit reserved usernames:
-        if (req.username == "admin" || req.username == "bank") throw LibeufinBankException(
-            httpStatus = HttpStatusCode.Conflict,
-            talerError = TalerError(
-                code = TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT.code,
-                hint = "Username '${req.username}' is reserved."
-            )
-        ) // Checking idempotency.
-        val maybeCustomerExists =
-            db.customerGetFromLogin(req.username) // Can be null if previous call crashed before completion.
-        val maybeHasBankAccount = maybeCustomerExists.run {
-            if (this == null) return@run null
-            db.bankAccountGetFromOwnerId(this.expectRowId())
-        }
-        val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
-        if (maybeCustomerExists != null && maybeHasBankAccount != null) {
-            logger.debug("Registering username was found: ${maybeCustomerExists.login}") // Checking _all_ the details are the same.
-            val isIdentic =
-                maybeCustomerExists.name == req.name &&
-                        maybeCustomerExists.email == req.challenge_contact_data?.email &&
-                        maybeCustomerExists.phone == req.challenge_contact_data?.phone &&
-                        maybeCustomerExists.cashoutPayto == req.cashout_payto_uri &&
-                        CryptoUtil.checkpw(req.password, maybeCustomerExists.passwordHash) &&
-                        maybeHasBankAccount.isPublic == req.is_public &&
-                        maybeHasBankAccount.isTalerExchange == req.is_taler_exchange &&
-                        maybeHasBankAccount.internalPaytoUri.canonical == internalPayto.canonical
-            if (isIdentic) {
-                call.respond(HttpStatusCode.Created)
-                return@post
-            }
-            throw LibeufinBankException(
-                httpStatus = HttpStatusCode.Conflict, talerError = TalerError(
-                    code = GENERIC_UNDEFINED, // FIXME: provide appropriate EC.
-                    hint = "Idempotency check failed."
-                )
-            )
-        }
-
-        // From here: fresh user being added.
-        val newCustomer = Customer(
-            login = req.username,
-            name = req.name,
-            email = req.challenge_contact_data?.email,
-            phone = req.challenge_contact_data?.phone,
-            cashoutPayto = req.cashout_payto_uri, // Following could be gone, if included in cashout_payto_uri
-            cashoutCurrency = ctx.cashoutCurrency,
-            passwordHash = CryptoUtil.hashpw(req.password),
-        )
-        val newCustomerRowId = db.customerCreate(newCustomer)
-            ?: throw internalServerError("New customer INSERT failed despite the previous checks") // Crashing here won't break data consistency between customers and bank accounts, because of the idempotency.  Client will just have to retry.
-        val maxDebt = ctx.defaultCustomerDebtLimit
-        val newBankAccount = BankAccount(
-            hasDebt = false,
-            internalPaytoUri = internalPayto,
-            owningCustomerId = newCustomerRowId,
-            isPublic = req.is_public,
-            isTalerExchange = req.is_taler_exchange,
-            maxDebt = maxDebt
-        )
-        val newBankAccountId = db.bankAccountCreate(newBankAccount)
-            ?: throw internalServerError("Could not INSERT bank account despite all the checks.")
-
-        // The new account got created, now optionally award the registration
-        // bonus to it.
-        val bonusAmount = if (ctx.registrationBonusEnabled && !req.is_taler_exchange) ctx.registrationBonus else null
-        if (bonusAmount != null) {
-            val adminCustomer =
-                db.customerGetFromLogin("admin") ?: throw internalServerError("Admin customer not found")
-            val adminBankAccount = db.bankAccountGetFromOwnerId(adminCustomer.expectRowId())
-                ?: throw internalServerError("Admin bank account not found")
-            val adminPaysBonus = BankInternalTransaction(
-                creditorAccountId = newBankAccountId,
-                debtorAccountId = adminBankAccount.expectRowId(),
-                amount = bonusAmount,
-                subject = "Registration bonus.",
-                transactionDate = Instant.now()
-            )
-            when (db.bankTransactionCreate(adminPaysBonus)) {
-                BankTransactionResult.NO_CREDITOR -> throw internalServerError("Bonus impossible: creditor not found, despite its recent creation.")
-                BankTransactionResult.NO_DEBTOR -> throw internalServerError("Bonus impossible: admin not found.")
-                BankTransactionResult.BALANCE_INSUFFICIENT -> throw internalServerError("Bonus impossible: admin has insufficient balance.")
-                BankTransactionResult.SAME_ACCOUNT -> throw internalServerError("Bonus impossible: admin should not be creditor.")
-                BankTransactionResult.SUCCESS -> {/* continue the execution */
-                }
-            }
-        }
-        call.respond(HttpStatusCode.Created)
-        return@post
-    }
-    get("/accounts/{USERNAME}") {
-        val c = call.authenticateBankRequest(db, TokenScope.readonly) ?: throw unauthorized("Login failed")
-        val resourceName = call.expectUriComponent("USERNAME")
-        if (!resourceName.canI(c, withAdmin = true)) throw forbidden()
-        val customerData = db.customerGetFromLogin(resourceName) ?: throw notFound(
-                "Customer '$resourceName' not found in the database.",
-                talerEc = TalerErrorCode.TALER_EC_END
-        )
-        val bankAccountData = db.bankAccountGetFromOwnerId(customerData.expectRowId())
-            ?: throw internalServerError("Customer '$resourceName' had no bank account despite they are customer.'")
-        val balance = Balance(
-            amount = bankAccountData.balance ?: throw internalServerError("Account '${customerData.login}' lacks balance!"),
-            credit_debit_indicator = if (bankAccountData.hasDebt) {
-                CorebankCreditDebitInfo.debit
-            } else {
-                CorebankCreditDebitInfo.credit
-            }
-        )
-        call.respond(
-            AccountData(
-                name = customerData.name,
-                balance = balance,
-                debit_threshold = bankAccountData.maxDebt,
-                payto_uri = bankAccountData.internalPaytoUri,
-                contact_data = ChallengeContactData(
-                    email = customerData.email, phone = customerData.phone
-                ),
-                cashout_payto_uri = customerData.cashoutPayto,
-            )
-        )
-        return@get
-    }
-    delete("/accounts/{USERNAME}") {
-        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
-        val resourceName = call.expectUriComponent("USERNAME")
-        // Checking rights.
-        if (c.login != "admin" && ctx.restrictAccountDeletion)
-            throw forbidden("Only admin allowed.")
-        if (!resourceName.canI(c, withAdmin = true))
-            throw forbidden("Insufficient rights on this account.")
-        // Not deleting reserved names.
-        if (resourceName == "bank" || resourceName == "admin")
-            throw forbidden("Cannot delete reserved accounts.")
-        val res = db.customerDeleteIfBalanceIsZero(resourceName)
-        when (res) {
-            CustomerDeletionResult.CUSTOMER_NOT_FOUND ->
-                throw notFound(
-                    "Customer '$resourceName' not found",
-                    talerEc = TalerErrorCode.TALER_EC_NONE // FIXME: need EC.
-                    )
-            CustomerDeletionResult.BALANCE_NOT_ZERO ->
-                throw LibeufinBankException(
-                    httpStatus = HttpStatusCode.PreconditionFailed,
-                    talerError = TalerError(
-                        hint = "Balance is not zero.",
-                        code = TalerErrorCode.TALER_EC_NONE.code // FIXME: need EC.
-                    )
-                )
-            CustomerDeletionResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
-        }
-        return@delete
-    }
-    patch("/accounts/{USERNAME}/auth") {
-        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
-        val accountName = call.getResourceName("USERNAME")
-        if (!accountName.canI(c, withAdmin = true)) throw forbidden()
-        val req = call.receive<AccountPasswordChange>()
-        val hashedPassword = CryptoUtil.hashpw(req.new_password)
-        if (!db.customerChangePassword(
-                accountName,
-                hashedPassword
-        )) throw notFound(
-            "Account '$accountName' not found (despite it being authenticated by this call)",
-            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need at least GENERIC_NOT_FOUND.
-        )
-        call.respond(HttpStatusCode.NoContent)
-        return@patch
-    }
-    patch("/accounts/{USERNAME}") {
-        val c = call.authenticateBankRequest(db, TokenScope.readwrite) ?: throw unauthorized()
-        val accountName = call.getResourceName("USERNAME")
-        // preventing user non-admin X trying on resource Y.
-        if (!accountName.canI(c, withAdmin = true)) throw forbidden()
-        // admin is not allowed itself to change its own details.
-        if (accountName == "admin") throw forbidden("admin account not patchable")
-        // authentication OK, go on.
-        val req = call.receive<AccountReconfiguration>()
-        /**
-         * This object holds the details of the customer that's affected
-         * by this operation, as it MAY differ from the one being authenticated.
-         * This typically happens when admin did the request.
-         */
-        val accountCustomer = db.customerGetFromLogin(accountName) ?: throw notFound(
-            "Account $accountName not found",
-            talerEc = TalerErrorCode.TALER_EC_END // FIXME, define EC.
-        )
-        // Check if a non-admin user tried to change their legal name
-        if ((c.login != "admin") && (req.name != null) && (req.name != accountCustomer.name))
-            throw forbidden("non-admin user cannot change their legal name")
-        // Preventing identical data to be overridden.
-        val bankAccount = db.bankAccountGetFromOwnerId(accountCustomer.expectRowId())
-            ?: throw internalServerError("Customer '${accountCustomer.login}' lacks bank account.")
-        if (
-            (req.is_exchange == bankAccount.isTalerExchange) &&
-            (req.cashout_address == accountCustomer.cashoutPayto) &&
-            (req.name == c.name) &&
-            (req.challenge_contact_data?.phone == accountCustomer.phone) &&
-            (req.challenge_contact_data?.email == accountCustomer.email)
-            ) {
-            call.respond(HttpStatusCode.NoContent)
-            return@patch
-        }
-        val dbRes = db.accountReconfig(
-            login = accountCustomer.login,
-            name = req.name,
-            cashoutPayto = req.cashout_address,
-            emailAddress = req.challenge_contact_data?.email,
-            isTalerExchange = req.is_exchange,
-            phoneNumber = req.challenge_contact_data?.phone
-            )
-        when (dbRes) {
-            AccountReconfigDBResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
-            AccountReconfigDBResult.CUSTOMER_NOT_FOUND -> {
-                // Rare case.  Only possible if a deletion happened before the flow reaches here.
-                logger.warn("Authenticated customer wasn't found any more in the database")
-                throw notFound("Customer not found", TalerErrorCode.TALER_EC_END) // FIXME: needs EC
-            }
-            AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND -> {
-                // Bank's fault: no customer should lack a bank account.
-                throw internalServerError("Customer '${accountCustomer.login}' lacks bank account")
-            }
-        }
-        return@patch
     }
     // WITHDRAWAL ENDPOINTS
     post("/accounts/{USERNAME}/withdrawals") {
@@ -481,9 +220,242 @@ fun Routing.accountsMgmtApi(db: Database, ctx: BankApplicationContext) {
     }
 }
 
+fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
+    post("/accounts") { 
+        // check if only admin is allowed to create new accounts
+        if (ctx.restrictRegistration) {
+            call.authAdmin(db, TokenScope.readwrite)
+        } // auth passed, proceed with activity.
+        val req = call.receive<RegisterAccountRequest>()
+        // Prohibit reserved usernames:
+        if (reservedAccounts.contains(req.username)) throw conflict( 
+            "Username '${req.username}' is reserved.",
+            TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT
+        )  // TODO conflict or forbidden ?
+        // Checking idempotency.
+        val maybeCustomerExists =
+            db.customerGetFromLogin(req.username) // Can be null if previous call crashed before completion.
+        val maybeHasBankAccount = maybeCustomerExists.run {
+            if (this == null) return@run null
+            db.bankAccountGetFromOwnerId(this.expectRowId())
+        }
+        val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
+        if (maybeCustomerExists != null && maybeHasBankAccount != null) {
+            logger.debug("Registering username was found: ${maybeCustomerExists.login}") // Checking _all_ the details are the same.
+            val isIdentic =
+                maybeCustomerExists.name == req.name &&
+                        maybeCustomerExists.email == req.challenge_contact_data?.email &&
+                        maybeCustomerExists.phone == req.challenge_contact_data?.phone &&
+                        maybeCustomerExists.cashoutPayto == req.cashout_payto_uri &&
+                        CryptoUtil.checkpw(req.password, maybeCustomerExists.passwordHash) &&
+                        maybeHasBankAccount.isPublic == req.is_public &&
+                        maybeHasBankAccount.isTalerExchange == req.is_taler_exchange &&
+                        maybeHasBankAccount.internalPaytoUri.canonical == internalPayto.canonical
+            if (isIdentic) {
+                call.respond(HttpStatusCode.Created)
+                return@post
+            }
+            throw conflict(
+                "Idempotency check failed.",
+                TalerErrorCode.TALER_EC_END // FIXME: provide appropriate EC.
+            )
+        }
+
+        // From here: fresh user being added.
+        val newCustomer = Customer(
+            login = req.username,
+            name = req.name,
+            email = req.challenge_contact_data?.email,
+            phone = req.challenge_contact_data?.phone,
+            cashoutPayto = req.cashout_payto_uri, // Following could be gone, if included in cashout_payto_uri
+            cashoutCurrency = ctx.cashoutCurrency,
+            passwordHash = CryptoUtil.hashpw(req.password),
+        )
+        val newCustomerRowId = db.customerCreate(newCustomer)
+            ?: throw internalServerError("New customer INSERT failed despite the previous checks") // Crashing here won't break data consistency between customers and bank accounts, because of the idempotency.  Client will just have to retry.
+        val maxDebt = ctx.defaultCustomerDebtLimit
+        val newBankAccount = BankAccount(
+            hasDebt = false,
+            internalPaytoUri = internalPayto,
+            owningCustomerId = newCustomerRowId,
+            isPublic = req.is_public,
+            isTalerExchange = req.is_taler_exchange,
+            maxDebt = maxDebt
+        )
+        val newBankAccountId = db.bankAccountCreate(newBankAccount)
+            ?: throw internalServerError("Could not INSERT bank account despite all the checks.")
+
+        // The new account got created, now optionally award the registration
+        // bonus to it.
+        val bonusAmount = if (ctx.registrationBonusEnabled && !req.is_taler_exchange) ctx.registrationBonus else null
+        if (bonusAmount != null) {
+            val adminCustomer =
+                db.customerGetFromLogin("admin") ?: throw internalServerError("Admin customer not found")
+            val adminBankAccount = db.bankAccountGetFromOwnerId(adminCustomer.expectRowId())
+                ?: throw internalServerError("Admin bank account not found")
+            val adminPaysBonus = BankInternalTransaction(
+                creditorAccountId = newBankAccountId,
+                debtorAccountId = adminBankAccount.expectRowId(),
+                amount = bonusAmount,
+                subject = "Registration bonus.",
+                transactionDate = Instant.now()
+            )
+            when (db.bankTransactionCreate(adminPaysBonus)) {
+                BankTransactionResult.NO_CREDITOR -> throw internalServerError("Bonus impossible: creditor not found, despite its recent creation.")
+                BankTransactionResult.NO_DEBTOR -> throw internalServerError("Bonus impossible: admin not found.")
+                BankTransactionResult.BALANCE_INSUFFICIENT -> throw internalServerError("Bonus impossible: admin has insufficient balance.")
+                BankTransactionResult.SAME_ACCOUNT -> throw internalServerError("Bonus impossible: admin should not be creditor.")
+                BankTransactionResult.SUCCESS -> { /* continue the execution */ }
+            }
+        }
+        call.respond(HttpStatusCode.Created)
+    }
+    delete("/accounts/{USERNAME}") {
+        val (login, _) = call.authCheck(db, TokenScope.readwrite, requireAdmin = ctx.restrictAccountDeletion)
+        // Not deleting reserved names.
+        if (reservedAccounts.contains(login)) throw conflict( 
+            "Cannot delete reserved accounts",
+            TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT
+        ) // TODO conflict or forbidden ?
+
+        when (db.customerDeleteIfBalanceIsZero(login)) {
+            CustomerDeletionResult.CUSTOMER_NOT_FOUND -> throw notFound(
+                "Customer '$login' not found",
+                talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
+            CustomerDeletionResult.BALANCE_NOT_ZERO -> throw LibeufinBankException(
+                httpStatus = HttpStatusCode.PreconditionFailed, // PreconditionFailed or conflict ?
+                talerError = TalerError(
+                    hint = "Balance is not zero.",
+                    code = TalerErrorCode.TALER_EC_NONE.code // FIXME: need EC.
+                )
+            )
+            CustomerDeletionResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+        }
+    }
+    patch("/accounts/{USERNAME}") {
+        val (login, isAdmin) = call.authCheck(db, TokenScope.readwrite)
+        // admin is not allowed itself to change its own details.
+        if (login == "admin") throw forbidden("admin account not patchable")
+        // authentication OK, go on.
+        val req = call.receive<AccountReconfiguration>()
+        /**
+         * This object holds the details of the customer that's affected
+         * by this operation, as it MAY differ from the one being authenticated.
+         * This typically happens when admin did the request.
+         */
+        val accountCustomer = db.customerGetFromLogin(login) ?: throw notFound(
+            "Account $login not found",
+            talerEc = TalerErrorCode.TALER_EC_END // FIXME, define EC.
+        )
+        // Check if a non-admin user tried to change their legal name
+        if (!isAdmin && (req.name != null) && (req.name != accountCustomer.name))
+            throw forbidden("non-admin user cannot change their legal name")
+        // Preventing identical data to be overridden.
+        val bankAccount = db.bankAccountGetFromOwnerId(accountCustomer.expectRowId())
+            ?: throw internalServerError("Customer '${accountCustomer.login}' lacks bank account.")
+        if (
+            (req.is_exchange == bankAccount.isTalerExchange) &&
+            (req.cashout_address == accountCustomer.cashoutPayto) &&
+            (req.name == accountCustomer.name) &&
+            (req.challenge_contact_data?.phone == accountCustomer.phone) &&
+            (req.challenge_contact_data?.email == accountCustomer.email)
+            ) {
+            call.respond(HttpStatusCode.NoContent)
+            return@patch
+        }
+        val dbRes = db.accountReconfig(
+            login = accountCustomer.login,
+            name = req.name,
+            cashoutPayto = req.cashout_address,
+            emailAddress = req.challenge_contact_data?.email,
+            isTalerExchange = req.is_exchange,
+            phoneNumber = req.challenge_contact_data?.phone
+            )
+        when (dbRes) {
+            AccountReconfigDBResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+            AccountReconfigDBResult.CUSTOMER_NOT_FOUND -> {
+                // Rare case.  Only possible if a deletion happened before the flow reaches here.
+                logger.warn("Authenticated customer wasn't found any more in the database")
+                throw notFound("Customer not found", TalerErrorCode.TALER_EC_END) // FIXME: needs EC
+            }
+            AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND -> {
+                // Bank's fault: no customer should lack a bank account.
+                throw internalServerError("Customer '${accountCustomer.login}' lacks bank account")
+            }
+        }
+    }
+    patch("/accounts/{USERNAME}/auth") {
+        val (login, _) = call.authCheck(db, TokenScope.readwrite)
+        val req = call.receive<AccountPasswordChange>()
+        val hashedPassword = CryptoUtil.hashpw(req.new_password)
+        if (!db.customerChangePassword(
+            login,
+            hashedPassword
+        )) throw notFound(
+            "Account '$login' not found (despite it being authenticated by this call)",
+            talerEc = TalerErrorCode.TALER_EC_END // FIXME: need at least GENERIC_NOT_FOUND.
+        )
+        call.respond(HttpStatusCode.NoContent)
+    }
+    get("/public-accounts") {
+        // no authentication here.
+        val publicAccounts = db.accountsGetPublic(ctx.currency)
+        if (publicAccounts.isEmpty()) {
+            call.respond(HttpStatusCode.NoContent)
+        } else {
+            call.respond(PublicAccountsResponse(publicAccounts))
+        }
+    }
+    get("/accounts") {
+        call.authAdmin(db, TokenScope.readonly)
+        // Get optional param.
+        val maybeFilter: String? = call.request.queryParameters["filter_name"]
+        logger.debug("Filtering on '${maybeFilter}'")
+        val queryParam = if (maybeFilter != null) {
+            "%${maybeFilter}%"
+        } else "%"
+        val accounts = db.accountsGetForAdmin(queryParam)
+        if (accounts.isEmpty()) {
+            call.respond(HttpStatusCode.NoContent)
+        } else {
+            call.respond(ListBankAccountsResponse(accounts))
+        }
+    }
+    get("/accounts/{USERNAME}") {
+        val (login, _) = call.authCheck(db, TokenScope.readonly)
+        val customerData = db.customerGetFromLogin(login) ?: throw notFound(
+                "Customer '$login' not found in the database.",
+                talerEc = TalerErrorCode.TALER_EC_END
+        )
+        val bankAccountData = db.bankAccountGetFromOwnerId(customerData.expectRowId())
+            ?: throw internalServerError("Customer '$login' had no bank account despite they are customer.'")
+        val balance = Balance(
+            amount = bankAccountData.balance ?: throw internalServerError("Account '${customerData.login}' lacks balance!"),
+            credit_debit_indicator = if (bankAccountData.hasDebt) {
+                CorebankCreditDebitInfo.debit
+            } else {
+                CorebankCreditDebitInfo.credit
+            }
+        )
+        call.respond(
+            AccountData(
+                name = customerData.name,
+                balance = balance,
+                debit_threshold = bankAccountData.maxDebt,
+                payto_uri = bankAccountData.internalPaytoUri,
+                contact_data = ChallengeContactData(
+                    email = customerData.email, phone = customerData.phone
+                ),
+                cashout_payto_uri = customerData.cashoutPayto,
+            )
+        )
+    }
+}
+
 fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
     get("/accounts/{USERNAME}/transactions") {
-        call.authCheck(db, TokenScope.readonly, true)
+        call.authCheck(db, TokenScope.readonly)
         val params = getHistoryParams(call.request.queryParameters)
         val bankAccount = call.bankAccount(db)
 
@@ -491,7 +463,7 @@ fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
         call.respond(BankAccountTransactionsResponse(history))
     }
     get("/accounts/{USERNAME}/transactions/{T_ID}") {
-        call.authCheck(db, TokenScope.readonly, true)
+        call.authCheck(db, TokenScope.readonly)
         val tId = call.expectUriComponent("T_ID")
         val txRowId = try {
             tId.toLong()
@@ -521,7 +493,7 @@ fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
         )
     }
     post("/accounts/{USERNAME}/transactions") {
-        val username = call.authCheck(db, TokenScope.readonly, false)
+        val (login, _ ) = call.authCheck(db, TokenScope.readwrite, withAdmin = false)
         val tx = call.receive<BankAccountTransactionCreate>()
 
         val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
@@ -530,10 +502,9 @@ fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
             "Wrong currency: ${amount.currency}",
             talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
         )
-
         val result = db.bankTransaction(
             creditAccountPayto = tx.payto_uri,
-            debitAccountUsername = username,
+            debitAccountUsername = login,
             subject = subject,
             amount = amount,
             timestamp = Instant.now(),
@@ -548,7 +519,7 @@ fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
                 TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
             )
             BankTransactionResult.NO_DEBTOR -> throw notFound(
-                "Customer $username not found",
+                "Customer $login not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
             BankTransactionResult.NO_CREDITOR -> throw notFound(
