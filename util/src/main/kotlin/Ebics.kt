@@ -99,7 +99,7 @@ data class EbicsClientSubscriberDetails(
 /**
  * @param size in bits
  */
-private fun getNonce(size: Int): ByteArray {
+fun getNonce(size: Int): ByteArray {
     val sr = SecureRandom()
     val ret = ByteArray(size / 8)
     sr.nextBytes(ret)
@@ -120,7 +120,7 @@ private fun getXmlDate(d: ZonedDateTime): XMLGregorianCalendar {
         )
 }
 
-private fun makeOrderParams(orderParams: EbicsOrderParams): EbicsRequest.OrderParams {
+fun makeOrderParams(orderParams: EbicsOrderParams): EbicsRequest.OrderParams {
     return when (orderParams) {
         is EbicsStandardOrderParams -> {
             EbicsRequest.StandardOrderParams().apply {
@@ -637,7 +637,7 @@ fun parseEbicsHpbOrder(orderDataRaw: ByteArray): HpbResponseData {
     )
 }
 
-private fun ebics3toInternalRepr(response: String): EbicsResponseContent {
+fun ebics3toInternalRepr(response: String): EbicsResponseContent {
     // logger.debug("Converting bank resp to internal repr.: $response")
     val resp: JAXBElement<Ebics3Response> = try {
         XMLUtil.convertStringToJaxb(response)
@@ -674,7 +674,7 @@ private fun ebics3toInternalRepr(response: String): EbicsResponseContent {
     )
 }
 
-private fun ebics25toInternalRepr(response: String): EbicsResponseContent {
+fun ebics25toInternalRepr(response: String): EbicsResponseContent {
     val resp: JAXBElement<EbicsResponse> = try {
         XMLUtil.convertStringToJaxb(response)
     } catch (e: Exception) {

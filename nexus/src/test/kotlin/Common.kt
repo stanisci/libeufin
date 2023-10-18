@@ -1,0 +1,50 @@
+import io.ktor.client.*
+import io.ktor.client.engine.mock.*
+import io.ktor.client.request.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.modules.SerializersModule
+import tech.libeufin.nexus.*
+import java.security.interfaces.RSAPrivateCrtKey
+
+val j = Json {
+    this.serializersModule = SerializersModule {
+        contextual(RSAPrivateCrtKey::class) { RSAPrivateCrtKeySerializer }
+    }
+}
+
+val config: EbicsSetupConfig = run {
+    val handle = TalerConfig(NEXUS_CONFIG_SOURCE)
+    handle.load()
+    EbicsSetupConfig(handle)
+}
+
+val clientKeys = generateNewKeys()
+
+// Gets an HTTP client whose requests are going to be served by 'handler'.
+fun getMockedClient(
+    handler: MockRequestHandleScope.(HttpRequestData) -> HttpResponseData
+): HttpClient {
+    return HttpClient(MockEngine) {
+        followRedirects = false
+        engine {
+            addHandler {
+                    request -> handler(request)
+            }
+        }
+    }
+}
+
+fun getPofiConfig(userId: String, partnerId: String) = """
+    [nexus-ebics]
+    CURRENCY = KUDOS
+    HOST_BASE_URL = https://isotest.postfinance.ch/ebicsweb/ebicsweb
+    HOST_ID = PFEBICS
+    USER_ID = $userId
+    PARTNER_ID = $partnerId
+    SYSTEM_ID = not-used
+    ACCOUNT_NUMBER = not-used-yet
+    BANK_PUBLIC_KEYS_FILE = /tmp/enc-auth-keys.json
+    CLIENT_PRIVATE_KEYS_FILE = /tmp/my-private-keys.json
+    ACCOUNT_META_DATA_FILE = /tmp/ebics-meta.json
+    BANK_DIALECT = postfinance
+""".trimIndent()
