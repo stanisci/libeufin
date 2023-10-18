@@ -3,8 +3,8 @@ plugins {
     id 'java'
     id 'application'
     id 'org.jetbrains.kotlin.jvm'
-    id "com.github.johnrengelman.shadow" version "5.2.0"
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.7.22'
+    id "com.github.johnrengelman.shadow" version "8.1.1"
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.10'
 }
 
 sourceSets {
@@ -57,7 +57,7 @@ dependencies {
     implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.21'
 
     // Command line parsing
-    implementation('com.github.ajalt:clikt:2.8.0')
+    implementation "com.github.ajalt.clikt:clikt:4.2.1"
 
     // Database connection driver
     implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.36.0.1'
