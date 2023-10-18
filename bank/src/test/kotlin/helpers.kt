@@ -10,6 +10,7 @@ import tech.libeufin.bank.*
 import java.io.ByteArrayOutputStream
 import java.util.zip.DeflaterOutputStream
 import tech.libeufin.util.CryptoUtil
+import tech.libeufin.util.*
 
 /* ----- Setup ----- */
 
@@ -81,8 +82,8 @@ fun setup(
 ){
     val config = talerConfig("conf/$conf")
     val dbCfg = config.loadDbConfig()
-    resetDatabaseTables(dbCfg)
-    initializeDatabaseTables(dbCfg)
+    resetDatabaseTables(dbCfg, "libeufin-bank")
+    initializeDatabaseTables(dbCfg, "libeufin-bank")
     val ctx = config.loadBankApplicationContext()
     Database(dbCfg.dbConnStr, ctx.currency).use {
         runBlocking {

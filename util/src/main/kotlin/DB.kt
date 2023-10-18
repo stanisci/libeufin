@@ -28,10 +28,14 @@ import org.jetbrains.exposed.sql.Transaction
 import org.jetbrains.exposed.sql.name
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.jdbc.PgConnection
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.io.File
 import java.net.URI
+import java.sql.PreparedStatement
+import java.sql.ResultSet
 
 fun getCurrentUser(): String = System.getProperty("user.name")
 
@@ -322,4 +326,99 @@ fun getJdbcConnectionFromPg(pgConn: String): String {
         return "jdbc:postgresql://" + pgConn.removePrefix("postgres://")
     }
     return "jdbc:$pgConn"
+}
+
+
+data class DatabaseConfig(
+    val dbConnStr: String,
+    val sqlDir: String
+)
+
+fun pgDataSource(dbConfig: String): PGSimpleDataSource {
+    val jdbcConnStr = getJdbcConnectionFromPg(dbConfig)
+    logger.info("connecting to database via JDBC string '$jdbcConnStr'")
+    val pgSource = PGSimpleDataSource()
+    pgSource.setUrl(jdbcConnStr)
+    pgSource.prepareThreshold = 1
+    return pgSource
+}
+
+fun PGSimpleDataSource.pgConnection(): PgConnection {
+    val conn = connection.unwrap(PgConnection::class.java)
+    conn.execSQLUpdate("SET search_path TO libeufin_bank;")
+    return conn
+}
+
+fun <R> PgConnection.transaction(lambda: (PgConnection) -> R): R {
+    try {
+        setAutoCommit(false);
+        val result = lambda(this)
+        commit();
+        setAutoCommit(true);
+        return result
+    } catch(e: Exception){
+        rollback();
+        setAutoCommit(true);
+        throw e;
+    }
+}
+
+fun <T> PreparedStatement.oneOrNull(lambda: (ResultSet) -> T): T? {
+    executeQuery().use {
+        if (!it.next()) return null
+        return lambda(it)
+    }
+}
+
+// sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
+fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
+    logger.info("doing DB initialization, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
+    pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
+        conn.transaction {
+            val sqlVersioning = File("${cfg.sqlDir}/versioning.sql").readText()
+            conn.execSQLUpdate(sqlVersioning)
+
+            val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
+
+            for (n in 1..9999) {
+                val numStr = n.toString().padStart(4, '0')
+                val patchName = "$sqlFilePrefix-$numStr"
+
+                checkStmt.setString(1, patchName)
+                val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Error("unable to query patches");
+                if (patchCount >= 1) {
+                    logger.info("patch $patchName already applied")
+                    continue
+                }
+
+                val path = File("${cfg.sqlDir}/$sqlFilePrefix-$numStr.sql")
+                if (!path.exists()) {
+                    logger.info("path $path doesn't exist anymore, stopping")
+                    break
+                }
+                logger.info("applying patch $path")
+                val sqlPatchText = path.readText()
+                conn.execSQLUpdate(sqlPatchText)
+            }
+            val sqlProcedures = File("${cfg.sqlDir}/procedures.sql").readText()
+            conn.execSQLUpdate(sqlProcedures)
+        }
+    }
+}
+
+// sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
+fun resetDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
+    logger.info("reset DB, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
+    pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
+        val count = conn.prepareStatement("SELECT count(*) FROM information_schema.schemata WHERE schema_name='_v'").oneOrNull {
+            it.getInt(1)
+        } ?: 0
+        if (count == 0) {
+            logger.info("versioning schema not present, not running drop sql")
+            return
+        }
+
+        val sqlDrop = File("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
+        conn.execSQLUpdate(sqlDrop) // TODO can fail ?
+    }
 }

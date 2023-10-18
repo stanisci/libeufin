@@ -58,6 +58,8 @@ import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.getVersion
+import tech.libeufin.util.initializeDatabaseTables
+import tech.libeufin.util.resetDatabaseTables
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -345,9 +347,9 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
     override fun run() {
         val cfg = talerConfig(configFile).loadDbConfig()
         if (requestReset) {
-            resetDatabaseTables(cfg)
+            resetDatabaseTables(cfg, sqlFilePrefix = "libeufin-bank")
         }
-        initializeDatabaseTables(cfg)
+        initializeDatabaseTables(cfg, sqlFilePrefix = "libeufin-bank")
     }
 }
 

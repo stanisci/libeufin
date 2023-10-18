@@ -24,14 +24,10 @@ import TalerConfigError
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import kotlinx.serialization.json.Json
+import tech.libeufin.util.DatabaseConfig
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Config")
 private val BANK_CONFIG_SOURCE = ConfigSource("libeufin-bank", "libeufin-bank")
-
-data class DatabaseConfig(
-    val dbConnStr: String,
-    val sqlDir: String
-)
 
 data class ServerConfig(
     val method: String,
