@@ -17,7 +17,6 @@
  * <http://www.gnu.org/licenses/>
  */
 
-
 package tech.libeufin.bank
 
 import org.postgresql.jdbc.PgConnection
@@ -703,15 +702,11 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         if (it.getBoolean("out_creditor_is_exchange")) {
             val rowId = it.getLong("out_credit_row_id")
             if (metadata is IncomingTxMetadata) {
-                val stmt = conn.prepareStatement("""
-                    INSERT INTO taler_exchange_incoming 
-                        (reserve_pub, bank_transaction) 
-                    VALUES (?, ?)
-                """)
+                val stmt = conn.prepareStatement("CALL register_incoming(?, ?, ?)")
                 stmt.setBytes(1, metadata.reservePub.raw)
                 stmt.setLong(2, rowId)
+                stmt.setLong(3, creditorAccountId)
                 stmt.executeUpdate()
-                conn.execSQLUpdate("NOTIFY incoming_tx, '$creditorAccountId $rowId'")
             } else {
                 // TODO bounce
                 logger.warn("exchange account $creditorAccountId received a transaction $rowId with malformed metadata, will bounce in future version")
@@ -720,16 +715,12 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         if (it.getBoolean("out_debtor_is_exchange")) {
             val rowId = it.getLong("out_debit_row_id")
             if (metadata is OutgoingTxMetadata) {
-                val stmt = conn.prepareStatement("""
-                    INSERT INTO taler_exchange_outgoing 
-                        (wtid, exchange_base_url, bank_transaction) 
-                    VALUES (?, ?, ?)
-                """)
+                val stmt = conn.prepareStatement("CALL register_outgoing(NULL, ?, ?, ?, ?)")
                 stmt.setBytes(1, metadata.wtid.raw)
                 stmt.setString(2, metadata.exchangeBaseUrl.url)
                 stmt.setLong(3, rowId)
+                stmt.setLong(4, debtorAccountId)
                 stmt.executeUpdate()
-                conn.execSQLUpdate("NOTIFY outgoing_tx, '$debtorAccountId $rowId'")
             } else {
                 logger.warn("exchange account $debtorAccountId sent a transaction $rowId with malformed metadata")
             }
@@ -942,7 +933,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
                         withTimeoutOrNull(params.poll_ms) {
                             flow.first { it > params.start } // Always forward so >
                         }
-                    }
+                    }    
                     // Initial loading
                     history = load(nbTx)
                     // Long polling if we found no transactions

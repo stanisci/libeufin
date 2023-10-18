@@ -5,8 +5,7 @@ CREATE OR REPLACE PROCEDURE amount_normalize(
     IN amount taler_amount
   ,INOUT normalized taler_amount
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 BEGIN
   normalized.val = amount.val + amount.frac / 100000000;
   normalized.frac = amount.frac % 100000000;
@@ -19,13 +18,11 @@ CREATE OR REPLACE PROCEDURE amount_add(
   ,IN b taler_amount
   ,INOUT sum taler_amount
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 BEGIN
   sum = (a.val + b.val, a.frac + b.frac);
   CALL amount_normalize(sum ,sum);
-  IF (sum.val > (1<<52))
-  THEN
+  IF sum.val > (1<<52) THEN
     RAISE EXCEPTION 'addition overflow';
   END IF;
 END $$;
@@ -38,23 +35,18 @@ CREATE OR REPLACE FUNCTION amount_left_minus_right(
  ,OUT diff taler_amount
  ,OUT ok BOOLEAN
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 BEGIN
-IF (l.val > r.val)
-THEN
+IF l.val > r.val THEN
   ok = TRUE;
-  IF (l.frac >= r.frac)
-  THEN
+  IF l.frac >= r.frac THEN
     diff.val = l.val - r.val;
     diff.frac = l.frac - r.frac;
   ELSE
     diff.val = l.val - r.val - 1;
     diff.frac = l.frac + 100000000 - r.frac;
   END IF;
-ELSE
-  IF (l.val = r.val) AND (l.frac >= r.frac)
-  THEN
+ELSE IF l.val = r.val AND l.frac >= r.frac THEN
     diff.val = 0;
     diff.frac = l.frac - r.frac;
     ok = TRUE;
@@ -71,15 +63,12 @@ CREATE OR REPLACE PROCEDURE bank_set_config(
   IN in_key TEXT,
   IN in_value TEXT
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 BEGIN
 UPDATE configuration SET config_value=in_value WHERE config_key=in_key;
-IF NOT FOUND
-THEN
+IF NOT FOUND THEN
   INSERT INTO configuration (config_key, config_value) VALUES (in_key, in_value);
 END IF;
-
 END $$;
 COMMENT ON PROCEDURE bank_set_config(TEXT, TEXT)
   IS 'Update or insert configuration values';
@@ -94,8 +83,7 @@ CREATE OR REPLACE FUNCTION account_reconfig(
   OUT out_nx_customer BOOLEAN,
   OUT out_nx_bank_account BOOLEAN
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 DECLARE
 my_customer_id INT8;
 BEGIN
@@ -104,22 +92,19 @@ SELECT
   INTO my_customer_id
   FROM customers
   WHERE login=in_login;
-IF NOT FOUND
-THEN
+IF NOT FOUND THEN
   out_nx_customer=TRUE;
   RETURN;
 END IF;
 out_nx_customer=FALSE;
 
 -- optionally updating the Taler exchange flag
-IF in_is_taler_exchange IS NOT NULL
-THEN
+IF in_is_taler_exchange IS NOT NULL THEN
   UPDATE bank_accounts
     SET is_taler_exchange = in_is_taler_exchange
     WHERE owning_customer_id = my_customer_id;
 END IF;
-IF in_is_taler_exchange IS NOT NULL AND NOT FOUND
-THEN
+IF in_is_taler_exchange IS NOT NULL AND NOT FOUND THEN
   out_nx_bank_account=TRUE;
   RETURN;
 END IF;
@@ -135,8 +120,7 @@ SET
   email=in_email
 WHERE customer_id = my_customer_id;
 -- optionally updating the name
-IF in_name IS NOT NULL
-THEN
+IF in_name IS NOT NULL THEN
   UPDATE customers SET name=in_name WHERE customer_id = my_customer_id;
 END IF;
 END $$;
@@ -148,8 +132,7 @@ CREATE OR REPLACE FUNCTION customer_delete(
   OUT out_nx_customer BOOLEAN,
   OUT out_balance_not_zero BOOLEAN
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 DECLARE
 my_customer_id BIGINT;
 my_balance_val INT8;
@@ -160,8 +143,7 @@ SELECT customer_id
   INTO my_customer_id
   FROM customers
   WHERE login = in_login;
-IF NOT FOUND
-THEN
+IF NOT FOUND THEN
   out_nx_customer=TRUE;
   RETURN;
 END IF;
@@ -176,13 +158,11 @@ SELECT
     my_balance_frac
   FROM bank_accounts
   WHERE owning_customer_id = my_customer_id;
-IF NOT FOUND
-THEN
+IF NOT FOUND THEN
   RAISE EXCEPTION 'Invariant failed: customer lacks bank account';
 END IF;
 -- check that balance is zero.
-IF my_balance_val != 0 OR my_balance_frac != 0
-THEN
+IF my_balance_val != 0 OR my_balance_frac != 0 THEN
   out_balance_not_zero=TRUE;
   RETURN;
 END IF;
@@ -193,6 +173,57 @@ DELETE FROM customers WHERE login = in_login;
 END $$;
 COMMENT ON FUNCTION customer_delete(TEXT)
   IS 'Deletes a customer (and its bank account via cascade) if the balance is zero';
+
+CREATE OR REPLACE PROCEDURE register_outgoing(
+  IN in_request_uid BYTEA,
+  IN in_wtid BYTEA,
+  IN in_exchange_base_url TEXT,
+  IN in_tx_row_id BIGINT,
+  IN in_exchange_bank_account_id BIGINT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+-- Register outgoing transaction
+INSERT
+  INTO taler_exchange_outgoing (
+    request_uid,
+    wtid,
+    exchange_base_url,
+    bank_transaction
+) VALUES (
+  in_request_uid,
+  in_wtid,
+  in_exchange_base_url,
+  in_tx_row_id
+);
+-- notify new transaction
+PERFORM pg_notify('outgoing_tx', in_exchange_bank_account_id || ' ' || in_tx_row_id);
+END $$;
+COMMENT ON PROCEDURE register_outgoing
+  IS 'Register a bank transaction as a taler outgoing transaction';
+
+CREATE OR REPLACE PROCEDURE register_incoming(
+  IN in_reserve_pub BYTEA,
+  IN in_tx_row_id BIGINT,
+  IN in_exchange_bank_account_id BIGINT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+-- Register incoming transaction
+INSERT
+  INTO taler_exchange_incoming (
+    reserve_pub,
+    bank_transaction
+) VALUES (
+  in_reserve_pub,
+  in_tx_row_id
+);
+-- notify new transaction
+PERFORM pg_notify('incoming_tx', in_exchange_bank_account_id || ' ' || in_tx_row_id);
+END $$;
+COMMENT ON PROCEDURE register_incoming
+  IS 'Register a bank transaction as a taler incoming transaction';
+
 
 CREATE OR REPLACE FUNCTION taler_transfer(
   IN in_request_uid BYTEA,
@@ -218,8 +249,7 @@ CREATE OR REPLACE FUNCTION taler_transfer(
   OUT out_tx_row_id BIGINT,
   OUT out_timestamp BIGINT
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 DECLARE
 exchange_bank_account_id BIGINT;
 receiver_bank_account_id BIGINT;
@@ -286,22 +316,9 @@ SELECT
 IF out_exchange_balance_insufficient THEN
   RETURN;
 END IF;
--- Register outgoing transaction
-INSERT
-  INTO taler_exchange_outgoing (
-    request_uid,
-    wtid,
-    exchange_base_url,
-    bank_transaction
-) VALUES (
-  in_request_uid,
-  in_wtid,
-  in_exchange_base_url,
-  out_tx_row_id
-);
 out_timestamp=in_timestamp;
--- notify new transaction
-PERFORM pg_notify('outgoing_tx', exchange_bank_account_id || ' ' || out_tx_row_id);
+-- Register outgoing transaction
+CALL register_outgoing(in_request_uid, in_wtid, in_exchange_base_url, out_tx_row_id, exchange_bank_account_id);
 END $$;
 COMMENT ON FUNCTION taler_transfer(
   bytea,
@@ -342,8 +359,7 @@ CREATE OR REPLACE FUNCTION taler_add_incoming(
   -- Success return
   OUT out_tx_row_id BIGINT
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 DECLARE
 exchange_bank_account_id BIGINT;
 sender_bank_account_id BIGINT;
@@ -405,16 +421,7 @@ IF out_debitor_balance_insufficient THEN
   RETURN;
 END IF;
 -- Register incoming transaction
-INSERT
-  INTO taler_exchange_incoming (
-    reserve_pub,
-    bank_transaction
-) VALUES (
-  in_reserve_pub,
-  out_tx_row_id
-);
--- notify new transaction
-PERFORM pg_notify('incoming_tx', exchange_bank_account_id || ' ' || out_tx_row_id);
+CALL register_incoming(in_reserve_pub, out_tx_row_id, exchange_bank_account_id);
 END $$;
 COMMENT ON FUNCTION taler_add_incoming(
   bytea,
@@ -453,8 +460,7 @@ CREATE OR REPLACE FUNCTION bank_transaction(
   OUT out_creditor_is_exchange BOOLEAN,
   OUT out_debtor_is_exchange BOOLEAN
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 BEGIN
 -- Find credit bank account id
 SELECT bank_account_id
@@ -522,7 +528,6 @@ account_has_debt BOOLEAN;
 account_balance taler_amount;
 account_max_debt taler_amount;
 BEGIN
-
 -- check account exists
 SELECT
   has_debt, bank_account_id,
@@ -592,8 +597,7 @@ CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   OUT out_exchange_not_found BOOLEAN,
   OUT out_already_confirmed_conflict BOOLEAN
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 DECLARE
   confirmation_done_local BOOLEAN;
   subject_local TEXT;
@@ -618,14 +622,12 @@ SELECT -- Really no-star policy and instead DECLARE almost one var per column?
     amount_local.val, amount_local.frac
   FROM taler_withdrawal_operations
   WHERE withdrawal_uuid=in_withdrawal_uuid;
-IF NOT FOUND
-THEN
+IF NOT FOUND THEN
   out_no_op=TRUE;
   RETURN;
 END IF;
 out_no_op=FALSE;
-IF (confirmation_done_local)
-THEN
+IF confirmation_done_local THEN
   out_already_confirmed_conflict=TRUE
   RETURN; -- Kotlin should have checked for idempotency before reaching here!
 END IF;
@@ -640,8 +642,7 @@ SELECT
   INTO exchange_bank_account_id
   FROM bank_accounts
   WHERE internal_payto_uri = selected_exchange_payto_local;
-IF NOT FOUND
-THEN
+IF NOT FOUND THEN
   out_exchange_not_found=TRUE;
   RETURN;
 END IF;
@@ -665,16 +666,7 @@ IF out_balance_insufficient THEN
 END IF;
 
 -- Register incoming transaction
-INSERT
-  INTO taler_exchange_incoming (
-    reserve_pub,
-    bank_transaction
-) VALUES (
-  reserve_pub_local,
-  tx_row_id
-);
--- notify new transaction
-PERFORM pg_notify('incoming_tx', exchange_bank_account_id || ' ' || tx_row_id);
+CALL register_incoming(reserve_pub_local, tx_row_id, exchange_bank_account_id);
 END $$;
 COMMENT ON FUNCTION confirm_taler_withdrawal(uuid, bigint, text, text, text)
   IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';
@@ -699,8 +691,7 @@ CREATE OR REPLACE FUNCTION bank_wire_transfer(
   OUT out_creditor_is_exchange BOOLEAN,
   OUT out_debtor_is_exchange BOOLEAN
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 DECLARE
 debtor_has_debt BOOLEAN;
 debtor_balance taler_amount;
@@ -928,14 +919,12 @@ CREATE OR REPLACE FUNCTION cashout_delete(
   IN in_cashout_uuid UUID,
   OUT out_already_confirmed BOOLEAN
 )
-LANGUAGE plpgsql
-AS $$
+LANGUAGE plpgsql AS $$
 BEGIN
   PERFORM
     FROM cashout_operations
     WHERE cashout_uuid=in_cashout_uuid AND tan_confirmation_time IS NOT NULL;
-  IF FOUND
-  THEN
+  IF FOUND THEN
     out_already_confirmed=TRUE;
     RETURN;
   END IF;
