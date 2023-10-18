@@ -330,12 +330,14 @@ class CoreBankTransactionsApiTest {
                     // testing that the first row_id is at most the 'start' query param.
                     assert(history.transactions[0].row_id <= params.start)
                     // testing that the row_id decreases.
-                    assert(history.transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
+                    if (history.transactions.size > 1)
+                        assert(history.transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
                 } else {
                     // testing that the first row_id is at least the 'start' query param.
                     assert(history.transactions[0].row_id >= params.start)
                     // testing that the row_id increases.
-                    assert(history.transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+                    if (history.transactions.size > 1)
+                        assert(history.transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
                 }
             }
         }
@@ -367,57 +369,41 @@ class CoreBankTransactionsApiTest {
         }
 
         // Check no useless polling
-        assertTime(0, 300) {
+        assertTime(0, 200) {
             client.get("/accounts/merchant/transactions?delta=-6&start=11&long_poll_ms=1000") {
                 basicAuth("merchant", "merchant-password")
             }.assertHistory(5)
         }
 
-        // Check polling end
-        client.get("/accounts/merchant/transactions?delta=6&long_poll_ms=60") {
-            basicAuth("merchant", "merchant-password")
-        }.assertHistory(5)
+        // Check no polling when find transaction
+        assertTime(0, 200) {
+            client.get("/accounts/merchant/transactions?delta=6&long_poll_ms=1000") {
+                basicAuth("merchant", "merchant-password")
+            }.assertHistory(5)
+        }
 
-        runBlocking {
-            joinAll(
-                launch {  // Check polling succeed forward
-                    assertTime(200, 1000) {
-                        client.get("/accounts/merchant/transactions?delta=6&long_poll_ms=1000") {
-                            basicAuth("merchant", "merchant-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {  // Check polling succeed backward
-                    assertTime(200, 1000) {
-                        client.get("/accounts/merchant/transactions?delta=-6&long_poll_ms=1000") {
-                            basicAuth("merchant", "merchant-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {  // Check polling timeout forward
-                    assertTime(200, 400) {
-                        client.get("/accounts/merchant/transactions?delta=8&long_poll_ms=300") {
-                            basicAuth("merchant", "merchant-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {  // Check polling timeout backward
-                    assertTime(200, 400) {
-                        client.get("/accounts/merchant/transactions?delta=-8&long_poll_ms=300") {
-                            basicAuth("merchant", "merchant-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {
-                    delay(200)
-                    client.post("/accounts/merchant/transactions") {
+        coroutineScope {
+            launch { // Check polling succeed
+                assertTime(200, 1000) {
+                    client.get("/accounts/merchant/transactions?delta=2&start=10&long_poll_ms=1000") {
                         basicAuth("merchant", "merchant-password")
-                        jsonBody(json {
-                            "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout_poll&amount=KUDOS:4.2"
-                        })
-                    }.assertOk()
+                    }.assertHistory(1)
                 }
-            )
+            }
+            launch { // Check polling timeout
+                assertTime(200, 400) {
+                    client.get("/accounts/merchant/transactions?delta=1&start=11&long_poll_ms=300") {
+                        basicAuth("merchant", "merchant-password")
+                    }.assertHistory(0)
+                }
+            }
+            delay(200)
+            client.post("/accounts/merchant/transactions") {
+                basicAuth("merchant", "merchant-password")
+                jsonBody(json {
+                    "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout_poll&amount=KUDOS:4.2"
+                })
+            }.assertOk()
         }
 
         // Testing ranges. 

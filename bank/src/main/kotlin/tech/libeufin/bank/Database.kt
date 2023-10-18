@@ -914,66 +914,43 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
     ): List<T> {
         val backward = params.delta < 0
         val nbTx = abs(params.delta) // Number of transaction to query
-        // Range of transaction ids to check
-        var (min, max) = if (backward) Pair(0L, params.start) else Pair(params.start, Long.MAX_VALUE)
         val query = """
             $query
             WHERE bank_account_id=? AND
-            bank_transaction_id > ? AND  bank_transaction_id < ?
+            bank_transaction_id ${if (backward) '<' else '>'} ?
             ORDER BY bank_transaction_id ${if (backward) "DESC" else "ASC"}
             LIMIT ?
         """
-        
+      
         suspend fun load(amount: Int): List<T> = conn { conn ->
             conn.prepareStatement(query).use { stmt ->
                 stmt.setLong(1, bankAccountId)
-                stmt.setLong(2, min)
-                stmt.setLong(3, max)
-                stmt.setInt(4, amount)
-                stmt.all {
-                    // Remember not to check this transaction again
-                    min = kotlin.math.max(it.getLong("bank_transaction_id"), min)
-                    map(it)
-                }
+                stmt.setLong(2, params.start)
+                stmt.setInt(3, amount)
+                stmt.all { map(it) }
             }
         }
 
-        val shoudPoll = when {
-            params.poll_ms <= 0 -> false
-            backward && max == Long.MAX_VALUE -> true
-            backward -> {
-                val maxId = conn {
-                    it.prepareStatement("SELECT MAX(bank_transaction_id) FROM bank_account_transactions")
-                        .oneOrNull { it.getLong(1) } ?: 0
-                };
-                // Check if a new transaction could appear within the chosen interval
-                max > maxId + 1
-            }
-            else -> true
-        }
-
-        if (shoudPoll) {
+        // TODO do we want to handle polling when going backward and there is no transactions yet ?
+        // When going backward there is always at least one transaction or none
+        if (!backward && params.poll_ms > 0) {
             var history = listOf<T>()
             notifWatcher.(listen)(bankAccountId) { flow ->
-                // Start buffering notification before loading transactions to not miss any
-                val buffered = flow.buffer()
-                // Initial load
-                history += load(nbTx)
-                // Long polling if transactions are missing
-                val missing = nbTx - history.size
-                if (missing > 0) {
-                    withTimeoutOrNull(params.poll_ms) {
-                        buffered
-                            .filter { it > min } // Skip transactions already checked
-                            .take(missing).count() // Wait for missing transactions
+                coroutineScope {
+                    // Start buffering notification before loading transactions to not miss any
+                    val polling = launch {
+                        withTimeoutOrNull(params.poll_ms) {
+                            flow.first { it > params.start } // Always forward so >
+                        }
                     }
-
-                    if (backward) {
-                        // When going backward, we could find more transactions than we need
-                        history = (load(nbTx) + history).take(nbTx)
+                    // Initial loading
+                    history = load(nbTx)
+                    // Long polling if we found no transactions
+                    if (history.isEmpty()) {
+                        polling.join()
+                        history = load(nbTx)
                     } else {
-                        // Only load missing ones
-                        history += load(missing)
+                        polling.cancel()
                     }
                 }
             }

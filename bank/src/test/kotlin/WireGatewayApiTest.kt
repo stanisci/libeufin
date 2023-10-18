@@ -213,15 +213,16 @@ class WireGatewayApiTest {
                 // testing that the first row_id is at most the 'start' query param.
                 assert(history.incoming_transactions[0].row_id <= params.start)
                 // testing that the row_id decreases.
-                assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
+                if (history.incoming_transactions.size > 1)
+                    assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
             } else {
                 // testing that the first row_id is at least the 'start' query param.
                 assert(history.incoming_transactions[0].row_id >= params.start)
                 // testing that the row_id increases.
-                assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+                if (history.incoming_transactions.size > 1)
+                    assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
             }
         }
-
 
         authRoutine("/accounts/merchant/taler-wire-gateway/history/incoming?delta=7", method = HttpMethod.Get)
 
@@ -243,22 +244,22 @@ class WireGatewayApiTest {
             genTx(IncomingTxMetadata(randShortHashCode()).encode(), 2, 1)
         ).assertSuccess()
         // Gen one transaction using withdraw logic
-        val uuid = client.post("/accounts/merchant/withdrawals") {
+        client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
             jsonBody(json { "amount" to "KUDOS:9" }) 
         }.assertOk().run {
             val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
-            resp.taler_withdraw_uri.split("/").last()
+            val uuid = resp.taler_withdraw_uri.split("/").last()
+            client.post("/taler-integration/withdrawal-operation/${uuid}") {
+                jsonBody(json {
+                    "reserve_pub" to randEddsaPublicKey()
+                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                })
+            }.assertOk()
+            client.post("/withdrawals/${uuid}/confirm") {
+                basicAuth("merchant", "merchant-password")
+            }.assertOk()
         }
-        client.post("/taler-integration/withdrawal-operation/${uuid}") {
-            jsonBody(json {
-                "reserve_pub" to randEddsaPublicKey()
-                "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
-            })
-        }.assertOk()
-        client.post("/withdrawals/${uuid}/confirm") {
-            basicAuth("merchant", "merchant-password")
-        }.assertOk()
 
         // Check ignore bogus subject
         client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7") {
@@ -271,52 +272,79 @@ class WireGatewayApiTest {
         }.assertHistory(5)
         
         // Check no useless polling
-        assertTime(0, 300) {
+        assertTime(0, 200) {
             client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-6&start=15&long_poll_ms=1000") {
                 basicAuth("exchange", "exchange-password")
             }.assertHistory(5)
         }
 
-        // Check polling end
-        client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=60") {
-            basicAuth("exchange", "exchange-password")
-        }.assertHistory(5)
+        // Check no polling when find transaction
+        assertTime(0, 200) {
+            client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=60") {
+                basicAuth("exchange", "exchange-password")
+            }.assertHistory(5)
+        }
 
-        runBlocking {
-            joinAll(
-                launch {  // Check polling succeed forward
-                    assertTime(200, 1000) {
-                        client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=1000") {
-                            basicAuth("exchange", "exchange-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {  // Check polling succeed backward
-                    assertTime(200, 1000) {
-                        client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-6&long_poll_ms=1000") {
-                            basicAuth("exchange", "exchange-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {  // Check polling timeout forward
-                    assertTime(200, 400) {
-                        client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=8&long_poll_ms=300") {
-                            basicAuth("exchange", "exchange-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {  // Check polling timeout backward
-                    assertTime(200, 400) {
-                        client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-8&long_poll_ms=300") {
-                                basicAuth("exchange", "exchange-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {
-                    delay(200)
-                    db.genIncoming("exchange", bankAccountMerchant)
+        coroutineScope {
+            launch {  // Check polling succeed
+                assertTime(200, 300) {
+                    client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=2&start=14&long_poll_ms=1000") {
+                        basicAuth("exchange", "exchange-password")
+                    }.assertHistory(1)
                 }
-            )
+            }
+            launch {  // Check polling timeout
+                assertTime(200, 400) {
+                    client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=1&start=16&long_poll_ms=300") {
+                        basicAuth("exchange", "exchange-password")
+                    }.assertNoContent()
+                }
+            }
+            delay(200)
+            db.genIncoming("exchange", bankAccountMerchant)
+        }
+
+        // Test trigger by raw transaction
+        coroutineScope {
+            launch {
+                assertTime(200, 300) {
+                    client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7&start=16&long_poll_ms=1000") {
+                        basicAuth("exchange", "exchange-password")
+                    }.assertHistory(1)
+                }
+            }
+            delay(200)
+            db.bankTransactionCreate(
+                genTx(IncomingTxMetadata(randShortHashCode()).encode(), 2, 1)
+            ).assertSuccess()   
+        }
+
+        // Test trigger by withdraw operationr
+        coroutineScope {
+            launch {
+                assertTime(200, 300) {
+                    client.get("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7&start=18&long_poll_ms=1000") {
+                        basicAuth("exchange", "exchange-password")
+                    }.assertHistory(1)
+                }
+            }
+            delay(200)
+            client.post("/accounts/merchant/withdrawals") {
+                basicAuth("merchant", "merchant-password")
+                jsonBody(json { "amount" to "KUDOS:9" }) 
+            }.assertOk().run {
+                val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+                val uuid = resp.taler_withdraw_uri.split("/").last()
+                client.post("/taler-integration/withdrawal-operation/${uuid}") {
+                    jsonBody(json {
+                        "reserve_pub" to randEddsaPublicKey()
+                        "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                    })
+                }.assertOk()
+                client.post("/withdrawals/${uuid}/confirm") {
+                    basicAuth("merchant", "merchant-password")
+                }.assertOk()
+            }
         }
 
         // Testing ranges. 
@@ -364,12 +392,14 @@ class WireGatewayApiTest {
                 // testing that the first row_id is at most the 'start' query param.
                 assert(history.outgoing_transactions[0].row_id <= params.start)
                 // testing that the row_id decreases.
-                assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
+                if (history.outgoing_transactions.size > 1)
+                    assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
             } else {
                 // testing that the first row_id is at least the 'start' query param.
                 assert(history.outgoing_transactions[0].row_id >= params.start)
                 // testing that the row_id increases.
-                assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+                if (history.outgoing_transactions.size > 1)
+                    assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
             }
         }
 
@@ -406,52 +436,36 @@ class WireGatewayApiTest {
         }.assertHistory(5)
 
         // Check no useless polling
-        assertTime(0, 300) {
+        assertTime(0, 200) {
             client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-6&start=15&long_poll_ms=1000") {
                 basicAuth("exchange", "exchange-password")
             }.assertHistory(5)
         }
 
-        // Check polling end
-        client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=6&long_poll_ms=60") {
-            basicAuth("exchange", "exchange-password")
-        }.assertHistory(5)
+        // Check no polling when find transaction
+        assertTime(0, 200) {
+            client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=6&long_poll_ms=1000") {
+                basicAuth("exchange", "exchange-password")
+            }.assertHistory(5)
+        }
 
-        runBlocking {
-            joinAll(
-                launch {  // Check polling succeed forward
-                    assertTime(200, 1000) {
-                        client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=6&long_poll_ms=1000") {
-                            basicAuth("exchange", "exchange-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {  // Check polling succeed backward
-                    assertTime(200, 1000) {
-                        client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-6&long_poll_ms=1000") {
-                            basicAuth("exchange", "exchange-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {  // Check polling timeout forward
-                    assertTime(200, 400) {
-                        client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=8&long_poll_ms=300") {
-                            basicAuth("exchange", "exchange-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {  // Check polling timeout backward
-                    assertTime(200, 400) {
-                        client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-8&long_poll_ms=300") {
-                            basicAuth("exchange", "exchange-password")
-                        }.assertHistory(6)
-                    }
-                },
-                launch {
-                    delay(200)
-                    db.genTransfer("exchange", bankAccountMerchant)
+        coroutineScope {
+            launch {  // Check polling succeed forward
+                assertTime(200, 300) {
+                    client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=2&start=14&long_poll_ms=1000") {
+                        basicAuth("exchange", "exchange-password")
+                    }.assertHistory(1)
                 }
-            )
+            }
+            launch {  // Check polling timeout forward
+                assertTime(200, 400) {
+                    client.get("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=1&start=16&long_poll_ms=300") {
+                        basicAuth("exchange", "exchange-password")
+                    }.assertNoContent()
+                }
+            }
+            delay(200)
+            db.genTransfer("exchange", bankAccountMerchant) 
         }
 
         // Testing ranges.
