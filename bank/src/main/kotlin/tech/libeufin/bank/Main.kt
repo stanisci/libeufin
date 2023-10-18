@@ -23,7 +23,6 @@ package tech.libeufin.bank
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
@@ -269,15 +268,6 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
     }
 }
 
-class LibeufinBankCommand : CliktCommand() {
-    init {
-        versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), ChangePw(), BankConfig())
-    }
-
-    override fun run() = Unit
-}
-
 fun durationFromPretty(s: String): Long {
     var durationUs: Long = 0;
     var currentNum = "";
@@ -332,17 +322,10 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
         "--config", "-c",
         help = "set the configuration file"
     )
-
     private val requestReset by option(
         "--reset", "-r",
         help = "reset database (DANGEROUS: All existing data is lost)"
     ).flag()
-
-    init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
-    }
 
     override fun run() {
         val cfg = talerConfig(configFile).loadDbConfig()
@@ -358,12 +341,6 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         "--config", "-c",
         help = "set the configuration file"
     )
-
-    init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
-    }
 
     override fun run() {
         val cfg = talerConfig(configFile)
@@ -393,12 +370,6 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     private val account by argument("account")
     private val password by argument("password")
 
-    init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
-    }
-
     override fun run() {
         val cfg = talerConfig(configFile)
         val ctx = cfg.loadBankApplicationContext() 
@@ -424,12 +395,6 @@ class BankConfigDump : CliktCommand("Dump the configuration", name = "dump") {
         help = "set the configuration file"
     )
 
-    init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
-    }
-
     override fun run() {
         val config = talerConfig(configFile)
         println("# install path: ${config.getInstallPath()}")
@@ -443,14 +408,7 @@ class BankConfigPathsub : CliktCommand("Substitute variables in a path", name = 
         "--config", "-c",
         help = "set the configuration file"
     )
-
     private val pathExpr by argument()
-
-    init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
-    }
 
     override fun run() {
         val config = talerConfig(configFile)
@@ -463,21 +421,13 @@ class BankConfigGet : CliktCommand("Lookup config value", name = "get") {
         "--config", "-c",
         help = "set the configuration file"
     )
-
     private val isPath by option(
         "--filename", "-f",
         help = "interpret value as path with dollar-expansion"
     ).flag()
-
     private val sectionName by argument()
     private val optionName by argument()
 
-
-    init {
-        context {
-            helpFormatter = CliktHelpFormatter(showDefaultValues = true)
-        }
-    }
 
     override fun run() {
         val config = talerConfig(configFile)
@@ -502,6 +452,15 @@ class BankConfigGet : CliktCommand("Lookup config value", name = "get") {
 class BankConfig : CliktCommand("Dump the configuration", name = "config") {
     init {
         subcommands(BankConfigDump(), BankConfigPathsub(), BankConfigGet())
+    }
+
+    override fun run() = Unit
+}
+
+class LibeufinBankCommand : CliktCommand() {
+    init {
+        versionOption(getVersion())
+        subcommands(ServeBank(), BankDbInit(), ChangePw(), BankConfig())
     }
 
     override fun run() = Unit

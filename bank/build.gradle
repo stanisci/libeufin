@@ -4,7 +4,7 @@ plugins {
     id 'application'
     id 'org.jetbrains.kotlin.jvm'
     id "com.github.johnrengelman.shadow" version "5.2.0"
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.7.22'
+    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.10'
 }
 
 sourceCompatibility = "11"
@@ -44,7 +44,7 @@ sourceSets {
 }
 
 dependencies {
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1-native-mt'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
     implementation 'ch.qos.logback:logback-classic:1.4.5'
     implementation project(":util")
 
@@ -53,10 +53,10 @@ dependencies {
     implementation "javax.xml.bind:jaxb-api:2.3.0"
     implementation "org.glassfish.jaxb:jaxb-runtime:2.3.1"
 
-    implementation 'org.postgresql:postgresql:42.2.27'
+    implementation 'org.postgresql:postgresql:42.6.0'
     implementation 'com.zaxxer:HikariCP:5.0.1'
     implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.21'
-    implementation('com.github.ajalt:clikt:2.8.0')
+    implementation "com.github.ajalt.clikt:clikt:4.2.1"
 
     implementation "io.ktor:ktor-server-core:$ktor_version"
     implementation "io.ktor:ktor-server-call-logging:$ktor_version"
@@ -68,18 +68,18 @@ dependencies {
     implementation "io.ktor:ktor-server-netty:$ktor_version"
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
     implementation "io.ktor:ktor-auth:$ktor_auth_version"
-    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1"
-    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0"
+    implementation "io.ktor:ktor-serialization-kotlinx-json:$ktor_version"
     implementation "io.ktor:ktor-server-request-validation:$ktor_version"
 
-    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
+    testImplementation "org.jetbrains.kotlin:kotlin-test:$kotlin_version"
     testImplementation group: "junit", name: "junit", version: '4.13.2'
 
     testImplementation project(":util")
 
     // UNIX domain sockets support (used to connect to PostgreSQL)
-    implementation 'com.kohlschutter.junixsocket:junixsocket-core:2.6.2'
+    implementation 'com.kohlschutter.junixsocket:junixsocket-core:2.8.1'
 }
 
 application {
