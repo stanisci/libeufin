@@ -5,6 +5,7 @@ import io.ktor.server.testing.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import net.taler.wallet.crypto.Base32Crockford
+import net.taler.common.errorcodes.TalerErrorCode
 import kotlin.test.*
 import tech.libeufin.bank.*
 import java.io.ByteArrayOutputStream
@@ -105,8 +106,19 @@ fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {
 fun HttpResponse.assertOk(): HttpResponse = assertStatus(HttpStatusCode.OK)
 fun HttpResponse.assertCreated(): HttpResponse = assertStatus(HttpStatusCode.Created)
 fun HttpResponse.assertNoContent(): HttpResponse = assertStatus(HttpStatusCode.NoContent)
+fun HttpResponse.assertNotFound(): HttpResponse = assertStatus(HttpStatusCode.NotFound)
 fun HttpResponse.assertUnauthorized(): HttpResponse = assertStatus(HttpStatusCode.Unauthorized)
+fun HttpResponse.assertConflict(): HttpResponse = assertStatus(HttpStatusCode.Conflict)
 fun HttpResponse.assertBadRequest(): HttpResponse = assertStatus(HttpStatusCode.BadRequest)
+
+
+suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
+    val err = Json.decodeFromString<TalerError>(bodyAsText())
+    assertEquals(code.code, err.code)
+    return this
+}
+
+
 
 fun BankTransactionResult.assertSuccess() {
     assertEquals(BankTransactionResult.SUCCESS, this)

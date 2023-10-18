@@ -585,6 +585,68 @@ INSERT INTO taler_withdrawal_operations
   VALUES (in_withdrawal_uuid, account_id, in_amount);
 END $$;
 
+CREATE OR REPLACE FUNCTION select_taler_withdrawal(
+  IN in_withdrawal_uuid uuid,
+  IN in_reserve_pub BYTEA,
+  IN in_subject TEXT,
+  IN in_selected_exchange_payto TEXT,
+  -- Error status
+  OUT out_no_op BOOLEAN,
+  OUT out_already_selected BOOLEAN,
+  OUT out_reserve_pub_reuse BOOLEAN,
+  OUT out_account_not_found BOOLEAN,
+  OUT out_account_is_not_exchange BOOLEAN,
+  -- Success return
+  OUT out_confirmation_done BOOLEAN
+)
+LANGUAGE plpgsql AS $$ 
+DECLARE
+not_selected BOOLEAN;
+BEGIN
+-- Check for conflict and idempotence
+SELECT
+  NOT selection_done, confirmation_done,
+  selection_done 
+    AND (selected_exchange_payto != in_selected_exchange_payto OR reserve_pub != in_reserve_pub)
+  INTO not_selected, out_confirmation_done, out_already_selected
+  FROM taler_withdrawal_operations
+  WHERE withdrawal_uuid=in_withdrawal_uuid;
+IF NOT FOUND THEN
+  out_no_op=TRUE;
+  RETURN;
+ELSIF out_already_selected THEN
+  RETURN;
+END IF;
+
+IF NOT out_confirmation_done AND not_selected THEN
+  -- Check reserve_pub reuse
+  SELECT true FROM taler_exchange_incoming WHERE reserve_pub = in_reserve_pub
+  UNION ALL
+  SELECT true FROM taler_withdrawal_operations WHERE reserve_pub = in_reserve_pub
+    INTO out_reserve_pub_reuse;
+  IF out_reserve_pub_reuse THEN
+    RETURN;
+  END IF;
+  -- Check exchange account
+  SELECT NOT is_taler_exchange
+    INTO out_account_is_not_exchange
+    FROM bank_accounts
+    WHERE internal_payto_uri=in_selected_exchange_payto;
+  IF NOT FOUND THEN
+    out_account_not_found=TRUE;
+    RETURN;
+  ELSIF out_account_is_not_exchange THEN
+    RETURN;
+  END IF;
+
+  -- Update withdrawal operation
+  UPDATE taler_withdrawal_operations
+    SET selected_exchange_payto=in_selected_exchange_payto, reserve_pub=in_reserve_pub, subject=in_subject, selection_done=true
+    WHERE withdrawal_uuid=in_withdrawal_uuid;
+END IF;
+END $$;
+
+
 CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
   IN in_confirmation_date BIGINT,

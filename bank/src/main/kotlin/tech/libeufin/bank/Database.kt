@@ -1048,19 +1048,36 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         opUuid: UUID,
         exchangePayto: IbanPayTo,
         reservePub: EddsaPublicKey
-    ): Boolean = conn { conn ->
+    ): Pair<WithdrawalSelectionResult, Boolean> = conn { conn ->
         val subject = IncomingTxMetadata(reservePub).encode()
         val stmt = conn.prepareStatement("""
-            UPDATE taler_withdrawal_operations
-            SET selected_exchange_payto = ?, reserve_pub = ?, subject = ?, selection_done = true
-            WHERE withdrawal_uuid=?
+            SELECT
+                out_no_op,
+                out_already_selected,
+                out_reserve_pub_reuse,
+                out_account_not_found,
+                out_account_is_not_exchange,
+                out_confirmation_done
+            FROM select_taler_withdrawal(?, ?, ?, ?);
         """
         )
-        stmt.setString(1, exchangePayto.canonical)
+        stmt.setObject(1, opUuid)
         stmt.setBytes(2, reservePub.raw)
         stmt.setString(3, subject)
-        stmt.setObject(4, opUuid)
-        stmt.executeUpdateViolation()
+        stmt.setString(4, exchangePayto.canonical)
+        stmt.executeQuery().use {
+            val status = when {
+                !it.next() ->
+                    throw internalServerError("No result from DB procedure select_taler_withdrawal")
+                it.getBoolean("out_no_op") -> WithdrawalSelectionResult.OP_NOT_FOUND
+                it.getBoolean("out_already_selected") -> WithdrawalSelectionResult.ALREADY_SELECTED
+                it.getBoolean("out_reserve_pub_reuse") -> WithdrawalSelectionResult.RESERVE_PUB_REUSE
+                it.getBoolean("out_account_not_found") -> WithdrawalSelectionResult.ACCOUNT_NOT_FOUND
+                it.getBoolean("out_account_is_not_exchange") -> WithdrawalSelectionResult.ACCOUNT_IS_NOT_EXCHANGE
+                else -> WithdrawalSelectionResult.SUCCESS
+            }
+            Pair(status, it.getBoolean("out_confirmation_done"))
+        }
     }
 
     /**
@@ -1504,6 +1521,16 @@ enum class WithdrawalCreationResult {
     ACCOUNT_NOT_FOUND,
     ACCOUNT_IS_EXCHANGE,
     BALANCE_INSUFFICIENT
+}
+
+/** Result status of withdrawal operation selection */
+enum class WithdrawalSelectionResult {
+    SUCCESS,
+    OP_NOT_FOUND,
+    ALREADY_SELECTED,
+    RESERVE_PUB_REUSE,
+    ACCOUNT_NOT_FOUND,
+    ACCOUNT_IS_NOT_EXCHANGE
 }
 
 /**

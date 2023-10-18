@@ -289,11 +289,11 @@ class DatabaseTest {
         val op = db.talerWithdrawalGet(uuid)
         assert(op?.walletBankAccount == 2L && op.withdrawalUuid == uuid)
         // Setting the details.
-        assert(db.talerWithdrawalSetDetails(
+        assertEquals(WithdrawalSelectionResult.SUCCESS, db.talerWithdrawalSetDetails(
             opUuid = uuid,
             exchangePayto = IbanPayTo("payto://iban/FOO-IBAN-XYZ"),
             reservePub = randEddsaPublicKey()
-        ))
+        ).first)
         val opSelected = db.talerWithdrawalGet(uuid)
         assert(opSelected?.selectionDone == true && !opSelected.confirmationDone)
         assert(db.talerWithdrawalConfirm(uuid, Instant.now()) == WithdrawalConfirmationResult.SUCCESS)
