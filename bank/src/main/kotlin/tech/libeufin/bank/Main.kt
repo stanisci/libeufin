@@ -259,10 +259,10 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
             call.respond(Config(ctx.currencySpecification))
             return@get
         }
-        this.accountsMgmtApi(db, ctx)
+        this.coreBankTokenApi(db)
         this.coreBankAccountsMgmtApi(db, ctx)
         this.coreBankTransactionsApi(db, ctx)
-        this.accountsMgmtApi(db, ctx)
+        this.coreBankWithdrawalApi(db, ctx)
         this.bankIntegrationApi(db, ctx)
         this.wireGatewayApi(db, ctx)
     }

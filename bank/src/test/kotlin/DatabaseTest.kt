@@ -108,7 +108,7 @@ class DatabaseTest {
      * given by the exchange to pay one merchant.
      */
     @Test
-    fun talerTransferTest() = setupDb { db ->
+    fun talerTransferTest() = dbSetup { db ->
         val exchangeReq = TransferRequest(
             amount = TalerAmount(9, 0, "KUDOS"),
             credit_account = IbanPayTo("payto://iban/BAR-IBAN-ABC"),
@@ -131,7 +131,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun bearerTokenTest() = setupDb { db ->
+    fun bearerTokenTest() = dbSetup { db ->
         val tokenBytes = ByteArray(32)
         Random().nextBytes(tokenBytes)
         val token = BearerToken(
@@ -148,7 +148,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun tokenDeletionTest() = setupDb { db ->
+    fun tokenDeletionTest() = dbSetup { db ->
         val token = ByteArray(32)
         // Token not there, must fail.
         assert(!db.bearerTokenDelete(token))
@@ -172,7 +172,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun bankTransactionsTest() = setupDb { db ->
+    fun bankTransactionsTest() = dbSetup { db ->
         val fooId = db.customerCreate(customerFoo)
         assert(fooId != null)
         val barId = db.customerCreate(customerBar)
@@ -253,7 +253,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun customerCreationTest() = setupDb { db ->
+    fun customerCreationTest() = dbSetup { db ->
         assert(db.customerGetFromLogin("foo") == null)
         db.customerCreate(customerFoo)
         assert(db.customerGetFromLogin("foo")?.name == "Foo")
@@ -262,7 +262,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun bankAccountTest() = setupDb { db ->
+    fun bankAccountTest() = dbSetup { db ->
         val currency = "KUDOS"
         assert(db.bankAccountGetFromOwnerId(1L) == null)
         assert(db.customerCreate(customerFoo) != null)
@@ -272,7 +272,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun withdrawalTest() = setupDb { db ->
+    fun withdrawalTest() = dbSetup { db ->
         val uuid = UUID.randomUUID()
         val currency = "KUDOS"
         assert(db.customerCreate(customerFoo) != null)
@@ -302,7 +302,7 @@ class DatabaseTest {
     }
     // Only testing the interaction between Kotlin and the DBMS.  No actual logic tested.
     @Test
-    fun historyTest() = setupDb { db ->
+    fun historyTest() = dbSetup { db ->
         val currency = "KUDOS"
         db.customerCreate(customerFoo); db.bankAccountCreate(bankAccountFoo)
         db.customerCreate(customerBar); db.bankAccountCreate(bankAccountBar)
@@ -330,7 +330,7 @@ class DatabaseTest {
         assert(backward[0].row_id <= 50 && backward.size == 2 && backward[0].row_id > backward[1].row_id)
     }
     @Test
-    fun cashoutTest() = setupDb { db ->
+    fun cashoutTest() = dbSetup { db ->
         val currency = "KUDOS"
         val op = Cashout(
             cashoutUuid = UUID.randomUUID(),
@@ -385,7 +385,7 @@ class DatabaseTest {
 
     // Tests the retrieval of many accounts, used along GET /accounts
     @Test
-    fun accountsForAdminTest() = setupDb { db ->
+    fun accountsForAdminTest() = dbSetup { db ->
         assert(db.accountsGetForAdmin().isEmpty()) // No data exists yet.
         assert(db.customerCreate(customerFoo) != null)
         assert(db.bankAccountCreate(bankAccountFoo) != null)
@@ -397,7 +397,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun passwordChangeTest() = setupDb { db ->
+    fun passwordChangeTest() = dbSetup { db ->
         // foo not found, this fails.
         assert(!db.customerChangePassword("foo", "won't make it"))
         // creating foo.
@@ -407,7 +407,7 @@ class DatabaseTest {
     }
 
     @Test
-    fun getPublicAccountsTest() = setupDb { db ->
+    fun getPublicAccountsTest() = dbSetup { db ->
         // Expecting empty, no accounts exist yet.
         assert(db.accountsGetPublic("KUDOS").isEmpty())
         // Make a NON-public account, so expecting still an empty result.
@@ -442,7 +442,7 @@ class DatabaseTest {
      * PATCH /accounts/foo endpoint.
      */
     @Test
-    fun accountReconfigTest() = setupDb { db ->
+    fun accountReconfigTest() = dbSetup { db ->
         // asserting for the customer not being found.
         db.accountReconfig(
             "foo",

@@ -45,11 +45,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
     post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
         val (login, _) = call.authCheck(db, TokenScope.readwrite)
         val req = call.receive<TransferRequest>()
-        if (req.amount.currency != ctx.currency)
-            throw badRequest(
-                "Currency mismatch",
-                TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-            )
+        checkInternalCurrency(ctx, req.amount)
         val dbRes = db.talerTransferCreate(
             req = req,
             username = login,
@@ -128,11 +124,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
     post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {
         val (login, _) = call.authCheck(db, TokenScope.readwrite) // TODO authAdmin ?
         val req = call.receive<AddIncomingRequest>()
-        if (req.amount.currency != ctx.currency)
-            throw badRequest(
-                "Currency mismatch",
-                TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-            )
+        checkInternalCurrency(ctx, req.amount)
         val timestamp = Instant.now()
         val dbRes = db.talerAddIncomingCreate(
             req = req,

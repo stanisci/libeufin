@@ -34,7 +34,7 @@ class BankIntegrationApiTest {
         }.assertOk().run {
             val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
             val uuid = resp.taler_withdraw_uri.split("/").last()
-            client.get("/taler-integration/withdrawal-operation/${uuid}")
+            client.get("/taler-integration/withdrawal-operation/$uuid")
                 .assertOk()
         }
 
@@ -74,15 +74,15 @@ class BankIntegrationApiTest {
             val uuid = resp.taler_withdraw_uri.split("/").last()
 
             // Check OK
-            client.post("/taler-integration/withdrawal-operation/${uuid}") {
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody(req)
             }.assertOk()
             // Check idempotence
-            client.post("/taler-integration/withdrawal-operation/${uuid}") {
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody(req)
             }.assertOk()
             // Check already selected
-            client.post("/taler-integration/withdrawal-operation/${uuid}") {
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody(json(req) {
                     "reserve_pub" to randEddsaPublicKey()
                 })
@@ -97,88 +97,24 @@ class BankIntegrationApiTest {
             val uuid = resp.taler_withdraw_uri.split("/").last()
 
             // Check reserve_pub_reuse
-            client.post("/taler-integration/withdrawal-operation/${uuid}") {
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody(req)
             }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT)
             // Check unknown account
-            client.post("/taler-integration/withdrawal-operation/${uuid}") {
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody(json {
                     "reserve_pub" to randEddsaPublicKey()
                     "selected_exchange" to IbanPayTo("payto://iban/UNKNOWN-IBAN-XYZ")
                 })
             }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
             // Check account not exchange
-            client.post("/taler-integration/withdrawal-operation/${uuid}") {
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody(json {
                     "reserve_pub" to randEddsaPublicKey()
                     "selected_exchange" to IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ")
                 })
             }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
         }
-    }
-
-    // Testing withdrawal abort
-    @Test
-    fun withdrawalAbort() = bankSetup { db ->
-        val uuid = UUID.randomUUID()
-        // insert new.
-        assertEquals(WithdrawalCreationResult.SUCCESS, db.talerWithdrawalCreate(
-            opUUID = uuid,
-            walletAccountUsername = "merchant",
-            amount = TalerAmount(1, 0, "KUDOS")
-        ))
-        val op = db.talerWithdrawalGet(uuid)
-        assert(op?.aborted == false)
-        assertEquals(WithdrawalSelectionResult.SUCCESS,
-            db.talerWithdrawalSetDetails(uuid, IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"), randEddsaPublicKey()).first
-        )
-       
-        client.post("/withdrawals/${uuid}/abort") {
-            basicAuth("merchant", "merchant-password")
-        }.assertOk()
-        
-        val opAbo = db.talerWithdrawalGet(uuid)
-        assert(opAbo?.aborted == true && opAbo.selectionDone == true)
-    }
-
-    // Testing withdrawal creation
-    @Test
-    fun withdrawalCreation() = bankSetup { _ ->
-        // Creating the withdrawal as if the SPA did it.
-        val r = client.post("/accounts/merchant/withdrawals") {
-            basicAuth("merchant", "merchant-password")
-            jsonBody(BankAccountCreateWithdrawalRequest(TalerAmount(value = 9, frac = 0, currency = "KUDOS"))) 
-        }.assertOk()
-        val opId = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(r.bodyAsText())
-        // Getting the withdrawal from the bank.  Throws (failing the test) if not found.
-        client.get("/withdrawals/${opId.withdrawal_id}") {
-            basicAuth("merchant", "merchant-password")
-        }.assertOk()
-    }
-
-    // Testing withdrawal confirmation
-    @Test
-    fun withdrawalConfirmation() = bankSetup { db -> 
-        // Artificially making a withdrawal operation for merchant.
-        val uuid = UUID.randomUUID()
-        assertEquals(WithdrawalCreationResult.SUCCESS, db.talerWithdrawalCreate(
-            opUUID = uuid,
-            walletAccountUsername = "merchant",
-            amount = TalerAmount(1, 0, "KUDOS")
-        ))
-        // Specifying the exchange via its Payto URI.
-        assertEquals(WithdrawalSelectionResult.SUCCESS,
-            db.talerWithdrawalSetDetails(
-                opUuid = uuid,
-                exchangePayto = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
-                reservePub = randEddsaPublicKey()
-            ).first
-        )
-
-        // Starting the bank and POSTing as Foo to /confirm the operation.
-        client.post("/withdrawals/${uuid}/confirm") {
-            basicAuth("merchant", "merchant-password")
-        }.assertOk()
     }
 
     // Testing the generation of taler://withdraw-URIs.

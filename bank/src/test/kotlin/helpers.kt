@@ -49,6 +49,22 @@ val bankAccountExchange = BankAccount(
     isTalerExchange = true
 )
 
+fun setup(
+    conf: String = "test.conf",
+    lambda: suspend (Database, BankApplicationContext) -> Unit
+) {
+    val config = talerConfig("conf/$conf")
+    val dbCfg = config.loadDbConfig()
+    resetDatabaseTables(dbCfg, "libeufin-bank")
+    initializeDatabaseTables(dbCfg, "libeufin-bank")
+    val ctx = config.loadBankApplicationContext()
+    Database(dbCfg.dbConnStr, ctx.currency).use {
+        runBlocking {
+            lambda(it, ctx)
+        }
+    }
+}
+
 fun bankSetup(
     conf: String = "test.conf",    
     lambda: suspend ApplicationTestBuilder.(Database) -> Unit
@@ -77,23 +93,7 @@ fun bankSetup(
     }
 }
 
-fun setup(
-    conf: String = "test.conf",
-    lambda: suspend (Database, BankApplicationContext) -> Unit
-){
-    val config = talerConfig("conf/$conf")
-    val dbCfg = config.loadDbConfig()
-    resetDatabaseTables(dbCfg, "libeufin-bank")
-    initializeDatabaseTables(dbCfg, "libeufin-bank")
-    val ctx = config.loadBankApplicationContext()
-    Database(dbCfg.dbConnStr, ctx.currency).use {
-        runBlocking {
-            lambda(it, ctx)
-        }
-    }
-}
-
-fun setupDb(lambda: suspend (Database) -> Unit) {
+fun dbSetup(lambda: suspend (Database) -> Unit) {
     setup() { db, _ -> lambda(db) }
 }
 
@@ -118,8 +118,6 @@ suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
     assertEquals(code.code, err.code)
     return this
 }
-
-
 
 fun BankTransactionResult.assertSuccess() {
     assertEquals(BankTransactionResult.SUCCESS, this)

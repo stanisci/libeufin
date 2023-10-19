@@ -18,9 +18,134 @@ import java.sql.DriverManager
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.*
 import kotlin.random.Random
 import kotlin.test.*
 import kotlinx.coroutines.*
+
+class CoreBankConfigTest {
+    @Test
+    fun getConfig() = bankSetup { _ -> 
+        client.get("/config").assertOk()
+    }
+}
+
+class CoreBankTokenApiTest {
+    // POST /accounts/USERNAME/token
+    @Test
+    fun post() = bankSetup { db -> 
+        // Wrong user
+        client.post("/accounts/merchant/token") {
+            basicAuth("exchange", "exchange-password")
+        }.assertUnauthorized()
+
+        // New default token
+        client.post("/accounts/merchant/token") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "scope" to "readonly"})
+        }.assertOk().run {
+            // Checking that the token lifetime defaulted to 24 hours.
+            val resp = Json.decodeFromString<TokenSuccessResponse>(bodyAsText())
+            val token = db.bearerTokenGet(Base32Crockford.decode(resp.access_token))
+            val lifeTime = Duration.between(token!!.creationTime, token.expirationTime)
+            assertEquals(Duration.ofDays(1), lifeTime)
+        }
+
+        // Check default duration
+        client.post("/accounts/merchant/token") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "scope" to "readonly" })
+        }.assertOk().run {
+            // Checking that the token lifetime defaulted to 24 hours.
+            val resp = Json.decodeFromString<TokenSuccessResponse>(bodyAsText())
+            val token = db.bearerTokenGet(Base32Crockford.decode(resp.access_token))
+            val lifeTime = Duration.between(token!!.creationTime, token.expirationTime)
+            assertEquals(Duration.ofDays(1), lifeTime)
+        }
+
+        // Check refresh
+        client.post("/accounts/merchant/token") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { 
+                "scope" to "readonly"
+                "refreshable" to true
+            })
+        }.assertOk().run {
+            val token = Json.decodeFromString<TokenSuccessResponse>(bodyAsText()).access_token
+            client.post("/accounts/merchant/token") {
+                headers["Authorization"] = "Bearer secret-token:$token"
+                jsonBody(json { "scope" to "readonly" })
+            }.assertOk()
+        }
+        
+        // Check'forever' case.
+        client.post("/accounts/merchant/token") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { 
+                "scope" to "readonly"
+                "duration" to json {
+                    "d_us" to "forever"
+                }
+            })
+        }.run {
+            val never: TokenSuccessResponse = Json.decodeFromString(bodyAsText())
+            assertEquals(Instant.MAX, never.expiration.t_s)
+        }
+
+        // Check too big or invalid durations
+        client.post("/accounts/merchant/token") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { 
+                "scope" to "readonly"
+                "duration" to json {
+                    "d_us" to "invalid"
+                }
+            })
+        }.assertBadRequest()
+        client.post("/accounts/merchant/token") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { 
+                "scope" to "readonly"
+                "duration" to json {
+                    "d_us" to Long.MAX_VALUE
+                }
+            })
+        }.assertBadRequest()
+        client.post("/accounts/merchant/token") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { 
+                "scope" to "readonly"
+                "duration" to json {
+                    "d_us" to -1
+                }
+            })
+        }.assertBadRequest()
+    }
+
+    // DELETE /accounts/USERNAME/token
+    @Test
+    fun delete() = bankSetup { _ -> 
+        val token = client.post("/accounts/merchant/token") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "scope" to "readonly" })
+        }.assertOk().run {
+            Json.decodeFromString<TokenSuccessResponse>(bodyAsText()).access_token
+        }
+        // Check OK
+        client.delete("/accounts/merchant/token") {
+            headers["Authorization"] = "Bearer secret-token:$token"
+        }.assertNoContent()
+        // Check token no longer work
+        client.delete("/accounts/merchant/token") {
+            headers["Authorization"] = "Bearer secret-token:$token"
+        }.assertUnauthorized()
+
+        // Checking merchant can still be served by basic auth, after token deletion.
+        client.get("/accounts/merchant") {
+            basicAuth("merchant", "merchant-password")
+        }.assertOk()
+    }
+}
 
 class CoreBankAccountsMgmtApiTest {
     // Testing the account creation and its idempotency
@@ -551,213 +676,159 @@ class CoreBankTransactionsApiTest {
     }
 }
 
-class LibeuFinApiTest {
-    private val customerFoo = Customer(
-        login = "foo",
-        passwordHash = CryptoUtil.hashpw("pw"),
-        name = "Foo",
-        phone = "+00",
-        email = "foo@b.ar",
-        cashoutPayto = "payto://external-IBAN",
-        cashoutCurrency = "KUDOS"
-    )
-    private val customerBar = Customer(
-        login = "bar",
-        passwordHash = CryptoUtil.hashpw("pw"),
-        name = "Bar",
-        phone = "+99",
-        email = "bar@example.com",
-        cashoutPayto = "payto://external-IBAN",
-        cashoutCurrency = "KUDOS"
-    )
-
-    private fun genBankAccount(rowId: Long) = BankAccount(
-        hasDebt = false,
-        internalPaytoUri = IbanPayTo("payto://iban/ac${rowId}"),
-        maxDebt = TalerAmount(100, 0, "KUDOS"),
-        owningCustomerId = rowId
-    )
-
+class CoreBankWithdrawalApiTest {
+    // POST /accounts/USERNAME/withdrawals
     @Test
-    fun getConfig() = bankSetup { _ -> 
-        val r = client.get("/config") {
-             expectSuccess = true
+    fun create() = bankSetup { _ ->
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:9.0" }) 
         }.assertOk()
-        println(r.bodyAsText())
     }
 
-   
+    // GET /withdrawals/withdrawal_id
     @Test
-    fun tokenDeletionTest() = setup { db, ctx -> 
-        assert(db.customerCreate(customerFoo) != null)
-        val token = ByteArray(32)
-        Random.nextBytes(token)
-        assert(db.bearerTokenCreate(
-            BearerToken(
-                bankCustomer = 1L,
-                content = token,
-                creationTime = Instant.now(),
-                expirationTime = Instant.now().plusSeconds(10),
-                scope = TokenScope.readwrite
-            )
-        ))
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            // Legitimate first attempt, should succeed
-            client.delete("/accounts/foo/token") {
-                expectSuccess = true
-                headers["Authorization"] = "Bearer secret-token:${Base32Crockford.encode(token)}"
-            }.apply {
-                assert(this.status == HttpStatusCode.NoContent)
-            }
-            // Trying after deletion should hit 404.
-            client.delete("/accounts/foo/token") {
-                expectSuccess = false
-                headers["Authorization"] = "Bearer secret-token:${Base32Crockford.encode(token)}"
-            }.apply {
-                assert(this.status == HttpStatusCode.Unauthorized)
-            }
-            // Checking foo can still be served by basic auth, after token deletion.
-            assert(db.bankAccountCreate(
-                BankAccount(
-                    hasDebt = false,
-                    internalPaytoUri = IbanPayTo("payto://iban/DE1234"),
-                    maxDebt = TalerAmount(100, 0, "KUDOS"),
-                    owningCustomerId = 1
-                )
-            ) != null)
-            client.get("/accounts/foo") {
-                expectSuccess = true
-                basicAuth("foo", "pw")
-            }
+    fun get() = bankSetup { _ ->
+        // Check OK
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:9.0" } ) 
+        }.assertOk().run {
+            val opId = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            client.get("/withdrawals/${opId.withdrawal_id}") {
+                basicAuth("merchant", "merchant-password")
+            }.assertOk()
         }
+
+        // Check bad UUID
+        client.get("/withdrawals/chocolate").assertBadRequest()
+
+        // Check unknown
+        client.get("/withdrawals/${UUID.randomUUID()}").assertNotFound()
     }
 
-    // Creating token with "forever" duration.
+    // POST /withdrawals/withdrawal_id/abort
     @Test
-    fun tokenForeverTest() = setup { db, ctx -> 
-        assert(db.customerCreate(customerFoo) != null)
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            val newTok = client.post("/accounts/foo/token") {
-                expectSuccess = true
-                contentType(ContentType.Application.Json)
-                basicAuth("foo", "pw")
-                setBody(
-                    """
-                    {"duration": {"d_us": "forever"}, "scope": "readonly"}
-                """.trimIndent()
-                )
-            }
-            val newTokObj = Json.decodeFromString<TokenSuccessResponse>(newTok.bodyAsText())
-            assert(newTokObj.expiration.t_s == Instant.MAX)
+    fun abort() = bankSetup { _ ->
+        // Check abort created
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:1" }) 
+        }.assertOk().run {
+            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val uuid = resp.taler_withdraw_uri.split("/").last()
+
+            // Check OK
+            client.post("/withdrawals/$uuid/abort").assertOk()
+            // Check idempotence
+            client.post("/withdrawals/$uuid/abort").assertOk()
         }
+
+        // Check abort selected
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:1" }) 
+        }.assertOk().run {
+            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val uuid = resp.taler_withdraw_uri.split("/").last()
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
+                jsonBody(json {
+                    "reserve_pub" to randEddsaPublicKey()
+                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                })
+            }.assertOk()
+
+            // Check OK
+            client.post("/withdrawals/$uuid/abort").assertOk()
+            // Check idempotence
+            client.post("/withdrawals/$uuid/abort").assertOk()
+        }
+
+        // Check abort confirmed
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:1" }) 
+        }.assertOk().run {
+            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val uuid = resp.taler_withdraw_uri.split("/").last()
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
+                jsonBody(json {
+                    "reserve_pub" to randEddsaPublicKey()
+                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                })
+            }.assertOk()
+            client.post("/withdrawals/$uuid/confirm").assertOk()
+
+            // Check error
+            client.post("/withdrawals/$uuid/abort").assertConflict()
+        }
+
+        // Check bad UUID
+        client.post("/withdrawals/chocolate/abort").assertBadRequest()
+
+        // Check unknown
+        client.post("/withdrawals/${UUID.randomUUID()}/abort").assertNotFound()
     }
 
-    // Testing that too big or invalid durations fail the request.
+    // POST /withdrawals/withdrawal_id/confirm
     @Test
-    fun tokenInvalidDurationTest() = setup { db, ctx -> 
-        assert(db.customerCreate(customerFoo) != null)
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            var r = client.post("/accounts/foo/token") {
-                expectSuccess = false
-                contentType(ContentType.Application.Json)
-                basicAuth("foo", "pw")
-                setBody("""{
-                    "duration": {"d_us": "invalid"},
-                    "scope": "readonly"}""".trimIndent())
-            }
-            assert(r.status == HttpStatusCode.BadRequest)
-            r = client.post("/accounts/foo/token") {
-                expectSuccess = false
-                contentType(ContentType.Application.Json)
-                basicAuth("foo", "pw")
-                setBody("""{
-                    "duration": {"d_us": ${Long.MAX_VALUE}},
-                    "scope": "readonly"}""".trimIndent())
-            }
-            assert(r.status == HttpStatusCode.BadRequest)
-            r = client.post("/accounts/foo/token") {
-                expectSuccess = false
-                contentType(ContentType.Application.Json)
-                basicAuth("foo", "pw")
-                setBody("""{
-                    "duration": {"d_us": -1},
-                    "scope": "readonly"}""".trimIndent())
-            }
-            assert(r.status == HttpStatusCode.BadRequest)
-        }
-    }
-    // Checking the POST /token handling.
-    @Test
-    fun tokenTest() = setup { db, ctx -> 
-        assert(db.customerCreate(customerFoo) != null)
-        testApplication {
-            application {
-                corebankWebApp(db, ctx)
-            }
-            val newTok = client.post("/accounts/foo/token") {
-                expectSuccess = true
-                contentType(ContentType.Application.Json)
-                basicAuth("foo", "pw")
-                setBody(
-                    """
-                    {"scope": "readonly"}
-                """.trimIndent()
-                )
-            }
-            // Checking that the token lifetime defaulted to 24 hours.
-            val newTokObj = Json.decodeFromString<TokenSuccessResponse>(newTok.bodyAsText())
-            val newTokDb = db.bearerTokenGet(Base32Crockford.decode(newTokObj.access_token))
-            val lifeTime = Duration.between(newTokDb!!.creationTime, newTokDb.expirationTime)
-            assert(lifeTime == Duration.ofDays(1))
+    fun confirm() = bankSetup { db -> 
+        // Check confirm created
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:1" }) 
+        }.assertOk().run {
+            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val uuid = resp.taler_withdraw_uri.split("/").last()
 
-            // foo tries to create a token on behalf of bar, expect 403.
-            val r = client.post("/accounts/bar/token") {
-                expectSuccess = false
-                basicAuth("foo", "pw")
-            }
-            assert(r.status == HttpStatusCode.Unauthorized)
-            // Make ad-hoc token for foo.
-            val fooTok = ByteArray(32).apply { Random.nextBytes(this) }
-            assert(
-                db.bearerTokenCreate(
-                    BearerToken(
-                        content = fooTok,
-                        bankCustomer = 1L, // only foo exists.
-                        scope = TokenScope.readonly,
-                        creationTime = Instant.now(),
-                        isRefreshable = true,
-                        expirationTime = Instant.now().plus(1, ChronoUnit.DAYS)
-                    )
-                )
-            )
-            // Testing the secret-token:-scheme.
-            client.post("/accounts/foo/token") {
-                headers.set("Authorization", "Bearer secret-token:${Base32Crockford.encode(fooTok)}")
-                contentType(ContentType.Application.Json)
-                setBody("{\"scope\": \"readonly\"}")
-                expectSuccess = true
-            }
-            // Testing the 'forever' case.
-            val forever = client.post("/accounts/foo/token") {
-                expectSuccess = true
-                contentType(ContentType.Application.Json)
-                basicAuth("foo", "pw")
-                setBody("""{
-                    "scope": "readonly",
-                    "duration": {"d_us": "forever"}
-                }""".trimIndent())
-            }
-            val never: TokenSuccessResponse = Json.decodeFromString(forever.bodyAsText())
-            assert(never.expiration.t_s == Instant.MAX)
+            // Check err
+            client.post("/withdrawals/$uuid/confirm").assertStatus(HttpStatusCode.UnprocessableEntity)
         }
+
+        // Check confirm selected
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:1" }) 
+        }.assertOk().run {
+            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val uuid = resp.taler_withdraw_uri.split("/").last()
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
+                jsonBody(json {
+                    "reserve_pub" to randEddsaPublicKey()
+                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                })
+            }.assertOk()
+
+            // Check OK
+            client.post("/withdrawals/$uuid/confirm").assertOk()
+            // Check idempotence
+            client.post("/withdrawals/$uuid/confirm").assertOk()
+        }
+
+        // Check confirm aborted
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:1" }) 
+        }.assertOk().run {
+            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val uuid = resp.taler_withdraw_uri.split("/").last()
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
+                jsonBody(json {
+                    "reserve_pub" to randEddsaPublicKey()
+                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                })
+            }.assertOk()
+            client.post("/withdrawals/$uuid/abort").assertOk()
+
+            // Check error
+            client.post("/withdrawals/$uuid/confirm").assertConflict()
+                .assertErr(TalerErrorCode.TALER_EC_BANK_CONFIRM_ABORT_CONFLICT)
+        }
+
+        // Check bad UUID
+        client.post("/withdrawals/chocolate/confirm").assertBadRequest()
+
+        // Check unknown
+        client.post("/withdrawals/${UUID.randomUUID()}/confirm").assertNotFound()
     }
 }

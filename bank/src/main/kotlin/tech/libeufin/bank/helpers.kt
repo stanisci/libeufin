@@ -114,6 +114,13 @@ fun badRequest(
     )
 )
 
+fun checkInternalCurrency(ctx: BankApplicationContext, amount: TalerAmount) {
+    if (amount.currency != ctx.currency) throw badRequest(
+        "Wrong currency: expected internal currency ${ctx.currency} got ${amount.currency}",
+        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+    )
+}
+
 // Generates a new Payto-URI with IBAN scheme.
 fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
 
