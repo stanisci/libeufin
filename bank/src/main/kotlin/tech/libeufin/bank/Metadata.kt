@@ -29,7 +29,7 @@ sealed interface TxMetadata {
 
             // OutgoingTxMetadata
             try {
-                val (wtid, exchangeBaseUrl) = subject.split(" ", limit=2) ; 
+                val (wtid, exchangeBaseUrl) = subject.split(" ", limit=2)
                 return OutgoingTxMetadata(ShortHashCode(wtid), ExchangeUrl(exchangeBaseUrl))
             } catch (e: Exception) { }
 

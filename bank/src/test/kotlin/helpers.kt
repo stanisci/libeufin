@@ -110,6 +110,7 @@ fun HttpResponse.assertNotFound(): HttpResponse = assertStatus(HttpStatusCode.No
 fun HttpResponse.assertUnauthorized(): HttpResponse = assertStatus(HttpStatusCode.Unauthorized)
 fun HttpResponse.assertConflict(): HttpResponse = assertStatus(HttpStatusCode.Conflict)
 fun HttpResponse.assertBadRequest(): HttpResponse = assertStatus(HttpStatusCode.BadRequest)
+fun HttpResponse.assertForbidden(): HttpResponse = assertStatus(HttpStatusCode.Forbidden)
 
 
 suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {

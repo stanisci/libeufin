@@ -210,10 +210,10 @@ fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
         } // auth passed, proceed with activity.
         val req = call.receive<RegisterAccountRequest>()
         // Prohibit reserved usernames:
-        if (reservedAccounts.contains(req.username)) throw conflict( 
+        if (reservedAccounts.contains(req.username)) throw forbidden( 
             "Username '${req.username}' is reserved.",
             TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT
-        )  // TODO conflict or forbidden ?
+        )
         // Checking idempotency.
         val maybeCustomerExists =
             db.customerGetFromLogin(req.username) // Can be null if previous call crashed before completion.
@@ -295,22 +295,19 @@ fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
     delete("/accounts/{USERNAME}") {
         val (login, _) = call.authCheck(db, TokenScope.readwrite, withAdmin = true, requireAdmin = ctx.restrictAccountDeletion)
         // Not deleting reserved names.
-        if (reservedAccounts.contains(login)) throw conflict( 
+        if (reservedAccounts.contains(login)) throw forbidden( 
             "Cannot delete reserved accounts",
             TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT
-        ) // TODO conflict or forbidden ?
+        )
 
         when (db.customerDeleteIfBalanceIsZero(login)) {
             CustomerDeletionResult.CUSTOMER_NOT_FOUND -> throw notFound(
                 "Customer '$login' not found",
-                talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
-            CustomerDeletionResult.BALANCE_NOT_ZERO -> throw LibeufinBankException(
-                httpStatus = HttpStatusCode.PreconditionFailed, // PreconditionFailed or conflict ?
-                talerError = TalerError(
-                    hint = "Balance is not zero.",
-                    code = TalerErrorCode.TALER_EC_NONE.code // FIXME: need EC.
-                )
+            CustomerDeletionResult.BALANCE_NOT_ZERO -> throw conflict(
+                "Balance is not zero.",
+                TalerErrorCode.TALER_EC_NONE // FIXME: need EC.
             )
             CustomerDeletionResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
         }

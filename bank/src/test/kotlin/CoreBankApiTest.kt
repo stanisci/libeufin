@@ -9,6 +9,7 @@ import io.ktor.server.testing.*
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import net.taler.wallet.crypto.Base32Crockford
+import net.taler.common.errorcodes.TalerErrorCode
 import org.junit.Test
 import org.postgresql.jdbc.PgConnection
 import tech.libeufin.bank.*
@@ -59,7 +60,7 @@ class CoreBankAccountsMgmtApiTest {
                     "password" to "password"
                     "name" to "John Smith"
                 })
-            }.assertStatus(HttpStatusCode.Conflict)
+            }.assertForbidden().assertErr(TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT)
         }
     }
 
@@ -90,14 +91,13 @@ class CoreBankAccountsMgmtApiTest {
         // Unknown account
         client.delete("/accounts/unknown") {
             basicAuth("admin", "admin-password")
-        }.assertStatus(HttpStatusCode.NotFound)
+        }.assertNotFound().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
 
         // Reserved account
         reservedAccounts.forEach {
             client.delete("/accounts/$it") {
                 basicAuth("admin", "admin-password")
-                expectSuccess = false
-            }.assertStatus(HttpStatusCode.Conflict)
+            }.assertForbidden().assertErr(TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT)
         }
        
         // successful deletion
@@ -114,7 +114,7 @@ class CoreBankAccountsMgmtApiTest {
         // Trying again must yield 404
         client.delete("/accounts/john") {
             basicAuth("admin", "admin-password")
-        }.assertStatus(HttpStatusCode.NotFound)
+        }.assertNotFound().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
 
         
         // fail to delete, due to a non-zero balance.
@@ -126,7 +126,7 @@ class CoreBankAccountsMgmtApiTest {
         }.assertOk()
         client.delete("/accounts/merchant") {
             basicAuth("admin", "admin-password")
-        }.assertStatus(HttpStatusCode.PreconditionFailed)
+        }.assertConflict()
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
             jsonBody(json {
@@ -167,7 +167,7 @@ class CoreBankAccountsMgmtApiTest {
         client.patch("/accounts/merchant") {
             basicAuth("merchant", "merchant-password")
             jsonBody(nameReq)
-        }.assertStatus(HttpStatusCode.Forbidden)
+        }.assertForbidden()
         // Finally checking that admin does get to patch foo's name.
         client.patch("/accounts/merchant") {
             basicAuth("admin", "admin-password")
@@ -280,8 +280,8 @@ class CoreBankAccountsMgmtApiTest {
 
         // Check wrong user
         client.get("/accounts/exchange") {
-            basicAuth("merchanr", "merchanr-password")
-        }.assertStatus(HttpStatusCode.Unauthorized)
+            basicAuth("merchant", "merchant-password")
+        }.assertUnauthorized()
     }
 }
 
@@ -294,19 +294,19 @@ class CoreBankTransactionsApiTest {
         client.request(path) {
             this.method = method
             basicAuth("unknown", "password")
-        }.assertStatus(HttpStatusCode.Unauthorized)
+        }.assertUnauthorized()
 
         // Wrong password
         client.request(path) {
             this.method = method
             basicAuth("merchant", "wrong-password")
-        }.assertStatus(HttpStatusCode.Unauthorized)
+        }.assertUnauthorized()
 
         // Wrong account
         client.request(path) {
             this.method = method
             basicAuth("exchange", "merchant-password")
-        }.assertStatus(HttpStatusCode.Unauthorized)
+        }.assertUnauthorized()
 
         // TODO check admin rights
     }
@@ -451,11 +451,11 @@ class CoreBankTransactionsApiTest {
         // Check unknown transaction
         client.get("/accounts/merchant/transactions/3") {
             basicAuth("merchant", "merchant-password")
-        }.assertStatus(HttpStatusCode.NotFound)
+        }.assertNotFound().assertErr(TalerErrorCode.TALER_EC_BANK_TRANSACTION_NOT_FOUND)
         // Check wrong transaction
         client.get("/accounts/merchant/transactions/2") {
             basicAuth("merchant", "merchant-password")
-        }.assertStatus(HttpStatusCode.Unauthorized) // Should be NOT_FOUND ?
+        }.assertUnauthorized() // Should be NOT_FOUND ?
     }
 
     // POST /transactions
@@ -515,7 +515,7 @@ class CoreBankTransactionsApiTest {
             jsonBody(json(valid_req) {
                 "amount" to "EUR:3.3"
             })
-        }.assertBadRequest()
+        }.assertBadRequest().assertErr(TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH)
         // Surpassing the debt limit
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
@@ -523,7 +523,7 @@ class CoreBankTransactionsApiTest {
             jsonBody(json(valid_req) {
                 "amount" to "KUDOS:555"
             })
-        }.assertStatus(HttpStatusCode.Conflict)
+        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
         // Missing message
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
@@ -539,7 +539,7 @@ class CoreBankTransactionsApiTest {
             jsonBody(json(valid_req) {
                 "payto_uri" to "payto://iban/UNKNOWN-IBAN-XYZ?message=payout"
             })
-        }.assertStatus(HttpStatusCode.NotFound)
+        }.assertNotFound().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
         // Transaction to self
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
@@ -547,7 +547,7 @@ class CoreBankTransactionsApiTest {
             jsonBody(json(valid_req) {
                 "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout"
             })
-        }.assertStatus(HttpStatusCode.Conflict)
+        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT)
     }
 }
 
