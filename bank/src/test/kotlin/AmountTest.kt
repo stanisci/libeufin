@@ -17,10 +17,10 @@
  * <http://www.gnu.org/licenses/>
  */
 
-
 import org.junit.Test
 import org.postgresql.jdbc.PgConnection
 import tech.libeufin.bank.*
+import tech.libeufin.util.*
 import kotlin.test.*
 import java.time.Instant
 import java.util.*
@@ -126,19 +126,19 @@ class AmountTest {
     }
 
     @Test
-    fun parseValid() {
+    fun parse() {
         assertEquals(TalerAmount("EUR:4"), TalerAmount(4L, 0, "EUR"))
         assertEquals(TalerAmount("EUR:0.02"), TalerAmount(0L, 2000000, "EUR"))
         assertEquals(TalerAmount("EUR:4.12"), TalerAmount(4L, 12000000, "EUR"))
         assertEquals(TalerAmount("LOCAL:4444.1000"), TalerAmount(4444L, 10000000, "LOCAL"))
-    }
+        assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), TalerAmount(TalerAmount.MAX_VALUE, 99999999, "EUR"))
 
-    @Test
-    fun parseInvalid() {
         assertException("Invalid amount format") {TalerAmount("")}
         assertException("Invalid amount format") {TalerAmount("EUR")}
         assertException("Invalid amount format") {TalerAmount("eur:12")}
         assertException("Invalid amount format") {TalerAmount(" EUR:12")}
+        assertException("Invalid amount format") {TalerAmount("EUR:1.")}
+        assertException("Invalid amount format") {TalerAmount("EUR:.1")}
         assertException("Invalid amount format") {TalerAmount("AZERTYUIOPQSD:12")}
         assertException("Value specified in amount is too large") {TalerAmount("EUR:${Long.MAX_VALUE}")}
         assertException("Invalid amount format") {TalerAmount("EUR:4.000000000")}
@@ -149,6 +149,86 @@ class AmountTest {
     fun parseRoundTrip() {
         for (amount in listOf("EUR:4", "EUR:0.02", "EUR:4.12")) {
             assertEquals(amount, TalerAmount(amount).toString())
+        }
+    }
+    
+    @Test
+    fun normalize() = dbSetup { db ->
+        db.conn { conn ->
+            val stmt = conn.prepareStatement("SELECT normalized.val, normalized.frac FROM amount_normalize((?, ?)::taler_amount) as normalized")
+            fun TalerAmount.normalize(): TalerAmount? {
+                stmt.setLong(1, value)
+                stmt.setInt(2, frac)
+                return stmt.oneOrNull {
+                    TalerAmount(
+                        it.getLong(1),
+                        it.getInt(2),
+                        "EUR"
+                    )
+                }!!
+            }
+    
+            assertEquals(TalerAmount("EUR:6"), TalerAmount(4L, 2 * TalerAmount.FRACTION_BASE, "EUR").normalize())
+            assertEquals(TalerAmount("EUR:6.00000001"), TalerAmount(4L, 2 * TalerAmount.FRACTION_BASE + 1, "EUR").normalize())
+            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999").normalize())
+            assertException("ERROR: bigint out of range") { TalerAmount(Long.MAX_VALUE, TalerAmount.FRACTION_BASE, "EUR").normalize() }
+            assertException("ERROR: amount value overflowed") { TalerAmount(TalerAmount.MAX_VALUE, TalerAmount.FRACTION_BASE , "EUR").normalize() }
+        }
+    }
+
+    @Test
+    fun add() = dbSetup { db ->
+        db.conn { conn ->
+            val stmt = conn.prepareStatement("SELECT sum.val, sum.frac FROM amount_add((?, ?)::taler_amount, (?, ?)::taler_amount) as sum")
+            operator fun TalerAmount.plus(increment: TalerAmount): TalerAmount? {
+                stmt.setLong(1, value)
+                stmt.setInt(2, frac)
+                stmt.setLong(3, increment.value)
+                stmt.setInt(4, increment.frac)
+                return stmt.oneOrNull {
+                    TalerAmount(
+                        it.getLong(1),
+                        it.getInt(2),
+                        "EUR"
+                    )
+                }!!
+            }
+    
+            assertEquals(TalerAmount("EUR:6.41") + TalerAmount("EUR:4.69"), TalerAmount("EUR:11.1"))
+            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}") + TalerAmount("EUR:0.99999999"), TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"))
+            assertException("ERROR: amount value overflowed") { TalerAmount(TalerAmount.MAX_VALUE - 5, 0, "EUR") + TalerAmount(6, 0, "EUR") }
+            assertException("ERROR: bigint out of range") { TalerAmount(Long.MAX_VALUE, 0, "EUR") + TalerAmount(1, 0, "EUR") }
+            assertException("ERROR: amount value overflowed") { TalerAmount(TalerAmount.MAX_VALUE - 5, TalerAmount.FRACTION_BASE - 1, "EUR") + TalerAmount(5, 2, "EUR") }
+            assertException("ERROR: integer out of range") { TalerAmount(0, Int.MAX_VALUE, "EUR") + TalerAmount(0, 1, "EUR") }
+        }
+    }
+
+    @Test
+    fun mul() = dbSetup { db ->
+        db.conn { conn ->
+            val stmt = conn.prepareStatement("SELECT product.val, product.frac FROM amount_mul((?, ?)::taler_amount, (?, ?)::taler_amount) as product")
+            operator fun TalerAmount.times(increment: TalerAmount): TalerAmount? {
+                stmt.setLong(1, value)
+                stmt.setInt(2, frac)
+                stmt.setLong(3, increment.value)
+                stmt.setInt(4, increment.frac)
+                return stmt.oneOrNull {
+                    TalerAmount(
+                        it.getLong(1),
+                        it.getInt(2),
+                        "EUR"
+                    )
+                }!!
+            }
+    
+            assertEquals(TalerAmount("EUR:6.41") * TalerAmount("EUR:4.69"), TalerAmount("EUR:30.0629"))
+            assertEquals(TalerAmount("EUR:6.41") * TalerAmount("EUR:1.000001"), TalerAmount("EUR:6.41000641"))
+            assertEquals(TalerAmount("EUR:0.99999999") * TalerAmount("EUR:2.5"), TalerAmount("EUR:2.49999998"))
+            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999") * TalerAmount("EUR:1"), TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"))
+            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE/4}") * TalerAmount("EUR:4"), TalerAmount("EUR:${TalerAmount.MAX_VALUE}"))
+            assertException("ERROR: amount value overflowed") { TalerAmount(TalerAmount.MAX_VALUE/3, 0, "EUR") * TalerAmount(3, 1, "EUR") }
+            assertException("ERROR: amount value overflowed") { TalerAmount((TalerAmount.MAX_VALUE+2)/2, 0, "EUR") * TalerAmount("EUR:2") }
+            assertException("ERROR: numeric field overflow") { TalerAmount(Long.MAX_VALUE, 0, "EUR") * TalerAmount("EUR:1") }
         }
     }
 }

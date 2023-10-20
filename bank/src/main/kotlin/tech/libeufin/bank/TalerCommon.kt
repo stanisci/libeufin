@@ -241,7 +241,7 @@ class TalerAmount {
         val (currency, value, frac) = match.destructured
         this.currency = currency
         this.value = value.toLongOrNull() ?: throw badAmount("Invalid value")
-        if (this.value > MAX_SAFE_INTEGER) throw badAmount("Value specified in amount is too large")
+        if (this.value > MAX_VALUE) throw badAmount("Value specified in amount is too large")
         this.frac = if (frac.isEmpty()) {
             0
         } else {
@@ -284,7 +284,8 @@ class TalerAmount {
 
     companion object {
         const val FRACTION_BASE = 100000000
-        private val PATTERN = Regex("([A-Z]{1,11}):([0-9]+)(?:\\.([0-9]{0,8}))?");
+        const val MAX_VALUE = 4503599627370496L; // 2^52
+        private val PATTERN = Regex("([A-Z]{1,11}):([0-9]+)(?:\\.([0-9]{1,8}))?");
     }
 }
 

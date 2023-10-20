@@ -137,7 +137,7 @@ fun assertException(msg: String, lambda: () -> Unit) {
         lambda()
         throw Exception("Expected failure")
     } catch (e: Exception) {
-        assertEquals(msg, e.message)
+        assert(e.message!!.startsWith(msg)) { "${e.message}" }
     }
 }
 

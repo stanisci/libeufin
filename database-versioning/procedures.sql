@@ -1,33 +1,54 @@
 BEGIN;
 SET search_path TO libeufin_bank;
 
-CREATE OR REPLACE PROCEDURE amount_normalize(
+CREATE OR REPLACE FUNCTION amount_normalize(
     IN amount taler_amount
-  ,INOUT normalized taler_amount
+  ,OUT normalized taler_amount
 )
 LANGUAGE plpgsql AS $$
 BEGIN
   normalized.val = amount.val + amount.frac / 100000000;
+  IF (normalized.val > 1::bigint<<52) THEN
+    RAISE EXCEPTION 'amount value overflowed';
+  END IF;
   normalized.frac = amount.frac % 100000000;
-END $$;
-COMMENT ON PROCEDURE amount_normalize
-  IS 'Returns the normalized amount by adding to the .val the value of (.frac / 100000000) and removing the modulus 100000000 from .frac.';
 
-CREATE OR REPLACE PROCEDURE amount_add(
+END $$;
+COMMENT ON FUNCTION amount_normalize
+  IS 'Returns the normalized amount by adding to the .val the value of (.frac / 100000000) and removing the modulus 100000000 from .frac.'
+      'It raises an exception when the resulting .val is larger than 2^52';
+
+CREATE OR REPLACE FUNCTION amount_add(
    IN a taler_amount
   ,IN b taler_amount
-  ,INOUT sum taler_amount
+  ,OUT sum taler_amount
 )
 LANGUAGE plpgsql AS $$
 BEGIN
   sum = (a.val + b.val, a.frac + b.frac);
-  CALL amount_normalize(sum ,sum);
-  IF sum.val > (1<<52) THEN
-    RAISE EXCEPTION 'addition overflow';
+  SELECT normalized.val, normalized.frac INTO sum.val, sum.frac FROM amount_normalize(sum) as normalized;
+END $$;
+COMMENT ON FUNCTION amount_add
+  IS 'Returns the normalized sum of two amounts. It raises an exception when the resulting .val is larger than 2^52';
+
+CREATE OR REPLACE FUNCTION amount_mul(
+   IN a taler_amount
+  ,IN b taler_amount
+  ,OUT product taler_amount
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+tmp NUMERIC(24, 8); -- 16 digit for val and 8 for frac
+BEGIN
+  -- TODO write custom multiplication logic to get more control over rounding
+  tmp = (a.val::numeric(24, 8) + a.frac::numeric(24, 8) / 100000000) * (b.val::numeric(24, 8) + b.frac::numeric(24, 8) / 100000000);
+  product = (trunc(tmp)::bigint, (tmp * 100000000 % 100000000)::int);
+  IF (product.val > 1::bigint<<52) THEN
+    RAISE EXCEPTION 'amount value overflowed';
   END IF;
 END $$;
-COMMENT ON PROCEDURE amount_add
-  IS 'Returns the normalized sum of two amounts. It raises an exception when the resulting .val is larger than 2^52';
+COMMENT ON FUNCTION amount_mul -- TODO document rounding
+  IS 'Returns the product of two amounts. It raises an exception when the resulting .val is larger than 2^52';
 
 CREATE OR REPLACE FUNCTION amount_left_minus_right(
   IN l taler_amount
@@ -552,7 +573,9 @@ END IF;
 -- check enough funds
 IF account_has_debt THEN 
   -- debt case: simply checking against the max debt allowed.
-  CALL amount_add(account_balance, in_amount, account_balance);
+  SELECT sum.val, sum.frac 
+    INTO account_balance.val, account_balance.frac 
+    FROM amount_add(account_balance, in_amount) as sum;
   SELECT NOT ok
     INTO out_balance_insufficient
     FROM amount_left_minus_right(account_max_debt, account_balance);
@@ -826,9 +849,9 @@ out_creditor_not_found=FALSE;
 -- check debtor has enough funds.
 IF debtor_has_debt THEN 
   -- debt case: simply checking against the max debt allowed.
-  CALL amount_add(debtor_balance,
-	          in_amount,
-		  potential_balance);
+  SELECT sum.val, sum.frac 
+    INTO potential_balance.val, potential_balance.frac 
+    FROM amount_add(debtor_balance, in_amount) as sum;
   SELECT NOT ok
     INTO out_balance_insufficient
     FROM amount_left_minus_right(debtor_max_debt,
@@ -875,7 +898,9 @@ out_balance_insufficient=FALSE;
 -- from debit to a credit situation, and adjust the balance
 -- accordingly.
 IF NOT creditor_has_debt THEN -- easy case.
-  CALL amount_add(creditor_balance, in_amount, new_creditor_balance);
+  SELECT sum.val, sum.frac 
+    INTO new_creditor_balance.val, new_creditor_balance.frac 
+    FROM amount_add(creditor_balance, in_amount) as sum;
   will_creditor_have_debt=FALSE;
 ELSE -- creditor had debit but MIGHT switch to credit.
   SELECT

@@ -37,9 +37,7 @@ import tech.libeufin.util.*
 private const val DB_CTR_LIMIT = 1000000
 
 fun Customer.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Cutsomer '$login' had no DB row ID.")
-fun BankAccount.expectBalance(): TalerAmount = this.balance ?: throw internalServerError("Bank account '${this.internalPaytoUri}' lacks balance.")
 fun BankAccount.expectRowId(): Long = this.bankAccountId ?: throw internalServerError("Bank account '${this.internalPaytoUri}' lacks database row ID.")
-fun BankAccountTransaction.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Bank account transaction (${this.subject}) lacks database row ID.")
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
 
@@ -116,7 +114,7 @@ class Database(dbConfig: String, private val bankCurrency: String): java.io.Clos
         dbPool.close()
     }
 
-    private suspend fun <R> conn(lambda: suspend (PgConnection) -> R): R {
+    suspend fun <R> conn(lambda: suspend (PgConnection) -> R): R {
         // Use a coroutine dispatcher that we can block as JDBC API is blocking
         return withContext(Dispatchers.IO) {
             val conn = dbPool.getConnection()
