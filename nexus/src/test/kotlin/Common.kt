@@ -4,6 +4,9 @@ import io.ktor.client.request.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import tech.libeufin.nexus.*
+import tech.libeufin.util.DatabaseConfig
+import tech.libeufin.util.initializeDatabaseTables
+import tech.libeufin.util.resetDatabaseTables
 import java.security.interfaces.RSAPrivateCrtKey
 
 val j = Json {
@@ -16,6 +19,23 @@ val config: EbicsSetupConfig = run {
     val handle = TalerConfig(NEXUS_CONFIG_SOURCE)
     handle.load()
     EbicsSetupConfig(handle)
+}
+
+fun prepDb(cfg: TalerConfig): Database {
+    cfg.loadDefaults()
+    val dbCfg = DatabaseConfig(
+        dbConnStr = "postgresql:///libeufincheck",
+        sqlDir = cfg.requirePath("paths", "datadir") + "sql"
+    )
+    println("SQL dir for testing: ${dbCfg.sqlDir}")
+    try {
+        resetDatabaseTables(dbCfg, "libeufin-nexus")
+    } catch (e: Exception) {
+        logger.warn("Resetting an empty database throws, tolerating this...")
+        logger.warn(e.message)
+    }
+    initializeDatabaseTables(dbCfg, "libeufin-nexus")
+    return Database(dbCfg.dbConnStr)
 }
 
 val clientKeys = generateNewKeys()

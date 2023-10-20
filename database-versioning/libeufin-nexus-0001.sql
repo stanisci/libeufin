@@ -55,9 +55,9 @@ CREATE TABLE IF NOT EXISTS initiated_outgoing_transactions
   ,credit_payto_uri TEXT NOT NULL
   ,outgoing_transaction_id INT8 REFERENCES outgoing_transactions (outgoing_transaction_id)
   ,submitted BOOL DEFAULT FALSE 
-  ,hidden BOOL DEFAULT FALSE -- FIXME: exaplain this.
-  ,client_request_uuid TEXT NOT NULL UNIQUE
-    ,failure_message TEXT -- NOTE: that may mix soon failures (those found at initiation time), or late failures (those found out along a fetch operation)
+  ,hidden BOOL DEFAULT FALSE -- FIXME: explain this.
+  ,client_request_uuid TEXT UNIQUE
+  ,failure_message TEXT -- NOTE: that may mix soon failures (those found at initiation time), or late failures (those found out along a fetch operation)
     );
 
 COMMENT ON COLUMN initiated_outgoing_transactions.outgoing_transaction_id
