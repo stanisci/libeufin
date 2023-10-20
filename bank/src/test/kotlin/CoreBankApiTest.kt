@@ -24,9 +24,24 @@ import kotlin.test.*
 import kotlinx.coroutines.*
 
 class CoreBankConfigTest {
+    // GET /config
     @Test
-    fun getConfig() = bankSetup { _ -> 
+    fun config() = bankSetup { _ -> 
         client.get("/config").assertOk()
+    }
+
+    // GET /monitor
+    @Test
+    fun monitor() = bankSetup { _ -> 
+        // Check OK
+        client.get("/monitor?timeframe=hour") {
+            basicAuth("admin", "admin-password")
+        }.assertOk()
+
+        // Check only admin
+        client.get("/monitor") {
+            basicAuth("exchange", "exchange-password")
+        }.assertUnauthorized()
     }
 }
 

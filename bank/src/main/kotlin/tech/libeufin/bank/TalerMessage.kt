@@ -106,6 +106,16 @@ data class TokenRequest(
     val refreshable: Boolean = false
 )
 
+@Serializable
+data class MonitorResponse(
+    val cashinCount: Long,
+    val cashinExternalVolume: TalerAmount,
+    val cashoutCount: Long,
+    val cashoutExternalVolume: TalerAmount,
+    val talerPayoutCount: Long,
+    val talerPayoutInternalVolume: TalerAmount
+)
+
 /**
  * Convenience type to throw errors along the bank activity
  * and that is meant to be caught by Ktor and responded to the

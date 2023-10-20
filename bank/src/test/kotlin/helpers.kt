@@ -58,7 +58,7 @@ fun setup(
     resetDatabaseTables(dbCfg, "libeufin-bank")
     initializeDatabaseTables(dbCfg, "libeufin-bank")
     val ctx = config.loadBankApplicationContext()
-    Database(dbCfg.dbConnStr, ctx.currency).use {
+    Database(dbCfg.dbConnStr, ctx.currency, "TODO").use {
         runBlocking {
             lambda(it, ctx)
         }

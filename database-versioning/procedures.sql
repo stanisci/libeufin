@@ -1017,6 +1017,67 @@ BEGIN
   END IF;
   out_already_confirmed=FALSE;
   DELETE FROM cashout_operations WHERE cashout_uuid=in_cashout_uuid;
-  RETURN;
 END $$;
-COMMIT;
+
+CREATE OR REPLACE FUNCTION stats_get_frame(
+  IN timeframe stat_timeframe_enum,
+  IN which INTEGER,
+  OUT cashin_count BIGINT,
+  OUT cashin_volume_in_fiat taler_amount,
+  OUT cashout_count BIGINT,
+  OUT cashout_volume_in_fiat taler_amount,
+  OUT internal_taler_payments_count BIGINT,
+  OUT internal_taler_payments_volume taler_amount
+)
+LANGUAGE sql AS $$
+  SELECT 
+    s.cashin_count
+    ,s.cashin_volume_in_fiat
+    ,s.cashout_count
+    ,s.cashout_volume_in_fiat
+    ,s.internal_taler_payments_count
+    ,s.internal_taler_payments_volume
+    FROM regional_stats AS s
+  WHERE s.timeframe = timeframe 
+    AND start_time = CASE 
+      WHEN which IS NULL        THEN date_trunc(timeframe::text, now())
+      WHEN timeframe = 'hour'   THEN date_trunc('day', now()) + '1 hour'::interval * which
+      WHEN timeframe = 'day'    THEN date_trunc('month', now()) + '1 day'::interval * which
+      WHEN timeframe = 'month'  THEN date_trunc('year', now()) + '1 month'::interval * which
+      WHEN timeframe = 'year'   THEN make_date(which, 1, 1)::TIMESTAMP
+    END
+$$;
+
+CREATE OR REPLACE PROCEDURE stats_register_internal_taler_payment(
+  IN amount taler_amount
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+  frame stat_timeframe_enum;
+BEGIN
+  FOREACH frame IN ARRAY enum_range(null::stat_timeframe_enum) LOOP
+    INSERT INTO regional_stats AS s (
+      timeframe
+      ,start_time
+      ,cashin_count
+      ,cashin_volume_in_fiat
+      ,cashout_count
+      ,cashout_volume_in_fiat
+      ,internal_taler_payments_count
+      ,internal_taler_payments_volume
+      ) 
+    VALUES (
+        frame
+        ,date_trunc(frame::text, now())
+        ,0
+        ,(0, 0)::taler_amount
+        ,0
+        ,(0, 0)::taler_amount
+        ,1
+        ,amount
+      )
+    ON CONFLICT (timeframe, start_time) DO UPDATE
+    SET internal_taler_payments_count = s.internal_taler_payments_count+1
+        ,internal_taler_payments_volume = (SELECT amount_add(s.internal_taler_payments_volume, amount));
+  END LOOP;
+END $$;

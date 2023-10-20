@@ -255,16 +255,9 @@ fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
         }
     }
     routing {
-        get("/config") {
-            call.respond(Config(ctx.currencySpecification))
-            return@get
-        }
-        this.coreBankTokenApi(db)
-        this.coreBankAccountsMgmtApi(db, ctx)
-        this.coreBankTransactionsApi(db, ctx)
-        this.coreBankWithdrawalApi(db, ctx)
-        this.bankIntegrationApi(db, ctx)
-        this.wireGatewayApi(db, ctx)
+        coreBankApi(db, ctx)
+        bankIntegrationApi(db, ctx)
+        wireGatewayApi(db, ctx)
     }
 }
 
@@ -351,7 +344,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
             logger.info("Can only serve libeufin-bank via TCP")
             exitProcess(1)
         }
-        val db = Database(dbCfg.dbConnStr, ctx.currency)
+        val db = Database(dbCfg.dbConnStr, ctx.currency, "TODO")
         runBlocking {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
                 exitProcess(1)
@@ -374,7 +367,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val cfg = talerConfig(configFile)
         val ctx = cfg.loadBankApplicationContext() 
         val dbCfg = cfg.loadDbConfig()
-        val db = Database(dbCfg.dbConnStr, ctx.currency)
+        val db = Database(dbCfg.dbConnStr, ctx.currency, "TODO")
         runBlocking {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)

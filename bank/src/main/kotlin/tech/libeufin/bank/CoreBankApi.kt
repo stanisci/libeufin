@@ -18,7 +18,22 @@ import kotlin.random.Random
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
 
-fun Routing.coreBankTokenApi(db: Database) {
+fun Routing.coreBankApi(db: Database, ctx: BankApplicationContext) {
+    get("/config") {
+        call.respond(Config(ctx.currencySpecification))
+    }
+    get("/monitor") {
+        call.authAdmin(db, TokenScope.readonly)
+        val params = MonitorParams.extract(call.request.queryParameters)
+        call.respond(db.monitor(params))
+    }
+    coreBankTokenApi(db)
+    coreBankAccountsMgmtApi(db, ctx)
+    coreBankTransactionsApi(db, ctx)
+    coreBankWithdrawalApi(db, ctx)
+}
+
+private fun Routing.coreBankTokenApi(db: Database) {
     post("/accounts/{USERNAME}/token") {
         val (login, _) = call.authCheck(db, TokenScope.refreshable)
         val maybeAuthToken = call.getAuthToken()
@@ -95,7 +110,7 @@ fun Routing.coreBankTokenApi(db: Database) {
 }
 
 
-fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
+private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
     post("/accounts") { 
         // check if only admin is allowed to create new accounts
         if (ctx.restrictRegistration) {
@@ -325,7 +340,7 @@ fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
     }
 }
 
-fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
+private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
     get("/accounts/{USERNAME}/transactions") {
         call.authCheck(db, TokenScope.readonly)
         val params = getHistoryParams(call.request.queryParameters)

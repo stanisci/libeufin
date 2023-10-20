@@ -24,13 +24,15 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.util.*
+import io.ktor.util.valuesOf
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import java.net.URL
-import java.time.Instant
+import java.time.*
+import java.time.temporal.*
 import java.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers")
@@ -179,6 +181,44 @@ suspend fun getWithdrawal(db: Database, opIdParam: String): TalerWithdrawalOpera
         hint = "Withdrawal operation $opIdParam not found", talerEc = TalerErrorCode.TALER_EC_END
     )
     return op
+}
+
+enum class Timeframe {
+    hour,
+    day,
+    month,
+    year
+}
+
+data class MonitorParams(
+    val timeframe: Timeframe,
+    val which: Int?
+) {
+    companion object {
+        fun extract(params: Parameters): MonitorParams {
+            val timeframe = Timeframe.valueOf(params["timeframe"] ?: throw MissingRequestParameterException(parameterName = "timeframe"))
+            val which = try {
+                params["which"]?.toInt()
+            } catch (e: Exception) {
+                throw badRequest("Param 'which' not a number")
+            }
+            if (which != null) {
+                val lastDayOfMonth = OffsetDateTime.now(ZoneOffset.UTC).with(TemporalAdjusters.lastDayOfMonth()).dayOfMonth
+                when {
+                    timeframe == Timeframe.hour && (0 > which || which > 23) -> 
+                        throw badRequest("For hour timestamp param 'which' must be between 00 to 23")
+                    timeframe == Timeframe.day && (1 > which || which > 23) -> 
+                        throw badRequest("For day timestamp param 'which' must be between 1 to $lastDayOfMonth")
+                    timeframe == Timeframe.month && (1 > which || which > lastDayOfMonth) -> 
+                        throw badRequest("For month timestamp param 'which' must be between 1 to 12")
+                    timeframe == Timeframe.year && (1 > which|| which > 9999) -> 
+                        throw badRequest("For year timestamp param 'which' must be between 0001 to 9999")
+                    else -> {}
+                }
+            }
+            return MonitorParams(timeframe, which)
+        }
+    }
 }
 
 data class HistoryParams(
