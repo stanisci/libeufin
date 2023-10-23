@@ -8,6 +8,7 @@ import tech.libeufin.util.DatabaseConfig
 import tech.libeufin.util.initializeDatabaseTables
 import tech.libeufin.util.resetDatabaseTables
 import java.security.interfaces.RSAPrivateCrtKey
+import java.time.Instant
 
 val j = Json {
     this.serializersModule = SerializersModule {
@@ -54,6 +55,7 @@ fun getMockedClient(
     }
 }
 
+// Partial config to talk to PostFinance.
 fun getPofiConfig(userId: String, partnerId: String) = """
     [nexus-ebics]
     CURRENCY = KUDOS
@@ -68,3 +70,13 @@ fun getPofiConfig(userId: String, partnerId: String) = """
     ACCOUNT_META_DATA_FILE = /tmp/ebics-meta.json
     BANK_DIALECT = postfinance
 """.trimIndent()
+
+// Generates a payment initiation, given its subject.
+fun genInitPay(subject: String, rowUuid: String? = null) =
+    InitiatedPayment(
+        amount = TalerAmount(44, 0, "KUDOS"),
+        creditPaytoUri = "payto://iban/not-used",
+        wireTransferSubject = subject,
+        initiationTime = Instant.now(),
+        clientRequestUuid = rowUuid
+    )

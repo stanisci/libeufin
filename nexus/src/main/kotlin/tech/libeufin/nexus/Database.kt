@@ -45,8 +45,9 @@ enum class PaymentInitiationOutcome {
 /**
  * Performs a INSERT, UPDATE, or DELETE operation.
  *
- * @return true on success, false on unique constraint violation,
- *         rethrows on any other issue.
+ * @return true if at least one row was affected by this operation,
+ *         false on unique constraint violation or no rows were affected.
+ *
  */
 private fun PreparedStatement.maybeUpdate(): Boolean {
     try {
@@ -56,7 +57,7 @@ private fun PreparedStatement.maybeUpdate(): Boolean {
         if (e.sqlState == "23505") return false // unique_violation
         throw e // rethrowing, not to hide other types of errors.
     }
-    return true
+    return updateCount > 0
 }
 
 /**
@@ -100,10 +101,17 @@ class Database(dbConfig: String): java.io.Closeable {
      * Sets payment initiation as submitted.
      *
      * @param rowId row ID of the record to set.
-     * @return true on success, false otherwise.
+     * @return true on success, false if no payment was affected.
      */
-    suspend fun initiatedPaymentSetSubmitted(rowId: Long): Boolean {
-        throw NotImplementedError()
+    suspend fun initiatedPaymentSetSubmitted(rowId: Long): Boolean = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+             UPDATE initiated_outgoing_transactions
+                      SET submitted = true
+                      WHERE initiated_outgoing_transaction_id=?
+             """
+        )
+        stmt.setLong(1, rowId)
+        return@runConn stmt.maybeUpdate()
     }
 
     /**
