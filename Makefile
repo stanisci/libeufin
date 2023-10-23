@@ -53,7 +53,6 @@ install-nexus:
 	install contrib/libeufin-nexus.conf $(nexus_config_dir)/
 	install -D database-versioning/libeufin-nexus*.sql -t $(nexus_sql_dir)
 	install -D database-versioning/versioning.sql -t $(nexus_sql_dir)
-	install -D database-versioning/procedures.sql -t $(nexus_sql_dir)
 	./gradlew -q -Pprefix=$(abs_destdir)$(prefix) nexus:installToPrefix
 
 .PHONY: assemble

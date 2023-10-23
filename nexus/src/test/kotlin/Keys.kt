@@ -23,9 +23,9 @@ class PublicKeys {
             bank_encryption_public_key = CryptoUtil.generateRsaKeyPair(2028).public
         )
         // storing them on disk.
-        assertTrue(syncJsonToDisk(fileContent, config.bankPublicKeysFilename))
+        assertTrue(syncJsonToDisk(fileContent, "/tmp/nexus-tests-bank-keys.json"))
         // loading them and check that values are the same.
-        val fromDisk = loadBankKeys(config.bankPublicKeysFilename)
+        val fromDisk = loadBankKeys("/tmp/nexus-tests-bank-keys.json")
         assertNotNull(fromDisk)
         assertTrue {
             fromDisk.accepted &&

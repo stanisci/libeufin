@@ -311,14 +311,8 @@ private fun findBic(maybeList: List<EbicsTypes.AccountInfo>?): String? {
  * @param configFile location of the configuration entry point.
  * @return internal representation of the configuration.
  */
-private fun extractConfig(configFile: String?): EbicsSetupConfig {
-    val config = TalerConfig(NEXUS_CONFIG_SOURCE)
-    try {
-        config.load(configFile)
-    } catch (e: Exception) {
-        logger.error("Could not load configuration from ${configFile}, detail: ${e.message}")
-        exitProcess(1)
-    }
+private fun extractEbicsConfig(configFile: String?): EbicsSetupConfig {
+    val config = loadConfigOrFail(configFile)
     // Checking the config.
     val cfg = try {
         EbicsSetupConfig(config)
@@ -355,7 +349,7 @@ private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
 /**
  * CLI class implementing the "ebics-setup" subcommand.
  */
-class EbicsSetup: CliktCommand() {
+class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
     private val configFile by option(
         "--config", "-c",
         help = "set the configuration file"
@@ -380,7 +374,7 @@ class EbicsSetup: CliktCommand() {
      * This function collects the main steps of setting up an EBICS access.
      */
     override fun run() {
-        val cfg = extractConfig(this.configFile)
+        val cfg = extractEbicsConfig(this.configFile)
         if (checkFullConfig) {
             throw NotImplementedError("--check-full-config flag not implemented")
         }

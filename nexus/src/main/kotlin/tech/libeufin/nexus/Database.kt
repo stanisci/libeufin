@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import org.postgresql.jdbc.PgConnection
 import tech.libeufin.util.pgDataSource
 import com.zaxxer.hikari.*
+import tech.libeufin.util.microsToJavaInstant
 import tech.libeufin.util.stripIbanPayto
 import tech.libeufin.util.toDbMicros
 import java.sql.PreparedStatement
@@ -26,8 +27,8 @@ data class TalerAmount(
 data class InitiatedPayment(
     val amount: TalerAmount,
     val wireTransferSubject: String,
-    val executionTime: Instant,
     val creditPaytoUri: String,
+    val initiationTime: Instant,
     val clientRequestUuid: String? = null
 )
 
@@ -36,7 +37,6 @@ data class InitiatedPayment(
  * into the database.
  */
 enum class PaymentInitiationOutcome {
-    BAD_TIMESTAMP,
     BAD_CREDIT_PAYTO,
     UNIQUE_CONSTRAINT_VIOLATION,
     SUCCESS
@@ -97,42 +97,95 @@ class Database(dbConfig: String): java.io.Closeable {
     }
 
     /**
+     * Sets payment initiation as submitted.
+     *
+     * @param rowId row ID of the record to set.
+     * @return true on success, false otherwise.
+     */
+    suspend fun initiatedPaymentSetSubmitted(rowId: Long): Boolean {
+        throw NotImplementedError()
+    }
+
+    /**
+     * Gets any initiated payment that was not submitted to the
+     * bank yet.
+     *
+     * @param currency in which currency should the payment be submitted to the bank.
+     * @return potentially empty list of initiated payments.
+     */
+    suspend fun initiatedPaymentsUnsubmittedGet(currency: String): Map<Long, InitiatedPayment> = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT
+              initiated_outgoing_transaction_id
+             ,(amount).val as amount_val
+             ,(amount).frac as amount_frac
+             ,wire_transfer_subject
+             ,credit_payto_uri
+             ,initiation_time
+             ,client_request_uuid
+             FROM initiated_outgoing_transactions
+             WHERE submitted=false;
+        """)
+        val maybeMap = mutableMapOf<Long, InitiatedPayment>()
+        stmt.executeQuery().use {
+            if (!it.next()) return@use
+            do {
+                val rowId = it.getLong("initiated_outgoing_transaction_id")
+                val initiationTime = it.getLong("initiation_time").microsToJavaInstant()
+                if (initiationTime == null) { // nexus fault
+                    throw Exception("Found invalid timestamp at initiated payment with ID: $rowId")
+                }
+                maybeMap[rowId] = InitiatedPayment(
+                    amount = TalerAmount(
+                        value = it.getLong("amount_val"),
+                        fraction = it.getInt("amount_frac"),
+                        currency = currency
+                    ),
+                    creditPaytoUri = it.getString("credit_payto_uri"),
+                    wireTransferSubject = it.getString("wire_transfer_subject"),
+                    initiationTime = initiationTime,
+                    clientRequestUuid = it.getString("client_request_uuid")
+                )
+            } while (it.next())
+        }
+        return@runConn maybeMap
+    }
+    /**
      * Initiate a payment in the database.  The "submit"
      * command is then responsible to pick it up and submit
-     * it at the bank.
+     * it to the bank.
      *
      * @param paymentData any data that's used to prepare the payment.
      * @return true if the insertion went through, false in case of errors.
      */
-    suspend fun initiatePayment(paymentData: InitiatedPayment): PaymentInitiationOutcome = runConn { conn ->
+    suspend fun initiatedPaymentCreate(paymentData: InitiatedPayment): PaymentInitiationOutcome = runConn { conn ->
         val stmt = conn.prepareStatement("""
            INSERT INTO initiated_outgoing_transactions (
              amount
              ,wire_transfer_subject
-             ,execution_time
              ,credit_payto_uri
+             ,initiation_time
              ,client_request_uuid
            ) VALUES (
              (?,?)::taler_amount
              ,?
              ,?
              ,?
-             ,?           
+             ,?
            )
         """)
         stmt.setLong(1, paymentData.amount.value)
         stmt.setInt(2, paymentData.amount.fraction)
         stmt.setString(3, paymentData.wireTransferSubject)
-        val executionTime = paymentData.executionTime.toDbMicros() ?: run {
-            logger.error("Execution time could not be converted to microseconds for the database.")
-            return@runConn PaymentInitiationOutcome.BAD_TIMESTAMP // nexus fault.
-        }
-        stmt.setLong(4, executionTime)
         val paytoOnlyIban = stripIbanPayto(paymentData.creditPaytoUri) ?: run {
             logger.error("Credit Payto address is invalid.")
             return@runConn PaymentInitiationOutcome.BAD_CREDIT_PAYTO // client fault.
         }
-        stmt.setString(5, paytoOnlyIban)
+        stmt.setString(4, paytoOnlyIban)
+        val initiationTime = paymentData.initiationTime.toDbMicros() ?: run {
+            throw Exception("Initiation time could not be converted to microseconds for the database.")
+        }
+        stmt.setLong(5, initiationTime)
         stmt.setString(6, paymentData.clientRequestUuid) // can be null.
         if (stmt.maybeUpdate())
             return@runConn PaymentInitiationOutcome.SUCCESS

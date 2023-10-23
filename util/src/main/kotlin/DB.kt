@@ -400,8 +400,13 @@ fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
                 val sqlPatchText = path.readText()
                 conn.execSQLUpdate(sqlPatchText)
             }
-            val sqlProcedures = File("${cfg.sqlDir}/procedures.sql").readText()
-            conn.execSQLUpdate(sqlProcedures)
+            val sqlProcedures = File("${cfg.sqlDir}/procedures.sql")
+            // Nexus doesn't have any procedures.
+            if (!sqlProcedures.exists()) {
+                logger.info("No procedures.sql for the SQL collection: $sqlFilePrefix")
+                return@transaction
+            }
+            conn.execSQLUpdate(sqlProcedures.readText())
         }
     }
 }

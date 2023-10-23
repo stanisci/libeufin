@@ -25,15 +25,11 @@
 package tech.libeufin.nexus
 import ConfigSource
 import TalerConfig
-import TalerConfigError
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import io.ktor.client.*
 import io.ktor.util.*
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.KSerializer
 import org.slf4j.Logger
@@ -44,20 +40,15 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import net.taler.wallet.crypto.Base32Crockford
-import org.slf4j.event.Level
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.util.*
-import tech.libeufin.util.ebics_h004.EbicsTypes
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
-import java.time.Instant
-import kotlin.reflect.typeOf
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin-nexus", "libeufin-nexus")
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus.Main")
@@ -268,12 +259,43 @@ fun loadPrivateKeysFromDisk(location: String): ClientPrivateKeysFile? {
 }
 
 /**
+ * Abstracts the config loading and exception handling.
+ *
+ * @param configFile potentially NULL configuration file location.
+ * @return the configuration handle.
+ */
+fun loadConfigOrFail(configFile: String?): TalerConfig {
+    val config = TalerConfig(NEXUS_CONFIG_SOURCE)
+    try {
+        config.load(configFile)
+    } catch (e: Exception) {
+        logger.error("Could not load configuration from ${configFile}, detail: ${e.message}")
+        exitProcess(1)
+    }
+    return config
+}
+
+/**
+ * Abstracts fetching the DB config values to set up Nexus.
+ */
+fun TalerConfig.extractDbConfigOrFail(): DatabaseConfig =
+    try {
+        DatabaseConfig(
+            dbConnStr = requireString("nexus-postgres", "config"),
+            sqlDir = requirePath("libeufin-nexusdb-postgres", "sql_dir")
+        )
+    } catch (e: Exception) {
+        logger.error("Could not load config options for Nexus DB, detail: ${e.message}.")
+        exitProcess(1)
+    }
+
+/**
  * Main CLI class that collects all the subcommands.
  */
 class LibeufinNexusCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(EbicsSetup())
+        subcommands(EbicsSetup(), DbInit())
     }
     override fun run() = Unit
 }
