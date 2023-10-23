@@ -95,7 +95,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankApplicationContext) {
         dbLambda: suspend Database.(HistoryParams, Long) -> List<T>
     ) {
         val (login, _) = call.authCheck(db, TokenScope.readonly)
-        val params = getHistoryParams(call.request.queryParameters)
+        val params = HistoryParams.extract(call.request.queryParameters)
         val bankAccount = call.bankAccount(db)
         
         if (!bankAccount.isTalerExchange)

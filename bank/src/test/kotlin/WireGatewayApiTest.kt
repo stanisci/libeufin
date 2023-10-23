@@ -213,9 +213,9 @@ class WireGatewayApiTest {
 
         suspend fun HttpResponse.assertHistory(size: Int) {
             assertOk()
-            val txt = this.bodyAsText()
+            val txt = bodyAsText()
             val history = Json.decodeFromString<IncomingHistory>(txt)
-            val params = getHistoryParams(this.call.request.url.parameters)
+            val params = HistoryParams.extract(call.request.url.parameters)
        
             // testing the size is like expected.
             assert(history.incoming_transactions.size == size) {
@@ -394,7 +394,7 @@ class WireGatewayApiTest {
             assertOk()
             val txt = this.bodyAsText()
             val history = Json.decodeFromString<OutgoingHistory>(txt)
-            val params = getHistoryParams(this.call.request.url.parameters)
+            val params = HistoryParams.extract(this.call.request.url.parameters)
        
             // testing the size is like expected.
             assert(history.outgoing_transactions.size == size) {

@@ -456,9 +456,9 @@ class CoreBankTransactionsApiTest {
     fun testHistory() = bankSetup { _ -> 
         suspend fun HttpResponse.assertHistory(size: Int) {
             assertOk()
-            val txt = this.bodyAsText()
+            val txt = bodyAsText()
             val history = Json.decodeFromString<BankAccountTransactionsResponse>(txt)
-            val params = getHistoryParams(this.call.request.url.parameters)
+            val params = HistoryParams.extract(call.request.url.parameters)
        
             // testing the size is like expected.
             assert(history.transactions.size == size) {

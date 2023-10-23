@@ -343,7 +343,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationCo
 private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationContext) {
     get("/accounts/{USERNAME}/transactions") {
         call.authCheck(db, TokenScope.readonly)
-        val params = getHistoryParams(call.request.queryParameters)
+        val params = HistoryParams.extract(call.request.queryParameters)
         val bankAccount = call.bankAccount(db)
 
         val history: List<BankAccountTransactionInfo> = db.bankPoolHistory(params, bankAccount.bankAccountId!!)

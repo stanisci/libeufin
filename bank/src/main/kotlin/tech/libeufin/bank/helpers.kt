@@ -197,11 +197,7 @@ data class MonitorParams(
     companion object {
         fun extract(params: Parameters): MonitorParams {
             val timeframe = Timeframe.valueOf(params["timeframe"] ?: "hour")
-            val which = try {
-                params["which"]?.toInt()
-            } catch (e: Exception) {
-                throw badRequest("Param 'which' not a number")
-            }
+            val which = params["which"]?.run { toIntOrNull() ?: throw badRequest("Param 'which' not a number") }
             if (which != null) {
                 val lastDayOfMonth = OffsetDateTime.now(ZoneOffset.UTC).with(TemporalAdjusters.lastDayOfMonth()).dayOfMonth
                 when {
@@ -223,41 +219,25 @@ data class MonitorParams(
 
 data class HistoryParams(
     val delta: Int, val start: Long, val poll_ms: Long
-)
-
-/**
- * Extracts the query parameters from "history-like" endpoints,
- * providing the defaults according to the API specification.
- */
-fun getHistoryParams(params: Parameters): HistoryParams {
-    val deltaParam: String =
-        params["delta"] ?: throw MissingRequestParameterException(parameterName = "delta")
-    val delta: Int = try {
-        deltaParam.toInt()
-    } catch (e: Exception) {
-        logger.error(e.message)
-        throw badRequest("Param 'delta' not a number")
-    }
-    // Note: minimum 'start' is zero, as database IDs start from 1.
-    val start: Long = when (val param = params["start"]) {
-        null -> if (delta >= 0) 0L else Long.MAX_VALUE
-        else -> try {
-            param.toLong()
-        } catch (e: Exception) {
-            logger.error(e.message)
-            throw badRequest("Param 'start' not a number")
+) {
+    companion object {
+        fun extract(params: Parameters): HistoryParams {
+            val deltaParam: String =
+                params["delta"] ?: throw MissingRequestParameterException(parameterName = "delta")
+            val delta: Int = deltaParam.toIntOrNull() ?: throw badRequest("Param 'delta' not a number")
+            // Note: minimum 'start' is zero, as database IDs start from 1.
+            val start: Long = when (val param = params["start"]) {
+                null -> if (delta >= 0) 0L else Long.MAX_VALUE
+                else -> param.toLongOrNull() ?: throw badRequest("Param 'start' not a number")
+            }
+            val poll_ms: Long = when (val param = params["long_poll_ms"]) {
+                null -> 0
+                else -> param.toLongOrNull() ?: throw badRequest("Param 'long_poll_ms' not a number")
+            }
+            // TODO check params range
+            return HistoryParams(delta = delta, start = start, poll_ms = poll_ms)
         }
     }
-    val poll_ms: Long = when (val param = params["long_poll_ms"]) {
-        null -> 0
-        else -> try {
-            param.toLong()
-        } catch (e: Exception) {
-            logger.error(e.message)
-            throw badRequest("Param 'long_poll_ms' not a number")
-        }
-    }
-    return HistoryParams(delta = delta, start = start, poll_ms = poll_ms)
 }
 
 /**
