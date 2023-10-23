@@ -60,7 +60,7 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Databas
 private fun faultyTimestampByBank() = internalServerError("Bank took overflowing timestamp")
 private fun faultyDurationByClient() = badRequest("Overflowing duration, please specify 'forever' instead.")
 
-private fun <T> PreparedStatement.all(lambda: (ResultSet) -> T): List<T> {
+fun <T> PreparedStatement.all(lambda: (ResultSet) -> T): List<T> {
     executeQuery().use {
         val ret = mutableListOf<T>()
         while (it.next()) {
@@ -621,11 +621,10 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         if (it.getBoolean("out_debtor_is_exchange")) {
             val rowId = it.getLong("out_debit_row_id")
             if (metadata is OutgoingTxMetadata) {
-                val stmt = conn.prepareStatement("CALL register_outgoing(NULL, ?, ?, ?, ?)")
+                val stmt = conn.prepareStatement("CALL register_outgoing(NULL, ?, ?, ?)")
                 stmt.setBytes(1, metadata.wtid.raw)
                 stmt.setString(2, metadata.exchangeBaseUrl.url)
                 stmt.setLong(3, rowId)
-                stmt.setLong(4, debtorAccountId)
                 stmt.executeUpdate()
             } else {
                 logger.warn("exchange account $debtorAccountId sent a transaction $rowId with malformed metadata")

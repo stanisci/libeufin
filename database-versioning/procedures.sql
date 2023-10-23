@@ -199,10 +199,12 @@ CREATE OR REPLACE PROCEDURE register_outgoing(
   IN in_request_uid BYTEA,
   IN in_wtid BYTEA,
   IN in_exchange_base_url TEXT,
-  IN in_tx_row_id BIGINT,
-  IN in_exchange_bank_account_id BIGINT
+  IN in_tx_row_id BIGINT
 )
 LANGUAGE plpgsql AS $$
+DECLARE 
+  local_amount taler_amount;
+  local_bank_account_id BIGINT;
 BEGIN
 -- Register outgoing transaction
 INSERT
@@ -217,8 +219,13 @@ INSERT
   in_exchange_base_url,
   in_tx_row_id
 );
+-- TODO check if not drain
+SELECT (amount).val, (amount).frac, bank_account_id
+INTO local_amount.val, local_amount.frac, local_bank_account_id
+FROM bank_account_transactions WHERE bank_transaction_id=in_tx_row_id;
+CALL stats_register_internal_taler_payment(now()::TIMESTAMP, local_amount);
 -- notify new transaction
-PERFORM pg_notify('outgoing_tx', in_exchange_bank_account_id || ' ' || in_tx_row_id);
+PERFORM pg_notify('outgoing_tx', local_bank_account_id || ' ' || in_tx_row_id);
 END $$;
 COMMENT ON PROCEDURE register_outgoing
   IS 'Register a bank transaction as a taler outgoing transaction';
@@ -339,7 +346,7 @@ IF out_exchange_balance_insufficient THEN
 END IF;
 out_timestamp=in_timestamp;
 -- Register outgoing transaction
-CALL register_outgoing(in_request_uid, in_wtid, in_exchange_base_url, out_tx_row_id, exchange_bank_account_id);
+CALL register_outgoing(in_request_uid, in_wtid, in_exchange_base_url, out_tx_row_id);
 END $$;
 COMMENT ON FUNCTION taler_transfer(
   bytea,
@@ -1021,7 +1028,7 @@ END $$;
 
 CREATE OR REPLACE FUNCTION stats_get_frame(
   IN now TIMESTAMP,
-  IN timeframe stat_timeframe_enum,
+  IN in_timeframe stat_timeframe_enum,
   IN which INTEGER,
   OUT cashin_count BIGINT,
   OUT cashin_volume_in_fiat taler_amount,
@@ -1030,24 +1037,41 @@ CREATE OR REPLACE FUNCTION stats_get_frame(
   OUT internal_taler_payments_count BIGINT,
   OUT internal_taler_payments_volume taler_amount
 )
-LANGUAGE sql AS $$
+LANGUAGE plpgsql AS $$
+DECLARE
+  local_start_time TIMESTAMP;
+BEGIN
+  local_start_time = CASE 
+    WHEN which IS NULL          THEN date_trunc(in_timeframe::text, now)
+    WHEN in_timeframe = 'hour'  THEN date_trunc('day'  , now) + make_interval(hours  => which)
+    WHEN in_timeframe = 'day'   THEN date_trunc('month', now) + make_interval(days   => which-1)
+    WHEN in_timeframe = 'month' THEN date_trunc('year' , now) + make_interval(months => which-1)
+    WHEN in_timeframe = 'year'  THEN make_date(which, 1, 1)::TIMESTAMP
+  END;
   SELECT 
     s.cashin_count
-    ,s.cashin_volume_in_fiat
+    ,(s.cashin_volume_in_fiat).val
+    ,(s.cashin_volume_in_fiat).frac
     ,s.cashout_count
-    ,s.cashout_volume_in_fiat
+    ,(s.cashout_volume_in_fiat).val
+    ,(s.cashout_volume_in_fiat).frac
     ,s.internal_taler_payments_count
-    ,s.internal_taler_payments_volume
-    FROM regional_stats AS s
-  WHERE s.timeframe = timeframe 
-    AND start_time = CASE 
-      WHEN which IS NULL        THEN date_trunc(timeframe::text, now)
-      WHEN timeframe = 'hour'   THEN date_trunc('day', now) + '1 hour'::interval * which
-      WHEN timeframe = 'day'    THEN date_trunc('month', now) + '1 day'::interval * which
-      WHEN timeframe = 'month'  THEN date_trunc('year', now) + '1 month'::interval * which
-      WHEN timeframe = 'year'   THEN make_date(which, 1, 1)::TIMESTAMP
-    END
-$$;
+    ,(s.internal_taler_payments_volume).val
+    ,(s.internal_taler_payments_volume).frac
+  INTO
+    cashin_count
+    ,cashin_volume_in_fiat.val
+    ,cashin_volume_in_fiat.frac
+    ,cashout_count
+    ,cashout_volume_in_fiat.val
+    ,cashout_volume_in_fiat.frac
+    ,internal_taler_payments_count
+    ,internal_taler_payments_volume.val
+    ,internal_taler_payments_volume.frac
+  FROM regional_stats AS s
+  WHERE s.timeframe = in_timeframe 
+    AND s.start_time = local_start_time;
+END $$;
 
 CREATE OR REPLACE PROCEDURE stats_register_internal_taler_payment(
   IN now TIMESTAMP,
