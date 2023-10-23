@@ -34,7 +34,7 @@ class StatsTest {
     @Test
     fun internalTalerPayment() = bankSetup { db ->  
         db.conn { conn ->
-            val stmt = conn.prepareStatement("CALL stats_register_internal_taler_payment((?, ?)::taler_amount)")
+            val stmt = conn.prepareStatement("CALL stats_register_internal_taler_payment(now()::timestamp, (?, ?)::taler_amount)")
         
             suspend fun register(amount: TalerAmount) {
                 stmt.setLong(1, amount.value)
@@ -42,7 +42,7 @@ class StatsTest {
                 stmt.executeUpdate()
             }
 
-            client.get("/monitor?timeframe=hour") {
+            client.get("/monitor") {
                 basicAuth("admin", "admin-password")
             }.assertOk().run {
                 val resp = Json.decodeFromString<MonitorResponse>(bodyAsText())
@@ -51,7 +51,7 @@ class StatsTest {
             }
 
             register(TalerAmount("KUDOS:10.0"))
-            client.get("/monitor?timeframe=hour") {
+            client.get("/monitor") {
                 basicAuth("admin", "admin-password")
             }.assertOk().run {
                 val resp = Json.decodeFromString<MonitorResponse>(bodyAsText())
@@ -60,7 +60,7 @@ class StatsTest {
             }
 
             register(TalerAmount("KUDOS:30.5"))
-            client.get("/monitor?timeframe=hour") {
+            client.get("/monitor") {
                 basicAuth("admin", "admin-password")
             }.assertOk().run {
                 val resp = Json.decodeFromString<MonitorResponse>(bodyAsText())
@@ -68,7 +68,7 @@ class StatsTest {
                 assertEquals(TalerAmount("KUDOS:40.5"), resp.talerPayoutInternalVolume)
             }
 
-            // TODO Test timeframe logic using now() mocking
+            // TODO Test timeframe logic with different timestamps
         }
     }
 }

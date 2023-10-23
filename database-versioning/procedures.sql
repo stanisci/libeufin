@@ -1020,6 +1020,7 @@ BEGIN
 END $$;
 
 CREATE OR REPLACE FUNCTION stats_get_frame(
+  IN now TIMESTAMP,
   IN timeframe stat_timeframe_enum,
   IN which INTEGER,
   OUT cashin_count BIGINT,
@@ -1040,15 +1041,16 @@ LANGUAGE sql AS $$
     FROM regional_stats AS s
   WHERE s.timeframe = timeframe 
     AND start_time = CASE 
-      WHEN which IS NULL        THEN date_trunc(timeframe::text, now())
-      WHEN timeframe = 'hour'   THEN date_trunc('day', now()) + '1 hour'::interval * which
-      WHEN timeframe = 'day'    THEN date_trunc('month', now()) + '1 day'::interval * which
-      WHEN timeframe = 'month'  THEN date_trunc('year', now()) + '1 month'::interval * which
+      WHEN which IS NULL        THEN date_trunc(timeframe::text, now)
+      WHEN timeframe = 'hour'   THEN date_trunc('day', now) + '1 hour'::interval * which
+      WHEN timeframe = 'day'    THEN date_trunc('month', now) + '1 day'::interval * which
+      WHEN timeframe = 'month'  THEN date_trunc('year', now) + '1 month'::interval * which
       WHEN timeframe = 'year'   THEN make_date(which, 1, 1)::TIMESTAMP
     END
 $$;
 
 CREATE OR REPLACE PROCEDURE stats_register_internal_taler_payment(
+  IN now TIMESTAMP,
   IN amount taler_amount
 )
 LANGUAGE plpgsql AS $$
@@ -1068,7 +1070,7 @@ BEGIN
       ) 
     VALUES (
         frame
-        ,date_trunc(frame::text, now())
+        ,date_trunc(frame::text, now)
         ,0
         ,(0, 0)::taler_amount
         ,0

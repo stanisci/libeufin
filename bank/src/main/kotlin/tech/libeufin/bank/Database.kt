@@ -96,7 +96,7 @@ private fun PreparedStatement.executeUpdateViolation(): Boolean {
     }
 }
 
-class Database(dbConfig: String, private val bankCurrency: String, private val fiatCurrency: String): java.io.Closeable {
+class Database(dbConfig: String, private val bankCurrency: String, private val fiatCurrency: String?): java.io.Closeable {
     val dbPool: HikariDataSource
     private val notifWatcher: NotificationWatcher
 
@@ -1486,7 +1486,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 ,internal_taler_payments_count
                 ,(internal_taler_payments_volume).val as internal_taler_payments_volume_val
                 ,(internal_taler_payments_volume).frac as internal_taler_payments_volume_frac
-            FROM stats_get_frame(?::stat_timeframe_enum, ?)
+            FROM stats_get_frame(now()::timestamp, ?::stat_timeframe_enum, ?)
         """)
         stmt.setString(1, params.timeframe.name)
         if (params.which != null) {
@@ -1496,18 +1496,22 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         }
         stmt.oneOrNull {
             MonitorResponse(
-                cashinCount = it.getLong("cashin_count"),
-                cashinExternalVolume = TalerAmount(
-                    value = it.getLong("cashin_volume_in_fiat_val"),
-                    frac = it.getInt("cashin_volume_in_fiat_frac"),
-                    currency = fiatCurrency
-                ),
-                cashoutCount = it.getLong("cashout_count"),
-                cashoutExternalVolume = TalerAmount(
-                    value = it.getLong("cashout_volume_in_fiat_val"),
-                    frac = it.getInt("cashout_volume_in_fiat_frac"),
-                    currency = fiatCurrency
-                ),
+                cashinCount = fiatCurrency?.run { it.getLong("cashin_count") },
+                cashinExternalVolume = fiatCurrency?.run { 
+                    TalerAmount(
+                        value = it.getLong("cashin_volume_in_fiat_val"),
+                        frac = it.getInt("cashin_volume_in_fiat_frac"),
+                        currency = this
+                    )
+                },
+                cashoutCount = fiatCurrency?.run { it.getLong("cashout_count") },
+                cashoutExternalVolume = fiatCurrency?.run {
+                    TalerAmount(
+                        value = it.getLong("cashout_volume_in_fiat_val"),
+                        frac = it.getInt("cashout_volume_in_fiat_frac"),
+                        currency = this
+                    )
+                },
                 talerPayoutCount = it.getLong("internal_taler_payments_count"),
                 talerPayoutInternalVolume = TalerAmount(
                     value = it.getLong("internal_taler_payments_volume_val"),
@@ -1516,18 +1520,22 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 )
             )
         } ?: MonitorResponse(
-            cashinCount = 0,
-            cashinExternalVolume = TalerAmount(
-                value = 0,
-                frac = 0,
-                currency = fiatCurrency
-            ),
-            cashoutCount = 0,
-            cashoutExternalVolume = TalerAmount(
-                value = 0,
-                frac = 0,
-                currency = fiatCurrency
-            ),
+            cashinCount = fiatCurrency?.run { 0 },
+            cashinExternalVolume = fiatCurrency?.run {
+                TalerAmount(
+                    value = 0,
+                    frac = 0,
+                    currency = this
+                )
+            },
+            cashoutCount = fiatCurrency?.run { 0 },
+            cashoutExternalVolume = fiatCurrency?.run {
+                TalerAmount(
+                    value = 0,
+                    frac = 0,
+                    currency = this
+                )
+            },
             talerPayoutCount = 0,
             talerPayoutInternalVolume = TalerAmount(
                 value = 0,

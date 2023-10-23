@@ -196,7 +196,7 @@ data class MonitorParams(
 ) {
     companion object {
         fun extract(params: Parameters): MonitorParams {
-            val timeframe = Timeframe.valueOf(params["timeframe"] ?: throw MissingRequestParameterException(parameterName = "timeframe"))
+            val timeframe = Timeframe.valueOf(params["timeframe"] ?: "hour")
             val which = try {
                 params["which"]?.toInt()
             } catch (e: Exception) {

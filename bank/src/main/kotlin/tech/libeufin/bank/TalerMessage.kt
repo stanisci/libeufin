@@ -108,10 +108,10 @@ data class TokenRequest(
 
 @Serializable
 data class MonitorResponse(
-    val cashinCount: Long,
-    val cashinExternalVolume: TalerAmount,
-    val cashoutCount: Long,
-    val cashoutExternalVolume: TalerAmount,
+    val cashinCount: Long? = null,
+    val cashinExternalVolume: TalerAmount? = null,
+    val cashoutCount: Long? = null,
+    val cashoutExternalVolume: TalerAmount? = null,
     val talerPayoutCount: Long,
     val talerPayoutInternalVolume: TalerAmount
 )
