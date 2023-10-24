@@ -82,12 +82,22 @@ fun genInitPay(subject: String, rowUuid: String? = null) =
     )
 
 // Generates an incoming payment, given its subject.
-fun genIncPay(subject: String, rowUuid: String? = null) =
+fun genIncPay(subject: String? = null, rowUuid: String? = null) =
     IncomingPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
         debitPaytoUri = "payto://iban/not-used",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
         bounced = false,
+        bankTransferId = "entropic"
+    )
+
+// Generates an outgoing payment, given its subject.
+fun genOutPay(subject: String? = null) =
+    OutgoingPayment(
+        amount = TalerAmount(44, 0, "KUDOS"),
+        creditPaytoUri = "payto://iban/not-used",
+        wireTransferSubject = subject,
+        executionTime = Instant.now(),
         bankTransferId = "entropic"
     )

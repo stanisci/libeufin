@@ -1,13 +1,45 @@
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
-import tech.libeufin.nexus.InitiatedPayment
-import tech.libeufin.nexus.NEXUS_CONFIG_SOURCE
-import tech.libeufin.nexus.PaymentInitiationOutcome
-import tech.libeufin.nexus.TalerAmount
+import tech.libeufin.nexus.*
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+
+class OutgoingPaymentsTest {
+
+    /**
+     * Tests the insertion of outgoing payments, including
+     * the case where we reconcile with an initiated payment.
+     */
+    @Test
+    fun outgoingPaymentCreation() {
+        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        runBlocking {
+            // inserting without reconciling
+            assertEquals(
+                OutgoingPaymentOutcome.SUCCESS,
+                db.outgoingPaymentCreate(genOutPay("paid by nexus"))
+            )
+            // inserting trying to reconcile with a non-existing initiated payment.
+            assertEquals(
+                OutgoingPaymentOutcome.INITIATED_COUNTERPART_NOT_FOUND,
+                db.outgoingPaymentCreate(genOutPay("paid by nexus"), 5)
+            )
+            // initiating a payment to reconcile later.  Takes row ID == 1
+            assertEquals(
+                PaymentInitiationOutcome.SUCCESS,
+                db.initiatedPaymentCreate(genInitPay("waiting for reconciliation"))
+            )
+            // Creating an outgoing payment, reconciling it with the one above.
+            assertEquals(
+                OutgoingPaymentOutcome.SUCCESS,
+                db.outgoingPaymentCreate(genOutPay(), 1)
+            )
+        }
+    }
+}
 
 class IncomingPaymentsTest {
     // Tests the function that flags incoming payments as bounced.
@@ -50,13 +82,15 @@ class IncomingPaymentsTest {
                 assertTrue(res.next())
                 assertEquals(0, res.getInt("how_many"))
             }
-            db.incomingPaymentCreate(genIncPay("singleton"))
+            assertTrue(db.incomingPaymentCreate(genIncPay("singleton")))
             // Asserting the table has one.
             db.runConn {
                 val res = it.execSQLQuery(countRows)
                 assertTrue(res.next())
                 assertEquals(1, res.getInt("how_many"))
             }
+            // Checking insertion of null (allowed) subjects.
+            assertTrue(db.incomingPaymentCreate(genIncPay()))
         }
     }
 }

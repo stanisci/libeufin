@@ -25,7 +25,7 @@ data class TalerAmount(
  */
 data class IncomingPayment(
     val amount: TalerAmount,
-    val wireTransferSubject: String,
+    val wireTransferSubject: String?,
     val debitPaytoUri: String,
     val executionTime: Instant,
     val bankTransferId: String,
@@ -53,6 +53,25 @@ data class InitiatedPayment(
 enum class PaymentInitiationOutcome {
     BAD_CREDIT_PAYTO,
     UNIQUE_CONSTRAINT_VIOLATION,
+    SUCCESS
+}
+
+// OUTGOING PAYMENTS STRUCTS
+
+data class OutgoingPayment(
+    val amount: TalerAmount,
+    val wireTransferSubject: String?,
+    val executionTime: Instant,
+    val creditPaytoUri: String,
+    val bankTransferId: String
+)
+
+/**
+ * Witnesses the outcome of inserting an outgoing
+ * payment into the database.
+ */
+enum class OutgoingPaymentOutcome {
+    INITIATED_COUNTERPART_NOT_FOUND,
     SUCCESS
 }
 
@@ -109,6 +128,54 @@ class Database(dbConfig: String): java.io.Closeable {
             val conn = dbPool.getConnection()
             conn.use { it -> lambda(it.unwrap(PgConnection::class.java)) }
         }
+    }
+
+    // OUTGOING PAYMENTS METHODS
+
+    /**
+     * Creates one outgoing payment OPTIONALLY reconciling it with its
+     * initiated payment counterpart.
+     *
+     * @param paymentData information about the outgoing payment.
+     * @param reconcileId optional row ID of the initiated payment
+     *        that will reference this one.  Note: if this value is
+     *        not found, then NO row gets inserted in the database.
+     * @return operation outcome enum.
+     */
+    suspend fun outgoingPaymentCreate(
+        paymentData: OutgoingPayment,
+        reconcileId: Long? = null
+    ): OutgoingPaymentOutcome = runConn {
+        val stmt = it.prepareStatement("""
+            SELECT out_nx_initiated
+              FROM create_outgoing_tx(
+                (?,?)::taler_amount
+                ,?
+                ,?
+                ,?
+                ,?
+                ,?
+              )"""
+        )
+        val executionTime = paymentData.executionTime.toDbMicros()
+            ?: throw Exception("Could not convert outgoing payment execution_time to microseconds")
+        stmt.setLong(1, paymentData.amount.value)
+        stmt.setInt(2, paymentData.amount.fraction)
+        stmt.setString(3, paymentData.wireTransferSubject)
+        stmt.setLong(4, executionTime)
+        stmt.setString(5, paymentData.creditPaytoUri)
+        stmt.setString(6, paymentData.bankTransferId)
+        if (reconcileId == null)
+            stmt.setNull(7, java.sql.Types.BIGINT)
+        else
+            stmt.setLong(7, reconcileId)
+
+        stmt.executeQuery().use {
+            if (!it.next()) throw Exception("Inserting outgoing payment gave no outcome.")
+            if (it.getBoolean("out_nx_initiated"))
+                return@runConn OutgoingPaymentOutcome.INITIATED_COUNTERPART_NOT_FOUND
+        }
+        return@runConn OutgoingPaymentOutcome.SUCCESS
     }
 
     // INCOMING PAYMENTS METHODS
