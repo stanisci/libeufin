@@ -72,7 +72,7 @@ fun getPofiConfig(userId: String, partnerId: String) = """
 """.trimIndent()
 
 // Generates a payment initiation, given its subject.
-fun genInitPay(subject: String, rowUuid: String? = null) =
+fun genInitPay(subject: String? = null, rowUuid: String? = null) =
     InitiatedPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
         creditPaytoUri = "payto://iban/not-used",

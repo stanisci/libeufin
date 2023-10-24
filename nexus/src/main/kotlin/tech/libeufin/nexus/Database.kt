@@ -40,7 +40,7 @@ data class IncomingPayment(
  */
 data class InitiatedPayment(
     val amount: TalerAmount,
-    val wireTransferSubject: String,
+    val wireTransferSubject: String?,
     val creditPaytoUri: String,
     val initiationTime: Instant,
     val clientRequestUuid: String? = null

@@ -4,6 +4,7 @@ import tech.libeufin.nexus.*
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 
@@ -25,7 +26,7 @@ class OutgoingPaymentsTest {
             // inserting trying to reconcile with a non-existing initiated payment.
             assertEquals(
                 OutgoingPaymentOutcome.INITIATED_COUNTERPART_NOT_FOUND,
-                db.outgoingPaymentCreate(genOutPay("paid by nexus"), 5)
+                db.outgoingPaymentCreate(genOutPay(), 5)
             )
             // initiating a payment to reconcile later.  Takes row ID == 1
             assertEquals(
@@ -95,6 +96,7 @@ class IncomingPaymentsTest {
     }
 }
 class PaymentInitiationsTest {
+
     // Tests the flagging of payments as submitted.
     @Test
     fun paymentInitiationSetAsSubmitted() {
@@ -165,6 +167,7 @@ class PaymentInitiationsTest {
             assertEquals(db.initiatedPaymentCreate(genInitPay("#2")), PaymentInitiationOutcome.SUCCESS)
             assertEquals(db.initiatedPaymentCreate(genInitPay("#3")), PaymentInitiationOutcome.SUCCESS)
             assertEquals(db.initiatedPaymentCreate(genInitPay("#4")), PaymentInitiationOutcome.SUCCESS)
+            assertEquals(db.initiatedPaymentCreate(genInitPay()), PaymentInitiationOutcome.SUCCESS) // checking the nullable subject
 
             // Marking one as submitted, hence not expecting it in the results.
             db.runConn { conn ->
@@ -177,10 +180,11 @@ class PaymentInitiationsTest {
 
             // Expecting all the payments BUT the #3 in the result.
             db.initiatedPaymentsUnsubmittedGet("KUDOS").apply {
-                assertEquals(3, this.size)
+                assertEquals(4, this.size)
                 assertEquals("#1", this[1]?.wireTransferSubject)
                 assertEquals("#2", this[2]?.wireTransferSubject)
                 assertEquals("#4", this[4]?.wireTransferSubject)
+                assertNull(this[5]?.wireTransferSubject)
             }
         }
     }
