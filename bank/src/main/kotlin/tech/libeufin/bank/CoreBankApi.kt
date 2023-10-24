@@ -109,7 +109,6 @@ private fun Routing.coreBankTokenApi(db: Database) {
     }
 }
 
-
 private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankApplicationContext) {
     post("/accounts") { 
         // check if only admin is allowed to create new accounts
@@ -410,7 +409,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationCo
                 "Creditor account was not found",
                 TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
-            BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.OK)
+            BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
         }
     }
 }
@@ -462,18 +461,18 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankApplicationContext) {
     post("/withdrawals/{withdrawal_id}/abort") {
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id")) // Idempotency:
         if (op.aborted) {
-            call.respondText("{}", ContentType.Application.Json)
+            call.respond(HttpStatusCode.NoContent)
             return@post
         } // Op is found, it'll now fail only if previously confirmed (DB checks).
         if (!db.talerWithdrawalAbort(op.withdrawalUuid)) throw conflict(
             hint = "Cannot abort confirmed withdrawal", talerEc = TalerErrorCode.TALER_EC_END
         )
-        call.respondText("{}", ContentType.Application.Json)
+        call.respond(HttpStatusCode.NoContent)
     }
     post("/withdrawals/{withdrawal_id}/confirm") {
         val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id")) // Checking idempotency:
         if (op.confirmationDone) {
-            call.respondText("{}", ContentType.Application.Json)
+            call.respond(HttpStatusCode.NoContent)
             return@post
         }
         if (op.aborted) throw conflict(
@@ -509,9 +508,7 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankApplicationContext) {
                     talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
                 )
             WithdrawalConfirmationResult.CONFLICT -> throw internalServerError("Bank didn't check for idempotency")
-            WithdrawalConfirmationResult.SUCCESS -> call.respondText(
-                "{}", ContentType.Application.Json
-            )
+            WithdrawalConfirmationResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
         }
     }
 }

@@ -263,7 +263,7 @@ class CoreBankAccountsMgmtApiTest {
             jsonBody(json {
                 "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout&amount=KUDOS:1"
             })
-        }.assertOk()
+        }.assertNoContent()
         client.delete("/accounts/merchant") {
             basicAuth("admin", "admin-password")
         }.assertConflict()
@@ -272,7 +272,7 @@ class CoreBankAccountsMgmtApiTest {
             jsonBody(json {
                 "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout&amount=KUDOS:1"
             })
-        }.assertOk()
+        }.assertNoContent()
         client.delete("/accounts/merchant") {
             basicAuth("admin", "admin-password")
         }.assertNoContent()
@@ -496,7 +496,7 @@ class CoreBankTransactionsApiTest {
                 jsonBody(json {
                     "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout$it&amount=KUDOS:0.$it"
                 })
-            }.assertOk()
+            }.assertNoContent()
         }
         // Gen two transactions from exchange to merchant
         repeat(2) {
@@ -505,7 +505,7 @@ class CoreBankTransactionsApiTest {
                 jsonBody(json {
                     "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout$it&amount=KUDOS:0.$it"
                 })
-            }.assertOk()
+            }.assertNoContent()
         }
 
         // Check no useless polling
@@ -543,7 +543,7 @@ class CoreBankTransactionsApiTest {
                 jsonBody(json {
                     "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout_poll&amount=KUDOS:4.2"
                 })
-            }.assertOk()
+            }.assertNoContent()
         }
 
         // Testing ranges. 
@@ -553,7 +553,7 @@ class CoreBankTransactionsApiTest {
                 jsonBody(json {
                     "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout_range&amount=KUDOS:0.001"
                 })
-            }.assertOk()
+            }.assertNoContent()
         }
 
         // forward range:
@@ -579,7 +579,7 @@ class CoreBankTransactionsApiTest {
                 "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout"
                 "amount" to "KUDOS:0.3"
             })
-        }.assertOk()
+        }.assertNoContent()
         // Check OK
         client.get("/accounts/merchant/transactions/1") {
             basicAuth("merchant", "merchant-password")
@@ -612,7 +612,7 @@ class CoreBankTransactionsApiTest {
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
             jsonBody(valid_req)
-        }.assertOk()
+        }.assertNoContent()
         client.get("/accounts/merchant/transactions/1") {
             basicAuth("merchant", "merchant-password")
         }.assertOk().run {
@@ -626,7 +626,7 @@ class CoreBankTransactionsApiTest {
             jsonBody(json {
                 "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout2&amount=KUDOS:1.05"
             })
-        }.assertOk()
+        }.assertNoContent()
         client.get("/accounts/merchant/transactions/3") {
             basicAuth("merchant", "merchant-password")
         }.assertOk().run {
@@ -641,7 +641,7 @@ class CoreBankTransactionsApiTest {
                 "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout3&amount=KUDOS:1.05"
                 "amount" to "KUDOS:10.003"
             })
-        }.assertOk()
+        }.assertNoContent()
         client.get("/accounts/merchant/transactions/5") {
             basicAuth("merchant", "merchant-password")
         }.assertOk().run {
@@ -734,9 +734,9 @@ class CoreBankWithdrawalApiTest {
             val uuid = resp.taler_withdraw_uri.split("/").last()
 
             // Check OK
-            client.post("/withdrawals/$uuid/abort").assertOk()
+            client.post("/withdrawals/$uuid/abort").assertNoContent()
             // Check idempotence
-            client.post("/withdrawals/$uuid/abort").assertOk()
+            client.post("/withdrawals/$uuid/abort").assertNoContent()
         }
 
         // Check abort selected
@@ -754,9 +754,9 @@ class CoreBankWithdrawalApiTest {
             }.assertOk()
 
             // Check OK
-            client.post("/withdrawals/$uuid/abort").assertOk()
+            client.post("/withdrawals/$uuid/abort").assertNoContent()
             // Check idempotence
-            client.post("/withdrawals/$uuid/abort").assertOk()
+            client.post("/withdrawals/$uuid/abort").assertNoContent()
         }
 
         // Check abort confirmed
@@ -772,7 +772,7 @@ class CoreBankWithdrawalApiTest {
                     "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
                 })
             }.assertOk()
-            client.post("/withdrawals/$uuid/confirm").assertOk()
+            client.post("/withdrawals/$uuid/confirm").assertNoContent()
 
             // Check error
             client.post("/withdrawals/$uuid/abort").assertConflict()
@@ -787,7 +787,7 @@ class CoreBankWithdrawalApiTest {
 
     // POST /withdrawals/withdrawal_id/confirm
     @Test
-    fun confirm() = bankSetup { db -> 
+    fun confirm() = bankSetup { _ -> 
         // Check confirm created
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
@@ -815,9 +815,9 @@ class CoreBankWithdrawalApiTest {
             }.assertOk()
 
             // Check OK
-            client.post("/withdrawals/$uuid/confirm").assertOk()
+            client.post("/withdrawals/$uuid/confirm").assertNoContent()
             // Check idempotence
-            client.post("/withdrawals/$uuid/confirm").assertOk()
+            client.post("/withdrawals/$uuid/confirm").assertNoContent()
         }
 
         // Check confirm aborted
@@ -833,7 +833,7 @@ class CoreBankWithdrawalApiTest {
                     "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
                 })
             }.assertOk()
-            client.post("/withdrawals/$uuid/abort").assertOk()
+            client.post("/withdrawals/$uuid/abort").assertNoContent()
 
             // Check error
             client.post("/withdrawals/$uuid/confirm").assertConflict()

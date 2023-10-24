@@ -271,7 +271,7 @@ class WireGatewayApiTest {
             }.assertOk()
             client.post("/withdrawals/${uuid}/confirm") {
                 basicAuth("merchant", "merchant-password")
-            }.assertOk()
+            }.assertNoContent()
         }
 
         // Check ignore bogus subject
@@ -356,7 +356,7 @@ class WireGatewayApiTest {
                 }.assertOk()
                 client.post("/withdrawals/${uuid}/confirm") {
                     basicAuth("merchant", "merchant-password")
-                }.assertOk()
+                }.assertNoContent()
             }
         }
 
