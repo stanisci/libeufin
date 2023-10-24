@@ -80,3 +80,14 @@ fun genInitPay(subject: String, rowUuid: String? = null) =
         initiationTime = Instant.now(),
         clientRequestUuid = rowUuid
     )
+
+// Generates an incoming payment, given its subject.
+fun genIncPay(subject: String, rowUuid: String? = null) =
+    IncomingPayment(
+        amount = TalerAmount(44, 0, "KUDOS"),
+        debitPaytoUri = "payto://iban/not-used",
+        wireTransferSubject = subject,
+        executionTime = Instant.now(),
+        bounced = false,
+        bankTransferId = "entropic"
+    )

@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS initiated_outgoing_transactions
   ,hidden BOOL DEFAULT FALSE -- FIXME: explain this.
   ,client_request_uuid TEXT UNIQUE
   ,failure_message TEXT -- NOTE: that may mix soon failures (those found at initiation time), or late failures (those found out along a fetch operation)
-    );
+  );
 
 COMMENT ON COLUMN initiated_outgoing_transactions.outgoing_transaction_id
     IS 'Points to the bank transaction that was found via nexus-fetch.  If "submitted" is false or nexus-fetch could not download this initiation, this column is expected to be NULL.';

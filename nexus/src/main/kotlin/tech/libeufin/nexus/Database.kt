@@ -12,13 +12,27 @@ import java.sql.PreparedStatement
 import java.sql.SQLException
 import java.time.Instant
 
-/* only importing TalerAmount from bank ONCE that Nexus has
-* its httpd component.  */
 data class TalerAmount(
     val value: Long,
     val fraction: Int,
     val currency: String
 )
+
+// INCOMING PAYMENTS STRUCTS
+
+/**
+ * Represents an incoming payment in the database.
+ */
+data class IncomingPayment(
+    val amount: TalerAmount,
+    val wireTransferSubject: String,
+    val debitPaytoUri: String,
+    val executionTime: Instant,
+    val bankTransferId: String,
+    val bounced: Boolean
+)
+
+// INITIATED PAYMENTS STRUCTS
 
 /**
  * Minimal set of information to initiate a new payment in
@@ -96,6 +110,69 @@ class Database(dbConfig: String): java.io.Closeable {
             conn.use { it -> lambda(it.unwrap(PgConnection::class.java)) }
         }
     }
+
+    // INCOMING PAYMENTS METHODS
+
+    /**
+     * Flags an incoming payment as bounced.  NOTE: the flag merely means
+     * that the payment had an invalid subject for a Taler withdrawal _and_
+     * it got sent to the initiated outgoing payments.  In NO way this flag
+     * means that the actual value was returned to the initial debtor.
+     *
+     * FIXME: this needs to run within the same transaction where the payment gets initiated.
+     *
+     * @param rowId row ID of the payment to flag as bounced.
+     * @return true on success, false otherwise.
+     */
+    suspend fun incomingPaymentSetAsBounced(rowId: Long): Boolean = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+             UPDATE incoming_transactions
+                      SET bounced = true
+                      WHERE incoming_transaction_id=?
+             """
+        )
+        stmt.setLong(1, rowId)
+        return@runConn stmt.maybeUpdate()
+    }
+
+    /**
+     * Creates a new incoming payment record in the database.
+     *
+     * @param paymentData information related to the incoming payment.
+     * @return true on success, false otherwise.
+     */
+    suspend fun incomingPaymentCreate(paymentData: IncomingPayment): Boolean = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+            INSERT INTO incoming_transactions (
+              amount
+              ,wire_transfer_subject
+              ,execution_time
+              ,debit_payto_uri
+              ,bank_transfer_id
+              ,bounced
+            ) VALUES (
+              (?,?)::taler_amount
+              ,?
+              ,?
+              ,?
+              ,?
+              ,?
+            )
+        """)
+        stmt.setLong(1, paymentData.amount.value)
+        stmt.setInt(2, paymentData.amount.fraction)
+        stmt.setString(3, paymentData.wireTransferSubject)
+        val executionTime = paymentData.executionTime.toDbMicros() ?: run {
+            throw Exception("Execution time could not be converted to microseconds for the database.")
+        }
+        stmt.setLong(4, executionTime)
+        stmt.setString(5, paymentData.debitPaytoUri)
+        stmt.setString(6, paymentData.bankTransferId)
+        stmt.setBoolean(7, paymentData.bounced)
+        return@runConn stmt.maybeUpdate()
+    }
+
+    // INITIATED PAYMENTS METHODS
 
     /**
      * Sets payment initiation as submitted.

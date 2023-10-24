@@ -1,16 +1,41 @@
+import io.ktor.client.*
+import io.ktor.client.request.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import tech.libeufin.nexus.InitiatedPayment
 import tech.libeufin.nexus.NEXUS_CONFIG_SOURCE
 import tech.libeufin.nexus.PaymentInitiationOutcome
 import tech.libeufin.nexus.TalerAmount
-import tech.libeufin.util.connectWithSchema
+import tech.libeufin.util.transaction
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class DatabaseTest {
+class IncomingPaymentsTest {
+    // Tests the creation of an incoming payment.
+    @Test
+    fun incomingPaymentCreation() {
+        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        val countRows = "SELECT count(*) AS how_many FROM incoming_transactions"
+        runBlocking {
+            // Asserting the table is empty.
+            db.runConn {
+                val res = it.execSQLQuery(countRows)
+                assertTrue(res.next())
+                assertEquals(0, res.getInt("how_many"))
+            }
+            db.incomingPaymentCreate(genIncPay("singleton"))
+            // Asserting the table has one.
+            db.runConn {
+                val res = it.execSQLQuery(countRows)
+                assertTrue(res.next())
+                assertEquals(1, res.getInt("how_many"))
+            }
+        }
+    }
+}
+class PaymentInitiationsTest {
     // Tests the flagging of payments as submitted.
     @Test
     fun paymentInitiationSetAsSubmitted() {
@@ -34,7 +59,6 @@ class DatabaseTest {
             }
             // Switching the submitted state to true.
             assertTrue(db.initiatedPaymentSetSubmitted(1))
-
             // Asserting on the submitted state being TRUE now.
             db.runConn { conn ->
                 val isSubmitted = conn.execSQLQuery(getRowOne)

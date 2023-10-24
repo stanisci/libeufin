@@ -345,6 +345,7 @@ fun pgDataSource(dbConfig: String): PGSimpleDataSource {
 
 fun PGSimpleDataSource.pgConnection(): PgConnection {
     val conn = connection.unwrap(PgConnection::class.java)
+    // FIXME: bring the DB schema to a function argument.
     conn.execSQLUpdate("SET search_path TO libeufin_bank;")
     return conn
 }
@@ -401,7 +402,6 @@ fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
                 conn.execSQLUpdate(sqlPatchText)
             }
             val sqlProcedures = File("${cfg.sqlDir}/procedures.sql")
-            // Nexus doesn't have any procedures.
             if (!sqlProcedures.exists()) {
                 logger.info("No procedures.sql for the SQL collection: $sqlFilePrefix")
                 return@transaction
