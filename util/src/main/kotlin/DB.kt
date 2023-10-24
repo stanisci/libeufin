@@ -401,7 +401,7 @@ fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
                 val sqlPatchText = path.readText()
                 conn.execSQLUpdate(sqlPatchText)
             }
-            val sqlProcedures = File("${cfg.sqlDir}/procedures.sql")
+            val sqlProcedures = File("${cfg.sqlDir}/$sqlFilePrefix-procedures.sql")
             if (!sqlProcedures.exists()) {
                 logger.info("No procedures.sql for the SQL collection: $sqlFilePrefix")
                 return@transaction

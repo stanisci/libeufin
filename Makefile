@@ -43,7 +43,7 @@ install-bank:
 	install contrib/currencies.conf $(bank_config_dir)/
 	install -D database-versioning/libeufin-bank*.sql -t $(bank_sql_dir)
 	install -D database-versioning/versioning.sql -t $(bank_sql_dir)
-	install -D database-versioning/procedures.sql -t $(bank_sql_dir)
+	install -D database-versioning/libeufin-bank-procedures.sql -t $(bank_sql_dir)
 	install -d $(spa_dir)
 	cp contrib/wallet-core/demobank/* $(spa_dir)/
 	./gradlew -q -Pprefix=$(abs_destdir)$(prefix) bank:installToPrefix
