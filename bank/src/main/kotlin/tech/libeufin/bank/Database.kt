@@ -1494,23 +1494,28 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
             stmt.setNull(2, java.sql.Types.INTEGER)
         }
         stmt.oneOrNull {
-            MonitorResponse(
-                cashinCount = fiatCurrency?.run { it.getLong("cashin_count") },
-                cashinExternalVolume = fiatCurrency?.run { 
-                    TalerAmount(
+            fiatCurrency?.run {
+                MonitorWithCashout(
+                    cashinCount = it.getLong("cashin_count"),
+                    cashinExternalVolume = TalerAmount(
                         value = it.getLong("cashin_volume_in_fiat_val"),
                         frac = it.getInt("cashin_volume_in_fiat_frac"),
                         currency = this
-                    )
-                },
-                cashoutCount = fiatCurrency?.run { it.getLong("cashout_count") },
-                cashoutExternalVolume = fiatCurrency?.run {
-                    TalerAmount(
+                    ),
+                    cashoutCount = it.getLong("cashout_count"),
+                    cashoutExternalVolume = TalerAmount(
                         value = it.getLong("cashout_volume_in_fiat_val"),
                         frac = it.getInt("cashout_volume_in_fiat_frac"),
                         currency = this
+                    ),
+                    talerPayoutCount = it.getLong("internal_taler_payments_count"),
+                    talerPayoutInternalVolume = TalerAmount(
+                        value = it.getLong("internal_taler_payments_volume_val"),
+                        frac = it.getInt("internal_taler_payments_volume_frac"),
+                        currency = bankCurrency
                     )
-                },
+                )
+            } ?:  MonitorJustPayouts(
                 talerPayoutCount = it.getLong("internal_taler_payments_count"),
                 talerPayoutInternalVolume = TalerAmount(
                     value = it.getLong("internal_taler_payments_volume_val"),
@@ -1518,30 +1523,8 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                     currency = bankCurrency
                 )
             )
-        } ?: MonitorResponse(
-            cashinCount = fiatCurrency?.run { 0 },
-            cashinExternalVolume = fiatCurrency?.run {
-                TalerAmount(
-                    value = 0,
-                    frac = 0,
-                    currency = this
-                )
-            },
-            cashoutCount = fiatCurrency?.run { 0 },
-            cashoutExternalVolume = fiatCurrency?.run {
-                TalerAmount(
-                    value = 0,
-                    frac = 0,
-                    currency = this
-                )
-            },
-            talerPayoutCount = 0,
-            talerPayoutInternalVolume = TalerAmount(
-                value = 0,
-                frac = 0,
-                currency = bankCurrency
-            )
-        )
+           
+        } ?: throw internalServerError("No result from DB procedure stats_get_frame")
     }
 }
 

@@ -31,6 +31,7 @@ import java.util.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.*
+import kotlinx.serialization.SerialName
 
 /**
  * Allowed lengths for fractional digits in amounts.
@@ -107,14 +108,28 @@ data class TokenRequest(
 )
 
 @Serializable
-data class MonitorResponse(
-    val cashinCount: Long? = null,
-    val cashinExternalVolume: TalerAmount? = null,
-    val cashoutCount: Long? = null,
-    val cashoutExternalVolume: TalerAmount? = null,
-    val talerPayoutCount: Long,
-    val talerPayoutInternalVolume: TalerAmount
-)
+sealed class MonitorResponse {
+    abstract val talerPayoutCount: Long
+    abstract val talerPayoutInternalVolume: TalerAmount
+}
+
+@Serializable
+@SerialName("just-payouts")
+data class MonitorJustPayouts(
+    override val talerPayoutCount: Long,
+    override val talerPayoutInternalVolume: TalerAmount
+) : MonitorResponse()
+
+@Serializable
+@SerialName("with-cashout")
+data class MonitorWithCashout(
+    val cashinCount: Long?,
+    val cashinExternalVolume: TalerAmount,
+    val cashoutCount: Long,
+    val cashoutExternalVolume: TalerAmount,
+    override val talerPayoutCount: Long,
+    override val talerPayoutInternalVolume: TalerAmount
+) : MonitorResponse()
 
 /**
  * Convenience type to throw errors along the bank activity
