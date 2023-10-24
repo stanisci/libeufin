@@ -687,11 +687,12 @@ CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   OUT out_balance_insufficient BOOLEAN,
   OUT out_creditor_not_found BOOLEAN,
   OUT out_exchange_not_found BOOLEAN,
-  OUT out_already_confirmed_conflict BOOLEAN
+  OUT out_not_selected BOOLEAN,
+  OUT out_aborted BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-  confirmation_done_local BOOLEAN;
+  already_confirmed BOOLEAN;
   subject_local TEXT;
   reserve_pub_local BYTEA;
   selected_exchange_payto_local TEXT;
@@ -702,12 +703,14 @@ DECLARE
 BEGIN
 SELECT -- Really no-star policy and instead DECLARE almost one var per column?
   confirmation_done,
+  aborted, NOT selection_done,
   reserve_pub, subject,
   selected_exchange_payto,
   wallet_bank_account,
   (amount).val, (amount).frac
   INTO
-    confirmation_done_local,
+    already_confirmed,
+    out_aborted, out_not_selected,
     reserve_pub_local, subject_local,
     selected_exchange_payto_local,
     wallet_bank_account_local,
@@ -717,17 +720,10 @@ SELECT -- Really no-star policy and instead DECLARE almost one var per column?
 IF NOT FOUND THEN
   out_no_op=TRUE;
   RETURN;
+ELSIF already_confirmed OR out_aborted OR out_not_selected THEN
+  RETURN;
 END IF;
-out_no_op=FALSE;
-IF confirmation_done_local THEN
-  out_already_confirmed_conflict=TRUE
-  RETURN; -- Kotlin should have checked for idempotency before reaching here!
-END IF;
-out_already_confirmed_conflict=FALSE;
--- exists and wasn't confirmed, do it.
-UPDATE taler_withdrawal_operations
-  SET confirmation_done = true
-  WHERE withdrawal_uuid=in_withdrawal_uuid;
+
 -- sending the funds to the exchange, but needs first its bank account row ID
 SELECT
   bank_account_id
@@ -738,7 +734,7 @@ IF NOT FOUND THEN
   out_exchange_not_found=TRUE;
   RETURN;
 END IF;
-out_exchange_not_found=FALSE;
+
 SELECT -- not checking for accounts existence, as it was done above.
   transfer.out_balance_insufficient,
   out_credit_row_id
@@ -756,6 +752,11 @@ FROM bank_wire_transfer(
 IF out_balance_insufficient THEN
   RETURN;
 END IF;
+
+-- Confirm operation
+UPDATE taler_withdrawal_operations
+  SET confirmation_done = true
+  WHERE withdrawal_uuid=in_withdrawal_uuid;
 
 -- Register incoming transaction
 CALL register_incoming(reserve_pub_local, tx_row_id, exchange_bank_account_id);

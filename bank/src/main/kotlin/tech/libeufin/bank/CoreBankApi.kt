@@ -430,7 +430,7 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankApplicationContext) {
             )
             WithdrawalCreationResult.ACCOUNT_IS_EXCHANGE -> throw conflict(
                 "Exchange account cannot perform withdrawal operation",
-                TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
             )
             WithdrawalCreationResult.BALANCE_INSUFFICIENT -> throw conflict(
                 "Insufficient funds to withdraw with Taler",
@@ -447,7 +447,7 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankApplicationContext) {
         }       
     }
     get("/withdrawals/{withdrawal_id}") {
-        val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id"))
+        val op = call.getWithdrawal(db, "withdrawal_id")
         call.respond(
             BankAccountGetWithdrawalResponse(
                 amount = op.amount,
@@ -460,55 +460,44 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankApplicationContext) {
         )
     }
     post("/withdrawals/{withdrawal_id}/abort") {
-        val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id")) // Idempotency:
-        if (op.aborted) {
-            call.respond(HttpStatusCode.NoContent)
-            return@post
-        } // Op is found, it'll now fail only if previously confirmed (DB checks).
-        if (!db.talerWithdrawalAbort(op.withdrawalUuid)) throw conflict(
-            hint = "Cannot abort confirmed withdrawal", talerEc = TalerErrorCode.TALER_EC_END
-        )
-        call.respond(HttpStatusCode.NoContent)
+        val opId = call.uuidUriComponent("withdrawal_id")
+        when (db.talerWithdrawalAbort(opId)) {
+            WithdrawalAbortResult.NOT_FOUND -> throw notFound(
+                "Withdrawal operation $opId not found", 
+                TalerErrorCode.TALER_EC_END
+            )
+            WithdrawalAbortResult.CONFIRMED -> throw conflict(
+                "Cannot abort confirmed withdrawal", 
+                TalerErrorCode.TALER_EC_END
+            )
+            WithdrawalAbortResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+        }
+        
     }
     post("/withdrawals/{withdrawal_id}/confirm") {
-        val op = getWithdrawal(db, call.expectUriComponent("withdrawal_id")) // Checking idempotency:
-        if (op.confirmationDone) {
-            call.respond(HttpStatusCode.NoContent)
-            return@post
-        }
-        if (op.aborted) throw conflict(
-            hint = "Cannot confirm an aborted withdrawal", talerEc = TalerErrorCode.TALER_EC_BANK_CONFIRM_ABORT_CONFLICT
-        ) // Checking that reserve GOT indeed selected.
-        if (!op.selectionDone) throw LibeufinBankException(
-            httpStatus = HttpStatusCode.UnprocessableEntity, talerError = TalerError(
-                hint = "Cannot confirm an unselected withdrawal", code = TalerErrorCode.TALER_EC_END.code
+        val opId = call.uuidUriComponent("withdrawal_id")
+        when (db.talerWithdrawalConfirm(opId, Instant.now())) {
+            WithdrawalConfirmationResult.OP_NOT_FOUND -> throw notFound(
+                "Withdrawal operation $opId not found", 
+                TalerErrorCode.TALER_EC_END
             )
-        ) // Confirmation conditions are all met, now put the operation
-        // to the selected state _and_ wire the funds to the exchange.
-        // Note: 'when' helps not to omit more result codes, should more
-        // be added.
-        when (db.talerWithdrawalConfirm(op.withdrawalUuid, Instant.now())) {
+            WithdrawalConfirmationResult.ABORTED -> throw conflict(
+                "Cannot confirm an aborted withdrawal",
+                TalerErrorCode.TALER_EC_BANK_CONFIRM_ABORT_CONFLICT
+            )
+            WithdrawalConfirmationResult.NOT_SELECTED -> throw LibeufinBankException(
+                httpStatus = HttpStatusCode.UnprocessableEntity, talerError = TalerError(
+                    hint = "Cannot confirm an unselected withdrawal", code = TalerErrorCode.TALER_EC_END.code
+                )
+            )
             WithdrawalConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
-                    "Insufficient funds",
-                    TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
-                )
-            WithdrawalConfirmationResult.OP_NOT_FOUND ->
-                /**
-                 * Despite previous checks, the database _still_ did not
-                 * find the withdrawal operation, that's on the bank.
-                 */
-                throw internalServerError("Withdrawal operation (${op.withdrawalUuid}) not found")
-            WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND ->
-                /**
-                 * That can happen because the bank did not check the exchange
-                 * exists when POST /withdrawals happened, or because the exchange
-                 * bank account got removed before this confirmation.
-                 */
-                throw conflict(
-                    hint = "Exchange to withdraw from not found",
-                    talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
-                )
-            WithdrawalConfirmationResult.CONFLICT -> throw internalServerError("Bank didn't check for idempotency")
+                "Insufficient funds",
+                TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+            )
+            WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND -> throw conflict(
+                "Exchange to withdraw from not found",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
             WithdrawalConfirmationResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
         }
     }

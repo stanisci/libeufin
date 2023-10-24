@@ -695,10 +695,24 @@ class CoreBankWithdrawalApiTest {
     // POST /accounts/USERNAME/withdrawals
     @Test
     fun create() = bankSetup { _ ->
+        // Check OK
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
             jsonBody(json { "amount" to "KUDOS:9.0" }) 
         }.assertOk()
+
+        // Check exchange account
+        client.post("/accounts/exchange/withdrawals") {
+            basicAuth("exchange", "exchange-password")
+            jsonBody(json { "amount" to "KUDOS:9.0" }) 
+        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
+
+        // Check insufficient fund
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:90" }) 
+        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
+
     }
 
     // GET /withdrawals/withdrawal_id
@@ -838,6 +852,35 @@ class CoreBankWithdrawalApiTest {
             // Check error
             client.post("/withdrawals/$uuid/confirm").assertConflict()
                 .assertErr(TalerErrorCode.TALER_EC_BANK_CONFIRM_ABORT_CONFLICT)
+        }
+
+        // Check balance insufficient
+        client.post("/accounts/merchant/withdrawals") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json { "amount" to "KUDOS:5" }) 
+        }.assertOk().run {
+            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val uuid = resp.taler_withdraw_uri.split("/").last()
+            client.post("/taler-integration/withdrawal-operation/$uuid") {
+                jsonBody(json {
+                    "reserve_pub" to randEddsaPublicKey()
+                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                })
+            }.assertOk()
+
+            // Send too much money
+            client.post("/accounts/merchant/transactions") {
+                basicAuth("merchant", "merchant-password")
+                jsonBody(json {
+                    "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout&amount=KUDOS:5"
+                })
+            }.assertNoContent()
+
+            client.post("/withdrawals/$uuid/confirm").assertConflict()
+                .assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
+
+            // Check can abort because not confirmed
+            client.post("/withdrawals/$uuid/abort").assertNoContent()
         }
 
         // Check bad UUID

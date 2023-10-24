@@ -164,11 +164,19 @@ fun getTalerWithdrawUri(baseUrl: String, woId: String) = url {
 
 // Builds a withdrawal confirm URL.
 fun getWithdrawalConfirmUrl(
-    baseUrl: String, wopId: String
+    baseUrl: String, wopId: UUID
 ): String {
-    return baseUrl.replace("{woid}", wopId)
+    return baseUrl.replace("{woid}", wopId.toString())
 }
 
+fun ApplicationCall.uuidUriComponent(name: String): UUID {
+    try {
+        return UUID.fromString(expectUriComponent(name))
+    } catch (e: Exception) {
+        logger.error(e.message)
+        throw badRequest("UUID uri component malformed")
+    }
+}
 
 /**
  * This handler factors out the checking of the query param
@@ -177,15 +185,10 @@ fun getWithdrawalConfirmUrl(
  * if the query param doesn't parse into a UUID.  Currently
  * used by the Taler Web/SPA and Integration API handlers.
  */
-suspend fun getWithdrawal(db: Database, opIdParam: String): TalerWithdrawalOperation {
-    val opId = try {
-        UUID.fromString(opIdParam)
-    } catch (e: Exception) {
-        logger.error(e.message)
-        throw badRequest("withdrawal_id query parameter was malformed")
-    }
+suspend fun ApplicationCall.getWithdrawal(db: Database, name: String): TalerWithdrawalOperation {
+    val opId = uuidUriComponent(name)
     val op = db.talerWithdrawalGet(opId) ?: throw notFound(
-        hint = "Withdrawal operation $opIdParam not found", talerEc = TalerErrorCode.TALER_EC_END
+        hint = "Withdrawal operation $opId not found", talerEc = TalerErrorCode.TALER_EC_END
     )
     return op
 }

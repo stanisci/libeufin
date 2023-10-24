@@ -38,16 +38,15 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
 
     // Note: wopid acts as an authentication token.
     get("/taler-integration/withdrawal-operation/{wopid}") {
-        val wopid = call.expectUriComponent("wopid")
         // TODO long poll
-        val op = getWithdrawal(db, wopid) // throws 404 if not found.
+        val op = call.getWithdrawal(db, "wopid") // throws 404 if not found.
         val relatedBankAccount = db.bankAccountGetFromOwnerId(op.walletBankAccount)
             ?: throw internalServerError("Bank has a withdrawal not related to any bank account.")
         val suggestedExchange = ctx.suggestedWithdrawalExchange
         val confirmUrl = if (ctx.spaCaptchaURL == null) null else
             getWithdrawalConfirmUrl(
                 baseUrl = ctx.spaCaptchaURL,
-                wopId = wopid
+                wopId = op.withdrawalUuid
             )
         call.respond(
             BankWithdrawalOperationStatus(
@@ -62,20 +61,15 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
         )
     }
     post("/taler-integration/withdrawal-operation/{wopid}") {
-        val wopid = call.expectUriComponent("wopid")
-        val uuid = try {
-            UUID.fromString(wopid)
-        } catch (e: Exception) {
-            throw badRequest("withdrawal_id query parameter was malformed")
-        }
+        val opId = call.uuidUriComponent("wopid")
         val req = call.receive<BankWithdrawalOperationPostRequest>()
 
         val (result, confirmationDone) = db.talerWithdrawalSetDetails(
-            uuid, req.selected_exchange, req.reserve_pub
+            opId, req.selected_exchange, req.reserve_pub
         )
         when (result) {
             WithdrawalSelectionResult.OP_NOT_FOUND -> throw notFound(
-                "Withdrawal operation $uuid not found", 
+                "Withdrawal operation $opId not found", 
                 TalerErrorCode.TALER_EC_END
             )
             WithdrawalSelectionResult.ALREADY_SELECTED -> throw conflict(
@@ -98,7 +92,7 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
                 val confirmUrl: String? = if (ctx.spaCaptchaURL !== null && !confirmationDone) {
                     getWithdrawalConfirmUrl(
                         baseUrl = ctx.spaCaptchaURL,
-                        wopId = wopid
+                        wopId = opId
                     )
                 } else null
                 call.respond(BankWithdrawalOperationPostResponse(

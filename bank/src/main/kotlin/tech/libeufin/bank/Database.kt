@@ -1022,16 +1022,20 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
      * Aborts one Taler withdrawal, only if it wasn't previously
      * confirmed.  It returns false if the UPDATE didn't succeed.
      */
-    suspend fun talerWithdrawalAbort(opUUID: UUID): Boolean = conn { conn ->
+    suspend fun talerWithdrawalAbort(opUUID: UUID): WithdrawalAbortResult = conn { conn ->
         val stmt = conn.prepareStatement("""
             UPDATE taler_withdrawal_operations
-            SET aborted = true
-            WHERE withdrawal_uuid=? AND confirmation_done = false
-            RETURNING taler_withdrawal_id
+            SET aborted = NOT confirmation_done
+            WHERE withdrawal_uuid=?
+            RETURNING confirmation_done
         """
         )
         stmt.setObject(1, opUUID)
-        stmt.executeQueryCheck()
+        when (stmt.oneOrNull { it.getBoolean(1) }) {
+            null -> WithdrawalAbortResult.NOT_FOUND
+            true -> WithdrawalAbortResult.CONFIRMED
+            false -> WithdrawalAbortResult.SUCCESS
+        }
     }
 
     /**
@@ -1093,7 +1097,8 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
               out_no_op,
               out_exchange_not_found,
               out_balance_insufficient,
-              out_already_confirmed_conflict
+              out_not_selected,
+              out_aborted
             FROM confirm_taler_withdrawal(?, ?, ?, ?, ?);
         """
         )
@@ -1109,7 +1114,8 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 it.getBoolean("out_no_op") -> WithdrawalConfirmationResult.OP_NOT_FOUND
                 it.getBoolean("out_exchange_not_found") -> WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND
                 it.getBoolean("out_balance_insufficient") -> WithdrawalConfirmationResult.BALANCE_INSUFFICIENT
-                it.getBoolean("out_already_confirmed_conflict") -> WithdrawalConfirmationResult.CONFLICT
+                it.getBoolean("out_not_selected") -> WithdrawalConfirmationResult.NOT_SELECTED
+                it.getBoolean("out_aborted") -> WithdrawalConfirmationResult.ABORTED
                 else -> WithdrawalConfirmationResult.SUCCESS
             }
         }
@@ -1586,6 +1592,13 @@ enum class WithdrawalSelectionResult {
     ACCOUNT_IS_NOT_EXCHANGE
 }
 
+/** Result status of withdrawal operation abortion */
+enum class WithdrawalAbortResult {
+    SUCCESS,
+    NOT_FOUND,
+    CONFIRMED
+}
+
 /**
  * This type communicates the result of a database operation
  * to confirm one withdrawal operation.
@@ -1595,16 +1608,8 @@ enum class WithdrawalConfirmationResult {
     OP_NOT_FOUND,
     EXCHANGE_NOT_FOUND,
     BALANCE_INSUFFICIENT,
-
-    /**
-     * This state indicates that the withdrawal was already
-     * confirmed BUT Kotlin did not detect it and still invoked
-     * the SQL procedure to confirm the withdrawal.  This is
-     * conflictual because only Kotlin is responsible to check
-     * for idempotency, and this state witnesses a failure in
-     * this regard.
-     */
-    CONFLICT
+    NOT_SELECTED,
+    ABORTED
 }
 
 private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
