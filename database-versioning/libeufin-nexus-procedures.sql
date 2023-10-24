@@ -13,7 +13,7 @@ INSERT INTO initiated_outgoing_transactions (
   amount
   ,wire_transfer_subject
   ,credit_payto_uri
-  ,in_initiation_time
+  ,initiation_time
   )
   SELECT
     amount

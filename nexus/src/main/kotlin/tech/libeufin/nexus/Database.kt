@@ -116,23 +116,26 @@ class Database(dbConfig: String): java.io.Closeable {
     /**
      * Flags an incoming payment as bounced.  NOTE: the flag merely means
      * that the payment had an invalid subject for a Taler withdrawal _and_
-     * it got sent to the initiated outgoing payments.  In NO way this flag
+     * it got initiated as an outgoing payments.  In NO way this flag
      * means that the actual value was returned to the initial debtor.
      *
-     * FIXME: this needs to run within the same transaction where the payment gets initiated.
-     *
      * @param rowId row ID of the payment to flag as bounced.
-     * @return true on success, false otherwise.
+     * @return true if the payment could be set as bounced, false otherwise.
      */
     suspend fun incomingPaymentSetAsBounced(rowId: Long): Boolean = runConn { conn ->
+        val timestamp = Instant.now().toDbMicros()
+            ?: throw Exception("Could not convert Instant.now() to microseconds, won't bounce this payment.")
         val stmt = conn.prepareStatement("""
-             UPDATE incoming_transactions
-                      SET bounced = true
-                      WHERE incoming_transaction_id=?
+             SELECT out_nx_incoming_payment
+               FROM bounce_payment(?,?)
              """
         )
         stmt.setLong(1, rowId)
-        return@runConn stmt.maybeUpdate()
+        stmt.setLong(2, timestamp)
+        stmt.executeQuery().use { maybeResult ->
+            if (!maybeResult.next()) throw Exception("Expected outcome from the SQL bounce_payment function")
+            return@runConn !maybeResult.getBoolean("out_nx_incoming_payment")
+        }
     }
 
     /**

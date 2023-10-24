@@ -1,18 +1,43 @@
-import io.ktor.client.*
-import io.ktor.client.request.*
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import tech.libeufin.nexus.InitiatedPayment
 import tech.libeufin.nexus.NEXUS_CONFIG_SOURCE
 import tech.libeufin.nexus.PaymentInitiationOutcome
 import tech.libeufin.nexus.TalerAmount
-import tech.libeufin.util.transaction
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class IncomingPaymentsTest {
+    // Tests the function that flags incoming payments as bounced.
+    @Test
+    fun incomingPaymentBounce() {
+        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        runBlocking {
+            // creating one incoming payment.
+            assertTrue(db.incomingPaymentCreate(genIncPay("to be bounced"))) // row ID == 1.
+            db.runConn {
+                val bouncedSql = """
+                    SELECT bounced
+                      FROM incoming_transactions
+                      WHERE incoming_transaction_id = 1"""
+                // asserting is NOT bounced.
+                val expectNotBounced = it.execSQLQuery(bouncedSql)
+                assertTrue(expectNotBounced.next())
+                assertFalse(expectNotBounced.getBoolean("bounced"))
+                // now bouncing it.
+                assertTrue(db.incomingPaymentSetAsBounced(1))
+                // asserting it got flagged as bounced.
+                val expectBounced = it.execSQLQuery(bouncedSql)
+                assertTrue(expectBounced.next())
+                assertTrue(expectBounced.getBoolean("bounced"))
+                // Trying to bounce a non-existing payment.
+                assertFalse(db.incomingPaymentSetAsBounced(5))
+            }
+        }
+    }
+
     // Tests the creation of an incoming payment.
     @Test
     fun incomingPaymentCreation() {
