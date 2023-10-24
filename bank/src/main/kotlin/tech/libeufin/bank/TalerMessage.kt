@@ -40,11 +40,15 @@ enum class FracDigits {
     TWO, EIGHT
 }
 
-
 // Allowed values for bank transactions directions.
 enum class TransactionDirection {
     credit,
     debit
+}
+
+enum class CashoutStatus {
+    pending,
+    confirmed
 }
 
 /**
@@ -504,6 +508,54 @@ data class BankWithdrawalOperationPostRequest(
 data class BankWithdrawalOperationPostResponse(
     val transfer_done: Boolean,
     val confirm_transfer_url: String? = null
+)
+
+@Serializable
+data class CashoutRequest(
+    val subject: String?,
+    val amount_debit: TalerAmount,
+    val amount_credit: TalerAmount,
+    val tan_channel: TanChannel?
+)
+
+@Serializable
+data class Cashouts(
+    val cashouts: List<CashoutInfo>,
+)
+
+@Serializable
+data class CashoutInfo(
+    val cashout_id: String,
+    val status: CashoutStatus,
+)
+
+
+@Serializable
+data class GlobalCashouts(
+    val cashouts: List<GlobalCashoutInfo>,
+)
+
+@Serializable
+data class GlobalCashoutInfo(
+    val cashout_id: String,
+    val username: String,
+    val status: CashoutStatus,
+)
+
+@Serializable
+data class CashoutStatusResponse(
+    val status: CashoutStatus,
+    val amount_debit: TalerAmount,
+    val amount_credit: TalerAmount,
+    val subject: String,
+    val credit_payto_uri: IbanPayTo,
+    val creation_time: TalerProtocolTimestamp,
+    val confirmation_time: TalerProtocolTimestamp?,
+)
+
+@Serializable
+data class CashoutConfirm(
+    val tan: String
 )
 
 /**

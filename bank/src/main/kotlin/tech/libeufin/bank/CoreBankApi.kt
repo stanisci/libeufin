@@ -31,6 +31,7 @@ fun Routing.coreBankApi(db: Database, ctx: BankApplicationContext) {
     coreBankAccountsMgmtApi(db, ctx)
     coreBankTransactionsApi(db, ctx)
     coreBankWithdrawalApi(db, ctx)
+    coreBankCashoutApi(db, ctx)
 }
 
 private fun Routing.coreBankTokenApi(db: Database) {
@@ -384,7 +385,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankApplicationCo
 
         val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
         val amount = tx.payto_uri.amount ?: tx.amount ?: throw badRequest("Wire transfer lacks amount")
-        checkInternalCurrency(ctx, amount)
+        ctx.checkInternalCurrency(amount)
         val result = db.bankTransaction(
             creditAccountPayto = tx.payto_uri,
             debitAccountUsername = login,
@@ -419,7 +420,7 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankApplicationContext) {
         val (login, _) = call.authCheck(db, TokenScope.readwrite)
         val req = call.receive<BankAccountCreateWithdrawalRequest>() // Checking that the user has enough funds.
         
-        checkInternalCurrency(ctx, req.amount)
+        ctx.checkInternalCurrency(req.amount)
 
         val opId = UUID.randomUUID()
         when (db.talerWithdrawalCreate(login, opId, req.amount)) {
@@ -510,5 +511,40 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankApplicationContext) {
             WithdrawalConfirmationResult.CONFLICT -> throw internalServerError("Bank didn't check for idempotency")
             WithdrawalConfirmationResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
         }
+    }
+}
+
+fun Routing.coreBankCashoutApi(db: Database, ctx: BankApplicationContext) {
+    post("/accounts/{USERNAME}/cashouts") {
+        val (login, _) = call.authCheck(db, TokenScope.readwrite)
+        val req = call.receive<CashoutRequest>() // Checking that the user has enough funds.
+        
+        ctx.checkInternalCurrency(req.amount_debit)
+        ctx.checkCashoutCurrency(req.amount_credit)
+
+        // TODO    
+    }
+    post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort") {
+        val (login, _) = call.authCheck(db, TokenScope.readwrite)
+        // TODO    
+    }
+    post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm") {
+        val (login, _) = call.authCheck(db, TokenScope.readwrite)
+        // TODO
+    }
+    get("/accounts/{USERNAME}/cashouts") {
+        val (login, _) = call.authCheck(db, TokenScope.readonly)
+        // TODO
+    }
+    get("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}") {
+        val (login, _) = call.authCheck(db, TokenScope.readonly)
+        // TODO
+    }
+    get("/cashouts") {
+        call.authAdmin(db, TokenScope.readonly)
+        // TODO
+    }
+    get("/cashout-rate") {
+        // TODO
     }
 }

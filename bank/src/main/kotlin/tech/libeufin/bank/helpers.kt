@@ -116,9 +116,16 @@ fun badRequest(
     )
 )
 
-fun checkInternalCurrency(ctx: BankApplicationContext, amount: TalerAmount) {
-    if (amount.currency != ctx.currency) throw badRequest(
-        "Wrong currency: expected internal currency ${ctx.currency} got ${amount.currency}",
+fun BankApplicationContext.checkInternalCurrency(amount: TalerAmount) {
+    if (amount.currency != currency) throw badRequest(
+        "Wrong currency: expected internal currency $currency got ${amount.currency}",
+        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+    )
+}
+
+fun BankApplicationContext.checkCashoutCurrency(amount: TalerAmount) {
+    if (amount.currency != cashoutCurrency) throw badRequest(
+        "Wrong currency: expected cashout currency $cashoutCurrency got ${amount.currency}",
         talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
     )
 }
