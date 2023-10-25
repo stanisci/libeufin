@@ -88,7 +88,6 @@ fun genIncPay(subject: String? = null, rowUuid: String? = null) =
         debitPaytoUri = "payto://iban/not-used",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
-        bounced = false,
         bankTransferId = "entropic"
     )
 

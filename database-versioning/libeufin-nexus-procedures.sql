@@ -1,7 +1,50 @@
 BEGIN;
 SET search_path TO libeufin_nexus;
 
-CREATE OR REPLACE FUNCTION create_outgoing_tx(
+CREATE OR REPLACE FUNCTION create_incoming_and_bounce(
+  IN in_amount taler_amount
+  ,IN in_wire_transfer_subject TEXT
+  ,IN in_execution_time BIGINT
+  ,IN in_debit_payto_uri TEXT
+  ,IN in_bank_transfer_id TEXT
+  ,IN in_timestamp BIGINT
+) RETURNS void
+LANGUAGE plpgsql AS $$
+BEGIN
+-- creating the bounced incoming transaction.
+INSERT INTO incoming_transactions (
+  amount
+  ,wire_transfer_subject
+  ,execution_time
+  ,debit_payto_uri
+  ,bank_transfer_id
+  ,bounced
+  ) VALUES (
+    in_amount
+    ,in_wire_transfer_subject
+    ,in_execution_time
+    ,in_debit_payto_uri
+    ,in_bank_transfer_id
+    ,true
+  );
+-- creating its reimbursement.
+INSERT INTO initiated_outgoing_transactions (
+  amount
+  ,wire_transfer_subject
+  ,credit_payto_uri
+  ,initiation_time
+  ) VALUES (
+    in_amount
+    ,'refund: ' || in_wire_transfer_subject
+    ,in_debit_payto_uri
+    ,in_timestamp
+  );
+END $$;
+
+COMMENT ON FUNCTION create_incoming_and_bounce(taler_amount, TEXT, BIGINT, TEXT, TEXT, BIGINT)
+  IS 'creates one incoming transaction with a bounced state and initiates its related refund.';
+
+CREATE OR REPLACE FUNCTION create_outgoing_payment(
   IN in_amount taler_amount
   ,IN in_wire_transfer_subject TEXT
   ,IN in_execution_time BIGINT
@@ -51,7 +94,7 @@ THEN
 END IF;
 END $$;
 
-COMMENT ON FUNCTION create_outgoing_tx(taler_amount, TEXT, BIGINT, TEXT, TEXT, BIGINT)
+COMMENT ON FUNCTION create_outgoing_payment(taler_amount, TEXT, BIGINT, TEXT, TEXT, BIGINT)
   IS 'Creates a new outgoing payment and optionally reconciles the related initiated payment with it.  If the initiated payment to reconcile is not found, it inserts NOTHING.';
 
 CREATE OR REPLACE FUNCTION bounce_payment(

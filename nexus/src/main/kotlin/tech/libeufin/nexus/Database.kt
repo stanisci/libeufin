@@ -28,8 +28,7 @@ data class IncomingPayment(
     val wireTransferSubject: String?,
     val debitPaytoUri: String,
     val executionTime: Instant,
-    val bankTransferId: String,
-    val bounced: Boolean
+    val bankTransferId: String
 )
 
 // INITIATED PAYMENTS STRUCTS
@@ -51,8 +50,18 @@ data class InitiatedPayment(
  * into the database.
  */
 enum class PaymentInitiationOutcome {
+    /**
+     * The Payto address to send the payment to was invalid.
+     */
     BAD_CREDIT_PAYTO,
+    /**
+     * The row contains a client_request_uid that exists
+     * already in the database.
+     */
     UNIQUE_CONSTRAINT_VIOLATION,
+    /**
+     * Record successfully created.
+     */
     SUCCESS
 }
 
@@ -71,7 +80,18 @@ data class OutgoingPayment(
  * payment into the database.
  */
 enum class OutgoingPaymentOutcome {
+    /**
+     * The caller wanted to link a previously initiated payment
+     * to this outgoing one, but the row ID passed to the inserting
+     * function could not be found in the payment initiations table.
+     * Note: NO insertion takes place in this case.
+     */
     INITIATED_COUNTERPART_NOT_FOUND,
+    /**
+     * The outgoing payment got inserted and _in case_ the caller
+     * wanted to link a previously initiated payment to this one, that
+     * succeeded too.
+     */
     SUCCESS
 }
 
@@ -148,7 +168,7 @@ class Database(dbConfig: String): java.io.Closeable {
     ): OutgoingPaymentOutcome = runConn {
         val stmt = it.prepareStatement("""
             SELECT out_nx_initiated
-              FROM create_outgoing_tx(
+              FROM create_outgoing_payment(
                 (?,?)::taler_amount
                 ,?
                 ,?
@@ -206,6 +226,37 @@ class Database(dbConfig: String): java.io.Closeable {
     }
 
     /**
+     * Creates an incoming payment as bounced _and_ initiates its
+     * reimbursement.  Throws exception on unique constraint violation,
+     * or other errors.
+     *
+     * @param paymentData information related to the incoming payment.
+     */
+    suspend fun incomingPaymentCreateBounced(paymentData: IncomingPayment) = runConn { conn ->
+        val refundTimestamp = Instant.now().toDbMicros()
+            ?: throw Exception("Could not convert refund execution time from Instant.now() to microsends.")
+        val executionTime = paymentData.executionTime.toDbMicros()
+            ?: throw Exception("Could not convert payment execution time from Instant to microseconds.")
+        val stmt = conn.prepareStatement("""
+            SELECT create_incoming_and_bounce (
+              (?,?)::taler_amount
+              ,?
+              ,?
+              ,?
+              ,?
+              ,?
+            )""")
+        stmt.setLong(1, paymentData.amount.value)
+        stmt.setInt(2, paymentData.amount.fraction)
+        stmt.setString(3, paymentData.wireTransferSubject)
+        stmt.setLong(4, executionTime)
+        stmt.setString(5, paymentData.debitPaytoUri)
+        stmt.setString(6, paymentData.bankTransferId)
+        stmt.setLong(7, refundTimestamp)
+        stmt.executeQuery()
+    }
+
+    /**
      * Creates a new incoming payment record in the database.
      *
      * @param paymentData information related to the incoming payment.
@@ -219,10 +270,8 @@ class Database(dbConfig: String): java.io.Closeable {
               ,execution_time
               ,debit_payto_uri
               ,bank_transfer_id
-              ,bounced
             ) VALUES (
               (?,?)::taler_amount
-              ,?
               ,?
               ,?
               ,?
@@ -238,7 +287,6 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.debitPaytoUri)
         stmt.setString(6, paymentData.bankTransferId)
-        stmt.setBoolean(7, paymentData.bounced)
         return@runConn stmt.maybeUpdate()
     }
 

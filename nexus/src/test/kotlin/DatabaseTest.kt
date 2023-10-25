@@ -43,6 +43,32 @@ class OutgoingPaymentsTest {
 }
 
 class IncomingPaymentsTest {
+    // Tests creating and bouncing incoming payments in one DB transaction.
+    @Test
+    fun incomingAndBounce() {
+        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        runBlocking {
+            // creating and bouncing one incoming transaction.
+            db.incomingPaymentCreateBounced(genIncPay("incoming and bounced"))
+            db.runConn {
+                // check the bounced flaag is true
+                val checkBounced = it.prepareStatement("""
+                    SELECT bounced FROM incoming_transactions WHERE incoming_transaction_id = 1;
+                """).executeQuery()
+                assertTrue(checkBounced.next())
+                assertTrue(checkBounced.getBoolean("bounced"))
+                // check the related initiated payment exists.
+                val checkInitiated = it.prepareStatement("""
+                    SELECT 
+                      COUNT(initiated_outgoing_transaction_id) AS how_many
+                      FROM initiated_outgoing_transactions
+                """).executeQuery()
+                assertTrue(checkInitiated.next())
+                assertEquals(1, checkInitiated.getInt("how_many"))
+            }
+        }
+    }
+
     // Tests the function that flags incoming payments as bounced.
     @Test
     fun incomingPaymentBounce() {
