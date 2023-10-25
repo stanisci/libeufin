@@ -42,7 +42,7 @@ data class InitiatedPayment(
     val wireTransferSubject: String?,
     val creditPaytoUri: String,
     val initiationTime: Instant,
-    val clientRequestUuid: String? = null
+    val requestUid: String
 )
 
 /**
@@ -207,18 +207,21 @@ class Database(dbConfig: String): java.io.Closeable {
      * means that the actual value was returned to the initial debtor.
      *
      * @param rowId row ID of the payment to flag as bounced.
+     * @param initiatedRequestUid unique identifier for the outgoing payment to
+     *                            initiate for this bouncing.
      * @return true if the payment could be set as bounced, false otherwise.
      */
-    suspend fun incomingPaymentSetAsBounced(rowId: Long): Boolean = runConn { conn ->
+    suspend fun incomingPaymentSetAsBounced(rowId: Long, initiatedRequestUid: String): Boolean = runConn { conn ->
         val timestamp = Instant.now().toDbMicros()
             ?: throw Exception("Could not convert Instant.now() to microseconds, won't bounce this payment.")
         val stmt = conn.prepareStatement("""
              SELECT out_nx_incoming_payment
-               FROM bounce_payment(?,?)
+               FROM bounce_payment(?,?,?)
              """
         )
         stmt.setLong(1, rowId)
         stmt.setLong(2, timestamp)
+        stmt.setString(3, initiatedRequestUid)
         stmt.executeQuery().use { maybeResult ->
             if (!maybeResult.next()) throw Exception("Expected outcome from the SQL bounce_payment function")
             return@runConn !maybeResult.getBoolean("out_nx_incoming_payment")
@@ -227,12 +230,16 @@ class Database(dbConfig: String): java.io.Closeable {
 
     /**
      * Creates an incoming payment as bounced _and_ initiates its
-     * reimbursement.  Throws exception on unique constraint violation,
-     * or other errors.
+     * reimbursement.
      *
      * @param paymentData information related to the incoming payment.
+     * @param requestUid unique identifier of the outgoing payment to
+     *                   initiate, in order to reimburse the bounced tx.
      */
-    suspend fun incomingPaymentCreateBounced(paymentData: IncomingPayment) = runConn { conn ->
+    suspend fun incomingPaymentCreateBounced(
+        paymentData: IncomingPayment,
+        requestUid: String
+        ) = runConn { conn ->
         val refundTimestamp = Instant.now().toDbMicros()
             ?: throw Exception("Could not convert refund execution time from Instant.now() to microsends.")
         val executionTime = paymentData.executionTime.toDbMicros()
@@ -240,6 +247,7 @@ class Database(dbConfig: String): java.io.Closeable {
         val stmt = conn.prepareStatement("""
             SELECT create_incoming_and_bounce (
               (?,?)::taler_amount
+              ,?
               ,?
               ,?
               ,?
@@ -253,6 +261,7 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setString(5, paymentData.debitPaytoUri)
         stmt.setString(6, paymentData.bankTransferId)
         stmt.setLong(7, refundTimestamp)
+        stmt.setString(8, requestUid)
         stmt.executeQuery()
     }
 
@@ -325,7 +334,7 @@ class Database(dbConfig: String): java.io.Closeable {
              ,wire_transfer_subject
              ,credit_payto_uri
              ,initiation_time
-             ,client_request_uuid
+             ,request_uid
              FROM initiated_outgoing_transactions
              WHERE submitted=false;
         """)
@@ -347,7 +356,7 @@ class Database(dbConfig: String): java.io.Closeable {
                     creditPaytoUri = it.getString("credit_payto_uri"),
                     wireTransferSubject = it.getString("wire_transfer_subject"),
                     initiationTime = initiationTime,
-                    clientRequestUuid = it.getString("client_request_uuid")
+                    requestUid = it.getString("request_uid")
                 )
             } while (it.next())
         }
@@ -368,7 +377,7 @@ class Database(dbConfig: String): java.io.Closeable {
              ,wire_transfer_subject
              ,credit_payto_uri
              ,initiation_time
-             ,client_request_uuid
+             ,request_uid
            ) VALUES (
              (?,?)::taler_amount
              ,?
@@ -389,7 +398,7 @@ class Database(dbConfig: String): java.io.Closeable {
             throw Exception("Initiation time could not be converted to microseconds for the database.")
         }
         stmt.setLong(5, initiationTime)
-        stmt.setString(6, paymentData.clientRequestUuid) // can be null.
+        stmt.setString(6, paymentData.requestUid) // can be null.
         if (stmt.maybeUpdate())
             return@runConn PaymentInitiationOutcome.SUCCESS
         /**

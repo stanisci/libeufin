@@ -8,6 +8,7 @@ CREATE OR REPLACE FUNCTION create_incoming_and_bounce(
   ,IN in_debit_payto_uri TEXT
   ,IN in_bank_transfer_id TEXT
   ,IN in_timestamp BIGINT
+  ,IN in_request_uid TEXT
 ) RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -33,15 +34,17 @@ INSERT INTO initiated_outgoing_transactions (
   ,wire_transfer_subject
   ,credit_payto_uri
   ,initiation_time
+  ,request_uid
   ) VALUES (
     in_amount
     ,'refund: ' || in_wire_transfer_subject
     ,in_debit_payto_uri
     ,in_timestamp
+    ,in_request_uid
   );
 END $$;
 
-COMMENT ON FUNCTION create_incoming_and_bounce(taler_amount, TEXT, BIGINT, TEXT, TEXT, BIGINT)
+COMMENT ON FUNCTION create_incoming_and_bounce(taler_amount, TEXT, BIGINT, TEXT, TEXT, BIGINT, TEXT)
   IS 'creates one incoming transaction with a bounced state and initiates its related refund.';
 
 CREATE OR REPLACE FUNCTION create_outgoing_payment(
@@ -100,6 +103,7 @@ COMMENT ON FUNCTION create_outgoing_payment(taler_amount, TEXT, BIGINT, TEXT, TE
 CREATE OR REPLACE FUNCTION bounce_payment(
   IN in_incoming_transaction_id BIGINT
   ,IN in_initiation_time BIGINT
+  ,IN in_request_uid TEXT
   ,OUT out_nx_incoming_payment BOOLEAN
 )
 LANGUAGE plpgsql AS $$
@@ -110,12 +114,14 @@ INSERT INTO initiated_outgoing_transactions (
   ,wire_transfer_subject
   ,credit_payto_uri
   ,initiation_time
+  ,request_uid
   )
   SELECT
     amount
     ,'refund: ' || wire_transfer_subject
     ,debit_payto_uri
     ,in_initiation_time
+    ,in_request_uid
     FROM incoming_transactions
     WHERE incoming_transaction_id = in_incoming_transaction_id;
 
@@ -134,4 +140,4 @@ UPDATE incoming_transactions
   WHERE incoming_transaction_id = in_incoming_transaction_id;
 END $$;
 
-COMMENT ON FUNCTION bounce_payment(BIGINT, BIGINT) IS 'Marks an incoming payment as bounced and initiates its refunding payment';
+COMMENT ON FUNCTION bounce_payment(BIGINT, BIGINT, TEXT) IS 'Marks an incoming payment as bounced and initiates its refunding payment';

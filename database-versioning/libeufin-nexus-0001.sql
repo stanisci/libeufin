@@ -56,11 +56,15 @@ CREATE TABLE IF NOT EXISTS initiated_outgoing_transactions
   ,outgoing_transaction_id INT8 REFERENCES outgoing_transactions (outgoing_transaction_id)
   ,submitted BOOL DEFAULT FALSE 
   ,hidden BOOL DEFAULT FALSE -- FIXME: explain this.
-  ,client_request_uuid TEXT UNIQUE -- only there for HTTP requests idempotence.
+  ,request_uid TEXT NOT NULL UNIQUE
   ,failure_message TEXT -- NOTE: that may mix soon failures (those found at initiation time), or late failures (those found out along a fetch operation)
   );
 
 COMMENT ON COLUMN initiated_outgoing_transactions.outgoing_transaction_id
-    IS 'Points to the bank transaction that was found via nexus-fetch.  If "submitted" is false or nexus-fetch could not download this initiation, this column is expected to be NULL.';
-
+  IS 'Points to the bank transaction that was found via nexus-fetch.  If "submitted" is false or nexus-fetch could not download this initiation, this column is expected to be NULL.';
+COMMENT ON COLUMN initiated_outgoing_transactions.request_uid
+  IS 'Unique identifier of this outgoing transaction initiation.
+This value could come both from a nexus-httpd client or directly
+generated when nexus-fetch bounces one payment.  In both cases, this
+value will be used as a unique identifier for its related pain.001 document.';
 COMMIT;

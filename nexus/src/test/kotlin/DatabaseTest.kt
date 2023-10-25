@@ -49,7 +49,10 @@ class IncomingPaymentsTest {
         val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
         runBlocking {
             // creating and bouncing one incoming transaction.
-            db.incomingPaymentCreateBounced(genIncPay("incoming and bounced"))
+            db.incomingPaymentCreateBounced(
+                genIncPay("incoming and bounced"),
+                "UID"
+            )
             db.runConn {
                 // check the bounced flaag is true
                 val checkBounced = it.prepareStatement("""
@@ -86,13 +89,13 @@ class IncomingPaymentsTest {
                 assertTrue(expectNotBounced.next())
                 assertFalse(expectNotBounced.getBoolean("bounced"))
                 // now bouncing it.
-                assertTrue(db.incomingPaymentSetAsBounced(1))
+                assertTrue(db.incomingPaymentSetAsBounced(1, "unique 0"))
                 // asserting it got flagged as bounced.
                 val expectBounced = it.execSQLQuery(bouncedSql)
                 assertTrue(expectBounced.next())
                 assertTrue(expectBounced.getBoolean("bounced"))
                 // Trying to bounce a non-existing payment.
-                assertFalse(db.incomingPaymentSetAsBounced(5))
+                assertFalse(db.incomingPaymentSetAsBounced(5, "unique 1"))
             }
         }
     }
@@ -168,7 +171,7 @@ class PaymentInitiationsTest {
             amount = TalerAmount(44, 0, "KUDOS"),
             creditPaytoUri = "payto://iban/not-used",
             wireTransferSubject = "test",
-            clientRequestUuid = "unique",
+            requestUid = "unique",
             initiationTime = Instant.now()
         )
         runBlocking {
@@ -178,7 +181,7 @@ class PaymentInitiationsTest {
             assertTrue {
                 haveOne.size == 1
                         && haveOne.containsKey(1)
-                        && haveOne[1]?.clientRequestUuid == "unique"
+                        && haveOne[1]?.requestUid == "unique"
             }
         }
     }
@@ -189,11 +192,11 @@ class PaymentInitiationsTest {
     fun paymentInitiationsMultiple() {
         val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
         runBlocking {
-            assertEquals(db.initiatedPaymentCreate(genInitPay("#1")), PaymentInitiationOutcome.SUCCESS)
-            assertEquals(db.initiatedPaymentCreate(genInitPay("#2")), PaymentInitiationOutcome.SUCCESS)
-            assertEquals(db.initiatedPaymentCreate(genInitPay("#3")), PaymentInitiationOutcome.SUCCESS)
-            assertEquals(db.initiatedPaymentCreate(genInitPay("#4")), PaymentInitiationOutcome.SUCCESS)
-            assertEquals(db.initiatedPaymentCreate(genInitPay()), PaymentInitiationOutcome.SUCCESS) // checking the nullable subject
+            assertEquals(db.initiatedPaymentCreate(genInitPay("#1", "unique1")), PaymentInitiationOutcome.SUCCESS)
+            assertEquals(db.initiatedPaymentCreate(genInitPay("#2", "unique2")), PaymentInitiationOutcome.SUCCESS)
+            assertEquals(db.initiatedPaymentCreate(genInitPay("#3", "unique3")), PaymentInitiationOutcome.SUCCESS)
+            assertEquals(db.initiatedPaymentCreate(genInitPay("#4", "unique4")), PaymentInitiationOutcome.SUCCESS)
+            assertEquals(db.initiatedPaymentCreate(genInitPay(rowUid = "unique5")), PaymentInitiationOutcome.SUCCESS) // checking the nullable subject
 
             // Marking one as submitted, hence not expecting it in the results.
             db.runConn { conn ->
