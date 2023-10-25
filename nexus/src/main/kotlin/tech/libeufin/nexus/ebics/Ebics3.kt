@@ -1,5 +1,8 @@
-package tech.libeufin.nexus
+package tech.libeufin.nexus.ebics
 
+import tech.libeufin.nexus.BankPublicKeysFile
+import tech.libeufin.nexus.ClientPrivateKeysFile
+import tech.libeufin.nexus.EbicsSetupConfig
 import tech.libeufin.util.PreparedUploadData
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.ebics_h005.Ebics3Request
