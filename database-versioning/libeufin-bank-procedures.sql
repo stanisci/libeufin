@@ -38,11 +38,11 @@ CREATE OR REPLACE FUNCTION amount_mul(
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-tmp NUMERIC(24, 8); -- 16 digit for val and 8 for frac
+  tmp NUMERIC(24, 8); -- 16 digit for val and 8 for frac
 BEGIN
   -- TODO write custom multiplication logic to get more control over rounding
   tmp = (a.val::numeric(24, 8) + a.frac::numeric(24, 8) / 100000000) * (b.val::numeric(24, 8) + b.frac::numeric(24, 8) / 100000000);
-  product = (trunc(tmp)::bigint, (tmp * 100000000 % 100000000)::int);
+  product = (trunc(tmp)::int8, (tmp * 100000000 % 100000000)::int4);
   IF (product.val > 1::bigint<<52) THEN
     RAISE EXCEPTION 'amount value overflowed';
   END IF;
@@ -1108,3 +1108,39 @@ BEGIN
         ,internal_taler_payments_volume = (SELECT amount_add(s.internal_taler_payments_volume, amount));
   END LOOP;
 END $$;
+
+CREATE OR REPLACE PROCEDURE conversion_config_update(
+  IN buy_at_ratio taler_amount,
+  IN sell_at_ratio taler_amount,
+  IN buy_in_fee taler_amount,
+  IN sell_out_fee taler_amount
+)
+LANGUAGE sql AS $$
+  INSERT INTO config (key, value) VALUES ('buy_at_ratio', jsonb_build_object('val', buy_at_ratio.val, 'frac', buy_at_ratio.frac));
+  INSERT INTO config (key, value) VALUES ('sell_at_ratio', jsonb_build_object('val', sell_at_ratio.val, 'frac', sell_at_ratio.frac));
+  INSERT INTO config (key, value) VALUES ('buy_in_fee', jsonb_build_object('val', buy_in_fee.val, 'frac', buy_in_fee.frac));
+  INSERT INTO config (key, value) VALUES ('sell_out_fee', jsonb_build_object('val', sell_out_fee.val, 'frac', sell_out_fee.frac));
+$$;
+
+CREATE OR REPLACE FUNCTION conversion_internal_to_fiat(
+  IN internal_amount taler_amount,
+  OUT fiat_amount taler_amount
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+  sell_at_ratio taler_amount;
+  sell_out_fee taler_amount;
+  calculation_ok BOOLEAN;
+BEGIN
+  SELECT value['val']::int8, value['frac']::int4 INTO sell_at_ratio.val, sell_at_ratio.frac FROM config WHERE key='sell_at_ratio';
+  SELECT value['val']::int8, value['frac']::int4 INTO sell_out_fee.val, sell_out_fee.frac FROM config WHERE key='sell_out_fee';
+
+  SELECT product.val, product.frac INTO fiat_amount.val, fiat_amount.frac FROM amount_mul(internal_amount, sell_at_ratio) as product;
+  SELECT (diff).val, (diff).frac, ok INTO fiat_amount.val, fiat_amount.frac, calculation_ok FROM amount_left_minus_right(fiat_amount, sell_out_fee);
+
+  IF NOT calculation_ok THEN
+    fiat_amount = (0, 0); -- TODO how to handle zero and less than zero ?
+  END IF;
+END $$;
+
+COMMIT;

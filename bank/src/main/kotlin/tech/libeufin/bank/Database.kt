@@ -1532,6 +1532,32 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
            
         } ?: throw internalServerError("No result from DB procedure stats_get_frame")
     }
+
+    suspend fun conversionUpdateConfig(cfg: ConversionInfo) = conn { conn ->
+        val stmt = conn.prepareStatement("CALL conversion_config_update((?, ?)::taler_amount, (?, ?)::taler_amount, (?, ?)::taler_amount, (?, ?)::taler_amount)")
+        stmt.setLong(1, cfg.buy_at_ratio.value)
+        stmt.setInt(2, cfg.buy_at_ratio.frac)
+        stmt.setLong(3, cfg.sell_at_ratio.value)
+        stmt.setInt(4, cfg.sell_at_ratio.frac)
+        stmt.setLong(5, cfg.buy_in_fee.value)
+        stmt.setInt(6, cfg.buy_in_fee.frac)
+        stmt.setLong(7, cfg.sell_out_fee.value)
+        stmt.setInt(8, cfg.sell_out_fee.frac)
+        stmt.executeUpdate()
+    }
+
+    suspend fun conversionInternalToFiat(internalAmount: TalerAmount): TalerAmount = conn { conn ->
+        val stmt = conn.prepareStatement("SELECT fiat_amount.val AS amount_val, fiat_amount.frac AS amount_frac FROM conversion_internal_to_fiat((?, ?)::taler_amount) as fiat_amount")
+        stmt.setLong(1, internalAmount.value)
+        stmt.setInt(2, internalAmount.frac)
+        stmt.oneOrNull {
+            TalerAmount(
+                value = it.getLong("amount_val"),
+                frac = it.getInt("amount_frac"),
+                currency = fiatCurrency!!
+            )
+        }!!
+    }
 }
 
 /** Result status of customer account deletion */

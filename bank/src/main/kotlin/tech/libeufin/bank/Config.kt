@@ -24,10 +24,71 @@ import TalerConfigError
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.Serializable
 import tech.libeufin.util.DatabaseConfig
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Config")
 private val BANK_CONFIG_SOURCE = ConfigSource("libeufin-bank", "libeufin-bank")
+
+
+/**
+ * Application the parsed configuration.
+ */
+data class BankConfig(
+    /**
+     * Main, internal currency of the bank.
+     */
+    val currency: String,
+    val currencySpecification: CurrencySpecification,
+    /**
+     * Restrict account registration to the administrator.
+     */
+    val restrictRegistration: Boolean,
+    /**
+     * Restrict account deletion to the administrator.
+     */
+    val restrictAccountDeletion: Boolean,
+    /**
+     * Default limit for the debt that a customer can have.
+     * Can be adjusted per account after account creation.
+     */
+    val defaultCustomerDebtLimit: TalerAmount,
+    /**
+     * Debt limit of the admin account.
+     */
+    val defaultAdminDebtLimit: TalerAmount,
+    /**
+     * If true, transfer a registration bonus from the admin
+     * account to the newly created account.
+     */
+    val registrationBonusEnabled: Boolean,
+    /**
+     * Only set if registration bonus is enabled.
+     */
+    val registrationBonus: TalerAmount?,
+    /**
+     * Exchange that the bank suggests to wallets for withdrawal.
+     */
+    val suggestedWithdrawalExchange: String?,
+    /**
+     * URL where the user should be redirected to complete the captcha.
+     * It can contain the substring "{woid}" that is going to be replaced
+     * with the withdrawal operation id and should point where the bank
+     * SPA is located.
+     */
+    val spaCaptchaURL: String?,
+    val haveCashout: Boolean,
+    val fiatCurrency: String?,
+    val conversionInfo: ConversionInfo?
+)
+
+@Serializable
+data class ConversionInfo (
+    val buy_at_ratio: DecimalNumber,
+    val sell_at_ratio: DecimalNumber,
+    val buy_in_fee: DecimalNumber,
+    val sell_out_fee: DecimalNumber,
+)
 
 data class ServerConfig(
     val method: String,
@@ -54,15 +115,15 @@ fun TalerConfig.loadServerConfig(): ServerConfig = catchError  {
     )
 }
 
-fun TalerConfig.loadBankApplicationContext(): BankApplicationContext = catchError  {
+fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
     val currency = requireString("libeufin-bank", "currency")
     val currencySpecification = sections.find {
         it.startsWith("CURRENCY-") && requireBoolean(it, "enabled") && requireString(it, "code") == currency
     }?.let { loadCurrencySpecification(it) } ?: throw TalerConfigError("missing currency specification for $currency")
-    BankApplicationContext(
+    val haveCashout = lookupBoolean("libeufin-bank", "have_cashout") ?: false;
+    BankConfig(
         currency = currency,
         restrictRegistration = lookupBoolean("libeufin-bank", "restrict_registration") ?: false,
-        cashoutCurrency = lookupString("libeufin-bank", "cashout_currency"),
         defaultCustomerDebtLimit = requireAmount("libeufin-bank", "default_customer_debt_limit", currency),
         registrationBonusEnabled = lookupBoolean("libeufin-bank", "registration_bonus_enabled") ?: false,
         registrationBonus = requireAmount("libeufin-bank", "registration_bonus", currency),
@@ -70,7 +131,19 @@ fun TalerConfig.loadBankApplicationContext(): BankApplicationContext = catchErro
         defaultAdminDebtLimit = requireAmount("libeufin-bank", "default_admin_debt_limit", currency),
         spaCaptchaURL = lookupString("libeufin-bank", "spa_captcha_url"),
         restrictAccountDeletion = lookupBoolean("libeufin-bank", "restrict_account_deletion") ?: true,
-        currencySpecification = currencySpecification
+        currencySpecification = currencySpecification,
+        haveCashout = haveCashout,
+        fiatCurrency = if (haveCashout) { requireString("libeufin-bank", "fiat_currency") } else { null },
+        conversionInfo = if (haveCashout) { loadConversionInfo() } else { null }
+    )
+}
+
+private fun TalerConfig.loadConversionInfo(): ConversionInfo = catchError {
+    ConversionInfo(
+        buy_at_ratio = requireDecimalNumber("libeufin-bank-conversion", "buy_at_ratio"),
+        sell_at_ratio = requireDecimalNumber("libeufin-bank-conversion", "sell_at_ratio"),
+        buy_in_fee = requireDecimalNumber("libeufin-bank-conversion", "buy_in_fee"),
+        sell_out_fee = requireDecimalNumber("libeufin-bank-conversion", "sell_out_fee")
     )
 }
 
@@ -101,6 +174,16 @@ private fun TalerConfig.requireAmount(section: String, option: String, currency:
         )
     }
     amount
+}
+
+private fun TalerConfig.requireDecimalNumber(section: String, option: String): DecimalNumber = catchError {
+    val numberStr = lookupString(section, option) ?:
+        throw TalerConfigError("expected decimal number for section $section, option $option, but config value is empty")
+    try {
+        DecimalNumber(numberStr)
+    } catch (e: Exception) {
+        throw TalerConfigError("expected decimal number for section $section, option $option, but number is malformed")
+    }
 }
 
 private fun <R> catchError(lambda: () -> R): R {

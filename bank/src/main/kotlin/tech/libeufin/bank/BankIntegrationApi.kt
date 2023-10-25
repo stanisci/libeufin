@@ -28,7 +28,7 @@ import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import java.util.*
 
-fun Routing.bankIntegrationApi(db: Database, ctx: BankApplicationContext) {
+fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     get("/taler-integration/config") {
         call.respond(TalerIntegrationConfigResponse(
             currency = ctx.currency,

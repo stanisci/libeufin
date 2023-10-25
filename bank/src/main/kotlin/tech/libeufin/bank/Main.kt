@@ -70,58 +70,6 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
 val TOKEN_DEFAULT_DURATION: java.time.Duration = Duration.ofDays(1L)
 
 /**
- * Application context with the parsed configuration.
- */
-data class BankApplicationContext(
-    /**
-     * Main, internal currency of the bank.
-     */
-    val currency: String,
-    val currencySpecification: CurrencySpecification,
-    /**
-     * Restrict account registration to the administrator.
-     */
-    val restrictRegistration: Boolean,
-    /**
-     * Restrict account deletion to the administrator.
-     */
-    val restrictAccountDeletion: Boolean,
-    /**
-     * Cashout currency, if cashouts are supported.
-     */
-    val cashoutCurrency: String?,
-    /**
-     * Default limit for the debt that a customer can have.
-     * Can be adjusted per account after account creation.
-     */
-    val defaultCustomerDebtLimit: TalerAmount,
-    /**
-     * Debt limit of the admin account.
-     */
-    val defaultAdminDebtLimit: TalerAmount,
-    /**
-     * If true, transfer a registration bonus from the admin
-     * account to the newly created account.
-     */
-    val registrationBonusEnabled: Boolean,
-    /**
-     * Only set if registration bonus is enabled.
-     */
-    val registrationBonus: TalerAmount?,
-    /**
-     * Exchange that the bank suggests to wallets for withdrawal.
-     */
-    val suggestedWithdrawalExchange: String?,
-    /**
-     * URL where the user should be redirected to complete the captcha.
-     * It can contain the substring "{woid}" that is going to be replaced
-     * with the withdrawal operation id and should point where the bank
-     * SPA is located.
-     */
-    val spaCaptchaURL: String?,
-)
-
-/**
  * This plugin inflates the requests that have "Content-Encoding: deflate"
  */
 val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompression") {
@@ -153,7 +101,7 @@ val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompr
 /**
  * Set up web server handlers for the Taler corebank API.
  */
-fun Application.corebankWebApp(db: Database, ctx: BankApplicationContext) {
+fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     install(CallLogging) {
         this.level = Level.DEBUG
         this.logger = tech.libeufin.bank.logger
@@ -337,14 +285,14 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
 
     override fun run() {
         val cfg = talerConfig(configFile)
-        val ctx = cfg.loadBankApplicationContext()
+        val ctx = cfg.loadBankConfig()
         val dbCfg = cfg.loadDbConfig()
         val serverCfg = cfg.loadServerConfig()
         if (serverCfg.method.lowercase() != "tcp") {
             logger.info("Can only serve libeufin-bank via TCP")
             exitProcess(1)
         }
-        val db = Database(dbCfg.dbConnStr, ctx.currency, null)
+        val db = Database(dbCfg.dbConnStr, ctx.currency, ctx.fiatCurrency)
         runBlocking {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
                 exitProcess(1)
@@ -365,9 +313,9 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
 
     override fun run() {
         val cfg = talerConfig(configFile)
-        val ctx = cfg.loadBankApplicationContext() 
+        val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
-        val db = Database(dbCfg.dbConnStr, ctx.currency, null)
+        val db = Database(dbCfg.dbConnStr, ctx.currency, ctx.fiatCurrency)
         runBlocking {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
@@ -442,7 +390,7 @@ class BankConfigGet : CliktCommand("Lookup config value", name = "get") {
     }
 }
 
-class BankConfig : CliktCommand("Dump the configuration", name = "config") {
+class BankConfigCmd : CliktCommand("Dump the configuration", name = "config") {
     init {
         subcommands(BankConfigDump(), BankConfigPathsub(), BankConfigGet())
     }
@@ -453,7 +401,7 @@ class BankConfig : CliktCommand("Dump the configuration", name = "config") {
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), ChangePw(), BankConfig())
+        subcommands(ServeBank(), BankDbInit(), ChangePw(), BankConfigCmd())
     }
 
     override fun run() = Unit

@@ -289,6 +289,63 @@ class TalerAmount {
     }
 }
 
+@Serializable(with = DecimalNumber.Serializer::class)
+class DecimalNumber {
+    val value: Long
+    val frac: Int
+
+    constructor(encoded: String) {
+        fun badAmount(hint: String): Exception = 
+            badRequest(hint, TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT)
+        
+        val match = PATTERN.matchEntire(encoded) ?: throw badAmount("Invalid decimal number format");
+        val (value, frac) = match.destructured
+        this.value = value.toLongOrNull() ?: throw badAmount("Invalid value")
+        if (this.value > TalerAmount.MAX_VALUE) throw badAmount("Value specified in decimal number is too large")
+        this.frac = if (frac.isEmpty()) {
+            0
+        } else {
+            var tmp = frac.toIntOrNull() ?: throw badAmount("Invalid fractional value")
+            repeat(8 - frac.length) {
+                tmp *= 10
+            }
+            tmp
+        }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        return other is DecimalNumber &&
+                other.value == this.value &&
+                other.frac == this.frac
+    }
+
+    override fun toString(): String {
+        if (frac == 0) {
+            return "$value"
+        } else {
+            return "$value.${frac.toString().padStart(8, '0')}"
+                .dropLastWhile { it == '0' } // Trim useless fractional trailing 0
+        }
+    }
+
+    internal object Serializer : KSerializer<DecimalNumber> {
+        override val descriptor: SerialDescriptor =
+            PrimitiveSerialDescriptor("DecimalNumber", PrimitiveKind.STRING)
+    
+        override fun serialize(encoder: Encoder, value: DecimalNumber) {
+            encoder.encodeString(value.toString())
+        }
+    
+        override fun deserialize(decoder: Decoder): DecimalNumber {
+            return DecimalNumber(decoder.decodeString())
+        }
+    }
+
+    companion object {
+        private val PATTERN = Regex("([0-9]+)(?:\\.([0-9]{1,8}))?");
+    }
+}
+
 
 /**
  * Internal representation of relative times.  The

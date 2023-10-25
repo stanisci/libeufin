@@ -890,3 +890,28 @@ class CoreBankWithdrawalApiTest {
         client.post("/withdrawals/${UUID.randomUUID()}/confirm").assertNotFound()
     }
 }
+
+
+class CoreBankCashoutApiTest {
+    // GET /cashout-rate
+    @Test
+    fun rate() = bankSetup { _ ->
+        // Check conversion
+        client.get("/cashout-rate?amount_debit=KUDOS:1").assertOk().run {
+            val resp = Json.decodeFromString<CashoutConversionResponse>(bodyAsText())
+            assertEquals(TalerAmount("FIAT:1.247"), resp.amount_credit)
+        }
+        // Check OK
+        client.get("/cashout-rate?amount_debit=KUDOS:1&amount_credit=FIAT:1.247").assertOk()
+        // Check bad conversion
+        client.get("/cashout-rate?amount_debit=KUDOS:1&amount_credit=FIAT:1.25").assertBadRequest()
+
+        // No amount
+        client.get("/cashout-rate").assertBadRequest()
+        // Wrong currency
+        client.get("/cashout-rate?amount_debit=FIAT:1").assertBadRequest()
+            .assertBadRequest().assertErr(TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH)
+        client.get("/cashout-rate?amount_credit=KUDOS:1").assertBadRequest()
+            .assertBadRequest().assertErr(TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH)
+    }
+}

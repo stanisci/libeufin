@@ -116,16 +116,16 @@ fun badRequest(
     )
 )
 
-fun BankApplicationContext.checkInternalCurrency(amount: TalerAmount) {
+fun BankConfig.checkInternalCurrency(amount: TalerAmount) {
     if (amount.currency != currency) throw badRequest(
         "Wrong currency: expected internal currency $currency got ${amount.currency}",
         talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
     )
 }
 
-fun BankApplicationContext.checkCashoutCurrency(amount: TalerAmount) {
-    if (amount.currency != cashoutCurrency) throw badRequest(
-        "Wrong currency: expected cashout currency $cashoutCurrency got ${amount.currency}",
+fun BankConfig.checkFiatCurrency(amount: TalerAmount) {
+    if (amount.currency != fiatCurrency) throw badRequest(
+        "Wrong currency: expected fiat currency $fiatCurrency got ${amount.currency}",
         talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
     )
 }
@@ -250,6 +250,29 @@ data class HistoryParams(
     }
 }
 
+data class CashoutRateParams(
+    val debit: TalerAmount?, val credit: TalerAmount?
+) {
+    companion object {
+        fun extract(params: Parameters): CashoutRateParams {
+            val debit = try {
+                params["amount_debit"]?.run(::TalerAmount)
+            } catch (e: Exception) {
+                throw badRequest("Param 'amount_debit' not a taler amount")
+            }
+            val credit = try {
+                params["amount_credit"]?.run(::TalerAmount)
+            } catch (e: Exception) {
+                throw badRequest("Param 'amount_credit' not a taler amount")
+            }
+            if (debit == null && credit == null) {
+                throw badRequest("Either param 'amount_debit' or 'amount_credit' is required")
+            } 
+            return CashoutRateParams(debit, credit)
+        }
+    }
+}
+
 /**
  * This function creates the admin account ONLY IF it was
  * NOT found in the database.  It sets it to a random password that
@@ -257,7 +280,7 @@ data class HistoryParams(
  *
  * It returns false in case of problems, true otherwise.
  */
-suspend fun maybeCreateAdminAccount(db: Database, ctx: BankApplicationContext): Boolean {
+suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig): Boolean {
     val maybeAdminCustomer = db.customerGetFromLogin("admin")
     val adminCustomerId: Long = if (maybeAdminCustomer == null) {
         logger.debug("Creating admin's customer row")

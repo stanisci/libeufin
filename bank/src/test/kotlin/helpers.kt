@@ -51,15 +51,16 @@ val bankAccountExchange = BankAccount(
 
 fun setup(
     conf: String = "test.conf",
-    lambda: suspend (Database, BankApplicationContext) -> Unit
+    lambda: suspend (Database, BankConfig) -> Unit
 ) {
     val config = talerConfig("conf/$conf")
     val dbCfg = config.loadDbConfig()
     resetDatabaseTables(dbCfg, "libeufin-bank")
     initializeDatabaseTables(dbCfg, "libeufin-bank")
-    val ctx = config.loadBankApplicationContext()
-    Database(dbCfg.dbConnStr, ctx.currency, null).use {
+    val ctx = config.loadBankConfig()
+    Database(dbCfg.dbConnStr, ctx.currency, ctx.fiatCurrency).use {
         runBlocking {
+            ctx.conversionInfo?.run { it.conversionUpdateConfig(this) }
             lambda(it, ctx)
         }
     }

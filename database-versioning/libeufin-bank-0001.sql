@@ -425,4 +425,13 @@ COMMENT ON COLUMN regional_stats.internal_taler_payments_volume IS 'how much int
 
 -- end of: Statistics
 
+-- start of: Conversion
+
+CREATE TABLE IF NOT EXISTS config (
+  key TEXT NOT NULL PRIMARY KEY,
+  value JSONB NOT NULL
+);
+
+-- end of: Conversion
+
 COMMIT;

@@ -327,15 +327,15 @@ data class Cashout(
 )
 
 // Type to return as GET /config response
-@Serializable // Never used to parse JSON.
+@Serializable
 data class Config(
     val currency: CurrencySpecification,
+    val have_cashout: Boolean,
+    val fiat_currency: String?,
+    val conversion_info: ConversionInfo?
 ) {
     val name: String = "libeufin-bank"
     val version: String = "0:0:0"
-    val have_cashout: Boolean = false
-    // Following might probably get renamed:
-    val fiat_currency: String? = null
 }
 
 enum class CorebankCreditDebitInfo {
@@ -556,6 +556,12 @@ data class CashoutStatusResponse(
 @Serializable
 data class CashoutConfirm(
     val tan: String
+)
+
+@Serializable
+data class CashoutConversionResponse(
+    val amount_debit: TalerAmount,
+    val amount_credit: TalerAmount,
 )
 
 /**
