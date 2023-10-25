@@ -156,7 +156,7 @@ fun makeEbics3DateRange(ebicsDateRange: EbicsDateRange?): Ebics3Request.DateRang
     else null
 }
 
-private fun signOrder(
+fun signOrder(
     orderBlob: ByteArray,
     signKey: RSAPrivateCrtKey,
     partnerId: String,
@@ -179,7 +179,7 @@ private fun signOrder(
     return userSignatureData
 }
 
-private fun signOrderEbics3(
+fun signOrderEbics3(
     orderBlob: ByteArray,
     signKey: RSAPrivateCrtKey,
     partnerId: String,
@@ -254,56 +254,6 @@ data class PreparedUploadData(
         result = 31 * result + encryptedPayloadChunks.hashCode()
         return result
     }
-}
-
-fun prepareUploadPayload(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    payload: ByteArray,
-    isEbics3: Boolean = false
-): PreparedUploadData {
-    // First A006-sign the payload, then E002-encrypt with bank's pub.
-    val encryptionResult = if (isEbics3) {
-        val innerSignedEbicsXml = signOrderEbics3( // A006 signature.
-            payload,
-            subscriberDetails.customerSignPriv,
-            subscriberDetails.partnerId,
-            subscriberDetails.userId
-        )
-        val userSignatureDataEncrypted = CryptoUtil.encryptEbicsE002(
-            EbicsOrderUtil.encodeOrderDataXml(innerSignedEbicsXml),
-            subscriberDetails.bankEncPub!!
-        )
-        userSignatureDataEncrypted
-    } else {
-        val innerSignedEbicsXml = signOrder( // A006 signature.
-            payload,
-            subscriberDetails.customerSignPriv,
-            subscriberDetails.partnerId,
-            subscriberDetails.userId
-        )
-        val userSignatureDataEncrypted = CryptoUtil.encryptEbicsE002(
-            EbicsOrderUtil.encodeOrderDataXml(innerSignedEbicsXml),
-            subscriberDetails.bankEncPub!!
-        )
-        userSignatureDataEncrypted
-    }
-    // Then only E002 symmetric (with ephemeral key) encrypt.
-    val compressedInnerPayload = DeflaterInputStream(
-        payload.inputStream()
-    ).use { it.readAllBytes() }
-    val encryptedPayload = CryptoUtil.encryptEbicsE002withTransactionKey(
-        compressedInnerPayload,
-        subscriberDetails.bankEncPub!!,
-        encryptionResult.plainTransactionKey!!
-    )
-    val encodedEncryptedPayload = Base64.getEncoder().encodeToString(encryptedPayload.encryptedData)
-
-    return PreparedUploadData(
-        encryptionResult.encryptedTransactionKey, // ephemeral key
-        encryptionResult.encryptedData, // bank-pub-encrypted A006 signature.
-        CryptoUtil.digestEbicsOrderA006(payload), // used by EBICS 3
-        listOf(encodedEncryptedPayload) // actual payload E002 encrypted.
-    )
 }
 
 // Creates the EBICS 3 upload init request.

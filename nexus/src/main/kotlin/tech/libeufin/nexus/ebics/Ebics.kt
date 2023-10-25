@@ -42,15 +42,16 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import tech.libeufin.nexus.BankPublicKeysFile
-import tech.libeufin.nexus.ClientPrivateKeysFile
-import tech.libeufin.nexus.EbicsSetupConfig
+import tech.libeufin.nexus.*
 import tech.libeufin.util.*
+import tech.libeufin.util.ebics_h005.Ebics3Request
+import tech.libeufin.util.logger
 import java.io.ByteArrayOutputStream
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
+import java.util.zip.DeflaterInputStream
 
 /**
  * Decrypts and decompresses the business payload that was
@@ -257,7 +258,7 @@ suspend fun postEbicsAndCheckReturnCodes(
     return respObj
 }
 /**
- * Collects all the steps of an EBICS download transaction.  Namely
+ * Collects all the steps of an EBICS download transaction.  Namely,
  * it conducts: init -> transfer -> receipt phases.
  *
  * @param client HTTP client for POSTing to the bank.
@@ -279,7 +280,7 @@ suspend fun doEbicsDownload(
 ): String? {
     val initResp = postEbicsAndCheckReturnCodes(client, cfg, bankKeys, reqXml, isEbics3)
     if (initResp == null) {
-        tech.libeufin.nexus.logger.error("Could not get past the EBICS init phase, failing.")
+        tech.libeufin.nexus.logger.error("EBICS download: could not get past the EBICS init phase, failing.")
         return null
     }
     val howManySegments = initResp.numSegments
@@ -381,4 +382,135 @@ fun parseAndValidateEbicsResponse(
     if (withEbics3)
         return ebics3toInternalRepr(responseStr)
     return ebics25toInternalRepr(responseStr)
+}
+
+/**
+ * Signs and the encrypts the data to send via EBICS.
+ *
+ * @param cfg configuration handle.
+ * @param clientKeys client keys.
+ * @param bankKeys bank keys.
+ * @param payload business payload to send to the bank, typically ISO20022.
+ * @param isEbics3 true if the payload travels on EBICS 3.
+ * @return [PreparedUploadData]
+ */
+fun prepareUloadPayload(
+    cfg: EbicsSetupConfig,
+    clientKeys: ClientPrivateKeysFile,
+    bankKeys: BankPublicKeysFile,
+    payload: ByteArray,
+    isEbics3: Boolean
+): PreparedUploadData {
+    val encryptionResult: CryptoUtil.EncryptionResult = if (isEbics3) {
+        val innerSignedEbicsXml = signOrderEbics3( // A006 signature.
+            payload,
+            clientKeys.signature_private_key,
+            cfg.ebicsPartnerId,
+            cfg.ebicsUserId
+        )
+        val userSignatureDataEncrypted = CryptoUtil.encryptEbicsE002(
+            EbicsOrderUtil.encodeOrderDataXml(innerSignedEbicsXml),
+            bankKeys.bank_encryption_public_key
+        )
+        userSignatureDataEncrypted
+    } else {
+        val innerSignedEbicsXml = signOrder( // A006 signature.
+            payload,
+            clientKeys.signature_private_key,
+            cfg.ebicsPartnerId,
+            cfg.ebicsUserId
+        )
+        val userSignatureDataEncrypted = CryptoUtil.encryptEbicsE002(
+            EbicsOrderUtil.encodeOrderDataXml(innerSignedEbicsXml),
+            bankKeys.bank_encryption_public_key
+        )
+        userSignatureDataEncrypted
+    }
+    val plainTransactionKey = encryptionResult.plainTransactionKey
+    if (plainTransactionKey == null)
+        throw Exception("Could not generate the transaction key, cannot encrypt the payload!")
+    // Then only E002 symmetric (with ephemeral key) encrypt.
+    val compressedInnerPayload = DeflaterInputStream(
+        payload.inputStream()
+    ).use { it.readAllBytes() }
+    val encryptedPayload = CryptoUtil.encryptEbicsE002withTransactionKey(
+        compressedInnerPayload,
+        bankKeys.bank_encryption_public_key,
+        plainTransactionKey
+    )
+    val encodedEncryptedPayload = Base64.getEncoder().encodeToString(encryptedPayload.encryptedData)
+
+    return PreparedUploadData(
+        encryptionResult.encryptedTransactionKey, // ephemeral key
+        encryptionResult.encryptedData, // bank-pub-encrypted A006 signature.
+        CryptoUtil.digestEbicsOrderA006(payload), // used by EBICS 3
+        listOf(encodedEncryptedPayload) // actual payload E002 encrypted.
+    )
+}
+
+/**
+ * Collects all the steps of an EBICS 3 upload transaction.
+ * NOTE: this function could conveniently be reused for an EBICS 2.x
+ * transaction, hence this function stays in this file.
+ *
+ * @param client HTTP client for POSTing to the bank.
+ * @param cfg configuration handle.
+ * @param clientKeys client EBICS private keys.
+ * @param bankKeys bank EBICS public keys.
+ * @param payload binary business paylaod.
+ * @return [EbicsResponseContent] or null upon errors.
+ */
+suspend fun doEbicsUpload(
+    client: HttpClient,
+    cfg: EbicsSetupConfig,
+    clientKeys: ClientPrivateKeysFile,
+    bankKeys: BankPublicKeysFile,
+    orderService: Ebics3Request.OrderDetails.Service,
+    payload: ByteArray
+): EbicsResponseContent? {
+    val preparedPayload = prepareUloadPayload(cfg, clientKeys, bankKeys, payload, isEbics3 = true)
+    val initXml = createEbics3RequestForUploadInitialization(
+        cfg,
+        preparedPayload,
+        bankKeys,
+        clientKeys,
+        orderService
+    )
+    val initResp = postEbicsAndCheckReturnCodes(
+        client,
+        cfg,
+        bankKeys,
+        initXml,
+        isEbics3 = true
+    )
+    if (initResp == null) {
+        tech.libeufin.nexus.logger.error("EBICS upload init phase failed.")
+        return null
+    }
+
+    // Init phase OK, proceeding with the transfer phase.
+    val tId = initResp.transactionID
+    if (tId == null) {
+        logger.error("EBICS upload init phase did not return a transaction ID, cannot do the transfer phase.")
+        return null
+    }
+    val transferXml = createEbics3RequestForUploadTransferPhase(
+        cfg,
+        clientKeys,
+        tId,
+        preparedPayload
+    )
+    val transferResp = postEbicsAndCheckReturnCodes(
+        client,
+        cfg,
+        bankKeys,
+        initXml,
+        isEbics3 = true
+    )
+    if (transferResp == null) {
+        tech.libeufin.nexus.logger.error("EBICS transfer phase failed.")
+        return null
+    }
+    // EBICS- and bank-technical codes were both EBICS_OK, success!
+    return transferResp
 }
