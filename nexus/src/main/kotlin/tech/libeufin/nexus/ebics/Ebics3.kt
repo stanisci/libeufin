@@ -1,8 +1,10 @@
 package tech.libeufin.nexus.ebics
 
+import io.ktor.client.*
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig
+import tech.libeufin.nexus.logger
 import tech.libeufin.util.PreparedUploadData
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.ebics_h005.Ebics3Request
@@ -90,4 +92,46 @@ fun createEbics3RequestForUploadTransferPhase(
         withEbics3 = true
     )
     return XMLUtil.convertDomToString(doc)
+}
+
+/**
+ * Collects all the steps to prepare the submission of a pain.001
+ * document to the bank, and finally send it.
+ *
+ * @param pain001xml pain.001 document in XML.  The caller should
+ *                   ensure its validity.
+ * @param cfg configuration handle.
+ * @param clientKeys client private keys.
+ * @param bankkeys bank public keys.
+ * @param httpClient HTTP client to connect to the bank.
+ * @return true on success, false otherwise.
+ */
+suspend fun submitPayment(
+    pain001xml: String,
+    cfg: EbicsSetupConfig,
+    clientKeys: ClientPrivateKeysFile,
+    bankkeys: BankPublicKeysFile,
+    httpClient: HttpClient
+): Boolean {
+    val orderService: Ebics3Request.OrderDetails.Service = Ebics3Request.OrderDetails.Service().apply {
+        serviceName = "MCT"
+        scope = "CH"
+        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+            value = "pain.001"
+            version = "09"
+        }
+    }
+    val maybeUploaded = doEbicsUpload(
+        httpClient,
+        cfg,
+        clientKeys,
+        bankkeys,
+        orderService,
+        pain001xml.toByteArray(Charsets.UTF_8)
+    )
+    if (maybeUploaded == null) {
+        logger.error("Could not send the pain.001 document to the bank.")
+        return false
+    }
+    return true
 }
