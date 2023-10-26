@@ -65,7 +65,7 @@ val myJson = Json {
  * If even one of the fields could not be instantiated, then
  * throws TalerConfigError.
  */
-class EbicsSetupConfig(config: TalerConfig) {
+class EbicsSetupConfig(val config: TalerConfig) {
     // abstracts the section name.
     private val ebicsSetupRequireString = { option: String ->
         config.requireString("nexus-ebics", option)

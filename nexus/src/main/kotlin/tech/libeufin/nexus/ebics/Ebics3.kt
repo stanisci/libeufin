@@ -83,7 +83,7 @@ fun createEbics3RequestForUploadTransferPhase(
         cfg.ebicsHostId,
         transactionId,
         BigInteger.valueOf(chunkIndex.toLong()),
-        uploadData.encryptedPayloadChunks[chunkIndex]
+        uploadData.encryptedPayloadChunks[chunkIndex - 1]
     )
     val doc = XMLUtil.convertJaxbToDocument(req)
     XMLUtil.signEbicsDocument(

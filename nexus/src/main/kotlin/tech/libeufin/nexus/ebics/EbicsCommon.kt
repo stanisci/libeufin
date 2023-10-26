@@ -504,7 +504,7 @@ suspend fun doEbicsUpload(
         client,
         cfg,
         bankKeys,
-        initXml,
+        transferXml,
         isEbics3 = true
     )
     if (transferResp == null) {
