@@ -221,30 +221,28 @@ data class CashoutRateParams(
  * It returns false in case of problems, true otherwise.
  */
 suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? = null): Boolean {
-    val maybeAdminCustomer = db.customerGetFromLogin("admin")
-    if (maybeAdminCustomer == null) {
-        logger.debug("Creating admin's account")
-        var pwStr = pw;
-        if (pwStr == null) {
-            val pwBuf = ByteArray(32)
-            Random().nextBytes(pwBuf)
-            pwStr = String(pwBuf, Charsets.UTF_8)
-        }
-        
-       
-        db.accountCreate(
-            login = "admin",
-            /**
-             * Hashing the password helps to avoid the "password not hashed"
-             * error, in case the admin tries to authenticate.
-             */
-            passwordHash = CryptoUtil.hashpw(pwStr),
-            name = "Bank administrator",
-            internalPaytoUri = IbanPayTo(genIbanPaytoUri()),
-            isPublic = false,
-            isTalerExchange = false,
-            maxDebt = ctx.defaultAdminDebtLimit
-        )
+    logger.debug("Creating admin's account")
+    var pwStr = pw;
+    if (pwStr == null) {
+        val pwBuf = ByteArray(32)
+        Random().nextBytes(pwBuf)
+        pwStr = String(pwBuf, Charsets.UTF_8)
     }
-    return true
+    
+    val res = db.accountCreate(
+        login = "admin",
+        password = pwStr,
+        name = "Bank administrator",
+        internalPaytoUri = IbanPayTo(genIbanPaytoUri()),
+        isPublic = false,
+        isTalerExchange = false,
+        maxDebt = ctx.defaultAdminDebtLimit,
+        bonus = null
+    )
+    return when (res) {
+        CustomerCreationResult.BALANCE_INSUFFICIENT -> false
+        CustomerCreationResult.CONFLICT_LOGIN -> true
+        CustomerCreationResult.CONFLICT_PAY_TO -> false
+        CustomerCreationResult.SUCCESS -> true
+    }
 }

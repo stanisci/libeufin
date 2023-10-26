@@ -98,27 +98,21 @@ private fun Routing.coreBankTokenApi(db: Database) {
                         throw badRequest("Bad token duration: ${e.message}")
                     }
                 }
-        val customerDbRow =
-                db.customerGetFromLogin(login)?.customerId
-                        ?: throw internalServerError(
-                                "Could not get customer '$login' database row ID"
-                        )
-        val token =
-                BearerToken(
-                        bankCustomer = customerDbRow,
-                        content = tokenBytes,
-                        creationTime = creationTime,
-                        expirationTime = expirationTimestamp,
-                        scope = req.scope,
-                        isRefreshable = req.refreshable
-                )
-        if (!db.bearerTokenCreate(token))
-                throw internalServerError("Failed at inserting new token in the database")
+        if (!db.bearerTokenCreate(
+            login = login,
+            content = tokenBytes,
+            creationTime = creationTime,
+            expirationTime = expirationTimestamp,
+            scope = req.scope,
+            isRefreshable = req.refreshable
+        )) {
+            throw internalServerError("Failed at inserting new token in the database")
+        }
         call.respond(
-                TokenSuccessResponse(
-                        access_token = Base32Crockford.encode(tokenBytes),
-                        expiration = TalerProtocolTimestamp(t_s = expirationTimestamp)
-                )
+            TokenSuccessResponse(
+                access_token = Base32Crockford.encode(tokenBytes),
+                expiration = TalerProtocolTimestamp(t_s = expirationTimestamp)
+            )
         )
     }
     delete("/accounts/{USERNAME}/token") {
@@ -148,101 +142,42 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
         val req = call.receive<RegisterAccountRequest>()
         // Prohibit reserved usernames:
         if (reservedAccounts.contains(req.username))
-                throw forbidden(
-                        "Username '${req.username}' is reserved.",
-                        TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT
-                )
-        // Checking idempotency.
-        val maybeCustomerExists =
-                db.customerGetFromLogin(
-                        req.username
-                ) // Can be null if previous call crashed before completion.
-        val maybeHasBankAccount =
-                maybeCustomerExists.run {
-                    if (this == null) return@run null
-                    db.bankAccountGetFromOwnerId(this.customerId)
-                }
-        val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
-        if (maybeCustomerExists != null && maybeHasBankAccount != null) {
-            logger.debug(
-                    "Registering username was found: ${maybeCustomerExists.login}"
-            ) // Checking _all_ the details are the same.
-            val isIdentic =
-                    maybeCustomerExists.name == req.name &&
-                            maybeCustomerExists.email == req.challenge_contact_data?.email &&
-                            maybeCustomerExists.phone == req.challenge_contact_data?.phone &&
-                            maybeCustomerExists.cashoutPayto == req.cashout_payto_uri &&
-                            CryptoUtil.checkpw(req.password, maybeCustomerExists.passwordHash) &&
-                            maybeHasBankAccount.isPublic == req.is_public &&
-                            maybeHasBankAccount.isTalerExchange == req.is_taler_exchange &&
-                            maybeHasBankAccount.internalPaytoUri.canonical ==
-                                    internalPayto.canonical
-            if (isIdentic) {
-                call.respond(HttpStatusCode.Created)
-                return@post
-            }
-            throw conflict(
-                    "Idempotency check failed.",
-                    TalerErrorCode.TALER_EC_END // FIXME: provide appropriate EC.
+            throw forbidden(
+                "Username '${req.username}' is reserved.",
+                TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT
             )
-        }
 
-        // From here: fresh user being added.
-        val (_, newBankAccountId) = db.accountCreate(
-                login = req.username,
-                name = req.name,
-                email = req.challenge_contact_data?.email,
-                phone = req.challenge_contact_data?.phone,
-                cashoutPayto =
-                        req.cashout_payto_uri, // Following could be gone, if included in
-                // cashout_payto_uri
-                cashoutCurrency = ctx.fiatCurrency,
-                passwordHash = CryptoUtil.hashpw(req.password),
-                internalPaytoUri = internalPayto,
-                isPublic = req.is_public,
-                isTalerExchange = req.is_taler_exchange,
-                maxDebt = ctx.defaultCustomerDebtLimit
+        val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
+        val result = db.accountCreate(
+            login = req.username,
+            name = req.name,
+            email = req.challenge_contact_data?.email,
+            phone = req.challenge_contact_data?.phone,
+            cashoutPayto = req.cashout_payto_uri,
+            password = req.password,
+            internalPaytoUri = internalPayto,
+            isPublic = req.is_public,
+            isTalerExchange = req.is_taler_exchange,
+            maxDebt = ctx.defaultCustomerDebtLimit,
+            bonus = if (ctx.registrationBonusEnabled && !req.is_taler_exchange) ctx.registrationBonus
+                    else null
         )
 
-        // The new account got created, now optionally award the registration
-        // bonus to it.
-        val bonusAmount =
-                if (ctx.registrationBonusEnabled && !req.is_taler_exchange) ctx.registrationBonus
-                else null
-        if (bonusAmount != null) {
-            val adminCustomer =
-                    db.customerGetFromLogin("admin")
-                            ?: throw internalServerError("Admin customer not found")
-            val adminBankAccount =
-                    db.bankAccountGetFromOwnerId(adminCustomer.customerId)
-                            ?: throw internalServerError("Admin bank account not found")
-            val adminPaysBonus =
-                    BankInternalTransaction(
-                            creditorAccountId = newBankAccountId,
-                            debtorAccountId = adminBankAccount.bankAccountId,
-                            amount = bonusAmount,
-                            subject = "Registration bonus.",
-                            transactionDate = Instant.now()
-                    )
-            when (db.bankTransactionCreate(adminPaysBonus)) {
-                BankTransactionResult.NO_CREDITOR ->
-                        throw internalServerError(
-                                "Bonus impossible: creditor not found, despite its recent creation."
-                        )
-                BankTransactionResult.NO_DEBTOR ->
-                        throw internalServerError("Bonus impossible: admin not found.")
-                BankTransactionResult.BALANCE_INSUFFICIENT ->
-                        throw internalServerError(
-                                "Bonus impossible: admin has insufficient balance."
-                        )
-                BankTransactionResult.SAME_ACCOUNT ->
-                        throw internalServerError("Bonus impossible: admin should not be creditor.")
-                BankTransactionResult.SUCCESS -> {
-                    /* continue the execution */
-                }
-            }
+        when (result) {
+            CustomerCreationResult.BALANCE_INSUFFICIENT -> throw conflict(
+                "Insufficient funds",
+                TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+            )
+            CustomerCreationResult.CONFLICT_LOGIN -> throw conflict(
+                "Customer username reuse '${req.username}'",
+                TalerErrorCode.TALER_EC_END // FIXME: provide appropriate EC.
+            )
+            CustomerCreationResult.CONFLICT_PAY_TO -> throw conflict(
+                "Bank internalPayToUri reuse '${internalPayto.canonical}'",
+                TalerErrorCode.TALER_EC_END // FIXME: provide appropriate EC.
+            )
+            CustomerCreationResult.SUCCESS -> call.respond(HttpStatusCode.Created)
         }
-        call.respond(HttpStatusCode.Created)
     }
     delete("/accounts/{USERNAME}") {
         val (login, _) =
@@ -277,57 +212,25 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
         val (login, isAdmin) = call.authCheck(db, TokenScope.readwrite, withAdmin = true)
         // admin is not allowed itself to change its own details.
         if (login == "admin") throw forbidden("admin account not patchable")
-        // authentication OK, go on.
+        
         val req = call.receive<AccountReconfiguration>()
-        /**
-         * This object holds the details of the customer that's affected by this operation, as it
-         * MAY differ from the one being authenticated. This typically happens when admin did the
-         * request.
-         */
-        val accountCustomer =
-                db.customerGetFromLogin(login)
-                        ?: throw notFound(
-                                "Account $login not found",
-                                talerEc = TalerErrorCode.TALER_EC_END // FIXME, define EC.
-                        )
-        // Check if a non-admin user tried to change their legal name
-        if (!isAdmin && (req.name != null) && (req.name != accountCustomer.name))
+        val res = db.accountReconfig(
+            login = login,
+            name = req.name,
+            cashoutPayto = req.cashout_address,
+            emailAddress = req.challenge_contact_data?.email,
+            isTalerExchange = req.is_exchange,
+            phoneNumber = req.challenge_contact_data?.phone,
+            isAdmin = isAdmin
+        )
+        when (res) {
+            CustomerPatchResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+            CustomerPatchResult.ACCOUNT_NOT_FOUND -> throw notFound(
+                "Customer '$login' not found",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
+            CustomerPatchResult.CONFLICT_LEGAL_NAME -> 
                 throw forbidden("non-admin user cannot change their legal name")
-        // Preventing identical data to be overridden.
-        val bankAccount =
-                db.bankAccountGetFromOwnerId(accountCustomer.customerId)
-                        ?: throw internalServerError(
-                                "Customer '${accountCustomer.login}' lacks bank account."
-                        )
-        if ((req.is_exchange == bankAccount.isTalerExchange) &&
-                        (req.cashout_address == accountCustomer.cashoutPayto) &&
-                        (req.name == accountCustomer.name) &&
-                        (req.challenge_contact_data?.phone == accountCustomer.phone) &&
-                        (req.challenge_contact_data?.email == accountCustomer.email)
-        ) {
-            call.respond(HttpStatusCode.NoContent)
-            return@patch
-        }
-        val dbRes =
-                db.accountReconfig(
-                        login = accountCustomer.login,
-                        name = req.name,
-                        cashoutPayto = req.cashout_address,
-                        emailAddress = req.challenge_contact_data?.email,
-                        isTalerExchange = req.is_exchange,
-                        phoneNumber = req.challenge_contact_data?.phone
-                )
-        when (dbRes) {
-            AccountReconfigDBResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
-            AccountReconfigDBResult.CUSTOMER_NOT_FOUND -> {
-                // Rare case.  Only possible if a deletion happened before the flow reaches here.
-                logger.warn("Authenticated customer wasn't found any more in the database")
-                throw notFound("Customer not found", TalerErrorCode.TALER_EC_END) // FIXME: needs EC
-            }
-            AccountReconfigDBResult.BANK_ACCOUNT_NOT_FOUND -> {
-                // Bank's fault: no customer should lack a bank account.
-                throw internalServerError("Customer '${accountCustomer.login}' lacks bank account")
-            }
         }
     }
     patch("/accounts/{USERNAME}/auth") {
@@ -370,44 +273,11 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
     }
     get("/accounts/{USERNAME}") {
         val (login, _) = call.authCheck(db, TokenScope.readonly, withAdmin = true)
-        val customerData =
-                db.customerGetFromLogin(login)
-                        ?: throw notFound(
-                                "Customer '$login' not found in the database.",
-                                talerEc = TalerErrorCode.TALER_EC_END
-                        )
-        val bankAccountData =
-                db.bankAccountGetFromOwnerId(customerData.customerId)
-                        ?: throw internalServerError(
-                                "Customer '$login' had no bank account despite they are customer.'"
-                        )
-        val balance =
-                Balance(
-                        amount = bankAccountData.balance
-                                        ?: throw internalServerError(
-                                                "Account '${customerData.login}' lacks balance!"
-                                        ),
-                        credit_debit_indicator =
-                                if (bankAccountData.hasDebt) {
-                                    CorebankCreditDebitInfo.debit
-                                } else {
-                                    CorebankCreditDebitInfo.credit
-                                }
-                )
-        call.respond(
-                AccountData(
-                        name = customerData.name,
-                        balance = balance,
-                        debit_threshold = bankAccountData.maxDebt,
-                        payto_uri = bankAccountData.internalPaytoUri,
-                        contact_data =
-                                ChallengeContactData(
-                                        email = customerData.email,
-                                        phone = customerData.phone
-                                ),
-                        cashout_payto_uri = customerData.cashoutPayto,
-                )
+        val account = db.accountDataFromLogin(login) ?: throw notFound(
+            "Customer '$login' not found in the database.",
+            talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
         )
+        call.respond(account)
     }
 }
 
@@ -418,7 +288,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
         val bankAccount = call.bankAccount(db)
 
         val history: List<BankAccountTransactionInfo> =
-                db.bankPoolHistory(params, bankAccount.bankAccountId!!)
+                db.bankPoolHistory(params, bankAccount.bankAccountId)
         call.respond(BankAccountTransactionsResponse(history))
     }
     get("/accounts/{USERNAME}/transactions/{T_ID}") {

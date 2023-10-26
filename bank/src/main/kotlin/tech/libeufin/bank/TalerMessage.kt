@@ -82,7 +82,7 @@ data class RegisterAccountRequest(
     val is_taler_exchange: Boolean = false,
     val challenge_contact_data: ChallengeContactData? = null,
     // External bank account where to send cashout amounts.
-    val cashout_payto_uri: String? = null,
+    val cashout_payto_uri: IbanPayTo? = null,
     // Bank account internal to Libeufin-Bank.
     val internal_payto_uri: IbanPayTo? = null
 )
@@ -124,30 +124,6 @@ data class MonitorWithCashout(
 ) : MonitorResponse()
 
 /**
- * Convenience type to hold customer data, typically after such
- * data gets fetched from the database.  It is also used to _insert_
- * customer data to the database.
- */
-data class Customer(
-    val login: String,
-    val passwordHash: String,
-    val name: String,
-    val customerId: Long,
-    val email: String? = null,
-    val phone: String? = null,
-    /**
-     * External bank account where customers send
-     * their cashout amounts.
-     */
-    val cashoutPayto: String? = null,
-    /**
-     * Currency of the external bank account where
-     * customers send their cashout amounts.
-     */
-    val cashoutCurrency: String? = null
-)
-
-/**
  * Convenience type to get and set bank account information
  * from/to the database.
  */
@@ -156,20 +132,9 @@ data class BankAccount(
     // Database row ID of the customer that owns this bank account.
     val owningCustomerId: Long,
     val bankAccountId: Long,
-    val isPublic: Boolean = false,
-    val isTalerExchange: Boolean = false,
-    /**
-     * Because bank accounts MAY be funded by an external currency,
-     * local bank accounts need to query Nexus, in order to find this
-     * out.  This field is a pointer to the latest incoming payment that
-     * was contained in a Nexus history response.
-     *
-     * Typically, the 'admin' bank account uses this field, in order
-     * to initiate Taler withdrawals that depend on an external currency
-     * being wired by wallet owners.
-     */
-    val lastNexusFetchRowId: Long = 0L,
-    val balance: TalerAmount? = null, // null when a new bank account gets created.
+    val isPublic: Boolean,
+    val isTalerExchange: Boolean,
+    val balance: TalerAmount,
     val hasDebt: Boolean,
     val maxDebt: TalerAmount
 )
@@ -253,7 +218,7 @@ data class BankAccountTransaction(
      */
     val bankAccountId: Long,
     // Null if this type is used to _create_ one transaction.
-    val dbRowId: Long? = null,
+    val dbRowId: Long,
     // Following are ISO20022 specific.
     val accountServicerReference: String,
     val paymentInformationId: String,
@@ -267,9 +232,9 @@ data class BankAccountTransaction(
 data class TalerWithdrawalOperation(
     val withdrawalUuid: UUID,
     val amount: TalerAmount,
-    val selectionDone: Boolean = false,
-    val aborted: Boolean = false,
-    val confirmationDone: Boolean = false,
+    val selectionDone: Boolean,
+    val aborted: Boolean,
+    val confirmationDone: Boolean,
     val reservePub: EddsaPublicKey?,
     val selectedExchangePayto: IbanPayTo?,
     val walletBankAccount: Long
@@ -349,7 +314,7 @@ data class AccountData(
     val payto_uri: IbanPayTo,
     val debit_threshold: TalerAmount,
     val contact_data: ChallengeContactData? = null,
-    val cashout_payto_uri: String? = null,
+    val cashout_payto_uri: IbanPayTo? = null,
 )
 
 /**
@@ -660,34 +625,7 @@ data class AccountPasswordChange(
 @Serializable
 data class AccountReconfiguration(
     val challenge_contact_data: ChallengeContactData?,
-    val cashout_address: String?,
+    val cashout_address: IbanPayTo?,
     val name: String?,
     val is_exchange: Boolean?
 )
-
-/**
- * This type expresses the outcome of updating the account
- * data in the database.
- */
-enum class AccountReconfigDBResult {
-    /**
-     * This indicates that despite the customer row was
-     * found in the database, its related bank account was not.
-     * This condition is a hard failure of the bank, since
-     * every customer must have one (and only one) bank account.
-     */
-    BANK_ACCOUNT_NOT_FOUND,
-
-    /**
-     * The customer row wasn't found in the database.  This error
-     * should be rare, as the client got authenticated in the first
-     * place, before the handler could try the reconfiguration in
-     * the database.
-     */
-    CUSTOMER_NOT_FOUND,
-
-    /**
-     * Reconfiguration successful.
-     */
-    SUCCESS
-}

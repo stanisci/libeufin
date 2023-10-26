@@ -101,35 +101,38 @@ CREATE OR REPLACE FUNCTION account_reconfig(
   IN in_email TEXT,
   IN in_cashout_payto TEXT,
   IN in_is_taler_exchange BOOLEAN,
-  OUT out_nx_customer BOOLEAN,
-  OUT out_nx_bank_account BOOLEAN
+  IN in_is_admin BOOLEAN,
+  OUT out_not_found BOOLEAN,
+  OUT out_legal_name_change BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
 my_customer_id INT8;
 BEGIN
 SELECT
-  customer_id
-  INTO my_customer_id
+  customer_id,
+  in_name IS NOT NULL AND name != in_name AND NOT in_is_admin
+  INTO my_customer_id, out_legal_name_change
   FROM customers
   WHERE login=in_login;
 IF NOT FOUND THEN
-  out_nx_customer=TRUE;
+  out_not_found=TRUE;
+  RETURN;
+ELSIF out_legal_name_change THEN
   RETURN;
 END IF;
-out_nx_customer=FALSE;
 
 -- optionally updating the Taler exchange flag
 IF in_is_taler_exchange IS NOT NULL THEN
   UPDATE bank_accounts
     SET is_taler_exchange = in_is_taler_exchange
     WHERE owning_customer_id = my_customer_id;
+  IF NOT FOUND THEN
+    out_not_found=TRUE;
+    RETURN;
+  END IF;
 END IF;
-IF in_is_taler_exchange IS NOT NULL AND NOT FOUND THEN
-  out_nx_bank_account=TRUE;
-  RETURN;
-END IF;
-out_nx_bank_account=FALSE;
+
 
 -- bank account patching worked, custom must as well
 -- since this runs in a DB transaction and the customer
@@ -145,7 +148,7 @@ IF in_name IS NOT NULL THEN
   UPDATE customers SET name=in_name WHERE customer_id = my_customer_id;
 END IF;
 END $$;
-COMMENT ON FUNCTION account_reconfig(TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN)
+COMMENT ON FUNCTION account_reconfig(TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN)
   IS 'Updates values on customer and bank account rows based on the input data.';
 
 CREATE OR REPLACE FUNCTION customer_delete(

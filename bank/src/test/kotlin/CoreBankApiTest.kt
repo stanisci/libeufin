@@ -178,7 +178,7 @@ class CoreBankAccountsMgmtApiTest {
         client.post("/accounts") {
             jsonBody(req)
         }.assertCreated()
-        // Testing idempotency.
+        // Testing idempotency
         client.post("/accounts") {
             jsonBody(req)
         }.assertCreated()
@@ -202,6 +202,55 @@ class CoreBankAccountsMgmtApiTest {
                 })
             }.assertForbidden().assertErr(TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT)
         }
+
+        // Testing login conflict
+        client.post("/accounts") {
+            jsonBody(json(req) {
+                "name" to "Foo"
+            })
+        }.assertConflict()
+        // Testing payto conflict
+        client.post("/accounts") {
+            jsonBody(json(req) {
+                "username" to "bar"
+            })
+        }.assertConflict()
+        client.get("/accounts/bar") {
+            basicAuth("admin", "admin-password")
+        }.assertNotFound().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
+    }
+
+    // Test account created with bonus
+    @Test
+    fun createAccountBonusTest() = bankSetup(conf = "test_bonus.conf") { _ -> 
+        val req = json {
+            "username" to "foo"
+            "password" to "xyz"
+            "name" to "Mallory"
+        }
+
+        // Check ok
+        client.post("/accounts") {
+            basicAuth("admin", "admin-password")
+            jsonBody(req)
+        }.assertCreated()
+        client.get("/accounts/foo") {
+            basicAuth("admin", "admin-password")
+        }.assertOk().run {
+            val obj: AccountData = Json.decodeFromString(bodyAsText())
+            assertEquals(TalerAmount("KUDOS:10"), obj.balance.amount)
+        }
+        
+        // Check unsufficient funs
+        client.post("/accounts") {
+            basicAuth("admin", "admin-password")
+            jsonBody(json(req) {
+                "username" to "bar"
+            })
+        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
+        client.get("/accounts/bar") {
+            basicAuth("admin", "admin-password")
+        }.assertNotFound().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
     }
 
     // Test admin-only account creation
@@ -280,10 +329,10 @@ class CoreBankAccountsMgmtApiTest {
 
     // PATCH /accounts/USERNAME
     @Test
-    fun accountReconfig() = bankSetup { db -> 
+    fun accountReconfig() = bankSetup { _ -> 
         // Successful attempt now.
         val req = json {
-            "cashout_address" to "payto://new-cashout-address"
+            "cashout_address" to IbanPayTo(genIbanPaytoUri()).canonical
             "challenge_contact_data" to json {
                 "email" to "new@example.com"
                 "phone" to "+987"
@@ -300,10 +349,11 @@ class CoreBankAccountsMgmtApiTest {
             jsonBody(req)
         }.assertNoContent()
 
+        val cashout = IbanPayTo(genIbanPaytoUri())
         val nameReq = json {
             "login" to "foo"
             "name" to "Another Foo"
-            "cashout_address" to "payto://cashout"
+            "cashout_address" to cashout.canonical
             "challenge_contact_data" to json {
                 "phone" to "+99"
                 "email" to "foo@example.com"
@@ -326,11 +376,10 @@ class CoreBankAccountsMgmtApiTest {
         }.assertOk().run {
             val obj: AccountData = Json.decodeFromString(bodyAsText())
             assertEquals("Another Foo", obj.name)
-            assertEquals("payto://cashout", obj.cashout_payto_uri)
+            assertEquals(cashout.canonical, obj.cashout_payto_uri?.canonical)
             assertEquals("+99", obj.contact_data?.phone)
             assertEquals("foo@example.com", obj.contact_data?.email)
         }
-        
     }
 
     // PATCH /accounts/USERNAME/auth
@@ -780,7 +829,6 @@ class CoreBankWithdrawalApiTest {
             basicAuth("merchant", "merchant-password")
             jsonBody(json { "amount" to "KUDOS:90" }) 
         }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
-
     }
 
     // GET /withdrawals/withdrawal_id

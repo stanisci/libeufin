@@ -410,14 +410,21 @@ class ExchangeUrl {
     }
 }
 
+sealed class PaytoUri {
+    abstract val amount: TalerAmount?
+    abstract val message: String?
+    abstract val receiverName: String?
+}
+
+// TODO x-taler-bank Payto
 
 @Serializable(with = IbanPayTo.Serializer::class)
-class IbanPayTo {
+class IbanPayTo: PaytoUri {
     val parsed: URI
     val canonical: String
-    val amount: TalerAmount?
-    val message: String?
-    val receiverName: String?
+    override val amount: TalerAmount?
+    override val message: String?
+    override val receiverName: String?
 
     constructor(raw: String) {
         parsed = URI(raw)

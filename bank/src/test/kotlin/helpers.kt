@@ -38,32 +38,35 @@ fun bankSetup(
 ) {
     setup(conf) { db, ctx -> 
         // Creating the exchange and merchant accounts first.
-        assertNotNull(db.accountCreate(
+        assertEquals(CustomerCreationResult.SUCCESS, db.accountCreate(
             login = "merchant",
-            passwordHash = CryptoUtil.hashpw("merchant-password"),
+            password = "merchant-password",
             name = "Merchant",
             internalPaytoUri = IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"),
             maxDebt = TalerAmount(10, 1, "KUDOS"),
             isTalerExchange = false,
-            isPublic = false
+            isPublic = false,
+            bonus = null
         ))
-        assertNotNull(db.accountCreate(
+        assertEquals(CustomerCreationResult.SUCCESS, db.accountCreate(
             login = "exchange",
-            passwordHash = CryptoUtil.hashpw("exchange-password"),
+            password = "exchange-password",
             name = "Exchange",
             internalPaytoUri = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
             maxDebt = TalerAmount(10, 1, "KUDOS"),
             isTalerExchange = true,
-            isPublic = false
+            isPublic = false,
+            bonus = null
         ))
-        assertNotNull(db.accountCreate(
+        assertEquals(CustomerCreationResult.SUCCESS, db.accountCreate(
             login = "customer",
-            passwordHash = CryptoUtil.hashpw("customer-password"),
+            password = "customer-password",
             name = "Customer",
             internalPaytoUri = IbanPayTo("payto://iban/CUSTOMER-IBAN-XYZ"),
             maxDebt = TalerAmount(10, 1, "KUDOS"),
             isTalerExchange = false,
-            isPublic = false
+            isPublic = false,
+            bonus = null
         ))
         // Create admin account
         assert(maybeCreateAdminAccount(db, ctx, "admin-password"))
