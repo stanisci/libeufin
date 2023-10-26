@@ -15,40 +15,6 @@ import tech.libeufin.util.*
 
 /* ----- Setup ----- */
 
-val customerMerchant = Customer(
-    login = "merchant",
-    passwordHash = CryptoUtil.hashpw("merchant-password"),
-    name = "Merchant",
-    phone = "+00",
-    email = "merchant@libeufin-bank.com",
-    cashoutPayto = "payto://external-IBAN",
-    cashoutCurrency = "KUDOS"
-)
-val bankAccountMerchant = BankAccount(
-    internalPaytoUri = IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"),
-    lastNexusFetchRowId = 1L,
-    owningCustomerId = 1L,
-    hasDebt = false,
-    maxDebt = TalerAmount(10, 1, "KUDOS"),
-)
-val customerExchange = Customer(
-    login = "exchange",
-    passwordHash = CryptoUtil.hashpw("exchange-password"),
-    name = "Exchange",
-    phone = "+00",
-    email = "exchange@libeufin-bank.com",
-    cashoutPayto = "payto://external-IBAN",
-    cashoutCurrency = "KUDOS"
-)
-val bankAccountExchange = BankAccount(
-    internalPaytoUri = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
-    lastNexusFetchRowId = 1L,
-    owningCustomerId = 2L,
-    hasDebt = false,
-    maxDebt = TalerAmount(10, 1, "KUDOS"),
-    isTalerExchange = true
-)
-
 fun setup(
     conf: String = "test.conf",
     lambda: suspend (Database, BankConfig) -> Unit
@@ -72,19 +38,35 @@ fun bankSetup(
 ) {
     setup(conf) { db, ctx -> 
         // Creating the exchange and merchant accounts first.
-        assertNotNull(db.customerCreate(customerMerchant))
-        assertNotNull(db.bankAccountCreate(bankAccountMerchant))
-        assertNotNull(db.customerCreate(customerExchange))
-        assertNotNull(db.bankAccountCreate(bankAccountExchange))
-        // Create admin account
-        assertNotNull(db.customerCreate(
-            Customer(
-                "admin",
-                CryptoUtil.hashpw("admin-password"),
-                "CFO"
-            )
+        assertNotNull(db.accountCreate(
+            login = "merchant",
+            passwordHash = CryptoUtil.hashpw("merchant-password"),
+            name = "Merchant",
+            internalPaytoUri = IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"),
+            maxDebt = TalerAmount(10, 1, "KUDOS"),
+            isTalerExchange = false,
+            isPublic = false
         ))
-        assert(maybeCreateAdminAccount(db, ctx))
+        assertNotNull(db.accountCreate(
+            login = "exchange",
+            passwordHash = CryptoUtil.hashpw("exchange-password"),
+            name = "Exchange",
+            internalPaytoUri = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
+            maxDebt = TalerAmount(10, 1, "KUDOS"),
+            isTalerExchange = true,
+            isPublic = false
+        ))
+        assertNotNull(db.accountCreate(
+            login = "customer",
+            passwordHash = CryptoUtil.hashpw("customer-password"),
+            name = "Customer",
+            internalPaytoUri = IbanPayTo("payto://iban/CUSTOMER-IBAN-XYZ"),
+            maxDebt = TalerAmount(10, 1, "KUDOS"),
+            isTalerExchange = false,
+            isPublic = false
+        ))
+        // Create admin account
+        assert(maybeCreateAdminAccount(db, ctx, "admin-password"))
         testApplication {
             application {
                 corebankWebApp(db, ctx)
@@ -178,11 +160,13 @@ class JsonBuilder(from: JsonObject) {
 
 /* ----- Random data generation ----- */
 
-fun randBase32Crockford(lenght: Int): String {
+fun randBytes(lenght: Int): ByteArray {
     val bytes = ByteArray(lenght)
     kotlin.random.Random.nextBytes(bytes)
-    return Base32Crockford.encode(bytes)
+    return bytes
 }
+
+fun randBase32Crockford(lenght: Int) = Base32Crockford.encode(randBytes(lenght))
 
 fun randHashCode(): HashCode = HashCode(randBase32Crockford(64))
 fun randShortHashCode(): ShortHashCode = ShortHashCode(randBase32Crockford(32))

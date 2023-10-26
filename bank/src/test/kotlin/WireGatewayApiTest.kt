@@ -17,14 +17,14 @@ import kotlin.test.assertNotNull
 import randHashCode
 
 class WireGatewayApiTest {
-    suspend fun Database.genTransfer(from: String, to: BankAccount, amount: String = "KUDOS:10") {
+    suspend fun Database.genTransfer(from: String, to: IbanPayTo, amount: String = "KUDOS:10") {
         talerTransferCreate(
             req = TransferRequest(
                 request_uid = randHashCode(),
                 amount = TalerAmount(amount),
                 exchange_base_url = ExchangeUrl("http://exchange.example.com/"),
                 wtid = randShortHashCode(),
-                credit_account = to.internalPaytoUri
+                credit_account = to
             ),
             username = from,
             timestamp = Instant.now()
@@ -33,12 +33,12 @@ class WireGatewayApiTest {
         }
     }
 
-    suspend fun Database.genIncoming(to: String, from: BankAccount) {
+    suspend fun Database.genIncoming(to: String, from: IbanPayTo) {
         talerAddIncomingCreate(
             req = AddIncomingRequest(
                 reserve_pub = randShortHashCode(),
                 amount = TalerAmount(10, 0, "KUDOS"),
-                debit_account = from.internalPaytoUri,
+                debit_account = from,
             ),
             username = to,
             timestamp = Instant.now()
@@ -246,7 +246,7 @@ class WireGatewayApiTest {
 
         // Gen three transactions using clean add incoming logic
         repeat(3) {
-            db.genIncoming("exchange", bankAccountMerchant)
+            db.genIncoming("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"))
         }
         // Should not show up in the taler wire gateway API history
         db.bankTransactionCreate(genTx("bogus foobar")).assertSuccess()
@@ -314,7 +314,7 @@ class WireGatewayApiTest {
                 }
             }
             delay(200)
-            db.genIncoming("exchange", bankAccountMerchant)
+            db.genIncoming("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"))
         }
 
         // Test trigger by raw transaction
@@ -362,7 +362,7 @@ class WireGatewayApiTest {
 
         // Testing ranges. 
         repeat(20) {
-            db.genIncoming("exchange", bankAccountMerchant)
+            db.genIncoming("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"))
         }
 
         // forward range:
@@ -425,7 +425,7 @@ class WireGatewayApiTest {
 
         // Gen three transactions using clean transfer logic
         repeat(3) {
-            db.genTransfer("exchange", bankAccountMerchant)
+            db.genTransfer("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"))
         }
         // Should not show up in the taler wire gateway API history
         db.bankTransactionCreate(genTx("bogus foobar", 1, 2)).assertSuccess()
@@ -478,12 +478,12 @@ class WireGatewayApiTest {
                 }
             }
             delay(200)
-            db.genTransfer("exchange", bankAccountMerchant) 
+            db.genTransfer("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ")) 
         }
 
         // Testing ranges.
         repeat(20) {
-            db.genTransfer("exchange", bankAccountMerchant)
+            db.genTransfer("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"))
         }
 
         // forward range:

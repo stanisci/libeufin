@@ -63,18 +63,6 @@ data class TokenSuccessResponse(
     val expiration: TalerProtocolTimestamp
 )
 
-/**
- * Error object to respond to the client.  The
- * 'code' field takes values from the GANA gnu-taler-error-code
- * specification.  'hint' is a human-readable description
- * of the error.
- */
-@Serializable
-data class TalerError(
-    val code: Int,
-    val hint: String? = null,
-    val detail: String? = null
-)
 
 /* Contains contact data to send TAN challges to the
 * users, to let them complete cashout operations. */
@@ -136,18 +124,6 @@ data class MonitorWithCashout(
 ) : MonitorResponse()
 
 /**
- * Convenience type to throw errors along the bank activity
- * and that is meant to be caught by Ktor and responded to the
- * client.
- */
-class LibeufinBankException(
-    // Status code that Ktor will set for the response.
-    val httpStatus: HttpStatusCode,
-    // Error detail object, after Taler API.
-    val talerError: TalerError
-) : Exception(talerError.hint)
-
-/**
  * Convenience type to hold customer data, typically after such
  * data gets fetched from the database.  It is also used to _insert_
  * customer data to the database.
@@ -156,11 +132,7 @@ data class Customer(
     val login: String,
     val passwordHash: String,
     val name: String,
-    /**
-     * Only non-null when this object is defined _by_ the
-     * database.
-     */
-    val dbRowId: Long? = null,
+    val customerId: Long,
     val email: String? = null,
     val phone: String? = null,
     /**
@@ -183,7 +155,7 @@ data class BankAccount(
     val internalPaytoUri: IbanPayTo,
     // Database row ID of the customer that owns this bank account.
     val owningCustomerId: Long,
-    val bankAccountId: Long? = null, // null at INSERT.
+    val bankAccountId: Long,
     val isPublic: Boolean = false,
     val isTalerExchange: Boolean = false,
     /**

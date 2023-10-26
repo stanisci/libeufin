@@ -36,9 +36,6 @@ import tech.libeufin.util.*
 
 private const val DB_CTR_LIMIT = 1000000
 
-fun Customer.expectRowId(): Long = this.dbRowId ?: throw internalServerError("Cutsomer '$login' had no DB row ID.")
-fun BankAccount.expectRowId(): Long = this.bankAccountId ?: throw internalServerError("Bank account '${this.internalPaytoUri}' lacks database row ID.")
-
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
 
 /**
@@ -123,51 +120,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
     }
 
     // CUSTOMERS
-    /**
-     * This method INSERTs a new customer into the database and
-     * returns its row ID.  That is useful because often a new user
-     * ID has to be specified in more database records, notably in
-     * bank accounts to point at their owners.
-     *
-     * In case of conflict, this method returns null.
-     */
-    suspend fun customerCreate(customer: Customer): Long? = conn { conn ->
-        val stmt = conn.prepareStatement("""
-            INSERT INTO customers (
-              login
-              ,password_hash
-              ,name
-              ,email
-              ,phone
-              ,cashout_payto
-              ,cashout_currency
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            RETURNING customer_id
-        """
-        )
-        stmt.setString(1, customer.login)
-        stmt.setString(2, customer.passwordHash)
-        stmt.setString(3, customer.name)
-        stmt.setString(4, customer.email)
-        stmt.setString(5, customer.phone)
-        stmt.setString(6, customer.cashoutPayto)
-        stmt.setString(7, customer.cashoutCurrency)
-
-        val res = try {
-            stmt.executeQuery()
-        } catch (e: SQLException) {
-            logger.error(e.message)
-            if (e.errorCode == 0) return@conn null // unique constraint violation.
-            throw e // rethrow on other errors.
-        }
-        res.use {
-            when {
-                !it.next() -> throw internalServerError("SQL RETURNING gave no customer_id.")
-                else -> it.getLong("customer_id")
-            }
-        }
-    }
 
     /**
      * Deletes a customer (including its bank account row) from
@@ -243,7 +195,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 email = it.getString("email"),
                 cashoutCurrency = it.getString("cashout_currency"),
                 cashoutPayto = it.getString("cashout_payto"),
-                dbRowId = it.getLong("customer_id")
+                customerId = it.getLong("customer_id")
             )
         }
     }
@@ -310,6 +262,68 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
     }
 
     // MIXED CUSTOMER AND BANK ACCOUNT DATA
+
+    suspend fun accountCreate(
+        login: String,
+        passwordHash: String,
+        name: String,
+        email: String? = null,
+        phone: String? = null,
+        cashoutPayto: String? = null,
+        cashoutCurrency: String? = null,
+        internalPaytoUri: IbanPayTo,
+        isPublic: Boolean,
+        isTalerExchange: Boolean,
+        maxDebt: TalerAmount
+    ): Pair<Long, Long> = conn { it ->
+        it.transaction { conn ->
+            val customerId = conn.prepareStatement("""
+                INSERT INTO customers (
+                    login
+                    ,password_hash
+                    ,name
+                    ,email
+                    ,phone
+                    ,cashout_payto
+                    ,cashout_currency
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                RETURNING customer_id
+            """
+            ).run {
+                setString(1, login)
+                setString(2, passwordHash)
+                setString(3, name)
+                setString(4, email)
+                setString(5, phone)
+                setString(6, cashoutPayto)
+                setString(7, cashoutCurrency)
+                oneOrNull { it.getLong("customer_id") } 
+                    ?: throw internalServerError("SQL RETURNING gave no customer_id.")
+            }
+         
+            val stmt = conn.prepareStatement("""
+                INSERT INTO bank_accounts
+                    (internal_payto_uri
+                    ,owning_customer_id
+                    ,is_public
+                    ,is_taler_exchange
+                    ,max_debt
+                    )
+                VALUES (?, ?, ?, ?, (?, ?)::taler_amount)
+                RETURNING bank_account_id;
+            """)
+            stmt.setString(1, internalPaytoUri.canonical)
+            stmt.setLong(2, customerId)
+            stmt.setBoolean(3, isPublic)
+            stmt.setBoolean(4, isTalerExchange)
+            stmt.setLong(5, maxDebt.value)
+            stmt.setInt(6, maxDebt.frac)
+            val bankId = stmt.oneOrNull { it.getLong("bank_account_id") } 
+                ?: throw internalServerError("SQL RETURNING gave no bank_account_id.")
+            Pair(customerId, bankId)
+        }
+    }
 
     /**
      * Updates accounts according to the PATCH /accounts/foo endpoint.
@@ -446,50 +460,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
     }
 
     // BANK ACCOUNTS
-
-    /**
-     * Inserts a new bank account in the database, returning its
-     * row ID in the successful case.  If of unique constrain violation,
-     * it returns null and any other error will be thrown as 500.
-     */
-    suspend fun bankAccountCreate(bankAccount: BankAccount): Long? = conn { conn ->
-        if (bankAccount.balance != null)
-            throw internalServerError(
-                "Do not pass a balance upon bank account creation, do a wire transfer instead."
-            )
-        val stmt = conn.prepareStatement("""
-            INSERT INTO bank_accounts
-              (internal_payto_uri
-              ,owning_customer_id
-              ,is_public
-              ,is_taler_exchange
-              ,max_debt
-              )
-            VALUES
-              (?, ?, ?, ?, (?, ?)::taler_amount)
-            RETURNING bank_account_id;
-        """)
-        stmt.setString(1, bankAccount.internalPaytoUri.canonical)
-        stmt.setLong(2, bankAccount.owningCustomerId)
-        stmt.setBoolean(3, bankAccount.isPublic)
-        stmt.setBoolean(4, bankAccount.isTalerExchange)
-        stmt.setLong(5, bankAccount.maxDebt.value)
-        stmt.setInt(6, bankAccount.maxDebt.frac)
-        // using the default zero value for the balance.
-        val res = try {
-            stmt.executeQuery()
-        } catch (e: SQLException) {
-            logger.error(e.message)
-            if (e.errorCode == 0) return@conn null // unique constraint violation.
-            throw e // rethrow on other errors.
-        }
-        res.use {
-            when {
-                !it.next() -> throw internalServerError("SQL RETURNING gave no bank_account_id.")
-                else -> it.getLong("bank_account_id")
-            }
-        }
-    }
 
     suspend fun bankAccountSetMaxDebt(
         owningCustomerId: Long,

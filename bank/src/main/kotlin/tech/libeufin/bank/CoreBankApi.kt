@@ -1,3 +1,21 @@
+/*
+ * This file is part of LibEuFin.
+ * Copyright (C) 2023 Stanisci and Dold.
+
+ * LibEuFin is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation; either version 3, or
+ * (at your option) any later version.
+
+ * LibEuFin is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General
+ * Public License for more details.
+
+ * You should have received a copy of the GNU Affero General Public
+ * License along with LibEuFin; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>
+ */
 package tech.libeufin.bank
 
 import io.ktor.http.*
@@ -81,7 +99,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
                     }
                 }
         val customerDbRow =
-                db.customerGetFromLogin(login)?.dbRowId
+                db.customerGetFromLogin(login)?.customerId
                         ?: throw internalServerError(
                                 "Could not get customer '$login' database row ID"
                         )
@@ -142,7 +160,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
         val maybeHasBankAccount =
                 maybeCustomerExists.run {
                     if (this == null) return@run null
-                    db.bankAccountGetFromOwnerId(this.expectRowId())
+                    db.bankAccountGetFromOwnerId(this.customerId)
                 }
         val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
         if (maybeCustomerExists != null && maybeHasBankAccount != null) {
@@ -170,39 +188,21 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
         }
 
         // From here: fresh user being added.
-        val newCustomer =
-                Customer(
-                        login = req.username,
-                        name = req.name,
-                        email = req.challenge_contact_data?.email,
-                        phone = req.challenge_contact_data?.phone,
-                        cashoutPayto =
-                                req.cashout_payto_uri, // Following could be gone, if included in
-                        // cashout_payto_uri
-                        cashoutCurrency = ctx.fiatCurrency,
-                        passwordHash = CryptoUtil.hashpw(req.password),
-                )
-        val newCustomerRowId =
-                db.customerCreate(newCustomer)
-                        ?: throw internalServerError(
-                                "New customer INSERT failed despite the previous checks"
-                        ) // Crashing here won't break data consistency between customers and bank
-        // accounts, because of the idempotency.  Client will just have to retry.
-        val maxDebt = ctx.defaultCustomerDebtLimit
-        val newBankAccount =
-                BankAccount(
-                        hasDebt = false,
-                        internalPaytoUri = internalPayto,
-                        owningCustomerId = newCustomerRowId,
-                        isPublic = req.is_public,
-                        isTalerExchange = req.is_taler_exchange,
-                        maxDebt = maxDebt
-                )
-        val newBankAccountId =
-                db.bankAccountCreate(newBankAccount)
-                        ?: throw internalServerError(
-                                "Could not INSERT bank account despite all the checks."
-                        )
+        val (_, newBankAccountId) = db.accountCreate(
+                login = req.username,
+                name = req.name,
+                email = req.challenge_contact_data?.email,
+                phone = req.challenge_contact_data?.phone,
+                cashoutPayto =
+                        req.cashout_payto_uri, // Following could be gone, if included in
+                // cashout_payto_uri
+                cashoutCurrency = ctx.fiatCurrency,
+                passwordHash = CryptoUtil.hashpw(req.password),
+                internalPaytoUri = internalPayto,
+                isPublic = req.is_public,
+                isTalerExchange = req.is_taler_exchange,
+                maxDebt = ctx.defaultCustomerDebtLimit
+        )
 
         // The new account got created, now optionally award the registration
         // bonus to it.
@@ -214,12 +214,12 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
                     db.customerGetFromLogin("admin")
                             ?: throw internalServerError("Admin customer not found")
             val adminBankAccount =
-                    db.bankAccountGetFromOwnerId(adminCustomer.expectRowId())
+                    db.bankAccountGetFromOwnerId(adminCustomer.customerId)
                             ?: throw internalServerError("Admin bank account not found")
             val adminPaysBonus =
                     BankInternalTransaction(
                             creditorAccountId = newBankAccountId,
-                            debtorAccountId = adminBankAccount.expectRowId(),
+                            debtorAccountId = adminBankAccount.bankAccountId,
                             amount = bonusAmount,
                             subject = "Registration bonus.",
                             transactionDate = Instant.now()
@@ -295,7 +295,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
                 throw forbidden("non-admin user cannot change their legal name")
         // Preventing identical data to be overridden.
         val bankAccount =
-                db.bankAccountGetFromOwnerId(accountCustomer.expectRowId())
+                db.bankAccountGetFromOwnerId(accountCustomer.customerId)
                         ?: throw internalServerError(
                                 "Customer '${accountCustomer.login}' lacks bank account."
                         )
@@ -377,7 +377,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
                                 talerEc = TalerErrorCode.TALER_EC_END
                         )
         val bankAccountData =
-                db.bankAccountGetFromOwnerId(customerData.expectRowId())
+                db.bankAccountGetFromOwnerId(customerData.customerId)
                         ?: throw internalServerError(
                                 "Customer '$login' had no bank account despite they are customer.'"
                         )

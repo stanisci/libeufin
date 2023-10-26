@@ -70,66 +70,6 @@ suspend fun ApplicationCall.bankAccount(db: Database): BankAccount {
     )
 }
 
-fun forbidden(
-    hint: String = "No rights on the resource",
-    talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_END
-): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.Forbidden, talerError = TalerError(
-        code = talerErrorCode.code, hint = hint
-    )
-)
-
-fun unauthorized(hint: String = "Login failed"): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.Unauthorized, talerError = TalerError(
-        code = TalerErrorCode.TALER_EC_GENERIC_UNAUTHORIZED.code, hint = hint
-    )
-)
-
-fun internalServerError(hint: String?): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.InternalServerError, talerError = TalerError(
-        code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code, hint = hint
-    )
-)
-
-fun notFound(
-    hint: String?,
-    talerEc: TalerErrorCode
-): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.NotFound, talerError = TalerError(
-        code = talerEc.code, hint = hint
-    )
-)
-
-fun conflict(
-    hint: String?, talerEc: TalerErrorCode
-): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.Conflict, talerError = TalerError(
-        code = talerEc.code, hint = hint
-    )
-)
-
-fun badRequest(
-    hint: String? = null, talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
-): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
-        code = talerErrorCode.code, hint = hint
-    )
-)
-
-fun BankConfig.checkInternalCurrency(amount: TalerAmount) {
-    if (amount.currency != currency) throw badRequest(
-        "Wrong currency: expected internal currency $currency got ${amount.currency}",
-        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-    )
-}
-
-fun BankConfig.checkFiatCurrency(amount: TalerAmount) {
-    if (amount.currency != fiatCurrency) throw badRequest(
-        "Wrong currency: expected fiat currency $fiatCurrency got ${amount.currency}",
-        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
-    )
-}
-
 // Generates a new Payto-URI with IBAN scheme.
 fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
 
@@ -280,48 +220,31 @@ data class CashoutRateParams(
  *
  * It returns false in case of problems, true otherwise.
  */
-suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig): Boolean {
+suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? = null): Boolean {
     val maybeAdminCustomer = db.customerGetFromLogin("admin")
-    val adminCustomerId: Long = if (maybeAdminCustomer == null) {
-        logger.debug("Creating admin's customer row")
-        val pwBuf = ByteArray(32)
-        Random().nextBytes(pwBuf)
-        val adminCustomer = Customer(
+    if (maybeAdminCustomer == null) {
+        logger.debug("Creating admin's account")
+        var pwStr = pw;
+        if (pwStr == null) {
+            val pwBuf = ByteArray(32)
+            Random().nextBytes(pwBuf)
+            pwStr = String(pwBuf, Charsets.UTF_8)
+        }
+        
+       
+        db.accountCreate(
             login = "admin",
             /**
              * Hashing the password helps to avoid the "password not hashed"
              * error, in case the admin tries to authenticate.
              */
-            passwordHash = CryptoUtil.hashpw(String(pwBuf, Charsets.UTF_8)), name = "Bank administrator"
-        )
-        val rowId = db.customerCreate(adminCustomer)
-        if (rowId == null) {
-            logger.error("Could not create the admin customer row.")
-            return false
-        }
-        rowId
-    } else maybeAdminCustomer.expectRowId()
-    val maybeAdminBankAccount = db.bankAccountGetFromOwnerId(adminCustomerId)
-    if (maybeAdminBankAccount == null) {
-        logger.info("Creating admin bank account")
-        val adminMaxDebtObj = ctx.defaultAdminDebtLimit
-        val adminInternalPayto = stripIbanPayto(genIbanPaytoUri())
-        if (adminInternalPayto == null) {
-            logger.error("Bank generated invalid payto URI for admin")
-            return false
-        }
-        val adminBankAccount = BankAccount(
-            hasDebt = false,
-            internalPaytoUri = IbanPayTo(adminInternalPayto),
-            owningCustomerId = adminCustomerId,
+            passwordHash = CryptoUtil.hashpw(pwStr),
+            name = "Bank administrator",
+            internalPaytoUri = IbanPayTo(genIbanPaytoUri()),
             isPublic = false,
             isTalerExchange = false,
-            maxDebt = adminMaxDebtObj
+            maxDebt = ctx.defaultAdminDebtLimit
         )
-        if (db.bankAccountCreate(adminBankAccount) == null) {
-            logger.error("Failed to creating admin bank account.")
-            return false
-        }
     }
     return true
 }

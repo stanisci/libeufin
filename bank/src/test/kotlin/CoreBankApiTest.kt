@@ -301,7 +301,13 @@ class CoreBankAccountsMgmtApiTest {
         }.assertNoContent()
 
         val nameReq = json {
+            "login" to "foo"
             "name" to "Another Foo"
+            "cashout_address" to "payto://cashout"
+            "challenge_contact_data" to json {
+                "phone" to "+99"
+                "email" to "foo@example.com"
+            }
         }
         // Checking ordinary user doesn't get to patch their name.
         client.patch("/accounts/merchant") {
@@ -314,8 +320,17 @@ class CoreBankAccountsMgmtApiTest {
             jsonBody(nameReq)
         }.assertNoContent()
 
-        val fooFromDb = db.customerGetFromLogin("merchant")
-        assertEquals("Another Foo", fooFromDb?.name)
+        // Check patch
+        client.get("/accounts/merchant") {
+            basicAuth("admin", "admin-password")
+        }.assertOk().run {
+            val obj: AccountData = Json.decodeFromString(bodyAsText())
+            assertEquals("Another Foo", obj.name)
+            assertEquals("payto://cashout", obj.cashout_payto_uri)
+            assertEquals("+99", obj.contact_data?.phone)
+            assertEquals("foo@example.com", obj.contact_data?.email)
+        }
+        
     }
 
     // PATCH /accounts/USERNAME/auth
@@ -345,7 +360,7 @@ class CoreBankAccountsMgmtApiTest {
     @Test
     fun accountsListTest() = bankSetup { _ -> 
         // Remove default accounts
-        listOf("merchant", "exchange").forEach {
+        listOf("merchant", "exchange", "customer").forEach {
             client.delete("/accounts/$it") {
                 basicAuth("admin", "admin-password")
             }.assertNoContent()
@@ -688,6 +703,59 @@ class CoreBankTransactionsApiTest {
                 "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout"
             })
         }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT)
+
+        suspend fun checkBalance(
+            merchantDebt: Boolean,
+            merchantAmount: String,
+            customerDebt: Boolean,
+            customerAmount: String,
+        ) {
+            client.get("/accounts/merchant") {
+                basicAuth("admin", "admin-password")
+            }.assertOk().run {
+                val obj: AccountData = Json.decodeFromString(bodyAsText())
+                assertEquals(
+                    if (merchantDebt) CorebankCreditDebitInfo.debit else CorebankCreditDebitInfo.credit, 
+                    obj.balance.credit_debit_indicator)
+                assertEquals(TalerAmount(merchantAmount), obj.balance.amount)
+            }
+            client.get("/accounts/customer") {
+                basicAuth("admin", "admin-password")
+            }.assertOk().run {
+                val obj: AccountData = Json.decodeFromString(bodyAsText())
+                assertEquals(
+                    if (customerDebt) CorebankCreditDebitInfo.debit else CorebankCreditDebitInfo.credit, 
+                    obj.balance.credit_debit_indicator)
+                assertEquals(TalerAmount(customerAmount), obj.balance.amount)
+            }
+        }
+
+        // Init state
+        checkBalance(true, "KUDOS:2.4", false, "KUDOS:0")
+        // Send 2 times 3
+        repeat(2) {
+            client.post("/accounts/merchant/transactions") {
+                basicAuth("merchant", "merchant-password")
+                jsonBody(json {
+                    "payto_uri" to "payto://iban/CUSTOMER-IBAN-XYZ?message=payout2&amount=KUDOS:3"
+                })
+            }.assertNoContent()
+        }
+        client.post("/accounts/merchant/transactions") {
+            basicAuth("merchant", "merchant-password")
+            jsonBody(json {
+                "payto_uri" to "payto://iban/CUSTOMER-IBAN-XYZ?message=payout2&amount=KUDOS:3"
+            })
+        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
+        checkBalance(true, "KUDOS:8.4", false, "KUDOS:6")
+        // Send throught debt
+        client.post("/accounts/customer/transactions") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json {
+                "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout2&amount=KUDOS:10"
+            })
+        }.assertNoContent()
+        checkBalance(false, "KUDOS:1.6", true, "KUDOS:4")
     }
 }
 
