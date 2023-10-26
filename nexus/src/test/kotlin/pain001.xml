@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:iso:std:iso:20022:tech:xsd:pain.001.001.09 pain.001.001.09.ch.03.xsd">
+    <CstmrCdtTrfInitn>
+        <GrpHdr>
+            <MsgId>random</MsgId>
+            <CreDtTm>2023-10-26T12:54:13.423443377Z</CreDtTm>
+            <NbOfTxs>1</NbOfTxs>
+            <CtrlSum>TalerAmount(value=4, fraction=0, currency=CHF)</CtrlSum>
+            <InitgPty>
+                <Nm>Marcello Stanisci</Nm>
+            </InitgPty>
+        </GrpHdr>
+        <PmtInf>
+            <PmtInfId>NOT GIVEN</PmtInfId>
+            <PmtMtd>TRF</PmtMtd>
+            <BtchBookg>true</BtchBookg>
+            <NbOfTxs>1</NbOfTxs>
+            <CtrlSum>TalerAmount(value=4, fraction=0, currency=CHF)</CtrlSum>
+            <PmtTpInf>
+                <SvcLvl>
+                    <Cd>SDVA</Cd>
+                </SvcLvl>
+            </PmtTpInf>
+            <ReqdExctnDt>2023-10-26Z</ReqdExctnDt>
+            <Dbtr>
+                <Nm>Marcello Stanisci</Nm>
+            </Dbtr>
+            <DbtrAcct>
+                <Id>
+                    <IBAN>not-used-yet</IBAN>
+                </Id>
+            </DbtrAcct>
+            <DbtrAgt>
+                <FinInstnId>
+                    <BICFI>POFICHBE</BICFI>
+                </FinInstnId>
+            </DbtrAgt>
+            <ChrgBr>SLEV</ChrgBr>
+            <CdtTrfTxInf>
+                <PmtId>
+                    <InstrId>NOT PROVIDED</InstrId>
+                    <EndToEndId>NOT PROVIDED</EndToEndId>
+                </PmtId>
+                <Amt>
+                    <InstdAmt Ccy="CHF">4</InstdAmt>
+                </Amt>
+                <CdtrAgt>
+                    <FinInstnId>
+                        <BICFI>BIC</BICFI>
+                    </FinInstnId>
+                </CdtrAgt>
+                <CdtrAcct>
+                    <Id>
+                        <IBAN>INVALID</IBAN>
+                    </Id>
+                </CdtrAcct>
+                <RmtInf>
+                    <Ustrd>Test reimbursement</Ustrd>
+                </RmtInf>
+            </CdtTrfTxInf>
+        </PmtInf>
+    </CstmrCdtTrfInitn>
+</Document>

@@ -18,6 +18,23 @@ data class TalerAmount(
     val currency: String
 )
 
+/**
+ * Stringifies TalerAmount's.  NOTE: the caller must enforce
+ * length-checks on the output fractional part, to ensure compatibility
+ * with the bank.
+ *
+ * @return the amount in the $currency:x.y format.
+ */
+fun TalerAmount.stringify(): String {
+    if (fraction == 0) {
+        return "$currency:$value"
+    } else {
+        val fractionFormat = this.fraction.toString().padStart(8, '0').dropLastWhile { it == '0' }
+        if (fractionFormat.length > 2) throw Exception("Sub-cent amounts not supported")
+        return "$currency:$value.$fractionFormat"
+    }
+}
+
 // INCOMING PAYMENTS STRUCTS
 
 /**

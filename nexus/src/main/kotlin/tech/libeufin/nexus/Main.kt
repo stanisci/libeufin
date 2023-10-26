@@ -201,6 +201,23 @@ data class BankPublicKeysFile(
 )
 
 /**
+ * Gets the bank account metadata file, according to the
+ * location found in the configuration.  The caller may still
+ * have to handle the exception, in case the found file doesn't
+ * parse to the wanted JSON type.
+ *
+ * @param cfg configuration handle.
+ * @return [BankAccountMetadataFile] or null, if the file wasn't found.
+ */
+fun loadBankAccountFile(cfg: EbicsSetupConfig): BankAccountMetadataFile? {
+    val f = File(cfg.bankAccountMetadataFilename)
+    if (!f.exists()) {
+        logger.error("Bank account metadata file not found in ${cfg.bankAccountMetadataFilename}")
+        return null
+    }
+    return myJson.decodeFromString(f.readText())
+}
+/**
  * Load the bank keys file from disk.
  *
  * @param location the keys file location.

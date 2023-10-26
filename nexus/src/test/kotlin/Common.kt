@@ -56,7 +56,11 @@ fun getMockedClient(
 }
 
 // Partial config to talk to PostFinance.
-fun getPofiConfig(userId: String, partnerId: String) = """
+fun getPofiConfig(
+    userId: String,
+    partnerId: String,
+    accountOwner: String? = "NotGiven"
+    ) = """
     [nexus-ebics]
     CURRENCY = KUDOS
     HOST_BASE_URL = https://isotest.postfinance.ch/ebicsweb/ebicsweb
@@ -64,7 +68,7 @@ fun getPofiConfig(userId: String, partnerId: String) = """
     USER_ID = $userId
     PARTNER_ID = $partnerId
     SYSTEM_ID = not-used
-    ACCOUNT_NUMBER = not-used-yet
+    ACCOUNT_NUMBER = payto://iban/POFICHBE/CH9789144829733648596?receiver-name=$accountOwner
     BANK_PUBLIC_KEYS_FILE = /tmp/enc-auth-keys.json
     CLIENT_PRIVATE_KEYS_FILE = /tmp/my-private-keys.json
     ACCOUNT_META_DATA_FILE = /tmp/ebics-meta.json

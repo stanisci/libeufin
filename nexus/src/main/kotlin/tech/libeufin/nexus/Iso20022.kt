@@ -2,7 +2,6 @@ package tech.libeufin.nexus
 
 import tech.libeufin.util.IbanPayto
 import tech.libeufin.util.constructXml
-import tech.libeufin.util.parsePayto
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -18,16 +17,23 @@ data class Pain001Namespaces(
  * Create a pain.001 document.  It requires the debtor BIC.
  *
  * @param requestUid UID of this request, helps to make this request idempotent.
- * @param debtorMetadataFile bank account information of the EBICS subscriber that
- *                           sends this request.
- * @param amount amount to pay.
+ * @param initiationTimestamp timestamp when the payment was initiated in the database.
+ *                            Although this is NOT the pain.001 creation timestamp, it
+ *                            will help making idempotent requests where one MsgId is
+ *                            always associated with one, and only one creation timestamp.
+ * @param debtorAccount [IbanPayto] bank account information of the EBICS subscriber that
+ *                           sends this request.  It's expected to contain IBAN, BIC, and NAME.
+ * @param amount amount to pay.  The caller is responsible for sanity-checking this
+ *               value to match the bank expectation.  For example, that the decimal
+ *               part formats always to at most two digits.
  * @param wireTransferSubject wire transfer subject.
- * @param creditAccount payment receiver.
+ * @param creditAccount payment receiver in [IbanPayto].  It should contain IBAN and NAME.
  * @return raw pain.001 XML, or throws if the debtor BIC is not found.
  */
 fun createPain001(
     requestUid: String,
-    debtorMetadataFile: BankAccountMetadataFile,
+    initiationTimestamp: Instant,
+    debitAccount: IbanPayto,
     amount: TalerAmount,
     wireTransferSubject: String,
     creditAccount: IbanPayto
@@ -36,17 +42,14 @@ fun createPain001(
         fullNamespace = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09",
         xsdFilename = "pain.001.001.09.ch.03.xsd"
     )
-    val creationTimestamp = Instant.now()
-    val amountWithoutCurrency: String = amount.toString().split(":").run {
+    val zonedTimestamp = ZonedDateTime.ofInstant(initiationTimestamp, ZoneId.of("UTC"))
+    val amountWithoutCurrency: String = amount.stringify().split(":").run {
         if (this.size != 2) throw Exception("Invalid stringified amount: $amount")
         return@run this[1]
     }
-    if (debtorMetadataFile.bank_code == null)
-        throw Exception("Need debtor BIC, but not found in the debtor account metadata file.")
-    // Current version expects the receiver BIC, TODO: try also without.
-    if (creditAccount.bic == null)
-        throw Exception("Expecting the receiver BIC.")
-
+    val debtorBic: String = debitAccount.bic ?: throw Exception("Cannot operate without the debtor BIC")
+    val debtorName: String = debitAccount.receiverName ?: throw Exception("Cannot operate without the debtor name")
+    val creditorName: String = creditAccount.receiverName ?: throw Exception("Cannot operate without the creditor name")
     return constructXml(indent = true) {
         root("Document") {
             attribute("xmlns", namespace.fullNamespace)
@@ -62,20 +65,16 @@ fun createPain001(
                     }
                     element("CreDtTm") {
                         val dateFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
-                        val zoned = ZonedDateTime.ofInstant(
-                            creationTimestamp,
-                            ZoneId.systemDefault() // FIXME: should this be UTC?
-                        )
-                        text(dateFormatter.format(zoned))
+                        text(dateFormatter.format(zonedTimestamp))
                     }
                     element("NbOfTxs") {
                         text("1")
                     }
                     element("CtrlSum") {
-                        text(amount.toString())
+                        text(amountWithoutCurrency)
                     }
-                    element("InitgPty/Nm") { // optional
-                        text(debtorMetadataFile.account_holder_name)
+                    element("InitgPty/Nm") {
+                        text(debtorName)
                     }
                 }
                 element("PmtInf") {
@@ -92,23 +91,25 @@ fun createPain001(
                         text("1")
                     }
                     element("CtrlSum") {
-                        text(amount.toString())
+                        text(amountWithoutCurrency)
                     }
                     element("PmtTpInf/SvcLvl/Cd") {
                         text("SDVA")
                     }
                     element("ReqdExctnDt") {
-                        text(DateTimeFormatter.ISO_DATE.format(creationTimestamp))
+                        element("Dt") {
+                            text(DateTimeFormatter.ISO_DATE.format(zonedTimestamp))
+                        }
                     }
-                    element("Dbtr/Nm") { // optional
-                        text(debtorMetadataFile.account_holder_name)
+                    element("Dbtr/Nm") {
+                        text(debtorName)
                     }
                     element("DbtrAcct/Id/IBAN") {
-                        text(debtorMetadataFile.account_holder_iban)
+                        text(debitAccount.iban)
                     }
                     element("DbtrAgt/FinInstnId") {
                         element("BICFI") {
-                            text(debtorMetadataFile.bank_code)
+                            text(debtorBic)
                         }
                     }
                     element("ChrgBr") {
@@ -131,11 +132,8 @@ fun createPain001(
                                     }
                                 }
                         }
-                        creditAccount.receiverName.apply {
-                            if (this != null)
-                                element("Cdtr/Nm") {
-                                    text(this@apply)
-                                }
+                        element("Cdtr/Nm") {
+                            text(creditorName)
                         }
                         element("CdtrAcct/Id/IBAN") {
                             text(creditAccount.iban)
