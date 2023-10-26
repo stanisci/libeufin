@@ -7,14 +7,13 @@ import tech.libeufin.util.initializeDatabaseTables
 import tech.libeufin.util.resetDatabaseTables
 import kotlin.system.exitProcess
 
-fun doOrFail(doLambda: () -> Unit) {
+fun <T>doOrFail(getLambda: () -> T): T =
     try {
-        doLambda()
+        getLambda()
     } catch (e: Exception) {
         logger.error(e.message)
         exitProcess(1)
     }
-}
 
 /**
  * This subcommand tries to load the SQL files that define

@@ -15,6 +15,8 @@ import java.time.format.DateTimeFormatter
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
+// Tests only manual, that's why they are @Ignore
+
 private fun prep(): EbicsSetupConfig {
     val handle = TalerConfig(NEXUS_CONFIG_SOURCE)
     val ebicsUserId = File("/tmp/pofi-ebics-user-id.txt").readText()
@@ -23,6 +25,7 @@ private fun prep(): EbicsSetupConfig {
     return EbicsSetupConfig(handle)
 }
 
+@Ignore
 class Iso20022 {
     @Test
     fun sendPayment() {
@@ -36,13 +39,13 @@ class Iso20022 {
             parsePayto("payto://iban/CH9300762011623852957?receiver-name=NotGiven")!!
         )
         runBlocking {
-            submitPayment(
+            assertTrue(submitPayment(
                 xml,
                 cfg,
                 loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)!!,
                 loadBankKeys(cfg.bankPublicKeysFilename)!!,
                 HttpClient()
-            )
+            ))
         }
     }
 }

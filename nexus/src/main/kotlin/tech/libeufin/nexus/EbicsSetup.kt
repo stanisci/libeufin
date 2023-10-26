@@ -27,7 +27,6 @@ import kotlinx.coroutines.runBlocking
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import java.io.File
 import kotlin.system.exitProcess
-import TalerConfig
 import TalerConfigError
 import kotlinx.serialization.encodeToString
 import tech.libeufin.nexus.ebics.*
@@ -429,11 +428,15 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         val cfg = extractEbicsConfig(this.configFile)
         if (checkFullConfig) {
             doOrFail {
-                cfg.config.requireString("nexus-ebics-submit", "frequency")
-                cfg.config.requireString("nexus-ebics-fetch", "frequency")
-                cfg.config.requireString("nexus-ebics-fetch", "statement-log-directory")
-                cfg.config.requireString("nexus-httpd", "port")
-                cfg.config.requireString("nexus-httpd", "unixpath")
+                cfg.config.requireNumber("nexus-ebics-submit", "frequency").apply {
+                    if (this < 0) throw Exception("section 'nexus-ebics-submit' has negative frequency")
+                }
+                cfg.config.requireNumber("nexus-ebics-fetch", "frequency").apply {
+                    if (this < 0) throw Exception("section 'nexus-ebics-fetch' has negative frequency")
+                }
+                cfg.config.requirePath("nexus-ebics-fetch", "statement-log-directory")
+                cfg.config.requireNumber("nexus-httpd", "port")
+                cfg.config.requirePath("nexus-httpd", "unixpath")
                 cfg.config.requireString("nexus-httpd", "serve")
                 cfg.config.requireString("nexus-httpd-wire-gateway-facade", "enabled")
                 cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_method")
@@ -442,6 +445,7 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
                 cfg.config.requireString("nexus-httpd-revenue-facade", "auth_method")
                 cfg.config.requireString("nexus-httpd-revenue-facade", "auth_token")
             }
+            return
         }
         // Config is sane.  Go (maybe) making the private keys.
         val privsMaybe = preparePrivateKeys(cfg.clientPrivateKeysFilename)

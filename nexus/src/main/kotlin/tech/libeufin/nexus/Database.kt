@@ -340,7 +340,7 @@ class Database(dbConfig: String): java.io.Closeable {
      * bank yet.
      *
      * @param currency in which currency should the payment be submitted to the bank.
-     * @return potentially empty list of initiated payments.
+     * @return [Map] of the initiated payment row ID and [InitiatedPayment]
      */
     suspend fun initiatedPaymentsUnsubmittedGet(currency: String): Map<Long, InitiatedPayment> = runConn { conn ->
         val stmt = conn.prepareStatement("""
