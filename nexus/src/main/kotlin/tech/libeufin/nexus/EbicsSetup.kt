@@ -428,7 +428,20 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
     override fun run() {
         val cfg = extractEbicsConfig(this.configFile)
         if (checkFullConfig) {
-            throw NotImplementedError("--check-full-config flag not implemented")
+            doOrFail {
+                cfg.config.requireString("nexus-ebics-submit", "frequency")
+                cfg.config.requireString("nexus-ebics-fetch", "frequency")
+                cfg.config.requireString("nexus-ebics-fetch", "statement-log-directory")
+                cfg.config.requireString("nexus-httpd", "port")
+                cfg.config.requireString("nexus-httpd", "unixpath")
+                cfg.config.requireString("nexus-httpd", "serve")
+                cfg.config.requireString("nexus-httpd-wire-gateway-facade", "enabled")
+                cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_method")
+                cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_token")
+                cfg.config.requireString("nexus-httpd-revenue-facade", "enabled")
+                cfg.config.requireString("nexus-httpd-revenue-facade", "auth_method")
+                cfg.config.requireString("nexus-httpd-revenue-facade", "auth_token")
+            }
         }
         // Config is sane.  Go (maybe) making the private keys.
         val privsMaybe = preparePrivateKeys(cfg.clientPrivateKeysFilename)
