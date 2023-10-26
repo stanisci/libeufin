@@ -43,6 +43,9 @@ fun createPain001(
     }
     if (debtorMetadataFile.bank_code == null)
         throw Exception("Need debtor BIC, but not found in the debtor account metadata file.")
+    // Current version expects the receiver BIC, TODO: try also without.
+    if (creditAccount.bic == null)
+        throw Exception("Expecting the receiver BIC.")
 
     return constructXml(indent = true) {
         root("Document") {
