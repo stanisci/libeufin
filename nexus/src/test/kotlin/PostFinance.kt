@@ -51,7 +51,7 @@ class Iso20022 {
     }
 }
 
-// @Ignore
+@Ignore
 class PostFinance {
     // Tests sending client keys to the PostFinance test platform.
     @Test
@@ -110,6 +110,6 @@ class PostFinance {
         val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
         assertNotNull(bankKeys)
         val htd = runBlocking { fetchBankAccounts(cfg, clientKeys, bankKeys, HttpClient()) }
-        extractBankAccountMetadata(cfg, htd!!, false)
+        println(htd)
     }
 }
