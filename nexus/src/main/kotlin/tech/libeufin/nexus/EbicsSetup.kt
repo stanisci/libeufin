@@ -59,6 +59,12 @@ inline fun <reified T> syncJsonToDisk(obj: T, location: String): Boolean {
     }
     return true
 }
+
+/**
+ * Generates new client private keys.
+ *
+ * @return [ClientPrivateKeysFile]
+ */
 fun generateNewKeys(): ClientPrivateKeysFile =
     ClientPrivateKeysFile(
         authentication_private_key = CryptoUtil.generateRsaKeyPair(2048).private,
@@ -250,59 +256,6 @@ suspend fun doKeysRequestAndUpdateState(
         return false
     }
     return true
-}
-
-/**
- * Abstracts (part of) the IBAN extraction from an HTD response.
- */
-private fun maybeExtractIban(accountNumberList: List<EbicsTypes.AbstractAccountNumber>): String? =
-    accountNumberList.filterIsInstance<EbicsTypes.GeneralAccountNumber>().find { it.international }?.value
-
-/**
- * Abstracts (part of) the BIC extraction from an HTD response.
- */
-private fun maybeExtractBic(bankCodes: List<EbicsTypes.AbstractBankCode>): String? =
-    bankCodes.filterIsInstance<EbicsTypes.GeneralBankCode>().find { it.international }?.value
-
-private fun findIban(maybeList: List<EbicsTypes.AccountInfo>?): String? {
-    if (maybeList == null) {
-        logger.warn("Looking for IBAN: bank did not give any account list for us.")
-        return null
-    }
-    if (maybeList.size != 1) {
-        logger.warn("Looking for IBAN: bank gave account list, but it was not a singleton.")
-        return null
-    }
-    val accountNumberList = maybeList[0].accountNumberList
-    if (accountNumberList == null) {
-        logger.warn("Bank gave account list, but no IBAN list of found.")
-        return null
-    }
-    if (accountNumberList.size != 1) {
-        logger.warn("Bank gave account list, but IBAN list was not singleton.")
-        return null
-    }
-    return maybeExtractIban(accountNumberList)
-}
-private fun findBic(maybeList: List<EbicsTypes.AccountInfo>?): String? {
-    if (maybeList == null) {
-        logger.warn("Looking for BIC: bank did not give any account list for us.")
-        return null
-    }
-    if (maybeList.size != 1) {
-        logger.warn("Looking for BIC: bank gave account list, but it was not a singleton.")
-        return null
-    }
-    val bankCodeList = maybeList[0].bankCodeList
-    if (bankCodeList == null) {
-        logger.warn("Bank gave account list, but no BIC list of found.")
-        return null
-    }
-    if (bankCodeList.size != 1) {
-        logger.warn("Bank gave account list, but BIC list was not singleton.")
-        return null
-    }
-    return maybeExtractBic(bankCodeList)
 }
 
 /**
