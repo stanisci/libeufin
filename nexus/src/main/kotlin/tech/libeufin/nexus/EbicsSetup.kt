@@ -347,57 +347,6 @@ private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
 }
 
 /**
- * Extracts bank account information and stores it to the bank account
- * metadata file that's found in the configuration. It returns void in
- * case of success, or fails the whole process upon errors.
- *
- * @param cfg configuration handle.
- * @param bankAccounts bank response to EBICS HTD request.
- * @param showAssociatedAccounts if true, the function only shows the
- *        users account, without persisting anything to disk.
- */
-fun extractBankAccountMetadata(
-    cfg: EbicsSetupConfig,
-    bankAccounts: HTDResponseOrderData,
-    showAssociatedAccounts: Boolean
-) {
-    // Now trying to extract whatever IBAN & BIC pair the bank gave in the response.
-    val foundIban: String? = findIban(bankAccounts.partnerInfo.accountInfoList)
-    val foundBic: String? = findBic(bankAccounts.partnerInfo.accountInfoList)
-    // _some_ IBAN & BIC _might_ have been found, compare it with the config.
-    if (foundIban == null)
-        logger.warn("Bank seems NOT to show any IBAN for our account.")
-    if (foundBic == null)
-        logger.warn("Bank seems NOT to show any BIC for our account.")
-    // Warn the user if instead one IBAN was found but that differs from the config.
-    if (foundIban != null && foundIban != cfg.accountNumber) {
-        logger.error("Bank has another IBAN for us: $foundIban, while config has: ${cfg.accountNumber}")
-        exitProcess(1)
-    }
-    // Users wants to only _see_ the accounts, NOT checking values and returning here.
-    if (showAssociatedAccounts) {
-        println("Bank associates this account to the EBICS user ${cfg.ebicsUserId}: IBAN: $foundIban, BIC: $foundBic, Name: ${bankAccounts.userInfo.name}")
-        return
-    }
-    // No divergences were found, either because the config was right
-    // _or_ the bank didn't give any information.  Setting the account
-    // metadata accordingly.
-    val accountMetaData = BankAccountMetadataFile(
-        account_holder_name = bankAccounts.userInfo.name ?: "Account holder name not given",
-        account_holder_iban = foundIban ?: run iban@ {
-            logger.warn("Bank did not show any IBAN for us, defaulting to the one we configured.")
-            return@iban cfg.accountNumber },
-        bank_code = foundBic ?: run bic@ {
-            logger.warn("Bank did not show any BIC for us, setting it as null.")
-            return@bic null }
-    )
-    if (!syncJsonToDisk(accountMetaData, cfg.bankAccountMetadataFilename)) {
-        logger.error("Failed to persist bank account meta-data at: ${cfg.bankAccountMetadataFilename}")
-        exitProcess(1)
-    }
-}
-
-/**
  * CLI class implementing the "ebics-setup" subcommand.
  */
 class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
@@ -481,7 +430,7 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         if (keysNotSub || generateRegistrationPdf) makePdf(privs, cfg)
         // Checking if the bank keys exist on disk.
         val bankKeysFile = File(cfg.bankPublicKeysFilename)
-        if (!bankKeysFile.exists()) { // FIXME: should this also check the content validity?
+        if (!bankKeysFile.exists()) {
             val areKeysOnDisk = runBlocking {
                 doKeysRequestAndUpdateState(
                     cfg,
@@ -502,43 +451,24 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
             logger.error("Although previous checks, could not load the bank keys file from: ${cfg.bankPublicKeysFilename}")
             exitProcess(1)
         }
-        /**
-         * The following block potentially updates the bank keys state
-         * on disk, if that's the first time that they become accepted.
-         * If so, finally reloads the bank keys file from disk.
-         */
-        val bankKeys = if (!bankKeysMaybe.accepted) {
+        val printOk = { println("setup ready") }
 
-            if (autoAcceptKeys) bankKeysMaybe.accepted = true
-            else bankKeysMaybe.accepted = askUserToAcceptKeys(bankKeysMaybe)
-
-            if (!bankKeysMaybe.accepted) {
-                logger.error("Cannot continue without accepting the bank keys.")
-                exitProcess(1)
-            }
-
-            if (!syncJsonToDisk(bankKeysMaybe, cfg.bankPublicKeysFilename)) {
-                logger.error("Could not set bank keys as accepted on disk.")
-                exitProcess(1)
-            }
-            // Reloading after the disk write above.
-            loadBankKeys(cfg.bankPublicKeysFilename) ?: kotlin.run {
-                logger.error("Could not reload bank keys after disk write.")
-                exitProcess(1)
-            }
-        } else
-            bankKeysMaybe // keys were already accepted.
-
-        // Downloading the list of owned bank account(s).
-        val bankAccounts = runBlocking {
-            fetchBankAccounts(cfg, privs, bankKeys, httpClient)
+        if (bankKeysMaybe.accepted) {
+            printOk()
+            return
         }
-        if (bankAccounts == null) {
-            logger.error("Could not obtain the list of bank accounts from the bank.")
+        // Finishing the setup by accepting the bank keys.
+        if (autoAcceptKeys) bankKeysMaybe.accepted = true
+        else bankKeysMaybe.accepted = askUserToAcceptKeys(bankKeysMaybe)
+
+        if (!bankKeysMaybe.accepted) {
+            logger.error("Cannot successfully finish the setup without accepting the bank keys.")
             exitProcess(1)
         }
-        logger.info("Subscriber's bank accounts fetched.")
-        extractBankAccountMetadata(cfg, bankAccounts, showAssociatedAccounts)
-        println("setup ready")
+        if (!syncJsonToDisk(bankKeysMaybe, cfg.bankPublicKeysFilename)) {
+            logger.error("Could not set bank keys as accepted on disk.")
+            exitProcess(1)
+        }
+        printOk()
     }
 }

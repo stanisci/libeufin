@@ -3,6 +3,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.nexus.*
+import tech.libeufin.nexus.ebics.doEbicsCustomDownload
 import tech.libeufin.nexus.ebics.fetchBankAccounts
 import tech.libeufin.nexus.ebics.submitPayment
 import tech.libeufin.util.IbanPayto
@@ -50,7 +51,7 @@ class Iso20022 {
     }
 }
 
-@Ignore
+// @Ignore
 class PostFinance {
     // Tests sending client keys to the PostFinance test platform.
     @Test
@@ -80,6 +81,23 @@ class PostFinance {
                 KeysOrderType.HPB
             )
             )
+        }
+    }
+
+    @Test
+    fun customDownload() {
+        val cfg = prep()
+        val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
+        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
+        runBlocking {
+            val xml = doEbicsCustomDownload(
+                messageType = "HTD",
+                cfg = cfg,
+                bankKeys = bankKeys!!,
+                clientKeys = clientKeys!!,
+                client = HttpClient()
+            )
+            println(xml)
         }
     }
 

@@ -101,10 +101,14 @@ class EbicsSetupConfig(val config: TalerConfig) {
      */
     val ebicsSystemId = ebicsSetupRequireString("system_id")
     /**
-     * Bank account name, as given by the bank.  It
-     * can be an IBAN or even any alphanumeric value.
+     * Bank account metadata.
      */
-    val accountNumber = ebicsSetupRequireString("account_number")
+    val accountNumber: IbanPayto = ebicsSetupRequireString("account_number").run {
+        val maybeAccount = parsePayto(this)
+        if (maybeAccount?.bic == null) throw Exception("ACCOUNT_NUMBER lacks the BIC")
+        if (maybeAccount.receiverName == null) throw Exception("ACCOUNT_NUMBER lacks the name")
+        return@run maybeAccount
+    }
     /**
      * Filename where we store the bank public keys.
      */
@@ -113,10 +117,6 @@ class EbicsSetupConfig(val config: TalerConfig) {
      * Filename where we store our private keys.
      */
     val clientPrivateKeysFilename = ebicsSetupRequireString("client_private_keys_file")
-    /**
-     * Filename where we store the bank account main information.
-     */
-    val bankAccountMetadataFilename = ebicsSetupRequireString("account_meta_data_file")
     /**
      * A name that identifies the EBICS and ISO20022 flavour
      * that Nexus should honor in the communication with the
@@ -200,23 +200,6 @@ data class BankPublicKeysFile(
     var accepted: Boolean
 )
 
-/**
- * Gets the bank account metadata file, according to the
- * location found in the configuration.  The caller may still
- * have to handle the exception, in case the found file doesn't
- * parse to the wanted JSON type.
- *
- * @param cfg configuration handle.
- * @return [BankAccountMetadataFile] or null, if the file wasn't found.
- */
-fun loadBankAccountFile(cfg: EbicsSetupConfig): BankAccountMetadataFile? {
-    val f = File(cfg.bankAccountMetadataFilename)
-    if (!f.exists()) {
-        logger.error("Bank account metadata file not found in ${cfg.bankAccountMetadataFilename}")
-        return null
-    }
-    return myJson.decodeFromString(f.readText())
-}
 /**
  * Load the bank keys file from disk.
  *
