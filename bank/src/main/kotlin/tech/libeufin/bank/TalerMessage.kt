@@ -437,6 +437,11 @@ data class CashoutRequest(
 )
 
 @Serializable
+data class CashoutPending(
+    val cashout_id: String,
+)
+
+@Serializable
 data class Cashouts(
     val cashouts: List<CashoutInfo>,
 )

@@ -729,19 +729,10 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
             stmt.executeQuery().use {
                 when {
                     !it.next() -> throw internalServerError("Bank transaction didn't properly return")
-                    it.getBoolean("out_creditor_not_found") -> {
-                        logger.error("No creditor account found")
-                        BankTransactionResult.NO_CREDITOR
-                    }
-                    it.getBoolean("out_debtor_not_found") -> {
-                        logger.error("No debtor account found")
-                        BankTransactionResult.NO_DEBTOR
-                    }
+                    it.getBoolean("out_creditor_not_found") -> BankTransactionResult.NO_CREDITOR
+                    it.getBoolean("out_debtor_not_found") -> BankTransactionResult.NO_DEBTOR
                     it.getBoolean("out_same_account") -> BankTransactionResult.SAME_ACCOUNT
-                    it.getBoolean("out_balance_insufficient") -> {
-                        logger.error("Balance insufficient")
-                        BankTransactionResult.BALANCE_INSUFFICIENT
-                    }
+                    it.getBoolean("out_balance_insufficient") -> BankTransactionResult.BALANCE_INSUFFICIENT
                     else -> {
                         handleExchangeTx(conn, subject, it.getLong("out_credit_bank_account_id"), it.getLong("out_debit_bank_account_id"), it)
                         BankTransactionResult.SUCCESS
@@ -983,6 +974,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
             }
         }
     }
+
     suspend fun talerWithdrawalGet(opUUID: UUID): TalerWithdrawalOperation? = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
@@ -1021,7 +1013,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
      * Aborts one Taler withdrawal, only if it wasn't previously
      * confirmed.  It returns false if the UPDATE didn't succeed.
      */
-    suspend fun talerWithdrawalAbort(opUUID: UUID): WithdrawalAbortResult = conn { conn ->
+    suspend fun talerWithdrawalAbort(opUUID: UUID): AbortResult = conn { conn ->
         val stmt = conn.prepareStatement("""
             UPDATE taler_withdrawal_operations
             SET aborted = NOT confirmation_done
@@ -1031,9 +1023,9 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         )
         stmt.setObject(1, opUUID)
         when (stmt.oneOrNull { it.getBoolean(1) }) {
-            null -> WithdrawalAbortResult.NOT_FOUND
-            true -> WithdrawalAbortResult.CONFIRMED
-            false -> WithdrawalAbortResult.SUCCESS
+            null -> AbortResult.NOT_FOUND
+            true -> AbortResult.CONFIRMED
+            false -> AbortResult.SUCCESS
         }
     }
 
@@ -1123,81 +1115,103 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
     /**
      * Creates a cashout operation in the database.
      */
-    suspend fun cashoutCreate(op: Cashout): Boolean = conn { conn ->
+    suspend fun cashoutCreate(
+        accountUsername: String,
+        cashoutUuid: UUID,
+        amountDebit: TalerAmount,
+        amountCredit: TalerAmount,
+        subject: String,
+        creationTime: Instant,
+        tanChannel: TanChannel,
+        tanCode: String,
+    ): Pair<CashoutCreationResult, String?> = conn { conn ->
         val stmt = conn.prepareStatement("""
-            INSERT INTO cashout_operations (
-              cashout_uuid
-              ,amount_debit 
-              ,amount_credit 
-              ,buy_at_ratio
-              ,buy_in_fee 
-              ,sell_at_ratio
-              ,sell_out_fee
-              ,subject
-              ,creation_time
-              ,tan_channel
-              ,tan_code
-              ,bank_account
-              ,credit_payto_uri
-              ,cashout_currency
-	    )
-            VALUES (
-	      ?
-	      ,(?,?)::taler_amount
-	      ,(?,?)::taler_amount
-	      ,?
-	      ,(?,?)::taler_amount
-	      ,?
-	      ,(?,?)::taler_amount
-	      ,?
-	      ,?
-	      ,?::tan_enum
-	      ,?
-	      ,?
-	      ,?
-	      ,?
-	    );
+            SELECT
+                out_bad_conversion,
+                out_account_not_found,
+                out_account_is_exchange,
+                out_missing_tan_info,
+                out_balance_insufficient,
+                out_tan_info
+            FROM cashout_create(?, ?, (?,?)::taler_amount, (?,?)::taler_amount, ?, ?, ?::tan_enum, ?);
         """)
-        stmt.setObject(1, op.cashoutUuid)
-        stmt.setLong(2, op.amountDebit.value)
-        stmt.setInt(3, op.amountDebit.frac)
-        stmt.setLong(4, op.amountCredit.value)
-        stmt.setInt(5, op.amountCredit.frac)
-        stmt.setInt(6, op.buyAtRatio)
-        stmt.setLong(7, op.buyInFee.value)
-        stmt.setInt(8, op.buyInFee.frac)
-        stmt.setInt(9, op.sellAtRatio)
-        stmt.setLong(10, op.sellOutFee.value)
-        stmt.setInt(11, op.sellOutFee.frac)
-        stmt.setString(12, op.subject)
-        stmt.setLong(13, op.creationTime.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setString(14, op.tanChannel.name)
-        stmt.setString(15, op.tanCode)
-        stmt.setLong(16, op.bankAccount)
-        stmt.setString(17, op.credit_payto_uri)
-        stmt.setString(18, op.cashoutCurrency)
-        stmt.executeUpdateViolation()
+        stmt.setString(1, accountUsername)
+        stmt.setObject(2, cashoutUuid)
+        stmt.setLong(3, amountDebit.value)
+        stmt.setInt(4, amountDebit.frac)
+        stmt.setLong(5, amountCredit.value)
+        stmt.setInt(6, amountCredit.frac)
+        stmt.setString(7, subject)
+        stmt.setLong(8, creationTime.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setString(9, tanChannel.name)
+        stmt.setString(10, tanCode)
+        stmt.executeQuery().use {
+            var info: String? = null;
+            val status = when {
+                !it.next() ->
+                    throw internalServerError("No result from DB procedure cashout_create")
+                it.getBoolean("out_bad_conversion") -> CashoutCreationResult.BAD_CONVERSION
+                it.getBoolean("out_account_not_found") -> CashoutCreationResult.ACCOUNT_NOT_FOUND
+                it.getBoolean("out_account_is_exchange") -> CashoutCreationResult.ACCOUNT_IS_EXCHANGE
+                it.getBoolean("out_missing_tan_info") -> CashoutCreationResult.MISSING_TAN_INFO
+                it.getBoolean("out_balance_insufficient") -> CashoutCreationResult.BALANCE_INSUFFICIENT
+                else -> {
+                    info = it.getString("out_tan_info")
+                    CashoutCreationResult.SUCCESS
+                }
+            }
+            Pair(status, info)
+        }
     }
 
-    /**
-     * Flags one cashout operation as confirmed.  The backing
-     * payment should already have taken place, before calling
-     * this function.
-     */
-    suspend fun cashoutConfirm(
-        opUuid: UUID,
-        tanConfirmationTimestamp: Long,
-        bankTransaction: Long // regional payment backing the operation
-    ): Boolean = conn { conn ->
+    suspend fun cashoutAbort(opUUID: UUID): AbortResult = conn { conn ->
         val stmt = conn.prepareStatement("""
             UPDATE cashout_operations
-              SET tan_confirmation_time = ?, local_transaction = ?
-              WHERE cashout_uuid=?;
+            SET aborted = tan_confirmation_time IS NULL
+            WHERE cashout_uuid=?
+            RETURNING tan_confirmation_time IS NOT NULL
         """)
-        stmt.setLong(1, tanConfirmationTimestamp)
-        stmt.setLong(2, bankTransaction)
-        stmt.setObject(3, opUuid)
-        stmt.executeUpdateViolation()
+        stmt.setObject(1, opUUID)
+        when (stmt.oneOrNull { it.getBoolean(1) }) {
+            null -> AbortResult.NOT_FOUND
+            true -> AbortResult.CONFIRMED
+            false -> AbortResult.SUCCESS
+        }
+    }
+
+    suspend fun cashoutConfirm(
+        opUuid: UUID,
+        tanCode: String,
+        timestamp: Instant,
+        accountServicerReference: String = "NOT-USED",
+        endToEndId: String = "NOT-USED",
+        paymentInfId: String = "NOT-USED"
+    ): CashoutConfirmationResult = conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT
+                out_no_op,
+                out_bad_code,
+                out_balance_insufficient,
+                out_aborted
+            FROM cashout_confirm(?, ?, ?, ?, ?, ?);
+        """)
+        stmt.setObject(1, opUuid)
+        stmt.setString(2, tanCode)
+        stmt.setLong(3, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setString(4, accountServicerReference)
+        stmt.setString(5, endToEndId)
+        stmt.setString(6, paymentInfId)
+        stmt.executeQuery().use {
+            when {
+                !it.next() ->
+                    throw internalServerError("No result from DB procedure cashout_create")
+                it.getBoolean("out_no_op") -> CashoutConfirmationResult.OP_NOT_FOUND
+                it.getBoolean("out_bad_code") -> CashoutConfirmationResult.BAD_TAN_CODE
+                it.getBoolean("out_balance_insufficient") -> CashoutConfirmationResult.BALANCE_INSUFFICIENT
+                it.getBoolean("out_aborted") -> CashoutConfirmationResult.ABORTED
+                else -> CashoutConfirmationResult.SUCCESS
+            }
+        }
     }
 
     /**
@@ -1632,17 +1646,7 @@ enum class WithdrawalSelectionResult {
     ACCOUNT_IS_NOT_EXCHANGE
 }
 
-/** Result status of withdrawal operation abortion */
-enum class WithdrawalAbortResult {
-    SUCCESS,
-    NOT_FOUND,
-    CONFIRMED
-}
-
-/**
- * This type communicates the result of a database operation
- * to confirm one withdrawal operation.
- */
+/** Result status of withdrawal operation confirmation */
 enum class WithdrawalConfirmationResult {
     SUCCESS,
     OP_NOT_FOUND,
@@ -1650,6 +1654,32 @@ enum class WithdrawalConfirmationResult {
     BALANCE_INSUFFICIENT,
     NOT_SELECTED,
     ABORTED
+}
+
+/** Result status of cashout operation creation */
+enum class CashoutCreationResult {
+    SUCCESS,
+    BAD_CONVERSION,
+    ACCOUNT_NOT_FOUND,
+    ACCOUNT_IS_EXCHANGE,
+    MISSING_TAN_INFO,
+    BALANCE_INSUFFICIENT
+}
+
+/** Result status of cashout operation confirmation */
+enum class CashoutConfirmationResult {
+    SUCCESS,
+    OP_NOT_FOUND,
+    BAD_TAN_CODE,
+    BALANCE_INSUFFICIENT,
+    ABORTED
+}
+
+/** Result status of withdrawal or cashout operation abortion */
+enum class AbortResult {
+    SUCCESS,
+    NOT_FOUND,
+    CONFIRMED
 }
 
 private class NotificationWatcher(private val pgSource: PGSimpleDataSource) {

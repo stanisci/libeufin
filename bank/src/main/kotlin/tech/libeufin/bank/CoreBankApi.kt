@@ -27,6 +27,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
+import java.io.File
 import kotlin.random.Random
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
@@ -369,10 +370,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
 fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     post("/accounts/{USERNAME}/withdrawals") {
         val (login, _) = call.authCheck(db, TokenScope.readwrite)
-        val req =
-                call.receive<
-                        BankAccountCreateWithdrawalRequest>() // Checking that the user has enough
-        // funds.
+        val req = call.receive<BankAccountCreateWithdrawalRequest>()
 
         ctx.checkInternalCurrency(req.amount)
 
@@ -423,14 +421,13 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     post("/withdrawals/{withdrawal_id}/abort") {
         val opId = call.uuidUriComponent("withdrawal_id")
         when (db.talerWithdrawalAbort(opId)) {
-            WithdrawalAbortResult.NOT_FOUND ->
-                    throw notFound(
-                            "Withdrawal operation $opId not found",
-                            TalerErrorCode.TALER_EC_END
-                    )
-            WithdrawalAbortResult.CONFIRMED ->
+            AbortResult.NOT_FOUND -> throw notFound(
+                "Withdrawal operation $opId not found",
+                TalerErrorCode.TALER_EC_END
+            )
+            AbortResult.CONFIRMED ->
                     throw conflict("Cannot abort confirmed withdrawal", TalerErrorCode.TALER_EC_END)
-            WithdrawalAbortResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+            AbortResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
         }
     }
     post("/withdrawals/{withdrawal_id}/confirm") {
@@ -478,15 +475,94 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         ctx.checkInternalCurrency(req.amount_debit)
         ctx.checkFiatCurrency(req.amount_credit)
 
-        // TODO
+        val opId = UUID.randomUUID()
+        val tanChannel = req.tan_channel ?: TanChannel.sms
+        val tanCode = UUID.randomUUID().toString()
+        val (status, info) = db.cashoutCreate(
+            accountUsername = login, 
+            cashoutUuid = opId, 
+            amountDebit = req.amount_debit, 
+            amountCredit = req.amount_credit, 
+            subject = req.subject ?: "", // TODO default subject
+            creationTime = Instant.now(), 
+            tanChannel = tanChannel, 
+            tanCode = tanCode
+        )
+        when (status) {
+            CashoutCreationResult.BAD_CONVERSION -> throw conflict(
+                "Wrong currency conversion",
+                TalerErrorCode.TALER_EC_END // TODO EC ?
+            )
+            CashoutCreationResult.ACCOUNT_NOT_FOUND -> throw notFound(
+                "Customer $login not found",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
+            CashoutCreationResult.ACCOUNT_IS_EXCHANGE -> throw conflict(
+                "Exchange account cannot perform cashout operation",
+                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+            )
+            CashoutCreationResult.BALANCE_INSUFFICIENT -> throw conflict(
+                "Insufficient funds to withdraw with Taler",
+                TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+            )
+            CashoutCreationResult.MISSING_TAN_INFO -> throw conflict(
+                "Customer $login missing iinfo for tan channel ${req.tan_channel}",
+                TalerErrorCode.TALER_EC_END // TODO EC ?
+            )
+            CashoutCreationResult.SUCCESS -> {
+                when (tanChannel) {
+                    TanChannel.sms -> throw Exception("TODO")
+                    TanChannel.email -> throw Exception("TODO")
+                    TanChannel.file -> {
+                        File("/tmp/cashout-tan.txt").writeText(tanCode)
+                    }
+                }
+                // TODO delete on error or commit transaction on error
+                call.respond(CashoutPending(opId.toString()))
+            }
+        }
     }
     post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort") {
-        val (login, _) = call.authCheck(db, TokenScope.readwrite)
-        // TODO
+        call.authCheck(db, TokenScope.readwrite)
+        val opId = call.uuidUriComponent("CASHOUT_ID")
+        when (db.cashoutAbort(opId)) {
+            AbortResult.NOT_FOUND -> throw notFound(
+                "Cashout operation $opId not found",
+                TalerErrorCode.TALER_EC_END
+            )
+            AbortResult.CONFIRMED ->
+                    throw conflict("Cannot abort confirmed cashout", TalerErrorCode.TALER_EC_END)
+            AbortResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+        }
     }
     post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm") {
-        val (login, _) = call.authCheck(db, TokenScope.readwrite)
-        // TODO
+        call.authCheck(db, TokenScope.readwrite)
+        val req = call.receive<CashoutConfirm>()
+        val opId = call.uuidUriComponent("CASHOUT_ID")
+        when (db.cashoutConfirm(
+            opUuid = opId,
+            tanCode = req.tan,
+            timestamp = Instant.now()
+        )) {
+            CashoutConfirmationResult.OP_NOT_FOUND -> throw notFound(
+                "Cashout operation $opId not found",
+                TalerErrorCode.TALER_EC_END
+            )
+            CashoutConfirmationResult.ABORTED -> throw conflict(
+                "Cannot confirm an aborted cashout",
+                TalerErrorCode.TALER_EC_BANK_CONFIRM_ABORT_CONFLICT
+            )
+            CashoutConfirmationResult.BAD_TAN_CODE -> throw forbidden(
+                "Incorrect TAN code",
+                TalerErrorCode.TALER_EC_END
+            )
+            CashoutConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
+                "Insufficient funds",
+                TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+            )
+            CashoutConfirmationResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+        }
+
     }
     get("/accounts/{USERNAME}/cashouts") {
         val (login, _) = call.authCheck(db, TokenScope.readonly)

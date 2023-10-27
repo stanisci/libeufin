@@ -80,19 +80,60 @@ END $$;
 COMMENT ON FUNCTION amount_left_minus_right
   IS 'Subtracts the right amount from the left and returns the difference and TRUE, if the left amount is larger than the right, or an invalid amount and FALSE otherwise.';
 
-CREATE OR REPLACE PROCEDURE bank_set_config(
-  IN in_key TEXT,
-  IN in_value TEXT
+CREATE OR REPLACE FUNCTION account_balance_is_sufficient(
+  IN in_account_id BIGINT,
+  IN in_amount taler_amount,
+  OUT out_balance_insufficient BOOLEAN
 )
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql AS $$ 
+DECLARE
+account_has_debt BOOLEAN;
+account_balance taler_amount;
+account_max_debt taler_amount;
 BEGIN
-UPDATE configuration SET config_value=in_value WHERE config_key=in_key;
-IF NOT FOUND THEN
-  INSERT INTO configuration (config_key, config_value) VALUES (in_key, in_value);
+-- get account info, we expect the account to exist
+SELECT
+  has_debt,
+  (balance).val, (balance).frac,
+  (max_debt).val, (max_debt).frac
+  INTO
+    account_has_debt,
+    account_balance.val, account_balance.frac,
+    account_max_debt.val, account_max_debt.frac
+  FROM bank_accounts WHERE bank_account_id=in_account_id;
+
+-- check enough funds
+IF account_has_debt THEN 
+  -- debt case: simply checking against the max debt allowed.
+  SELECT sum.val, sum.frac 
+    INTO account_balance.val, account_balance.frac 
+    FROM amount_add(account_balance, in_amount) as sum;
+  SELECT NOT ok
+    INTO out_balance_insufficient
+    FROM amount_left_minus_right(account_max_debt, account_balance);
+  IF out_balance_insufficient THEN
+    RETURN;
+  END IF;
+ELSE -- not a debt account
+  SELECT NOT ok
+    INTO out_balance_insufficient
+    FROM amount_left_minus_right(account_balance, in_amount);
+  IF out_balance_insufficient THEN
+     -- debtor will switch to debt: determine their new negative balance.
+    SELECT
+      (diff).val, (diff).frac
+      INTO
+        account_balance.val, account_balance.frac
+      FROM amount_left_minus_right(in_amount, account_balance);
+    SELECT NOT ok
+      INTO out_balance_insufficient
+      FROM amount_left_minus_right(account_max_debt, account_balance);
+    IF out_balance_insufficient THEN
+      RETURN;
+    END IF;
+  END IF;
 END IF;
 END $$;
-COMMENT ON PROCEDURE bank_set_config(TEXT, TEXT)
-  IS 'Update or insert configuration values';
 
 CREATE OR REPLACE FUNCTION account_reconfig(
   IN in_login TEXT,
@@ -555,21 +596,10 @@ CREATE OR REPLACE FUNCTION create_taler_withdrawal(
 LANGUAGE plpgsql AS $$ 
 DECLARE
 account_id BIGINT;
-account_has_debt BOOLEAN;
-account_balance taler_amount;
-account_max_debt taler_amount;
 BEGIN
 -- check account exists
-SELECT
-  has_debt, bank_account_id,
-  (balance).val, (balance).frac,
-  (max_debt).val, (max_debt).frac,
-  is_taler_exchange
-  INTO
-    account_has_debt, account_id,
-    account_balance.val, account_balance.frac,
-    account_max_debt.val, account_max_debt.frac,
-    out_account_is_exchange
+SELECT bank_account_id, is_taler_exchange
+  INTO account_id, out_account_is_exchange
   FROM bank_accounts
   JOIN customers ON bank_accounts.owning_customer_id = customers.customer_id
   WHERE login=in_account_username;
@@ -581,35 +611,9 @@ ELSIF out_account_is_exchange THEN
 END IF;
 
 -- check enough funds
-IF account_has_debt THEN 
-  -- debt case: simply checking against the max debt allowed.
-  SELECT sum.val, sum.frac 
-    INTO account_balance.val, account_balance.frac 
-    FROM amount_add(account_balance, in_amount) as sum;
-  SELECT NOT ok
-    INTO out_balance_insufficient
-    FROM amount_left_minus_right(account_max_debt, account_balance);
-  IF out_balance_insufficient THEN
-    RETURN;
-  END IF;
-ELSE -- not a debt account
-  SELECT NOT ok
-    INTO out_balance_insufficient
-    FROM amount_left_minus_right(account_balance, in_amount);
-  IF out_balance_insufficient THEN
-     -- debtor will switch to debt: determine their new negative balance.
-    SELECT
-      (diff).val, (diff).frac
-      INTO
-        account_balance.val, account_balance.frac
-      FROM amount_left_minus_right(in_amount, account_balance);
-    SELECT NOT ok
-      INTO out_balance_insufficient
-      FROM amount_left_minus_right(account_max_debt, account_balance);
-    IF out_balance_insufficient THEN
-      RETURN;
-    END IF;
-  END IF;
+SELECT account_balance_is_sufficient(account_id, in_amount) INTO out_balance_insufficient;
+IF out_balance_insufficient THEN
+  RETURN;
 END IF;
 
 -- Create withdrawal operation
@@ -1013,22 +1017,156 @@ WHERE bank_account_id=in_creditor_account_id;
 PERFORM pg_notify('bank_tx', in_debtor_account_id || ' ' || in_creditor_account_id || ' ' || out_debit_row_id || ' ' || out_credit_row_id);
 END $$;
 
-CREATE OR REPLACE FUNCTION cashout_delete(
-  IN in_cashout_uuid UUID,
-  OUT out_already_confirmed BOOLEAN
+CREATE OR REPLACE FUNCTION cashout_create(
+  IN in_account_username TEXT,
+  IN in_cashout_uuid uuid,
+  IN in_amount_debit taler_amount,
+  IN in_amount_credit taler_amount,
+  IN in_subject TEXT,
+  IN in_creation_time BIGINT,
+  IN in_tan_channel tan_enum,
+  IN in_tan_code TEXT,
+  -- Error status
+  OUT out_bad_conversion BOOLEAN,
+  OUT out_account_not_found BOOLEAN,
+  OUT out_account_is_exchange BOOLEAN,
+  OUT out_missing_tan_info BOOLEAN,
+  OUT out_balance_insufficient BOOLEAN,
+  -- Success return
+  OUT out_tan_info TEXT
 )
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql AS $$ 
+DECLARE
+account_id BIGINT;
 BEGIN
-  PERFORM
-    FROM cashout_operations
-    WHERE cashout_uuid=in_cashout_uuid AND tan_confirmation_time IS NOT NULL;
-  IF FOUND THEN
-    out_already_confirmed=TRUE;
-    RETURN;
-  END IF;
-  out_already_confirmed=FALSE;
-  DELETE FROM cashout_operations WHERE cashout_uuid=in_cashout_uuid;
+-- check conversion
+SELECT in_amount_credit!=expected INTO out_bad_conversion FROM conversion_internal_to_fiat(in_amount_debit) AS expected;
+IF out_bad_conversion THEN
+  RETURN;
+END IF;
+
+-- check account exists and has appropriate tan info
+SELECT 
+    bank_account_id, is_taler_exchange,
+    CASE 
+      WHEN in_tan_channel = 'file'  THEN login -- unused
+      WHEN in_tan_channel = 'sms'   THEN phone
+      WHEN in_tan_channel = 'email' THEN email
+    END
+  INTO account_id, out_account_is_exchange, out_tan_info
+  FROM bank_accounts
+  JOIN customers ON bank_accounts.owning_customer_id = customers.customer_id
+  WHERE login=in_account_username;
+IF NOT FOUND THEN
+  out_account_not_found=TRUE;
+  RETURN;
+ELSIF out_account_is_exchange THEN
+  RETURN;
+ELSIF out_tan_info IS NULL THEN
+  out_missing_tan_info=TRUE;
+  RETURN;
+END IF;
+
+-- check enough funds
+SELECT account_balance_is_sufficient(account_id, in_amount_debit) INTO out_balance_insufficient;
+IF out_balance_insufficient THEN
+  RETURN;
+END IF;
+
+-- Create cashout operation
+INSERT INTO cashout_operations (
+  cashout_uuid
+  ,amount_debit
+  ,amount_credit
+  ,subject
+  ,creation_time
+  ,bank_account
+  ,tan_channel
+  ,tan_code
+) VALUES (
+  in_cashout_uuid
+  ,in_amount_debit
+  ,in_amount_credit
+  ,in_subject
+  ,in_creation_time
+  ,account_id
+  ,in_tan_channel
+  ,in_tan_code
+);
 END $$;
+
+CREATE OR REPLACE FUNCTION cashout_confirm(
+  IN in_cashout_uuid uuid,
+  IN in_tan_code TEXT,
+  IN in_confirmation_time BIGINT,
+  IN in_acct_svcr_ref TEXT,
+  IN in_pmt_inf_id TEXT,
+  IN in_end_to_end_id TEXT,
+  OUT out_no_op BOOLEAN,
+  OUT out_bad_code BOOLEAN,
+  OUT out_balance_insufficient BOOLEAN,
+  OUT out_aborted BOOLEAN
+)
+LANGUAGE plpgsql as $$
+DECLARE
+  wallet_account_id BIGINT;
+  admin_account_id BIGINT;
+  already_confirmed BOOLEAN;
+  subject_local TEXT;
+  amount_local taler_amount;
+BEGIN
+-- Retrieve cashout operation info
+SELECT
+  tan_code != in_tan_code,
+  tan_confirmation_time IS NOT NULL,
+  aborted, subject,
+  bank_account,
+  (amount_debit).val, (amount_debit).frac
+  INTO
+    out_bad_code,
+    already_confirmed,
+    out_aborted, subject_local,
+    wallet_account_id,
+    amount_local.val, amount_local.frac
+  FROM cashout_operations
+  WHERE cashout_uuid=in_cashout_uuid;
+IF NOT FOUND THEN
+  out_no_op=TRUE;
+  RETURN;
+ELSIF out_bad_code OR out_bad_code OR out_aborted THEN
+  RETURN;
+END IF;
+
+-- Retrieve admin account id
+SELECT bank_account_id
+  INTO admin_account_id
+  FROM bank_accounts
+    JOIN customers 
+      ON customer_id=owning_customer_id
+  WHERE login = 'admin';
+
+-- Perform bank wire transfer
+SELECT transfer.out_balance_insufficient INTO out_balance_insufficient
+FROM bank_wire_transfer(
+  admin_account_id,
+  wallet_account_id,
+  subject_local,
+  amount_local,
+  in_confirmation_time,
+  in_acct_svcr_ref,
+  in_pmt_inf_id,
+  in_end_to_end_id
+) as transfer;
+IF out_balance_insufficient THEN
+  RETURN;
+END IF;
+
+-- Confirm operation
+UPDATE cashout_operations
+  SET tan_confirmation_time = in_confirmation_time
+  WHERE cashout_uuid=in_cashout_uuid;
+END $$;
+
 
 CREATE OR REPLACE FUNCTION stats_get_frame(
   IN now TIMESTAMP,

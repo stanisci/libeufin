@@ -43,7 +43,7 @@ fun bankSetup(
             password = "merchant-password",
             name = "Merchant",
             internalPaytoUri = IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"),
-            maxDebt = TalerAmount(10, 1, "KUDOS"),
+            maxDebt = TalerAmount(10, 0, "KUDOS"),
             isTalerExchange = false,
             isPublic = false,
             bonus = null
@@ -53,7 +53,7 @@ fun bankSetup(
             password = "exchange-password",
             name = "Exchange",
             internalPaytoUri = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
-            maxDebt = TalerAmount(10, 1, "KUDOS"),
+            maxDebt = TalerAmount(10, 0, "KUDOS"),
             isTalerExchange = true,
             isPublic = false,
             bonus = null
@@ -63,7 +63,7 @@ fun bankSetup(
             password = "customer-password",
             name = "Customer",
             internalPaytoUri = IbanPayTo("payto://iban/CUSTOMER-IBAN-XYZ"),
-            maxDebt = TalerAmount(10, 1, "KUDOS"),
+            maxDebt = TalerAmount(10, 0, "KUDOS"),
             isTalerExchange = false,
             isPublic = false,
             bonus = null

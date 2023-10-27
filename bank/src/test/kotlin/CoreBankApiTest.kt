@@ -19,6 +19,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
+import java.io.File
 import kotlin.random.Random
 import kotlin.test.*
 import kotlinx.coroutines.*
@@ -1009,6 +1010,227 @@ class CoreBankWithdrawalApiTest {
 
 
 class CoreBankCashoutApiTest {
+    fun tanCode(): String = File("/tmp/cashout-tan.txt").readText()
+
+    private suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
+        // Check conversion
+        client.get("/cashout-rate?amount_debit=$amount").assertOk().run {
+            val resp = Json.decodeFromString<CashoutConversionResponse>(bodyAsText())
+            return resp.amount_credit
+        }
+    }
+
+    // POST /accounts/{USERNAME}/cashouts
+    @Test
+    fun create() = bankSetup { _ ->
+        // TODO auth routine
+        val req = json {
+            "amount_debit" to "KUDOS:1"
+            "amount_credit" to convert("KUDOS:1")
+            "tan_channel" to "file"
+        }
+
+        // Check OK
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(req) 
+        }.assertOk()
+
+        // Check exchange account
+        client.post("/accounts/exchange/cashouts") {
+            basicAuth("exchange", "exchange-password")
+            jsonBody(req) 
+        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
+
+        // Check insufficient fund
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json(req) {
+                "amount_debit" to "KUDOS:75"
+                "amount_credit" to convert("KUDOS:75")
+            })
+        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
+
+        // Check wrong conversion
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json(req) {
+                "amount_credit" to convert("KUDOS:2")
+            }) 
+        }.assertConflict()
+
+        // Check wrong currency
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json(req) {
+                "amount_debit" to "EUR:1"
+            }) 
+        }.assertBadRequest().assertErr(TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH)
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json(req) {
+                "amount_credit" to "EUR:1"
+            }) 
+        }.assertBadRequest().assertErr(TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH)
+
+        // Check missing TAN info
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json(req) {
+                "tan_channel" to "sms"
+            }) 
+        }.assertConflict()
+    }
+
+    // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort
+    @Test
+    fun abort() = bankSetup { _ ->
+        // TODO auth routine
+        val req = json {
+            "amount_debit" to "KUDOS:1"
+            "amount_credit" to convert("KUDOS:1")
+            "tan_channel" to "file"
+        }
+
+        // Check abort created
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(req) 
+        }.assertOk().run {
+            val uuid = Json.decodeFromString<CashoutPending>(bodyAsText()).cashout_id
+
+            // Check OK
+            client.post("/accounts/customer/cashouts/$uuid/abort") {
+                basicAuth("customer", "customer-password")
+            }.assertNoContent()
+            // Check idempotence
+            client.post("/accounts/customer/cashouts/$uuid/abort") {
+                basicAuth("customer", "customer-password")
+            }.assertNoContent()
+        }
+
+        // Check abort confirmed
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(req) 
+        }.assertOk().run {
+            val uuid = Json.decodeFromString<CashoutPending>(bodyAsText()).cashout_id
+
+            client.post("/accounts/customer/cashouts/$uuid/confirm") {
+                basicAuth("customer", "customer-password")
+                jsonBody(json { "tan" to tanCode() }) 
+            }.assertNoContent()
+
+            // Check error
+            client.post("/accounts/customer/cashouts/$uuid/abort") {
+                basicAuth("customer", "customer-password")
+            }.assertConflict()
+        }
+
+        // Check bad UUID
+        client.post("/accounts/customer/cashouts/chocolate/abort") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json { "tan" to tanCode() }) 
+        }.assertBadRequest()
+
+        // Check unknown
+        client.post("/accounts/customer/cashouts/${UUID.randomUUID()}/abort") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json { "tan" to tanCode() }) 
+        }.assertNotFound()
+    }
+
+    // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm
+    @Test
+    fun confirm() = bankSetup { _ -> 
+        // TODO auth routine
+        val req = json {
+            "amount_debit" to "KUDOS:1"
+            "amount_credit" to convert("KUDOS:1")
+            "tan_channel" to "file"
+        }
+
+        // TODO check sms and mail TAN channel
+        // Check confirm
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(req) 
+        }.assertOk().run {
+            val uuid = Json.decodeFromString<CashoutPending>(bodyAsText()).cashout_id
+
+            // Check bad TAN code
+            client.post("/accounts/customer/cashouts/$uuid/confirm") {
+                basicAuth("customer", "customer-password")
+                jsonBody(json { "tan" to "nice-try" }) 
+            }.assertForbidden()
+
+            // Check OK
+            client.post("/accounts/customer/cashouts/$uuid/confirm") {
+                basicAuth("customer", "customer-password")
+                jsonBody(json { "tan" to tanCode() }) 
+            }.assertNoContent()
+            // Check idempotence
+            client.post("/accounts/customer/cashouts/$uuid/confirm") {
+                basicAuth("customer", "customer-password")
+                jsonBody(json { "tan" to tanCode() }) 
+            }.assertNoContent()
+        }
+
+        // Check confirm aborted TODO
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(req) 
+        }.assertOk().run {
+            val uuid = Json.decodeFromString<CashoutPending>(bodyAsText()).cashout_id
+            client.post("/accounts/customer/cashouts/$uuid/abort") {
+                basicAuth("customer", "customer-password")
+            }.assertNoContent()
+
+            // Check error
+            client.post("/accounts/customer/cashouts/$uuid/confirm") {
+                basicAuth("customer", "customer-password")
+                jsonBody(json { "tan" to tanCode() }) 
+            }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_CONFIRM_ABORT_CONFLICT)
+        }
+
+        // Check balance insufficient
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(req) 
+        }.assertOk().run {
+            val uuid = Json.decodeFromString<CashoutPending>(bodyAsText()).cashout_id
+            // Send too much money
+            client.post("/accounts/customer/transactions") {
+                basicAuth("customer", "customer-password")
+                jsonBody(json {
+                    "payto_uri" to "payto://iban/merchant-IBAN-XYZ?message=payout&amount=KUDOS:8"
+                })
+            }.assertNoContent()
+
+            client.post("/accounts/customer/cashouts/$uuid/confirm"){
+                basicAuth("customer", "customer-password")
+                jsonBody(json { "tan" to tanCode() }) 
+            }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
+
+            // Check can abort because not confirmed
+            client.post("/accounts/customer/cashouts/$uuid/abort") {
+                basicAuth("customer", "customer-password")
+            }.assertNoContent()
+        }
+
+        // Check bad UUID
+        client.post("/accounts/customer/cashouts/chocolate/confirm") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json { "tan" to tanCode() }) 
+        }.assertBadRequest()
+
+        // Check unknown
+        client.post("/accounts/customer/cashouts/${UUID.randomUUID()}/confirm") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json { "tan" to tanCode() }) 
+        }.assertNotFound()
+    }
+
     // GET /cashout-rate
     @Test
     fun rate() = bankSetup { _ ->

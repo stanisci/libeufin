@@ -165,8 +165,9 @@ CREATE TABLE IF NOT EXISTS cashout_operations
     ON UPDATE RESTRICT
   ,tan_channel tan_enum NOT NULL
   ,tan_code TEXT NOT NULL
-  ,tan_confirmation_time BIGINT
-  ,local_transaction BIGINT UNIQUE -- FIXME: Comment that the transaction only gets created after the TAN confirmation
+  ,tan_confirmation_time BIGINT DEFAULT NULL
+  ,aborted BOOLEAN NOT NULL DEFAULT FALSE
+  ,local_transaction BIGINT UNIQUE DEFAULT NULL-- FIXME: Comment that the transaction only gets created after the TAN confirmation
     REFERENCES bank_account_transactions(bank_transaction_id)
     ON DELETE RESTRICT
     ON UPDATE RESTRICT
