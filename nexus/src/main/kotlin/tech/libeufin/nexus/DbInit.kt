@@ -7,6 +7,13 @@ import tech.libeufin.util.initializeDatabaseTables
 import tech.libeufin.util.resetDatabaseTables
 import kotlin.system.exitProcess
 
+/**
+ * Runs the argument and fails the process, if that throws
+ * an exception.
+ *
+ * @param getLambda function that might return a value.
+ * @return the value from getLambda.
+ */
 fun <T>doOrFail(getLambda: () -> T): T =
     try {
         getLambda()

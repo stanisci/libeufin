@@ -264,7 +264,7 @@ suspend fun doKeysRequestAndUpdateState(
  * @param configFile location of the configuration entry point.
  * @return internal representation of the configuration.
  */
-private fun extractEbicsConfig(configFile: String?): EbicsSetupConfig {
+fun extractEbicsConfig(configFile: String?): EbicsSetupConfig {
     val config = loadConfigOrFail(configFile)
     // Checking the config.
     val cfg = try {
@@ -327,16 +327,16 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
      * This function collects the main steps of setting up an EBICS access.
      */
     override fun run() {
-        val cfg = extractEbicsConfig(this.configFile)
+        val cfg = doOrFail { extractEbicsConfig(this.configFile) }
         if (checkFullConfig) {
             doOrFail {
-                cfg.config.requireNumber("nexus-ebics-submit", "frequency").apply {
-                    if (this < 0) throw Exception("section 'nexus-ebics-submit' has negative frequency")
+                cfg.config.requireString("nexus-ebics-submit", "frequency").apply {
+                    checkFrequency(this)
                 }
-                cfg.config.requireNumber("nexus-ebics-fetch", "frequency").apply {
-                    if (this < 0) throw Exception("section 'nexus-ebics-fetch' has negative frequency")
+                cfg.config.requireString("nexus-ebics-fetch", "frequency").apply {
+                    checkFrequency(this)
                 }
-                cfg.config.requirePath("nexus-ebics-fetch", "statement-log-directory")
+                cfg.config.requirePath("nexus-ebics-fetch", "statement_log_directory")
                 cfg.config.requireNumber("nexus-httpd", "port")
                 cfg.config.requirePath("nexus-httpd", "unixpath")
                 cfg.config.requireString("nexus-httpd", "serve")

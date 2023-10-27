@@ -2,6 +2,9 @@ import org.junit.Test
 import org.junit.jupiter.api.assertThrows
 import tech.libeufin.nexus.EbicsSetupConfig
 import tech.libeufin.nexus.NEXUS_CONFIG_SOURCE
+import tech.libeufin.nexus.getFrequencyInSeconds
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class ConfigLoading {
     /**
@@ -15,6 +18,15 @@ class ConfigLoading {
         val cfg = EbicsSetupConfig(handle)
         cfg._dump()
     }
+
+    @Test
+    fun loadPath() {
+        val handle = TalerConfig(NEXUS_CONFIG_SOURCE)
+        handle.load()
+        val cfg = EbicsSetupConfig(handle)
+        cfg.config.requirePath("nexus-ebics-fetch", "statement_log_directory")
+    }
+
 
     /**
      * Tests that if the configuration lacks at least one option, then
@@ -31,5 +43,19 @@ class ConfigLoading {
         assertThrows<TalerConfigError> {
             EbicsSetupConfig(handle)
         }
+    }
+
+    // Checks converting human-readable durations to seconds.
+    @Test
+    fun timeParsing() {
+        assertEquals(1, getFrequencyInSeconds("1s"))
+        assertEquals(10*60, getFrequencyInSeconds("10m"))
+        assertEquals(24*60*60, getFrequencyInSeconds("24h"))
+        assertEquals(60*60, getFrequencyInSeconds("      1h      "))
+        assertEquals(60*60, getFrequencyInSeconds("01h"))
+        assertNull(getFrequencyInSeconds("1.1s"))
+        assertNull(getFrequencyInSeconds("         "))
+        assertNull(getFrequencyInSeconds("m"))
+        assertNull(getFrequencyInSeconds(""))
     }
 }

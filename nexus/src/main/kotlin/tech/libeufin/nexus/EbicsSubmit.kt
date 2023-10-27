@@ -22,9 +22,13 @@ package tech.libeufin.nexus
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.*
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.time.delay
 import tech.libeufin.nexus.ebics.submitPayment
-import tech.libeufin.util.IbanPayto
+import tech.libeufin.util.getDatabaseName
 import tech.libeufin.util.parsePayto
+import java.util.*
+import kotlin.concurrent.fixedRateTimer
 import kotlin.system.exitProcess
 
 /**
@@ -46,14 +50,14 @@ private suspend fun submitInitiatedPayment(
     cfg: EbicsSetupConfig,
     clientPrivateKeysFile: ClientPrivateKeysFile,
     bankPublicKeysFile: BankPublicKeysFile,
-    initiatedPayment: InitiatedPayment,
-    debtor: IbanPayto
+    initiatedPayment: InitiatedPayment
 ): Boolean {
     val creditor = parsePayto(initiatedPayment.creditPaytoUri)
     if (creditor?.receiverName == null) {
         logger.error("Won't create pain.001 without the receiver name")
         return false
     }
+    val debtor = cfg.accountNumber
     if (debtor.bic == null || debtor.receiverName == null) {
         logger.error("Won't create pain.001 without the debtor BIC and name")
         return false
@@ -74,6 +78,98 @@ private suspend fun submitInitiatedPayment(
     return true
 }
 
+/**
+ * Converts human-readable duration in how many seconds.  Supports
+ * the suffixes 's' (seconds), 'm' (minute), 'h' (hours).  A valid
+ * duration is therefore, for example, Nm, where N is the number of
+ * minutes.
+ *
+ * @param trimmed duration
+ * @return how many seconds is the duration input, or null if the input
+ *         is not valid.
+ */
+fun getFrequencyInSeconds(humanFormat: String): Int? {
+    val trimmed = humanFormat.trim()
+    if (trimmed.isEmpty()) {
+        logger.error("Input was empty")
+        return null
+    }
+    val lastChar = trimmed.last()
+    val howManySeconds: Int = when (lastChar) {
+        's' -> {1}
+        'm' -> {60}
+        'h' -> {60 * 60}
+        else -> {
+            logger.error("Duration symbol not one of s, m, h.  '$lastChar' was found instead")
+            return null
+        }
+    }
+    val maybeNumber = trimmed.dropLast(1)
+    val howMany = try {
+        maybeNumber.toInt()
+    } catch (e: Exception) {
+        logger.error("Prefix was not a valid input: '$maybeNumber'")
+        return null
+    }
+    if (howMany == 0) return 0
+    val ret = howMany * howManySeconds
+    if (howMany != ret / howManySeconds) {
+        logger.error("Result overflew")
+        return null
+    }
+    return ret
+}
+
+/**
+ * Sanity-checks the frequency found in the configuration and
+ * either returns it or fails the process.  Note: the returned
+ * value is also guaranteed to be non-negative.
+ *
+ * @param foundInConfig frequency value as found in the configuration.
+ * @return the duration in seconds of the value found in the configuration.
+ */
+fun checkFrequency(foundInConfig: String): Int {
+    val frequencySeconds = getFrequencyInSeconds(foundInConfig)
+    if (frequencySeconds == null) {
+        throw Exception("Invalid frequency value")
+    }
+    if (frequencySeconds < 0) {
+        throw Exception("Configuration error: cannot operate with a negative submit frequency ($foundInConfig)")
+    }
+    return frequencySeconds
+}
+
+private fun submitBatch(
+    cfg: EbicsSetupConfig,
+    db: Database,
+    httpClient: HttpClient,
+    clientKeys: ClientPrivateKeysFile,
+    bankKeys: BankPublicKeysFile
+) {
+    runBlocking {
+        db.initiatedPaymentsUnsubmittedGet(cfg.currency).forEach {
+            val submitted = submitInitiatedPayment(
+                httpClient,
+                cfg,
+                clientKeys,
+                bankKeys,
+                it.value
+            )
+            /**
+             * The following block tries to flag the initiated payment as submitted,
+             * but it does NOT fail the process if the flagging fails.  This way, we
+             * do NOT block other payments to be submitted.
+             */
+            if (submitted) {
+                val flagged = db.initiatedPaymentSetSubmitted(it.key)
+                if (!flagged) {
+                    logger.warn("Initiated payment with row ID ${it.key} could not be flagged as submitted")
+                }
+            }
+        }
+    }
+}
+
 class EbicsSubmit : CliktCommand("Submits any initiated payment found in the database") {
     private val configFile by option(
         "--config", "-c",
@@ -83,23 +179,43 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
     /**
      * Submits any initiated payment that was not submitted
      * so far and -- according to the configuration -- returns
-     * or long-polls for new payments.
+     * or long-polls (currently not implemented) for new payments.
      */
     override fun run() {
-        val cfg = loadConfigOrFail(configFile)
+        val cfg: EbicsSetupConfig = doOrFail { extractEbicsConfig(configFile) }
         val frequency: Int = doOrFail {
-            cfg.requireNumber("nexus-ebics-submit", "frequency")
+            val configValue = cfg.config.requireString("nexus-ebics-submit", "frequency")
+            return@doOrFail checkFrequency(configValue)
+
         }
-        if (frequency < 0) {
-            logger.error("Configuration error: cannot operate with a negative submit frequency ($frequency)")
+        val dbCfg = cfg.config.extractDbConfigOrFail()
+        val db = Database(dbCfg.dbConnStr)
+        val httpClient = HttpClient()
+        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
+        if (bankKeys == null) {
+            logger.error("Could not find the bank keys at: ${cfg.bankPublicKeysFilename}")
+            exitProcess(1)
+        }
+        if (!bankKeys.accepted) {
+            logger.error("Bank keys are not accepted, yet.  Won't submit any payment.")
+            exitProcess(1)
+        }
+        val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
+        if (clientKeys == null) {
+            logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
             exitProcess(1)
         }
         if (frequency == 0) {
-            logger.error("Long-polling not implemented, set frequency > 0")
-            exitProcess(1)
+            logger.warn("Long-polling not implemented, submitting what is found and exit")
+            submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
+            return
         }
-        val dbCfg = cfg.extractDbConfigOrFail()
-        val db = Database(dbCfg.dbConnStr)
-        throw NotImplementedError("to be done")
+        fixedRateTimer(
+            name = "ebics submit period",
+            period = (frequency * 1000).toLong(),
+            action = {
+                submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
+            }
+        )
     }
 }
