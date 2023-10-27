@@ -37,13 +37,25 @@ class WireGatewayApiTest {
         talerAddIncomingCreate(
             req = AddIncomingRequest(
                 reserve_pub = randShortHashCode(),
-                amount = TalerAmount(10, 0, "KUDOS"),
+                amount = TalerAmount("KUDOS:10"),
                 debit_account = from,
             ),
             username = to,
             timestamp = Instant.now()
         ).run {
             assertEquals(TalerAddIncomingResult.SUCCESS, txResult)
+        }
+    }
+
+    suspend fun Database.genTransaction(from: String, to: IbanPayTo, subject: String) {
+        bankTransaction(
+            creditAccountPayto = to,
+            debitAccountUsername = from,
+            subject = subject,
+            amount = TalerAmount("KUDOS:10"),
+            timestamp = Instant.now(),
+        ).run {
+            assertEquals(BankTransactionResult.SUCCESS, this)
         }
     }
 
@@ -249,13 +261,11 @@ class WireGatewayApiTest {
             db.genIncoming("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"))
         }
         // Should not show up in the taler wire gateway API history
-        db.bankTransactionCreate(genTx("bogus foobar")).assertSuccess()
-        // Bar pays Foo once, but that should not appear in the result.
-        db.bankTransactionCreate(genTx("payout", creditorId = 1, debtorId = 2)).assertSuccess()
+        db.genTransaction("merchant", IbanPayTo("payto://iban/exchange-IBAN-XYZ"), "bogus")
+        // Exchange pays merchant once, but that should not appear in the result
+        db.genTransaction("exchange", IbanPayTo("payto://iban/merchant-IBAN-XYZ"), "ignored")
         // Gen one transaction using raw bank transaction logic
-        db.bankTransactionCreate(
-            genTx(IncomingTxMetadata(randShortHashCode()).encode(), 2, 1)
-        ).assertSuccess()
+        db.genTransaction("merchant", IbanPayTo("payto://iban/exchange-IBAN-XYZ"), IncomingTxMetadata(randShortHashCode()).encode())
         // Gen one transaction using withdraw logic
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
@@ -327,9 +337,7 @@ class WireGatewayApiTest {
                 }
             }
             delay(200)
-            db.bankTransactionCreate(
-                genTx(IncomingTxMetadata(randShortHashCode()).encode(), 2, 1)
-            ).assertSuccess()   
+            db.genTransaction("merchant", IbanPayTo("payto://iban/exchange-IBAN-XYZ"), IncomingTxMetadata(randShortHashCode()).encode())
         }
 
         // Test trigger by withdraw operationr
@@ -428,14 +436,12 @@ class WireGatewayApiTest {
             db.genTransfer("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"))
         }
         // Should not show up in the taler wire gateway API history
-        db.bankTransactionCreate(genTx("bogus foobar", 1, 2)).assertSuccess()
-        // Foo pays Bar once, but that should not appear in the result.
-        db.bankTransactionCreate(genTx("payout")).assertSuccess()
+        db.genTransaction("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"), "bogus")
+        // Merchant pays exchange once, but that should not appear in the result
+        db.genTransaction("merchant", IbanPayTo("payto://iban/exchange-IBAN-XYZ"), "ignored")
         // Gen two transactions using raw bank transaction logic
         repeat(2) {
-            db.bankTransactionCreate(
-                genTx(OutgoingTxMetadata(randShortHashCode(), ExchangeUrl("http://exchange.example.com/")).encode(), 1, 2)
-            ).assertSuccess()
+            db.genTransaction("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"), OutgoingTxMetadata(randShortHashCode(), ExchangeUrl("http://exchange.example.com/")).encode())
         }
 
         // Check ignore bogus subject

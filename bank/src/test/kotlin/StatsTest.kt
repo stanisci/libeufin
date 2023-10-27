@@ -124,8 +124,8 @@ class StatsTest {
 
             val now = OffsetDateTime.now(ZoneOffset.UTC)
             val otherHour = now.withHour((now.hour + 1) % 24)
-            val otherDay = now.withDayOfMonth((now.dayOfMonth + 1) % 28)
-            val otherMonth = now.withMonth((now.monthValue + 1) % 12)
+            val otherDay = now.withDayOfMonth((now.dayOfMonth) % 28 + 1)
+            val otherMonth = now.withMonth((now.monthValue) % 12 + 1)
             val otherYear = now.minusYears(1)
 
             register(now, TalerAmount("KUDOS:10.0"))

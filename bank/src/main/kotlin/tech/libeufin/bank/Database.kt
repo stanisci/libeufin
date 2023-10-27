@@ -750,69 +750,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
             }
         }
     }
-
-    suspend fun bankTransactionCreate(
-        tx: BankInternalTransaction
-    ): BankTransactionResult = conn { conn ->
-        conn.transaction {
-            val stmt = conn.prepareStatement("""
-                SELECT 
-                    out_same_account 
-                    ,out_debtor_not_found 
-                    ,out_creditor_not_found 
-                    ,out_balance_insufficient 
-                    ,out_credit_row_id
-                    ,out_debit_row_id
-                    ,out_creditor_is_exchange 
-                    ,out_debtor_is_exchange
-                FROM bank_wire_transfer(?,?,TEXT(?),(?,?)::taler_amount,?,TEXT(?),TEXT(?),TEXT(?))
-            """
-            )
-            stmt.setLong(1, tx.creditorAccountId)
-            stmt.setLong(2, tx.debtorAccountId)
-            stmt.setString(3, tx.subject)
-            stmt.setLong(4, tx.amount.value)
-            stmt.setInt(5, tx.amount.frac)
-            stmt.setLong(6, tx.transactionDate.toDbMicros() ?: throw faultyTimestampByBank())
-            stmt.setString(7, tx.accountServicerReference)
-            stmt.setString(8, tx.paymentInformationId)
-            stmt.setString(9, tx.endToEndId)
-            stmt.executeQuery().use {
-                when {
-                    !it.next() -> throw internalServerError("Bank transaction didn't properly return")
-                    it.getBoolean("out_debtor_not_found") -> {
-                        logger.error("No debtor account found")
-                        BankTransactionResult.NO_DEBTOR
-                    }
-                    it.getBoolean("out_creditor_not_found") -> {
-                        logger.error("No creditor account found")
-                        BankTransactionResult.NO_CREDITOR
-                    }
-                    it.getBoolean("out_same_account") ->  BankTransactionResult.SAME_ACCOUNT
-                    it.getBoolean("out_balance_insufficient") -> {
-                        logger.error("Balance insufficient")
-                        BankTransactionResult.BALANCE_INSUFFICIENT
-                    }
-                    else -> {
-                        handleExchangeTx(conn, tx.subject, tx.creditorAccountId, tx.debtorAccountId, it)
-                        BankTransactionResult.SUCCESS
-                    }
-                }
-            }
-        }
-    }
-
-    suspend fun checkReservePubReuse(reservePub: EddsaPublicKey): Boolean = conn { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT 1 FROM taler_exchange_incoming WHERE reserve_pub = ?
-            UNION ALL
-            SELECT 1 FROM taler_withdrawal_operations WHERE reserve_pub = ?           
-        """)
-        stmt.setBytes(1, reservePub.raw)
-        stmt.setBytes(2, reservePub.raw)
-        stmt.oneOrNull {  } != null
-    }
-
+    
     // Get the bank transaction whose row ID is rowId
     suspend fun bankTransactionGetFromInternalId(rowId: Long): BankAccountTransaction? = conn { conn ->
         val stmt = conn.prepareStatement("""

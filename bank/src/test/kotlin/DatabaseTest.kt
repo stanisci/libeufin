@@ -28,23 +28,6 @@ import java.util.UUID
 import kotlin.experimental.inv
 import kotlin.test.*
 
-// Foo pays Bar with custom subject.
-fun genTx(
-    subject: String = "test",
-    creditorId: Long = 2,
-    debtorId: Long = 1
-): BankInternalTransaction =
-    BankInternalTransaction(
-        creditorAccountId = creditorId,
-        debtorAccountId = debtorId,
-        subject = subject,
-        amount = TalerAmount( 10, 0, "KUDOS"),
-        accountServicerReference = "acct-svcr-ref",
-        endToEndId = "end-to-end-id",
-        paymentInformationId = "pmtinfid",
-        transactionDate = Instant.now()
-    )
-
 class DatabaseTest {
 
     // Testing the helper that creates the admin account.

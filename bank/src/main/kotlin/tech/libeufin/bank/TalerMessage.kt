@@ -174,25 +174,6 @@ data class BearerToken(
 )
 
 /**
- * Convenience type to _communicate_ a bank transfer to the
- * database procedure, NOT representing therefore any particular
- * table.  The procedure will then retrieve all the tables data
- * from this type.
- */
-data class BankInternalTransaction(
-    // Database row ID of the internal bank account sending the payment.
-    val creditorAccountId: Long,
-    // Database row ID of the internal bank account receiving the payment.
-    val debtorAccountId: Long,
-    val subject: String,
-    val amount: TalerAmount,
-    val transactionDate: Instant,
-    val accountServicerReference: String = "not used", // ISO20022
-    val endToEndId: String = "not used", // ISO20022
-    val paymentInformationId: String = "not used" // ISO20022
-)
-
-/**
  * Convenience type representing bank transactions as they
  * are in the respective database table.  Only used to _get_
  * the information from the database.
