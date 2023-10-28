@@ -43,29 +43,10 @@ fun ApplicationCall.expectUriComponent(componentName: String) =
         hint = "No username found in the URI", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
     )
 
-typealias ResourceName = String
-
-/**
- * Factors out the retrieval of the resource name from
- * the URI.  The resource looked for defaults to "USERNAME"
- * as this is frequently mentioned resource along the endpoints.
- *
- * This helper is recommended because it returns a ResourceName
- * type that then offers the ".canI()" helper to check if the user
- * has the rights on the resource.
- */
-fun ApplicationCall.getResourceName(param: String): ResourceName =
-    this.expectUriComponent(param)
-    
-
-/** Get account login from path */
-suspend fun ApplicationCall.accountLogin(): String = getResourceName("USERNAME")
-
 /** Retrieve the bank account info for the selected username*/
 suspend fun ApplicationCall.bankAccount(db: Database): BankAccount {
-    val login = accountLogin()
-    return db.bankAccountGetFromCustomerLogin(login) ?: throw notFound(
-        hint = "Bank account for customer $login not found",
+    return db.bankAccountGetFromCustomerLogin(username) ?: throw notFound(
+        hint = "Bank account for customer $username not found",
         talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
     )
 }

@@ -141,6 +141,7 @@ class CoreBankTokenApiTest {
     // DELETE /accounts/USERNAME/token
     @Test
     fun delete() = bankSetup { _ -> 
+        // TODO test restricted
         val token = client.post("/accounts/merchant/token") {
             basicAuth("merchant", "merchant-password")
             jsonBody(json { "scope" to "readonly" })

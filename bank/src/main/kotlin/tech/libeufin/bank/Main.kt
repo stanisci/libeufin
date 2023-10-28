@@ -36,7 +36,6 @@ import io.ktor.server.plugins.*
 import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
-import io.ktor.server.plugins.requestvalidation.*
 import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -129,7 +128,6 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
             ignoreUnknownKeys = true
         })
     }
-    install(RequestValidation)
     install(StatusPages) {
         /**
          * This branch triggers when the Ktor layers detect one

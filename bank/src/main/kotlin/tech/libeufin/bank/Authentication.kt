@@ -20,37 +20,67 @@ package tech.libeufin.bank
 
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.RouteSelector
+import io.ktor.server.routing.RoutingResolveContext
+import io.ktor.server.routing.RouteSelectorEvaluation
+import io.ktor.util.AttributeKey
+import io.ktor.util.pipeline.PipelineContext
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.*
 import net.taler.wallet.crypto.Base32Crockford
 import java.time.Instant
 
-/** Authenticate admin */
-suspend fun ApplicationCall.authAdmin(db: Database, scope: TokenScope) {
-    val login = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
-    if (login != "admin") {
-        throw unauthorized("Only administrator allowed")
+private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin");
+
+/** Restrict route access to admin */
+fun Route.authAdmin(db: Database, scope: TokenScope, enforce: Boolean = true, callback: Route.() -> Unit): Route =
+    intercept(callback) {
+        if (enforce) {
+            val login = context.authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
+            if (login != "admin") {
+                throw unauthorized("Only administrator allowed")
+            }
+        }
     }
-    
-}
+
 
 /** Authenticate and check access rights */
-suspend fun ApplicationCall.authCheck(db: Database, scope: TokenScope, withAdmin: Boolean = false, requireAdmin: Boolean = false): Pair<String, Boolean> {
-    val authLogin = authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
-    val login = accountLogin()
-    if (requireAdmin && authLogin != "admin") {
-        if (authLogin != "admin") {
-            throw unauthorized("Only administrator allowed")
+fun Route.auth(db: Database, scope: TokenScope, allowAdmin: Boolean = false, requireAdmin: Boolean = false, callback: Route.() -> Unit): Route  =
+    intercept(callback) {
+        val authLogin = context.authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
+        if (requireAdmin && authLogin != "admin") {
+            if (authLogin != "admin") {
+                throw unauthorized("Only administrator allowed")
+            }
+        } else {
+            println("$allowAdmin, $authLogin")
+            val hasRight = authLogin == username || (allowAdmin && authLogin == "admin");
+            if (!hasRight) {
+                throw unauthorized("Customer $authLogin have no right on $username account")
+            }
         }
-    } else {
-        val hasRight = authLogin == login || (withAdmin && authLogin == "admin");
-        if (!hasRight) {
-            throw unauthorized("Customer $authLogin have no right on $login account")
-        }
+        context.attributes.put(AUTH_IS_ADMIN, authLogin == "admin")
     }
-    return Pair(login, authLogin == "admin")
-}
 
+val PipelineContext<Unit, ApplicationCall>.username: String get() = call.username
+val PipelineContext<Unit, ApplicationCall>.isAdmin: Boolean get() = call.isAdmin
+val ApplicationCall.username: String get() = expectUriComponent("USERNAME")
+val ApplicationCall.isAdmin: Boolean get() = attributes.getOrNull(AUTH_IS_ADMIN) ?: throw Exception("No auth")
+
+private fun Route.intercept(callback: Route.() -> Unit, interceptor: suspend PipelineContext<Unit, ApplicationCall>.() -> Unit): Route {
+    val subRoute = createChild(object : RouteSelector() {
+        override fun evaluate(context: RoutingResolveContext, segmentIndex: Int): RouteSelectorEvaluation =
+            RouteSelectorEvaluation.Constant
+    })
+    subRoute.intercept(ApplicationCallPipeline.Plugins) {
+        interceptor()
+        proceed()
+    }
+    
+    callback(subRoute)
+    return subRoute
+}
 /**
  * This function tries to authenticate the call according
  * to the scheme that is mentioned in the Authorization header.
@@ -73,7 +103,7 @@ private suspend fun ApplicationCall.authenticateBankRequest(db: Database, requir
     return when (authDetails.scheme) {
         "Basic" -> doBasicAuth(db, authDetails.content)
         "Bearer" -> doTokenAuth(db, authDetails.content, requiredScope)
-        else -> throw unauthorized("Authorization method wrong or not supported.")
+        else -> throw unauthorized("Authorization method wrong or not supported.") // TODO basic auth challenge
     }
 }
 

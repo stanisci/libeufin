@@ -48,7 +48,6 @@ dependencies {
     implementation 'ch.qos.logback:logback-classic:1.4.5'
     implementation project(":util")
 
-
     // XML:
     implementation "javax.xml.bind:jaxb-api:2.3.0"
     implementation "org.glassfish.jaxb:jaxb-runtime:2.3.1"
@@ -63,14 +62,10 @@ dependencies {
     implementation "io.ktor:ktor-server-cors:$ktor_version"
     implementation "io.ktor:ktor-server-content-negotiation:$ktor_version"
     implementation "io.ktor:ktor-server-status-pages:$ktor_version"
-    implementation "io.ktor:ktor-client-apache:$ktor_version"
-    implementation "io.ktor:ktor-client-auth:$ktor_version"
     implementation "io.ktor:ktor-server-netty:$ktor_version"
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
-    implementation "io.ktor:ktor-auth:$ktor_auth_version"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0"
     implementation "io.ktor:ktor-serialization-kotlinx-json:$ktor_version"
-    implementation "io.ktor:ktor-server-request-validation:$ktor_version"
 
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
     testImplementation "org.jetbrains.kotlin:kotlin-test:$kotlin_version"
