@@ -331,10 +331,12 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         if (checkFullConfig) {
             doOrFail {
                 cfg.config.requireString("nexus-ebics-submit", "frequency").apply {
-                    checkFrequency(this)
+                    if (getFrequencyInSeconds(this) == null)
+                        throw Exception("frequency value of nexus-ebics-submit section is not valid: $this")
                 }
                 cfg.config.requireString("nexus-ebics-fetch", "frequency").apply {
-                    checkFrequency(this)
+                    if (getFrequencyInSeconds(this) == null)
+                        throw Exception("frequency value of nexus-ebics-fetch section is not valid: $this")
                 }
                 cfg.config.requirePath("nexus-ebics-fetch", "statement_log_directory")
                 cfg.config.requireNumber("nexus-httpd", "port")
