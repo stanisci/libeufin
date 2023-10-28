@@ -3,11 +3,8 @@ package tech.libeufin.nexus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.postgresql.jdbc.PgConnection
-import tech.libeufin.util.pgDataSource
 import com.zaxxer.hikari.*
-import tech.libeufin.util.microsToJavaInstant
-import tech.libeufin.util.stripIbanPayto
-import tech.libeufin.util.toDbMicros
+import tech.libeufin.util.*
 import java.sql.PreparedStatement
 import java.sql.SQLException
 import java.time.Instant
@@ -71,6 +68,13 @@ enum class PaymentInitiationOutcome {
      * The Payto address to send the payment to was invalid.
      */
     BAD_CREDIT_PAYTO,
+
+    /**
+     * The receiver payto address lacks the name, that would
+     * cause the bank to reject the pain.001.
+     */
+    RECEIVER_NAME_MISSING,
+
     /**
      * The row contains a client_request_uid that exists
      * already in the database.
@@ -406,11 +410,11 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setLong(1, paymentData.amount.value)
         stmt.setInt(2, paymentData.amount.fraction)
         stmt.setString(3, paymentData.wireTransferSubject)
-        val paytoOnlyIban = stripIbanPayto(paymentData.creditPaytoUri) ?: run {
-            logger.error("Credit Payto address is invalid.")
-            return@runConn PaymentInitiationOutcome.BAD_CREDIT_PAYTO // client fault.
+        parsePayto(paymentData.creditPaytoUri).apply {
+            if (this == null) return@runConn PaymentInitiationOutcome.BAD_CREDIT_PAYTO
+            if (this.receiverName == null) return@runConn PaymentInitiationOutcome.RECEIVER_NAME_MISSING
         }
-        stmt.setString(4, paytoOnlyIban)
+        stmt.setString(4, paymentData.creditPaytoUri)
         val initiationTime = paymentData.initiationTime.toDbMicros() ?: run {
             throw Exception("Initiation time could not be converted to microseconds for the database.")
         }

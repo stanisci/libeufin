@@ -60,6 +60,15 @@ val myJson = Json {
 }
 
 /**
+ * Triple identifying one IBAN bank account.
+ */
+data class IbanAccountMetadata(
+    val iban: String,
+    val bic: String,
+    val name: String
+)
+
+/**
  * Keeps all the options of the ebics-setup subcommand.  The
  * caller has to handle TalerConfigError if values are missing.
  * If even one of the fields could not be instantiated, then
@@ -103,12 +112,11 @@ class EbicsSetupConfig(val config: TalerConfig) {
     /**
      * Bank account metadata.
      */
-    val accountNumber: IbanPayto = ebicsSetupRequireString("account_number").run {
-        val maybeAccount = parsePayto(this)
-        if (maybeAccount?.bic == null) throw Exception("ACCOUNT_NUMBER lacks the BIC")
-        if (maybeAccount.receiverName == null) throw Exception("ACCOUNT_NUMBER lacks the name")
-        return@run maybeAccount
-    }
+    val myIbanAccount = IbanAccountMetadata(
+        iban = ebicsSetupRequireString("iban"),
+        bic = ebicsSetupRequireString("bic"),
+        name = ebicsSetupRequireString("name")
+    )
     /**
      * Filename where we store the bank public keys.
      */

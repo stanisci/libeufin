@@ -33,7 +33,7 @@ data class Pain001Namespaces(
 fun createPain001(
     requestUid: String,
     initiationTimestamp: Instant,
-    debitAccount: IbanPayto,
+    debitAccount: IbanAccountMetadata,
     amount: TalerAmount,
     wireTransferSubject: String,
     creditAccount: IbanPayto
@@ -47,8 +47,6 @@ fun createPain001(
         if (this.size != 2) throw Exception("Invalid stringified amount: $amount")
         return@run this[1]
     }
-    val debtorBic: String = debitAccount.bic ?: throw Exception("Cannot operate without the debtor BIC")
-    val debtorName: String = debitAccount.receiverName ?: throw Exception("Cannot operate without the debtor name")
     val creditorName: String = creditAccount.receiverName ?: throw Exception("Cannot operate without the creditor name")
     return constructXml(indent = true) {
         root("Document") {
@@ -74,7 +72,7 @@ fun createPain001(
                         text(amountWithoutCurrency)
                     }
                     element("InitgPty/Nm") {
-                        text(debtorName)
+                        text(debitAccount.name)
                     }
                 }
                 element("PmtInf") {
@@ -102,14 +100,14 @@ fun createPain001(
                         }
                     }
                     element("Dbtr/Nm") {
-                        text(debtorName)
+                        text(debitAccount.name)
                     }
                     element("DbtrAcct/Id/IBAN") {
                         text(debitAccount.iban)
                     }
                     element("DbtrAgt/FinInstnId") {
                         element("BICFI") {
-                            text(debtorBic)
+                            text(debitAccount.bic)
                         }
                     }
                     element("ChrgBr") {

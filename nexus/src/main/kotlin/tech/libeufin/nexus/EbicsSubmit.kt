@@ -23,9 +23,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.time.delay
 import tech.libeufin.nexus.ebics.submitPayment
-import tech.libeufin.util.getDatabaseName
 import tech.libeufin.util.parsePayto
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
@@ -57,11 +55,6 @@ private suspend fun submitInitiatedPayment(
         logger.error("Won't create pain.001 without the receiver name")
         return false
     }
-    val debtor = cfg.accountNumber
-    if (debtor.bic == null || debtor.receiverName == null) {
-        logger.error("Won't create pain.001 without the debtor BIC and name")
-        return false
-    }
     if (initiatedPayment.wireTransferSubject == null) {
         logger.error("Won't create pain.001 without the wire transfer subject")
         return false
@@ -71,7 +64,7 @@ private suspend fun submitInitiatedPayment(
         initiationTimestamp = initiatedPayment.initiationTime,
         amount = initiatedPayment.amount,
         creditAccount = creditor,
-        debitAccount = debtor,
+        debitAccount = cfg.myIbanAccount,
         wireTransferSubject = initiatedPayment.wireTransferSubject
     )
     submitPayment(xml, cfg, clientPrivateKeysFile, bankPublicKeysFile, httpClient)

@@ -68,7 +68,9 @@ fun getPofiConfig(
     USER_ID = $userId
     PARTNER_ID = $partnerId
     SYSTEM_ID = not-used
-    ACCOUNT_NUMBER = payto://iban/POFICHBE/CH9789144829733648596?receiver-name=$accountOwner
+    IBAN = CH9789144829733648596
+    BIC = POFICHBE
+    NAME = LibEuFin
     BANK_PUBLIC_KEYS_FILE = /tmp/enc-auth-keys.json
     CLIENT_PRIVATE_KEYS_FILE = /tmp/my-private-keys.json
     ACCOUNT_META_DATA_FILE = /tmp/ebics-meta.json
@@ -79,7 +81,7 @@ fun getPofiConfig(
 fun genInitPay(subject: String? = null, rowUid: String = "unique") =
     InitiatedPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
-        creditPaytoUri = "payto://iban/not-used",
+        creditPaytoUri = "payto://iban/TEST-IBAN?receiver-name=Test",
         wireTransferSubject = subject,
         initiationTime = Instant.now(),
         requestUid = rowUid
@@ -99,7 +101,7 @@ fun genIncPay(subject: String? = null) =
 fun genOutPay(subject: String? = null) =
     OutgoingPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
-        creditPaytoUri = "payto://iban/not-used",
+        creditPaytoUri = "payto://iban/TEST-IBAN?receiver-name=Test",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
         bankTransferId = "entropic"

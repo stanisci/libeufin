@@ -34,7 +34,7 @@ class Iso20022 {
         val xml = createPain001(
             "random",
             Instant.now(),
-            parsePayto("payto://iban/POFICHBE/CH9789144829733648596?receiver-name=NotGiven")!!,
+            cfg.myIbanAccount,
             TalerAmount(4, 0, "CHF"),
             "Test reimbursement, part 2",
             parsePayto("payto://iban/CH9300762011623852957?receiver-name=NotGiven")!!
