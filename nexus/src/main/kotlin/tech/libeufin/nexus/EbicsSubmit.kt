@@ -124,7 +124,7 @@ fun getFrequencyInSeconds(humanFormat: String): Int? {
 fun checkFrequency(foundInConfig: String): Int {
     val frequencySeconds = getFrequencyInSeconds(foundInConfig)
     if (frequencySeconds == null) {
-        throw Exception("Invalid frequency value")
+        throw Exception("Invalid frequency value in config section nexus-ebics-submit: $foundInConfig")
     }
     if (frequencySeconds < 0) {
         throw Exception("Configuration error: cannot operate with a negative submit frequency ($foundInConfig)")
@@ -168,7 +168,6 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         "--config", "-c",
         help = "set the configuration file"
     )
-
     /**
      * Submits any initiated payment that was not submitted
      * so far and -- according to the configuration -- returns
@@ -179,16 +178,11 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         val frequency: Int = doOrFail {
             val configValue = cfg.config.requireString("nexus-ebics-submit", "frequency")
             return@doOrFail checkFrequency(configValue)
-
         }
         val dbCfg = cfg.config.extractDbConfigOrFail()
         val db = Database(dbCfg.dbConnStr)
         val httpClient = HttpClient()
-        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
-        if (bankKeys == null) {
-            logger.error("Could not find the bank keys at: ${cfg.bankPublicKeysFilename}")
-            exitProcess(1)
-        }
+        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
         if (!bankKeys.accepted) {
             logger.error("Bank keys are not accepted, yet.  Won't submit any payment.")
             exitProcess(1)
