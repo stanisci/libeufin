@@ -4,8 +4,10 @@ plugins {
     id 'org.jetbrains.kotlin.jvm'
 }
 
-sourceCompatibility = "11"
-targetCompatibility = "11"
+java {
+     sourceCompatibility = JavaVersion.VERSION_11
+     targetCompatibility = JavaVersion.VERSION_11
+}
 
 version = rootProject.version
 
