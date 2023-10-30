@@ -31,32 +31,21 @@ sourceSets {
 def netty_version = '4.1.68.Final'
 
 dependencies {
-    implementation 'io.ktor:ktor-server-netty:1.6.1'
     implementation 'ch.qos.logback:logback-classic:1.4.5'
-
+    implementation 'io.ktor:ktor-server-netty:1.6.1'
     // XML Stuff
     implementation "javax.xml.bind:jaxb-api:2.3.1"
     implementation "org.glassfish.jaxb:jaxb-runtime:2.3.1"
     implementation 'org.apache.santuario:xmlsec:2.2.2'
-
+    // Crypto
     implementation group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.69'
-
-    // Compression
-    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.21'
-
-    // https://mvnrepository.com/artifact/org.jetbrains.kotlin/kotlin-reflect
-    implementation group: 'org.jetbrains.kotlin', name: 'kotlin-reflect', version: '1.5.21'
-
-    // Database helper
-    implementation group: 'org.postgresql', name: 'postgresql', version: '42.5.4'
-    implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
-    implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
+    // Unix domain socket to serve HTTP
     implementation "io.netty:netty-all:$netty_version"
     implementation "io.netty:netty-transport-native-epoll:$netty_version"
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
-    implementation "io.ktor:ktor-serialization-jackson:$ktor_version"
+    // Database helper
+    implementation group: 'org.postgresql', name: 'postgresql', version: '42.5.4'
 
-    testImplementation "io.ktor:ktor-server-content-negotiation:$ktor_version"
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
     testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'

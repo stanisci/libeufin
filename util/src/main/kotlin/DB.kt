@@ -23,11 +23,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import net.taler.wallet.crypto.Base32Crockford
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.Transaction
-import org.jetbrains.exposed.sql.name
-import org.jetbrains.exposed.sql.transactions.TransactionManager
-import org.jetbrains.exposed.sql.transactions.transaction
 import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.jdbc.PgConnection
 import org.slf4j.Logger
@@ -39,13 +34,6 @@ import java.sql.ResultSet
 
 fun getCurrentUser(): String = System.getProperty("user.name")
 
-fun isPostgres(): Boolean {
-    val db = TransactionManager.defaultDatabase ?: throw Exception(
-        "Could not find the default database, can't check if that's Postgres."
-    )
-    return db.vendor == "postgresql"
-
-}
 
 // Check GANA (https://docs.gnunet.org/gana/index.html) for numbers allowance.
 /**
@@ -92,181 +80,6 @@ fun buildChannelName(
     return ret
 }
 
-fun Transaction.postgresNotify(
-    channel: String,
-    payload: String? = null
-) {
-    logger.debug("Sending NOTIFY on channel '$channel' with payload '$payload'")
-    if (payload != null) {
-        val argEnc = Base32Crockford.encode(payload.toByteArray())
-        if (payload.toByteArray().size > 8000)
-            throw Exception(
-                "DB notification on channel $channel used >8000 bytes payload '$payload'"
-            )
-        this.exec("NOTIFY $channel, '$argEnc'")
-        return
-    }
-    this.exec("NOTIFY $channel")
-}
-
-/**
- * postgresListen() and postgresGetNotifications() appear to have
- * to use the same connection, in order for the notifications to
- * arrive.  Therefore, calling LISTEN inside one "transaction {}"
- * and postgresGetNotifications() outside of it did NOT work because
- * Exposed _closes_ the connection as soon as the transaction block
- * completes. OTOH, calling postgresGetNotifications() _inside_ the
- * same transaction block as LISTEN's would lead to keep the database
- * locked for the timeout duration.
- *
- * For this reason, opening and keeping one connection open for the
- * lifetime of this object and only executing postgresListen() and
- * postgresGetNotifications() _on that connection_ makes the event
- * delivery more reliable.
- */
-class PostgresListenHandle(val channelName: String) {
-    private val db = TransactionManager.defaultDatabase ?: throw Exception(
-        "Could not find the default database, won't get Postgres notifications."
-    )
-    private val conn = db.connector().connection as PgConnection
-
-    // Gets set to the NOTIFY's payload, in case one exists.
-    var receivedPayload: String? = null
-
-    // Signals whether the connection should be kept open,
-    // after one (and possibly not expected) event arrives.
-    // This gives more flexibility to the caller.
-    var keepConnection: Boolean = false
-
-    fun postgresListen() {
-        val stmt = conn.createStatement()
-        stmt.execute("LISTEN $channelName")
-        stmt.close()
-        logger.debug("LISTENing on channel: $channelName")
-    }
-
-    fun postgresUnlisten() {
-        val stmt = conn.createStatement()
-        stmt.execute("UNLISTEN $channelName")
-        stmt.close()
-        logger.debug("UNLISTENing on channel: $channelName")
-        conn.close()
-    }
-
-    private fun likelyCloseConnection() {
-        if (this.keepConnection)
-            return
-        this.conn.close()
-    }
-
-    fun postgresGetNotifications(timeoutMs: Long): Boolean {
-        if (timeoutMs == 0L)
-            logger.info(
-                "Database notification checker has timeout == 0," +
-                        " that waits FOREVER until a notification arrives."
-            )
-        logger.debug(
-            "Waiting Postgres notifications on channel " +
-                    "'$channelName' for $timeoutMs millis."
-        )
-        val maybeNotifications = this.conn.getNotifications(timeoutMs.toInt())
-        if (maybeNotifications == null || maybeNotifications.isEmpty()) {
-            logger.debug("DB notifications not found on channel $channelName.")
-            this.likelyCloseConnection()
-            return false
-        }
-        for (n in maybeNotifications) {
-            if (n.name.lowercase() != channelName.lowercase()) {
-                conn.close() // always close on error, without the optional check.
-                throw Exception("Channel $channelName got notified from ${n.name}!")
-            }
-        }
-        logger.debug("Found DB notifications on channel $channelName")
-        // Only ever used for singleton notifications.
-        assert(maybeNotifications.size == 1)
-        if (maybeNotifications[0].parameter.isNotEmpty())
-            this.receivedPayload = maybeNotifications[0].parameter
-        this.likelyCloseConnection()
-        return true
-    }
-
-    // Wrapper around the core method "postgresGetNotifications()" that
-    // sets up the coroutine environment to wait and release the execution.
-    suspend fun waitOnIODispatchers(timeoutMs: Long): Boolean =
-        coroutineScope {
-            async(Dispatchers.IO) {
-                postgresGetNotifications(timeoutMs)
-            }.await()
-        }
-
-    /**
-     * Waits at most 'timeoutMs' on 'this.channelName' for
-     * the one particular payload that's passed in the 'payload'
-     * argument.  FIXME: will be used along the fiat side of cash-outs.
-     */
-    suspend fun waitOnIoDispatchersForPayload(
-        timeoutMs: Long,
-        expectedPayload: String
-    ): Boolean {
-        var leftTime = timeoutMs
-        val expectedPayloadEnc = Base32Crockford.encode(expectedPayload.toByteArray())
-        /**
-         * This setting allows the loop to reuse the open connection,
-         * otherwise the internal loop would close it if one unexpected
-         * payload wakes it up.
-         */
-        this.keepConnection = true
-        while (leftTime > 0) {
-            val loopStart = System.currentTimeMillis()
-            // Ask for notifications.
-            val maybeNotification = waitOnIODispatchers(leftTime)
-            // One arrived, check the payload.
-            if (maybeNotification) {
-                if (this.receivedPayload != null && this.receivedPayload == expectedPayloadEnc) {
-                    conn.close()
-                    return true
-                }
-            }
-            val loopEnd = System.currentTimeMillis()
-            // Account the spent time.
-            leftTime -= loopEnd - loopStart
-        }
-        conn.close()
-        return false
-    }
-}
-
-fun getDatabaseName(): String {
-    var maybe_db_name: String? = null
-    transaction {
-        this.exec("SELECT current_database() AS database_name;") { oneLineRes ->
-            if (oneLineRes.next())
-                maybe_db_name = oneLineRes.getString("database_name")
-        }
-    }
-    return maybe_db_name ?: throw Exception("Could not find current DB name")
-}
-
-/**
- * Abstracts over the Exposed details to connect
- * to a database and ONLY use the passed schema
- * WHEN PostgreSQL is the DBMS.
- */
-fun connectWithSchema(jdbcConn: String, schemaName: String? = null) {
-    Database.connect(
-        jdbcConn,
-        setupConnection = { conn ->
-            if (isPostgres() && schemaName != null)
-                conn.schema = schemaName
-        }
-    )
-    try {
-        transaction { this.db.name }
-    } catch (e: Throwable) {
-        logger.error("Test query failed: ${e.message}")
-        throw Exception("Failed connection to: $jdbcConn")
-    }
-}
 
 /**
  * This function converts postgresql:// URIs to JDBC URIs.
@@ -327,7 +140,6 @@ fun getJdbcConnectionFromPg(pgConn: String): String {
     }
     return "jdbc:$pgConn"
 }
-
 
 data class DatabaseConfig(
     val dbConnStr: String,
