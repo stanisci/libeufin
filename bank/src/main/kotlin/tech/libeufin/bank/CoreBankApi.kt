@@ -166,7 +166,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
 
             when (result) {
                 CustomerCreationResult.BALANCE_INSUFFICIENT -> throw conflict(
-                    "Insufficient funds",
+                    "Insufficient admin funds to grant bonus",
                     TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
                 )
                 CustomerCreationResult.CONFLICT_LOGIN -> throw conflict(

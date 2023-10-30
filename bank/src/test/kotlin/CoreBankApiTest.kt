@@ -232,15 +232,27 @@ class CoreBankAccountsMgmtApiTest {
         }
 
         // Check ok
-        client.post("/accounts") {
-            basicAuth("admin", "admin-password")
-            jsonBody(req)
-        }.assertCreated()
-        client.get("/accounts/foo") {
+        repeat(100) {
+            client.post("/accounts") {
+                basicAuth("admin", "admin-password")
+                jsonBody(json(req) {
+                    "username" to "foo$it"
+                })
+            }.assertCreated()
+            client.get("/accounts/foo$it") {
+                basicAuth("admin", "admin-password")
+            }.assertOk().run {
+                val obj: AccountData = Json.decodeFromString(bodyAsText())
+                assertEquals(TalerAmount("KUDOS:100"), obj.balance.amount)
+                assertEquals(CorebankCreditDebitInfo.credit, obj.balance.credit_debit_indicator)
+            }
+        }
+        client.get("/accounts/admin") {
             basicAuth("admin", "admin-password")
         }.assertOk().run {
             val obj: AccountData = Json.decodeFromString(bodyAsText())
-            assertEquals(TalerAmount("KUDOS:10"), obj.balance.amount)
+            assertEquals(TalerAmount("KUDOS:10000"), obj.balance.amount)
+            assertEquals(CorebankCreditDebitInfo.debit, obj.balance.credit_debit_indicator)
         }
         
         // Check unsufficient funs

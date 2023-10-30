@@ -54,7 +54,6 @@ fun Route.auth(db: Database, scope: TokenScope, allowAdmin: Boolean = false, req
                 throw unauthorized("Only administrator allowed")
             }
         } else {
-            println("$allowAdmin, $authLogin")
             val hasRight = authLogin == username || (allowAdmin && authLogin == "admin");
             if (!hasRight) {
                 throw unauthorized("Customer $authLogin have no right on $username account")
