@@ -319,10 +319,6 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
     private val generateRegistrationPdf by option(
         help = "generates the PDF with the client public keys to send to the bank"
     ).flag(default = false)
-    private val showAssociatedAccounts by option(
-        help = "shows which bank accounts belong to the EBICS subscriber"
-    ).flag(default = false)
-
     /**
      * This function collects the main steps of setting up an EBICS access.
      */

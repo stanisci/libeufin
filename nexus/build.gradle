@@ -61,20 +61,12 @@ dependencies {
 
     // Command line parsing
     implementation "com.github.ajalt.clikt:clikt:4.2.1"
-
-    // Database connection driver
-    implementation group: 'org.xerial', name: 'sqlite-jdbc', version: '3.36.0.1'
-    // implementation 'org.postgresql:postgresql:42.2.23.jre7'
+    // Database
     implementation 'org.postgresql:postgresql:42.6.0'
     implementation 'com.zaxxer:HikariCP:5.0.1'
-
-    // Ktor, an HTTP client and server library (no need for nexus-setup)
-    implementation "io.ktor:ktor-server-core:$ktor_version"
-    implementation "io.ktor:ktor-server-content-negotiation:$ktor_version"
-    implementation "io.ktor:ktor-server-status-pages:$ktor_version"
+    // Ktor client library
     implementation "io.ktor:ktor-client-apache:$ktor_version"
     implementation "io.ktor:ktor-client-auth:$ktor_version"
-    implementation "io.ktor:ktor-server-netty:$ktor_version"
 
     // Brings the call-logging library too.
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
