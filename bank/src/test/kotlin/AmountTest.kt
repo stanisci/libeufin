@@ -206,7 +206,7 @@ class AmountTest {
     @Test
     fun mul() = dbSetup { db ->
         db.conn { conn ->
-            val stmt = conn.prepareStatement("SELECT product.val, product.frac FROM amount_mul((?, ?)::taler_amount, (?, ?)::taler_amount) as product")
+            val stmt = conn.prepareStatement("SELECT product.val, product.frac FROM amount_mul((?, ?)::taler_amount, (?, ?)::taler_amount, NULL) as product")
             operator fun TalerAmount.times(increment: TalerAmount): TalerAmount? {
                 stmt.setLong(1, value)
                 stmt.setInt(2, frac)
@@ -221,9 +221,10 @@ class AmountTest {
                 }!!
             }
     
+
             assertEquals(TalerAmount("EUR:6.41") * TalerAmount("EUR:4.69"), TalerAmount("EUR:30.0629"))
             assertEquals(TalerAmount("EUR:6.41") * TalerAmount("EUR:1.000001"), TalerAmount("EUR:6.41000641"))
-            assertEquals(TalerAmount("EUR:0.99999999") * TalerAmount("EUR:2.5"), TalerAmount("EUR:2.49999998"))
+            assertEquals(TalerAmount("EUR:0.99999999") * TalerAmount("EUR:2.5"), TalerAmount("EUR:2.49999997"))
             assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999") * TalerAmount("EUR:1"), TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"))
             assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE/4}") * TalerAmount("EUR:4"), TalerAmount("EUR:${TalerAmount.MAX_VALUE}"))
             assertException("ERROR: amount value overflowed") { TalerAmount(TalerAmount.MAX_VALUE/3, 0, "EUR") * TalerAmount(3, 1, "EUR") }

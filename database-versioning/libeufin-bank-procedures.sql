@@ -34,20 +34,22 @@ COMMENT ON FUNCTION amount_add
 CREATE OR REPLACE FUNCTION amount_mul(
    IN a taler_amount
   ,IN b taler_amount
+  ,IN rounding rounding_mode
   ,OUT product taler_amount
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-  tmp NUMERIC(24, 8); -- 16 digit for val and 8 for frac
+  tmp NUMERIC(25, 9); -- 16 digit for val, 8 for frac and 1 for rounding error
+  rounding_error INT2;
 BEGIN
-  -- TODO write custom multiplication logic to get more control over rounding
-  tmp = (a.val::numeric(24, 8) + a.frac::numeric(24, 8) / 100000000) * (b.val::numeric(24, 8) + b.frac::numeric(24, 8) / 100000000);
-  product = (trunc(tmp)::int8, (tmp * 100000000 % 100000000)::int4);
-  IF (product.val > 1::bigint<<52) THEN
-    RAISE EXCEPTION 'amount value overflowed';
-  END IF;
+  tmp = (a.val::numeric(25, 9) + a.frac::numeric(25, 9) / 100000000) * (b.val::numeric(25, 9) + b.frac::numeric(25, 9) / 100000000);
+  product = (trunc(tmp)::int8, (tmp * 1000000000 % 1000000000)::int4);
+  rounding_error = product.frac % 10;
+  product.frac = product.frac / 10;
+  -- TODO handle rounding
+  SELECT normalized.val, normalized.frac INTO product.val, product.frac FROM amount_normalize(product) as normalized;
 END $$;
-COMMENT ON FUNCTION amount_mul -- TODO document rounding
+COMMENT ON FUNCTION amount_mul
   IS 'Returns the product of two amounts. It raises an exception when the resulting .val is larger than 2^52';
 
 CREATE OR REPLACE FUNCTION amount_left_minus_right(
@@ -1271,12 +1273,14 @@ LANGUAGE plpgsql AS $$
 DECLARE
   sell_at_ratio taler_amount;
   sell_out_fee taler_amount;
+  rounding_mode rounding_mode;
   calculation_ok BOOLEAN;
 BEGIN
   SELECT value['val']::int8, value['frac']::int4 INTO sell_at_ratio.val, sell_at_ratio.frac FROM config WHERE key='sell_at_ratio';
   SELECT value['val']::int8, value['frac']::int4 INTO sell_out_fee.val, sell_out_fee.frac FROM config WHERE key='sell_out_fee';
+  rounding_mode = 'nearest'; -- TODO rounding error config
 
-  SELECT product.val, product.frac INTO fiat_amount.val, fiat_amount.frac FROM amount_mul(internal_amount, sell_at_ratio) as product;
+  SELECT product.val, product.frac INTO fiat_amount.val, fiat_amount.frac FROM amount_mul(internal_amount, sell_at_ratio, rounding_mode) as product;
   SELECT (diff).val, (diff).frac, ok INTO fiat_amount.val, fiat_amount.frac, calculation_ok FROM amount_left_minus_right(fiat_amount, sell_out_fee);
 
   IF NOT calculation_ok THEN

@@ -45,7 +45,9 @@ install-bank:
 	install -D database-versioning/versioning.sql -t $(bank_sql_dir)
 	install -d $(spa_dir)
 	cp contrib/wallet-core/demobank/* $(spa_dir)/
-	./gradlew -q -Pprefix=$(abs_destdir)$(prefix) bank:installToPrefix
+	./gradlew bank:installShadowDist
+	install -d $(abs_destdir)$(prefix)
+	cp -r bank/build/install/bank-shadow/* -d $(abs_destdir)$(prefix)
 
 install-nexus:
 	install -d $(nexus_config_dir)
