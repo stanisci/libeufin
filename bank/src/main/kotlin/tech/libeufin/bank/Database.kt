@@ -1546,17 +1546,21 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         } ?: throw internalServerError("No result from DB procedure stats_get_frame")
     }
 
-    suspend fun conversionUpdateConfig(cfg: ConversionInfo) = conn { conn ->
-        val stmt = conn.prepareStatement("CALL conversion_config_update((?, ?)::taler_amount, (?, ?)::taler_amount, (?, ?)::taler_amount, (?, ?)::taler_amount)")
-        stmt.setLong(1, cfg.buy_at_ratio.value)
-        stmt.setInt(2, cfg.buy_at_ratio.frac)
-        stmt.setLong(3, cfg.sell_at_ratio.value)
-        stmt.setInt(4, cfg.sell_at_ratio.frac)
-        stmt.setLong(5, cfg.buy_in_fee.value)
-        stmt.setInt(6, cfg.buy_in_fee.frac)
-        stmt.setLong(7, cfg.sell_out_fee.value)
-        stmt.setInt(8, cfg.sell_out_fee.frac)
-        stmt.executeUpdate()
+    suspend fun conversionUpdateConfig(cfg: ConversionInfo) = conn {
+        it.transaction { conn -> 
+            val stmt = conn.prepareStatement("CALL config_set_amount(?, (?, ?)::taler_amount)")
+            for ((name, amount) in listOf(
+                Pair("buy_at_ratio", cfg.buy_at_ratio),
+                Pair("sell_at_ratio", cfg.sell_at_ratio),
+                Pair("buy_in_fee", cfg.buy_in_fee),
+                Pair("sell_out_fee", cfg.sell_out_fee)
+            )) {
+                stmt.setString(1, name)
+                stmt.setLong(2, amount.value)
+                stmt.setInt(3, amount.frac)
+                stmt.executeUpdate()
+            }
+        }
     }
 
     suspend fun conversionInternalToFiat(internalAmount: TalerAmount): TalerAmount = conn { conn ->

@@ -29,10 +29,17 @@ import kotlin.experimental.inv
 import kotlin.test.*
 
 class DatabaseTest {
+    // Testing the helper that update conversion config
+    @Test
+    fun conversionConfig() = setup { db, ctx ->
+        // Check idempotent
+        db.conversionUpdateConfig(ctx.conversionInfo!!)
+        db.conversionUpdateConfig(ctx.conversionInfo!!)
+    }
 
     // Testing the helper that creates the admin account.
     @Test
-    fun createAdminTest() = setup { db, ctx ->
+    fun createAdmin() = setup { db, ctx ->
         // Create admin account
         assert(maybeCreateAdminAccount(db, ctx))
         // Checking idempotency
