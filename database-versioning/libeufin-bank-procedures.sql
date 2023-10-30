@@ -40,16 +40,16 @@ CREATE OR REPLACE FUNCTION amount_mul(
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-  product_numeric NUMERIC(32, 8); -- 16 digit for val and 8 for frac
+  product_numeric NUMERIC(33, 9); -- 16 digit for val, 8 for frac and 1 for rounding error
   tiny_numeric NUMERIC;
   rounding_error int2;
 BEGIN
   -- Perform multiplication using big numbers
-  product_numeric = (a.val::numeric(24, 8) + a.frac::numeric(24, 8) / 100000000) * (b.val::numeric(24, 8) + b.frac::numeric(24, 8) / 100000000);
+  product_numeric = (a.val::numeric(25, 9) + a.frac::numeric(25, 9) / 100000000) * (b.val::numeric(25, 9) + b.frac::numeric(25, 8) / 100000000);
 
   -- Round to tiny amounts
   product_numeric = product_numeric * 100000000;
-  tiny_numeric = (tiny.val::numeric(32, 8) * 100000000 + tiny.frac::numeric(32, 8));
+  tiny_numeric = (tiny.val::numeric(33, 9) * 100000000 + tiny.frac::numeric(33, 9));
   product_numeric = product_numeric / tiny_numeric;
   rounding_error = trunc(product_numeric * 10 % 10)::int2;
   product_numeric = trunc(product_numeric)*tiny_numeric;

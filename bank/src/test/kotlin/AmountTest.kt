@@ -227,15 +227,14 @@ class AmountTest {
     
             assertEquals(TalerAmount("EUR:30.0629"), mul(TalerAmount("EUR:6.41"), DecimalNumber("4.69")))
             assertEquals(TalerAmount("EUR:6.41000641"), mul(TalerAmount("EUR:6.41"), DecimalNumber("1.000001")))
-            assertEquals(TalerAmount("EUR:2.49999998"), mul(TalerAmount("EUR:0.99999999"), DecimalNumber("2.5")))
-            assertEquals(TalerAmount("EUR:2.49999998"), mul(TalerAmount("EUR:0.99999999"), DecimalNumber("2.5")))
+            assertEquals(TalerAmount("EUR:2.49999997"), mul(TalerAmount("EUR:0.99999999"), DecimalNumber("2.5")))
             assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), mul(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), DecimalNumber("1")))
             assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}"), mul(TalerAmount("EUR:${TalerAmount.MAX_VALUE/4}"), DecimalNumber("4")))
             assertException("ERROR: amount value overflowed") { mul(TalerAmount(TalerAmount.MAX_VALUE/3, 0, "EUR"), DecimalNumber("3.00000001")) }
             assertException("ERROR: amount value overflowed") { mul(TalerAmount((TalerAmount.MAX_VALUE+2)/2, 0, "EUR"), DecimalNumber("2")) }
             assertException("ERROR: numeric field overflow") { mul(TalerAmount(Long.MAX_VALUE, 0, "EUR"), DecimalNumber("1")) }
 
-            // Check euro rounding mode
+            // Check rounding mode
             for ((mode, rounding) in listOf(
                 Pair("round-to-zero", listOf(Pair(1, listOf(10, 11, 12, 12, 14, 15, 16, 17, 18, 19)))),
                 Pair("round-up", listOf(Pair(1, listOf(10)), Pair(2, listOf(11, 12, 12, 14, 15, 16, 17, 18, 19)))),
@@ -243,7 +242,10 @@ class AmountTest {
             )) {
                 for ((rounded, amounts) in rounding) {
                     for (amount in amounts) {
+                        // Check euro
                         assertEquals(TalerAmount("EUR:0.0$rounded"), mul(TalerAmount("EUR:$amount"), DecimalNumber("0.001001"), DecimalNumber("0.01"), mode))
+                        // Check kudos
+                        assertEquals(TalerAmount("KUDOS:0.0000000$rounded"), mul(TalerAmount("KUDOS:0.$amount"), DecimalNumber("0.0000001"), roundingMode = mode))
                     }
                 }
             }
