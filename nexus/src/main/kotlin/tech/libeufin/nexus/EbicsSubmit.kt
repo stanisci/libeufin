@@ -20,6 +20,7 @@
 package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
@@ -168,6 +169,12 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         "--config", "-c",
         help = "set the configuration file"
     )
+    private val transient by option(
+        "--transient",
+        help = "This flag submits what is found in the database and returns, " +
+                "ignoring the 'frequency' value found in the configuration"
+    ).flag(default = true)
+
     /**
      * Submits any initiated payment that was not submitted
      * so far and -- according to the configuration -- returns
@@ -191,6 +198,11 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         if (clientKeys == null) {
             logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
             exitProcess(1)
+        }
+        if (transient) {
+            logger.info("Transient mode: submitting what found and returning.")
+            submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
+            return
         }
         if (frequency == 0) {
             logger.warn("Long-polling not implemented, submitting what is found and exit")

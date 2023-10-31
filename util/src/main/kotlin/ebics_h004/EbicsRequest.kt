@@ -160,7 +160,7 @@ class EbicsRequest {
         lateinit var orderType: String
 
         /**
-         * Only present if this ebicsRequest is a upload order
+         * Only present if this ebicsRequest is an upload order
          * relating to an already existing order.
          */
         @get:XmlElement(name = "OrderID", required = true)
