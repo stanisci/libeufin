@@ -106,10 +106,6 @@ class EbicsSetupConfig(val config: TalerConfig) {
      */
     val ebicsPartnerId = ebicsSetupRequireString("partner_id")
     /**
-     * EBICS system ID (is this optional?).
-     */
-    val ebicsSystemId = ebicsSetupRequireString("system_id")
-    /**
      * Bank account metadata.
      */
     val myIbanAccount = IbanAccountMetadata(
