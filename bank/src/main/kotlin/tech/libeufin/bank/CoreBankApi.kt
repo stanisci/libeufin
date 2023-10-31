@@ -567,7 +567,11 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         params.credit?.let { ctx.checkFiatCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversionInternalToFiat(params.debit)
+            val credit = db.conversionInternalToFiat(params.debit) ?:
+                throw conflict(
+                    "${params.debit} is too small to be converted",
+                    TalerErrorCode.BANK_BAD_CONVERSION
+                )
             call.respond(ConversionResponse(params.debit, credit))
         } else {
             call.respond(HttpStatusCode.NotImplemented) // TODO
@@ -580,7 +584,11 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         params.credit?.let { ctx.checkInternalCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversionFiatToInternal(params.debit)
+            val credit = db.conversionFiatToInternal(params.debit) ?:
+                throw conflict(
+                    "${params.debit} is too small to be converted",
+                    TalerErrorCode.BANK_BAD_CONVERSION
+                )
             call.respond(ConversionResponse(params.debit, credit))
         } else {
             call.respond(HttpStatusCode.NotImplemented) // TODO

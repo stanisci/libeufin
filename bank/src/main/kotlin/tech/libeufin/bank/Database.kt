@@ -1544,10 +1544,10 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         it.transaction { conn -> 
             var stmt = conn.prepareStatement("CALL config_set_amount(?, (?, ?)::taler_amount)")
             for ((name, amount) in listOf(
-                Pair("buy_ratio", cfg.buy_at_ratio),
-                Pair("buy_fee", cfg.buy_in_fee),
-                Pair("sell_ratio", cfg.sell_at_ratio),
-                Pair("sell_fee", cfg.sell_out_fee),
+                Pair("buy_ratio", cfg.buy_ratio),
+                Pair("buy_fee", cfg.buy_fee),
+                Pair("sell_ratio", cfg.sell_ratio),
+                Pair("sell_fee", cfg.sell_fee),
             )) {
                 stmt.setString(1, name)
                 stmt.setLong(2, amount.value)
@@ -1556,7 +1556,9 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
             }
             for ((name, amount) in listOf(
                 Pair("buy_tiny_amount", cfg.buy_tiny_amount),
-                Pair("sell_tiny_amount", cfg.sell_tiny_amount)
+                Pair("buy_min_amount", cfg.buy_min_amount),
+                Pair("sell_tiny_amount", cfg.sell_tiny_amount),
+                Pair("sell_min_amount", cfg.sell_min_amount),
             )) {
                 stmt.setString(1, name)
                 stmt.setLong(2, amount.value)
@@ -1575,22 +1577,27 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         }
     }
 
-    private suspend fun conversionTo(amount: TalerAmount, name: String, currency: String): TalerAmount = conn { conn ->
-        val stmt = conn.prepareStatement("SELECT amount.val AS amount_val, amount.frac AS amount_frac FROM conversion_to((?, ?)::taler_amount, ?) as amount")
+    private suspend fun conversionTo(amount: TalerAmount, name: String, currency: String): TalerAmount? = conn { conn ->
+        val stmt = conn.prepareStatement("SELECT too_small, (to_amount).val AS amount_val, (to_amount).frac AS amount_frac FROM conversion_to((?, ?)::taler_amount, ?)")
         stmt.setLong(1, amount.value)
         stmt.setInt(2, amount.frac)
         stmt.setString(3, name)
-        stmt.oneOrNull {
-            TalerAmount(
-                value = it.getLong("amount_val"),
-                frac = it.getInt("amount_frac"),
-                currency = currency
-            )
-        }!!
+        stmt.executeQuery().use {
+            it.next()
+            if (!it.getBoolean("too_small")) {
+                TalerAmount(
+                    value = it.getLong("amount_val"),
+                    frac = it.getInt("amount_frac"),
+                    currency = currency
+                )
+            } else {
+                null
+            }
+        }
     }
 
-    suspend fun conversionInternalToFiat(amount: TalerAmount): TalerAmount = conversionTo(amount, "sell", fiatCurrency!!)
-    suspend fun conversionFiatToInternal(amount: TalerAmount): TalerAmount = conversionTo(amount, "buy", bankCurrency)
+    suspend fun conversionInternalToFiat(amount: TalerAmount): TalerAmount? = conversionTo(amount, "sell", fiatCurrency!!)
+    suspend fun conversionFiatToInternal(amount: TalerAmount): TalerAmount? = conversionTo(amount, "buy", bankCurrency)
 
 }
 

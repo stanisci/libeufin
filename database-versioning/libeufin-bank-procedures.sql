@@ -1053,7 +1053,7 @@ DECLARE
 account_id BIGINT;
 BEGIN
 -- check conversion
-SELECT in_amount_credit!=expected INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'sell'::text) AS expected;
+SELECT too_small OR in_amount_credit!=to_amount INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'sell'::text);
 IF out_bad_conversion THEN
   RETURN;
 END IF;
@@ -1284,26 +1284,36 @@ $$;
 CREATE OR REPLACE FUNCTION conversion_to(
   IN from_amount taler_amount,
   IN name TEXT,
-  OUT to_amount taler_amount
+  OUT to_amount taler_amount,
+  OUT too_small BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
   at_ratio taler_amount;
   out_fee taler_amount;
   tiny_amount taler_amount;
+  min_amount taler_amount;
   mode rounding_mode;
-  calculation_ok BOOLEAN;
 BEGIN
+  -- Check min amount
+  SELECT value['val']::int8, value['frac']::int4 INTO min_amount.val, min_amount.frac FROM config WHERE key=name||'_min_amount';
+  SELECT NOT ok INTO too_small FROM amount_left_minus_right(from_amount, min_amount);
+  IF too_small THEN
+    to_amount = (0, 0);
+    RETURN;
+  END IF;
+
+  -- Perform conversion
   SELECT value['val']::int8, value['frac']::int4 INTO at_ratio.val, at_ratio.frac FROM config WHERE key=name||'_ratio';
   SELECT value['val']::int8, value['frac']::int4 INTO out_fee.val, out_fee.frac FROM config WHERE key=name||'_fee';
   SELECT value['val']::int8, value['frac']::int4 INTO tiny_amount.val, tiny_amount.frac FROM config WHERE key=name||'_tiny_amount';
   SELECT (value->>'mode')::rounding_mode INTO mode FROM config WHERE key=name||'_rounding_mode';
-  -- TODO minimum amount 
-  SELECT product.val, product.frac INTO to_amount.val, to_amount.frac FROM amount_mul(from_amount, at_ratio, tiny_amount, mode) as product;
-  SELECT (diff).val, (diff).frac, ok INTO to_amount.val, to_amount.frac, calculation_ok FROM amount_left_minus_right(to_amount, out_fee);
 
-  IF NOT calculation_ok THEN
-    to_amount = (0, 0); -- TODO how to handle zero and less than zero ?
+  SELECT product.val, product.frac INTO to_amount.val, to_amount.frac FROM amount_mul(from_amount, at_ratio, tiny_amount, mode) as product;
+  SELECT (diff).val, (diff).frac, NOT ok INTO to_amount.val, to_amount.frac, too_small FROM amount_left_minus_right(to_amount, out_fee);
+
+  IF too_small THEN
+    to_amount = (0, 0);
   END IF;
 END $$;
 

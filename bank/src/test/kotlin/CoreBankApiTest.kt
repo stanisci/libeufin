@@ -1259,10 +1259,13 @@ class CoreBankCashoutApiTest {
 
         // No amount
         client.get("/cashout-rate").assertBadRequest()
+        // Too small
+        client.get("/cashout-rate?amount_debit=KUDOS:0.08")
+            .assertConflict().assertErr(TalerErrorCode.BANK_BAD_CONVERSION)
         // Wrong currency
-        client.get("/cashout-rate?amount_debit=FIAT:1").assertBadRequest()
+        client.get("/cashout-rate?amount_debit=FIAT:1")
             .assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
-        client.get("/cashout-rate?amount_credit=KUDOS:1").assertBadRequest()
+        client.get("/cashout-rate?amount_credit=KUDOS:1")
             .assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
     }
 
@@ -1282,9 +1285,9 @@ class CoreBankCashoutApiTest {
         // No amount
         client.get("/cashin-rate").assertBadRequest()
         // Wrong currency
-        client.get("/cashin-rate?amount_debit=KUDOS:1").assertBadRequest()
+        client.get("/cashin-rate?amount_debit=KUDOS:1")
             .assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
-        client.get("/cashin-rate?amount_credit=FIAT:1").assertBadRequest()
+        client.get("/cashin-rate?amount_credit=FIAT:1")
             .assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
     }
 }
