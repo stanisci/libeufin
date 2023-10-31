@@ -1542,33 +1542,56 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
 
     suspend fun conversionUpdateConfig(cfg: ConversionInfo) = conn {
         it.transaction { conn -> 
-            val stmt = conn.prepareStatement("CALL config_set_amount(?, (?, ?)::taler_amount)")
+            var stmt = conn.prepareStatement("CALL config_set_amount(?, (?, ?)::taler_amount)")
             for ((name, amount) in listOf(
-                Pair("buy_at_ratio", cfg.buy_at_ratio),
-                Pair("sell_at_ratio", cfg.sell_at_ratio),
-                Pair("buy_in_fee", cfg.buy_in_fee),
-                Pair("sell_out_fee", cfg.sell_out_fee)
+                Pair("buy_ratio", cfg.buy_at_ratio),
+                Pair("buy_fee", cfg.buy_in_fee),
+                Pair("sell_ratio", cfg.sell_at_ratio),
+                Pair("sell_fee", cfg.sell_out_fee),
             )) {
                 stmt.setString(1, name)
                 stmt.setLong(2, amount.value)
                 stmt.setInt(3, amount.frac)
                 stmt.executeUpdate()
             }
+            for ((name, amount) in listOf(
+                Pair("buy_tiny_amount", cfg.buy_tiny_amount),
+                Pair("sell_tiny_amount", cfg.sell_tiny_amount)
+            )) {
+                stmt.setString(1, name)
+                stmt.setLong(2, amount.value)
+                stmt.setInt(3, amount.frac)
+                stmt.executeUpdate()
+            }
+            stmt = conn.prepareStatement("CALL config_set_rounding_mode(?, ?::rounding_mode)")
+            for ((name, value) in listOf(
+                Pair("buy_rounding_mode", cfg.buy_rounding_mode),
+                Pair("sell_rounding_mode", cfg.sell_rounding_mode)
+            )) {
+                stmt.setString(1, name)
+                stmt.setString(2, value.name)
+                stmt.executeUpdate()
+            }
         }
     }
 
-    suspend fun conversionInternalToFiat(internalAmount: TalerAmount): TalerAmount = conn { conn ->
-        val stmt = conn.prepareStatement("SELECT fiat_amount.val AS amount_val, fiat_amount.frac AS amount_frac FROM conversion_internal_to_fiat((?, ?)::taler_amount) as fiat_amount")
-        stmt.setLong(1, internalAmount.value)
-        stmt.setInt(2, internalAmount.frac)
+    private suspend fun conversionTo(amount: TalerAmount, name: String, currency: String): TalerAmount = conn { conn ->
+        val stmt = conn.prepareStatement("SELECT amount.val AS amount_val, amount.frac AS amount_frac FROM conversion_to((?, ?)::taler_amount, ?) as amount")
+        stmt.setLong(1, amount.value)
+        stmt.setInt(2, amount.frac)
+        stmt.setString(3, name)
         stmt.oneOrNull {
             TalerAmount(
                 value = it.getLong("amount_val"),
                 frac = it.getInt("amount_frac"),
-                currency = fiatCurrency!!
+                currency = currency
             )
         }!!
     }
+
+    suspend fun conversionInternalToFiat(amount: TalerAmount): TalerAmount = conversionTo(amount, "sell", fiatCurrency!!)
+    suspend fun conversionFiatToInternal(amount: TalerAmount): TalerAmount = conversionTo(amount, "buy", bankCurrency)
+
 }
 
 /** Result status of customer account creation */

@@ -51,6 +51,12 @@ enum class CashoutStatus {
     confirmed
 }
 
+enum class RoundingMode {
+    zero,
+    up,
+    nearest
+}
+
 /**
  * HTTP response type of successful token refresh.
  * access_token is the Crockford encoding of the 32 byte
@@ -482,7 +488,7 @@ data class CashoutConfirm(
 )
 
 @Serializable
-data class CashoutConversionResponse(
+data class ConversionResponse(
     val amount_debit: TalerAmount,
     val amount_credit: TalerAmount,
 )

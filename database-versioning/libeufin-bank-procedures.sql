@@ -40,23 +40,22 @@ CREATE OR REPLACE FUNCTION amount_mul(
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-  product_numeric NUMERIC(33, 9); -- 16 digit for val, 8 for frac and 1 for rounding error
-  tiny_numeric NUMERIC;
+  product_numeric NUMERIC(33, 8); -- 16 digit for val, 8 for frac and 1 for rounding error
+  tiny_numeric NUMERIC(24);
   rounding_error int2;
 BEGIN
   -- Perform multiplication using big numbers
-  product_numeric = (a.val::numeric(25, 9) + a.frac::numeric(25, 9) / 100000000) * (b.val::numeric(25, 9) + b.frac::numeric(25, 8) / 100000000);
+  product_numeric = (a.val::numeric(24) * 100000000 + a.frac::numeric(24)) * (b.val::numeric(24, 8) + b.frac::numeric(24, 8) / 100000000);
 
   -- Round to tiny amounts
-  product_numeric = product_numeric * 100000000;
-  tiny_numeric = (tiny.val::numeric(33, 9) * 100000000 + tiny.frac::numeric(33, 9));
+  tiny_numeric = (tiny.val::numeric(24) * 100000000 + tiny.frac::numeric(24));
   product_numeric = product_numeric / tiny_numeric;
-  rounding_error = trunc(product_numeric * 10 % 10)::int2;
-  product_numeric = trunc(product_numeric)*tiny_numeric;
+  rounding_error = (product_numeric * 10 % 10)::int2;
+  product_numeric = trunc(product_numeric) * tiny_numeric;
   
   -- Apply rounding mode
-  IF (rounding = 'round-to-nearest'::rounding_mode AND rounding_error >= 5)
-    OR (rounding = 'round-up'::rounding_mode AND rounding_error > 0) THEN
+  IF (rounding = 'nearest'::rounding_mode AND rounding_error >= 5)
+    OR (rounding = 'up'::rounding_mode AND rounding_error > 0) THEN
     product_numeric = product_numeric + tiny_numeric;
   END IF;
 
@@ -1054,7 +1053,7 @@ DECLARE
 account_id BIGINT;
 BEGIN
 -- check conversion
-SELECT in_amount_credit!=expected INTO out_bad_conversion FROM conversion_internal_to_fiat(in_amount_debit) AS expected;
+SELECT in_amount_credit!=expected INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'sell'::text) AS expected;
 IF out_bad_conversion THEN
   RETURN;
 END IF;
@@ -1273,24 +1272,38 @@ LANGUAGE sql AS $$
     ON CONFLICT (key) DO UPDATE SET value = excluded.value
 $$;
 
-CREATE OR REPLACE FUNCTION conversion_internal_to_fiat(
-  IN internal_amount taler_amount,
-  OUT fiat_amount taler_amount
+CREATE OR REPLACE PROCEDURE config_set_rounding_mode(
+  IN name TEXT,
+  IN mode rounding_mode
+)
+LANGUAGE sql AS $$
+  INSERT INTO config (key, value) VALUES (name, jsonb_build_object('mode', mode::text))
+    ON CONFLICT (key) DO UPDATE SET value = excluded.value
+$$;
+
+CREATE OR REPLACE FUNCTION conversion_to(
+  IN from_amount taler_amount,
+  IN name TEXT,
+  OUT to_amount taler_amount
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-  sell_at_ratio taler_amount;
-  sell_out_fee taler_amount;
+  at_ratio taler_amount;
+  out_fee taler_amount;
+  tiny_amount taler_amount;
+  mode rounding_mode;
   calculation_ok BOOLEAN;
 BEGIN
-  SELECT value['val']::int8, value['frac']::int4 INTO sell_at_ratio.val, sell_at_ratio.frac FROM config WHERE key='sell_at_ratio';
-  SELECT value['val']::int8, value['frac']::int4 INTO sell_out_fee.val, sell_out_fee.frac FROM config WHERE key='sell_out_fee';
-
-  SELECT product.val, product.frac INTO fiat_amount.val, fiat_amount.frac FROM amount_mul(internal_amount, sell_at_ratio, (0, 1)::taler_amount, 'round-to-zero'::rounding_mode) as product;
-  SELECT (diff).val, (diff).frac, ok INTO fiat_amount.val, fiat_amount.frac, calculation_ok FROM amount_left_minus_right(fiat_amount, sell_out_fee);
+  SELECT value['val']::int8, value['frac']::int4 INTO at_ratio.val, at_ratio.frac FROM config WHERE key=name||'_ratio';
+  SELECT value['val']::int8, value['frac']::int4 INTO out_fee.val, out_fee.frac FROM config WHERE key=name||'_fee';
+  SELECT value['val']::int8, value['frac']::int4 INTO tiny_amount.val, tiny_amount.frac FROM config WHERE key=name||'_tiny_amount';
+  SELECT (value->>'mode')::rounding_mode INTO mode FROM config WHERE key=name||'_rounding_mode';
+  -- TODO minimum amount 
+  SELECT product.val, product.frac INTO to_amount.val, to_amount.frac FROM amount_mul(from_amount, at_ratio, tiny_amount, mode) as product;
+  SELECT (diff).val, (diff).frac, ok INTO to_amount.val, to_amount.frac, calculation_ok FROM amount_left_minus_right(to_amount, out_fee);
 
   IF NOT calculation_ok THEN
-    fiat_amount = (0, 0); -- TODO how to handle zero and less than zero ?
+    to_amount = (0, 0); -- TODO how to handle zero and less than zero ?
   END IF;
 END $$;
 

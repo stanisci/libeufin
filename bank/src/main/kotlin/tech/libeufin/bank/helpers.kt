@@ -171,11 +171,11 @@ data class HistoryParams(
     }
 }
 
-data class CashoutRateParams(
+data class RateParams(
     val debit: TalerAmount?, val credit: TalerAmount?
 ) {
     companion object {
-        fun extract(params: Parameters): CashoutRateParams {
+        fun extract(params: Parameters): RateParams {
             val debit = try {
                 params["amount_debit"]?.run(::TalerAmount)
             } catch (e: Exception) {
@@ -189,7 +189,7 @@ data class CashoutRateParams(
             if (debit == null && credit == null) {
                 throw badRequest("Either param 'amount_debit' or 'amount_credit' is required")
             } 
-            return CashoutRateParams(debit, credit)
+            return RateParams(debit, credit)
         }
     }
 }

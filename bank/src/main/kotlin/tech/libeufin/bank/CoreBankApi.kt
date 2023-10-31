@@ -561,19 +561,29 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         }
     }
     get("/cashout-rate") {
-        val params = CashoutRateParams.extract(call.request.queryParameters)
+        val params = RateParams.extract(call.request.queryParameters)
 
         params.debit?.let { ctx.checkInternalCurrency(it) }
         params.credit?.let { ctx.checkFiatCurrency(it) }
 
         if (params.debit != null) {
             val credit = db.conversionInternalToFiat(params.debit)
-            if (params.credit != null && params.credit != credit) {
-                throw badRequest("Bad conversion expected $credit got $params.credit")
-            }
-            call.respond(CashoutConversionResponse(params.debit, credit))
+            call.respond(ConversionResponse(params.debit, credit))
         } else {
-            // TODO
+            call.respond(HttpStatusCode.NotImplemented) // TODO
+        }
+    }
+    get("/cashin-rate") {
+        val params = RateParams.extract(call.request.queryParameters)
+
+        params.debit?.let { ctx.checkFiatCurrency(it) }
+        params.credit?.let { ctx.checkInternalCurrency(it) }
+
+        if (params.debit != null) {
+            val credit = db.conversionFiatToInternal(params.debit)
+            call.respond(ConversionResponse(params.debit, credit))
+        } else {
+            call.respond(HttpStatusCode.NotImplemented) // TODO
         }
     }
 }

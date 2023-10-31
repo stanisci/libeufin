@@ -208,7 +208,7 @@ class AmountTest {
         db.conn { conn ->
             val stmt = conn.prepareStatement("SELECT product.val, product.frac FROM amount_mul((?, ?)::taler_amount, (?, ?)::taler_amount, (?, ?)::taler_amount, ?::rounding_mode) as product")
 
-            fun mul(nb: TalerAmount, times: DecimalNumber, tiny: DecimalNumber = DecimalNumber("0.00000001"), roundingMode: String = "round-to-zero"): TalerAmount? {
+            fun mul(nb: TalerAmount, times: DecimalNumber, tiny: DecimalNumber = DecimalNumber("0.00000001"), roundingMode: String = "zero"): TalerAmount? {
                 stmt.setLong(1, nb.value)
                 stmt.setInt(2, nb.frac)
                 stmt.setLong(3, times.value)
@@ -236,9 +236,9 @@ class AmountTest {
 
             // Check rounding mode
             for ((mode, rounding) in listOf(
-                Pair("round-to-zero", listOf(Pair(1, listOf(10, 11, 12, 12, 14, 15, 16, 17, 18, 19)))),
-                Pair("round-up", listOf(Pair(1, listOf(10)), Pair(2, listOf(11, 12, 12, 14, 15, 16, 17, 18, 19)))),
-                Pair("round-to-nearest", listOf(Pair(1, listOf(10, 11, 12, 12, 14)), Pair(2, listOf(15, 16, 17, 18, 19))))
+                Pair("zero", listOf(Pair(1, listOf(10, 11, 12, 12, 14, 15, 16, 17, 18, 19)))),
+                Pair("up", listOf(Pair(1, listOf(10)), Pair(2, listOf(11, 12, 12, 14, 15, 16, 17, 18, 19)))),
+                Pair("nearest", listOf(Pair(1, listOf(10, 11, 12, 12, 14)), Pair(2, listOf(15, 16, 17, 18, 19))))
             )) {
                 for ((rounded, amounts) in rounding) {
                     for (amount in amounts) {
@@ -257,7 +257,7 @@ class AmountTest {
                 Pair(20, listOf(18, 19)),
             )) {
                 for (amount in amounts) {
-                    assertEquals(TalerAmount("HUF:$rounded"), mul(TalerAmount("HUF:$amount"), DecimalNumber("1.01"), DecimalNumber("5"), "round-to-nearest"))
+                    assertEquals(TalerAmount("HUF:$rounded"), mul(TalerAmount("HUF:$amount"), DecimalNumber("1.01"), DecimalNumber("5"), "nearest"))
                 }
             }
         }

@@ -51,7 +51,7 @@ CREATE TYPE stat_timeframe_enum
   AS ENUM ('hour', 'day', 'month', 'year');
 
 CREATE TYPE rounding_mode
-  AS ENUM ('round-to-zero', 'round-up', 'round-to-nearest'); -- up is toward infinity and down toward zero
+  AS ENUM ('zero', 'up', 'nearest');
 
 
 -- FIXME: comments on types (see exchange for example)!

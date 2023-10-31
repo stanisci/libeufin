@@ -85,9 +85,13 @@ data class BankConfig(
 @Serializable
 data class ConversionInfo (
     val buy_at_ratio: DecimalNumber,
-    val sell_at_ratio: DecimalNumber,
     val buy_in_fee: DecimalNumber,
+    val buy_tiny_amount: TalerAmount,
+    val buy_rounding_mode: RoundingMode,
+    val sell_at_ratio: DecimalNumber,
     val sell_out_fee: DecimalNumber,
+    val sell_tiny_amount: TalerAmount,
+    val sell_rounding_mode: RoundingMode,
 )
 
 data class ServerConfig(
@@ -120,7 +124,13 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
     val currencySpecification = sections.find {
         it.startsWith("CURRENCY-") && requireBoolean(it, "enabled") && requireString(it, "code") == currency
     }?.let { loadCurrencySpecification(it) } ?: throw TalerConfigError("missing currency specification for $currency")
+    var fiatCurrency: String? = null;
+    var conversionInfo: ConversionInfo? = null;
     val haveCashout = lookupBoolean("libeufin-bank", "have_cashout") ?: false;
+    if (haveCashout) {
+        fiatCurrency = requireString("libeufin-bank", "fiat_currency");
+        conversionInfo = loadConversionInfo(currency, fiatCurrency)
+    }
     BankConfig(
         currency = currency,
         restrictRegistration = lookupBoolean("libeufin-bank", "restrict_registration") ?: false,
@@ -133,17 +143,21 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
         restrictAccountDeletion = lookupBoolean("libeufin-bank", "restrict_account_deletion") ?: true,
         currencySpecification = currencySpecification,
         haveCashout = haveCashout,
-        fiatCurrency = if (haveCashout) { requireString("libeufin-bank", "fiat_currency") } else { null },
-        conversionInfo = if (haveCashout) { loadConversionInfo() } else { null }
+        fiatCurrency = fiatCurrency,
+        conversionInfo = conversionInfo
     )
 }
 
-private fun TalerConfig.loadConversionInfo(): ConversionInfo = catchError {
+private fun TalerConfig.loadConversionInfo(currency: String, fiatCurrency: String): ConversionInfo = catchError {
     ConversionInfo(
         buy_at_ratio = requireDecimalNumber("libeufin-bank-conversion", "buy_at_ratio"),
-        sell_at_ratio = requireDecimalNumber("libeufin-bank-conversion", "sell_at_ratio"),
         buy_in_fee = requireDecimalNumber("libeufin-bank-conversion", "buy_in_fee"),
-        sell_out_fee = requireDecimalNumber("libeufin-bank-conversion", "sell_out_fee")
+        buy_tiny_amount = amount("libeufin-bank-conversion", "buy_tiny_amount", currency) ?: TalerAmount(0, 1, currency),
+        buy_rounding_mode = RoundingMode("libeufin-bank-conversion", "buy_rounding_mode") ?: RoundingMode.zero,
+        sell_at_ratio = requireDecimalNumber("libeufin-bank-conversion", "sell_at_ratio"),
+        sell_out_fee = requireDecimalNumber("libeufin-bank-conversion", "sell_out_fee"),
+        sell_tiny_amount = amount("libeufin-bank-conversion", "sell_tiny_amount", fiatCurrency) ?: TalerAmount(0, 1, fiatCurrency),
+        sell_rounding_mode = RoundingMode("libeufin-bank-conversion", "sell_rounding_mode") ?: RoundingMode.zero,
     )
 }
 
@@ -159,9 +173,8 @@ private fun TalerConfig.loadCurrencySpecification(section: String): CurrencySpec
     )
 }
 
-private fun TalerConfig.requireAmount(section: String, option: String, currency: String): TalerAmount = catchError {
-    val amountStr = lookupString(section, option) ?:
-        throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
+private fun TalerConfig.amount(section: String, option: String, currency: String): TalerAmount? = catchError {
+    val amountStr = lookupString(section, option) ?: return@catchError null
     val amount = try {
         TalerAmount(amountStr)
     } catch (e: Exception) {
@@ -176,13 +189,31 @@ private fun TalerConfig.requireAmount(section: String, option: String, currency:
     amount
 }
 
-private fun TalerConfig.requireDecimalNumber(section: String, option: String): DecimalNumber = catchError {
-    val numberStr = lookupString(section, option) ?:
-        throw TalerConfigError("expected decimal number for section $section, option $option, but config value is empty")
+private fun TalerConfig.requireAmount(section: String, option: String, currency: String): TalerAmount = catchError {
+    amount(section, option, currency) ?:
+        throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
+}
+
+private fun TalerConfig.decimalNumber(section: String, option: String): DecimalNumber? = catchError {
+    val numberStr = lookupString(section, option) ?: return@catchError null
     try {
         DecimalNumber(numberStr)
     } catch (e: Exception) {
         throw TalerConfigError("expected decimal number for section $section, option $option, but number is malformed")
+    }
+}
+
+private fun TalerConfig.requireDecimalNumber(section: String, option: String): DecimalNumber = catchError {
+    decimalNumber(section, option) ?:
+        throw TalerConfigError("expected decimal number for section $section, option $option, but config value is empty")
+}
+
+private fun TalerConfig.RoundingMode(section: String, option: String): RoundingMode? = catchError {
+    val str = lookupString(section, option) ?: return@catchError null;
+    try {
+        RoundingMode.valueOf(str)
+    } catch (e: Exception) {
+        throw TalerConfigError("expected rouding mode for section $section, option $option, but $str is unknown")
     }
 }
 
