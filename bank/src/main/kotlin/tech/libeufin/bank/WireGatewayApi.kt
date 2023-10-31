@@ -53,32 +53,28 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             )
             when (dbRes.txResult) {
                 TalerTransferResult.NO_DEBITOR -> throw notFound(
-                    "Customer $username not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    "Account '$username' not found",
+                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
                 TalerTransferResult.NOT_EXCHANGE -> throw conflict(
                     "$username is not an exchange account.",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
-                TalerTransferResult.NO_CREDITOR -> throw notFound(
+                TalerTransferResult.NO_CREDITOR -> throw conflict(
                     "Creditor account was not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
-                )
-                TalerTransferResult.SAME_ACCOUNT -> throw conflict(
-                    "Wire transfer attempted with credit and debit party being the same bank account",
-                    TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+                    TalerErrorCode.BANK_UNKNOWN_CREDITOR
                 )
                 TalerTransferResult.BOTH_EXCHANGE -> throw conflict(
                     "Wire transfer attempted with credit and debit party being both exchange account",
-                    TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+                    TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
                 )
                 TalerTransferResult.REQUEST_UID_REUSE -> throw conflict(
                     "request_uid used already",
-                    TalerErrorCode.TALER_EC_BANK_TRANSFER_REQUEST_UID_REUSED
+                    TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED
                 )
                 TalerTransferResult.BALANCE_INSUFFICIENT -> throw conflict(
                     "Insufficient balance for exchange",
-                    TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+                    TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
                 TalerTransferResult.SUCCESS -> call.respond(
                     TransferResponse(
@@ -100,7 +96,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             if (!bankAccount.isTalerExchange)
                 throw conflict(
                     "$username is not an exchange account.",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
 
             val items = db.dbLambda(params, bankAccount.bankAccountId);
@@ -130,32 +126,28 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             )
             when (dbRes.txResult) {
                 TalerAddIncomingResult.NO_CREDITOR -> throw notFound(
-                    "Customer $username not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    "Account '$username' not found",
+                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
                 TalerAddIncomingResult.NOT_EXCHANGE -> throw conflict(
                     "$username is not an exchange account.",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
-                TalerAddIncomingResult.NO_DEBITOR -> throw notFound(
-                    "Debitor account was not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
-                )
-                TalerAddIncomingResult.SAME_ACCOUNT -> throw conflict(
-                    "Wire transfer attempted with credit and debit party being the same bank account",
-                    TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+                TalerAddIncomingResult.NO_DEBITOR -> throw conflict(
+                    "Debtor account was not found",
+                    TalerErrorCode.BANK_UNKNOWN_DEBTOR
                 )
                 TalerAddIncomingResult.BOTH_EXCHANGE -> throw conflict(
                     "Wire transfer attempted with credit and debit party being both exchange account",
-                    TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+                    TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
                 )
                 TalerAddIncomingResult.RESERVE_PUB_REUSE -> throw conflict(
                     "reserve_pub used already",
-                    TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
+                    TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT
                 )
                 TalerAddIncomingResult.BALANCE_INSUFFICIENT -> throw conflict(
                     "Insufficient balance for debitor",
-                    TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+                    TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
                 TalerAddIncomingResult.SUCCESS -> call.respond(
                     AddIncomingResponse(

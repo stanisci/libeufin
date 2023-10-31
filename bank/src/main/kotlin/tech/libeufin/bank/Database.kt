@@ -1350,7 +1350,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 out_debtor_not_found
                 ,out_debtor_not_exchange
                 ,out_creditor_not_found
-                ,out_same_account
                 ,out_both_exchanges
                 ,out_request_uid_reuse
                 ,out_exchange_balance_insufficient
@@ -1387,8 +1386,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                     TalerTransferCreationResult(TalerTransferResult.NOT_EXCHANGE)
                 it.getBoolean("out_creditor_not_found") ->
                     TalerTransferCreationResult(TalerTransferResult.NO_CREDITOR)
-                it.getBoolean("out_same_account") ->
-                    TalerTransferCreationResult(TalerTransferResult.SAME_ACCOUNT)
                 it.getBoolean("out_both_exchanges") ->
                     TalerTransferCreationResult(TalerTransferResult.BOTH_EXCHANGE)
                 it.getBoolean("out_exchange_balance_insufficient") ->
@@ -1438,7 +1435,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 out_creditor_not_found
                 ,out_creditor_not_exchange
                 ,out_debtor_not_found
-                ,out_same_account
                 ,out_both_exchanges
                 ,out_reserve_pub_reuse
                 ,out_debitor_balance_insufficient
@@ -1472,8 +1468,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                     TalerAddIncomingCreationResult(TalerAddIncomingResult.NOT_EXCHANGE)
                 it.getBoolean("out_debtor_not_found") ->
                     TalerAddIncomingCreationResult(TalerAddIncomingResult.NO_DEBITOR)
-                it.getBoolean("out_same_account") ->
-                    TalerAddIncomingCreationResult(TalerAddIncomingResult.SAME_ACCOUNT)
                 it.getBoolean("out_both_exchanges") ->
                     TalerAddIncomingCreationResult(TalerAddIncomingResult.BOTH_EXCHANGE)
                 it.getBoolean("out_debitor_balance_insufficient") ->
@@ -1613,7 +1607,6 @@ enum class TalerTransferResult {
     NO_DEBITOR,
     NOT_EXCHANGE,
     NO_CREDITOR,
-    SAME_ACCOUNT,
     BOTH_EXCHANGE,
     REQUEST_UID_REUSE,
     BALANCE_INSUFFICIENT,
@@ -1625,7 +1618,6 @@ enum class TalerAddIncomingResult {
     NO_DEBITOR,
     NOT_EXCHANGE,
     NO_CREDITOR,
-    SAME_ACCOUNT,
     BOTH_EXCHANGE,
     RESERVE_PUB_REUSE,
     BALANCE_INSUFFICIENT,

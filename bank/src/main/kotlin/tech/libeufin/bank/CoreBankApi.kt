@@ -80,7 +80,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
                 if (refreshingToken.scope == TokenScope.readonly && req.scope == TokenScope.readwrite)
                         throw forbidden(
                                 "Cannot generate RW token from RO",
-                                TalerErrorCode.TALER_EC_GENERIC_TOKEN_PERMISSION_INSUFFICIENT
+                                TalerErrorCode.GENERIC_TOKEN_PERMISSION_INSUFFICIENT
                         )
             }
             val tokenBytes = ByteArray(32).apply { Random.nextBytes(this) }
@@ -145,7 +145,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
             if (reservedAccounts.contains(req.username))
                 throw forbidden(
                     "Username '${req.username}' is reserved.",
-                    TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT
+                    TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
                 )
 
             val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
@@ -167,15 +167,15 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
             when (result) {
                 CustomerCreationResult.BALANCE_INSUFFICIENT -> throw conflict(
                     "Insufficient admin funds to grant bonus",
-                    TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+                    TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
                 CustomerCreationResult.CONFLICT_LOGIN -> throw conflict(
                     "Customer username reuse '${req.username}'",
-                    TalerErrorCode.TALER_EC_END // FIXME: provide appropriate EC.
+                    TalerErrorCode.BANK_REGISTER_USERNAME_REUSE
                 )
                 CustomerCreationResult.CONFLICT_PAY_TO -> throw conflict(
                     "Bank internalPayToUri reuse '${internalPayto.canonical}'",
-                    TalerErrorCode.TALER_EC_END // FIXME: provide appropriate EC.
+                    TalerErrorCode.BANK_REGISTER_PAYTO_URI_REUSE
                 )
                 CustomerCreationResult.SUCCESS -> call.respond(HttpStatusCode.Created)
             }
@@ -192,17 +192,17 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
             if (reservedAccounts.contains(username))
                 throw forbidden(
                     "Cannot delete reserved accounts",
-                    TalerErrorCode.TALER_EC_BANK_RESERVED_USERNAME_CONFLICT
+                    TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
                 )
 
             when (db.customerDeleteIfBalanceIsZero(username)) {
                 CustomerDeletionResult.CUSTOMER_NOT_FOUND -> throw notFound(
-                    "Customer '$username' not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    "Account '$username' not found",
+                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
                 CustomerDeletionResult.BALANCE_NOT_ZERO -> throw conflict(
-                    "Balance is not zero.",
-                    TalerErrorCode.TALER_EC_NONE // FIXME: need EC.
+                    "Account balance is not zero.",
+                    TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO
                 )
                 CustomerDeletionResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
             }
@@ -226,8 +226,8 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
             when (res) {
                 CustomerPatchResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
                 CustomerPatchResult.ACCOUNT_NOT_FOUND -> throw notFound(
-                    "Customer '$username' not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    "Account '$username' not found",
+                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
                 CustomerPatchResult.CONFLICT_LEGAL_NAME -> 
                     throw forbidden("non-admin user cannot change their legal name")
@@ -240,8 +240,8 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
             val hashedPassword = CryptoUtil.hashpw(req.new_password)
             if (!db.customerChangePassword(username, hashedPassword))
                 throw notFound(
-                    "Account '$username' not found (despite it being authenticated by this call)",
-                    TalerErrorCode.TALER_EC_END // FIXME: need at least GENERIC_NOT_FOUND.
+                    "Account '$username' not found",
+                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
             call.respond(HttpStatusCode.NoContent)
         }
@@ -275,8 +275,8 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readonly, allowAdmin = true) {
         get("/accounts/{USERNAME}") {
             val account = db.accountDataFromLogin(username) ?: throw notFound(
-                "Customer '$username' not found in the database.",
-                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                "Account '$username' not found.",
+                TalerErrorCode.BANK_UNKNOWN_ACCOUNT
             )
             call.respond(account)
         }
@@ -308,7 +308,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
                     db.bankTransactionGetFromInternalId(txRowId)
                             ?: throw notFound(
                                     "Bank transaction '$tId' not found",
-                                    TalerErrorCode.TALER_EC_BANK_TRANSACTION_NOT_FOUND
+                                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
                             )
             if (tx.bankAccountId != bankAccount.bankAccountId) // TODO not found ?
              throw unauthorized("Client has no rights over the bank transaction: $tId")
@@ -341,21 +341,21 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
                 timestamp = Instant.now(),
             )
             when (result) {
-                BankTransactionResult.BALANCE_INSUFFICIENT -> throw conflict(
-                    "Insufficient funds",
-                    TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+                BankTransactionResult.NO_DEBTOR -> throw notFound(
+                    "Account '$username' not found",
+                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
                 BankTransactionResult.SAME_ACCOUNT -> throw conflict(
                     "Wire transfer attempted with credit and debit party being the same bank account",
-                    TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT
+                    TalerErrorCode.BANK_SAME_ACCOUNT 
                 )
-                BankTransactionResult.NO_DEBTOR -> throw notFound(
-                    "Customer $username not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
-                )
-                BankTransactionResult.NO_CREDITOR -> throw notFound(
+                BankTransactionResult.NO_CREDITOR -> throw conflict(
                     "Creditor account was not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    TalerErrorCode.BANK_UNKNOWN_CREDITOR
+                )
+                BankTransactionResult.BALANCE_INSUFFICIENT -> throw conflict(
+                    "Insufficient funds",
+                    TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
                 BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
             }
@@ -371,27 +371,25 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             val opId = UUID.randomUUID()
             when (db.talerWithdrawalCreate(username, opId, req.amount)) {
                 WithdrawalCreationResult.ACCOUNT_NOT_FOUND -> throw notFound(
-                    "Customer $username not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    "Account '$username' not found",
+                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
                 WithdrawalCreationResult.ACCOUNT_IS_EXCHANGE -> throw conflict(
                     "Exchange account cannot perform withdrawal operation",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
                 )
                 WithdrawalCreationResult.BALANCE_INSUFFICIENT -> throw conflict(
                     "Insufficient funds to withdraw with Taler",
-                    TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+                    TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
                 WithdrawalCreationResult.SUCCESS -> {
-                    val bankBaseUrl =
-                            call.request.getBaseUrl()
-                                    ?: throw internalServerError("Bank could not find its own base URL")
+                    val bankBaseUrl = call.request.getBaseUrl()
+                        ?: throw internalServerError("Bank could not find its own base URL")
                     call.respond(
-                            BankAccountCreateWithdrawalResponse(
-                                    withdrawal_id = opId.toString(),
-                                    taler_withdraw_uri =
-                                            getTalerWithdrawUri(bankBaseUrl, opId.toString())
-                            )
+                        BankAccountCreateWithdrawalResponse(
+                            withdrawal_id = opId.toString(),
+                            taler_withdraw_uri = getTalerWithdrawUri(bankBaseUrl, opId.toString())
+                        )
                     )
                 }
             }
@@ -415,10 +413,12 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         when (db.talerWithdrawalAbort(opId)) {
             AbortResult.NOT_FOUND -> throw notFound(
                 "Withdrawal operation $opId not found",
-                TalerErrorCode.TALER_EC_END
+                TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
             )
-            AbortResult.CONFIRMED ->
-                    throw conflict("Cannot abort confirmed withdrawal", TalerErrorCode.TALER_EC_END)
+            AbortResult.CONFIRMED -> throw conflict(
+                "Cannot abort confirmed withdrawal", 
+                TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
+            )
             AbortResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
         }
     }
@@ -427,28 +427,23 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         when (db.talerWithdrawalConfirm(opId, Instant.now())) {
             WithdrawalConfirmationResult.OP_NOT_FOUND -> throw notFound(
                 "Withdrawal operation $opId not found",
-                TalerErrorCode.TALER_EC_END
+                TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
             )
             WithdrawalConfirmationResult.ABORTED -> throw conflict(
                 "Cannot confirm an aborted withdrawal",
-                TalerErrorCode.TALER_EC_BANK_CONFIRM_ABORT_CONFLICT
+                TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
             )
-            WithdrawalConfirmationResult.NOT_SELECTED ->
-                    throw LibeufinBankException(
-                            httpStatus = HttpStatusCode.UnprocessableEntity,
-                            talerError =
-                                    TalerError(
-                                            hint = "Cannot confirm an unselected withdrawal",
-                                            code = TalerErrorCode.TALER_EC_END.code
-                                    )
-                    )
+            WithdrawalConfirmationResult.NOT_SELECTED -> throw conflict(
+                "Cannot confirm an unselected withdrawal",
+                TalerErrorCode.BANK_CONFIRM_INCOMPLETE
+            )
             WithdrawalConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
                 "Insufficient funds",
-                TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+                TalerErrorCode.BANK_UNALLOWED_DEBIT
             )
             WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND -> throw conflict(
                 "Exchange to withdraw from not found",
-                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                TalerErrorCode.BANK_UNKNOWN_CREDITOR
             )
             WithdrawalConfirmationResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
         }
@@ -477,25 +472,25 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
                 tanCode = tanCode
             )
             when (status) {
+                CashoutCreationResult.ACCOUNT_NOT_FOUND -> throw notFound(
+                    "Account '$username' not found",
+                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
+                )
                 CashoutCreationResult.BAD_CONVERSION -> throw conflict(
                     "Wrong currency conversion",
-                    TalerErrorCode.TALER_EC_END // TODO EC ?
-                )
-                CashoutCreationResult.ACCOUNT_NOT_FOUND -> throw notFound(
-                    "Customer $username not found",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    TalerErrorCode.BANK_BAD_CONVERSION
                 )
                 CashoutCreationResult.ACCOUNT_IS_EXCHANGE -> throw conflict(
                     "Exchange account cannot perform cashout operation",
-                    TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                    TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
                 )
                 CashoutCreationResult.BALANCE_INSUFFICIENT -> throw conflict(
                     "Insufficient funds to withdraw with Taler",
-                    TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+                    TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
                 CashoutCreationResult.MISSING_TAN_INFO -> throw conflict(
-                    "Customer $username missing iinfo for tan channel ${req.tan_channel}",
-                    TalerErrorCode.TALER_EC_END // TODO EC ?
+                    "Account '$username' missing info for tan channel ${req.tan_channel}",
+                    TalerErrorCode.BANK_MISSING_TAN_INFO
                 )
                 CashoutCreationResult.SUCCESS -> {
                     when (tanChannel) {
@@ -515,10 +510,12 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
             when (db.cashoutAbort(opId)) {
                 AbortResult.NOT_FOUND -> throw notFound(
                     "Cashout operation $opId not found",
-                    TalerErrorCode.TALER_EC_END
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
                 )
-                AbortResult.CONFIRMED ->
-                        throw conflict("Cannot abort confirmed cashout", TalerErrorCode.TALER_EC_END)
+                AbortResult.CONFIRMED -> throw conflict(
+                    "Cannot abort confirmed cashout",
+                    TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
+                )
                 AbortResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
             }
         }
@@ -532,23 +529,22 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
             )) {
                 CashoutConfirmationResult.OP_NOT_FOUND -> throw notFound(
                     "Cashout operation $opId not found",
-                    TalerErrorCode.TALER_EC_END
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
                 )
                 CashoutConfirmationResult.ABORTED -> throw conflict(
                     "Cannot confirm an aborted cashout",
-                    TalerErrorCode.TALER_EC_BANK_CONFIRM_ABORT_CONFLICT
+                    TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
                 )
                 CashoutConfirmationResult.BAD_TAN_CODE -> throw forbidden(
                     "Incorrect TAN code",
-                    TalerErrorCode.TALER_EC_END
+                    TalerErrorCode.END
                 )
                 CashoutConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
                     "Insufficient funds",
-                    TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT
+                    TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
                 CashoutConfirmationResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
             }
-
         }
     }
     auth(db, TokenScope.readonly) {

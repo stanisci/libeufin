@@ -51,7 +51,7 @@ data class TalerError(
 
 fun forbidden(
     hint: String = "No rights on the resource",
-    talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_END
+    talerErrorCode: TalerErrorCode = TalerErrorCode.END
 ): LibeufinBankException = LibeufinBankException(
     httpStatus = HttpStatusCode.Forbidden, talerError = TalerError(
         code = talerErrorCode.code, hint = hint
@@ -60,13 +60,13 @@ fun forbidden(
 
 fun unauthorized(hint: String = "Login failed"): LibeufinBankException = LibeufinBankException(
     httpStatus = HttpStatusCode.Unauthorized, talerError = TalerError(
-        code = TalerErrorCode.TALER_EC_GENERIC_UNAUTHORIZED.code, hint = hint
+        code = TalerErrorCode.GENERIC_UNAUTHORIZED.code, hint = hint
     )
 )
 
 fun internalServerError(hint: String?): LibeufinBankException = LibeufinBankException(
     httpStatus = HttpStatusCode.InternalServerError, talerError = TalerError(
-        code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code, hint = hint
+        code = TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE.code, hint = hint
     )
 )
 
@@ -88,7 +88,7 @@ fun conflict(
 )
 
 fun badRequest(
-    hint: String? = null, talerErrorCode: TalerErrorCode = TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
+    hint: String? = null, talerErrorCode: TalerErrorCode = TalerErrorCode.GENERIC_JSON_INVALID
 ): LibeufinBankException = LibeufinBankException(
     httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
         code = talerErrorCode.code, hint = hint
@@ -98,13 +98,13 @@ fun badRequest(
 fun BankConfig.checkInternalCurrency(amount: TalerAmount) {
     if (amount.currency != currency) throw badRequest(
         "Wrong currency: expected internal currency $currency got ${amount.currency}",
-        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+        talerErrorCode = TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
 }
 
 fun BankConfig.checkFiatCurrency(amount: TalerAmount) {
     if (amount.currency != fiatCurrency) throw badRequest(
         "Wrong currency: expected fiat currency $fiatCurrency got ${amount.currency}",
-        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH
+        talerErrorCode = TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
 }

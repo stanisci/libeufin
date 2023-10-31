@@ -40,14 +40,14 @@ val reservedAccounts = setOf("admin", "bank")
 
 fun ApplicationCall.expectUriComponent(componentName: String) =
     this.maybeUriComponent(componentName) ?: throw badRequest(
-        hint = "No username found in the URI", talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
+        hint = "No username found in the URI", talerErrorCode = TalerErrorCode.GENERIC_PARAMETER_MISSING
     )
 
 /** Retrieve the bank account info for the selected username*/
 suspend fun ApplicationCall.bankAccount(db: Database): BankAccount {
     return db.bankAccountGetFromCustomerLogin(username) ?: throw notFound(
         hint = "Bank account for customer $username not found",
-        talerEc = TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+        talerEc = TalerErrorCode.BANK_UNKNOWN_ACCOUNT
     )
 }
 
@@ -109,7 +109,7 @@ fun ApplicationCall.uuidUriComponent(name: String): UUID {
 suspend fun ApplicationCall.getWithdrawal(db: Database, name: String): TalerWithdrawalOperation {
     val opId = uuidUriComponent(name)
     val op = db.talerWithdrawalGet(opId) ?: throw notFound(
-        hint = "Withdrawal operation $opId not found", talerEc = TalerErrorCode.TALER_EC_END
+        hint = "Withdrawal operation $opId not found", talerEc = TalerErrorCode.END
     )
     return op
 }

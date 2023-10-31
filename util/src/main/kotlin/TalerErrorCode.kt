@@ -30,7 +30,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_NONE(0),
+  NONE(0),
 
 
   /**
@@ -38,7 +38,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_INVALID(1),
+  INVALID(1),
 
 
   /**
@@ -46,7 +46,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_CLIENT_INTERNAL_ERROR(2),
+  GENERIC_CLIENT_INTERNAL_ERROR(2),
 
 
   /**
@@ -54,7 +54,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_INVALID_RESPONSE(10),
+  GENERIC_INVALID_RESPONSE(10),
 
 
   /**
@@ -62,7 +62,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_TIMEOUT(11),
+  GENERIC_TIMEOUT(11),
 
 
   /**
@@ -70,7 +70,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_VERSION_MALFORMED(12),
+  GENERIC_VERSION_MALFORMED(12),
 
 
   /**
@@ -78,7 +78,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_REPLY_MALFORMED(13),
+  GENERIC_REPLY_MALFORMED(13),
 
 
   /**
@@ -86,7 +86,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_CONFIGURATION_INVALID(14),
+  GENERIC_CONFIGURATION_INVALID(14),
 
 
   /**
@@ -94,7 +94,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_UNEXPECTED_REQUEST_ERROR(15),
+  GENERIC_UNEXPECTED_REQUEST_ERROR(15),
 
 
   /**
@@ -102,7 +102,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_TOKEN_PERMISSION_INSUFFICIENT(16),
+  GENERIC_TOKEN_PERMISSION_INSUFFICIENT(16),
 
 
   /**
@@ -110,7 +110,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_METHOD_NOT_ALLOWED (405).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_METHOD_INVALID(20),
+  GENERIC_METHOD_INVALID(20),
 
 
   /**
@@ -118,7 +118,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_ENDPOINT_UNKNOWN(21),
+  GENERIC_ENDPOINT_UNKNOWN(21),
 
 
   /**
@@ -126,7 +126,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_JSON_INVALID(22),
+  GENERIC_JSON_INVALID(22),
 
 
   /**
@@ -134,7 +134,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED(23),
+  GENERIC_HTTP_HEADERS_MALFORMED(23),
 
 
   /**
@@ -142,7 +142,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_PAYTO_URI_MALFORMED(24),
+  GENERIC_PAYTO_URI_MALFORMED(24),
 
 
   /**
@@ -150,7 +150,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_PARAMETER_MISSING(25),
+  GENERIC_PARAMETER_MISSING(25),
 
 
   /**
@@ -158,7 +158,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_PARAMETER_MALFORMED(26),
+  GENERIC_PARAMETER_MALFORMED(26),
 
 
   /**
@@ -166,7 +166,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_RESERVE_PUB_MALFORMED(27),
+  GENERIC_RESERVE_PUB_MALFORMED(27),
 
 
   /**
@@ -174,15 +174,15 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_COMPRESSION_INVALID(28),
+  GENERIC_COMPRESSION_INVALID(28),
 
 
   /**
-   * The currencies involved in the operation do not match.
+   * The currency involved in the operation is not acceptable for this backend.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_CURRENCY_MISMATCH(30),
+  GENERIC_CURRENCY_MISMATCH(30),
 
 
   /**
@@ -190,7 +190,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_URI_TOO_LONG (414).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_URI_TOO_LONG(31),
+  GENERIC_URI_TOO_LONG(31),
 
 
   /**
@@ -198,7 +198,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONTENT_TOO_LARGE (413).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_UPLOAD_EXCEEDS_LIMIT(32),
+  GENERIC_UPLOAD_EXCEEDS_LIMIT(32),
 
 
   /**
@@ -206,7 +206,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNAUTHORIZED (401).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_UNAUTHORIZED(40),
+  GENERIC_UNAUTHORIZED(40),
 
 
   /**
@@ -214,7 +214,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNAUTHORIZED (401).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_TOKEN_UNKNOWN(41),
+  GENERIC_TOKEN_UNKNOWN(41),
 
 
   /**
@@ -222,7 +222,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNAUTHORIZED (401).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_TOKEN_EXPIRED(42),
+  GENERIC_TOKEN_EXPIRED(42),
 
 
   /**
@@ -230,7 +230,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNAUTHORIZED (401).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_TOKEN_MALFORMED(43),
+  GENERIC_TOKEN_MALFORMED(43),
 
 
   /**
@@ -238,7 +238,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_FORBIDDEN(44),
+  GENERIC_FORBIDDEN(44),
 
 
   /**
@@ -246,7 +246,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_DB_SETUP_FAILED(50),
+  GENERIC_DB_SETUP_FAILED(50),
 
 
   /**
@@ -254,7 +254,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_DB_START_FAILED(51),
+  GENERIC_DB_START_FAILED(51),
 
 
   /**
@@ -262,7 +262,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_DB_STORE_FAILED(52),
+  GENERIC_DB_STORE_FAILED(52),
 
 
   /**
@@ -270,7 +270,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_DB_FETCH_FAILED(53),
+  GENERIC_DB_FETCH_FAILED(53),
 
 
   /**
@@ -278,7 +278,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_DB_COMMIT_FAILED(54),
+  GENERIC_DB_COMMIT_FAILED(54),
 
 
   /**
@@ -286,7 +286,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_DB_SOFT_FAILURE(55),
+  GENERIC_DB_SOFT_FAILURE(55),
 
 
   /**
@@ -294,7 +294,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_DB_INVARIANT_FAILURE(56),
+  GENERIC_DB_INVARIANT_FAILURE(56),
 
 
   /**
@@ -302,7 +302,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE(60),
+  GENERIC_INTERNAL_INVARIANT_FAILURE(60),
 
 
   /**
@@ -310,7 +310,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_FAILED_COMPUTE_JSON_HASH(61),
+  GENERIC_FAILED_COMPUTE_JSON_HASH(61),
 
 
   /**
@@ -318,7 +318,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_FAILED_COMPUTE_AMOUNT(62),
+  GENERIC_FAILED_COMPUTE_AMOUNT(62),
 
 
   /**
@@ -326,7 +326,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_PARSER_OUT_OF_MEMORY(70),
+  GENERIC_PARSER_OUT_OF_MEMORY(70),
 
 
   /**
@@ -334,7 +334,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_ALLOCATION_FAILURE(71),
+  GENERIC_ALLOCATION_FAILURE(71),
 
 
   /**
@@ -342,7 +342,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_JSON_ALLOCATION_FAILURE(72),
+  GENERIC_JSON_ALLOCATION_FAILURE(72),
 
 
   /**
@@ -350,7 +350,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_CURL_ALLOCATION_FAILURE(73),
+  GENERIC_CURL_ALLOCATION_FAILURE(73),
 
 
   /**
@@ -358,7 +358,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_FAILED_TO_LOAD_TEMPLATE(74),
+  GENERIC_FAILED_TO_LOAD_TEMPLATE(74),
 
 
   /**
@@ -366,7 +366,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_GENERIC_FAILED_TO_EXPAND_TEMPLATE(75),
+  GENERIC_FAILED_TO_EXPAND_TEMPLATE(75),
 
 
   /**
@@ -374,7 +374,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_BAD_CONFIGURATION(1000),
+  EXCHANGE_GENERIC_BAD_CONFIGURATION(1000),
 
 
   /**
@@ -382,7 +382,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_OPERATION_UNKNOWN(1001),
+  EXCHANGE_GENERIC_OPERATION_UNKNOWN(1001),
 
 
   /**
@@ -390,7 +390,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_WRONG_NUMBER_OF_SEGMENTS(1002),
+  EXCHANGE_GENERIC_WRONG_NUMBER_OF_SEGMENTS(1002),
 
 
   /**
@@ -398,7 +398,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_COIN_CONFLICTING_DENOMINATION_KEY(1003),
+  EXCHANGE_GENERIC_COIN_CONFLICTING_DENOMINATION_KEY(1003),
 
 
   /**
@@ -406,7 +406,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_COINS_INVALID_COIN_PUB(1004),
+  EXCHANGE_GENERIC_COINS_INVALID_COIN_PUB(1004),
 
 
   /**
@@ -414,7 +414,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_DENOMINATION_KEY_UNKNOWN(1005),
+  EXCHANGE_GENERIC_DENOMINATION_KEY_UNKNOWN(1005),
 
 
   /**
@@ -422,7 +422,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DENOMINATION_SIGNATURE_INVALID(1006),
+  EXCHANGE_DENOMINATION_SIGNATURE_INVALID(1006),
 
 
   /**
@@ -430,7 +430,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_SERVICE_UNAVAILABLE (503).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_KEYS_MISSING(1007),
+  EXCHANGE_GENERIC_KEYS_MISSING(1007),
 
 
   /**
@@ -438,7 +438,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_PRECONDITION_FAILED (412).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_DENOMINATION_VALIDITY_IN_FUTURE(1008),
+  EXCHANGE_GENERIC_DENOMINATION_VALIDITY_IN_FUTURE(1008),
 
 
   /**
@@ -446,7 +446,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_DENOMINATION_EXPIRED(1009),
+  EXCHANGE_GENERIC_DENOMINATION_EXPIRED(1009),
 
 
   /**
@@ -454,7 +454,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_DENOMINATION_REVOKED(1010),
+  EXCHANGE_GENERIC_DENOMINATION_REVOKED(1010),
 
 
   /**
@@ -462,7 +462,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_SECMOD_TIMEOUT(1011),
+  EXCHANGE_GENERIC_SECMOD_TIMEOUT(1011),
 
 
   /**
@@ -470,7 +470,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_INSUFFICIENT_FUNDS(1012),
+  EXCHANGE_GENERIC_INSUFFICIENT_FUNDS(1012),
 
 
   /**
@@ -478,7 +478,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_COIN_HISTORY_COMPUTATION_FAILED(1013),
+  EXCHANGE_GENERIC_COIN_HISTORY_COMPUTATION_FAILED(1013),
 
 
   /**
@@ -486,7 +486,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_HISTORY_DB_ERROR_INSUFFICIENT_FUNDS(1014),
+  EXCHANGE_GENERIC_HISTORY_DB_ERROR_INSUFFICIENT_FUNDS(1014),
 
 
   /**
@@ -494,7 +494,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_COIN_CONFLICTING_AGE_HASH(1015),
+  EXCHANGE_GENERIC_COIN_CONFLICTING_AGE_HASH(1015),
 
 
   /**
@@ -502,7 +502,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_INVALID_DENOMINATION_CIPHER_FOR_OPERATION(1016),
+  EXCHANGE_GENERIC_INVALID_DENOMINATION_CIPHER_FOR_OPERATION(1016),
 
 
   /**
@@ -510,7 +510,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_CIPHER_MISMATCH(1017),
+  EXCHANGE_GENERIC_CIPHER_MISMATCH(1017),
 
 
   /**
@@ -518,7 +518,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_NEW_DENOMS_ARRAY_SIZE_EXCESSIVE(1018),
+  EXCHANGE_GENERIC_NEW_DENOMS_ARRAY_SIZE_EXCESSIVE(1018),
 
 
   /**
@@ -526,7 +526,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_COIN_UNKNOWN(1019),
+  EXCHANGE_GENERIC_COIN_UNKNOWN(1019),
 
 
   /**
@@ -534,7 +534,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_CLOCK_SKEW(1020),
+  EXCHANGE_GENERIC_CLOCK_SKEW(1020),
 
 
   /**
@@ -542,7 +542,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_AMOUNT_EXCEEDS_DENOMINATION_VALUE(1021),
+  EXCHANGE_GENERIC_AMOUNT_EXCEEDS_DENOMINATION_VALUE(1021),
 
 
   /**
@@ -550,7 +550,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_GLOBAL_FEES_MISSING(1022),
+  EXCHANGE_GENERIC_GLOBAL_FEES_MISSING(1022),
 
 
   /**
@@ -558,7 +558,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_WIRE_FEES_MISSING(1023),
+  EXCHANGE_GENERIC_WIRE_FEES_MISSING(1023),
 
 
   /**
@@ -566,7 +566,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_PURSE_PUB_MALFORMED(1024),
+  EXCHANGE_GENERIC_PURSE_PUB_MALFORMED(1024),
 
 
   /**
@@ -574,7 +574,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_PURSE_UNKNOWN(1025),
+  EXCHANGE_GENERIC_PURSE_UNKNOWN(1025),
 
 
   /**
@@ -582,7 +582,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_PURSE_EXPIRED(1026),
+  EXCHANGE_GENERIC_PURSE_EXPIRED(1026),
 
 
   /**
@@ -590,7 +590,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_RESERVE_UNKNOWN(1027),
+  EXCHANGE_GENERIC_RESERVE_UNKNOWN(1027),
 
 
   /**
@@ -598,7 +598,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNAVAILABLE_FOR_LEGAL_REASONS (451).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_KYC_REQUIRED(1028),
+  EXCHANGE_GENERIC_KYC_REQUIRED(1028),
 
 
   /**
@@ -606,7 +606,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_DEPOSIT_COIN_CONFLICTING_ATTEST_VS_AGE_COMMITMENT(1029),
+  EXCHANGE_PURSE_DEPOSIT_COIN_CONFLICTING_ATTEST_VS_AGE_COMMITMENT(1029),
 
 
   /**
@@ -614,7 +614,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_DEPOSIT_COIN_AGE_ATTESTATION_FAILURE(1030),
+  EXCHANGE_PURSE_DEPOSIT_COIN_AGE_ATTESTATION_FAILURE(1030),
 
 
   /**
@@ -622,7 +622,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_PURSE_DELETED(1031),
+  EXCHANGE_GENERIC_PURSE_DELETED(1031),
 
 
   /**
@@ -630,7 +630,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_AML_OFFICER_PUB_MALFORMED(1032),
+  EXCHANGE_GENERIC_AML_OFFICER_PUB_MALFORMED(1032),
 
 
   /**
@@ -638,7 +638,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_AML_OFFICER_GET_SIGNATURE_INVALID(1033),
+  EXCHANGE_GENERIC_AML_OFFICER_GET_SIGNATURE_INVALID(1033),
 
 
   /**
@@ -646,7 +646,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_AML_OFFICER_ACCESS_DENIED(1034),
+  EXCHANGE_GENERIC_AML_OFFICER_ACCESS_DENIED(1034),
 
 
   /**
@@ -654,7 +654,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNAVAILABLE_FOR_LEGAL_REASONS (451).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_AML_PENDING(1035),
+  EXCHANGE_GENERIC_AML_PENDING(1035),
 
 
   /**
@@ -662,7 +662,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNAVAILABLE_FOR_LEGAL_REASONS (451).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GENERIC_AML_FROZEN(1036),
+  EXCHANGE_GENERIC_AML_FROZEN(1036),
 
 
   /**
@@ -670,7 +670,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSITS_GET_NOT_FOUND(1100),
+  EXCHANGE_DEPOSITS_GET_NOT_FOUND(1100),
 
 
   /**
@@ -678,7 +678,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSITS_GET_INVALID_H_WIRE(1101),
+  EXCHANGE_DEPOSITS_GET_INVALID_H_WIRE(1101),
 
 
   /**
@@ -686,7 +686,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSITS_GET_INVALID_MERCHANT_PUB(1102),
+  EXCHANGE_DEPOSITS_GET_INVALID_MERCHANT_PUB(1102),
 
 
   /**
@@ -694,7 +694,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSITS_GET_INVALID_H_CONTRACT_TERMS(1103),
+  EXCHANGE_DEPOSITS_GET_INVALID_H_CONTRACT_TERMS(1103),
 
 
   /**
@@ -702,7 +702,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSITS_GET_INVALID_COIN_PUB(1104),
+  EXCHANGE_DEPOSITS_GET_INVALID_COIN_PUB(1104),
 
 
   /**
@@ -710,7 +710,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSITS_GET_INVALID_SIGNATURE_BY_EXCHANGE(1105),
+  EXCHANGE_DEPOSITS_GET_INVALID_SIGNATURE_BY_EXCHANGE(1105),
 
 
   /**
@@ -718,7 +718,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSITS_GET_MERCHANT_SIGNATURE_INVALID(1106),
+  EXCHANGE_DEPOSITS_GET_MERCHANT_SIGNATURE_INVALID(1106),
 
 
   /**
@@ -726,7 +726,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSITS_POLICY_NOT_ACCEPTED(1107),
+  EXCHANGE_DEPOSITS_POLICY_NOT_ACCEPTED(1107),
 
 
   /**
@@ -734,7 +734,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WITHDRAW_INSUFFICIENT_FUNDS(1150),
+  EXCHANGE_WITHDRAW_INSUFFICIENT_FUNDS(1150),
 
 
   /**
@@ -742,7 +742,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AGE_WITHDRAW_INSUFFICIENT_FUNDS(1151),
+  EXCHANGE_AGE_WITHDRAW_INSUFFICIENT_FUNDS(1151),
 
 
   /**
@@ -750,7 +750,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WITHDRAW_AMOUNT_FEE_OVERFLOW(1152),
+  EXCHANGE_WITHDRAW_AMOUNT_FEE_OVERFLOW(1152),
 
 
   /**
@@ -758,7 +758,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WITHDRAW_SIGNATURE_FAILED(1153),
+  EXCHANGE_WITHDRAW_SIGNATURE_FAILED(1153),
 
 
   /**
@@ -766,7 +766,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WITHDRAW_RESERVE_SIGNATURE_INVALID(1154),
+  EXCHANGE_WITHDRAW_RESERVE_SIGNATURE_INVALID(1154),
 
 
   /**
@@ -774,7 +774,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVE_HISTORY_ERROR_INSUFFICIENT_FUNDS(1155),
+  EXCHANGE_RESERVE_HISTORY_ERROR_INSUFFICIENT_FUNDS(1155),
 
 
   /**
@@ -782,7 +782,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_GET_RESERVE_HISTORY_ERROR_INSUFFICIENT_BALANCE(1156),
+  EXCHANGE_GET_RESERVE_HISTORY_ERROR_INSUFFICIENT_BALANCE(1156),
 
 
   /**
@@ -790,7 +790,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WITHDRAW_DENOMINATION_KEY_LOST(1158),
+  EXCHANGE_WITHDRAW_DENOMINATION_KEY_LOST(1158),
 
 
   /**
@@ -798,7 +798,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WITHDRAW_UNBLIND_FAILURE(1159),
+  EXCHANGE_WITHDRAW_UNBLIND_FAILURE(1159),
 
 
   /**
@@ -806,7 +806,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WITHDRAW_NONCE_REUSE(1160),
+  EXCHANGE_WITHDRAW_NONCE_REUSE(1160),
 
 
   /**
@@ -814,7 +814,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AGE_WITHDRAW_COMMITMENT_UNKNOWN(1161),
+  EXCHANGE_AGE_WITHDRAW_COMMITMENT_UNKNOWN(1161),
 
 
   /**
@@ -822,7 +822,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AGE_WITHDRAW_AMOUNT_OVERFLOW(1162),
+  EXCHANGE_AGE_WITHDRAW_AMOUNT_OVERFLOW(1162),
 
 
   /**
@@ -830,7 +830,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AGE_WITHDRAW_AMOUNT_INCORRECT(1163),
+  EXCHANGE_AGE_WITHDRAW_AMOUNT_INCORRECT(1163),
 
 
   /**
@@ -838,7 +838,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AGE_WITHDRAW_REVEAL_INVALID_HASH(1164),
+  EXCHANGE_AGE_WITHDRAW_REVEAL_INVALID_HASH(1164),
 
 
   /**
@@ -846,7 +846,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AGE_WITHDRAW_MAXIMUM_AGE_TOO_LARGE(1165),
+  EXCHANGE_AGE_WITHDRAW_MAXIMUM_AGE_TOO_LARGE(1165),
 
 
   /**
@@ -854,7 +854,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WITHDRAW_BATCH_IDEMPOTENT_PLANCHET(1175),
+  EXCHANGE_WITHDRAW_BATCH_IDEMPOTENT_PLANCHET(1175),
 
 
   /**
@@ -862,7 +862,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSIT_COIN_SIGNATURE_INVALID(1205),
+  EXCHANGE_DEPOSIT_COIN_SIGNATURE_INVALID(1205),
 
 
   /**
@@ -870,7 +870,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSIT_CONFLICTING_CONTRACT(1206),
+  EXCHANGE_DEPOSIT_CONFLICTING_CONTRACT(1206),
 
 
   /**
@@ -878,7 +878,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSIT_NEGATIVE_VALUE_AFTER_FEE(1207),
+  EXCHANGE_DEPOSIT_NEGATIVE_VALUE_AFTER_FEE(1207),
 
 
   /**
@@ -886,7 +886,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSIT_REFUND_DEADLINE_AFTER_WIRE_DEADLINE(1208),
+  EXCHANGE_DEPOSIT_REFUND_DEADLINE_AFTER_WIRE_DEADLINE(1208),
 
 
   /**
@@ -894,7 +894,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSIT_WIRE_DEADLINE_IS_NEVER(1209),
+  EXCHANGE_DEPOSIT_WIRE_DEADLINE_IS_NEVER(1209),
 
 
   /**
@@ -902,7 +902,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSIT_INVALID_WIRE_FORMAT_JSON(1210),
+  EXCHANGE_DEPOSIT_INVALID_WIRE_FORMAT_JSON(1210),
 
 
   /**
@@ -910,7 +910,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSIT_INVALID_WIRE_FORMAT_CONTRACT_HASH_CONFLICT(1211),
+  EXCHANGE_DEPOSIT_INVALID_WIRE_FORMAT_CONTRACT_HASH_CONFLICT(1211),
 
 
   /**
@@ -918,7 +918,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSIT_INVALID_SIGNATURE_BY_EXCHANGE(1221),
+  EXCHANGE_DEPOSIT_INVALID_SIGNATURE_BY_EXCHANGE(1221),
 
 
   /**
@@ -926,7 +926,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DEPOSIT_FEE_ABOVE_AMOUNT(1222),
+  EXCHANGE_DEPOSIT_FEE_ABOVE_AMOUNT(1222),
 
 
   /**
@@ -934,7 +934,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_EXTENSIONS_INVALID_FULFILLMENT(1240),
+  EXCHANGE_EXTENSIONS_INVALID_FULFILLMENT(1240),
 
 
   /**
@@ -942,7 +942,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_COIN_HISTORY_BAD_SIGNATURE(1251),
+  EXCHANGE_COIN_HISTORY_BAD_SIGNATURE(1251),
 
 
   /**
@@ -950,7 +950,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVE_HISTORY_BAD_SIGNATURE(1252),
+  EXCHANGE_RESERVE_HISTORY_BAD_SIGNATURE(1252),
 
 
   /**
@@ -958,7 +958,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MELT_FEES_EXCEED_CONTRIBUTION(1302),
+  EXCHANGE_MELT_FEES_EXCEED_CONTRIBUTION(1302),
 
 
   /**
@@ -966,7 +966,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MELT_COIN_SIGNATURE_INVALID(1303),
+  EXCHANGE_MELT_COIN_SIGNATURE_INVALID(1303),
 
 
   /**
@@ -974,7 +974,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MELT_COIN_EXPIRED_NO_ZOMBIE(1305),
+  EXCHANGE_MELT_COIN_EXPIRED_NO_ZOMBIE(1305),
 
 
   /**
@@ -982,7 +982,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MELT_INVALID_SIGNATURE_BY_EXCHANGE(1306),
+  EXCHANGE_MELT_INVALID_SIGNATURE_BY_EXCHANGE(1306),
 
 
   /**
@@ -990,7 +990,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_COMMITMENT_VIOLATION(1353),
+  EXCHANGE_REFRESHES_REVEAL_COMMITMENT_VIOLATION(1353),
 
 
   /**
@@ -998,7 +998,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_SIGNING_ERROR(1354),
+  EXCHANGE_REFRESHES_REVEAL_SIGNING_ERROR(1354),
 
 
   /**
@@ -1006,7 +1006,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_SESSION_UNKNOWN(1355),
+  EXCHANGE_REFRESHES_REVEAL_SESSION_UNKNOWN(1355),
 
 
   /**
@@ -1014,7 +1014,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_CNC_TRANSFER_ARRAY_SIZE_INVALID(1356),
+  EXCHANGE_REFRESHES_REVEAL_CNC_TRANSFER_ARRAY_SIZE_INVALID(1356),
 
 
   /**
@@ -1022,7 +1022,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_NEW_DENOMS_ARRAY_SIZE_MISMATCH(1358),
+  EXCHANGE_REFRESHES_REVEAL_NEW_DENOMS_ARRAY_SIZE_MISMATCH(1358),
 
 
   /**
@@ -1030,7 +1030,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_COST_CALCULATION_OVERFLOW(1359),
+  EXCHANGE_REFRESHES_REVEAL_COST_CALCULATION_OVERFLOW(1359),
 
 
   /**
@@ -1038,7 +1038,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_AMOUNT_INSUFFICIENT(1360),
+  EXCHANGE_REFRESHES_REVEAL_AMOUNT_INSUFFICIENT(1360),
 
 
   /**
@@ -1046,7 +1046,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_LINK_SIGNATURE_INVALID(1361),
+  EXCHANGE_REFRESHES_REVEAL_LINK_SIGNATURE_INVALID(1361),
 
 
   /**
@@ -1054,7 +1054,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_INVALID_RCH(1362),
+  EXCHANGE_REFRESHES_REVEAL_INVALID_RCH(1362),
 
 
   /**
@@ -1062,7 +1062,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_OPERATION_INVALID(1363),
+  EXCHANGE_REFRESHES_REVEAL_OPERATION_INVALID(1363),
 
 
   /**
@@ -1070,7 +1070,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_AGE_RESTRICTION_NOT_SUPPORTED(1364),
+  EXCHANGE_REFRESHES_REVEAL_AGE_RESTRICTION_NOT_SUPPORTED(1364),
 
 
   /**
@@ -1078,7 +1078,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFRESHES_REVEAL_AGE_RESTRICTION_COMMITMENT_INVALID(1365),
+  EXCHANGE_REFRESHES_REVEAL_AGE_RESTRICTION_COMMITMENT_INVALID(1365),
 
 
   /**
@@ -1086,7 +1086,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_LINK_COIN_UNKNOWN(1400),
+  EXCHANGE_LINK_COIN_UNKNOWN(1400),
 
 
   /**
@@ -1094,7 +1094,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_TRANSFERS_GET_WTID_MALFORMED(1450),
+  EXCHANGE_TRANSFERS_GET_WTID_MALFORMED(1450),
 
 
   /**
@@ -1102,7 +1102,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_TRANSFERS_GET_WTID_NOT_FOUND(1451),
+  EXCHANGE_TRANSFERS_GET_WTID_NOT_FOUND(1451),
 
 
   /**
@@ -1110,7 +1110,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_TRANSFERS_GET_WIRE_FEE_NOT_FOUND(1452),
+  EXCHANGE_TRANSFERS_GET_WIRE_FEE_NOT_FOUND(1452),
 
 
   /**
@@ -1118,7 +1118,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_TRANSFERS_GET_WIRE_FEE_INCONSISTENT(1453),
+  EXCHANGE_TRANSFERS_GET_WIRE_FEE_INCONSISTENT(1453),
 
 
   /**
@@ -1126,7 +1126,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSES_INVALID_WAIT_TARGET(1475),
+  EXCHANGE_PURSES_INVALID_WAIT_TARGET(1475),
 
 
   /**
@@ -1134,7 +1134,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSES_GET_INVALID_SIGNATURE_BY_EXCHANGE(1476),
+  EXCHANGE_PURSES_GET_INVALID_SIGNATURE_BY_EXCHANGE(1476),
 
 
   /**
@@ -1142,7 +1142,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_COIN_NOT_FOUND(1500),
+  EXCHANGE_REFUND_COIN_NOT_FOUND(1500),
 
 
   /**
@@ -1150,7 +1150,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_CONFLICT_DEPOSIT_INSUFFICIENT(1501),
+  EXCHANGE_REFUND_CONFLICT_DEPOSIT_INSUFFICIENT(1501),
 
 
   /**
@@ -1158,7 +1158,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_DEPOSIT_NOT_FOUND(1502),
+  EXCHANGE_REFUND_DEPOSIT_NOT_FOUND(1502),
 
 
   /**
@@ -1166,7 +1166,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_MERCHANT_ALREADY_PAID(1503),
+  EXCHANGE_REFUND_MERCHANT_ALREADY_PAID(1503),
 
 
   /**
@@ -1174,7 +1174,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_FEE_TOO_LOW(1504),
+  EXCHANGE_REFUND_FEE_TOO_LOW(1504),
 
 
   /**
@@ -1182,7 +1182,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_FEE_ABOVE_AMOUNT(1505),
+  EXCHANGE_REFUND_FEE_ABOVE_AMOUNT(1505),
 
 
   /**
@@ -1190,7 +1190,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_MERCHANT_SIGNATURE_INVALID(1506),
+  EXCHANGE_REFUND_MERCHANT_SIGNATURE_INVALID(1506),
 
 
   /**
@@ -1198,7 +1198,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_MERCHANT_SIGNING_FAILED(1507),
+  EXCHANGE_REFUND_MERCHANT_SIGNING_FAILED(1507),
 
 
   /**
@@ -1206,7 +1206,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_INVALID_SIGNATURE_BY_EXCHANGE(1508),
+  EXCHANGE_REFUND_INVALID_SIGNATURE_BY_EXCHANGE(1508),
 
 
   /**
@@ -1214,7 +1214,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_INVALID_FAILURE_PROOF_BY_EXCHANGE(1509),
+  EXCHANGE_REFUND_INVALID_FAILURE_PROOF_BY_EXCHANGE(1509),
 
 
   /**
@@ -1222,7 +1222,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FAILED_DEPENDENCY (424).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_REFUND_INCONSISTENT_AMOUNT(1510),
+  EXCHANGE_REFUND_INCONSISTENT_AMOUNT(1510),
 
 
   /**
@@ -1230,7 +1230,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_SIGNATURE_INVALID(1550),
+  EXCHANGE_RECOUP_SIGNATURE_INVALID(1550),
 
 
   /**
@@ -1238,7 +1238,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_WITHDRAW_NOT_FOUND(1551),
+  EXCHANGE_RECOUP_WITHDRAW_NOT_FOUND(1551),
 
 
   /**
@@ -1246,7 +1246,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_COIN_BALANCE_ZERO(1552),
+  EXCHANGE_RECOUP_COIN_BALANCE_ZERO(1552),
 
 
   /**
@@ -1254,7 +1254,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_BLINDING_FAILED(1553),
+  EXCHANGE_RECOUP_BLINDING_FAILED(1553),
 
 
   /**
@@ -1262,7 +1262,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_COIN_BALANCE_NEGATIVE(1554),
+  EXCHANGE_RECOUP_COIN_BALANCE_NEGATIVE(1554),
 
 
   /**
@@ -1270,7 +1270,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_NOT_ELIGIBLE(1555),
+  EXCHANGE_RECOUP_NOT_ELIGIBLE(1555),
 
 
   /**
@@ -1278,7 +1278,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_REFRESH_SIGNATURE_INVALID(1575),
+  EXCHANGE_RECOUP_REFRESH_SIGNATURE_INVALID(1575),
 
 
   /**
@@ -1286,7 +1286,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_REFRESH_MELT_NOT_FOUND(1576),
+  EXCHANGE_RECOUP_REFRESH_MELT_NOT_FOUND(1576),
 
 
   /**
@@ -1294,7 +1294,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_REFRESH_BLINDING_FAILED(1578),
+  EXCHANGE_RECOUP_REFRESH_BLINDING_FAILED(1578),
 
 
   /**
@@ -1302,7 +1302,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RECOUP_REFRESH_NOT_ELIGIBLE(1580),
+  EXCHANGE_RECOUP_REFRESH_NOT_ELIGIBLE(1580),
 
 
   /**
@@ -1310,7 +1310,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KEYS_TIMETRAVEL_FORBIDDEN(1600),
+  EXCHANGE_KEYS_TIMETRAVEL_FORBIDDEN(1600),
 
 
   /**
@@ -1318,7 +1318,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WIRE_SIGNATURE_INVALID(1650),
+  EXCHANGE_WIRE_SIGNATURE_INVALID(1650),
 
 
   /**
@@ -1326,7 +1326,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WIRE_NO_ACCOUNTS_CONFIGURED(1651),
+  EXCHANGE_WIRE_NO_ACCOUNTS_CONFIGURED(1651),
 
 
   /**
@@ -1334,7 +1334,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WIRE_INVALID_PAYTO_CONFIGURED(1652),
+  EXCHANGE_WIRE_INVALID_PAYTO_CONFIGURED(1652),
 
 
   /**
@@ -1342,7 +1342,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_WIRE_FEES_NOT_CONFIGURED(1653),
+  EXCHANGE_WIRE_FEES_NOT_CONFIGURED(1653),
 
 
   /**
@@ -1350,7 +1350,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_PURSE_CREATE_CONFLICTING_META_DATA(1675),
+  EXCHANGE_RESERVES_PURSE_CREATE_CONFLICTING_META_DATA(1675),
 
 
   /**
@@ -1358,7 +1358,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_PURSE_MERGE_CONFLICTING_META_DATA(1676),
+  EXCHANGE_RESERVES_PURSE_MERGE_CONFLICTING_META_DATA(1676),
 
 
   /**
@@ -1366,7 +1366,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_PURSE_CREATE_INSUFFICIENT_FUNDS(1677),
+  EXCHANGE_RESERVES_PURSE_CREATE_INSUFFICIENT_FUNDS(1677),
 
 
   /**
@@ -1374,7 +1374,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_PURSE_FEE_TOO_LOW(1678),
+  EXCHANGE_RESERVES_PURSE_FEE_TOO_LOW(1678),
 
 
   /**
@@ -1382,7 +1382,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_DELETE_ALREADY_DECIDED(1679),
+  EXCHANGE_PURSE_DELETE_ALREADY_DECIDED(1679),
 
 
   /**
@@ -1390,7 +1390,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_DELETE_SIGNATURE_INVALID(1680),
+  EXCHANGE_PURSE_DELETE_SIGNATURE_INVALID(1680),
 
 
   /**
@@ -1398,7 +1398,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_AGE_RESTRICTION_REQUIRED(1681),
+  EXCHANGE_RESERVES_AGE_RESTRICTION_REQUIRED(1681),
 
 
   /**
@@ -1406,7 +1406,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DENOMINATION_HELPER_UNAVAILABLE(1700),
+  EXCHANGE_DENOMINATION_HELPER_UNAVAILABLE(1700),
 
 
   /**
@@ -1414,7 +1414,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DENOMINATION_HELPER_BUG(1701),
+  EXCHANGE_DENOMINATION_HELPER_BUG(1701),
 
 
   /**
@@ -1422,7 +1422,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_DENOMINATION_HELPER_TOO_EARLY(1702),
+  EXCHANGE_DENOMINATION_HELPER_TOO_EARLY(1702),
 
 
   /**
@@ -1430,7 +1430,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_DEPOSIT_EXCHANGE_SIGNATURE_INVALID(1725),
+  EXCHANGE_PURSE_DEPOSIT_EXCHANGE_SIGNATURE_INVALID(1725),
 
 
   /**
@@ -1438,7 +1438,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_SIGNKEY_HELPER_UNAVAILABLE(1750),
+  EXCHANGE_SIGNKEY_HELPER_UNAVAILABLE(1750),
 
 
   /**
@@ -1446,7 +1446,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_SIGNKEY_HELPER_BUG(1751),
+  EXCHANGE_SIGNKEY_HELPER_BUG(1751),
 
 
   /**
@@ -1454,7 +1454,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_SIGNKEY_HELPER_TOO_EARLY(1752),
+  EXCHANGE_SIGNKEY_HELPER_TOO_EARLY(1752),
 
 
   /**
@@ -1462,7 +1462,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_PURSE_EXPIRATION_BEFORE_NOW(1775),
+  EXCHANGE_RESERVES_PURSE_EXPIRATION_BEFORE_NOW(1775),
 
 
   /**
@@ -1470,7 +1470,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_PURSE_EXPIRATION_IS_NEVER(1776),
+  EXCHANGE_RESERVES_PURSE_EXPIRATION_IS_NEVER(1776),
 
 
   /**
@@ -1478,7 +1478,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_PURSE_MERGE_SIGNATURE_INVALID(1777),
+  EXCHANGE_RESERVES_PURSE_MERGE_SIGNATURE_INVALID(1777),
 
 
   /**
@@ -1486,7 +1486,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_RESERVE_MERGE_SIGNATURE_INVALID(1778),
+  EXCHANGE_RESERVES_RESERVE_MERGE_SIGNATURE_INVALID(1778),
 
 
   /**
@@ -1494,7 +1494,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_OPEN_BAD_SIGNATURE(1785),
+  EXCHANGE_RESERVES_OPEN_BAD_SIGNATURE(1785),
 
 
   /**
@@ -1502,7 +1502,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_CLOSE_BAD_SIGNATURE(1786),
+  EXCHANGE_RESERVES_CLOSE_BAD_SIGNATURE(1786),
 
 
   /**
@@ -1510,7 +1510,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_ATTEST_BAD_SIGNATURE(1787),
+  EXCHANGE_RESERVES_ATTEST_BAD_SIGNATURE(1787),
 
 
   /**
@@ -1518,7 +1518,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_CLOSE_NO_TARGET_ACCOUNT(1788),
+  EXCHANGE_RESERVES_CLOSE_NO_TARGET_ACCOUNT(1788),
 
 
   /**
@@ -1526,7 +1526,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_RESERVES_OPEN_INSUFFICIENT_FUNDS(1789),
+  EXCHANGE_RESERVES_OPEN_INSUFFICIENT_FUNDS(1789),
 
 
   /**
@@ -1534,7 +1534,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_AUDITOR_NOT_FOUND(1800),
+  EXCHANGE_MANAGEMENT_AUDITOR_NOT_FOUND(1800),
 
 
   /**
@@ -1542,7 +1542,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_AUDITOR_MORE_RECENT_PRESENT(1801),
+  EXCHANGE_MANAGEMENT_AUDITOR_MORE_RECENT_PRESENT(1801),
 
 
   /**
@@ -1550,7 +1550,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_AUDITOR_ADD_SIGNATURE_INVALID(1802),
+  EXCHANGE_MANAGEMENT_AUDITOR_ADD_SIGNATURE_INVALID(1802),
 
 
   /**
@@ -1558,7 +1558,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_AUDITOR_DEL_SIGNATURE_INVALID(1803),
+  EXCHANGE_MANAGEMENT_AUDITOR_DEL_SIGNATURE_INVALID(1803),
 
 
   /**
@@ -1566,7 +1566,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_DENOMINATION_REVOKE_SIGNATURE_INVALID(1804),
+  EXCHANGE_MANAGEMENT_DENOMINATION_REVOKE_SIGNATURE_INVALID(1804),
 
 
   /**
@@ -1574,7 +1574,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_SIGNKEY_REVOKE_SIGNATURE_INVALID(1805),
+  EXCHANGE_MANAGEMENT_SIGNKEY_REVOKE_SIGNATURE_INVALID(1805),
 
 
   /**
@@ -1582,7 +1582,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_WIRE_MORE_RECENT_PRESENT(1806),
+  EXCHANGE_MANAGEMENT_WIRE_MORE_RECENT_PRESENT(1806),
 
 
   /**
@@ -1590,7 +1590,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_KEYS_SIGNKEY_UNKNOWN(1807),
+  EXCHANGE_MANAGEMENT_KEYS_SIGNKEY_UNKNOWN(1807),
 
 
   /**
@@ -1598,7 +1598,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_WIRE_DETAILS_SIGNATURE_INVALID(1808),
+  EXCHANGE_MANAGEMENT_WIRE_DETAILS_SIGNATURE_INVALID(1808),
 
 
   /**
@@ -1606,7 +1606,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_WIRE_ADD_SIGNATURE_INVALID(1809),
+  EXCHANGE_MANAGEMENT_WIRE_ADD_SIGNATURE_INVALID(1809),
 
 
   /**
@@ -1614,7 +1614,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_WIRE_DEL_SIGNATURE_INVALID(1810),
+  EXCHANGE_MANAGEMENT_WIRE_DEL_SIGNATURE_INVALID(1810),
 
 
   /**
@@ -1622,7 +1622,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_WIRE_NOT_FOUND(1811),
+  EXCHANGE_MANAGEMENT_WIRE_NOT_FOUND(1811),
 
 
   /**
@@ -1630,7 +1630,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_WIRE_FEE_SIGNATURE_INVALID(1812),
+  EXCHANGE_MANAGEMENT_WIRE_FEE_SIGNATURE_INVALID(1812),
 
 
   /**
@@ -1638,7 +1638,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_WIRE_FEE_MISMATCH(1813),
+  EXCHANGE_MANAGEMENT_WIRE_FEE_MISMATCH(1813),
 
 
   /**
@@ -1646,7 +1646,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_KEYS_DENOMKEY_ADD_SIGNATURE_INVALID(1814),
+  EXCHANGE_MANAGEMENT_KEYS_DENOMKEY_ADD_SIGNATURE_INVALID(1814),
 
 
   /**
@@ -1654,7 +1654,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_KEYS_SIGNKEY_ADD_SIGNATURE_INVALID(1815),
+  EXCHANGE_MANAGEMENT_KEYS_SIGNKEY_ADD_SIGNATURE_INVALID(1815),
 
 
   /**
@@ -1662,7 +1662,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_GLOBAL_FEE_MISMATCH(1816),
+  EXCHANGE_MANAGEMENT_GLOBAL_FEE_MISMATCH(1816),
 
 
   /**
@@ -1670,7 +1670,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_GLOBAL_FEE_SIGNATURE_INVALID(1817),
+  EXCHANGE_MANAGEMENT_GLOBAL_FEE_SIGNATURE_INVALID(1817),
 
 
   /**
@@ -1678,7 +1678,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_DRAIN_PROFITS_SIGNATURE_INVALID(1818),
+  EXCHANGE_MANAGEMENT_DRAIN_PROFITS_SIGNATURE_INVALID(1818),
 
 
   /**
@@ -1686,7 +1686,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AML_DECISION_ADD_SIGNATURE_INVALID(1825),
+  EXCHANGE_AML_DECISION_ADD_SIGNATURE_INVALID(1825),
 
 
   /**
@@ -1694,7 +1694,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AML_DECISION_INVALID_OFFICER(1826),
+  EXCHANGE_AML_DECISION_INVALID_OFFICER(1826),
 
 
   /**
@@ -1702,7 +1702,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AML_DECISION_MORE_RECENT_PRESENT(1827),
+  EXCHANGE_AML_DECISION_MORE_RECENT_PRESENT(1827),
 
 
   /**
@@ -1710,7 +1710,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AML_DECISION_UNKNOWN_CHECK(1828),
+  EXCHANGE_AML_DECISION_UNKNOWN_CHECK(1828),
 
 
   /**
@@ -1718,7 +1718,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_UPDATE_AML_OFFICER_SIGNATURE_INVALID(1830),
+  EXCHANGE_MANAGEMENT_UPDATE_AML_OFFICER_SIGNATURE_INVALID(1830),
 
 
   /**
@@ -1726,7 +1726,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_AML_OFFICERS_MORE_RECENT_PRESENT(1831),
+  EXCHANGE_MANAGEMENT_AML_OFFICERS_MORE_RECENT_PRESENT(1831),
 
 
   /**
@@ -1734,7 +1734,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_CREATE_CONFLICTING_META_DATA(1850),
+  EXCHANGE_PURSE_CREATE_CONFLICTING_META_DATA(1850),
 
 
   /**
@@ -1742,7 +1742,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_CREATE_CONFLICTING_CONTRACT_STORED(1851),
+  EXCHANGE_PURSE_CREATE_CONFLICTING_CONTRACT_STORED(1851),
 
 
   /**
@@ -1750,7 +1750,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_CREATE_COIN_SIGNATURE_INVALID(1852),
+  EXCHANGE_PURSE_CREATE_COIN_SIGNATURE_INVALID(1852),
 
 
   /**
@@ -1758,7 +1758,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_CREATE_EXPIRATION_BEFORE_NOW(1853),
+  EXCHANGE_PURSE_CREATE_EXPIRATION_BEFORE_NOW(1853),
 
 
   /**
@@ -1766,7 +1766,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_CREATE_EXPIRATION_IS_NEVER(1854),
+  EXCHANGE_PURSE_CREATE_EXPIRATION_IS_NEVER(1854),
 
 
   /**
@@ -1774,7 +1774,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_CREATE_SIGNATURE_INVALID(1855),
+  EXCHANGE_PURSE_CREATE_SIGNATURE_INVALID(1855),
 
 
   /**
@@ -1782,7 +1782,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_ECONTRACT_SIGNATURE_INVALID(1856),
+  EXCHANGE_PURSE_ECONTRACT_SIGNATURE_INVALID(1856),
 
 
   /**
@@ -1790,7 +1790,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_CREATE_EXCHANGE_SIGNATURE_INVALID(1857),
+  EXCHANGE_PURSE_CREATE_EXCHANGE_SIGNATURE_INVALID(1857),
 
 
   /**
@@ -1798,7 +1798,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_DEPOSIT_CONFLICTING_META_DATA(1858),
+  EXCHANGE_PURSE_DEPOSIT_CONFLICTING_META_DATA(1858),
 
 
   /**
@@ -1806,7 +1806,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_ECONTRACT_CONFLICTING_META_DATA(1859),
+  EXCHANGE_PURSE_ECONTRACT_CONFLICTING_META_DATA(1859),
 
 
   /**
@@ -1814,7 +1814,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_CREATE_PURSE_NEGATIVE_VALUE_AFTER_FEE(1860),
+  EXCHANGE_CREATE_PURSE_NEGATIVE_VALUE_AFTER_FEE(1860),
 
 
   /**
@@ -1822,7 +1822,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_MERGE_INVALID_MERGE_SIGNATURE(1876),
+  EXCHANGE_PURSE_MERGE_INVALID_MERGE_SIGNATURE(1876),
 
 
   /**
@@ -1830,7 +1830,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_MERGE_INVALID_RESERVE_SIGNATURE(1877),
+  EXCHANGE_PURSE_MERGE_INVALID_RESERVE_SIGNATURE(1877),
 
 
   /**
@@ -1838,7 +1838,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_NOT_FULL(1878),
+  EXCHANGE_PURSE_NOT_FULL(1878),
 
 
   /**
@@ -1846,7 +1846,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_MERGE_EXCHANGE_SIGNATURE_INVALID(1879),
+  EXCHANGE_PURSE_MERGE_EXCHANGE_SIGNATURE_INVALID(1879),
 
 
   /**
@@ -1854,7 +1854,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MERGE_PURSE_PARTNER_UNKNOWN(1880),
+  EXCHANGE_MERGE_PURSE_PARTNER_UNKNOWN(1880),
 
 
   /**
@@ -1862,7 +1862,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_ADD_PARTNER_SIGNATURE_INVALID(1890),
+  EXCHANGE_MANAGEMENT_ADD_PARTNER_SIGNATURE_INVALID(1890),
 
 
   /**
@@ -1870,7 +1870,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_MANAGEMENT_ADD_PARTNER_DATA_CONFLICT(1891),
+  EXCHANGE_MANAGEMENT_ADD_PARTNER_DATA_CONFLICT(1891),
 
 
   /**
@@ -1878,7 +1878,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AUDITORS_AUDITOR_SIGNATURE_INVALID(1900),
+  EXCHANGE_AUDITORS_AUDITOR_SIGNATURE_INVALID(1900),
 
 
   /**
@@ -1886,7 +1886,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_PRECONDITION_FAILED (412).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AUDITORS_AUDITOR_UNKNOWN(1901),
+  EXCHANGE_AUDITORS_AUDITOR_UNKNOWN(1901),
 
 
   /**
@@ -1894,7 +1894,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_AUDITORS_AUDITOR_INACTIVE(1902),
+  EXCHANGE_AUDITORS_AUDITOR_INACTIVE(1902),
 
 
   /**
@@ -1902,7 +1902,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_WALLET_SIGNATURE_INVALID(1925),
+  EXCHANGE_KYC_WALLET_SIGNATURE_INVALID(1925),
 
 
   /**
@@ -1910,7 +1910,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_PROOF_BACKEND_INVALID_RESPONSE(1926),
+  EXCHANGE_KYC_PROOF_BACKEND_INVALID_RESPONSE(1926),
 
 
   /**
@@ -1918,7 +1918,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_PROOF_BACKEND_ERROR(1927),
+  EXCHANGE_KYC_PROOF_BACKEND_ERROR(1927),
 
 
   /**
@@ -1926,7 +1926,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_PROOF_BACKEND_AUTHORIZATION_FAILED(1928),
+  EXCHANGE_KYC_PROOF_BACKEND_AUTHORIZATION_FAILED(1928),
 
 
   /**
@@ -1934,7 +1934,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_PROOF_REQUEST_UNKNOWN(1929),
+  EXCHANGE_KYC_PROOF_REQUEST_UNKNOWN(1929),
 
 
   /**
@@ -1942,7 +1942,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_CHECK_AUTHORIZATION_FAILED(1930),
+  EXCHANGE_KYC_CHECK_AUTHORIZATION_FAILED(1930),
 
 
   /**
@@ -1950,7 +1950,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_GENERIC_LOGIC_UNKNOWN(1931),
+  EXCHANGE_KYC_GENERIC_LOGIC_UNKNOWN(1931),
 
 
   /**
@@ -1958,7 +1958,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_GENERIC_LOGIC_GONE(1932),
+  EXCHANGE_KYC_GENERIC_LOGIC_GONE(1932),
 
 
   /**
@@ -1966,7 +1966,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_GENERIC_LOGIC_BUG(1933),
+  EXCHANGE_KYC_GENERIC_LOGIC_BUG(1933),
 
 
   /**
@@ -1974,7 +1974,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NETWORK_AUTHENTICATION_REQUIRED (511).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_GENERIC_PROVIDER_ACCESS_REFUSED(1934),
+  EXCHANGE_KYC_GENERIC_PROVIDER_ACCESS_REFUSED(1934),
 
 
   /**
@@ -1982,7 +1982,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GATEWAY_TIMEOUT (504).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_GENERIC_PROVIDER_TIMEOUT(1935),
+  EXCHANGE_KYC_GENERIC_PROVIDER_TIMEOUT(1935),
 
 
   /**
@@ -1990,7 +1990,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_GENERIC_PROVIDER_UNEXPECTED_REPLY(1936),
+  EXCHANGE_KYC_GENERIC_PROVIDER_UNEXPECTED_REPLY(1936),
 
 
   /**
@@ -1998,7 +1998,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_SERVICE_UNAVAILABLE (503).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_GENERIC_PROVIDER_RATE_LIMIT_EXCEEDED(1937),
+  EXCHANGE_KYC_GENERIC_PROVIDER_RATE_LIMIT_EXCEEDED(1937),
 
 
   /**
@@ -2006,7 +2006,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNAUTHORIZED (401).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_KYC_WEBHOOK_UNAUTHORIZED(1938),
+  EXCHANGE_KYC_WEBHOOK_UNAUTHORIZED(1938),
 
 
   /**
@@ -2014,7 +2014,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_CONTRACTS_UNKNOWN(1950),
+  EXCHANGE_CONTRACTS_UNKNOWN(1950),
 
 
   /**
@@ -2022,7 +2022,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_CONTRACTS_INVALID_CONTRACT_PUB(1951),
+  EXCHANGE_CONTRACTS_INVALID_CONTRACT_PUB(1951),
 
 
   /**
@@ -2030,7 +2030,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_CONTRACTS_DECRYPTION_FAILED(1952),
+  EXCHANGE_CONTRACTS_DECRYPTION_FAILED(1952),
 
 
   /**
@@ -2038,7 +2038,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_CONTRACTS_SIGNATURE_INVALID(1953),
+  EXCHANGE_CONTRACTS_SIGNATURE_INVALID(1953),
 
 
   /**
@@ -2046,7 +2046,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_CONTRACTS_DECODING_FAILED(1954),
+  EXCHANGE_CONTRACTS_DECODING_FAILED(1954),
 
 
   /**
@@ -2054,7 +2054,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_DEPOSIT_COIN_SIGNATURE_INVALID(1975),
+  EXCHANGE_PURSE_DEPOSIT_COIN_SIGNATURE_INVALID(1975),
 
 
   /**
@@ -2062,7 +2062,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_PURSE_DEPOSIT_DECIDED_ALREADY(1976),
+  EXCHANGE_PURSE_DEPOSIT_DECIDED_ALREADY(1976),
 
 
   /**
@@ -2070,7 +2070,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_EXCHANGE_TOTP_KEY_INVALID(1980),
+  EXCHANGE_TOTP_KEY_INVALID(1980),
 
 
   /**
@@ -2078,7 +2078,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_INSTANCE_UNKNOWN(2000),
+  MERCHANT_GENERIC_INSTANCE_UNKNOWN(2000),
 
 
   /**
@@ -2086,7 +2086,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_HOLE_IN_WIRE_FEE_STRUCTURE(2001),
+  MERCHANT_GENERIC_HOLE_IN_WIRE_FEE_STRUCTURE(2001),
 
 
   /**
@@ -2094,7 +2094,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_EXCHANGE_WIRE_REQUEST_FAILED(2002),
+  MERCHANT_GENERIC_EXCHANGE_WIRE_REQUEST_FAILED(2002),
 
 
   /**
@@ -2102,7 +2102,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_ORDER_UNKNOWN(2005),
+  MERCHANT_GENERIC_ORDER_UNKNOWN(2005),
 
 
   /**
@@ -2110,7 +2110,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_PRODUCT_UNKNOWN(2006),
+  MERCHANT_GENERIC_PRODUCT_UNKNOWN(2006),
 
 
   /**
@@ -2118,7 +2118,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_REWARD_ID_UNKNOWN(2007),
+  MERCHANT_GENERIC_REWARD_ID_UNKNOWN(2007),
 
 
   /**
@@ -2126,7 +2126,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_DB_CONTRACT_CONTENT_INVALID(2008),
+  MERCHANT_GENERIC_DB_CONTRACT_CONTENT_INVALID(2008),
 
 
   /**
@@ -2134,7 +2134,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_CONTRACT_HASH_DOES_NOT_MATCH_ORDER(2009),
+  MERCHANT_GENERIC_CONTRACT_HASH_DOES_NOT_MATCH_ORDER(2009),
 
 
   /**
@@ -2142,7 +2142,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_EXCHANGE_KEYS_FAILURE(2010),
+  MERCHANT_GENERIC_EXCHANGE_KEYS_FAILURE(2010),
 
 
   /**
@@ -2150,7 +2150,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GATEWAY_TIMEOUT (504).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_EXCHANGE_TIMEOUT(2011),
+  MERCHANT_GENERIC_EXCHANGE_TIMEOUT(2011),
 
 
   /**
@@ -2158,7 +2158,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_EXCHANGE_CONNECT_FAILURE(2012),
+  MERCHANT_GENERIC_EXCHANGE_CONNECT_FAILURE(2012),
 
 
   /**
@@ -2166,7 +2166,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_EXCHANGE_REPLY_MALFORMED(2013),
+  MERCHANT_GENERIC_EXCHANGE_REPLY_MALFORMED(2013),
 
 
   /**
@@ -2174,7 +2174,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_EXCHANGE_UNEXPECTED_STATUS(2014),
+  MERCHANT_GENERIC_EXCHANGE_UNEXPECTED_STATUS(2014),
 
 
   /**
@@ -2182,7 +2182,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNAUTHORIZED (401).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_UNAUTHORIZED(2015),
+  MERCHANT_GENERIC_UNAUTHORIZED(2015),
 
 
   /**
@@ -2190,7 +2190,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_INSTANCE_DELETED(2016),
+  MERCHANT_GENERIC_INSTANCE_DELETED(2016),
 
 
   /**
@@ -2198,7 +2198,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_TRANSFER_UNKNOWN(2017),
+  MERCHANT_GENERIC_TRANSFER_UNKNOWN(2017),
 
 
   /**
@@ -2206,7 +2206,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_TEMPLATE_UNKNOWN(2018),
+  MERCHANT_GENERIC_TEMPLATE_UNKNOWN(2018),
 
 
   /**
@@ -2214,7 +2214,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_WEBHOOK_UNKNOWN(2019),
+  MERCHANT_GENERIC_WEBHOOK_UNKNOWN(2019),
 
 
   /**
@@ -2222,7 +2222,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_PENDING_WEBHOOK_UNKNOWN(2020),
+  MERCHANT_GENERIC_PENDING_WEBHOOK_UNKNOWN(2020),
 
 
   /**
@@ -2230,7 +2230,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_OTP_DEVICE_UNKNOWN(2021),
+  MERCHANT_GENERIC_OTP_DEVICE_UNKNOWN(2021),
 
 
   /**
@@ -2238,7 +2238,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_ACCOUNT_UNKNOWN(2022),
+  MERCHANT_GENERIC_ACCOUNT_UNKNOWN(2022),
 
 
   /**
@@ -2246,7 +2246,15 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GENERIC_H_WIRE_MALFORMED(2023),
+  MERCHANT_GENERIC_H_WIRE_MALFORMED(2023),
+
+
+  /**
+   * The currency specified in the operation does not work with the current state of the given resource. 
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_GENERIC_CURRENCY_MISMATCH(2024),
 
 
   /**
@@ -2254,7 +2262,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_OK (200).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GET_ORDERS_EXCHANGE_TRACKING_FAILURE(2100),
+  MERCHANT_GET_ORDERS_EXCHANGE_TRACKING_FAILURE(2100),
 
 
   /**
@@ -2262,7 +2270,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GET_ORDERS_ID_EXCHANGE_REQUEST_FAILURE(2103),
+  MERCHANT_GET_ORDERS_ID_EXCHANGE_REQUEST_FAILURE(2103),
 
 
   /**
@@ -2270,7 +2278,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GET_ORDERS_ID_EXCHANGE_LOOKUP_START_FAILURE(2104),
+  MERCHANT_GET_ORDERS_ID_EXCHANGE_LOOKUP_START_FAILURE(2104),
 
 
   /**
@@ -2278,7 +2286,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GET_ORDERS_ID_INVALID_TOKEN(2105),
+  MERCHANT_GET_ORDERS_ID_INVALID_TOKEN(2105),
 
 
   /**
@@ -2286,7 +2294,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_GET_ORDERS_ID_INVALID_CONTRACT_HASH(2106),
+  MERCHANT_GET_ORDERS_ID_INVALID_CONTRACT_HASH(2106),
 
 
   /**
@@ -2294,7 +2302,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_INSUFFICIENT_FUNDS(2150),
+  MERCHANT_POST_ORDERS_ID_PAY_INSUFFICIENT_FUNDS(2150),
 
 
   /**
@@ -2302,7 +2310,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_DENOMINATION_KEY_NOT_FOUND(2151),
+  MERCHANT_POST_ORDERS_ID_PAY_DENOMINATION_KEY_NOT_FOUND(2151),
 
 
   /**
@@ -2310,7 +2318,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_DENOMINATION_KEY_AUDITOR_FAILURE(2152),
+  MERCHANT_POST_ORDERS_ID_PAY_DENOMINATION_KEY_AUDITOR_FAILURE(2152),
 
 
   /**
@@ -2318,7 +2326,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_AMOUNT_OVERFLOW(2153),
+  MERCHANT_POST_ORDERS_ID_PAY_AMOUNT_OVERFLOW(2153),
 
 
   /**
@@ -2326,7 +2334,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_FEES_EXCEED_PAYMENT(2154),
+  MERCHANT_POST_ORDERS_ID_PAY_FEES_EXCEED_PAYMENT(2154),
 
 
   /**
@@ -2334,7 +2342,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_ACCEPTABLE (406).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_INSUFFICIENT_DUE_TO_FEES(2155),
+  MERCHANT_POST_ORDERS_ID_PAY_INSUFFICIENT_DUE_TO_FEES(2155),
 
 
   /**
@@ -2342,7 +2350,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_ACCEPTABLE (406).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_PAYMENT_INSUFFICIENT(2156),
+  MERCHANT_POST_ORDERS_ID_PAY_PAYMENT_INSUFFICIENT(2156),
 
 
   /**
@@ -2350,7 +2358,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_COIN_SIGNATURE_INVALID(2157),
+  MERCHANT_POST_ORDERS_ID_PAY_COIN_SIGNATURE_INVALID(2157),
 
 
   /**
@@ -2358,7 +2366,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_EXCHANGE_LOOKUP_FAILED(2158),
+  MERCHANT_POST_ORDERS_ID_PAY_EXCHANGE_LOOKUP_FAILED(2158),
 
 
   /**
@@ -2366,7 +2374,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_REFUND_DEADLINE_PAST_WIRE_TRANSFER_DEADLINE(2159),
+  MERCHANT_POST_ORDERS_ID_PAY_REFUND_DEADLINE_PAST_WIRE_TRANSFER_DEADLINE(2159),
 
 
   /**
@@ -2374,7 +2382,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_ALREADY_PAID(2160),
+  MERCHANT_POST_ORDERS_ID_PAY_ALREADY_PAID(2160),
 
 
   /**
@@ -2382,7 +2390,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_OFFER_EXPIRED(2161),
+  MERCHANT_POST_ORDERS_ID_PAY_OFFER_EXPIRED(2161),
 
 
   /**
@@ -2390,7 +2398,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_MERCHANT_FIELD_MISSING(2162),
+  MERCHANT_POST_ORDERS_ID_PAY_MERCHANT_FIELD_MISSING(2162),
 
 
   /**
@@ -2398,7 +2406,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_WIRE_HASH_UNKNOWN(2163),
+  MERCHANT_POST_ORDERS_ID_PAY_WIRE_HASH_UNKNOWN(2163),
 
 
   /**
@@ -2406,7 +2414,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_DENOMINATION_DEPOSIT_EXPIRED(2165),
+  MERCHANT_POST_ORDERS_ID_PAY_DENOMINATION_DEPOSIT_EXPIRED(2165),
 
 
   /**
@@ -2414,7 +2422,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_EXCHANGE_WIRE_FEE_ADDITION_FAILED(2166),
+  MERCHANT_POST_ORDERS_ID_PAY_EXCHANGE_WIRE_FEE_ADDITION_FAILED(2166),
 
 
   /**
@@ -2422,7 +2430,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_PAYMENT_REQUIRED (402).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_REFUNDED(2167),
+  MERCHANT_POST_ORDERS_ID_PAY_REFUNDED(2167),
 
 
   /**
@@ -2430,7 +2438,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_REFUNDS_EXCEED_PAYMENTS(2168),
+  MERCHANT_POST_ORDERS_ID_PAY_REFUNDS_EXCEED_PAYMENTS(2168),
 
 
   /**
@@ -2438,7 +2446,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_DEAD_QQQ_PAY_MERCHANT_POST_ORDERS_ID_ABORT_REFUND_REFUSED_PAYMENT_COMPLETE(2169),
+  DEAD_QQQ_PAY_MERCHANT_POST_ORDERS_ID_ABORT_REFUND_REFUSED_PAYMENT_COMPLETE(2169),
 
 
   /**
@@ -2446,7 +2454,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_EXCHANGE_FAILED(2170),
+  MERCHANT_POST_ORDERS_ID_PAY_EXCHANGE_FAILED(2170),
 
 
   /**
@@ -2454,7 +2462,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_AGE_COMMITMENT_MISSING(2171),
+  MERCHANT_POST_ORDERS_ID_PAY_AGE_COMMITMENT_MISSING(2171),
 
 
   /**
@@ -2462,7 +2470,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_AGE_COMMITMENT_SIZE_MISMATCH(2172),
+  MERCHANT_POST_ORDERS_ID_PAY_AGE_COMMITMENT_SIZE_MISMATCH(2172),
 
 
   /**
@@ -2470,7 +2478,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_AGE_VERIFICATION_FAILED(2173),
+  MERCHANT_POST_ORDERS_ID_PAY_AGE_VERIFICATION_FAILED(2173),
 
 
   /**
@@ -2478,7 +2486,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_AGE_COMMITMENT_HASH_MISSING(2174),
+  MERCHANT_POST_ORDERS_ID_PAY_AGE_COMMITMENT_HASH_MISSING(2174),
 
 
   /**
@@ -2486,7 +2494,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAY_WIRE_METHOD_UNSUPPORTED(2175),
+  MERCHANT_POST_ORDERS_ID_PAY_WIRE_METHOD_UNSUPPORTED(2175),
 
 
   /**
@@ -2494,7 +2502,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAID_CONTRACT_HASH_MISMATCH(2200),
+  MERCHANT_POST_ORDERS_ID_PAID_CONTRACT_HASH_MISMATCH(2200),
 
 
   /**
@@ -2502,7 +2510,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_PAID_COIN_SIGNATURE_INVALID(2201),
+  MERCHANT_POST_ORDERS_ID_PAID_COIN_SIGNATURE_INVALID(2201),
 
 
   /**
@@ -2510,7 +2518,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_ABORT_EXCHANGE_REFUND_FAILED(2251),
+  MERCHANT_POST_ORDERS_ID_ABORT_EXCHANGE_REFUND_FAILED(2251),
 
 
   /**
@@ -2518,7 +2526,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_ABORT_EXCHANGE_LOOKUP_FAILED(2252),
+  MERCHANT_POST_ORDERS_ID_ABORT_EXCHANGE_LOOKUP_FAILED(2252),
 
 
   /**
@@ -2526,7 +2534,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_ABORT_CONTRACT_NOT_FOUND(2253),
+  MERCHANT_POST_ORDERS_ID_ABORT_CONTRACT_NOT_FOUND(2253),
 
 
   /**
@@ -2534,7 +2542,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_PRECONDITION_FAILED (412).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_ABORT_REFUND_REFUSED_PAYMENT_COMPLETE(2254),
+  MERCHANT_POST_ORDERS_ID_ABORT_REFUND_REFUSED_PAYMENT_COMPLETE(2254),
 
 
   /**
@@ -2542,7 +2550,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_ABORT_CONTRACT_HASH_MISSMATCH(2255),
+  MERCHANT_POST_ORDERS_ID_ABORT_CONTRACT_HASH_MISSMATCH(2255),
 
 
   /**
@@ -2550,7 +2558,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_ABORT_COINS_ARRAY_EMPTY(2256),
+  MERCHANT_POST_ORDERS_ID_ABORT_COINS_ARRAY_EMPTY(2256),
 
 
   /**
@@ -2558,7 +2566,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_CLAIM_NOT_FOUND(2300),
+  MERCHANT_POST_ORDERS_ID_CLAIM_NOT_FOUND(2300),
 
 
   /**
@@ -2566,7 +2574,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_CLAIM_ALREADY_CLAIMED(2301),
+  MERCHANT_POST_ORDERS_ID_CLAIM_ALREADY_CLAIMED(2301),
 
 
   /**
@@ -2574,7 +2582,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_CLAIM_CLIENT_INTERNAL_FAILURE(2302),
+  MERCHANT_POST_ORDERS_ID_CLAIM_CLIENT_INTERNAL_FAILURE(2302),
 
 
   /**
@@ -2582,7 +2590,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_ORDERS_ID_REFUND_SIGNATURE_FAILED(2350),
+  MERCHANT_POST_ORDERS_ID_REFUND_SIGNATURE_FAILED(2350),
 
 
   /**
@@ -2590,7 +2598,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_REWARD_PICKUP_UNBLIND_FAILURE(2400),
+  MERCHANT_REWARD_PICKUP_UNBLIND_FAILURE(2400),
 
 
   /**
@@ -2598,7 +2606,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_REWARD_PICKUP_EXCHANGE_ERROR(2403),
+  MERCHANT_REWARD_PICKUP_EXCHANGE_ERROR(2403),
 
 
   /**
@@ -2606,7 +2614,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_REWARD_PICKUP_SUMMATION_FAILED(2404),
+  MERCHANT_REWARD_PICKUP_SUMMATION_FAILED(2404),
 
 
   /**
@@ -2614,7 +2622,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_REWARD_PICKUP_HAS_EXPIRED(2405),
+  MERCHANT_REWARD_PICKUP_HAS_EXPIRED(2405),
 
 
   /**
@@ -2622,7 +2630,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_REWARD_PICKUP_AMOUNT_EXCEEDS_REWARD_REMAINING(2406),
+  MERCHANT_REWARD_PICKUP_AMOUNT_EXCEEDS_REWARD_REMAINING(2406),
 
 
   /**
@@ -2630,7 +2638,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_REWARD_PICKUP_DENOMINATION_UNKNOWN(2407),
+  MERCHANT_REWARD_PICKUP_DENOMINATION_UNKNOWN(2407),
 
 
   /**
@@ -2638,7 +2646,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_INSTANCE_CONFIGURATION_LACKS_WIRE(2500),
+  MERCHANT_PRIVATE_POST_ORDERS_INSTANCE_CONFIGURATION_LACKS_WIRE(2500),
 
 
   /**
@@ -2646,7 +2654,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_NO_LOCALTIME(2501),
+  MERCHANT_PRIVATE_POST_ORDERS_NO_LOCALTIME(2501),
 
 
   /**
@@ -2654,7 +2662,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_PROPOSAL_PARSE_ERROR(2502),
+  MERCHANT_PRIVATE_POST_ORDERS_PROPOSAL_PARSE_ERROR(2502),
 
 
   /**
@@ -2662,7 +2670,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_ALREADY_EXISTS(2503),
+  MERCHANT_PRIVATE_POST_ORDERS_ALREADY_EXISTS(2503),
 
 
   /**
@@ -2670,7 +2678,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_REFUND_AFTER_WIRE_DEADLINE(2504),
+  MERCHANT_PRIVATE_POST_ORDERS_REFUND_AFTER_WIRE_DEADLINE(2504),
 
 
   /**
@@ -2678,7 +2686,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_DELIVERY_DATE_IN_PAST(2505),
+  MERCHANT_PRIVATE_POST_ORDERS_DELIVERY_DATE_IN_PAST(2505),
 
 
   /**
@@ -2686,7 +2694,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_WIRE_DEADLINE_IS_NEVER(2506),
+  MERCHANT_PRIVATE_POST_ORDERS_WIRE_DEADLINE_IS_NEVER(2506),
 
 
   /**
@@ -2694,7 +2702,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_PAY_DEADLINE_IN_PAST(2507),
+  MERCHANT_PRIVATE_POST_ORDERS_PAY_DEADLINE_IN_PAST(2507),
 
 
   /**
@@ -2702,7 +2710,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_REFUND_DEADLINE_IN_PAST(2508),
+  MERCHANT_PRIVATE_POST_ORDERS_REFUND_DEADLINE_IN_PAST(2508),
 
 
   /**
@@ -2710,7 +2718,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_NO_EXCHANGES_FOR_WIRE_METHOD(2509),
+  MERCHANT_PRIVATE_POST_ORDERS_NO_EXCHANGES_FOR_WIRE_METHOD(2509),
 
 
   /**
@@ -2718,7 +2726,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_PATCH_ORDERS_ID_FORGET_PATH_SYNTAX_INCORRECT(2510),
+  MERCHANT_PRIVATE_PATCH_ORDERS_ID_FORGET_PATH_SYNTAX_INCORRECT(2510),
 
 
   /**
@@ -2726,7 +2734,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_PATCH_ORDERS_ID_FORGET_PATH_NOT_FORGETTABLE(2511),
+  MERCHANT_PRIVATE_PATCH_ORDERS_ID_FORGET_PATH_NOT_FORGETTABLE(2511),
 
 
   /**
@@ -2734,7 +2742,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_DELETE_ORDERS_AWAITING_PAYMENT(2520),
+  MERCHANT_PRIVATE_DELETE_ORDERS_AWAITING_PAYMENT(2520),
 
 
   /**
@@ -2742,7 +2750,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_DELETE_ORDERS_ALREADY_PAID(2521),
+  MERCHANT_PRIVATE_DELETE_ORDERS_ALREADY_PAID(2521),
 
 
   /**
@@ -2750,7 +2758,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_ID_REFUND_INCONSISTENT_AMOUNT(2530),
+  MERCHANT_PRIVATE_POST_ORDERS_ID_REFUND_INCONSISTENT_AMOUNT(2530),
 
 
   /**
@@ -2758,7 +2766,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_ID_REFUND_ORDER_UNPAID(2531),
+  MERCHANT_PRIVATE_POST_ORDERS_ID_REFUND_ORDER_UNPAID(2531),
 
 
   /**
@@ -2766,7 +2774,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_ORDERS_ID_REFUND_NOT_ALLOWED_BY_CONTRACT(2532),
+  MERCHANT_PRIVATE_POST_ORDERS_ID_REFUND_NOT_ALLOWED_BY_CONTRACT(2532),
 
 
   /**
@@ -2774,7 +2782,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_TRANSFERS_EXCHANGE_UNKNOWN(2550),
+  MERCHANT_PRIVATE_POST_TRANSFERS_EXCHANGE_UNKNOWN(2550),
 
 
   /**
@@ -2782,7 +2790,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_TRANSFERS_REQUEST_ERROR(2551),
+  MERCHANT_PRIVATE_POST_TRANSFERS_REQUEST_ERROR(2551),
 
 
   /**
@@ -2790,7 +2798,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_TRANSFERS_CONFLICTING_TRANSFERS(2552),
+  MERCHANT_PRIVATE_POST_TRANSFERS_CONFLICTING_TRANSFERS(2552),
 
 
   /**
@@ -2798,7 +2806,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_TRANSFERS_CONFLICTING_REPORTS(2553),
+  MERCHANT_PRIVATE_POST_TRANSFERS_CONFLICTING_REPORTS(2553),
 
 
   /**
@@ -2806,7 +2814,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_TRANSFERS_BAD_WIRE_FEE(2554),
+  MERCHANT_PRIVATE_POST_TRANSFERS_BAD_WIRE_FEE(2554),
 
 
   /**
@@ -2814,7 +2822,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_TRANSFERS_ACCOUNT_NOT_FOUND(2555),
+  MERCHANT_PRIVATE_POST_TRANSFERS_ACCOUNT_NOT_FOUND(2555),
 
 
   /**
@@ -2822,7 +2830,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_DELETE_TRANSFERS_ALREADY_CONFIRMED(2556),
+  MERCHANT_PRIVATE_DELETE_TRANSFERS_ALREADY_CONFIRMED(2556),
 
 
   /**
@@ -2830,7 +2838,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_TRANSFERS_CONFLICTING_SUBMISSION(2557),
+  MERCHANT_PRIVATE_POST_TRANSFERS_CONFLICTING_SUBMISSION(2557),
 
 
   /**
@@ -2838,7 +2846,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_EXCHANGE_TRANSFERS_AWAITING_KEYS(2258),
+  MERCHANT_EXCHANGE_TRANSFERS_AWAITING_KEYS(2258),
 
 
   /**
@@ -2846,7 +2854,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_EXCHANGE_TRANSFERS_AWAITING_LIST(2259),
+  MERCHANT_EXCHANGE_TRANSFERS_AWAITING_LIST(2259),
 
 
   /**
@@ -2854,7 +2862,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_OK (200).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_EXCHANGE_TRANSFERS_FATAL_NO_EXCHANGE(2260),
+  MERCHANT_EXCHANGE_TRANSFERS_FATAL_NO_EXCHANGE(2260),
 
 
   /**
@@ -2862,7 +2870,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_EXCHANGE_TRANSFERS_FATAL_NOT_FOUND(2261),
+  MERCHANT_EXCHANGE_TRANSFERS_FATAL_NOT_FOUND(2261),
 
 
   /**
@@ -2870,7 +2878,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_EXCHANGE_TRANSFERS_RATE_LIMITED(2262),
+  MERCHANT_EXCHANGE_TRANSFERS_RATE_LIMITED(2262),
 
 
   /**
@@ -2878,7 +2886,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_EXCHANGE_TRANSFERS_TRANSIENT_FAILURE(2263),
+  MERCHANT_EXCHANGE_TRANSFERS_TRANSIENT_FAILURE(2263),
 
 
   /**
@@ -2886,7 +2894,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_OK (200).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_EXCHANGE_TRANSFERS_HARD_FAILURE(2264),
+  MERCHANT_EXCHANGE_TRANSFERS_HARD_FAILURE(2264),
 
 
   /**
@@ -2894,7 +2902,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_EXCHANGE_TRANSFERS_CONFLICTING_TRANSFERS(2563),
+  MERCHANT_EXCHANGE_TRANSFERS_CONFLICTING_TRANSFERS(2563),
 
 
   /**
@@ -2902,7 +2910,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_INSTANCES_ALREADY_EXISTS(2600),
+  MERCHANT_PRIVATE_POST_INSTANCES_ALREADY_EXISTS(2600),
 
 
   /**
@@ -2910,7 +2918,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_INSTANCES_BAD_AUTH(2601),
+  MERCHANT_PRIVATE_POST_INSTANCES_BAD_AUTH(2601),
 
 
   /**
@@ -2918,7 +2926,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_INSTANCE_AUTH_BAD_AUTH(2602),
+  MERCHANT_PRIVATE_POST_INSTANCE_AUTH_BAD_AUTH(2602),
 
 
   /**
@@ -2926,7 +2934,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_INSTANCES_PURGE_REQUIRED(2603),
+  MERCHANT_PRIVATE_POST_INSTANCES_PURGE_REQUIRED(2603),
 
 
   /**
@@ -2934,7 +2942,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_PATCH_INSTANCES_PURGE_REQUIRED(2625),
+  MERCHANT_PRIVATE_PATCH_INSTANCES_PURGE_REQUIRED(2625),
 
 
   /**
@@ -2942,7 +2950,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_ACCOUNT_DELETE_UNKNOWN_ACCOUNT(2626),
+  MERCHANT_PRIVATE_ACCOUNT_DELETE_UNKNOWN_ACCOUNT(2626),
 
 
   /**
@@ -2950,7 +2958,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_ACCOUNT_EXISTS(2627),
+  MERCHANT_PRIVATE_ACCOUNT_EXISTS(2627),
 
 
   /**
@@ -2958,7 +2966,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_PRODUCTS_CONFLICT_PRODUCT_EXISTS(2650),
+  MERCHANT_PRIVATE_POST_PRODUCTS_CONFLICT_PRODUCT_EXISTS(2650),
 
 
   /**
@@ -2966,7 +2974,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_PATCH_PRODUCTS_TOTAL_LOST_REDUCED(2660),
+  MERCHANT_PRIVATE_PATCH_PRODUCTS_TOTAL_LOST_REDUCED(2660),
 
 
   /**
@@ -2974,7 +2982,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_PATCH_PRODUCTS_TOTAL_LOST_EXCEEDS_STOCKS(2661),
+  MERCHANT_PRIVATE_PATCH_PRODUCTS_TOTAL_LOST_EXCEEDS_STOCKS(2661),
 
 
   /**
@@ -2982,7 +2990,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_PATCH_PRODUCTS_TOTAL_STOCKED_REDUCED(2662),
+  MERCHANT_PRIVATE_PATCH_PRODUCTS_TOTAL_STOCKED_REDUCED(2662),
 
 
   /**
@@ -2990,7 +2998,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_PATCH_PRODUCTS_TOTAL_SOLD_REDUCED(2663),
+  MERCHANT_PRIVATE_PATCH_PRODUCTS_TOTAL_SOLD_REDUCED(2663),
 
 
   /**
@@ -2998,7 +3006,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_PRODUCTS_LOCK_INSUFFICIENT_STOCKS(2670),
+  MERCHANT_PRIVATE_POST_PRODUCTS_LOCK_INSUFFICIENT_STOCKS(2670),
 
 
   /**
@@ -3006,7 +3014,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_DELETE_PRODUCTS_CONFLICTING_LOCK(2680),
+  MERCHANT_PRIVATE_DELETE_PRODUCTS_CONFLICTING_LOCK(2680),
 
 
   /**
@@ -3014,7 +3022,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_RESERVES_UNSUPPORTED_WIRE_METHOD(2700),
+  MERCHANT_PRIVATE_POST_RESERVES_UNSUPPORTED_WIRE_METHOD(2700),
 
 
   /**
@@ -3022,7 +3030,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_RESERVES_REWARDS_NOT_ALLOWED(2701),
+  MERCHANT_PRIVATE_POST_RESERVES_REWARDS_NOT_ALLOWED(2701),
 
 
   /**
@@ -3030,7 +3038,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_DELETE_RESERVES_NO_SUCH_RESERVE(2710),
+  MERCHANT_PRIVATE_DELETE_RESERVES_NO_SUCH_RESERVE(2710),
 
 
   /**
@@ -3038,7 +3046,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_REWARD_AUTHORIZE_RESERVE_EXPIRED(2750),
+  MERCHANT_PRIVATE_POST_REWARD_AUTHORIZE_RESERVE_EXPIRED(2750),
 
 
   /**
@@ -3046,7 +3054,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_SERVICE_UNAVAILABLE (503).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_REWARD_AUTHORIZE_RESERVE_UNKNOWN(2751),
+  MERCHANT_PRIVATE_POST_REWARD_AUTHORIZE_RESERVE_UNKNOWN(2751),
 
 
   /**
@@ -3054,7 +3062,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_REWARD_AUTHORIZE_INSUFFICIENT_FUNDS(2752),
+  MERCHANT_PRIVATE_POST_REWARD_AUTHORIZE_INSUFFICIENT_FUNDS(2752),
 
 
   /**
@@ -3062,7 +3070,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_SERVICE_UNAVAILABLE (503).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_REWARD_AUTHORIZE_RESERVE_NOT_FOUND(2753),
+  MERCHANT_PRIVATE_POST_REWARD_AUTHORIZE_RESERVE_NOT_FOUND(2753),
 
 
   /**
@@ -3070,7 +3078,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_OK (200).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_GET_ORDERS_ID_AMOUNT_ARITHMETIC_FAILURE(2800),
+  MERCHANT_PRIVATE_GET_ORDERS_ID_AMOUNT_ARITHMETIC_FAILURE(2800),
 
 
   /**
@@ -3078,7 +3086,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_TEMPLATES_CONFLICT_TEMPLATE_EXISTS(2850),
+  MERCHANT_PRIVATE_POST_TEMPLATES_CONFLICT_TEMPLATE_EXISTS(2850),
 
 
   /**
@@ -3086,7 +3094,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_OTP_DEVICES_CONFLICT_OTP_DEVICE_EXISTS(2851),
+  MERCHANT_PRIVATE_POST_OTP_DEVICES_CONFLICT_OTP_DEVICE_EXISTS(2851),
 
 
   /**
@@ -3094,7 +3102,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_USING_TEMPLATES_AMOUNT_CONFLICT_TEMPLATES_CONTRACT_AMOUNT(2860),
+  MERCHANT_POST_USING_TEMPLATES_AMOUNT_CONFLICT_TEMPLATES_CONTRACT_AMOUNT(2860),
 
 
   /**
@@ -3102,7 +3110,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_USING_TEMPLATES_SUMMARY_CONFLICT_TEMPLATES_CONTRACT_SUBJECT(2861),
+  MERCHANT_POST_USING_TEMPLATES_SUMMARY_CONFLICT_TEMPLATES_CONTRACT_SUBJECT(2861),
 
 
   /**
@@ -3110,7 +3118,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_USING_TEMPLATES_NO_AMOUNT(2862),
+  MERCHANT_POST_USING_TEMPLATES_NO_AMOUNT(2862),
 
 
   /**
@@ -3118,7 +3126,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_POST_USING_TEMPLATES_NO_SUMMARY(2863),
+  MERCHANT_POST_USING_TEMPLATES_NO_SUMMARY(2863),
 
 
   /**
@@ -3126,7 +3134,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_WEBHOOKS_CONFLICT_WEBHOOK_EXISTS(2900),
+  MERCHANT_PRIVATE_POST_WEBHOOKS_CONFLICT_WEBHOOK_EXISTS(2900),
 
 
   /**
@@ -3134,7 +3142,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_MERCHANT_PRIVATE_POST_PENDING_WEBHOOKS_CONFLICT_PENDING_WEBHOOK_EXISTS(2910),
+  MERCHANT_PRIVATE_POST_PENDING_WEBHOOKS_CONFLICT_PENDING_WEBHOOK_EXISTS(2910),
 
 
   /**
@@ -3142,7 +3150,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_AUDITOR_DEPOSIT_CONFIRMATION_SIGNATURE_INVALID(3100),
+  AUDITOR_DEPOSIT_CONFIRMATION_SIGNATURE_INVALID(3100),
 
 
   /**
@@ -3150,7 +3158,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_AUDITOR_EXCHANGE_SIGNING_KEY_REVOKED(3101),
+  AUDITOR_EXCHANGE_SIGNING_KEY_REVOKED(3101),
 
 
   /**
@@ -3158,7 +3166,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_SAME_ACCOUNT(5101),
+  BANK_SAME_ACCOUNT(5101),
 
 
   /**
@@ -3166,7 +3174,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_UNALLOWED_DEBIT(5102),
+  BANK_UNALLOWED_DEBIT(5102),
 
 
   /**
@@ -3174,7 +3182,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_NEGATIVE_NUMBER_AMOUNT(5103),
+  BANK_NEGATIVE_NUMBER_AMOUNT(5103),
 
 
   /**
@@ -3182,7 +3190,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_NUMBER_TOO_BIG(5104),
+  BANK_NUMBER_TOO_BIG(5104),
 
 
   /**
@@ -3190,7 +3198,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_UNKNOWN_ACCOUNT(5106),
+  BANK_UNKNOWN_ACCOUNT(5106),
 
 
   /**
@@ -3198,7 +3206,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_TRANSACTION_NOT_FOUND(5107),
+  BANK_TRANSACTION_NOT_FOUND(5107),
 
 
   /**
@@ -3206,7 +3214,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_BAD_FORMAT_AMOUNT(5108),
+  BANK_BAD_FORMAT_AMOUNT(5108),
 
 
   /**
@@ -3214,7 +3222,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_REJECT_NO_RIGHTS(5109),
+  BANK_REJECT_NO_RIGHTS(5109),
 
 
   /**
@@ -3222,7 +3230,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_UNMANAGED_EXCEPTION(5110),
+  BANK_UNMANAGED_EXCEPTION(5110),
 
 
   /**
@@ -3230,7 +3238,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_SOFT_EXCEPTION(5111),
+  BANK_SOFT_EXCEPTION(5111),
 
 
   /**
@@ -3238,7 +3246,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_TRANSFER_REQUEST_UID_REUSED(5112),
+  BANK_TRANSFER_REQUEST_UID_REUSED(5112),
 
 
   /**
@@ -3246,7 +3254,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT(5113),
+  BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT(5113),
 
 
   /**
@@ -3254,7 +3262,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT(5114),
+  BANK_DUPLICATE_RESERVE_PUB_SUBJECT(5114),
 
 
   /**
@@ -3262,7 +3270,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GONE (410).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_ANCIENT_TRANSACTION_GONE(5115),
+  BANK_ANCIENT_TRANSACTION_GONE(5115),
 
 
   /**
@@ -3270,7 +3278,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_ABORT_CONFIRM_CONFLICT(5116),
+  BANK_ABORT_CONFIRM_CONFLICT(5116),
 
 
   /**
@@ -3278,7 +3286,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_CONFIRM_ABORT_CONFLICT(5117),
+  BANK_CONFIRM_ABORT_CONFLICT(5117),
 
 
   /**
@@ -3286,7 +3294,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_REGISTER_CONFLICT(5118),
+  BANK_REGISTER_CONFLICT(5118),
 
 
   /**
@@ -3294,7 +3302,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_POST_WITHDRAWAL_OPERATION_REQUIRED(5119),
+  BANK_POST_WITHDRAWAL_OPERATION_REQUIRED(5119),
 
 
   /**
@@ -3302,7 +3310,87 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_BANK_RESERVED_USERNAME_CONFLICT(5120),
+  BANK_RESERVED_USERNAME_CONFLICT(5120),
+
+
+  /**
+   * The client tried to register a new account with an username already in use.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_REGISTER_USERNAME_REUSE(5121),
+
+
+  /**
+   * The client tried to register a new account with a payto:// URI already in use.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_REGISTER_PAYTO_URI_REUSE(5122),
+
+
+  /**
+   * The client tried to delete an account with a non null balance.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_ACCOUNT_BALANCE_NOT_ZERO(5123),
+
+
+  /**
+   * The client tried to create a transaction or an operation that credit an unknown account.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_UNKNOWN_CREDITOR(5124),
+
+
+  /**
+   * The client tried to create a transaction or an operation that debit an unknown account.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_UNKNOWN_DEBTOR(5125),
+
+
+  /**
+   * The client tried to perform an action prohibited for exchange accounts.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_ACCOUNT_IS_EXCHANGE(5126),
+
+
+  /**
+   * The client tried to perform an action reserved for exchange accounts.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_ACCOUNT_IS_NOT_EXCHANGE(5127),
+
+
+  /**
+   * Received currency conversion is wrong.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_BAD_CONVERSION(5128),
+
+
+  /**
+   * The account referenced in this operation is missing tan info for the chosen channel.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_MISSING_TAN_INFO(5129),
+
+
+  /**
+   * The client attempted to confirm a transaction with incomplete info.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_CONFIRM_INCOMPLETE(5130),
 
 
   /**
@@ -3310,7 +3398,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_ACCOUNT_UNKNOWN(6100),
+  SYNC_ACCOUNT_UNKNOWN(6100),
 
 
   /**
@@ -3318,7 +3406,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_BAD_IF_NONE_MATCH(6101),
+  SYNC_BAD_IF_NONE_MATCH(6101),
 
 
   /**
@@ -3326,7 +3414,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_BAD_IF_MATCH(6102),
+  SYNC_BAD_IF_MATCH(6102),
 
 
   /**
@@ -3334,7 +3422,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_BAD_SYNC_SIGNATURE(6103),
+  SYNC_BAD_SYNC_SIGNATURE(6103),
 
 
   /**
@@ -3342,7 +3430,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_INVALID_SIGNATURE(6104),
+  SYNC_INVALID_SIGNATURE(6104),
 
 
   /**
@@ -3350,7 +3438,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_MALFORMED_CONTENT_LENGTH(6105),
+  SYNC_MALFORMED_CONTENT_LENGTH(6105),
 
 
   /**
@@ -3358,7 +3446,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONTENT_TOO_LARGE (413).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_EXCESSIVE_CONTENT_LENGTH(6106),
+  SYNC_EXCESSIVE_CONTENT_LENGTH(6106),
 
 
   /**
@@ -3366,7 +3454,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONTENT_TOO_LARGE (413).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_OUT_OF_MEMORY_ON_CONTENT_LENGTH(6107),
+  SYNC_OUT_OF_MEMORY_ON_CONTENT_LENGTH(6107),
 
 
   /**
@@ -3374,7 +3462,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_INVALID_UPLOAD(6108),
+  SYNC_INVALID_UPLOAD(6108),
 
 
   /**
@@ -3382,7 +3470,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_REQUEST_TIMEOUT (408).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_PAYMENT_GENERIC_TIMEOUT(6109),
+  SYNC_PAYMENT_GENERIC_TIMEOUT(6109),
 
 
   /**
@@ -3390,7 +3478,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_PAYMENT_CREATE_BACKEND_ERROR(6110),
+  SYNC_PAYMENT_CREATE_BACKEND_ERROR(6110),
 
 
   /**
@@ -3398,7 +3486,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_PREVIOUS_BACKUP_UNKNOWN(6111),
+  SYNC_PREVIOUS_BACKUP_UNKNOWN(6111),
 
 
   /**
@@ -3406,7 +3494,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_MISSING_CONTENT_LENGTH(6112),
+  SYNC_MISSING_CONTENT_LENGTH(6112),
 
 
   /**
@@ -3414,7 +3502,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_GENERIC_BACKEND_ERROR(6113),
+  SYNC_GENERIC_BACKEND_ERROR(6113),
 
 
   /**
@@ -3422,7 +3510,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GATEWAY_TIMEOUT (504).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_SYNC_GENERIC_BACKEND_TIMEOUT(6114),
+  SYNC_GENERIC_BACKEND_TIMEOUT(6114),
 
 
   /**
@@ -3430,7 +3518,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_IMPLEMENTED (501).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_EXCHANGE_PROTOCOL_VERSION_INCOMPATIBLE(7000),
+  WALLET_EXCHANGE_PROTOCOL_VERSION_INCOMPATIBLE(7000),
 
 
   /**
@@ -3438,7 +3526,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_UNEXPECTED_EXCEPTION(7001),
+  WALLET_UNEXPECTED_EXCEPTION(7001),
 
 
   /**
@@ -3446,7 +3534,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_RECEIVED_MALFORMED_RESPONSE(7002),
+  WALLET_RECEIVED_MALFORMED_RESPONSE(7002),
 
 
   /**
@@ -3454,7 +3542,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_NETWORK_ERROR(7003),
+  WALLET_NETWORK_ERROR(7003),
 
 
   /**
@@ -3462,7 +3550,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_HTTP_REQUEST_THROTTLED(7004),
+  WALLET_HTTP_REQUEST_THROTTLED(7004),
 
 
   /**
@@ -3470,7 +3558,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_UNEXPECTED_REQUEST_ERROR(7005),
+  WALLET_UNEXPECTED_REQUEST_ERROR(7005),
 
 
   /**
@@ -3478,7 +3566,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_EXCHANGE_DENOMINATIONS_INSUFFICIENT(7006),
+  WALLET_EXCHANGE_DENOMINATIONS_INSUFFICIENT(7006),
 
 
   /**
@@ -3486,7 +3574,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_CORE_API_OPERATION_UNKNOWN(7007),
+  WALLET_CORE_API_OPERATION_UNKNOWN(7007),
 
 
   /**
@@ -3494,7 +3582,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_INVALID_TALER_PAY_URI(7008),
+  WALLET_INVALID_TALER_PAY_URI(7008),
 
 
   /**
@@ -3502,7 +3590,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_EXCHANGE_COIN_SIGNATURE_INVALID(7009),
+  WALLET_EXCHANGE_COIN_SIGNATURE_INVALID(7009),
 
 
   /**
@@ -3510,7 +3598,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_EXCHANGE_WITHDRAW_RESERVE_UNKNOWN_AT_EXCHANGE(7010),
+  WALLET_EXCHANGE_WITHDRAW_RESERVE_UNKNOWN_AT_EXCHANGE(7010),
 
 
   /**
@@ -3518,7 +3606,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_CORE_NOT_AVAILABLE(7011),
+  WALLET_CORE_NOT_AVAILABLE(7011),
 
 
   /**
@@ -3526,7 +3614,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_WITHDRAWAL_OPERATION_ABORTED_BY_BANK(7012),
+  WALLET_WITHDRAWAL_OPERATION_ABORTED_BY_BANK(7012),
 
 
   /**
@@ -3534,7 +3622,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_HTTP_REQUEST_GENERIC_TIMEOUT(7013),
+  WALLET_HTTP_REQUEST_GENERIC_TIMEOUT(7013),
 
 
   /**
@@ -3542,7 +3630,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_ORDER_ALREADY_CLAIMED(7014),
+  WALLET_ORDER_ALREADY_CLAIMED(7014),
 
 
   /**
@@ -3550,7 +3638,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_WITHDRAWAL_GROUP_INCOMPLETE(7015),
+  WALLET_WITHDRAWAL_GROUP_INCOMPLETE(7015),
 
 
   /**
@@ -3558,7 +3646,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_REWARD_COIN_SIGNATURE_INVALID(7016),
+  WALLET_REWARD_COIN_SIGNATURE_INVALID(7016),
 
 
   /**
@@ -3566,7 +3654,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_BANK_INTEGRATION_PROTOCOL_VERSION_INCOMPATIBLE(7017),
+  WALLET_BANK_INTEGRATION_PROTOCOL_VERSION_INCOMPATIBLE(7017),
 
 
   /**
@@ -3574,7 +3662,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_CONTRACT_TERMS_BASE_URL_MISMATCH(7018),
+  WALLET_CONTRACT_TERMS_BASE_URL_MISMATCH(7018),
 
 
   /**
@@ -3582,7 +3670,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_CONTRACT_TERMS_SIGNATURE_INVALID(7019),
+  WALLET_CONTRACT_TERMS_SIGNATURE_INVALID(7019),
 
 
   /**
@@ -3590,7 +3678,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_CONTRACT_TERMS_MALFORMED(7020),
+  WALLET_CONTRACT_TERMS_MALFORMED(7020),
 
 
   /**
@@ -3598,7 +3686,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_PENDING_OPERATION_FAILED(7021),
+  WALLET_PENDING_OPERATION_FAILED(7021),
 
 
   /**
@@ -3606,7 +3694,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_PAY_MERCHANT_SERVER_ERROR(7022),
+  WALLET_PAY_MERCHANT_SERVER_ERROR(7022),
 
 
   /**
@@ -3614,7 +3702,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_CRYPTO_WORKER_ERROR(7023),
+  WALLET_CRYPTO_WORKER_ERROR(7023),
 
 
   /**
@@ -3622,7 +3710,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_CRYPTO_WORKER_BAD_REQUEST(7024),
+  WALLET_CRYPTO_WORKER_BAD_REQUEST(7024),
 
 
   /**
@@ -3630,7 +3718,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_WITHDRAWAL_KYC_REQUIRED(7025),
+  WALLET_WITHDRAWAL_KYC_REQUIRED(7025),
 
 
   /**
@@ -3638,7 +3726,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_DEPOSIT_GROUP_INSUFFICIENT_BALANCE(7026),
+  WALLET_DEPOSIT_GROUP_INSUFFICIENT_BALANCE(7026),
 
 
   /**
@@ -3646,7 +3734,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_PEER_PUSH_PAYMENT_INSUFFICIENT_BALANCE(7027),
+  WALLET_PEER_PUSH_PAYMENT_INSUFFICIENT_BALANCE(7027),
 
 
   /**
@@ -3654,7 +3742,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_PEER_PULL_PAYMENT_INSUFFICIENT_BALANCE(7028),
+  WALLET_PEER_PULL_PAYMENT_INSUFFICIENT_BALANCE(7028),
 
 
   /**
@@ -3662,7 +3750,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_REFRESH_GROUP_INCOMPLETE(7029),
+  WALLET_REFRESH_GROUP_INCOMPLETE(7029),
 
 
   /**
@@ -3670,7 +3758,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_EXCHANGE_BASE_URL_MISMATCH(7030),
+  WALLET_EXCHANGE_BASE_URL_MISMATCH(7030),
 
 
   /**
@@ -3678,7 +3766,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_WALLET_ORDER_ALREADY_PAID(7031),
+  WALLET_ORDER_ALREADY_PAID(7031),
 
 
   /**
@@ -3686,7 +3774,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_GATEWAY_TIMEOUT (504).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_GENERIC_BACKEND_TIMEOUT(8000),
+  ANASTASIS_GENERIC_BACKEND_TIMEOUT(8000),
 
 
   /**
@@ -3694,7 +3782,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_GENERIC_INVALID_PAYMENT_REQUEST(8001),
+  ANASTASIS_GENERIC_INVALID_PAYMENT_REQUEST(8001),
 
 
   /**
@@ -3702,7 +3790,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_GENERIC_BACKEND_ERROR(8002),
+  ANASTASIS_GENERIC_BACKEND_ERROR(8002),
 
 
   /**
@@ -3710,7 +3798,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_GENERIC_MISSING_CONTENT_LENGTH(8003),
+  ANASTASIS_GENERIC_MISSING_CONTENT_LENGTH(8003),
 
 
   /**
@@ -3718,7 +3806,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_GENERIC_MALFORMED_CONTENT_LENGTH(8004),
+  ANASTASIS_GENERIC_MALFORMED_CONTENT_LENGTH(8004),
 
 
   /**
@@ -3726,7 +3814,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_GENERIC_ORDER_CREATE_BACKEND_ERROR(8005),
+  ANASTASIS_GENERIC_ORDER_CREATE_BACKEND_ERROR(8005),
 
 
   /**
@@ -3734,7 +3822,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_GENERIC_PAYMENT_CHECK_UNAUTHORIZED(8006),
+  ANASTASIS_GENERIC_PAYMENT_CHECK_UNAUTHORIZED(8006),
 
 
   /**
@@ -3742,7 +3830,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_GENERIC_PAYMENT_CHECK_START_FAILED(8007),
+  ANASTASIS_GENERIC_PAYMENT_CHECK_START_FAILED(8007),
 
 
   /**
@@ -3750,7 +3838,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_GENERIC_PROVIDER_UNREACHABLE(8008),
+  ANASTASIS_GENERIC_PROVIDER_UNREACHABLE(8008),
 
 
   /**
@@ -3758,7 +3846,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_REQUEST_TIMEOUT (408).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_PAYMENT_GENERIC_TIMEOUT(8009),
+  ANASTASIS_PAYMENT_GENERIC_TIMEOUT(8009),
 
 
   /**
@@ -3766,7 +3854,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_UNKNOWN(8108),
+  ANASTASIS_TRUTH_UNKNOWN(8108),
 
 
   /**
@@ -3774,7 +3862,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_AUTHORIZATION_METHOD_NO_LONGER_SUPPORTED(8109),
+  ANASTASIS_TRUTH_AUTHORIZATION_METHOD_NO_LONGER_SUPPORTED(8109),
 
 
   /**
@@ -3782,7 +3870,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_CHALLENGE_RESPONSE_REQUIRED(8110),
+  ANASTASIS_TRUTH_CHALLENGE_RESPONSE_REQUIRED(8110),
 
 
   /**
@@ -3790,7 +3878,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_CHALLENGE_FAILED(8111),
+  ANASTASIS_TRUTH_CHALLENGE_FAILED(8111),
 
 
   /**
@@ -3798,7 +3886,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_CHALLENGE_UNKNOWN(8112),
+  ANASTASIS_TRUTH_CHALLENGE_UNKNOWN(8112),
 
 
   /**
@@ -3806,7 +3894,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_AUTHORIZATION_START_FAILED(8114),
+  ANASTASIS_TRUTH_AUTHORIZATION_START_FAILED(8114),
 
 
   /**
@@ -3814,7 +3902,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_KEY_SHARE_GONE(8115),
+  ANASTASIS_TRUTH_KEY_SHARE_GONE(8115),
 
 
   /**
@@ -3822,7 +3910,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_ORDER_DISAPPEARED(8116),
+  ANASTASIS_TRUTH_ORDER_DISAPPEARED(8116),
 
 
   /**
@@ -3830,7 +3918,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_BACKEND_EXCHANGE_BAD(8117),
+  ANASTASIS_TRUTH_BACKEND_EXCHANGE_BAD(8117),
 
 
   /**
@@ -3838,7 +3926,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_UNEXPECTED_PAYMENT_STATUS(8118),
+  ANASTASIS_TRUTH_UNEXPECTED_PAYMENT_STATUS(8118),
 
 
   /**
@@ -3846,7 +3934,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_PAYMENT_CREATE_BACKEND_ERROR(8119),
+  ANASTASIS_TRUTH_PAYMENT_CREATE_BACKEND_ERROR(8119),
 
 
   /**
@@ -3854,7 +3942,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_DECRYPTION_FAILED(8120),
+  ANASTASIS_TRUTH_DECRYPTION_FAILED(8120),
 
 
   /**
@@ -3862,7 +3950,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_TOO_MANY_REQUESTS (429).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_RATE_LIMITED(8121),
+  ANASTASIS_TRUTH_RATE_LIMITED(8121),
 
 
   /**
@@ -3870,7 +3958,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_CHALLENGE_WRONG_METHOD(8123),
+  ANASTASIS_TRUTH_CHALLENGE_WRONG_METHOD(8123),
 
 
   /**
@@ -3878,7 +3966,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_UPLOAD_UUID_EXISTS(8150),
+  ANASTASIS_TRUTH_UPLOAD_UUID_EXISTS(8150),
 
 
   /**
@@ -3886,7 +3974,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TRUTH_UPLOAD_METHOD_NOT_SUPPORTED(8151),
+  ANASTASIS_TRUTH_UPLOAD_METHOD_NOT_SUPPORTED(8151),
 
 
   /**
@@ -3894,7 +3982,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_SMS_PHONE_INVALID(8200),
+  ANASTASIS_SMS_PHONE_INVALID(8200),
 
 
   /**
@@ -3902,7 +3990,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_SMS_HELPER_EXEC_FAILED(8201),
+  ANASTASIS_SMS_HELPER_EXEC_FAILED(8201),
 
 
   /**
@@ -3910,7 +3998,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_SMS_HELPER_COMMAND_FAILED(8202),
+  ANASTASIS_SMS_HELPER_COMMAND_FAILED(8202),
 
 
   /**
@@ -3918,7 +4006,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_EMAIL_INVALID(8210),
+  ANASTASIS_EMAIL_INVALID(8210),
 
 
   /**
@@ -3926,7 +4014,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_EMAIL_HELPER_EXEC_FAILED(8211),
+  ANASTASIS_EMAIL_HELPER_EXEC_FAILED(8211),
 
 
   /**
@@ -3934,7 +4022,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_EMAIL_HELPER_COMMAND_FAILED(8212),
+  ANASTASIS_EMAIL_HELPER_COMMAND_FAILED(8212),
 
 
   /**
@@ -3942,7 +4030,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_POST_INVALID(8220),
+  ANASTASIS_POST_INVALID(8220),
 
 
   /**
@@ -3950,7 +4038,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_POST_HELPER_EXEC_FAILED(8221),
+  ANASTASIS_POST_HELPER_EXEC_FAILED(8221),
 
 
   /**
@@ -3958,7 +4046,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_POST_HELPER_COMMAND_FAILED(8222),
+  ANASTASIS_POST_HELPER_COMMAND_FAILED(8222),
 
 
   /**
@@ -3966,7 +4054,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_IBAN_INVALID(8230),
+  ANASTASIS_IBAN_INVALID(8230),
 
 
   /**
@@ -3974,7 +4062,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_IBAN_MISSING_TRANSFER(8231),
+  ANASTASIS_IBAN_MISSING_TRANSFER(8231),
 
 
   /**
@@ -3982,7 +4070,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TOTP_KEY_MISSING(8240),
+  ANASTASIS_TOTP_KEY_MISSING(8240),
 
 
   /**
@@ -3990,7 +4078,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_TOTP_KEY_INVALID(8241),
+  ANASTASIS_TOTP_KEY_INVALID(8241),
 
 
   /**
@@ -3998,7 +4086,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_POLICY_BAD_IF_NONE_MATCH(8301),
+  ANASTASIS_POLICY_BAD_IF_NONE_MATCH(8301),
 
 
   /**
@@ -4006,7 +4094,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_CONTENT_TOO_LARGE (413).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_POLICY_OUT_OF_MEMORY_ON_CONTENT_LENGTH(8304),
+  ANASTASIS_POLICY_OUT_OF_MEMORY_ON_CONTENT_LENGTH(8304),
 
 
   /**
@@ -4014,7 +4102,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_POLICY_BAD_SIGNATURE(8305),
+  ANASTASIS_POLICY_BAD_SIGNATURE(8305),
 
 
   /**
@@ -4022,7 +4110,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_POLICY_BAD_IF_MATCH(8306),
+  ANASTASIS_POLICY_BAD_IF_MATCH(8306),
 
 
   /**
@@ -4030,7 +4118,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_POLICY_INVALID_UPLOAD(8307),
+  ANASTASIS_POLICY_INVALID_UPLOAD(8307),
 
 
   /**
@@ -4038,7 +4126,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_POLICY_NOT_FOUND(8350),
+  ANASTASIS_POLICY_NOT_FOUND(8350),
 
 
   /**
@@ -4046,7 +4134,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_ACTION_INVALID(8400),
+  ANASTASIS_REDUCER_ACTION_INVALID(8400),
 
 
   /**
@@ -4054,7 +4142,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_STATE_INVALID(8401),
+  ANASTASIS_REDUCER_STATE_INVALID(8401),
 
 
   /**
@@ -4062,7 +4150,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_INPUT_INVALID(8402),
+  ANASTASIS_REDUCER_INPUT_INVALID(8402),
 
 
   /**
@@ -4070,7 +4158,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_AUTHENTICATION_METHOD_NOT_SUPPORTED(8403),
+  ANASTASIS_REDUCER_AUTHENTICATION_METHOD_NOT_SUPPORTED(8403),
 
 
   /**
@@ -4078,7 +4166,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_INPUT_INVALID_FOR_STATE(8404),
+  ANASTASIS_REDUCER_INPUT_INVALID_FOR_STATE(8404),
 
 
   /**
@@ -4086,7 +4174,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_BACKEND_FAILURE(8405),
+  ANASTASIS_REDUCER_BACKEND_FAILURE(8405),
 
 
   /**
@@ -4094,7 +4182,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_RESOURCE_MALFORMED(8406),
+  ANASTASIS_REDUCER_RESOURCE_MALFORMED(8406),
 
 
   /**
@@ -4102,7 +4190,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_RESOURCE_MISSING(8407),
+  ANASTASIS_REDUCER_RESOURCE_MISSING(8407),
 
 
   /**
@@ -4110,7 +4198,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_INPUT_REGEX_FAILED(8408),
+  ANASTASIS_REDUCER_INPUT_REGEX_FAILED(8408),
 
 
   /**
@@ -4118,7 +4206,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_INPUT_VALIDATION_FAILED(8409),
+  ANASTASIS_REDUCER_INPUT_VALIDATION_FAILED(8409),
 
 
   /**
@@ -4126,7 +4214,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_POLICY_LOOKUP_FAILED(8410),
+  ANASTASIS_REDUCER_POLICY_LOOKUP_FAILED(8410),
 
 
   /**
@@ -4134,7 +4222,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_BACKUP_PROVIDER_FAILED(8411),
+  ANASTASIS_REDUCER_BACKUP_PROVIDER_FAILED(8411),
 
 
   /**
@@ -4142,7 +4230,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_PROVIDER_CONFIG_FAILED(8412),
+  ANASTASIS_REDUCER_PROVIDER_CONFIG_FAILED(8412),
 
 
   /**
@@ -4150,7 +4238,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_POLICY_MALFORMED(8413),
+  ANASTASIS_REDUCER_POLICY_MALFORMED(8413),
 
 
   /**
@@ -4158,7 +4246,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_NETWORK_FAILED(8414),
+  ANASTASIS_REDUCER_NETWORK_FAILED(8414),
 
 
   /**
@@ -4166,7 +4254,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_SECRET_MALFORMED(8415),
+  ANASTASIS_REDUCER_SECRET_MALFORMED(8415),
 
 
   /**
@@ -4174,7 +4262,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_CHALLENGE_DATA_TOO_BIG(8416),
+  ANASTASIS_REDUCER_CHALLENGE_DATA_TOO_BIG(8416),
 
 
   /**
@@ -4182,7 +4270,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_SECRET_TOO_BIG(8417),
+  ANASTASIS_REDUCER_SECRET_TOO_BIG(8417),
 
 
   /**
@@ -4190,7 +4278,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_PROVIDER_INVALID_CONFIG(8418),
+  ANASTASIS_REDUCER_PROVIDER_INVALID_CONFIG(8418),
 
 
   /**
@@ -4198,7 +4286,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_INTERNAL_ERROR(8419),
+  ANASTASIS_REDUCER_INTERNAL_ERROR(8419),
 
 
   /**
@@ -4206,7 +4294,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_ANASTASIS_REDUCER_PROVIDERS_ALREADY_SYNCED(8420),
+  ANASTASIS_REDUCER_PROVIDERS_ALREADY_SYNCED(8420),
 
 
   /**
@@ -4214,7 +4302,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_LIBEUFIN_NEXUS_GENERIC_ERROR(9000),
+  LIBEUFIN_NEXUS_GENERIC_ERROR(9000),
 
 
   /**
@@ -4222,7 +4310,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_LIBEUFIN_NEXUS_UNCAUGHT_EXCEPTION(9001),
+  LIBEUFIN_NEXUS_UNCAUGHT_EXCEPTION(9001),
 
 
   /**
@@ -4230,7 +4318,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_LIBEUFIN_SANDBOX_GENERIC_ERROR(9500),
+  LIBEUFIN_SANDBOX_GENERIC_ERROR(9500),
 
 
   /**
@@ -4238,7 +4326,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_LIBEUFIN_SANDBOX_UNCAUGHT_EXCEPTION(9501),
+  LIBEUFIN_SANDBOX_UNCAUGHT_EXCEPTION(9501),
 
 
   /**
@@ -4246,7 +4334,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_TALDIR_METHOD_NOT_SUPPORTED(9600),
+  TALDIR_METHOD_NOT_SUPPORTED(9600),
 
 
   /**
@@ -4254,7 +4342,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_TOO_MANY_REQUESTS (429).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_TALDIR_REGISTER_RATE_LIMITED(9601),
+  TALDIR_REGISTER_RATE_LIMITED(9601),
 
 
   /**
@@ -4262,7 +4350,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_CHALLENGER_GENERIC_CLIENT_UNKNOWN(9750),
+  CHALLENGER_GENERIC_CLIENT_UNKNOWN(9750),
 
 
   /**
@@ -4270,7 +4358,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_CHALLENGER_GENERIC_CLIENT_FORBIDDEN_BAD_REDIRECT_URI(9751),
+  CHALLENGER_GENERIC_CLIENT_FORBIDDEN_BAD_REDIRECT_URI(9751),
 
 
   /**
@@ -4278,7 +4366,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_CHALLENGER_HELPER_EXEC_FAILED(9752),
+  CHALLENGER_HELPER_EXEC_FAILED(9752),
 
 
   /**
@@ -4286,7 +4374,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_CHALLENGER_GRANT_UNKNOWN(9753),
+  CHALLENGER_GRANT_UNKNOWN(9753),
 
 
   /**
@@ -4294,7 +4382,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_CHALLENGER_CLIENT_FORBIDDEN_BAD_CODE(9754),
+  CHALLENGER_CLIENT_FORBIDDEN_BAD_CODE(9754),
 
 
   /**
@@ -4302,7 +4390,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_CHALLENGER_GENERIC_VALIDATION_UNKNOWN(9755),
+  CHALLENGER_GENERIC_VALIDATION_UNKNOWN(9755),
 
 
   /**
@@ -4310,7 +4398,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_CHALLENGER_CLIENT_FORBIDDEN_INVALID_CODE(9756),
+  CHALLENGER_CLIENT_FORBIDDEN_INVALID_CODE(9756),
 
 
   /**
@@ -4318,7 +4406,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_TOO_MANY_REQUESTS (429).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_CHALLENGER_TOO_MANY_ATTEMPTS(9757),
+  CHALLENGER_TOO_MANY_ATTEMPTS(9757),
 
 
   /**
@@ -4326,7 +4414,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_CHALLENGER_INVALID_PIN(9758),
+  CHALLENGER_INVALID_PIN(9758),
 
 
   /**
@@ -4334,7 +4422,7 @@ enum class TalerErrorCode(val code: Int) {
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
-  TALER_EC_END(9999),
+  END(9999),
 
 
 }

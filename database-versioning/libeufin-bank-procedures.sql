@@ -333,7 +333,6 @@ CREATE OR REPLACE FUNCTION taler_transfer(
   OUT out_debtor_not_found BOOLEAN,
   OUT out_debtor_not_exchange BOOLEAN,
   OUT out_creditor_not_found BOOLEAN,
-  OUT out_same_account BOOLEAN,
   OUT out_both_exchanges BOOLEAN,
   OUT out_request_uid_reuse BOOLEAN,
   OUT out_exchange_balance_insufficient BOOLEAN,
@@ -389,12 +388,10 @@ END IF;
 -- Perform bank transfer
 SELECT
   out_balance_insufficient,
-  out_debit_row_id,
-  transfer.out_same_account
+  out_debit_row_id
   INTO
     out_exchange_balance_insufficient,
-    out_tx_row_id,
-    out_same_account
+    out_tx_row_id
   FROM bank_wire_transfer(
     receiver_bank_account_id,
     exchange_bank_account_id,
@@ -444,7 +441,6 @@ CREATE OR REPLACE FUNCTION taler_add_incoming(
   OUT out_creditor_not_found BOOLEAN,
   OUT out_creditor_not_exchange BOOLEAN,
   OUT out_debtor_not_found BOOLEAN,
-  OUT out_same_account BOOLEAN,
   OUT out_both_exchanges BOOLEAN,
   OUT out_reserve_pub_reuse BOOLEAN,
   OUT out_debitor_balance_insufficient BOOLEAN,
@@ -493,12 +489,10 @@ END IF;
 -- Perform bank transfer
 SELECT
   out_balance_insufficient,
-  out_credit_row_id,
-  transfer.out_same_account
+  out_credit_row_id
   INTO
     out_debitor_balance_insufficient,
-    out_tx_row_id,
-    out_same_account
+    out_tx_row_id
   FROM bank_wire_transfer(
     exchange_bank_account_id,
     sender_bank_account_id,

@@ -88,7 +88,7 @@ val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompr
                     logger.error("Deflated request failed to inflate: ${e.message}")
                     throw badRequest(
                         hint = "Could not inflate request",
-                        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_COMPRESSION_INVALID
+                        talerErrorCode = TalerErrorCode.GENERIC_COMPRESSION_INVALID
                     )
                 }
                 brc
@@ -155,12 +155,12 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
             // Telling apart invalid JSON vs missing parameter vs invalid parameter.
             val talerErrorCode = when (cause) {
                 is MissingRequestParameterException ->
-                    TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MISSING
+                    TalerErrorCode.GENERIC_PARAMETER_MISSING
 
                 is ParameterConversionException ->
-                    TalerErrorCode.TALER_EC_GENERIC_PARAMETER_MALFORMED
+                    TalerErrorCode.GENERIC_PARAMETER_MALFORMED
 
-                else -> TalerErrorCode.TALER_EC_GENERIC_JSON_INVALID
+                else -> TalerErrorCode.GENERIC_JSON_INVALID
             }
             call.respond(
                 status = HttpStatusCode.BadRequest,
@@ -194,7 +194,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
             call.respond(
                 status = HttpStatusCode.InternalServerError,
                 message = TalerError(
-                    code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
+                    code = TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE.code,
                     hint = cause.message
                 )
             )

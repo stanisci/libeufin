@@ -86,7 +86,7 @@ class WireGatewayApiTest {
             this.method = method
             if (body != null) jsonBody(body)
             basicAuth("merchant", "merchant-password")
-        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
+        }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)
     }
 
     // Testing the POST /transfer call from the TWG API.
@@ -106,7 +106,7 @@ class WireGatewayApiTest {
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
             jsonBody(valid_req)
-        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
+        }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
         // Giving debt allowance and checking the OK case.
         assert(db.bankAccountSetMaxDebt(
@@ -133,7 +133,7 @@ class WireGatewayApiTest {
                     "exchange_base_url" to "http://different-exchange.example.com/"
                 }
             )
-        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_TRANSFER_REQUEST_UID_REUSED)
+        }.assertConflict().assertErr(TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED)
 
         // Currency mismatch
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
@@ -143,7 +143,7 @@ class WireGatewayApiTest {
                     "amount" to "EUR:33"
                 }
             )
-        }.assertBadRequest().assertErr(TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH)
+        }.assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
 
         // Unknown account
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
@@ -155,7 +155,7 @@ class WireGatewayApiTest {
                     "credit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
                 }
             )
-        }.assertNotFound().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
+        }.assertConflict().assertErr(TalerErrorCode.BANK_UNKNOWN_CREDITOR)
 
         // Same account
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
@@ -167,7 +167,7 @@ class WireGatewayApiTest {
                     "credit_account" to "payto://iban/EXCHANGE-IBAN-XYZ"
                 }
             )
-        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT)
+        }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
 
         // Bad BASE32 wtid
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
@@ -518,7 +518,7 @@ class WireGatewayApiTest {
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             basicAuth("exchange", "exchange-password")
             jsonBody(valid_req)
-        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_UNALLOWED_DEBIT)
+        }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
         // Giving debt allowance and checking the OK case.
         assert(db.bankAccountSetMaxDebt(
@@ -535,7 +535,7 @@ class WireGatewayApiTest {
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             basicAuth("exchange", "exchange-password")
             jsonBody(valid_req)
-        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT)
+        }.assertConflict().assertErr(TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT)
 
         // Currency mismatch
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
@@ -545,7 +545,7 @@ class WireGatewayApiTest {
                     "amount" to "EUR:33"
                 }
             )
-        }.assertBadRequest().assertErr(TalerErrorCode.TALER_EC_GENERIC_CURRENCY_MISMATCH)
+        }.assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
 
         // Unknown account
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
@@ -556,7 +556,7 @@ class WireGatewayApiTest {
                     "debit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
                 }
             )
-        }.assertNotFound().assertErr(TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT)
+        }.assertConflict().assertErr(TalerErrorCode.BANK_UNKNOWN_DEBTOR)
 
         // Same account
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
@@ -567,7 +567,7 @@ class WireGatewayApiTest {
                     "debit_account" to "payto://iban/EXCHANGE-IBAN-XYZ"
                 }
             )
-        }.assertConflict().assertErr(TalerErrorCode.TALER_EC_BANK_SAME_ACCOUNT)
+        }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
 
         // Bad BASE32 reserve_pub
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {

@@ -70,23 +70,23 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
         when (result) {
             WithdrawalSelectionResult.OP_NOT_FOUND -> throw notFound(
                 "Withdrawal operation $opId not found", 
-                TalerErrorCode.TALER_EC_END
+                TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
             )
             WithdrawalSelectionResult.ALREADY_SELECTED -> throw conflict(
                 "Cannot select different exchange and reserve pub. under the same withdrawal operation",
-                TalerErrorCode.TALER_EC_BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT
+                TalerErrorCode.BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT
             )
             WithdrawalSelectionResult.RESERVE_PUB_REUSE -> throw conflict(
                 "Reserve pub. already used", 
-                TalerErrorCode.TALER_EC_BANK_DUPLICATE_RESERVE_PUB_SUBJECT
+                TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT
             )
             WithdrawalSelectionResult.ACCOUNT_NOT_FOUND -> throw conflict(
-                "Account ${req.selected_exchange} not found",
-                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                "Account ${req.selected_exchange.canonical} not found",
+                TalerErrorCode.BANK_UNKNOWN_ACCOUNT
             )
             WithdrawalSelectionResult.ACCOUNT_IS_NOT_EXCHANGE -> throw conflict(
-                "Account ${req.selected_exchange} is not an exchange",
-                TalerErrorCode.TALER_EC_BANK_UNKNOWN_ACCOUNT
+                "Account ${req.selected_exchange.canonical} is not an exchange",
+                TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
             )
             WithdrawalSelectionResult.SUCCESS -> {
                 val confirmUrl: String? = if (ctx.spaCaptchaURL !== null && !confirmationDone) {

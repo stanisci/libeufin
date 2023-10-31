@@ -93,11 +93,11 @@ private suspend fun ApplicationCall.authenticateBankRequest(db: Database, requir
     // Extracting the Authorization header.
     val header = getAuthorizationRawHeader(this.request) ?: throw badRequest(
         "Authorization header not found.",
-        TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+        TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     val authDetails = getAuthorizationDetails(header) ?: throw badRequest(
         "Authorization is invalid.",
-        TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+        TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     return when (authDetails.scheme) {
         "Basic" -> doBasicAuth(db, authDetails.content)
@@ -111,11 +111,11 @@ private suspend fun ApplicationCall.authenticateBankRequest(db: Database, requir
 fun ApplicationCall.getAuthToken(): String? {
     val h = getAuthorizationRawHeader(this.request) ?: return null
     val authDetails = getAuthorizationDetails(h) ?: throw badRequest(
-        "Authorization header is malformed.", TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+        "Authorization header is malformed.", TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     if (authDetails.scheme == "Bearer") return splitBearerToken(authDetails.content) ?: throw throw badRequest(
         "Authorization header is malformed (could not strip the prefix from Bearer token).",
-        TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+        TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     return null // Not a Bearer token case.
 }
@@ -138,7 +138,7 @@ private suspend fun doBasicAuth(db: Database, encodedCredentials: String): Strin
     )
     if (userAndPassSplit.size != 2) throw LibeufinBankException(
         httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
-            code = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED.code,
+            code = TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED.code,
             "Malformed Basic auth credentials found in the Authorization header."
         )
     )
@@ -169,13 +169,13 @@ private suspend fun doTokenAuth(
 ): String? {
     val bareToken = splitBearerToken(token) ?: throw badRequest(
         "Bearer token malformed",
-        talerErrorCode = TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+        talerErrorCode = TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     val tokenBytes = try {
         Base32Crockford.decode(bareToken)
     } catch (e: Exception) {
         throw badRequest(
-            e.message, TalerErrorCode.TALER_EC_GENERIC_HTTP_HEADERS_MALFORMED
+            e.message, TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
         )
     }
     val maybeToken: BearerToken? = db.bearerTokenGet(tokenBytes)
@@ -198,7 +198,7 @@ private suspend fun doTokenAuth(
     // Getting the related username.
     return db.customerLoginFromId(maybeToken.bankCustomer) ?: throw LibeufinBankException(
         httpStatus = HttpStatusCode.InternalServerError, talerError = TalerError(
-            code = TalerErrorCode.TALER_EC_GENERIC_INTERNAL_INVARIANT_FAILURE.code,
+            code = TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE.code,
             hint = "Customer not found, despite token mentions it.",
         )
     )

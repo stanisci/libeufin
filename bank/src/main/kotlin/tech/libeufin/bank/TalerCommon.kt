@@ -235,7 +235,7 @@ class TalerAmount {
     }
     constructor(encoded: String) {
         fun badAmount(hint: String): Exception = 
-            badRequest(hint, TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT)
+            badRequest(hint, TalerErrorCode.BANK_BAD_FORMAT_AMOUNT)
         
         val match = PATTERN.matchEntire(encoded) ?: throw badAmount("Invalid amount format");
         val (currency, value, frac) = match.destructured
@@ -296,7 +296,7 @@ class DecimalNumber {
 
     constructor(encoded: String) {
         fun badAmount(hint: String): Exception = 
-            badRequest(hint, TalerErrorCode.TALER_EC_BANK_BAD_FORMAT_AMOUNT)
+            badRequest(hint, TalerErrorCode.BANK_BAD_FORMAT_AMOUNT)
         
         val match = PATTERN.matchEntire(encoded) ?: throw badAmount("Invalid decimal number format");
         val (value, frac) = match.destructured
