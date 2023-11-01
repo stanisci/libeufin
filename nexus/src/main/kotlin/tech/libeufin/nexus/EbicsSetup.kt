@@ -327,15 +327,15 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         val cfg = doOrFail { extractEbicsConfig(this.configFile) }
         if (checkFullConfig) {
             doOrFail {
-                cfg.config.requireString("nexus-ebics-submit", "frequency").apply {
+                cfg.config.requireString("nexus-submit", "frequency").apply {
                     if (getFrequencyInSeconds(this) == null)
-                        throw Exception("frequency value of nexus-ebics-submit section is not valid: $this")
+                        throw Exception("frequency value of nexus-submit section is not valid: $this")
                 }
-                cfg.config.requireString("nexus-ebics-fetch", "frequency").apply {
+                cfg.config.requireString("nexus-fetch", "frequency").apply {
                     if (getFrequencyInSeconds(this) == null)
-                        throw Exception("frequency value of nexus-ebics-fetch section is not valid: $this")
+                        throw Exception("frequency value of nexus-fetch section is not valid: $this")
                 }
-                cfg.config.requirePath("nexus-ebics-fetch", "statement_log_directory")
+                cfg.config.requirePath("nexus-fetch", "statement_log_directory")
                 cfg.config.requireNumber("nexus-httpd", "port")
                 cfg.config.requirePath("nexus-httpd", "unixpath")
                 cfg.config.requireString("nexus-httpd", "serve")
