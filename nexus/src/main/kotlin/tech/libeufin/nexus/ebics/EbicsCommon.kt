@@ -94,6 +94,7 @@ fun decryptAndDecompressPayload(
  *         EBICS handler, or null otherwise.
  */
 suspend fun HttpClient.postToBank(bankUrl: String, msg: String): String? {
+    logger.debug("POSTing EBICS to: $bankUrl")
     val resp: HttpResponse = try {
         this.post(urlString = bankUrl) {
             expectSuccess = false // avoids exceptions on non-2xx statuses.

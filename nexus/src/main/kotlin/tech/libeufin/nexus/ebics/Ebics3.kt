@@ -113,6 +113,7 @@ suspend fun submitPayment(
     bankkeys: BankPublicKeysFile,
     httpClient: HttpClient
 ): Boolean {
+    logger.debug("Submitting pain.001: $pain001xml")
     val orderService: Ebics3Request.OrderDetails.Service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "MCT"
         scope = "CH"
@@ -133,5 +134,9 @@ suspend fun submitPayment(
         logger.error("Could not send the pain.001 document to the bank.")
         return false
     }
+    logger.debug("Payment submitted, report text is: ${maybeUploaded.reportText}," +
+            " EBICS technical code is: ${maybeUploaded.technicalReturnCode}," +
+            " bank technical return code is: ${maybeUploaded.bankReturnCode}"
+    )
     return true
 }

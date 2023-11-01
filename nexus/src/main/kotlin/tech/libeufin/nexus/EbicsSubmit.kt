@@ -68,8 +68,7 @@ private suspend fun submitInitiatedPayment(
         debitAccount = cfg.myIbanAccount,
         wireTransferSubject = initiatedPayment.wireTransferSubject
     )
-    submitPayment(xml, cfg, clientPrivateKeysFile, bankPublicKeysFile, httpClient)
-    return true
+    return submitPayment(xml, cfg, clientPrivateKeysFile, bankPublicKeysFile, httpClient)
 }
 
 /**
@@ -142,6 +141,7 @@ private fun submitBatch(
 ) {
     runBlocking {
         db.initiatedPaymentsUnsubmittedGet(cfg.currency).forEach {
+            logger.debug("Submitting payment initiation with row ID: ${it.key}")
             val submitted = submitInitiatedPayment(
                 httpClient,
                 cfg,
@@ -159,7 +159,8 @@ private fun submitBatch(
                 if (!flagged) {
                     logger.warn("Initiated payment with row ID ${it.key} could not be flagged as submitted")
                 }
-            }
+            } else
+                logger.warn("Initiated payment with row ID ${it.key} could not be submitted")
         }
     }
 }
@@ -183,7 +184,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
     override fun run() {
         val cfg: EbicsSetupConfig = doOrFail { extractEbicsConfig(configFile) }
         val frequency: Int = doOrFail {
-            val configValue = cfg.config.requireString("nexus-ebics-submit", "frequency")
+            val configValue = cfg.config.requireString("nexus-submit", "frequency")
             return@doOrFail checkFrequency(configValue)
         }
         val dbCfg = cfg.config.extractDbConfigOrFail()
