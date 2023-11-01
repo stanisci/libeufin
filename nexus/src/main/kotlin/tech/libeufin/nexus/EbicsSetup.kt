@@ -222,6 +222,7 @@ suspend fun doKeysRequestAndUpdateState(
     client: HttpClient,
     orderType: KeysOrderType
 ): Boolean {
+    logger.debug("Doing key request ${orderType.name}")
     val req = when(orderType) {
         KeysOrderType.INI -> generateIniMessage(cfg, privs)
         KeysOrderType.HIA -> generateHiaMessage(cfg, privs)
