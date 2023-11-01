@@ -32,11 +32,8 @@ import tech.libeufin.util.*
 
 class StatsTest {
     @Test
-    fun transfer() = bankSetup { db ->
-        assert(db.bankAccountSetMaxDebt(
-            2L,
-            TalerAmount(1000, 0, "KUDOS")
-        ))
+    fun transfer() = bankSetup { _ ->
+        setMaxDebt("exchange", TalerAmount("KUDOS:1000"))
 
         suspend fun transfer(amount: TalerAmount) {
             client.post("/accounts/exchange/taler-wire-gateway/transfer") {

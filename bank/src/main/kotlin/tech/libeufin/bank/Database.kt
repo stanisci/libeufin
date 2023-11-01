@@ -398,7 +398,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                     amount = TalerAmount(
                         it.getLong("balance_val"),
                         it.getInt("balance_frac"),
-                        getCurrency()
+                        bankCurrency
                     ),
                     credit_debit_indicator =
                         if (it.getBoolean("has_debt")) {
@@ -410,7 +410,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 debit_threshold = TalerAmount(
                     value = it.getLong("max_debt_val"),
                     frac = it.getInt("max_debt_frac"),
-                    getCurrency()
+                    bankCurrency
                 )
             )
         }
@@ -543,7 +543,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                     amount = TalerAmount(
                         value = it.getLong("balance_val"),
                         frac = it.getInt("balance_frac"),
-                        currency = getCurrency()
+                        currency = bankCurrency
                     ),
                     credit_debit_indicator = if (it.getBoolean("balance_has_debt")) {
                         CorebankCreditDebitInfo.debit
@@ -554,32 +554,13 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 debit_threshold = TalerAmount(
                     value = it.getLong("max_debt_val"),
                     frac = it.getInt("max_debt_frac"),
-                    currency = getCurrency()
+                    currency = bankCurrency
                 )
             )
         }
     }
 
     // BANK ACCOUNTS
-
-    suspend fun bankAccountSetMaxDebt(
-        owningCustomerId: Long,
-        maxDebt: TalerAmount
-    ): Boolean = conn { conn ->
-        val stmt = conn.prepareStatement("""
-           UPDATE bank_accounts
-           SET max_debt=(?,?)::taler_amount
-           WHERE owning_customer_id=?
-        """)
-        stmt.setLong(1, maxDebt.value)
-        stmt.setInt(2, maxDebt.frac)
-        stmt.setLong(3, owningCustomerId)
-        stmt.executeUpdateViolation()
-    }
-
-    private fun getCurrency(): String {
-        return bankCurrency
-    }
 
     suspend fun bankAccountGetFromOwnerId(ownerId: Long): BankAccount? = conn { conn ->
         val stmt = conn.prepareStatement("""
@@ -605,7 +586,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 balance = TalerAmount(
                     it.getLong("balance_val"),
                     it.getInt("balance_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 owningCustomerId = it.getLong("owning_customer_id"),
                 hasDebt = it.getBoolean("has_debt"),
@@ -614,7 +595,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 maxDebt = TalerAmount(
                     value = it.getLong("max_debt_val"),
                     frac = it.getInt("max_debt_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 bankAccountId = it.getLong("bank_account_id")
             )
@@ -647,7 +628,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 balance = TalerAmount(
                     it.getLong("balance_val"),
                     it.getInt("balance_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 owningCustomerId = it.getLong("owning_customer_id"),
                 hasDebt = it.getBoolean("has_debt"),
@@ -655,7 +636,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 maxDebt = TalerAmount(
                     value = it.getLong("max_debt_val"),
                     frac = it.getInt("max_debt_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 isPublic = it.getBoolean("is_public"),
                 bankAccountId = it.getLong("bank_account_id")
@@ -782,7 +763,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 amount = TalerAmount(
                     it.getLong("amount_val"),
                     it.getInt("amount_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 accountServicerReference = it.getString("account_servicer_reference"),
                 endToEndId = it.getString("end_to_end_id"),
@@ -881,7 +862,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 amount = TalerAmount(
                     it.getLong("amount_val"),
                     it.getInt("amount_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 subject = it.getString("subject"),
                 direction = TransactionDirection.valueOf(it.getString("direction"))
@@ -913,7 +894,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 amount = TalerAmount(
                     it.getLong("amount_val"),
                     it.getInt("amount_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 debit_account = it.getString("debtor_payto_uri"),
                 reserve_pub = EddsaPublicKey(it.getBytes("reserve_pub")),
@@ -946,7 +927,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 amount = TalerAmount(
                     it.getLong("amount_val"),
                     it.getInt("amount_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 credit_account = IbanPayTo(it.getString("creditor_payto_uri")),
                 wtid = ShortHashCode(it.getBytes("wtid")),
@@ -1005,7 +986,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 amount = TalerAmount(
                     it.getLong("amount_val"),
                     it.getInt("amount_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 selectionDone = it.getBoolean("selection_done"),
                 selectedExchangePayto = it.getString("selected_exchange_payto")?.run(::IbanPayTo),
@@ -1284,19 +1265,19 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 amountDebit = TalerAmount(
                     value = it.getLong("amount_debit_val"),
                     frac = it.getInt("amount_debit_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 amountCredit = TalerAmount(
                     value = it.getLong("amount_credit_val"),
                     frac = it.getInt("amount_credit_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 bankAccount = it.getLong("bank_account"),
                 buyAtRatio = it.getInt("buy_at_ratio"),
                 buyInFee = TalerAmount(
                     value = it.getLong("buy_in_fee_val"),
                     frac = it.getInt("buy_in_fee_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 credit_payto_uri = it.getString("credit_payto_uri"),
                 cashoutCurrency = it.getString("cashout_currency"),
@@ -1306,7 +1287,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 sellOutFee = TalerAmount(
                     value = it.getLong("sell_out_fee_val"),
                     frac = it.getInt("sell_out_fee_frac"),
-                    getCurrency()
+                    bankCurrency
                 ),
                 subject = it.getString("subject"),
                 tanChannel = TanChannel.valueOf(it.getString("tan_channel")),

@@ -83,6 +83,15 @@ fun dbSetup(lambda: suspend (Database) -> Unit) {
     setup() { db, _ -> lambda(db) }
 }
 
+/* ----- Common actions ----- */
+
+suspend fun ApplicationTestBuilder.setMaxDebt(account: String, maxDebt: TalerAmount) {
+    client.patch("/accounts/$account") { 
+        basicAuth("admin", "admin-password")
+        jsonBody(json { "debit_threshold" to maxDebt })
+    }.assertNoContent()
+}
+
 /* ----- Assert ----- */
 
 fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {

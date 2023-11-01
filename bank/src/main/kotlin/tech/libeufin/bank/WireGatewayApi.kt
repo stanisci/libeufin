@@ -114,7 +114,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             historyEndpoint(::OutgoingHistory, Database::exchangeOutgoingPoolHistory)
         }
     }
-    auth(db, TokenScope.readwrite) {
+    authAdmin(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {
             val req = call.receive<AddIncomingRequest>()
             ctx.checkInternalCurrency(req.amount)

@@ -60,7 +60,7 @@ class WireGatewayApiTest {
     }
 
     // Test endpoint is correctly authenticated 
-    suspend fun ApplicationTestBuilder.authRoutine(path: String, body: JsonObject? = null, method: HttpMethod = HttpMethod.Post) {
+    suspend fun ApplicationTestBuilder.authRoutine(path: String, body: JsonObject? = null, method: HttpMethod = HttpMethod.Post, requireAdmin: Boolean = false) {
         // No body when authentication must happen before parsing the body
         
         // Unknown account
@@ -81,17 +81,28 @@ class WireGatewayApiTest {
             basicAuth("exchange", "merchant-password")
         }.assertUnauthorized()
 
+        if (requireAdmin) {
+             // Not exchange account
+            client.request(path) {
+                this.method = method
+                if (body != null) jsonBody(body)
+                basicAuth("merchant", "merchant-password")
+            }.assertUnauthorized()
+        }
+
         // Not exchange account
         client.request(path) {
             this.method = method
             if (body != null) jsonBody(body)
-            basicAuth("merchant", "merchant-password")
+            if (requireAdmin)
+                basicAuth("admin", "admin-password")
+            else basicAuth("merchant", "merchant-password")
         }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)
     }
 
     // Testing the POST /transfer call from the TWG API.
     @Test
-    fun transfer() = bankSetup { db -> 
+    fun transfer() = bankSetup { _ -> 
         val valid_req = json {
             "request_uid" to randHashCode()
             "amount" to "KUDOS:55"
@@ -109,10 +120,7 @@ class WireGatewayApiTest {
         }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
         // Giving debt allowance and checking the OK case.
-        assert(db.bankAccountSetMaxDebt(
-            2L,
-            TalerAmount(1000, 0, "KUDOS")
-        ))
+        setMaxDebt("exchange", TalerAmount("KUDOS:1000"))
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
             jsonBody(valid_req)
@@ -216,12 +224,7 @@ class WireGatewayApiTest {
     @Test
     fun historyIncoming() = bankSetup { db -> 
         // Give Foo reasonable debt allowance:
-        assert(
-            db.bankAccountSetMaxDebt(
-                1L,
-                TalerAmount(1000000, 0, "KUDOS")
-            )
-        )
+        setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
 
         suspend fun HttpResponse.assertHistory(size: Int) {
             assertOk()
@@ -390,13 +393,7 @@ class WireGatewayApiTest {
      */
     @Test
     fun historyOutgoing() = bankSetup { db -> 
-        // Give Bar reasonable debt allowance:
-        assert(
-            db.bankAccountSetMaxDebt(
-                2L,
-                TalerAmount(1000000, 0, "KUDOS")
-            )
-        )
+        setMaxDebt("exchange", TalerAmount("KUDOS:1000000"))
 
         suspend fun HttpResponse.assertHistory(size: Int) {
             assertOk()
@@ -505,41 +502,37 @@ class WireGatewayApiTest {
 
     // Testing the /admin/add-incoming call from the TWG API.
     @Test
-    fun addIncoming() = bankSetup { db -> 
+    fun addIncoming() = bankSetup { _ -> 
         val valid_req = json {
             "amount" to "KUDOS:44"
             "reserve_pub" to randEddsaPublicKey()
             "debit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
         };
 
-        authRoutine("/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req)
+        authRoutine("/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req, requireAdmin = true)
 
         // Checking exchange debt constraint.
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            basicAuth("exchange", "exchange-password")
+            basicAuth("admin", "admin-password")
             jsonBody(valid_req)
         }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
         // Giving debt allowance and checking the OK case.
-        assert(db.bankAccountSetMaxDebt(
-            1L,
-            TalerAmount(1000, 0, "KUDOS")
-        ))
-
+        setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            basicAuth("exchange", "exchange-password")
+            basicAuth("admin", "admin-password")
             jsonBody(valid_req, deflate = true)
         }.assertOk()
 
         // Trigger conflict due to reused reserve_pub
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            basicAuth("exchange", "exchange-password")
+            basicAuth("admin", "admin-password")
             jsonBody(valid_req)
         }.assertConflict().assertErr(TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT)
 
         // Currency mismatch
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            basicAuth("exchange", "exchange-password")
+            basicAuth("admin", "admin-password")
             jsonBody(
                 json(valid_req) {
                     "amount" to "EUR:33"
@@ -549,7 +542,7 @@ class WireGatewayApiTest {
 
         // Unknown account
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            basicAuth("exchange", "exchange-password")
+            basicAuth("admin", "admin-password")
             jsonBody(
                 json(valid_req) { 
                     "reserve_pub" to randEddsaPublicKey()
@@ -560,7 +553,7 @@ class WireGatewayApiTest {
 
         // Same account
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            basicAuth("exchange", "exchange-password")
+            basicAuth("admin", "admin-password")
             jsonBody(
                 json(valid_req) { 
                     "reserve_pub" to randEddsaPublicKey()
@@ -571,7 +564,7 @@ class WireGatewayApiTest {
 
         // Bad BASE32 reserve_pub
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            basicAuth("exchange", "exchange-password")
+            basicAuth("admin", "admin-password")
             jsonBody(json(valid_req) { 
                 "reserve_pub" to "I love chocolate"
             })
@@ -579,7 +572,7 @@ class WireGatewayApiTest {
         
         // Bad BASE32 len reserve_pub
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            basicAuth("exchange", "exchange-password")
+            basicAuth("admin", "admin-password")
             jsonBody(json(valid_req) { 
                 "reserve_pub" to randBase32Crockford(31)
             })
