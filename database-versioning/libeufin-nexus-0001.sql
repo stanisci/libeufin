@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS initiated_outgoing_transactions
   ,outgoing_transaction_id INT8 REFERENCES outgoing_transactions (outgoing_transaction_id)
   ,submitted BOOL DEFAULT FALSE 
   ,hidden BOOL DEFAULT FALSE -- FIXME: explain this.
-  ,request_uid TEXT NOT NULL UNIQUE
+  ,request_uid TEXT NOT NULL UNIQUE CHECK (char_length(request_uid) <= 35)
   ,failure_message TEXT -- NOTE: that may mix soon failures (those found at initiation time), or late failures (those found out along a fetch operation)
   );
 
@@ -71,7 +71,8 @@ COMMENT ON COLUMN initiated_outgoing_transactions.request_uid
   IS 'Unique identifier of this outgoing transaction initiation.
 This value could come both from a nexus-httpd client or directly
 generated when nexus-fetch bounces one payment.  In both cases, this
-value will be used as a unique identifier for its related pain.001 document.';
+value will be used as a unique identifier for its related pain.001 document.
+For this reason, it must have at most 35 characters';
 
 -- only active in exchange mode.
 CREATE TABLE IF NOT EXISTS bounced_transactions
