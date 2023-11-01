@@ -176,6 +176,7 @@ class CoreBankAccountsMgmtApiTest {
             "name" to "Jane"
             "is_public" to true
             "internal_payto_uri" to ibanPayto
+            "is_taler_exchange" to true
         }
         // Check Ok
         client.post("/accounts") {
@@ -205,20 +206,6 @@ class CoreBankAccountsMgmtApiTest {
                 })
             }.assertConflict().assertErr(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
         }
-
-        // Only admin can create exchange account
-        val exchangeReq = json(req) {
-            "username" to "better-exchange"
-            "internal_payto_uri" to genIbanPaytoUri()
-            "is_taler_exchange" to true
-        }
-        client.post("/accounts") {
-            jsonBody(exchangeReq)
-        }.assertForbidden()
-        client.post("/accounts") {
-            basicAuth("admin", "admin-password")
-            jsonBody(exchangeReq)
-        }.assertCreated()
 
         // Testing login conflict
         client.post("/accounts") {
@@ -365,6 +352,7 @@ class CoreBankAccountsMgmtApiTest {
                 "phone" to "+99"
                 "email" to "foo@example.com"
             }
+            "is_taler_exchange" to true 
         }
         client.patch("/accounts/merchant") {
             basicAuth("merchant", "merchant-password")
@@ -390,7 +378,6 @@ class CoreBankAccountsMgmtApiTest {
         }
 
         checkAdminOnly(json(req) { "name" to "Another Foo" })
-        checkAdminOnly(json(req) { "is_taler_exchange" to true })
         checkAdminOnly(json(req) { "debit_threshold" to "KUDOS:100" })
 
         // Check admin account cannot be exchange
