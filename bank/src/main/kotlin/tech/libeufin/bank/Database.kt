@@ -437,13 +437,15 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         phoneNumber: String?,
         emailAddress: String?,
         isTalerExchange: Boolean?,
+        debtLimit: TalerAmount?,
         isAdmin: Boolean
     ): CustomerPatchResult = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
                 out_not_found,
-                out_legal_name_change
-            FROM account_reconfig(?, ?, ?, ?, ?, ?, ?)
+                out_legal_name_change,
+                out_debt_limit_change
+            FROM account_reconfig(?, ?, ?, ?, ?, ?, (?, ?)::taler_amount, ?)
         """)
         stmt.setString(1, login)
         stmt.setString(2, name)
@@ -453,13 +455,20 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         if (isTalerExchange == null)
             stmt.setNull(6, Types.NULL)
         else stmt.setBoolean(6, isTalerExchange)
-        stmt.setBoolean(7, isAdmin)
-
+        if (debtLimit == null) {
+            stmt.setNull(7, Types.NULL)
+            stmt.setNull(8, Types.NULL)
+        } else {
+            stmt.setLong(7, debtLimit.value)
+            stmt.setInt(8, debtLimit.frac)
+        }
+        stmt.setBoolean(9, isAdmin)
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw internalServerError("accountReconfig() returned nothing")
                 it.getBoolean("out_not_found") -> CustomerPatchResult.ACCOUNT_NOT_FOUND
                 it.getBoolean("out_legal_name_change") -> CustomerPatchResult.CONFLICT_LEGAL_NAME
+                it.getBoolean("out_debt_limit_change") -> CustomerPatchResult.CONFLICT_DEBT_LIMIT
                 else -> CustomerPatchResult.SUCCESS
             }
         }
@@ -1613,6 +1622,7 @@ enum class CustomerCreationResult {
 enum class CustomerPatchResult {
     ACCOUNT_NOT_FOUND,
     CONFLICT_LEGAL_NAME,
+    CONFLICT_DEBT_LIMIT,
     SUCCESS
 }
 

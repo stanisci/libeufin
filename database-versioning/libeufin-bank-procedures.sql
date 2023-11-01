@@ -161,54 +161,47 @@ CREATE OR REPLACE FUNCTION account_reconfig(
   IN in_email TEXT,
   IN in_cashout_payto TEXT,
   IN in_is_taler_exchange BOOLEAN,
+  IN in_max_debt taler_amount,
   IN in_is_admin BOOLEAN,
   OUT out_not_found BOOLEAN,
-  OUT out_legal_name_change BOOLEAN
+  OUT out_legal_name_change BOOLEAN,
+  OUT out_debt_limit_change BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
 my_customer_id INT8;
 BEGIN
+-- Get user ID and check reconfig rights
 SELECT
   customer_id,
-  in_name IS NOT NULL AND name != in_name AND NOT in_is_admin
-  INTO my_customer_id, out_legal_name_change
+  in_name IS NOT NULL AND name != in_name AND NOT in_is_admin,
+  in_max_debt IS NOT NULL AND max_debt != in_max_debt AND NOT in_is_admin
+  INTO my_customer_id, out_legal_name_change, out_debt_limit_change
   FROM customers
+    JOIN bank_accounts 
+    ON customer_id=owning_customer_id
   WHERE login=in_login;
 IF NOT FOUND THEN
   out_not_found=TRUE;
   RETURN;
-ELSIF out_legal_name_change THEN
+ELSIF out_legal_name_change OR out_debt_limit_change THEN
   RETURN;
 END IF;
 
--- optionally updating the Taler exchange flag
-IF in_is_taler_exchange IS NOT NULL THEN
-  UPDATE bank_accounts
-    SET is_taler_exchange = in_is_taler_exchange
-    WHERE owning_customer_id = my_customer_id;
-  IF NOT FOUND THEN
-    out_not_found=TRUE;
-    RETURN;
-  END IF;
-END IF;
-
-
--- bank account patching worked, custom must as well
--- since this runs in a DB transaction and the customer
--- was found earlier in this function.
-UPDATE customers
-SET
+-- Update bank info
+UPDATE bank_accounts SET 
+  is_taler_exchange = COALESCE(in_is_taler_exchange, is_taler_exchange),
+  max_debt = COALESCE(in_max_debt, max_debt)
+WHERE owning_customer_id = my_customer_id;
+-- Update customer info
+UPDATE customers SET
   cashout_payto=in_cashout_payto,
   phone=in_phone,
-  email=in_email
+  email=in_email,
+  name = COALESCE(in_name, name)
 WHERE customer_id = my_customer_id;
--- optionally updating the name
-IF in_name IS NOT NULL THEN
-  UPDATE customers SET name=in_name WHERE customer_id = my_customer_id;
-END IF;
 END $$;
-COMMENT ON FUNCTION account_reconfig(TEXT, TEXT, TEXT, TEXT, TEXT, BOOLEAN, BOOLEAN)
+COMMENT ON FUNCTION account_reconfig
   IS 'Updates values on customer and bank account rows based on the input data.';
 
 CREATE OR REPLACE FUNCTION customer_delete(

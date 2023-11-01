@@ -256,7 +256,9 @@ data class Config(
     val currency: CurrencySpecification,
     val have_cashout: Boolean,
     val fiat_currency: String?,
-    val conversion_info: ConversionInfo?
+    val conversion_info: ConversionInfo?,
+    val allow_registrations: Boolean,
+    val allow_deletions: Boolean
 ) {
     val name: String = "libeufin-bank"
     val version: String = "0:0:0"
@@ -619,5 +621,6 @@ data class AccountReconfiguration(
     val challenge_contact_data: ChallengeContactData?,
     val cashout_address: IbanPayTo?,
     val name: String?,
-    val is_exchange: Boolean?
+    val is_exchange: Boolean?,
+    val debit_threshold: TalerAmount?
 )

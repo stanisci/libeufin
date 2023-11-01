@@ -8,6 +8,7 @@ import io.ktor.server.engine.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import net.taler.wallet.crypto.Base32Crockford
 import net.taler.common.errorcodes.TalerErrorCode
 import org.junit.Test
@@ -345,13 +346,13 @@ class CoreBankAccountsMgmtApiTest {
     @Test
     fun accountReconfig() = bankSetup { _ -> 
         // Successful attempt now.
+        val cashout = IbanPayTo(genIbanPaytoUri())
         val req = json {
-            "cashout_address" to IbanPayTo(genIbanPaytoUri()).canonical
+            "cashout_address" to cashout.canonical
             "challenge_contact_data" to json {
-                "email" to "new@example.com"
-                "phone" to "+987"
+                "phone" to "+99"
+                "email" to "foo@example.com"
             }
-            "is_exchange" to true
         }
         client.patch("/accounts/merchant") {
             basicAuth("merchant", "merchant-password")
@@ -363,36 +364,39 @@ class CoreBankAccountsMgmtApiTest {
             jsonBody(req)
         }.assertNoContent()
 
-        val cashout = IbanPayTo(genIbanPaytoUri())
-        val nameReq = json {
-            "login" to "foo"
-            "name" to "Another Foo"
-            "cashout_address" to cashout.canonical
-            "challenge_contact_data" to json {
-                "phone" to "+99"
-                "email" to "foo@example.com"
-            }
+        suspend fun checkAdminOnly(req: JsonElement) {
+            // Checking ordinary user doesn't get to patch
+            client.patch("/accounts/merchant") {
+                basicAuth("merchant", "merchant-password")
+                jsonBody(req)
+            }.assertForbidden()
+            // Finally checking that admin does get to patch
+            client.patch("/accounts/merchant") {
+                basicAuth("admin", "admin-password")
+                jsonBody(req)
+            }.assertNoContent()
         }
-        // Checking ordinary user doesn't get to patch their name.
-        client.patch("/accounts/merchant") {
-            basicAuth("merchant", "merchant-password")
-            jsonBody(nameReq)
-        }.assertForbidden()
-        // Finally checking that admin does get to patch foo's name.
+
+        checkAdminOnly(json(req) { "name" to "Another Foo" })
+        checkAdminOnly(json(req) { "is_exchange" to true })
+        checkAdminOnly(json(req) { "debit_threshold" to "KUDOS:100" })
+        
+        // Check currency
         client.patch("/accounts/merchant") {
             basicAuth("admin", "admin-password")
-            jsonBody(nameReq)
-        }.assertNoContent()
+            jsonBody(json(req) { "debit_threshold" to "EUR:100" })
+        }.assertBadRequest()
 
         // Check patch
         client.get("/accounts/merchant") {
             basicAuth("admin", "admin-password")
-        }.assertOk().run {
+        }.assertOk().run { 
             val obj: AccountData = Json.decodeFromString(bodyAsText())
             assertEquals("Another Foo", obj.name)
             assertEquals(cashout.canonical, obj.cashout_payto_uri?.canonical)
             assertEquals("+99", obj.contact_data?.phone)
             assertEquals("foo@example.com", obj.contact_data?.email)
+            assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
         }
     }
 

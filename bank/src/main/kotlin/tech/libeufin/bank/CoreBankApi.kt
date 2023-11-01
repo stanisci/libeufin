@@ -40,12 +40,14 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.account
 fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
     get("/config") {
         call.respond(
-                Config(
-                        currency = ctx.currencySpecification,
-                        have_cashout = ctx.haveCashout,
-                        fiat_currency = ctx.fiatCurrency,
-                        conversion_info = ctx.conversionInfo
-                )
+            Config(
+                currency = ctx.currencySpecification,
+                have_cashout = ctx.haveCashout,
+                fiat_currency = ctx.fiatCurrency,
+                conversion_info = ctx.conversionInfo,
+                allow_registrations = !ctx.restrictRegistration,
+                allow_deletions = !ctx.restrictAccountDeletion
+            )
         )
     }
     authAdmin(db, TokenScope.readonly) {
@@ -214,6 +216,11 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
             if (username == "admin") throw forbidden("admin account not patchable")
             
             val req = call.receive<AccountReconfiguration>()
+            req.debit_threshold?.run { ctx.checkInternalCurrency(this) }
+
+            if (req.is_exchange != null && !isAdmin)
+                throw forbidden("non-admin user cannot change their exchange nature")
+
             val res = db.accountReconfig(
                 login = username,
                 name = req.name,
@@ -221,6 +228,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
                 emailAddress = req.challenge_contact_data?.email,
                 isTalerExchange = req.is_exchange,
                 phoneNumber = req.challenge_contact_data?.phone,
+                debtLimit = req.debit_threshold,
                 isAdmin = isAdmin
             )
             when (res) {
@@ -231,6 +239,8 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
                 )
                 CustomerPatchResult.CONFLICT_LEGAL_NAME -> 
                     throw forbidden("non-admin user cannot change their legal name")
+                CustomerPatchResult.CONFLICT_DEBT_LIMIT -> 
+                    throw forbidden("non-admin user cannot change their debt limit")
             }
         }
     }
