@@ -203,7 +203,7 @@ class CoreBankAccountsMgmtApiTest {
                     "password" to "password"
                     "name" to "John Smith"
                 })
-            }.assertForbidden().assertErr(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
+            }.assertConflict().assertErr(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
         }
 
         // Only admin can create exchange account
@@ -313,7 +313,7 @@ class CoreBankAccountsMgmtApiTest {
         reservedAccounts.forEach {
             client.delete("/accounts/$it") {
                 basicAuth("admin", "admin-password")
-            }.assertForbidden().assertErr(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
+            }.assertConflict().assertErr(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
         }
        
         // successful deletion

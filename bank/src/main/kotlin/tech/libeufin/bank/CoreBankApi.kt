@@ -145,7 +145,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
             val req = call.receive<RegisterAccountRequest>()
             // Prohibit reserved usernames:
             if (reservedAccounts.contains(req.username))
-                throw forbidden(
+                throw conflict(
                     "Username '${req.username}' is reserved.",
                     TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
                 )
@@ -194,7 +194,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
         delete("/accounts/{USERNAME}") {
             // Not deleting reserved names.
             if (reservedAccounts.contains(username))
-                throw forbidden(
+                throw conflict(
                     "Cannot delete reserved accounts",
                     TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
                 )
