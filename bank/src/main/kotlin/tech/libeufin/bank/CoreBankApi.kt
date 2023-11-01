@@ -149,6 +149,8 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
                     "Username '${req.username}' is reserved.",
                     TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
                 )
+            if (req.is_taler_exchange && !isAdmin)
+                throw forbidden("Only admin can create exchange accounts")
 
             val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
             val result = db.accountCreate(
@@ -212,13 +214,12 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
     }
     auth(db, TokenScope.readwrite, allowAdmin = true) {
         patch("/accounts/{USERNAME}") {
-            // admin is not allowed itself to change its own details.
-            if (username == "admin") throw forbidden("admin account not patchable")
-            
             val req = call.receive<AccountReconfiguration>()
             req.debit_threshold?.run { ctx.checkInternalCurrency(this) }
 
-            if (req.is_exchange != null && !isAdmin)
+            if (req.is_taler_exchange != null && username == "admin")
+                throw forbidden("admin account cannot be an exchange")
+            if (req.is_taler_exchange != null && !isAdmin)
                 throw forbidden("non-admin user cannot change their exchange nature")
 
             val res = db.accountReconfig(
@@ -226,7 +227,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
                 name = req.name,
                 cashoutPayto = req.cashout_address,
                 emailAddress = req.challenge_contact_data?.email,
-                isTalerExchange = req.is_exchange,
+                isTalerExchange = req.is_taler_exchange,
                 phoneNumber = req.challenge_contact_data?.phone,
                 debtLimit = req.debit_threshold,
                 isAdmin = isAdmin

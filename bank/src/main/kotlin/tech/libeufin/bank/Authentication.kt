@@ -41,6 +41,14 @@ fun Route.authAdmin(db: Database, scope: TokenScope, enforce: Boolean = true, ca
             if (login != "admin") {
                 throw unauthorized("Only administrator allowed")
             }
+            context.attributes.put(AUTH_IS_ADMIN, true)
+        } else {
+            val login = try {
+                context.authenticateBankRequest(db, scope) 
+            } catch (e: Exception) {
+                null
+            }
+            context.attributes.put(AUTH_IS_ADMIN, login == "admin")
         }
     }
 
@@ -65,7 +73,7 @@ fun Route.auth(db: Database, scope: TokenScope, allowAdmin: Boolean = false, req
 val PipelineContext<Unit, ApplicationCall>.username: String get() = call.username
 val PipelineContext<Unit, ApplicationCall>.isAdmin: Boolean get() = call.isAdmin
 val ApplicationCall.username: String get() = expectUriComponent("USERNAME")
-val ApplicationCall.isAdmin: Boolean get() = attributes.getOrNull(AUTH_IS_ADMIN) ?: throw Exception("No auth")
+val ApplicationCall.isAdmin: Boolean get() = attributes.getOrNull(AUTH_IS_ADMIN) ?: false
 
 private fun Route.intercept(callback: Route.() -> Unit, interceptor: suspend PipelineContext<Unit, ApplicationCall>.() -> Unit): Route {
     val subRoute = createChild(object : RouteSelector() {

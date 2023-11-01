@@ -206,6 +206,20 @@ class CoreBankAccountsMgmtApiTest {
             }.assertForbidden().assertErr(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
         }
 
+        // Only admin can create exchange account
+        val exchangeReq = json(req) {
+            "username" to "better-exchange"
+            "internal_payto_uri" to genIbanPaytoUri()
+            "is_taler_exchange" to true
+        }
+        client.post("/accounts") {
+            jsonBody(exchangeReq)
+        }.assertForbidden()
+        client.post("/accounts") {
+            basicAuth("admin", "admin-password")
+            jsonBody(exchangeReq)
+        }.assertCreated()
+
         // Testing login conflict
         client.post("/accounts") {
             jsonBody(json(req) {
@@ -277,12 +291,10 @@ class CoreBankAccountsMgmtApiTest {
             "name" to "Mallory"
         }
 
-        // Ordinary user
         client.post("/accounts") {
             basicAuth("merchant", "merchant-password")
             jsonBody(req)
         }.assertUnauthorized()
-        // Administrator
         client.post("/accounts") {
             basicAuth("admin", "admin-password")
             jsonBody(req)
@@ -378,8 +390,19 @@ class CoreBankAccountsMgmtApiTest {
         }
 
         checkAdminOnly(json(req) { "name" to "Another Foo" })
-        checkAdminOnly(json(req) { "is_exchange" to true })
+        checkAdminOnly(json(req) { "is_taler_exchange" to true })
         checkAdminOnly(json(req) { "debit_threshold" to "KUDOS:100" })
+
+        // Check admin account cannot be exchange
+        client.patch("/accounts/admin") {
+            basicAuth("admin", "admin-password")
+            jsonBody(json { "is_taler_exchange" to true })
+        }.assertForbidden()
+        // But we can change its debt limit
+        client.patch("/accounts/admin") {
+            basicAuth("admin", "admin-password")
+            jsonBody(json { "debit_threshold" to "KUDOS:100" })
+        }.assertNoContent()
         
         // Check currency
         client.patch("/accounts/merchant") {

@@ -621,6 +621,6 @@ data class AccountReconfiguration(
     val challenge_contact_data: ChallengeContactData?,
     val cashout_address: IbanPayTo?,
     val name: String?,
-    val is_exchange: Boolean?,
+    val is_taler_exchange: Boolean?,
     val debit_threshold: TalerAmount?
 )
