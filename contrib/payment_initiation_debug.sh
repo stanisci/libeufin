@@ -30,7 +30,7 @@ echo database: $DB_NAME
 # Optionally reading the user-provided request UID.
 if test -n "${LIBEUFIN_SUBMIT_REQUEST_UID:-}"
   then SUBMIT_REQUEST_UID="$LIBEUFIN_SUBMIT_REQUEST_UID"
-  else SUBMIT_REQUEST_UID=$(uuidgen)
+  else SUBMIT_REQUEST_UID=$(uuidgen | cut -c -30)
 fi
 
 # Finally inserting the initiated payment into the database.
@@ -43,8 +43,8 @@ INSERT INTO libeufin_nexus.initiated_outgoing_transactions
   request_uid)
   VALUES ((1,0),
   '${PAYMENT_SUBJECT}',
-  1,
-  'payto://iban/BIC/${IBAN_CREDITOR}',
+  $(($(date +%s) * 1000000)),
+  'payto://iban/POFICHBE/${IBAN_CREDITOR}?receiver-name=Merchant',
   '${SUBMIT_REQUEST_UID}')"
 
 # Only logging errors.
