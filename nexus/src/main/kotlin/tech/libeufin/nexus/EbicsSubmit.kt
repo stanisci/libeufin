@@ -26,6 +26,7 @@ import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
 import tech.libeufin.nexus.ebics.submitPayment
 import tech.libeufin.util.parsePayto
+import java.time.Instant
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
 import kotlin.system.exitProcess
@@ -124,7 +125,7 @@ fun getFrequencyInSeconds(humanFormat: String): Int? {
 fun checkFrequency(foundInConfig: String): Int {
     val frequencySeconds = getFrequencyInSeconds(foundInConfig)
     if (frequencySeconds == null) {
-        throw Exception("Invalid frequency value in config section nexus-ebics-submit: $foundInConfig")
+        throw Exception("Invalid frequency value in config section nexus-submit: $foundInConfig")
     }
     if (frequencySeconds < 0) {
         throw Exception("Configuration error: cannot operate with a negative submit frequency ($foundInConfig)")
@@ -139,6 +140,7 @@ private fun submitBatch(
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile
 ) {
+    logger.debug("Running submit at: ${Instant.now()}")
     runBlocking {
         db.initiatedPaymentsUnsubmittedGet(cfg.currency).forEach {
             logger.debug("Submitting payment initiation with row ID: ${it.key}")
@@ -164,7 +166,10 @@ private fun submitBatch(
         }
     }
 }
-
+data class SubmitFrequency(
+    val inSeconds: Int,
+    val fromConfig: String
+)
 class EbicsSubmit : CliktCommand("Submits any initiated payment found in the database") {
     private val configFile by option(
         "--config", "-c",
@@ -173,8 +178,8 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
     private val transient by option(
         "--transient",
         help = "This flag submits what is found in the database and returns, " +
-                "ignoring the 'frequency' value found in the configuration"
-    ).flag(default = true)
+                "ignoring the 'frequency' configuration value"
+    ).flag(default = false)
 
     /**
      * Submits any initiated payment that was not submitted
@@ -183,9 +188,10 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
      */
     override fun run() {
         val cfg: EbicsSetupConfig = doOrFail { extractEbicsConfig(configFile) }
-        val frequency: Int = doOrFail {
+        val frequency: SubmitFrequency = doOrFail {
             val configValue = cfg.config.requireString("nexus-submit", "frequency")
-            return@doOrFail checkFrequency(configValue)
+            val frequencySeconds = checkFrequency(configValue)
+            return@doOrFail SubmitFrequency(frequencySeconds, configValue)
         }
         val dbCfg = cfg.config.extractDbConfigOrFail()
         val db = Database(dbCfg.dbConnStr)
@@ -205,14 +211,15 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
             return
         }
-        if (frequency == 0) {
-            logger.warn("Long-polling not implemented, submitting what is found and exit")
+        logger.debug("Running with a frequency of ${frequency.fromConfig}")
+        if (frequency.inSeconds == 0) {
+            logger.warn("Long-polling not implemented, running therefore in transient mode")
             submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
             return
         }
         fixedRateTimer(
             name = "ebics submit period",
-            period = (frequency * 1000).toLong(),
+            period = (frequency.inSeconds * 1000).toLong(),
             action = {
                 submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
             }
