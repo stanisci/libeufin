@@ -4,7 +4,7 @@ plugins {
     id 'application'
     id 'org.jetbrains.kotlin.jvm'
     id "com.github.johnrengelman.shadow" version "8.1.1"
-    id 'org.jetbrains.kotlin.plugin.serialization' version '1.9.10'
+    id 'org.jetbrains.kotlin.plugin.serialization' version "$kotlin_version"
 }
 
 sourceSets {
@@ -66,11 +66,9 @@ dependencies {
     implementation 'com.zaxxer:HikariCP:5.0.1'
     // Ktor client library
     implementation "io.ktor:ktor-client-apache:$ktor_version"
-    implementation "io.ktor:ktor-client-auth:$ktor_version"
 
     // Brings the call-logging library too.
     implementation "io.ktor:ktor-server-test-host:$ktor_version"
-    implementation "io.ktor:ktor-auth:$ktor_auth_version"
 
     // PDF generation
     implementation 'com.itextpdf:itext7-core:7.1.16'

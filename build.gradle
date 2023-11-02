@@ -3,12 +3,10 @@
 import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
-    // id 'org.jetbrains.kotlin.jvm' version '1.5.30'
-    id 'org.jetbrains.kotlin.jvm' version '1.9.10'
+    id 'org.jetbrains.kotlin.jvm' version '1.9.20'
     id 'idea'
     id 'java-library'
     id 'maven-publish'
-    // id 'signing'
 }
 
 group = 'tech.libeufin'
@@ -21,10 +19,8 @@ if (!JavaVersion.current().isJava11Compatible()){
 }
 
 allprojects {
-    ext.set("kotlin_version", "1.9.10")
+    ext.set("kotlin_version", "1.9.20")
     ext.set("ktor_version", "2.3.3")
-    ext.set("ktor_auth_version", "1.6.8")
-    ext.set("exposed_version", "0.41.1")
 
     repositories {
         mavenCentral()
