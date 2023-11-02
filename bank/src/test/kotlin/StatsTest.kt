@@ -38,20 +38,20 @@ class StatsTest {
         suspend fun transfer(amount: TalerAmount) {
             client.post("/accounts/exchange/taler-wire-gateway/transfer") {
                 basicAuth("exchange", "exchange-password")
-                jsonBody(json {
+                jsonBody {
                     "request_uid" to randHashCode()
                     "amount" to amount
                     "exchange_base_url" to "http://exchange.example.com/"
                     "wtid" to randShortHashCode()
                     "credit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
-                })
+                }
             }.assertOk()
         }
 
         suspend fun monitor(count: Long, amount: TalerAmount) {
             Timeframe.entries.forEach { timestamp -> 
                 client.get("/monitor?timestamp=${timestamp.name}") { basicAuth("admin", "admin-password") }.assertOk().run {
-                    val resp = Json.decodeFromString<MonitorResponse>(bodyAsText())
+                    val resp = json<MonitorResponse>()
                     assertEquals(count, resp.talerPayoutCount)
                     assertEquals(amount, resp.talerPayoutInternalVolume)
                 }

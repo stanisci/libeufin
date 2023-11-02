@@ -30,9 +30,9 @@ class BankIntegrationApiTest {
         // Check OK
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
-            jsonBody(json { "amount" to "KUDOS:9" }) 
+            jsonBody { "amount" to "KUDOS:9" } 
         }.assertOk().run {
-            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val resp = json<BankAccountCreateWithdrawalResponse>()
             val uuid = resp.taler_withdraw_uri.split("/").last()
             client.get("/taler-integration/withdrawal-operation/$uuid")
                 .assertOk()
@@ -68,9 +68,9 @@ class BankIntegrationApiTest {
 
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
-            jsonBody(json { "amount" to "KUDOS:1" }) 
+            jsonBody { "amount" to "KUDOS:1" } 
         }.assertOk().run {
-            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val resp = json<BankAccountCreateWithdrawalResponse>()
             val uuid = resp.taler_withdraw_uri.split("/").last()
 
             // Check OK
@@ -83,17 +83,17 @@ class BankIntegrationApiTest {
             }.assertOk()
             // Check already selected
             client.post("/taler-integration/withdrawal-operation/$uuid") {
-                jsonBody(json(req) {
+                jsonBody(req) {
                     "reserve_pub" to randEddsaPublicKey()
-                })
+                }
             }.assertConflict().assertErr(TalerErrorCode.BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT)
         }   
 
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
-            jsonBody(json { "amount" to "KUDOS:1" }) 
+            jsonBody {  "amount" to "KUDOS:1"  } 
         }.assertOk().run {
-            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val resp = json<BankAccountCreateWithdrawalResponse>()
             val uuid = resp.taler_withdraw_uri.split("/").last()
 
             // Check reserve_pub_reuse
@@ -102,17 +102,17 @@ class BankIntegrationApiTest {
             }.assertConflict().assertErr(TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT)
             // Check unknown account
             client.post("/taler-integration/withdrawal-operation/$uuid") {
-                jsonBody(json {
+                jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
                     "selected_exchange" to IbanPayTo("payto://iban/UNKNOWN-IBAN-XYZ")
-                })
+                }
             }.assertConflict().assertErr(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
             // Check account not exchange
             client.post("/taler-integration/withdrawal-operation/$uuid") {
-                jsonBody(json {
+                jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
                     "selected_exchange" to IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ")
-                })
+                }
             }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)
         }
     }

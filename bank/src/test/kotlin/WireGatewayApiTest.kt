@@ -135,86 +135,70 @@ class WireGatewayApiTest {
         // Trigger conflict due to reused request_uid
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
-            jsonBody(
-                json(valid_req) { 
-                    "wtid" to randShortHashCode()
-                    "exchange_base_url" to "http://different-exchange.example.com/"
-                }
-            )
+            jsonBody(valid_req) { 
+                "wtid" to randShortHashCode()
+                "exchange_base_url" to "http://different-exchange.example.com/"
+            }
         }.assertConflict().assertErr(TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED)
 
         // Currency mismatch
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
-            jsonBody(
-                json(valid_req) {
-                    "amount" to "EUR:33"
-                }
-            )
+            jsonBody(valid_req) {
+                "amount" to "EUR:33"
+            }
         }.assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
 
         // Unknown account
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
-            jsonBody(
-                json(valid_req) { 
-                    "request_uid" to randHashCode()
-                    "wtid" to randShortHashCode()
-                    "credit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
-                }
-            )
+            jsonBody(valid_req) { 
+                "request_uid" to randHashCode()
+                "wtid" to randShortHashCode()
+                "credit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
+            }
         }.assertConflict().assertErr(TalerErrorCode.BANK_UNKNOWN_CREDITOR)
 
         // Same account
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
-            jsonBody(
-                json(valid_req) { 
-                    "request_uid" to randHashCode()
-                    "wtid" to randShortHashCode()
-                    "credit_account" to "payto://iban/EXCHANGE-IBAN-XYZ"
-                }
-            )
+            jsonBody(valid_req) { 
+                "request_uid" to randHashCode()
+                "wtid" to randShortHashCode()
+                "credit_account" to "payto://iban/EXCHANGE-IBAN-XYZ"
+            }
         }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
 
         // Bad BASE32 wtid
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
-            jsonBody(
-                json(valid_req) { 
-                    "wtid" to "I love chocolate"
-                }
-            )
+            jsonBody(valid_req) { 
+                "wtid" to "I love chocolate"
+            }
         }.assertBadRequest()
         
         // Bad BASE32 len wtid
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
-            jsonBody(
-                json(valid_req) { 
-                    "wtid" to randBase32Crockford(31)
-                }
-            )
+            jsonBody(valid_req) { 
+                "wtid" to randBase32Crockford(31)
+            }
         }.assertBadRequest()
 
         // Bad BASE32 request_uid
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
-            jsonBody(
-                json(valid_req) { 
-                    "request_uid" to "I love chocolate"
-                }
-            )
+            jsonBody(valid_req) { 
+                "request_uid" to "I love chocolate"
+            }
         }.assertBadRequest()
 
         // Bad BASE32 len wtid
         client.post("/accounts/exchange/taler-wire-gateway/transfer") {
             basicAuth("exchange", "exchange-password")
-            jsonBody(
-                json(valid_req) { 
-                    "request_uid" to randBase32Crockford(65)
-                }
-            )
+            jsonBody(valid_req) { 
+                "request_uid" to randBase32Crockford(65)
+            }
         }.assertBadRequest()
     }
     
@@ -272,15 +256,15 @@ class WireGatewayApiTest {
         // Gen one transaction using withdraw logic
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
-            jsonBody(json { "amount" to "KUDOS:9" }) 
+            jsonBody { "amount" to "KUDOS:9" } 
         }.assertOk().run {
-            val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+            val resp = json<BankAccountCreateWithdrawalResponse>()
             val uuid = resp.taler_withdraw_uri.split("/").last()
             client.post("/taler-integration/withdrawal-operation/${uuid}") {
-                jsonBody(json {
+                jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
                     "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
-                })
+                }
             }.assertOk()
             client.post("/withdrawals/${uuid}/confirm") {
                 basicAuth("merchant", "merchant-password")
@@ -355,15 +339,15 @@ class WireGatewayApiTest {
             delay(200)
             client.post("/accounts/merchant/withdrawals") {
                 basicAuth("merchant", "merchant-password")
-                jsonBody(json { "amount" to "KUDOS:9" }) 
+                jsonBody { "amount" to "KUDOS:9" } 
             }.assertOk().run {
-                val resp = Json.decodeFromString<BankAccountCreateWithdrawalResponse>(bodyAsText())
+                val resp = json<BankAccountCreateWithdrawalResponse>()
                 val uuid = resp.taler_withdraw_uri.split("/").last()
                 client.post("/taler-integration/withdrawal-operation/${uuid}") {
-                    jsonBody(json {
+                    jsonBody {
                         "reserve_pub" to randEddsaPublicKey()
                         "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
-                    })
+                    }
                 }.assertOk()
                 client.post("/withdrawals/${uuid}/confirm") {
                     basicAuth("merchant", "merchant-password")
@@ -533,49 +517,41 @@ class WireGatewayApiTest {
         // Currency mismatch
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             basicAuth("admin", "admin-password")
-            jsonBody(
-                json(valid_req) {
-                    "amount" to "EUR:33"
-                }
-            )
+            jsonBody(valid_req) { "amount" to "EUR:33" }
         }.assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
 
         // Unknown account
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             basicAuth("admin", "admin-password")
-            jsonBody(
-                json(valid_req) { 
-                    "reserve_pub" to randEddsaPublicKey()
-                    "debit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
-                }
-            )
+            jsonBody(valid_req) { 
+                "reserve_pub" to randEddsaPublicKey()
+                "debit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
+            }
         }.assertConflict().assertErr(TalerErrorCode.BANK_UNKNOWN_DEBTOR)
 
         // Same account
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             basicAuth("admin", "admin-password")
-            jsonBody(
-                json(valid_req) { 
-                    "reserve_pub" to randEddsaPublicKey()
-                    "debit_account" to "payto://iban/EXCHANGE-IBAN-XYZ"
-                }
-            )
+            jsonBody(valid_req) { 
+                "reserve_pub" to randEddsaPublicKey()
+                "debit_account" to "payto://iban/EXCHANGE-IBAN-XYZ"
+            }
         }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
 
         // Bad BASE32 reserve_pub
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             basicAuth("admin", "admin-password")
-            jsonBody(json(valid_req) { 
+            jsonBody(valid_req) { 
                 "reserve_pub" to "I love chocolate"
-            })
+            }
         }.assertBadRequest()
         
         // Bad BASE32 len reserve_pub
         client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             basicAuth("admin", "admin-password")
-            jsonBody(json(valid_req) { 
+            jsonBody(valid_req) { 
                 "reserve_pub" to randBase32Crockford(31)
-            })
+            }
         }.assertBadRequest()
     }
 }

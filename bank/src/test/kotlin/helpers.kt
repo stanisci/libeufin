@@ -88,7 +88,7 @@ fun dbSetup(lambda: suspend (Database) -> Unit) {
 suspend fun ApplicationTestBuilder.setMaxDebt(account: String, maxDebt: TalerAmount) {
     client.patch("/accounts/$account") { 
         basicAuth("admin", "admin-password")
-        jsonBody(json { "debit_threshold" to maxDebt })
+        jsonBody {  "debit_threshold" to maxDebt  }
     }.assertNoContent()
 }
 
@@ -109,7 +109,7 @@ fun HttpResponse.assertForbidden(): HttpResponse = assertStatus(HttpStatusCode.F
 
 
 suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
-    val err = Json.decodeFromString<TalerError>(bodyAsText())
+    val err = json<TalerError>()
     assertEquals(code.code, err.code)
     return this
 }
@@ -152,6 +152,17 @@ inline fun <reified B> HttpRequestBuilder.jsonBody(b: B, deflate: Boolean = fals
         setBody(json)
     }
 }
+
+inline suspend fun HttpRequestBuilder.jsonBody(
+    from: JsonObject = JsonObject(emptyMap()), 
+    deflate: Boolean = false, 
+    builderAction: JsonBuilder.() -> Unit
+) {
+    jsonBody(json(from, builderAction), deflate)
+}
+
+inline suspend fun <reified B> HttpResponse.json(): B =
+    Json.decodeFromString(kotlinx.serialization.serializer<B>(), bodyAsText())
 
 /* ----- Json DSL ----- */
 
