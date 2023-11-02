@@ -60,5 +60,6 @@ class ConfigLoading {
         assertNull(getFrequencyInSeconds("         "))
         assertNull(getFrequencyInSeconds("m"))
         assertNull(getFrequencyInSeconds(""))
+        assertNull(getFrequencyInSeconds("0"))
     }
 }
