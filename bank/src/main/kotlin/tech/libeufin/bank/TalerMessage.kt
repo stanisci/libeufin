@@ -205,11 +205,7 @@ data class BankAccountTransaction(
      */
     val bankAccountId: Long,
     // Null if this type is used to _create_ one transaction.
-    val dbRowId: Long,
-    // Following are ISO20022 specific.
-    val accountServicerReference: String,
-    val paymentInformationId: String,
-    val endToEndId: String,
+    val dbRowId: Long
 )
 
 /**

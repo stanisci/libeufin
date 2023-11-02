@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS bank_account_transactions
   ,subject TEXT NOT NULL
   ,amount taler_amount NOT NULL
   ,transaction_date BIGINT NOT NULL -- is this ISO20022 terminology? document format (microseconds since epoch)
-  ,account_servicer_reference TEXT NOT NULL
+  ,account_servicer_reference TEXT
   ,payment_information_id TEXT
   ,end_to_end_id TEXT
   ,direction direction_enum NOT NULL

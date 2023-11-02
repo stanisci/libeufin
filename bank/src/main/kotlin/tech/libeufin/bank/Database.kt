@@ -34,8 +34,6 @@ import kotlinx.coroutines.*
 import com.zaxxer.hikari.*
 import tech.libeufin.util.*
 
-private const val DB_CTR_LIMIT = 1000000
-
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
 
 /**
@@ -337,15 +335,12 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                 if (bonus != null) {
                     conn.prepareStatement("""
                         SELECT out_balance_insufficient
-                        FROM bank_transaction(?,'admin','bonus',(?,?)::taler_amount,?,?,?,?)
+                        FROM bank_transaction(?,'admin','bonus',(?,?)::taler_amount,?)
                     """).run {
                         setString(1, internalPaytoUri.canonical)
                         setLong(2, bonus.value)
                         setInt(3, bonus.frac)
                         setLong(4, Instant.now().toDbMicros() ?: throw faultyTimestampByBank())
-                        setString(5, "not used") // ISO20022
-                        setString(6, "not used") // ISO20022
-                        setString(7, "not used") // ISO20022
                         executeQuery().use {
                             when {
                                 !it.next() -> throw internalServerError("Bank transaction didn't properly return")
@@ -687,9 +682,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         subject: String,
         amount: TalerAmount,
         timestamp: Instant,
-        accountServicerReference: String = "not used", // ISO20022
-        endToEndId: String = "not used", // ISO20022
-        paymentInformationId: String = "not used" // ISO20022
     ): BankTransactionResult = conn { conn ->
         conn.transaction {
             val stmt = conn.prepareStatement("""
@@ -704,7 +696,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                     ,out_debit_row_id
                     ,out_creditor_is_exchange 
                     ,out_debtor_is_exchange
-                FROM bank_transaction(?,?,?,(?,?)::taler_amount,?,?,?,?)
+                FROM bank_transaction(?,?,?,(?,?)::taler_amount,?)
             """
             )
             stmt.setString(1, creditAccountPayto.canonical)
@@ -713,9 +705,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
             stmt.setLong(4, amount.value)
             stmt.setInt(5, amount.frac)
             stmt.setLong(6, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
-            stmt.setString(7, accountServicerReference)
-            stmt.setString(8, paymentInformationId)
-            stmt.setString(9, endToEndId)
             stmt.executeQuery().use {
                 when {
                     !it.next() -> throw internalServerError("Bank transaction didn't properly return")
@@ -744,9 +733,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
               ,(amount).val AS amount_val
               ,(amount).frac AS amount_frac
               ,transaction_date
-              ,account_servicer_reference
-              ,payment_information_id
-              ,end_to_end_id
               ,direction
               ,bank_account_id
               ,bank_transaction_id
@@ -765,11 +751,8 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
                     it.getInt("amount_frac"),
                     bankCurrency
                 ),
-                accountServicerReference = it.getString("account_servicer_reference"),
-                endToEndId = it.getString("end_to_end_id"),
                 direction = TransactionDirection.valueOf(it.getString("direction")),
                 bankAccountId = it.getLong("bank_account_id"),
-                paymentInformationId = it.getString("payment_information_id"),
                 subject = it.getString("subject"),
                 transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
                 dbRowId = it.getLong("bank_transaction_id")
@@ -1068,10 +1051,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
      */
     suspend fun talerWithdrawalConfirm(
         opUuid: UUID,
-        timestamp: Instant,
-        accountServicerReference: String = "NOT-USED",
-        endToEndId: String = "NOT-USED",
-        paymentInfId: String = "NOT-USED"
+        timestamp: Instant
     ): WithdrawalConfirmationResult = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
@@ -1080,14 +1060,11 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
               out_balance_insufficient,
               out_not_selected,
               out_aborted
-            FROM confirm_taler_withdrawal(?, ?, ?, ?, ?);
+            FROM confirm_taler_withdrawal(?, ?);
         """
         )
         stmt.setObject(1, opUuid)
         stmt.setLong(2, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setString(3, accountServicerReference)
-        stmt.setString(4, endToEndId)
-        stmt.setString(5, paymentInfId)
         stmt.executeQuery().use {
             when {
                 !it.next() ->
@@ -1329,10 +1306,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
     suspend fun talerTransferCreate(
         req: TransferRequest,
         username: String,
-        timestamp: Instant,
-        acctSvcrRef: String = "not used",
-        pmtInfId: String = "not used",
-        endToEndId: String = "not used",
+        timestamp: Instant
         ): TalerTransferCreationResult = conn { conn ->
         val subject = OutgoingTxMetadata(req.wtid, req.exchange_base_url).encode()
         val stmt = conn.prepareStatement("""
@@ -1349,7 +1323,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
               taler_transfer (
                   ?, ?, ?,
                   (?,?)::taler_amount,
-                  ?, ?, ?, ?, ?, ?, ?
+                  ?, ?, ?, ?
                 );
         """)
 
@@ -1362,9 +1336,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         stmt.setString(7, req.credit_account.canonical)
         stmt.setString(8, username)
         stmt.setLong(9, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setString(10, acctSvcrRef)
-        stmt.setString(11, pmtInfId)
-        stmt.setString(12, endToEndId)
 
         stmt.executeQuery().use {
             when {
@@ -1414,10 +1385,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
     suspend fun talerAddIncomingCreate(
         req: AddIncomingRequest,
         username: String,
-        timestamp: Instant,
-        acctSvcrRef: String = "not used",
-        pmtInfId: String = "not used",
-        endToEndId: String = "not used",
+        timestamp: Instant
         ): TalerAddIncomingCreationResult = conn { conn ->
             val subject = IncomingTxMetadata(req.reserve_pub).encode()
         val stmt = conn.prepareStatement("""
@@ -1433,7 +1401,7 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
             taler_add_incoming (
                 ?, ?,
                 (?,?)::taler_amount,
-                ?, ?, ?, ?, ?, ?
+                ?, ?, ?
                 );
         """)
 
@@ -1444,9 +1412,6 @@ class Database(dbConfig: String, private val bankCurrency: String, private val f
         stmt.setString(5, req.debit_account.canonical)
         stmt.setString(6, username)
         stmt.setLong(7, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setString(8, acctSvcrRef)
-        stmt.setString(9, pmtInfId)
-        stmt.setString(10, endToEndId)
 
         stmt.executeQuery().use {
             when {

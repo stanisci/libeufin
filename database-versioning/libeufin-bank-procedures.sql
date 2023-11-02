@@ -318,9 +318,6 @@ CREATE OR REPLACE FUNCTION taler_transfer(
   IN in_credit_account_payto TEXT,
   IN in_username TEXT,
   IN in_timestamp BIGINT,
-  IN in_account_servicer_reference TEXT,
-  IN in_payment_information_id TEXT,
-  IN in_end_to_end_id TEXT,
   -- Error status
   OUT out_debtor_not_found BOOLEAN,
   OUT out_debtor_not_exchange BOOLEAN,
@@ -390,9 +387,9 @@ SELECT
     in_subject,
     in_amount,
     in_timestamp,
-    in_account_servicer_reference,
-    in_payment_information_id,
-    in_end_to_end_id
+    NULL,
+    NULL,
+    NULL
   ) as transfer;
 IF out_exchange_balance_insufficient THEN
   RETURN;
@@ -401,20 +398,8 @@ out_timestamp=in_timestamp;
 -- Register outgoing transaction
 CALL register_outgoing(in_request_uid, in_wtid, in_exchange_base_url, out_tx_row_id);
 END $$;
-COMMENT ON FUNCTION taler_transfer(
-  bytea,
-  bytea,
-  text,
-  taler_amount,
-  text,
-  text,
-  text,
-  bigint,
-  text,
-  text,
-  text
-  )-- TODO new comment
-  IS 'function that (1) inserts the TWG requests'
+-- TODO new comment
+COMMENT ON FUNCTION taler_transfer IS 'function that (1) inserts the TWG requests'
      'details into the database and (2) performs '
      'the actual bank transaction to pay the merchant';
 
@@ -426,9 +411,6 @@ CREATE OR REPLACE FUNCTION taler_add_incoming(
   IN in_debit_account_payto TEXT,
   IN in_username TEXT,
   IN in_timestamp BIGINT,
-  IN in_account_servicer_reference TEXT,
-  IN in_payment_information_id TEXT,
-  IN in_end_to_end_id TEXT,
   -- Error status
   OUT out_creditor_not_found BOOLEAN,
   OUT out_creditor_not_exchange BOOLEAN,
@@ -491,9 +473,9 @@ SELECT
     in_subject,
     in_amount,
     in_timestamp,
-    in_account_servicer_reference,
-    in_payment_information_id,
-    in_end_to_end_id
+    NULL,
+    NULL,
+    NULL
   ) as transfer;
 IF out_debitor_balance_insufficient THEN
   RETURN;
@@ -501,18 +483,8 @@ END IF;
 -- Register incoming transaction
 CALL register_incoming(in_reserve_pub, out_tx_row_id, exchange_bank_account_id);
 END $$;
-COMMENT ON FUNCTION taler_add_incoming(
-  bytea,
-  text,
-  taler_amount,
-  text,
-  text,
-  bigint,
-  text,
-  text,
-  text
-  ) -- TODO new comment
-  IS 'function that (1) inserts the TWG requests'
+-- TODO new comment
+COMMENT ON FUNCTION taler_add_incoming IS 'function that (1) inserts the TWG requests'
      'details into the database and (2) performs '
      'the actual bank transaction to pay the merchant';
 
@@ -522,9 +494,6 @@ CREATE OR REPLACE FUNCTION bank_transaction(
   IN in_subject TEXT,
   IN in_amount taler_amount,
   IN in_timestamp BIGINT,
-  IN in_account_servicer_reference TEXT,
-  IN in_payment_information_id TEXT,
-  IN in_end_to_end_id TEXT,
   -- Error status
   OUT out_creditor_not_found BOOLEAN,
   OUT out_debtor_not_found BOOLEAN,
@@ -581,9 +550,9 @@ SELECT
     in_subject,
     in_amount,
     in_timestamp,
-    in_account_servicer_reference,
-    in_payment_information_id,
-    in_end_to_end_id
+    NULL,
+    NULL,
+    NULL
   ) as transfer;
 IF out_balance_insufficient THEN
   RETURN;
@@ -693,9 +662,6 @@ END $$;
 CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
   IN in_confirmation_date BIGINT,
-  IN in_acct_svcr_ref TEXT,
-  IN in_pmt_inf_id TEXT,
-  IN in_end_to_end_id TEXT,
   OUT out_no_op BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
   OUT out_creditor_not_found BOOLEAN,
@@ -758,9 +724,9 @@ FROM bank_wire_transfer(
   subject_local,
   amount_local,
   in_confirmation_date,
-  in_acct_svcr_ref,
-  in_pmt_inf_id,
-  in_end_to_end_id
+  NULL,
+  NULL,
+  NULL
 ) as transfer;
 IF out_balance_insufficient THEN
   RETURN;
@@ -774,7 +740,7 @@ UPDATE taler_withdrawal_operations
 -- Register incoming transaction
 CALL register_incoming(reserve_pub_local, tx_row_id, exchange_bank_account_id);
 END $$;
-COMMENT ON FUNCTION confirm_taler_withdrawal(uuid, bigint, text, text, text)
+COMMENT ON FUNCTION confirm_taler_withdrawal
   IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';
 
 CREATE OR REPLACE FUNCTION bank_wire_transfer(

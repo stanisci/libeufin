@@ -692,7 +692,7 @@ class CoreBankTransactionsApiTest {
 
     // POST /transactions
     @Test
-    fun testCreate() = bankSetup { _ -> 
+    fun create() = bankSetup { _ -> 
         val valid_req = json {
             "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout"
             "amount" to "KUDOS:0.3"
