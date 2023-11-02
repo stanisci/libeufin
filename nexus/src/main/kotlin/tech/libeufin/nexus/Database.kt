@@ -340,6 +340,28 @@ class Database(dbConfig: String): java.io.Closeable {
     }
 
     /**
+     * Sets the failure message to an initiated payment.  This text may
+     * come soon: as an internal failure at Nexus itself, or as the bank
+     * HTTP response of POSTing the EBICS document, or later: when asking
+     * the bank a pain.002 report.
+     *
+     * @param rowId row ID of the record to set.
+     * @param failureMessage error message from the bank.
+     * @return true on success, false if no payment was affected.
+     */
+    suspend fun initiatedPaymentSetFailureMessage(rowId: Long, failureMessage: String): Boolean = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+             UPDATE initiated_outgoing_transactions
+                      SET failure_message = ?
+                      WHERE initiated_outgoing_transaction_id=?
+             """
+        )
+        stmt.setString(1, failureMessage)
+        stmt.setLong(2, rowId)
+        return@runConn stmt.maybeUpdate()
+    }
+
+    /**
      * Gets any initiated payment that was not submitted to the
      * bank yet.
      *

@@ -128,6 +128,30 @@ class IncomingPaymentsTest {
 }
 class PaymentInitiationsTest {
 
+    // Testing the insertion of the failure message.
+    @Test
+    fun setFailureMessage() {
+        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        runBlocking {
+            assertEquals(
+                db.initiatedPaymentCreate(genInitPay("not submitted, has row ID == 1")),
+                PaymentInitiationOutcome.SUCCESS
+            )
+            assertFalse(db.initiatedPaymentSetFailureMessage(3, "3 not existing"))
+            assertTrue(db.initiatedPaymentSetFailureMessage(1, "expired"))
+            // Checking the value from the database.
+            db.runConn { conn ->
+                val idOne = conn.execSQLQuery("""
+                    SELECT failure_message
+                      FROM initiated_outgoing_transactions
+                      WHERE initiated_outgoing_transaction_id = 1;
+                """.trimIndent())
+                assertTrue(idOne.next())
+                val maybeMessage = idOne.getString("failure_message")
+                assertEquals("expired", maybeMessage)
+            }
+        }
+    }
     // Tests the flagging of payments as submitted.
     @Test
     fun paymentInitiationSetAsSubmitted() {
