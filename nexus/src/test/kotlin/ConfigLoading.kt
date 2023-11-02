@@ -49,8 +49,11 @@ class ConfigLoading {
     @Test
     fun timeParsing() {
         assertEquals(1, getFrequencyInSeconds("1s"))
+        assertEquals(1, getFrequencyInSeconds("       1           s       "))
         assertEquals(10*60, getFrequencyInSeconds("10m"))
+        assertEquals(10*60, getFrequencyInSeconds("10 m"))
         assertEquals(24*60*60, getFrequencyInSeconds("24h"))
+        assertEquals(24*60*60, getFrequencyInSeconds(" 24h"))
         assertEquals(60*60, getFrequencyInSeconds("      1h      "))
         assertEquals(60*60, getFrequencyInSeconds("01h"))
         assertNull(getFrequencyInSeconds("1.1s"))

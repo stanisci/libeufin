@@ -99,7 +99,7 @@ fun getFrequencyInSeconds(humanFormat: String): Int? {
     }
     val maybeNumber = trimmed.dropLast(1)
     val howMany = try {
-        maybeNumber.toInt()
+        maybeNumber.trimEnd().toInt()
     } catch (e: Exception) {
         logger.error("Prefix was not a valid input: '$maybeNumber'")
         return null
