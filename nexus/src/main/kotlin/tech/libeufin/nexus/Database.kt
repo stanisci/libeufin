@@ -340,13 +340,10 @@ class Database(dbConfig: String): java.io.Closeable {
     }
 
     /**
-     * Sets the failure message to an initiated payment.  This text may
-     * come soon: as an internal failure at Nexus itself, or as the bank
-     * HTTP response of POSTing the EBICS document, or later: when asking
-     * the bank a pain.002 report.
+     * Sets the failure reason to an initiated payment.
      *
      * @param rowId row ID of the record to set.
-     * @param failureMessage error message from the bank.
+     * @param failureMessage error associated to this initiated payment.
      * @return true on success, false if no payment was affected.
      */
     suspend fun initiatedPaymentSetFailureMessage(rowId: Long, failureMessage: String): Boolean = runConn { conn ->
