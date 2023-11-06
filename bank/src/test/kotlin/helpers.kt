@@ -26,7 +26,7 @@ fun setup(
     val ctx = config.loadBankConfig()
     Database(dbCfg.dbConnStr, ctx.currency, ctx.fiatCurrency).use {
         runBlocking {
-            ctx.conversionInfo?.run { it.conversionUpdateConfig(this) }
+            ctx.conversionInfo?.run { it.conversion.updateConfig(this) }
             lambda(it, ctx)
         }
     }

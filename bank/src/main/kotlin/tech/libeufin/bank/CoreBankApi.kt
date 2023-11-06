@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Stanisci and Dold.
+ * Copyright (C) 2023 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -377,7 +377,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             val req = call.receive<BankAccountCreateWithdrawalRequest>()
             ctx.checkInternalCurrency(req.amount)
             val opId = UUID.randomUUID()
-            when (db.talerWithdrawalCreate(username, opId, req.amount)) {
+            when (db.withdrawal.create(username, opId, req.amount)) {
                 WithdrawalCreationResult.ACCOUNT_NOT_FOUND -> throw notFound(
                     "Account '$username' not found",
                     TalerErrorCode.BANK_UNKNOWN_ACCOUNT
@@ -418,7 +418,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     }
     post("/withdrawals/{withdrawal_id}/abort") {
         val opId = call.uuidUriComponent("withdrawal_id")
-        when (db.talerWithdrawalAbort(opId)) {
+        when (db.withdrawal.abort(opId)) {
             AbortResult.NOT_FOUND -> throw notFound(
                 "Withdrawal operation $opId not found",
                 TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
@@ -432,7 +432,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     }
     post("/withdrawals/{withdrawal_id}/confirm") {
         val opId = call.uuidUriComponent("withdrawal_id")
-        when (db.talerWithdrawalConfirm(opId, Instant.now())) {
+        when (db.withdrawal.confirm(opId, Instant.now())) {
             WithdrawalConfirmationResult.OP_NOT_FOUND -> throw notFound(
                 "Withdrawal operation $opId not found",
                 TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
@@ -590,7 +590,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         params.credit?.let { ctx.checkFiatCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversionInternalToFiat(params.debit) ?:
+            val credit = db.conversion.internalToFiat(params.debit) ?:
                 throw conflict(
                     "${params.debit} is too small to be converted",
                     TalerErrorCode.BANK_BAD_CONVERSION
@@ -607,7 +607,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         params.credit?.let { ctx.checkInternalCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversionFiatToInternal(params.debit) ?:
+            val credit = db.conversion.fiatToInternal(params.debit) ?:
                 throw conflict(
                     "${params.debit} is too small to be converted",
                     TalerErrorCode.BANK_BAD_CONVERSION

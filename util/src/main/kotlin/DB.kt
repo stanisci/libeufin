@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2020 Taler Systems S.A.
+ * Copyright (C) 2023 Taler Systems S.A.
  *
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -31,6 +31,7 @@ import java.io.File
 import java.net.URI
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.sql.SQLException
 
 fun getCurrentUser(): String = System.getProperty("user.name")
 
@@ -180,6 +181,42 @@ fun <T> PreparedStatement.oneOrNull(lambda: (ResultSet) -> T): T? {
     executeQuery().use {
         if (!it.next()) return null
         return lambda(it)
+    }
+}
+
+fun <T> PreparedStatement.all(lambda: (ResultSet) -> T): List<T> {
+    executeQuery().use {
+        val ret = mutableListOf<T>()
+        while (it.next()) {
+            ret.add(lambda(it))
+        }
+        return ret
+    }
+}
+
+fun PreparedStatement.executeQueryCheck(): Boolean {
+    executeQuery().use {
+        return it.next()
+    }
+}
+
+fun PreparedStatement.executeUpdateCheck(): Boolean {
+    executeUpdate()
+    return updateCount > 0
+}
+
+/**
+ * Helper that returns false if the row to be inserted
+ * hits a unique key constraint violation, true when it
+ * succeeds.  Any other error (re)throws exception.
+ */
+fun PreparedStatement.executeUpdateViolation(): Boolean {
+    return try {
+        executeUpdateCheck()
+    } catch (e: SQLException) {
+        logger.error(e.message)
+        if (e.sqlState == "23505") return false // unique_violation
+        throw e // rethrowing, not to hide other types of errors.
     }
 }
 

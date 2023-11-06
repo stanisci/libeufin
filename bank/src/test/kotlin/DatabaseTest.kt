@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2019 Stanisci and Dold.
+ * Copyright (C) 2023 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -36,8 +36,8 @@ class DatabaseTest {
     @Test
     fun conversionConfig() = setup { db, ctx ->
         // Check idempotent
-        db.conversionUpdateConfig(ctx.conversionInfo!!)
-        db.conversionUpdateConfig(ctx.conversionInfo!!)
+        db.conversion.updateConfig(ctx.conversionInfo!!)
+        db.conversion.updateConfig(ctx.conversionInfo!!)
     }
 
     // Testing the helper that creates the admin account.

@@ -108,7 +108,7 @@ fun ApplicationCall.uuidUriComponent(name: String): UUID {
  */
 suspend fun ApplicationCall.getWithdrawal(db: Database, name: String): TalerWithdrawalOperation {
     val opId = uuidUriComponent(name)
-    val op = db.talerWithdrawalGet(opId) ?: throw notFound(
+    val op = db.withdrawal.get(opId) ?: throw notFound(
         hint = "Withdrawal operation $opId not found", talerEc = TalerErrorCode.END
     )
     return op

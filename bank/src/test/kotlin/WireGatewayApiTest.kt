@@ -18,7 +18,7 @@ import randHashCode
 
 class WireGatewayApiTest {
     suspend fun Database.genTransfer(from: String, to: IbanPayTo, amount: String = "KUDOS:10") {
-        talerTransferCreate(
+        exchange.transfer(
             req = TransferRequest(
                 request_uid = randHashCode(),
                 amount = TalerAmount(amount),
@@ -34,7 +34,7 @@ class WireGatewayApiTest {
     }
 
     suspend fun Database.genIncoming(to: String, from: IbanPayTo) {
-        talerAddIncomingCreate(
+        exchange.addIncoming(
             req = AddIncomingRequest(
                 reserve_pub = randShortHashCode(),
                 amount = TalerAmount("KUDOS:10"),

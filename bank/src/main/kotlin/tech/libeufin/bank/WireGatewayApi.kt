@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2019 Stanisci and Dold.
+ * Copyright (C) 2023 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -46,7 +46,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
         post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
             val req = call.receive<TransferRequest>()
             ctx.checkInternalCurrency(req.amount)
-            val dbRes = db.talerTransferCreate(
+            val dbRes = db.exchange.transfer(
                 req = req,
                 username = username,
                 timestamp = Instant.now()
@@ -88,7 +88,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readonly) {
         suspend fun <T> PipelineContext<Unit, ApplicationCall>.historyEndpoint(
             reduce: (List<T>, String) -> Any, 
-            dbLambda: suspend Database.(HistoryParams, Long) -> List<T>
+            dbLambda: suspend ExchangeDAO.(HistoryParams, Long) -> List<T>
         ) {
             val params = HistoryParams.extract(context.request.queryParameters)
             val bankAccount = call.bankAccount(db)
@@ -99,7 +99,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
 
-            val items = db.dbLambda(params, bankAccount.bankAccountId);
+            val items = db.exchange.dbLambda(params, bankAccount.bankAccountId);
         
             if (items.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)
@@ -108,10 +108,10 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             }
         }
         get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {
-            historyEndpoint(::IncomingHistory, Database::exchangeIncomingPoolHistory)
+            historyEndpoint(::IncomingHistory, ExchangeDAO::incomingHistory)
         }
         get("/accounts/{USERNAME}/taler-wire-gateway/history/outgoing") {
-            historyEndpoint(::OutgoingHistory, Database::exchangeOutgoingPoolHistory)
+            historyEndpoint(::OutgoingHistory, ExchangeDAO::outgoingHistory)
         }
     }
     authAdmin(db, TokenScope.readwrite) {
@@ -119,7 +119,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             val req = call.receive<AddIncomingRequest>()
             ctx.checkInternalCurrency(req.amount)
             val timestamp = Instant.now()
-            val dbRes = db.talerAddIncomingCreate(
+            val dbRes = db.exchange.addIncoming(
                 req = req,
                 username = username,
                 timestamp = timestamp
