@@ -27,6 +27,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
+import java.util.concurrent.TimeUnit
 import java.io.File
 import kotlin.random.Random
 import net.taler.common.errorcodes.TalerErrorCode
@@ -34,6 +35,8 @@ import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
 
@@ -222,7 +225,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
             val res = db.accountReconfig(
                 login = username,
                 name = req.name,
-                cashoutPayto = req.cashout_address,
+                cashoutPayto = req.cashout_payto_uri,
                 emailAddress = req.challenge_contact_data?.email,
                 isTalerExchange = req.is_taler_exchange,
                 phoneNumber = req.challenge_contact_data?.phone,
@@ -471,6 +474,15 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
             ctx.checkFiatCurrency(req.amount_credit)
 
             val tanChannel = req.tan_channel ?: TanChannel.sms
+            val tanScript = when (tanChannel) {
+                TanChannel.sms -> ctx.tanSms
+                TanChannel.email -> ctx.tanEmail
+            } ?: throw libeufinError( 
+                HttpStatusCode.NotImplemented,
+                "Unsupported tan channel $tanChannel",
+                TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED
+            )
+
             val res = db.cashout.create(
                 accountUsername = username, 
                 requestUid = req.request_uid,
@@ -511,15 +523,25 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
                 )
                 CashoutCreationResult.SUCCESS -> {
                     res.tanCode?.run {
-                        when (tanChannel) {
-                            TanChannel.sms -> throw Exception("TODO")
-                            TanChannel.email -> throw Exception("TODO")
-                            TanChannel.file -> {
-                                File("/tmp/cashout-tan.txt").writeText(this)
+                        val exitValue = withContext(Dispatchers.IO) {
+                            val process = ProcessBuilder(tanScript, res.tanInfo).start()
+                            try {
+                                process.outputWriter().use { it.write(res.tanCode) }
+                                process.waitFor(10, TimeUnit.MINUTES)
+                            } catch (e: Exception) {
+                                process.destroy()
                             }
+                            process.exitValue()
                         }
+                        if (exitValue != 0) {
+                            throw libeufinError(
+                                HttpStatusCode.BadGateway,
+                                "Tan channel script failure with exit value $exitValue",
+                                TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED
+                            )
+                        }
+                        db.cashout.markSent(res.id!!, Instant.now(), TAN_RETRANSMISSION_PERIOD)
                     }
-                    db.cashout.markSent(res.id!!, Instant.now(), TAN_RETRANSMISSION_PERIOD)
                     call.respond(CashoutPending(res.id.toString()))
                 }
             }
@@ -556,11 +578,16 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
                 )
                 CashoutConfirmationResult.BAD_TAN_CODE -> throw forbidden(
                     "Incorrect TAN code",
-                    TalerErrorCode.END // TODO new ec
+                    TalerErrorCode.BANK_TAN_CHALLENGE_FAILED
                 )
-                CashoutConfirmationResult.NO_RETRY -> throw forbidden(
-                    "Too manny failed confirmation attempt",
-                    TalerErrorCode.END // TODO new ec
+                CashoutConfirmationResult.NO_RETRY -> throw libeufinError(
+                    HttpStatusCode.TooManyRequests,
+                    "Too many failed confirmation attempt",
+                    TalerErrorCode.BANK_TAN_RATE_LIMITED
+                )
+                CashoutConfirmationResult.NO_CASHOUT_PAYTO -> throw conflict(
+                    "Missing cashout payto uri",
+                    TalerErrorCode.BANK_MISSING_TAN_INFO
                 )
                 CashoutConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
                     "Insufficient funds",

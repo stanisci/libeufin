@@ -87,8 +87,8 @@ val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompr
                 } catch (e: Exception) {
                     logger.error("Deflated request failed to inflate: ${e.message}")
                     throw badRequest(
-                        hint = "Could not inflate request",
-                        talerErrorCode = TalerErrorCode.GENERIC_COMPRESSION_INVALID
+                        "Could not inflate request",
+                        TalerErrorCode.GENERIC_COMPRESSION_INVALID
                     )
                 }
                 brc

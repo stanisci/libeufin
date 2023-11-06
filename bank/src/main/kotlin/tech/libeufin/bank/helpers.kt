@@ -39,17 +39,17 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers
 val reservedAccounts = setOf("admin", "bank")
 
 fun ApplicationCall.expectUriComponent(componentName: String) =
-    this.maybeUriComponent(componentName) ?: throw badRequest(
-        hint = "No username found in the URI", talerErrorCode = TalerErrorCode.GENERIC_PARAMETER_MISSING
+    maybeUriComponent(componentName) ?: throw badRequest(
+        "No username found in the URI", 
+        TalerErrorCode.GENERIC_PARAMETER_MISSING
     )
 
 /** Retrieve the bank account info for the selected username*/
-suspend fun ApplicationCall.bankAccount(db: Database): BankAccount {
-    return db.bankAccountGetFromCustomerLogin(username) ?: throw notFound(
-        hint = "Bank account for customer $username not found",
-        talerEc = TalerErrorCode.BANK_UNKNOWN_ACCOUNT
+suspend fun ApplicationCall.bankAccount(db: Database): BankAccount
+    = db.bankAccountGetFromCustomerLogin(username) ?: throw notFound(
+        "Bank account for customer $username not found",
+        TalerErrorCode.BANK_UNKNOWN_ACCOUNT
     )
-}
 
 // Generates a new Payto-URI with IBAN scheme.
 fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
@@ -109,7 +109,8 @@ fun ApplicationCall.uuidUriComponent(name: String): UUID {
 suspend fun ApplicationCall.getWithdrawal(db: Database, name: String): TalerWithdrawalOperation {
     val opId = uuidUriComponent(name)
     val op = db.withdrawal.get(opId) ?: throw notFound(
-        hint = "Withdrawal operation $opId not found", talerEc = TalerErrorCode.END
+        "Withdrawal operation $opId not found", 
+        TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
     )
     return op
 }

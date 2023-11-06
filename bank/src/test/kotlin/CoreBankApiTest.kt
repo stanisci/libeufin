@@ -204,7 +204,7 @@ class CoreBankAccountsMgmtApiTest {
                     "password" to "password"
                     "name" to "John Smith"
                 }
-            }.assertConflict().assertErr(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
+            }.assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
         }
 
         // Testing login conflict
@@ -212,16 +212,16 @@ class CoreBankAccountsMgmtApiTest {
             jsonBody(req) {
                 "name" to "Foo"
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_REGISTER_USERNAME_REUSE)
+        }.assertConflict(TalerErrorCode.BANK_REGISTER_USERNAME_REUSE)
         // Testing payto conflict
         client.post("/accounts") {
             jsonBody(req) {
                 "username" to "bar"
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_REGISTER_PAYTO_URI_REUSE)
+        }.assertConflict(TalerErrorCode.BANK_REGISTER_PAYTO_URI_REUSE)
         client.get("/accounts/bar") {
             basicAuth("admin", "admin-password")
-        }.assertNotFound().assertErr(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+        }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
     }
 
     // Test account created with bonus
@@ -251,10 +251,10 @@ class CoreBankAccountsMgmtApiTest {
             jsonBody(req) {
                 "username" to "bar"
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
+        }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
         client.get("/accounts/bar") {
             basicAuth("admin", "admin-password")
-        }.assertNotFound().assertErr(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+        }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
     }
 
     // Test admin-only account creation
@@ -282,13 +282,13 @@ class CoreBankAccountsMgmtApiTest {
         // Unknown account
         client.delete("/accounts/unknown") {
             basicAuth("admin", "admin-password")
-        }.assertNotFound().assertErr(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+        }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
 
         // Reserved account
         reservedAccounts.forEach {
             client.delete("/accounts/$it") {
                 basicAuth("admin", "admin-password")
-            }.assertConflict().assertErr(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
+            }.assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
         }
        
         // successful deletion
@@ -305,7 +305,7 @@ class CoreBankAccountsMgmtApiTest {
         // Trying again must yield 404
         client.delete("/accounts/john") {
             basicAuth("admin", "admin-password")
-        }.assertNotFound().assertErr(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+        }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
 
         
         // fail to delete, due to a non-zero balance.
@@ -317,7 +317,7 @@ class CoreBankAccountsMgmtApiTest {
         }.assertNoContent()
         client.delete("/accounts/merchant") {
             basicAuth("admin", "admin-password")
-        }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
+        }.assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
             jsonBody {
@@ -335,7 +335,7 @@ class CoreBankAccountsMgmtApiTest {
         // Successful attempt now.
         val cashout = IbanPayTo(genIbanPaytoUri())
         val req = json {
-            "cashout_address" to cashout.canonical
+            "cashout_payto_uri" to cashout.canonical
             "challenge_contact_data" to json {
                 "phone" to "+99"
                 "email" to "foo@example.com"
@@ -671,7 +671,7 @@ class CoreBankTransactionsApiTest {
         // Check unknown transaction
         client.get("/accounts/merchant/transactions/3") {
             basicAuth("merchant", "merchant-password")
-        }.assertNotFound().assertErr(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
         // Check wrong transaction
         client.get("/accounts/merchant/transactions/2") {
             basicAuth("merchant", "merchant-password")
@@ -735,7 +735,7 @@ class CoreBankTransactionsApiTest {
             jsonBody(valid_req) {
                 "amount" to "EUR:3.3"
             }
-        }.assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
+        }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
         // Surpassing the debt limit
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
@@ -743,7 +743,7 @@ class CoreBankTransactionsApiTest {
             jsonBody(valid_req) {
                 "amount" to "KUDOS:555"
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
+        }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
         // Missing message
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
@@ -759,7 +759,7 @@ class CoreBankTransactionsApiTest {
             jsonBody(valid_req) {
                 "payto_uri" to "payto://iban/UNKNOWN-IBAN-XYZ?message=payout"
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_UNKNOWN_CREDITOR)
+        }.assertConflict(TalerErrorCode.BANK_UNKNOWN_CREDITOR)
         // Transaction to self
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
@@ -767,7 +767,7 @@ class CoreBankTransactionsApiTest {
             jsonBody(valid_req) {
                 "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout"
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_SAME_ACCOUNT)
+        }.assertConflict(TalerErrorCode.BANK_SAME_ACCOUNT)
 
         suspend fun checkBalance(
             merchantDebt: Boolean,
@@ -811,7 +811,7 @@ class CoreBankTransactionsApiTest {
             jsonBody {
                 "payto_uri" to "payto://iban/CUSTOMER-IBAN-XYZ?message=payout2&amount=KUDOS:3"
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
+        }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
         checkBalance(true, "KUDOS:8.4", false, "KUDOS:6")
         // Send throught debt
         client.post("/accounts/customer/transactions") {
@@ -838,13 +838,13 @@ class CoreBankWithdrawalApiTest {
         client.post("/accounts/exchange/withdrawals") {
             basicAuth("exchange", "exchange-password")
             jsonBody { "amount" to "KUDOS:9.0" } 
-        }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
+        }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
 
         // Check insufficient fund
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
             jsonBody { "amount" to "KUDOS:90" } 
-        }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
+        }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
     }
 
     // GET /withdrawals/withdrawal_id
@@ -865,7 +865,8 @@ class CoreBankWithdrawalApiTest {
         client.get("/withdrawals/chocolate").assertBadRequest()
 
         // Check unknown
-        client.get("/withdrawals/${UUID.randomUUID()}").assertNotFound()
+        client.get("/withdrawals/${UUID.randomUUID()}")
+            .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
     // POST /withdrawals/withdrawal_id/abort
@@ -921,16 +922,16 @@ class CoreBankWithdrawalApiTest {
             client.post("/withdrawals/$uuid/confirm").assertNoContent()
 
             // Check error
-            client.post("/withdrawals/$uuid/abort").assertConflict()
-                .assertErr(TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT)
+            client.post("/withdrawals/$uuid/abort")
+                .assertConflict(TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT)
         }
 
         // Check bad UUID
         client.post("/withdrawals/chocolate/abort").assertBadRequest()
 
         // Check unknown
-        client.post("/withdrawals/${UUID.randomUUID()}/abort").assertNotFound()
-            .assertErr(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        client.post("/withdrawals/${UUID.randomUUID()}/abort")
+            .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
     // POST /withdrawals/withdrawal_id/confirm
@@ -945,8 +946,8 @@ class CoreBankWithdrawalApiTest {
             val uuid = resp.taler_withdraw_uri.split("/").last()
 
             // Check err
-            client.post("/withdrawals/$uuid/confirm").assertConflict()
-            .assertErr(TalerErrorCode.BANK_CONFIRM_INCOMPLETE)
+            client.post("/withdrawals/$uuid/confirm")
+                .assertConflict(TalerErrorCode.BANK_CONFIRM_INCOMPLETE)
         }
 
         // Check confirm selected
@@ -985,8 +986,8 @@ class CoreBankWithdrawalApiTest {
             client.post("/withdrawals/$uuid/abort").assertNoContent()
 
             // Check error
-            client.post("/withdrawals/$uuid/confirm").assertConflict()
-                .assertErr(TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT)
+            client.post("/withdrawals/$uuid/confirm")
+                .assertConflict(TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT)
         }
 
         // Check balance insufficient
@@ -1011,8 +1012,8 @@ class CoreBankWithdrawalApiTest {
                 }
             }.assertNoContent()
 
-            client.post("/withdrawals/$uuid/confirm").assertConflict()
-                .assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
+            client.post("/withdrawals/$uuid/confirm")
+                .assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
             // Check can abort because not confirmed
             client.post("/withdrawals/$uuid/abort").assertNoContent()
@@ -1022,15 +1023,15 @@ class CoreBankWithdrawalApiTest {
         client.post("/withdrawals/chocolate/confirm").assertBadRequest()
 
         // Check unknown
-        client.post("/withdrawals/${UUID.randomUUID()}/confirm").assertNotFound()
-            .assertErr(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        client.post("/withdrawals/${UUID.randomUUID()}/confirm")
+            .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 }
 
 
 class CoreBankCashoutApiTest {
-    suspend fun tanCode(): String? {
-        val file = File("/tmp/cashout-tan.txt");
+    suspend fun smsCode(info: String): String? {
+        val file = File("/tmp/tan-$info.txt");
         if (file.exists()) {
             val code = file.readText()
             file.delete()
@@ -1057,8 +1058,30 @@ class CoreBankCashoutApiTest {
             "request_uid" to randShortHashCode()
             "amount_debit" to "KUDOS:1"
             "amount_credit" to convert("KUDOS:1")
-            "tan_channel" to "file"
         }
+
+        // Check missing TAN info
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(req) 
+        }.assertConflict(TalerErrorCode.BANK_MISSING_TAN_INFO)
+        client.patch("/accounts/customer") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json {
+                "challenge_contact_data" to json {
+                    "phone" to "+99"
+                    "email" to "foo@example.com"
+                }
+            })
+        }.assertNoContent()
+
+        // Check email TAN error
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(req) {
+                "tan_channel" to "email"
+            }
+        }.assertStatus(HttpStatusCode.BadGateway, TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED)
 
         // Check OK
         client.post("/accounts/customer/cashouts") {
@@ -1066,14 +1089,14 @@ class CoreBankCashoutApiTest {
             jsonBody(req) 
         }.assertOk().run {
             val id = json<CashoutPending>().cashout_id
-            tanCode()
+            smsCode("+99")
             // Check idempotency
             client.post("/accounts/customer/cashouts") {
                 basicAuth("customer", "customer-password")
                 jsonBody(req) 
             }.assertOk().run { 
                 assertEquals(id, json<CashoutPending>().cashout_id)
-                assertNull(tanCode())     
+                assertNull(smsCode("+99"))     
             }
         }
 
@@ -1084,13 +1107,13 @@ class CoreBankCashoutApiTest {
                 "amount_debit" to "KUDOS:2"
                 "amount_credit" to convert("KUDOS:2")
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED)
+        }.assertConflict(TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED)
 
         // Check exchange account
         client.post("/accounts/exchange/cashouts") {
             basicAuth("exchange", "exchange-password")
             jsonBody(req) 
-        }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
+        }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
 
         // Check insufficient fund
         client.post("/accounts/customer/cashouts") {
@@ -1099,7 +1122,7 @@ class CoreBankCashoutApiTest {
                 "amount_debit" to "KUDOS:75"
                 "amount_credit" to convert("KUDOS:75")
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
+        }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
         // Check wrong conversion
         client.post("/accounts/customer/cashouts") {
@@ -1107,7 +1130,7 @@ class CoreBankCashoutApiTest {
             jsonBody(req) {
                 "amount_credit" to convert("KUDOS:2")
             }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_BAD_CONVERSION)
+        }.assertConflict(TalerErrorCode.BANK_BAD_CONVERSION)
 
         // Check wrong currency
         client.post("/accounts/customer/cashouts") {
@@ -1115,32 +1138,49 @@ class CoreBankCashoutApiTest {
             jsonBody(req) {
                 "amount_debit" to "EUR:1"
             }
-        }.assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
+        }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
         client.post("/accounts/customer/cashouts") {
             basicAuth("customer", "customer-password")
             jsonBody(req) {
                 "amount_credit" to "EUR:1"
             } 
-        }.assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
+        }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
+    }
 
-        // Check missing TAN info
+    // POST /accounts/{USERNAME}/cashouts
+    @Test
+    fun create_no_tan() = bankSetup("test_no_tan.conf") { _ ->
+        val req = json {
+            "request_uid" to randShortHashCode()
+            "amount_debit" to "KUDOS:1"
+            "amount_credit" to convert("KUDOS:1")
+        }
+
+        // Check unsupported TAN channel
         client.post("/accounts/customer/cashouts") {
             basicAuth("customer", "customer-password")
-            jsonBody(req) {
-                "tan_channel" to "sms"
-            }
-        }.assertConflict().assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
+            jsonBody(req) 
+        }.assertStatus(HttpStatusCode.NotImplemented, TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED)
     }
 
     // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort
     @Test
     fun abort() = bankSetup { _ ->
         // TODO auth routine
+        client.patch("/accounts/customer") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json {
+                "cashout_payto_uri" to IbanPayTo(genIbanPaytoUri())
+                "challenge_contact_data" to json {
+                    "phone" to "+99"
+                }
+            })
+        }.assertNoContent()
+        
         val req = json {
             "request_uid" to randShortHashCode()
             "amount_debit" to "KUDOS:1"
             "amount_credit" to convert("KUDOS:1")
-            "tan_channel" to "file"
         }
 
         // Check abort created
@@ -1169,40 +1209,47 @@ class CoreBankCashoutApiTest {
 
             client.post("/accounts/customer/cashouts/$uuid/confirm") {
                 basicAuth("customer", "customer-password")
-                jsonBody { "tan" to tanCode() } 
+                jsonBody { "tan" to smsCode("+99") } 
             }.assertNoContent()
 
             // Check error
             client.post("/accounts/customer/cashouts/$uuid/abort") {
                 basicAuth("customer", "customer-password")
-            }.assertConflict().assertErr(TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT)
+            }.assertConflict(TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT)
         }
 
         // Check bad UUID
         client.post("/accounts/customer/cashouts/chocolate/abort") {
             basicAuth("customer", "customer-password")
-            jsonBody { "tan" to tanCode() } 
+            jsonBody { "tan" to "code" } 
         }.assertBadRequest()
 
         // Check unknown
         client.post("/accounts/customer/cashouts/${UUID.randomUUID()}/abort") {
             basicAuth("customer", "customer-password")
-            jsonBody { "tan" to tanCode() } 
-        }.assertNotFound().assertErr(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+            jsonBody { "tan" to "code" } 
+        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
     // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm
     @Test
     fun confirm() = bankSetup { _ -> 
         // TODO auth routine
+        client.patch("/accounts/customer") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json {
+                "challenge_contact_data" to json {
+                    "phone" to "+99"
+                }
+            })
+        }.assertNoContent()
+
         val req = json {
             "request_uid" to randShortHashCode()
             "amount_debit" to "KUDOS:1"
             "amount_credit" to convert("KUDOS:1")
-            "tan_channel" to "file"
         }
 
-        // TODO check sms and mail TAN channel
         // Check confirm
         client.post("/accounts/customer/cashouts") {
             basicAuth("customer", "customer-password")
@@ -1210,14 +1257,29 @@ class CoreBankCashoutApiTest {
         }.assertOk().run {
             val uuid = json<CashoutPending>().cashout_id
 
+            // Check missing cashout address
+            client.post("/accounts/customer/cashouts/$uuid/confirm") {
+                basicAuth("customer", "customer-password")
+                jsonBody { "tan" to "code" }
+            }.assertConflict(TalerErrorCode.BANK_MISSING_TAN_INFO)
+            client.patch("/accounts/customer") {
+                basicAuth("customer", "customer-password")
+                jsonBody(json {
+                    "cashout_payto_uri" to IbanPayTo(genIbanPaytoUri())
+                    "challenge_contact_data" to json {
+                        "phone" to "+99"
+                    }
+                })
+            }.assertNoContent()
+
             // Check bad TAN code
             client.post("/accounts/customer/cashouts/$uuid/confirm") {
                 basicAuth("customer", "customer-password")
                 jsonBody { "tan" to "nice-try" } 
-            }.assertForbidden()
+            }.assertForbidden(TalerErrorCode.BANK_TAN_CHALLENGE_FAILED)
 
-            val code = tanCode()
-
+            val code = smsCode("+99")
+           
             // Check OK
             client.post("/accounts/customer/cashouts/$uuid/confirm") {
                 basicAuth("customer", "customer-password")
@@ -1246,8 +1308,8 @@ class CoreBankCashoutApiTest {
 
             client.post("/accounts/customer/cashouts/$uuid/confirm"){
                 basicAuth("customer", "customer-password")
-                jsonBody { "tan" to tanCode() } 
-            }.assertConflict().assertErr(TalerErrorCode.BANK_UNALLOWED_DEBIT)
+                jsonBody { "tan" to smsCode("+99") } 
+            }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
             // Check can abort because not confirmed
             client.post("/accounts/customer/cashouts/$uuid/abort") {
@@ -1265,7 +1327,7 @@ class CoreBankCashoutApiTest {
         client.post("/accounts/customer/cashouts/${UUID.randomUUID()}/confirm") {
             basicAuth("customer", "customer-password")
             jsonBody { "tan" to "code" }
-        }.assertNotFound().assertErr(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
     // GET /cashout-rate
@@ -1281,12 +1343,12 @@ class CoreBankCashoutApiTest {
         client.get("/cashout-rate").assertBadRequest()
         // Too small
         client.get("/cashout-rate?amount_debit=KUDOS:0.08")
-            .assertConflict().assertErr(TalerErrorCode.BANK_BAD_CONVERSION)
+            .assertConflict(TalerErrorCode.BANK_BAD_CONVERSION)
         // Wrong currency
         client.get("/cashout-rate?amount_debit=FIAT:1")
-            .assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
+            .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
         client.get("/cashout-rate?amount_credit=KUDOS:1")
-            .assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
+            .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
     }
 
     // GET /cashin-rate
@@ -1306,8 +1368,8 @@ class CoreBankCashoutApiTest {
         client.get("/cashin-rate").assertBadRequest()
         // Wrong currency
         client.get("/cashin-rate?amount_debit=KUDOS:1")
-            .assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
+            .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
         client.get("/cashin-rate?amount_credit=FIAT:1")
-            .assertBadRequest().assertErr(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
+            .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
     }
 }

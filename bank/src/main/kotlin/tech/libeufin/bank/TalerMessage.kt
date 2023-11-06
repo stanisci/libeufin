@@ -93,6 +93,17 @@ data class RegisterAccountRequest(
     val internal_payto_uri: IbanPayTo? = null
 )
 
+/**
+ * Request of PATCH /accounts/{USERNAME}
+ */
+@Serializable
+data class AccountReconfiguration(
+    val challenge_contact_data: ChallengeContactData?,
+    val cashout_payto_uri: IbanPayTo?,
+    val name: String?,
+    val is_taler_exchange: Boolean?,
+    val debit_threshold: TalerAmount?
+)
 
 /**
  * Type expected at POST /accounts/{USERNAME}/token
@@ -148,8 +159,7 @@ data class BankAccount(
 // Allowed values for cashout TAN channels.
 enum class TanChannel {
     sms,
-    email,
-    file // Writes cashout TANs to /tmp, for testing.
+    email
 }
 
 // Scopes for authentication tokens.
@@ -608,16 +618,4 @@ data class PublicAccount(
 @Serializable
 data class AccountPasswordChange(
     val new_password: String
-)
-
-/**
- * Request of PATCH /accounts/{USERNAME}
- */
-@Serializable
-data class AccountReconfiguration(
-    val challenge_contact_data: ChallengeContactData?,
-    val cashout_address: IbanPayTo?,
-    val name: String?,
-    val is_taler_exchange: Boolean?,
-    val debit_threshold: TalerAmount?
 )

@@ -79,7 +79,9 @@ data class BankConfig(
     val spaCaptchaURL: String?,
     val haveCashout: Boolean,
     val fiatCurrency: String?,
-    val conversionInfo: ConversionInfo?
+    val conversionInfo: ConversionInfo?,
+    val tanSms: String?,
+    val tanEmail: String?,
 )
 
 @Serializable
@@ -146,7 +148,9 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
         currencySpecification = currencySpecification,
         haveCashout = haveCashout,
         fiatCurrency = fiatCurrency,
-        conversionInfo = conversionInfo
+        conversionInfo = conversionInfo,
+        tanSms = lookupPath("libeufin-bank", "tan_sms"),
+        tanEmail = lookupPath("libeufin-bank", "tan_email"),
     )
 }
 

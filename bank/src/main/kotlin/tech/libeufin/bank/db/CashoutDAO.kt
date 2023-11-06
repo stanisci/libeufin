@@ -43,6 +43,7 @@ enum class CashoutConfirmationResult {
     BAD_TAN_CODE,
     BALANCE_INSUFFICIENT,
     NO_RETRY,
+    NO_CASHOUT_PAYTO,
     ABORTED
 }
 
@@ -160,7 +161,8 @@ class CashoutDAO(private val db: Database) {
                 out_bad_code,
                 out_balance_insufficient,
                 out_aborted,
-                out_no_retry
+                out_no_retry,
+                out_no_cashout_payto
             FROM cashout_confirm(?, ?, ?);
         """)
         stmt.setObject(1, opUuid)
@@ -175,6 +177,7 @@ class CashoutDAO(private val db: Database) {
                 it.getBoolean("out_balance_insufficient") -> CashoutConfirmationResult.BALANCE_INSUFFICIENT
                 it.getBoolean("out_aborted") -> CashoutConfirmationResult.ABORTED
                 it.getBoolean("out_no_retry") -> CashoutConfirmationResult.NO_RETRY
+                it.getBoolean("out_no_cashout_payto") -> CashoutConfirmationResult.NO_CASHOUT_PAYTO
                 else -> CashoutConfirmationResult.SUCCESS
             }
         }

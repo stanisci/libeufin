@@ -49,62 +49,51 @@ data class TalerError(
 )
 
 
+fun libeufinError(
+    status: HttpStatusCode,
+    hint: String?,
+    error: TalerErrorCode
+): LibeufinBankException = LibeufinBankException(
+    httpStatus = status, talerError = TalerError(
+        code = error.code, hint = hint
+    )
+)
+
 fun forbidden(
     hint: String = "No rights on the resource",
-    talerErrorCode: TalerErrorCode = TalerErrorCode.END
-): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.Forbidden, talerError = TalerError(
-        code = talerErrorCode.code, hint = hint
-    )
-)
+    error: TalerErrorCode = TalerErrorCode.END
+): LibeufinBankException = libeufinError(HttpStatusCode.Forbidden, hint, error)
 
-fun unauthorized(hint: String = "Login failed"): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.Unauthorized, talerError = TalerError(
-        code = TalerErrorCode.GENERIC_UNAUTHORIZED.code, hint = hint
-    )
-)
+fun unauthorized(hint: String? = "Login failed"): LibeufinBankException 
+    = libeufinError(HttpStatusCode.Unauthorized, hint, TalerErrorCode.GENERIC_UNAUTHORIZED)
 
-fun internalServerError(hint: String?): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.InternalServerError, talerError = TalerError(
-        code = TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE.code, hint = hint
-    )
-)
+fun internalServerError(hint: String?): LibeufinBankException 
+    = libeufinError(HttpStatusCode.InternalServerError, hint, TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE)
 
 fun notFound(
-    hint: String?,
-    talerEc: TalerErrorCode
-): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.NotFound, talerError = TalerError(
-        code = talerEc.code, hint = hint
-    )
-)
+    hint: String,
+    error: TalerErrorCode
+): LibeufinBankException = libeufinError(HttpStatusCode.NotFound, hint, error)
 
 fun conflict(
-    hint: String?, talerEc: TalerErrorCode
-): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.Conflict, talerError = TalerError(
-        code = talerEc.code, hint = hint
-    )
-)
+    hint: String, error: TalerErrorCode
+): LibeufinBankException = libeufinError(HttpStatusCode.Conflict, hint, error)
 
 fun badRequest(
-    hint: String? = null, talerErrorCode: TalerErrorCode = TalerErrorCode.GENERIC_JSON_INVALID
-): LibeufinBankException = LibeufinBankException(
-    httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
-        code = talerErrorCode.code, hint = hint
-    )
-)
+    hint: String? = null, error: TalerErrorCode = TalerErrorCode.GENERIC_JSON_INVALID
+): LibeufinBankException = libeufinError(HttpStatusCode.BadRequest, hint, error)
+
 
 fun BankConfig.checkInternalCurrency(amount: TalerAmount) {
     if (amount.currency != currency) throw badRequest(
         "Wrong currency: expected internal currency $currency got ${amount.currency}",
-        talerErrorCode = TalerErrorCode.GENERIC_CURRENCY_MISMATCH
+        TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
 }
 
 fun BankConfig.checkFiatCurrency(amount: TalerAmount) {
     if (amount.currency != fiatCurrency) throw badRequest(
         "Wrong currency: expected fiat currency $fiatCurrency got ${amount.currency}",
-        talerErrorCode = TalerErrorCode.GENERIC_CURRENCY_MISMATCH
+        TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
 }

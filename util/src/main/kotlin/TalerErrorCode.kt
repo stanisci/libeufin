@@ -2250,7 +2250,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The currency specified in the operation does not work with the current state of the given resource. 
+   * The currency specified in the operation does not work with the current state of the given resource.
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -3394,6 +3394,38 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
+   * The request rate is too high. The server is refusing requests to guard against brute-force attacks.
+   * Returned with an HTTP status code of #MHD_HTTP_TOO_MANY_REQUESTS (429).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_TAN_RATE_LIMITED(5131),
+
+
+  /**
+   * This TAN channel is not supported.
+   * Returned with an HTTP status code of #MHD_HTTP_NOT_IMPLEMENTED (501).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_TAN_CHANNEL_NOT_SUPPORTED(5132),
+
+
+  /**
+   * Failed to send TAN using the helper script. Either script is not found, or script timeout, or script terminated with a non-successful result.
+   * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_TAN_CHANNEL_SCRIPT_FAILED(5133),
+
+
+  /**
+   * The client's response to the challenge was invalid.
+   * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_TAN_CHALLENGE_FAILED(5134),
+
+
+  /**
    * The sync service failed find the account in its database.
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
@@ -4415,6 +4447,14 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   CHALLENGER_INVALID_PIN(9758),
+
+
+  /**
+   * The token cannot be valid as no address was ever provided by the client.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  CHALLENGER_MISSING_ADDRESS(9759),
 
 
   /**

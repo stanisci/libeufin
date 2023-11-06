@@ -36,7 +36,7 @@ CREATE TYPE token_scope_enum
   AS ENUM ('readonly', 'readwrite');
 
 CREATE TYPE tan_enum
-  AS ENUM ('sms', 'email', 'file'); -- file is for testing purposes.
+  AS ENUM ('sms', 'email');
 
 CREATE TYPE cashout_status_enum
   AS ENUM ('pending', 'confirmed');
@@ -204,8 +204,6 @@ CREATE TABLE IF NOT EXISTS cashout_operations
     ON DELETE RESTRICT
     ON UPDATE RESTRICT
   );
-
--- FIXME: table comment missing
 
 -- end of: cashout management
 

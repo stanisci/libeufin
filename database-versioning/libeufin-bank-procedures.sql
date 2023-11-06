@@ -171,6 +171,9 @@ LANGUAGE plpgsql AS $$
 DECLARE
 my_customer_id INT8;
 BEGIN
+IF (in_max_debt.val IS NULL) THEN
+  in_max_debt = NULL;
+END IF;
 -- Get user ID and check reconfig rights
 SELECT
   customer_id,
@@ -1028,7 +1031,6 @@ END IF;
 SELECT 
     bank_account_id, is_taler_exchange,
     CASE 
-      WHEN in_tan_channel = 'file'  THEN login -- unused
       WHEN in_tan_channel = 'sms'   THEN phone
       WHEN in_tan_channel = 'email' THEN email
     END
@@ -1102,7 +1104,8 @@ CREATE OR REPLACE FUNCTION cashout_confirm(
   OUT out_bad_code BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
   OUT out_aborted BOOLEAN,
-  OUT out_no_retry BOOLEAN
+  OUT out_no_retry BOOLEAN,
+  OUT out_no_cashout_payto BOOLEAN
 )
 LANGUAGE plpgsql as $$
 DECLARE
@@ -1119,18 +1122,22 @@ SELECT
   local_transaction IS NOT NULL,
   aborted, subject,
   bank_account, challenge,
-  (amount_debit).val, (amount_debit).frac
+  (amount_debit).val, (amount_debit).frac,
+  cashout_payto IS NULL
   INTO
     already_confirmed,
     out_aborted, subject_local,
     wallet_account_id, challenge_id,
-    amount_local.val, amount_local.frac
-  FROM cashout_operations
+    amount_local.val, amount_local.frac,
+    out_no_cashout_payto
+  FROM cashout_operations 
+    JOIN bank_accounts ON bank_account_id=bank_account
+    JOIN customers ON customer_id=owning_customer_id
   WHERE cashout_uuid=in_cashout_uuid;
 IF NOT FOUND THEN
   out_no_op=TRUE;
   RETURN;
-ELSIF already_confirmed OR out_aborted THEN
+ELSIF already_confirmed OR out_aborted OR out_no_cashout_payto THEN
   RETURN;
 END IF;
 

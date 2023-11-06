@@ -144,11 +144,9 @@ private suspend fun doBasicAuth(db: Database, encodedCredentials: String): Strin
          */
         limit = 2
     )
-    if (userAndPassSplit.size != 2) throw LibeufinBankException(
-        httpStatus = HttpStatusCode.BadRequest, talerError = TalerError(
-            code = TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED.code,
-            "Malformed Basic auth credentials found in the Authorization header."
-        )
+    if (userAndPassSplit.size != 2) throw badRequest(
+        "Malformed Basic auth credentials found in the Authorization header.",
+        TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     val (login, plainPassword) = userAndPassSplit
     val passwordHash = db.customerPasswordHashFromLogin(login) ?: throw unauthorized()
@@ -177,7 +175,7 @@ private suspend fun doTokenAuth(
 ): String? {
     val bareToken = splitBearerToken(token) ?: throw badRequest(
         "Bearer token malformed",
-        talerErrorCode = TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
+        TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     val tokenBytes = try {
         Base32Crockford.decode(bareToken)
@@ -204,10 +202,9 @@ private suspend fun doTokenAuth(
         return null
     }
     // Getting the related username.
-    return db.customerLoginFromId(maybeToken.bankCustomer) ?: throw LibeufinBankException(
-        httpStatus = HttpStatusCode.InternalServerError, talerError = TalerError(
-            code = TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE.code,
-            hint = "Customer not found, despite token mentions it.",
-        )
+    return db.customerLoginFromId(maybeToken.bankCustomer) ?: throw libeufinError(
+        HttpStatusCode.InternalServerError,
+        "Customer not found, despite token mentions it.",
+        TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE
     )
 }

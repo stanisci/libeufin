@@ -40,7 +40,7 @@ class BankIntegrationApiTest {
 
         // Check unknown
         client.get("/taler-integration/withdrawal-operation/${UUID.randomUUID()}")
-            .assertNotFound()
+            .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
         
         // Check bad UUID
         client.get("/taler-integration/withdrawal-operation/chocolate")
@@ -64,7 +64,7 @@ class BankIntegrationApiTest {
         // Check unknown
         client.post("/taler-integration/withdrawal-operation/${UUID.randomUUID()}") {
             jsonBody(req)
-        }.assertNotFound().assertErr(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
 
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
@@ -86,7 +86,7 @@ class BankIntegrationApiTest {
                 jsonBody(req) {
                     "reserve_pub" to randEddsaPublicKey()
                 }
-            }.assertConflict().assertErr(TalerErrorCode.BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT)
+            }.assertConflict(TalerErrorCode.BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT)
         }   
 
         client.post("/accounts/merchant/withdrawals") {
@@ -99,21 +99,21 @@ class BankIntegrationApiTest {
             // Check reserve_pub_reuse
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody(req)
-            }.assertConflict().assertErr(TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT)
+            }.assertConflict(TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT)
             // Check unknown account
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
                     "selected_exchange" to IbanPayTo("payto://iban/UNKNOWN-IBAN-XYZ")
                 }
-            }.assertConflict().assertErr(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+            }.assertConflict(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
             // Check account not exchange
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
                     "selected_exchange" to IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ")
                 }
-            }.assertConflict().assertErr(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)
+            }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)
         }
     }
 

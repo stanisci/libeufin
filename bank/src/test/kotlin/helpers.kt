@@ -105,18 +105,27 @@ suspend fun ApplicationTestBuilder.assertBalance(account: String, info: CreditDe
 
 /* ----- Assert ----- */
 
-fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {
+suspend fun HttpResponse.assertStatus(status: HttpStatusCode, err: TalerErrorCode?): HttpResponse {
     assertEquals(status, this.status);
+    if (err != null) assertErr(err)
     return this
 }
-fun HttpResponse.assertOk(): HttpResponse = assertStatus(HttpStatusCode.OK)
-fun HttpResponse.assertCreated(): HttpResponse = assertStatus(HttpStatusCode.Created)
-fun HttpResponse.assertNoContent(): HttpResponse = assertStatus(HttpStatusCode.NoContent)
-fun HttpResponse.assertNotFound(): HttpResponse = assertStatus(HttpStatusCode.NotFound)
-fun HttpResponse.assertUnauthorized(): HttpResponse = assertStatus(HttpStatusCode.Unauthorized)
-fun HttpResponse.assertConflict(): HttpResponse = assertStatus(HttpStatusCode.Conflict)
-fun HttpResponse.assertBadRequest(): HttpResponse = assertStatus(HttpStatusCode.BadRequest)
-fun HttpResponse.assertForbidden(): HttpResponse = assertStatus(HttpStatusCode.Forbidden)
+suspend fun HttpResponse.assertOk(): HttpResponse
+    = assertStatus(HttpStatusCode.OK, null)
+suspend fun HttpResponse.assertCreated(): HttpResponse 
+    = assertStatus(HttpStatusCode.Created, null)
+suspend fun HttpResponse.assertNoContent(): HttpResponse 
+    = assertStatus(HttpStatusCode.NoContent, null)
+suspend fun HttpResponse.assertNotFound(err: TalerErrorCode?): HttpResponse 
+    = assertStatus(HttpStatusCode.NotFound, err)
+suspend fun HttpResponse.assertUnauthorized(): HttpResponse 
+    = assertStatus(HttpStatusCode.Unauthorized, null)
+suspend fun HttpResponse.assertConflict(err: TalerErrorCode?): HttpResponse 
+    = assertStatus(HttpStatusCode.Conflict, err)
+suspend fun HttpResponse.assertBadRequest(err: TalerErrorCode? = null): HttpResponse 
+    = assertStatus(HttpStatusCode.BadRequest, err)
+suspend fun HttpResponse.assertForbidden(err: TalerErrorCode? = null): HttpResponse 
+    = assertStatus(HttpStatusCode.Forbidden, err)
 
 
 suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
