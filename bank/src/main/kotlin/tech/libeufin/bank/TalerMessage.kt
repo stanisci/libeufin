@@ -260,14 +260,14 @@ data class Config(
     val version: String = "0:0:0"
 }
 
-enum class CorebankCreditDebitInfo {
+enum class CreditDebitInfo {
     credit, debit
 }
 
 @Serializable
 data class Balance(
     val amount: TalerAmount,
-    val credit_debit_indicator: CorebankCreditDebitInfo,
+    val credit_debit_indicator: CreditDebitInfo,
 )
 
 /**
@@ -434,6 +434,7 @@ data class BankWithdrawalOperationPostResponse(
 
 @Serializable
 data class CashoutRequest(
+    val request_uid: ShortHashCode,
     val subject: String?,
     val amount_debit: TalerAmount,
     val amount_credit: TalerAmount,

@@ -92,6 +92,17 @@ suspend fun ApplicationTestBuilder.setMaxDebt(account: String, maxDebt: TalerAmo
     }.assertNoContent()
 }
 
+suspend fun ApplicationTestBuilder.assertBalance(account: String, info: CreditDebitInfo, amount: String) {
+    client.get("/accounts/$account") { 
+        basicAuth("admin", "admin-password")
+    }.assertOk().run { 
+        val balance = json<AccountData>().balance;
+        assertEquals(info, balance.credit_debit_indicator)
+        assertEquals(TalerAmount(amount), balance.amount)
+    }
+}
+
+
 /* ----- Assert ----- */
 
 fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {
@@ -153,7 +164,7 @@ inline fun <reified B> HttpRequestBuilder.jsonBody(b: B, deflate: Boolean = fals
     }
 }
 
-inline suspend fun HttpRequestBuilder.jsonBody(
+inline fun HttpRequestBuilder.jsonBody(
     from: JsonObject = JsonObject(emptyMap()), 
     deflate: Boolean = false, 
     builderAction: JsonBuilder.() -> Unit

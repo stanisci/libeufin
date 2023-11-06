@@ -49,8 +49,8 @@ class JsonTest {
 
     @Test
     fun enumSerializer() {
-        assert("\"credit\"" == Json.encodeToString(CorebankCreditDebitInfo.credit))
-        assert("\"debit\"" == Json.encodeToString(CorebankCreditDebitInfo.debit))
+        assert("\"credit\"" == Json.encodeToString(CreditDebitInfo.credit))
+        assert("\"debit\"" == Json.encodeToString(CreditDebitInfo.debit))
     }
 
     // Testing JSON <--> TalerAmount

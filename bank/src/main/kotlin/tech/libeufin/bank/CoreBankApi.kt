@@ -64,6 +64,7 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
 }
 
 private fun Routing.coreBankTokenApi(db: Database) {
+    val TOKEN_DEFAULT_DURATION: Duration = Duration.ofDays(1L)
     auth(db, TokenScope.refreshable) {
         post("/accounts/{USERNAME}/token") {
             val maybeAuthToken = call.getAuthToken()
@@ -370,7 +371,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
     }
 }
 
-fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
+private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/withdrawals") {
             val req = call.receive<BankAccountCreateWithdrawalRequest>()
@@ -457,7 +458,11 @@ fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     }
 }
 
-fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
+private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
+    val TAN_RETRY_COUNTER: Int = 3;
+    val TAN_VALIDITY_PERIOD: Duration = Duration.ofHours(1)
+    val TAN_RETRANSMISSION_PERIOD: Duration = Duration.ofMinutes(1)
+
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/cashouts") {
             val req = call.receive<CashoutRequest>()
@@ -465,20 +470,21 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
             ctx.checkInternalCurrency(req.amount_debit)
             ctx.checkFiatCurrency(req.amount_credit)
 
-            val opId = UUID.randomUUID()
             val tanChannel = req.tan_channel ?: TanChannel.sms
-            val tanCode = UUID.randomUUID().toString()
-            val (status, info) = db.cashoutCreate(
+            val res = db.cashout.create(
                 accountUsername = username, 
-                cashoutUuid = opId, 
+                requestUid = req.request_uid,
+                cashoutUuid = UUID.randomUUID(), 
                 amountDebit = req.amount_debit, 
                 amountCredit = req.amount_credit, 
                 subject = req.subject ?: "", // TODO default subject
-                creationTime = Instant.now(), 
                 tanChannel = tanChannel, 
-                tanCode = tanCode
+                tanCode = UUID.randomUUID().toString(),
+                now = Instant.now(), 
+                retryCounter = TAN_RETRY_COUNTER,
+                validityPeriod = TAN_VALIDITY_PERIOD
             )
-            when (status) {
+            when (res.status) {
                 CashoutCreationResult.ACCOUNT_NOT_FOUND -> throw notFound(
                     "Account '$username' not found",
                     TalerErrorCode.BANK_UNKNOWN_ACCOUNT
@@ -499,22 +505,28 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
                     "Account '$username' missing info for tan channel ${req.tan_channel}",
                     TalerErrorCode.BANK_MISSING_TAN_INFO
                 )
+                CashoutCreationResult.REQUEST_UID_REUSE -> throw conflict(
+                    "request_uid used already",
+                    TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED
+                )
                 CashoutCreationResult.SUCCESS -> {
-                    when (tanChannel) {
-                        TanChannel.sms -> throw Exception("TODO")
-                        TanChannel.email -> throw Exception("TODO")
-                        TanChannel.file -> {
-                            File("/tmp/cashout-tan.txt").writeText(tanCode)
+                    res.tanCode?.run {
+                        when (tanChannel) {
+                            TanChannel.sms -> throw Exception("TODO")
+                            TanChannel.email -> throw Exception("TODO")
+                            TanChannel.file -> {
+                                File("/tmp/cashout-tan.txt").writeText(this)
+                            }
                         }
                     }
-                    // TODO delete on error or commit transaction on error
-                    call.respond(CashoutPending(opId.toString()))
+                    db.cashout.markSent(res.id!!, Instant.now(), TAN_RETRANSMISSION_PERIOD)
+                    call.respond(CashoutPending(res.id.toString()))
                 }
             }
         }
         post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort") {
             val opId = call.uuidUriComponent("CASHOUT_ID")
-            when (db.cashoutAbort(opId)) {
+            when (db.cashout.abort(opId)) {
                 AbortResult.NOT_FOUND -> throw notFound(
                     "Cashout operation $opId not found",
                     TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
@@ -529,7 +541,7 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm") {
             val req = call.receive<CashoutConfirm>()
             val opId = call.uuidUriComponent("CASHOUT_ID")
-            when (db.cashoutConfirm(
+            when (db.cashout.confirm(
                 opUuid = opId,
                 tanCode = req.tan,
                 timestamp = Instant.now()
@@ -544,7 +556,11 @@ fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
                 )
                 CashoutConfirmationResult.BAD_TAN_CODE -> throw forbidden(
                     "Incorrect TAN code",
-                    TalerErrorCode.END
+                    TalerErrorCode.END // TODO new ec
+                )
+                CashoutConfirmationResult.NO_RETRY -> throw forbidden(
+                    "Too manny failed confirmation attempt",
+                    TalerErrorCode.END // TODO new ec
                 )
                 CashoutConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
                     "Insufficient funds",
