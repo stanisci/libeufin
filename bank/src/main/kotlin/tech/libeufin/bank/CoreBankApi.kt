@@ -587,11 +587,15 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
                 )
                 CashoutConfirmationResult.NO_CASHOUT_PAYTO -> throw conflict(
                     "Missing cashout payto uri",
-                    TalerErrorCode.BANK_MISSING_TAN_INFO
+                    TalerErrorCode.BANK_CONFIRM_INCOMPLETE
                 )
                 CashoutConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
                     "Insufficient funds",
                     TalerErrorCode.BANK_UNALLOWED_DEBIT
+                )
+                CashoutConfirmationResult.BAD_CONVERSION -> throw conflict(
+                    "Wrong currency conversion",
+                    TalerErrorCode.BANK_BAD_CONVERSION
                 )
                 CashoutConfirmationResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
             }

@@ -1101,6 +1101,7 @@ CREATE OR REPLACE FUNCTION cashout_confirm(
   IN in_tan_code TEXT,
   IN in_now_date BIGINT,
   OUT out_no_op BOOLEAN,
+  OUT out_bad_conversion BOOLEAN,
   OUT out_bad_code BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
   OUT out_aborted BOOLEAN,
@@ -1113,7 +1114,8 @@ DECLARE
   admin_account_id BIGINT;
   already_confirmed BOOLEAN;
   subject_local TEXT;
-  amount_local taler_amount;
+  amount_debit_local taler_amount;
+  amount_credit_local taler_amount;
   challenge_id BIGINT;
   tx_id BIGINT;
 BEGIN
@@ -1123,14 +1125,16 @@ SELECT
   aborted, subject,
   bank_account, challenge,
   (amount_debit).val, (amount_debit).frac,
+  (amount_credit).val, (amount_credit).frac,
   cashout_payto IS NULL
   INTO
     already_confirmed,
     out_aborted, subject_local,
     wallet_account_id, challenge_id,
-    amount_local.val, amount_local.frac,
+    amount_debit_local.val, amount_debit_local.frac,
+    amount_credit_local.val, amount_credit_local.frac,
     out_no_cashout_payto
-  FROM cashout_operations 
+  FROM cashout_operations
     JOIN bank_accounts ON bank_account_id=bank_account
     JOIN customers ON customer_id=owning_customer_id
   WHERE cashout_uuid=in_cashout_uuid;
@@ -1141,7 +1145,13 @@ ELSIF already_confirmed OR out_aborted OR out_no_cashout_payto THEN
   RETURN;
 END IF;
 
--- Check challenge
+-- check conversion
+SELECT too_small OR amount_credit_local!=to_amount INTO out_bad_conversion FROM conversion_to(amount_debit_local, 'sell'::text);
+IF out_bad_conversion THEN
+  RETURN;
+END IF;
+
+-- check challenge
 SELECT NOT ok, no_retry
   INTO out_bad_code, out_no_retry
   FROM challenge_try(challenge_id, in_tan_code, in_now_date);
@@ -1164,7 +1174,7 @@ FROM bank_wire_transfer(
   admin_account_id,
   wallet_account_id,
   subject_local,
-  amount_local,
+  amount_debit_local,
   in_now_date,
   'not-used',
   'not-used',

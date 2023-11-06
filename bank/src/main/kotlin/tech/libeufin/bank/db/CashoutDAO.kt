@@ -39,6 +39,7 @@ enum class CashoutCreationResult {
 /** Result status of cashout operation confirmation */
 enum class CashoutConfirmationResult {
     SUCCESS,
+    BAD_CONVERSION,
     OP_NOT_FOUND,
     BAD_TAN_CODE,
     BALANCE_INSUFFICIENT,
@@ -158,6 +159,7 @@ class CashoutDAO(private val db: Database) {
         val stmt = conn.prepareStatement("""
             SELECT
                 out_no_op,
+                out_bad_conversion,
                 out_bad_code,
                 out_balance_insufficient,
                 out_aborted,
@@ -178,6 +180,7 @@ class CashoutDAO(private val db: Database) {
                 it.getBoolean("out_aborted") -> CashoutConfirmationResult.ABORTED
                 it.getBoolean("out_no_retry") -> CashoutConfirmationResult.NO_RETRY
                 it.getBoolean("out_no_cashout_payto") -> CashoutConfirmationResult.NO_CASHOUT_PAYTO
+                it.getBoolean("out_bad_conversion") -> CashoutConfirmationResult.BAD_CONVERSION
                 else -> CashoutConfirmationResult.SUCCESS
             }
         }

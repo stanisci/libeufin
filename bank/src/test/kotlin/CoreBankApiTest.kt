@@ -936,7 +936,7 @@ class CoreBankWithdrawalApiTest {
 
     // POST /withdrawals/withdrawal_id/confirm
     @Test
-    fun confirm() = bankSetup { _ -> 
+    fun confirm() = bankSetup { db -> 
         // Check confirm created
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
@@ -1233,7 +1233,7 @@ class CoreBankCashoutApiTest {
 
     // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm
     @Test
-    fun confirm() = bankSetup { _ -> 
+    fun confirm() = bankSetup { db -> 
         // TODO auth routine
         client.patch("/accounts/customer") {
             basicAuth("customer", "customer-password")
@@ -1261,7 +1261,7 @@ class CoreBankCashoutApiTest {
             client.post("/accounts/customer/cashouts/$uuid/confirm") {
                 basicAuth("customer", "customer-password")
                 jsonBody { "tan" to "code" }
-            }.assertConflict(TalerErrorCode.BANK_MISSING_TAN_INFO)
+            }.assertConflict(TalerErrorCode.BANK_CONFIRM_INCOMPLETE)
             client.patch("/accounts/customer") {
                 basicAuth("customer", "customer-password")
                 jsonBody(json {
@@ -1292,10 +1292,44 @@ class CoreBankCashoutApiTest {
             }.assertNoContent()
         }
 
-        // Check balance insufficient
+        // Check bad conversion
         client.post("/accounts/customer/cashouts") {
             basicAuth("customer", "customer-password")
             jsonBody(json(req) { "request_uid" to randShortHashCode() }) 
+        }.assertOk().run {
+            val uuid = json<CashoutPending>().cashout_id
+
+            db.conversion.updateConfig(ConversionInfo(
+                buy_ratio = DecimalNumber("1"),
+                buy_fee = DecimalNumber("1"),
+                buy_tiny_amount = TalerAmount("KUDOS:0.0001"),
+                buy_rounding_mode = RoundingMode.nearest,
+                buy_min_amount = TalerAmount("FIAT:0.0001"),
+                sell_ratio = DecimalNumber("1"),
+                sell_fee = DecimalNumber("1"),
+                sell_tiny_amount = TalerAmount("FIAT:0.0001"),
+                sell_rounding_mode = RoundingMode.nearest,
+                sell_min_amount = TalerAmount("KUDOS:0.0001"),
+            ))
+
+            client.post("/accounts/customer/cashouts/$uuid/confirm"){
+                basicAuth("customer", "customer-password")
+                jsonBody { "tan" to smsCode("+99") } 
+            }.assertConflict(TalerErrorCode.BANK_BAD_CONVERSION)
+
+            // Check can abort because not confirmed
+            client.post("/accounts/customer/cashouts/$uuid/abort") {
+                basicAuth("customer", "customer-password")
+            }.assertNoContent()
+        }
+
+        // Check balance insufficient
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json(req) { 
+                "request_uid" to randShortHashCode()
+                "amount_credit" to convert("KUDOS:1")
+            }) 
         }.assertOk().run {
             val uuid = json<CashoutPending>().cashout_id
             // Send too much money
