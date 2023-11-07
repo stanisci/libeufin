@@ -69,6 +69,22 @@ data class IbanAccountMetadata(
 )
 
 /**
+ * Contains the frequency of submit or fetch iterations.
+ */
+data class NexusFrequency(
+    /**
+     * Value in seconds of the FREQUENCY configuration
+     * value, found either under [nexus-fetch] or [nexus-submit]
+     */
+    val inSeconds: Int,
+    /**
+     * Copy of the value found in the configuration.  Used
+     * for logging.
+     */
+    val fromConfig: String
+)
+
+/**
  * Keeps all the options of the ebics-setup subcommand.  The
  * caller has to handle TalerConfigError if values are missing.
  * If even one of the fields could not be instantiated, then
@@ -169,23 +185,11 @@ object RSAPrivateCrtKeySerializer : KSerializer<RSAPrivateCrtKey> {
 }
 
 /**
- * Structure of the file that holds the bank account
- * metadata.
- */
-@Serializable
-data class BankAccountMetadataFile(
-    val account_holder_iban: String,
-    val bank_code: String?,
-    val account_holder_name: String
-)
-
-/**
  * Structure of the JSON file that contains the client
  * private keys on disk.
  */
 @Serializable
 data class ClientPrivateKeysFile(
-    // FIXME: centralize the @Contextual use.
     @Contextual val signature_private_key: RSAPrivateCrtKey,
     @Contextual val encryption_private_key: RSAPrivateCrtKey,
     @Contextual val authentication_private_key: RSAPrivateCrtKey,

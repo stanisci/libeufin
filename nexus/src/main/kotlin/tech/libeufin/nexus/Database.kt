@@ -47,13 +47,34 @@ data class IncomingPayment(
 
 // INITIATED PAYMENTS STRUCTS
 
+enum class DatabaseSubmissionState {
+    /**
+     * Submission got both EBICS_OK.
+     */
+    success,
+    /**
+     * Submission can be retried (network issue, for example)
+     */
+    transient_failure,
+    /**
+     * Submission got at least one error code which was not
+     * EBICS_OK.
+     */
+    permanent_failure,
+    /**
+     * The submitted payment was never witnessed by a camt.5x
+     * or pain.002 report.
+     */
+    never_heard_back
+}
+
 /**
  * Minimal set of information to initiate a new payment in
  * the database.
  */
 data class InitiatedPayment(
     val amount: TalerAmount,
-    val wireTransferSubject: String?,
+    val wireTransferSubject: String,
     val creditPaytoUri: String,
     val initiationTime: Instant,
     val requestUid: String
@@ -323,19 +344,37 @@ class Database(dbConfig: String): java.io.Closeable {
     // INITIATED PAYMENTS METHODS
 
     /**
-     * Sets payment initiation as submitted.
+     * Represents all the states but "unsubmitted" related to an
+     * initiated payment.  Unsubmitted gets set by default by the
+     * database and there's no case where it has to be reset to an
+     * initiated payment.
+     */
+
+    /**
+     * Sets the submission state of an initiated payment.  Transparently
+     * sets the last_submission_time column too, as this corresponds to the
+     * time when we set the state.
      *
      * @param rowId row ID of the record to set.
+     * @param submissionState which state to set.
      * @return true on success, false if no payment was affected.
      */
-    suspend fun initiatedPaymentSetSubmitted(rowId: Long): Boolean = runConn { conn ->
+    suspend fun initiatedPaymentSetSubmittedState(
+        rowId: Long,
+        submissionState: DatabaseSubmissionState
+    ): Boolean = runConn { conn ->
         val stmt = conn.prepareStatement("""
              UPDATE initiated_outgoing_transactions
-                      SET submitted = true
-                      WHERE initiated_outgoing_transaction_id=?
+                      SET submitted = submission_state(?), last_submission_time = ?
+                      WHERE initiated_outgoing_transaction_id = ?
              """
         )
-        stmt.setLong(1, rowId)
+        val now = Instant.now()
+        stmt.setString(1, submissionState.name)
+        stmt.setLong(2, now.toDbMicros() ?: run {
+            throw Exception("Submission time could not be converted to microseconds for the database.")
+        })
+        stmt.setLong(3, rowId)
         return@runConn stmt.maybeUpdate()
     }
 
@@ -376,7 +415,7 @@ class Database(dbConfig: String): java.io.Closeable {
              ,initiation_time
              ,request_uid
              FROM initiated_outgoing_transactions
-             WHERE submitted=false;
+             WHERE submitted='unsubmitted';
         """)
         val maybeMap = mutableMapOf<Long, InitiatedPayment>()
         stmt.executeQuery().use {

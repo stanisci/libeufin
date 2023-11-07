@@ -5,14 +5,10 @@ import org.junit.Test
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.ebics.doEbicsCustomDownload
 import tech.libeufin.nexus.ebics.fetchBankAccounts
-import tech.libeufin.nexus.ebics.submitPayment
-import tech.libeufin.util.IbanPayto
+import tech.libeufin.nexus.ebics.submitPain001
 import tech.libeufin.util.parsePayto
 import java.io.File
 import java.time.Instant
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -40,13 +36,15 @@ class Iso20022 {
             parsePayto("payto://iban/CH9300762011623852957?receiver-name=NotGiven")!!
         )
         runBlocking {
-            assertTrue(submitPayment(
+
+            // Not asserting, as it throws in case of errors.
+            submitPain001(
                 xml,
                 cfg,
                 loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)!!,
                 loadBankKeys(cfg.bankPublicKeysFilename)!!,
                 HttpClient()
-            ))
+            )
         }
     }
 }

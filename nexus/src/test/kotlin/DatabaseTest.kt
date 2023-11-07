@@ -164,22 +164,22 @@ class PaymentInitiationsTest {
         runBlocking {
             // Creating the record first.  Defaults to submitted == false.
             assertEquals(
+                PaymentInitiationOutcome.SUCCESS,
                 db.initiatedPaymentCreate(genInitPay("not submitted, has row ID == 1")),
-                PaymentInitiationOutcome.SUCCESS
             )
             // Asserting on the false default submitted state.
             db.runConn { conn ->
                 val isSubmitted = conn.execSQLQuery(getRowOne)
                 assertTrue(isSubmitted.next())
-                assertFalse(isSubmitted.getBoolean("submitted"))
+                assertEquals("unsubmitted", isSubmitted.getString("submitted"))
             }
-            // Switching the submitted state to true.
-            assertTrue(db.initiatedPaymentSetSubmitted(1))
+            // Switching the submitted state to success.
+            assertTrue(db.initiatedPaymentSetSubmittedState(1, DatabaseSubmissionState.success))
             // Asserting on the submitted state being TRUE now.
             db.runConn { conn ->
                 val isSubmitted = conn.execSQLQuery(getRowOne)
                 assertTrue(isSubmitted.next())
-                assertTrue(isSubmitted.getBoolean("submitted"))
+                assertEquals("success", isSubmitted.getString("submitted"))
             }
         }
     }
@@ -222,24 +222,22 @@ class PaymentInitiationsTest {
             assertEquals(db.initiatedPaymentCreate(genInitPay("#2", "unique2")), PaymentInitiationOutcome.SUCCESS)
             assertEquals(db.initiatedPaymentCreate(genInitPay("#3", "unique3")), PaymentInitiationOutcome.SUCCESS)
             assertEquals(db.initiatedPaymentCreate(genInitPay("#4", "unique4")), PaymentInitiationOutcome.SUCCESS)
-            assertEquals(db.initiatedPaymentCreate(genInitPay(rowUid = "unique5")), PaymentInitiationOutcome.SUCCESS) // checking the nullable subject
 
             // Marking one as submitted, hence not expecting it in the results.
             db.runConn { conn ->
                 conn.execSQLUpdate("""
                     UPDATE initiated_outgoing_transactions
-                      SET submitted = true
+                      SET submitted='success'
                       WHERE initiated_outgoing_transaction_id=3;
                 """.trimIndent())
             }
 
             // Expecting all the payments BUT the #3 in the result.
             db.initiatedPaymentsUnsubmittedGet("KUDOS").apply {
-                assertEquals(4, this.size)
+                assertEquals(3, this.size)
                 assertEquals("#1", this[1]?.wireTransferSubject)
                 assertEquals("#2", this[2]?.wireTransferSubject)
                 assertEquals("#4", this[4]?.wireTransferSubject)
-                assertNull(this[5]?.wireTransferSubject)
             }
         }
     }

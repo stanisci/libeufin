@@ -24,12 +24,41 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
-import tech.libeufin.nexus.ebics.submitPayment
+import tech.libeufin.nexus.ebics.EbicsEarlyErrorCode
+import tech.libeufin.nexus.ebics.EbicsEarlyException
+import tech.libeufin.nexus.ebics.EbicsUploadException
+import tech.libeufin.nexus.ebics.submitPain001
 import tech.libeufin.util.parsePayto
 import java.time.Instant
 import java.util.*
+import javax.xml.crypto.Data
 import kotlin.concurrent.fixedRateTimer
 import kotlin.system.exitProcess
+
+/**
+ * Possible stages when an error may occur.  These stages
+ * help to decide the retry policy.
+ */
+enum class NexusSubmissionStage {
+    pain,
+    ebics,
+    /**
+     * Includes both non-200 responses and network issues.
+     * They are both considered transient (non-200 responses
+     * can be fixed by changing and reloading the configuration).
+     */
+    http
+}
+
+/**
+ * Expresses one error that occurred while submitting one pain.001
+ * document via EBICS.
+ */
+class NexusSubmitException(
+    msg: String? = null,
+    cause: Throwable? = null,
+    val stage: NexusSubmissionStage
+) : Exception(msg, cause)
 
 /**
  * Takes the initiated payment data, as it was returned from the
@@ -51,16 +80,13 @@ private suspend fun submitInitiatedPayment(
     clientPrivateKeysFile: ClientPrivateKeysFile,
     bankPublicKeysFile: BankPublicKeysFile,
     initiatedPayment: InitiatedPayment
-): Boolean {
+) {
     val creditor = parsePayto(initiatedPayment.creditPaytoUri)
-    if (creditor?.receiverName == null) {
-        logger.error("Won't create pain.001 without the receiver name")
-        return false
-    }
-    if (initiatedPayment.wireTransferSubject == null) {
-        logger.error("Won't create pain.001 without the wire transfer subject")
-        return false
-    }
+    if (creditor?.receiverName == null)
+        throw NexusSubmitException(
+            "Won't create pain.001 without the receiver name",
+            stage = NexusSubmissionStage.pain
+        )
     val xml = createPain001(
         requestUid = initiatedPayment.requestUid,
         initiationTimestamp = initiatedPayment.initiationTime,
@@ -69,7 +95,38 @@ private suspend fun submitInitiatedPayment(
         debitAccount = cfg.myIbanAccount,
         wireTransferSubject = initiatedPayment.wireTransferSubject
     )
-    return submitPayment(xml, cfg, clientPrivateKeysFile, bankPublicKeysFile, httpClient)
+    try {
+        submitPain001(
+            xml,
+            cfg,
+            clientPrivateKeysFile,
+            bankPublicKeysFile,
+            httpClient
+        )
+    } catch (early: EbicsEarlyException) {
+        val errorStage = when (early.earlyEc) {
+            EbicsEarlyErrorCode.HTTP_POST_FAILED ->
+                NexusSubmissionStage.http // transient error
+            /**
+             * Any other [EbicsEarlyErrorCode] should be treated as permanent,
+             * as they involve invalid signatures or an unexpected response
+             * format.  For this reason, they get the "ebics" stage assigned
+             * below, that will cause the payment as permanently failed and
+             * not to be retried.
+             */
+            else ->
+                NexusSubmissionStage.ebics // permanent error
+        }
+        throw NexusSubmitException(
+            stage = errorStage,
+            cause = early
+        )
+    } catch (permanent: EbicsUploadException) {
+        throw NexusSubmitException(
+            stage = NexusSubmissionStage.ebics,
+            cause = permanent
+        )
+    }
 }
 
 /**
@@ -124,9 +181,7 @@ fun getFrequencyInSeconds(humanFormat: String): Int? {
  */
 fun checkFrequency(foundInConfig: String): Int {
     val frequencySeconds = getFrequencyInSeconds(foundInConfig)
-    if (frequencySeconds == null) {
-        throw Exception("Invalid frequency value in config section nexus-submit: $foundInConfig")
-    }
+        ?: throw Exception("Invalid frequency value in config section nexus-submit: $foundInConfig")
     if (frequencySeconds < 0) {
         throw Exception("Configuration error: cannot operate with a negative submit frequency ($foundInConfig)")
     }
@@ -144,32 +199,43 @@ private fun submitBatch(
     runBlocking {
         db.initiatedPaymentsUnsubmittedGet(cfg.currency).forEach {
             logger.debug("Submitting payment initiation with row ID: ${it.key}")
-            val submitted = submitInitiatedPayment(
-                httpClient,
-                cfg,
-                clientKeys,
-                bankKeys,
-                it.value
-            )
-            /**
-             * The following block tries to flag the initiated payment as submitted,
-             * but it does NOT fail the process if the flagging fails.  This way, we
-             * do NOT block other payments to be submitted.
-             */
-            if (submitted) {
-                val flagged = db.initiatedPaymentSetSubmitted(it.key)
-                if (!flagged) {
-                    logger.warn("Initiated payment with row ID ${it.key} could not be flagged as submitted")
+            val submissionState = try {
+                submitInitiatedPayment(
+                    httpClient,
+                    cfg,
+                    clientKeys,
+                    bankKeys,
+                    initiatedPayment = it.value
+                )
+                DatabaseSubmissionState.success
+            } catch (e: NexusSubmitException) {
+                logger.error(e.message)
+                when (e.stage) {
+                    /**
+                     * Permanent failure: the pain.001 was invalid.  For example a Payto
+                     * URI was missing the receiver name, or the currency was wrong.  Must
+                     * not be retried.
+                     */
+                    NexusSubmissionStage.pain -> DatabaseSubmissionState.permanent_failure
+                    /**
+                     * Transient failure: HTTP or network failed, either because one party
+                     * was offline / unreachable, or because the bank URL is wrong.  In both
+                     * cases, the initiated payment stored in the database may still be correct,
+                     * therefore we set this error as transient, and it'll be retried.
+                     */
+                    NexusSubmissionStage.http -> DatabaseSubmissionState.transient_failure
+                    /**
+                     * As in the pain.001 case, there is a fundamental problem in the document
+                     * being submitted, so it should not be retried.
+                     */
+                    NexusSubmissionStage.ebics -> DatabaseSubmissionState.permanent_failure
                 }
-            } else
-                logger.warn("Initiated payment with row ID ${it.key} could not be submitted")
+            }
+            db.initiatedPaymentSetSubmittedState(it.key, submissionState)
         }
     }
 }
-data class SubmitFrequency(
-    val inSeconds: Int,
-    val fromConfig: String
-)
+
 class EbicsSubmit : CliktCommand("Submits any initiated payment found in the database") {
     private val configFile by option(
         "--config", "-c",
@@ -187,11 +253,15 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
      * or long-polls (currently not implemented) for new payments.
      */
     override fun run() {
-        val cfg: EbicsSetupConfig = doOrFail { extractEbicsConfig(configFile) }
-        val frequency: SubmitFrequency = doOrFail {
+        val cfg: EbicsSetupConfig = doOrFail {
+            extractEbicsConfig(configFile)
+        }
+        // Fail now if keying is incomplete.
+        if (!isKeyingComplete(cfg)) exitProcess(1)
+        val frequency: NexusFrequency = doOrFail {
             val configValue = cfg.config.requireString("nexus-submit", "frequency")
             val frequencySeconds = checkFrequency(configValue)
-            return@doOrFail SubmitFrequency(frequencySeconds, configValue)
+            return@doOrFail NexusFrequency(frequencySeconds, configValue)
         }
         val dbCfg = cfg.config.extractDbConfigOrFail()
         val db = Database(dbCfg.dbConnStr)

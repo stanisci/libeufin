@@ -44,10 +44,17 @@ fun createPain001(
     )
     val zonedTimestamp = ZonedDateTime.ofInstant(initiationTimestamp, ZoneId.of("UTC"))
     val amountWithoutCurrency: String = amount.stringify().split(":").run {
-        if (this.size != 2) throw Exception("Invalid stringified amount: $amount")
+        if (this.size != 2) throw NexusSubmitException(
+            "Invalid stringified amount: $amount",
+            stage=NexusSubmissionStage.pain
+        )
         return@run this[1]
     }
-    val creditorName: String = creditAccount.receiverName ?: throw Exception("Cannot operate without the creditor name")
+    val creditorName: String = creditAccount.receiverName
+        ?: throw NexusSubmitException(
+            "Cannot operate without the creditor name",
+            stage=NexusSubmissionStage.pain
+        )
     return constructXml(indent = true) {
         root("Document") {
             attribute("xmlns", namespace.fullNamespace)

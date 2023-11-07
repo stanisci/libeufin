@@ -96,7 +96,11 @@ fun createEbics3RequestForUploadTransferPhase(
 
 /**
  * Collects all the steps to prepare the submission of a pain.001
- * document to the bank, and finally send it.
+ * document to the bank, and finally send it.  Indirectly throws
+ * [EbicsEarlyException] or [EbicsUploadException].  The first means
+ * that the bank sent an invalid response or signature, the second
+ * that a proper EBICS or business error took place.  The caller must
+ * catch those exceptions and decide the retry policy.
  *
  * @param pain001xml pain.001 document in XML.  The caller should
  *                   ensure its validity.
@@ -104,15 +108,14 @@ fun createEbics3RequestForUploadTransferPhase(
  * @param clientKeys client private keys.
  * @param bankkeys bank public keys.
  * @param httpClient HTTP client to connect to the bank.
- * @return true on success, false otherwise.
  */
-suspend fun submitPayment(
+suspend fun submitPain001(
     pain001xml: String,
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankkeys: BankPublicKeysFile,
     httpClient: HttpClient
-): Boolean {
+) {
     logger.debug("Submitting pain.001: $pain001xml")
     val orderService: Ebics3Request.OrderDetails.Service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "MCT"
@@ -130,13 +133,8 @@ suspend fun submitPayment(
         orderService,
         pain001xml.toByteArray(Charsets.UTF_8)
     )
-    if (maybeUploaded == null) {
-        logger.error("Could not send the pain.001 document to the bank.")
-        return false
-    }
     logger.debug("Payment submitted, report text is: ${maybeUploaded.reportText}," +
             " EBICS technical code is: ${maybeUploaded.technicalReturnCode}," +
             " bank technical return code is: ${maybeUploaded.bankReturnCode}"
     )
-    return true
 }

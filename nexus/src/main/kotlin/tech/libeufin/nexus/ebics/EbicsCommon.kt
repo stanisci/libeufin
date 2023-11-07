@@ -215,49 +215,37 @@ fun generateKeysPdf(
  * @param tolerateBankReturnCode Business return code that may be accepted instead of
  *                               EBICS_OK.  Typically, EBICS_NO_DOWNLOAD_DATA_AVAILABLE is tolerated
  *                               when asking for new incoming payments.
- * @return the internal representation of an EBICS response IF both return codes
- *         were EBICS_OK, or null otherwise.
+ * @return [EbicsResponseContent] or throws [EbicsEarlyException]
  */
-suspend fun postEbicsAndCheckReturnCodes(
+suspend fun postEbics(
     client: HttpClient,
     cfg: EbicsSetupConfig,
     bankKeys: BankPublicKeysFile,
     xmlReq: String,
-    isEbics3: Boolean,
-    tolerateEbicsReturnCode: EbicsReturnCode? = null,
-    tolerateBankReturnCode: EbicsReturnCode? = null
-): EbicsResponseContent? {
+    isEbics3: Boolean
+): EbicsResponseContent {
     val respXml = client.postToBank(cfg.hostBaseUrl, xmlReq)
-    if (respXml == null) {
-        tech.libeufin.nexus.logger.error("EBICS init phase failed.  Aborting the HTD operation.")
-        return null
-    }
-    val respObj: EbicsResponseContent = parseAndValidateEbicsResponse(
+        ?: throw EbicsEarlyException(
+            "POSTing to ${cfg.hostBaseUrl} failed",
+            earlyEc = EbicsEarlyErrorCode.HTTP_POST_FAILED
+        )
+    return parseAndValidateEbicsResponse(
         bankKeys,
         respXml,
         isEbics3
-    ) ?: return null // helper logged the cause already.
-
-    var isEbicsCodeTolerated = false
-    if (tolerateEbicsReturnCode != null)
-       isEbicsCodeTolerated = respObj.technicalReturnCode == tolerateEbicsReturnCode
-
-    // EBICS communication error.
-    if ((respObj.technicalReturnCode != EbicsReturnCode.EBICS_OK) && (!isEbicsCodeTolerated)) {
-        tech.libeufin.nexus.logger.error("EBICS return code is ${respObj.technicalReturnCode}, failing.")
-        return null
-    }
-    var isBankCodeTolerated = false
-    if (tolerateBankReturnCode != null)
-        isBankCodeTolerated = respObj.bankReturnCode == tolerateBankReturnCode
-
-    // Business error, although EBICS itself was correct.
-    if ((respObj.bankReturnCode != EbicsReturnCode.EBICS_OK) && (!isBankCodeTolerated)) {
-        tech.libeufin.nexus.logger.error("Bank-technical return code is ${respObj.technicalReturnCode}, failing.")
-        return null
-    }
-    return respObj
+    )
 }
+
+/**
+ * Checks that EBICS- and bank-technical return codes are both EBICS_OK.
+ *
+ * @param ebicsResponseContent valid response gotten from the bank.
+ * @return true only if both codes are EBICS_OK.
+ */
+private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
+    ebicsResponseContent.technicalReturnCode == EbicsReturnCode.EBICS_OK &&
+            ebicsResponseContent.bankReturnCode == EbicsReturnCode.EBICS_OK
+
 /**
  * Collects all the steps of an EBICS download transaction.  Namely,
  * it conducts: init -> transfer -> receipt phases.
@@ -279,8 +267,8 @@ suspend fun doEbicsDownload(
     reqXml: String,
     isEbics3: Boolean
 ): String? {
-    val initResp = postEbicsAndCheckReturnCodes(client, cfg, bankKeys, reqXml, isEbics3)
-    if (initResp == null) {
+    val initResp = postEbics(client, cfg, bankKeys, reqXml, isEbics3)
+    if (!areCodesOk(initResp)) {
         tech.libeufin.nexus.logger.error("EBICS download: could not get past the EBICS init phase, failing.")
         return null
     }
@@ -310,8 +298,8 @@ suspend fun doEbicsDownload(
     for (x in 2 .. howManySegments) {
         // request segment number x.
         val transReq = createEbics25TransferPhase(cfg, clientKeys, x, howManySegments, tId)
-        val transResp = postEbicsAndCheckReturnCodes(client, cfg, bankKeys, transReq, isEbics3)
-        if (transResp == null) {
+        val transResp = postEbics(client, cfg, bankKeys, transReq, isEbics3)
+        if (!areCodesOk(transResp)) { // FIXME: consider tolerating EBICS_NO_DOWNLOAD_DATA_AVAILABLE.
             tech.libeufin.nexus.logger.error("EBICS transfer segment #$x failed.")
             return null
         }
@@ -330,16 +318,16 @@ suspend fun doEbicsDownload(
     )
     // payload reconstructed, ack to the bank.
     val ackXml = createEbics25ReceiptPhase(cfg, clientKeys, tId)
-    val ackResp = postEbicsAndCheckReturnCodes(
-        client,
-        cfg,
-        bankKeys,
-        ackXml,
-        isEbics3,
-        tolerateEbicsReturnCode = EbicsReturnCode.EBICS_DOWNLOAD_POSTPROCESS_DONE
-    )
-    if (ackResp == null) {
-        tech.libeufin.nexus.logger.error("EBICS receipt phase failed.")
+    try {
+        postEbics(
+            client,
+            cfg,
+            bankKeys,
+            ackXml,
+            isEbics3
+        )
+    } catch (e: EbicsEarlyException) {
+        logger.error("Download receipt phase failed: " + e.message)
         return null
     }
     // receipt phase OK, can now return the payload as an XML string.
@@ -351,6 +339,32 @@ suspend fun doEbicsDownload(
     }
 }
 
+enum class EbicsEarlyErrorCode {
+    BANK_SIGNATURE_DIDNT_VERIFY,
+    BANK_RESPONSE_IS_INVALID,
+    /**
+     * That's the bank fault, as this value should be there even
+     * if there was an error.
+     */
+    EBICS_UPLOAD_TRANSACTION_ID_MISSING,
+    /**
+     * May be caused by a connection issue OR the HTTP response
+     * code was not 200 OK.  Both cases should lead to retry as
+     * they are fixable or transient.
+     */
+    HTTP_POST_FAILED
+}
+
+/**
+ * Those errors happen before getting to validate the bank response
+ * and successfully verify its signature.  They bring therefore NO
+ * business meaning and may be retried.
+ */
+class EbicsEarlyException(
+    msg: String,
+    val earlyEc: EbicsEarlyErrorCode
+) : Exception(msg)
+
 /**
  * Parses the bank response from the raw XML and verifies
  * the bank signature.
@@ -358,27 +372,30 @@ suspend fun doEbicsDownload(
  * @param bankKeys provides the bank auth pub, to verify the signature.
  * @param responseStr raw XML response from the bank
  * @param withEbics3 true if the communication is EBICS 3, false otherwise.
- * @return libeufin internal representation of EBICS responses.  Null
- *         in case of errors.
+ * @return [EbicsResponseContent] or throw [EbicsEarlyException]
  */
 fun parseAndValidateEbicsResponse(
     bankKeys: BankPublicKeysFile,
     responseStr: String,
     withEbics3: Boolean
-): EbicsResponseContent? {
+): EbicsResponseContent {
     val responseDocument = try {
         XMLUtil.parseStringIntoDom(responseStr)
     } catch (e: Exception) {
-        tech.libeufin.nexus.logger.error("Bank response apparently invalid.")
-        return null
+        throw EbicsEarlyException(
+            "Bank response apparently invalid",
+            earlyEc = EbicsEarlyErrorCode.BANK_RESPONSE_IS_INVALID
+        )
     }
     if (!XMLUtil.verifyEbicsDocument(
             responseDocument,
             bankKeys.bank_authentication_public_key,
             withEbics3
-        )) {
-        tech.libeufin.nexus.logger.error("Bank signature did not verify.")
-        return null
+    )) {
+        throw EbicsEarlyException(
+            "Bank signature did not verify",
+            earlyEc = EbicsEarlyErrorCode.BANK_SIGNATURE_DIDNT_VERIFY
+        )
     }
     if (withEbics3)
         return ebics3toInternalRepr(responseStr)
@@ -395,7 +412,7 @@ fun parseAndValidateEbicsResponse(
  * @param isEbics3 true if the payload travels on EBICS 3.
  * @return [PreparedUploadData]
  */
-fun prepareUloadPayload(
+fun prepareUploadPayload(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
@@ -428,8 +445,7 @@ fun prepareUloadPayload(
         userSignatureDataEncrypted
     }
     val plainTransactionKey = encryptionResult.plainTransactionKey
-    if (plainTransactionKey == null)
-        throw Exception("Could not generate the transaction key, cannot encrypt the payload!")
+        ?: throw Exception("Could not generate the transaction key, cannot encrypt the payload!")
     // Then only E002 symmetric (with ephemeral key) encrypt.
     val compressedInnerPayload = DeflaterInputStream(
         payload.inputStream()
@@ -450,6 +466,32 @@ fun prepareUloadPayload(
 }
 
 /**
+ * Possible states of an EBICS transaction.
+ */
+enum class EbicsPhase {
+    initialization,
+    transmission,
+    receipt
+}
+
+/**
+ * Witnesses a failure in an EBICS communication.  That
+ * implies that the bank response and its signature were
+ * both valid.
+ */
+class EbicsUploadException(
+    msg: String,
+    val phase: EbicsPhase,
+    val ebicsErrorCode: EbicsReturnCode,
+    /**
+     * If the error was EBICS-technical, then we might not
+     * even have interest on the business error code, therefore
+     * the value below may be null.
+     */
+    val bankErrorCode: EbicsReturnCode? = null
+) : Exception(msg)
+
+/**
  * Collects all the steps of an EBICS 3 upload transaction.
  * NOTE: this function could conveniently be reused for an EBICS 2.x
  * transaction, hence this function stays in this file.
@@ -459,7 +501,7 @@ fun prepareUloadPayload(
  * @param clientKeys client EBICS private keys.
  * @param bankKeys bank EBICS public keys.
  * @param payload binary business paylaod.
- * @return [EbicsResponseContent] or null upon errors.
+ * @return [EbicsResponseContent] or throws [EbicsUploadException]
  */
 suspend fun doEbicsUpload(
     client: HttpClient,
@@ -468,8 +510,8 @@ suspend fun doEbicsUpload(
     bankKeys: BankPublicKeysFile,
     orderService: Ebics3Request.OrderDetails.Service,
     payload: ByteArray
-): EbicsResponseContent? {
-    val preparedPayload = prepareUloadPayload(cfg, clientKeys, bankKeys, payload, isEbics3 = true)
+): EbicsResponseContent {
+    val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload, isEbics3 = true)
     val initXml = createEbics3RequestForUploadInitialization(
         cfg,
         preparedPayload,
@@ -477,41 +519,44 @@ suspend fun doEbicsUpload(
         clientKeys,
         orderService
     )
-    val initResp = postEbicsAndCheckReturnCodes(
-        client,
-        cfg,
-        bankKeys,
-        initXml,
-        isEbics3 = true
+    val initResp = postEbics( // may throw EbicsEarlyException
+            client,
+            cfg,
+            bankKeys,
+            initXml,
+            isEbics3 = true
     )
-    if (initResp == null) {
-        tech.libeufin.nexus.logger.error("EBICS upload init phase failed.")
-        return null
-    }
-
+    if (!areCodesOk(initResp)) throw EbicsUploadException(
+        "EBICS upload init failed",
+        phase = EbicsPhase.initialization,
+        ebicsErrorCode = initResp.technicalReturnCode,
+        bankErrorCode = initResp.bankReturnCode
+    )
     // Init phase OK, proceeding with the transfer phase.
     val tId = initResp.transactionID
-    if (tId == null) {
-        logger.error("EBICS upload init phase did not return a transaction ID, cannot do the transfer phase.")
-        return null
-    }
+        ?: throw EbicsEarlyException(
+            "EBICS upload init phase did not return a transaction ID, cannot do the transfer phase.",
+            earlyEc = EbicsEarlyErrorCode.EBICS_UPLOAD_TRANSACTION_ID_MISSING
+        )
     val transferXml = createEbics3RequestForUploadTransferPhase(
         cfg,
         clientKeys,
         tId,
         preparedPayload
     )
-    val transferResp = postEbicsAndCheckReturnCodes(
+    val transferResp = postEbics(
         client,
         cfg,
         bankKeys,
         transferXml,
         isEbics3 = true
     )
-    if (transferResp == null) {
-        tech.libeufin.nexus.logger.error("EBICS transfer phase failed.")
-        return null
-    }
+    if (!areCodesOk(transferResp)) throw EbicsUploadException(
+        "EBICS upload transfer failed",
+        phase = EbicsPhase.transmission,
+        ebicsErrorCode = initResp.technicalReturnCode,
+        bankErrorCode = initResp.bankReturnCode
+    )
     // EBICS- and bank-technical codes were both EBICS_OK, success!
     return transferResp
 }
