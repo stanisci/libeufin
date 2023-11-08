@@ -258,11 +258,6 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         }
         // Fail now if keying is incomplete.
         if (!isKeyingComplete(cfg)) exitProcess(1)
-        val frequency: NexusFrequency = doOrFail {
-            val configValue = cfg.config.requireString("nexus-submit", "frequency")
-            val frequencySeconds = checkFrequency(configValue)
-            return@doOrFail NexusFrequency(frequencySeconds, configValue)
-        }
         val dbCfg = cfg.config.extractDbConfigOrFail()
         val db = Database(dbCfg.dbConnStr)
         val httpClient = HttpClient()
@@ -280,6 +275,11 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             logger.info("Transient mode: submitting what found and returning.")
             submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
             return
+        }
+        val frequency: NexusFrequency = doOrFail {
+            val configValue = cfg.config.requireString("nexus-submit", "frequency")
+            val frequencySeconds = checkFrequency(configValue)
+            return@doOrFail NexusFrequency(frequencySeconds, configValue)
         }
         logger.debug("Running with a frequency of ${frequency.fromConfig}")
         if (frequency.inSeconds == 0) {
