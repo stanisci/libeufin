@@ -23,9 +23,11 @@ import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.testing.*
 import java.time.*
+import java.time.Instant
 import java.util.*
 import kotlin.test.*
 import kotlin.reflect.full.declaredMemberProperties
+import kotlin.suspend
 import kotlinx.serialization.json.Json
 import org.junit.Test
 import tech.libeufin.bank.*
@@ -33,7 +35,8 @@ import tech.libeufin.util.*
 
 class StatsTest {
     @Test
-    fun transfer() = bankSetup { _ ->
+    fun register() = bankSetup { db ->
+        setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
         setMaxDebt("exchange", TalerAmount("KUDOS:1000"))
         setMaxDebt("customer", TalerAmount("KUDOS:1000"))
         client.patch("/accounts/customer") {
@@ -46,25 +49,58 @@ class StatsTest {
             })
         }.assertNoContent()
 
-        suspend fun monitor(countName: String, volumeName: String, count: Long, amount: String) {
+        suspend fun cashin(amount: String) {
+            db.conn { conn ->
+                val stmt = conn.prepareStatement("SELECT 0 FROM cashin(?, ?, (?, ?)::taler_amount, ?)")
+                stmt.setLong(1, Instant.now().toDbMicros()!!)
+                stmt.setString(2, IbanPayTo("payto://iban/CUSTOMER-IBAN-XYZ").canonical)
+                val amount = TalerAmount(amount)
+                stmt.setLong(3, amount.value)
+                stmt.setInt(4, amount.frac)
+                stmt.setString(5, "")
+                stmt.executeQueryCheck();
+            }
+        }
+
+        suspend fun monitor(
+            dbCount: (MonitorWithCashout) -> Long, 
+            count: Long, 
+            internalVolume: (MonitorWithCashout) -> TalerAmount, 
+            internalAmount: String,
+            externalVolume: ((MonitorWithCashout) -> TalerAmount)? = null, 
+            externalAmount: String? = null
+        ) {
             Timeframe.entries.forEach { timestamp -> 
                 client.get("/monitor?timestamp=${timestamp.name}") { basicAuth("admin", "admin-password") }.assertOk().run {
-                    val resp = json<MonitorResponse>()
-                    assertEquals(count, resp.javaClass.kotlin.declaredMemberProperties.first { it.name == countName }.get(resp))
-                    assertEquals(TalerAmount(amount), resp.javaClass.kotlin.declaredMemberProperties.first { it.name == volumeName }.get(resp))
+                    println(bodyAsText())
+                    val resp = json<MonitorResponse>() as MonitorWithCashout
+                    assertEquals(count, dbCount(resp))
+                    assertEquals(TalerAmount(internalAmount), internalVolume(resp))
+                    externalVolume?.run { assertEquals(TalerAmount(externalAmount!!), this(resp)) }
                 }
             }
         }
 
-        suspend fun monitorTalerOut(count: Long, amount: String) = monitor("talerOutCount" , "talerOutInternalVolume", count, amount)
-        suspend fun monitorTalerIn(count: Long, amount: String) = monitor("talerInCount" , "talerInInternalVolume", count, amount)
-        suspend fun monitorCashin(count: Long, amount: String) = monitor("cashinCount" , "cashinExternalVolume", count, amount)
-        suspend fun monitorCashout(count: Long, amount: String) = monitor("cashoutCount" , "cashoutExternalVolume", count, amount)
+        suspend fun monitorTalerIn(count: Long, amount: String) =
+            monitor({it.talerInCount}, count, {it.talerInVolume}, amount)
+        suspend fun monitorTalerOut(count: Long, amount: String) = 
+            monitor({it.talerOutCount}, count, {it.talerOutVolume}, amount)
+        suspend fun monitorCashin(count: Long, internalAmount: String, externalAmount: String) =
+            monitor({it.cashinCount}, count, {it.cashinInternalVolume}, internalAmount, {it.cashinExternalVolume}, externalAmount)
+        suspend fun monitorCashout(count: Long, internalAmount: String, externalAmount: String) =
+            monitor({it.cashoutCount}, count, {it.cashoutInternalVolume}, internalAmount, {it.cashoutExternalVolume}, externalAmount)
 
-        monitorTalerOut(0, "KUDOS:0")
         monitorTalerIn(0, "KUDOS:0")
-        monitorCashin(0, "FIAT:0")
-        monitorCashout(0, "FIAT:0")
+        monitorTalerOut(0, "KUDOS:0")
+        monitorCashin(0, "KUDOS:0", "FIAT:0")
+        monitorCashout(0, "KUDOS:0", "FIAT:0")
+
+        addIncoming("KUDOS:3")
+        monitorTalerIn(1, "KUDOS:3")
+        addIncoming("KUDOS:7.6")
+        monitorTalerIn(2, "KUDOS:10.6")
+        addIncoming("KUDOS:12.3")
+        monitorTalerIn(3, "KUDOS:22.9")
         
         transfer("KUDOS:10.0")
         monitorTalerOut(1, "KUDOS:10.0")
@@ -73,24 +109,24 @@ class StatsTest {
         transfer("KUDOS:42")
         monitorTalerOut(3, "KUDOS:82.5")
 
-        addIncoming("KUDOS:3")
-        monitorTalerIn(1, "KUDOS:3")
-        addIncoming("KUDOS:7.6")
-        monitorTalerIn(2, "KUDOS:10.6")
-        addIncoming("KUDOS:12.3")
-        monitorTalerIn(3, "KUDOS:22.9")
+        cashin("FIAT:10")
+        monitorCashin(1, "KUDOS:7.98", "FIAT:10")
+        cashin("FIAT:20")
+        monitorCashin(2, "KUDOS:23.96", "FIAT:30")
+        cashin("FIAT:40")
+        monitorCashin(3, "KUDOS:55.94", "FIAT:70")
 
         cashout("KUDOS:3")
-        monitorCashout(1, "FIAT:3.747")
+        monitorCashout(1, "KUDOS:3", "FIAT:3.747")
         cashout("KUDOS:7.6")
-        monitorCashout(2, "FIAT:13.244")
+        monitorCashout(2, "KUDOS:10.6", "FIAT:13.244")
         cashout("KUDOS:12.3")
-        monitorCashout(3, "FIAT:28.616")
+        monitorCashout(3, "KUDOS:22.9", "FIAT:28.616")
 
-        monitorTalerOut(3, "KUDOS:82.5")
         monitorTalerIn(3, "KUDOS:22.9")
-        monitorCashin(0, "FIAT:0")
-        monitorCashout(3, "FIAT:28.616")
+        monitorTalerOut(3, "KUDOS:82.5")
+        monitorCashin(3, "KUDOS:55.94", "FIAT:70")
+        monitorCashout(3, "KUDOS:22.9", "FIAT:28.616")
     }
 
     @Test
@@ -98,7 +134,7 @@ class StatsTest {
         db.conn { conn ->
             suspend fun register(now: OffsetDateTime, amount: TalerAmount) {
                 val stmt = conn.prepareStatement(
-                    "CALL stats_register_payment('taler_out', ?::timestamp, (?, ?)::taler_amount)"
+                    "CALL stats_register_payment('taler_out', ?::timestamp, (?, ?)::taler_amount, null)"
                 )
                 stmt.setObject(1, now)
                 stmt.setLong(2, amount.value)

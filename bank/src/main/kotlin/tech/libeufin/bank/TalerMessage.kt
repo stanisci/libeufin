@@ -127,31 +127,33 @@ data class TokenRequest(
 @Serializable
 sealed class MonitorResponse {
     abstract val talerInCount: Long
-    abstract val talerInInternalVolume: TalerAmount
+    abstract val talerInVolume: TalerAmount
     abstract val talerOutCount: Long
-    abstract val talerOutInternalVolume: TalerAmount
+    abstract val talerOutVolume: TalerAmount
 }
 
 @Serializable
 @SerialName("just-payouts")
 data class MonitorJustPayouts(
     override val talerInCount: Long,
-    override val talerInInternalVolume: TalerAmount,
+    override val talerInVolume: TalerAmount,
     override val talerOutCount: Long,
-    override val talerOutInternalVolume: TalerAmount
+    override val talerOutVolume: TalerAmount
 ) : MonitorResponse()
 
 @Serializable
 @SerialName("with-cashout")
 data class MonitorWithCashout(
-    val cashinCount: Long?,
+    val cashinCount: Long,
+    val cashinInternalVolume: TalerAmount,
     val cashinExternalVolume: TalerAmount,
     val cashoutCount: Long,
+    val cashoutInternalVolume: TalerAmount,
     val cashoutExternalVolume: TalerAmount,
     override val talerInCount: Long,
-    override val talerInInternalVolume: TalerAmount,
+    override val talerInVolume: TalerAmount,
     override val talerOutCount: Long,
-    override val talerOutInternalVolume: TalerAmount
+    override val talerOutVolume: TalerAmount
 ) : MonitorResponse()
 
 /**

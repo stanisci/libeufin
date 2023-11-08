@@ -283,7 +283,7 @@ INSERT
 SELECT (amount).val, (amount).frac, bank_account_id
 INTO local_amount.val, local_amount.frac, local_bank_account_id
 FROM bank_account_transactions WHERE bank_transaction_id=in_tx_row_id;
-CALL stats_register_payment('taler_out', now()::TIMESTAMP, local_amount);
+CALL stats_register_payment('taler_out', now()::TIMESTAMP, local_amount, null);
 -- notify new transaction
 PERFORM pg_notify('outgoing_tx', local_bank_account_id || ' ' || in_tx_row_id);
 END $$;
@@ -312,7 +312,7 @@ INSERT
 SELECT (amount).val, (amount).frac, bank_account_id
 INTO local_amount.val, local_amount.frac, local_bank_account_id
 FROM bank_account_transactions WHERE bank_transaction_id=in_tx_row_id;
-CALL stats_register_payment('taler_in', now()::TIMESTAMP, local_amount);
+CALL stats_register_payment('taler_in', now()::TIMESTAMP, local_amount, null);
 -- notify new transaction
 PERFORM pg_notify('incoming_tx', local_bank_account_id || ' ' || in_tx_row_id);
 END $$;
@@ -1000,6 +1000,66 @@ WHERE bank_account_id=in_creditor_account_id;
 PERFORM pg_notify('bank_tx', in_debtor_account_id || ' ' || in_creditor_account_id || ' ' || out_debit_row_id || ' ' || out_credit_row_id);
 END $$;
 
+CREATE OR REPLACE FUNCTION cashin(
+  IN in_now_date BIGINT,
+  IN in_payto_uri TEXT,
+  IN in_amount taler_amount,
+  IN in_subject TEXT,
+  -- Error status
+  OUT out_no_account BOOLEAN,
+  OUT out_too_small BOOLEAN,
+  OUT out_balance_insufficient BOOLEAN
+)
+LANGUAGE plpgsql AS $$ 
+DECLARE
+  converted_amount taler_amount;
+  admin_account_id BIGINT;
+  wallet_account_id BIGINT;
+BEGIN
+-- Recover account info
+SELECT bank_account_id
+  INTO wallet_account_id
+  FROM bank_accounts
+  WHERE internal_payto_uri = in_payto_uri;
+
+-- Retrieve admin account id
+SELECT bank_account_id
+  INTO admin_account_id
+  FROM bank_accounts
+    JOIN customers 
+      ON customer_id=owning_customer_id
+  WHERE login = 'admin';
+
+-- Perform conversion
+SELECT (to_amount).val, (to_amount).frac, too_small 
+  INTO converted_amount.val, converted_amount.frac, out_too_small 
+  FROM conversion_to(in_amount, 'buy'::text);
+IF out_too_small THEN
+  RETURN;
+END IF;
+
+-- Perform bank wire transfer
+SELECT transfer.out_balance_insufficient
+INTO out_balance_insufficient
+FROM bank_wire_transfer(
+  wallet_account_id,
+  admin_account_id,
+  in_subject,
+  converted_amount,
+  in_now_date,
+  'not-used',
+  'not-used',
+  'not-used'
+) as transfer;
+IF out_balance_insufficient THEN
+  RETURN;
+END IF;
+
+-- update stats
+CALL stats_register_payment('cashin', now()::TIMESTAMP, converted_amount, in_amount);
+END $$;
+
+
 CREATE OR REPLACE FUNCTION cashout_create(
   IN in_account_username TEXT,
   IN in_request_uid BYTEA,
@@ -1194,7 +1254,7 @@ UPDATE cashout_operations
   WHERE cashout_id=in_cashout_id;
 
 -- update stats
-CALL stats_register_payment('cashout', now()::TIMESTAMP, amount_credit_local);
+CALL stats_register_payment('cashout', now()::TIMESTAMP, amount_debit_local, amount_credit_local);
 END $$;
 
 CREATE OR REPLACE FUNCTION challenge_create (
@@ -1289,9 +1349,11 @@ CREATE OR REPLACE FUNCTION stats_get_frame(
   IN in_timeframe stat_timeframe_enum,
   IN which INTEGER,
   OUT cashin_count BIGINT,
-  OUT cashin_volume taler_amount,
+  OUT cashin_internal_volume taler_amount,
+  OUT cashin_external_volume taler_amount,
   OUT cashout_count BIGINT,
-  OUT cashout_volume taler_amount,
+  OUT cashout_internal_volume taler_amount,
+  OUT cashout_external_volume taler_amount,
   OUT taler_in_count BIGINT,
   OUT taler_in_volume taler_amount,
   OUT taler_out_count BIGINT,
@@ -1310,11 +1372,15 @@ BEGIN
   END;
   SELECT 
     s.cashin_count
-    ,(s.cashin_volume).val
-    ,(s.cashin_volume).frac
+    ,(s.cashin_internal_volume).val
+    ,(s.cashin_internal_volume).frac
+    ,(s.cashin_external_volume).val
+    ,(s.cashin_external_volume).frac
     ,s.cashout_count
-    ,(s.cashout_volume).val
-    ,(s.cashout_volume).frac
+    ,(s.cashout_internal_volume).val
+    ,(s.cashout_internal_volume).frac
+    ,(s.cashout_external_volume).val
+    ,(s.cashout_external_volume).frac
     ,s.taler_in_count
     ,(s.taler_in_volume).val
     ,(s.taler_in_volume).frac
@@ -1323,11 +1389,15 @@ BEGIN
     ,(s.taler_out_volume).frac
   INTO
     cashin_count
-    ,cashin_volume.val
-    ,cashin_volume.frac
+    ,cashin_internal_volume.val
+    ,cashin_internal_volume.frac
+    ,cashin_external_volume.val
+    ,cashin_external_volume.frac
     ,cashout_count
-    ,cashout_volume.val
-    ,cashout_volume.frac
+    ,cashout_internal_volume.val
+    ,cashout_internal_volume.frac
+    ,cashout_external_volume.val
+    ,cashout_external_volume.frac
     ,taler_in_count
     ,taler_in_volume.val
     ,taler_in_volume.frac
@@ -1342,24 +1412,38 @@ END $$;
 CREATE OR REPLACE PROCEDURE stats_register_payment(
   IN name TEXT,
   IN now TIMESTAMP,
-  IN amount taler_amount
+  IN internal_amount taler_amount,
+  IN external_amount taler_amount
 )
 LANGUAGE plpgsql AS $$
 DECLARE
   frame stat_timeframe_enum;
   query TEXT;
 BEGIN
-  query = format('INSERT INTO bank_stats AS s '
-    '(timeframe, start_time, %1$I_count, %1$I_volume) '
-    'VALUES ($1, $2, 1, $3) '
-    'ON CONFLICT (timeframe, start_time) DO UPDATE '
-    'SET %1$I_count=s.%1$I_count+1, '
-    '   %1$I_volume=(SELECT amount_add(s.%1$I_volume, $3))', 
-    name);
-
-  FOREACH frame IN ARRAY enum_range(null::stat_timeframe_enum) LOOP
-    EXECUTE query USING frame, date_trunc(frame::text, now), amount;
-  END LOOP;
+  IF external_amount IS NULL THEN
+    query = format('INSERT INTO bank_stats AS s '
+      '(timeframe, start_time, %1$I_count, %1$I_volume) '
+      'VALUES ($1, $2, 1, $3) '
+      'ON CONFLICT (timeframe, start_time) DO UPDATE '
+      'SET %1$I_count=s.%1$I_count+1 '
+      ', %1$I_volume=(SELECT amount_add(s.%1$I_volume, $3))', 
+      name);
+    FOREACH frame IN ARRAY enum_range(null::stat_timeframe_enum) LOOP
+      EXECUTE query USING frame, date_trunc(frame::text, now), internal_amount;
+    END LOOP;
+  ELSE
+    query = format('INSERT INTO bank_stats AS s '
+      '(timeframe, start_time, %1$I_count, %1$I_internal_volume, %1$I_external_volume) '
+      'VALUES ($1, $2, 1, $3, $4)'
+      'ON CONFLICT (timeframe, start_time) DO UPDATE '
+      'SET %1$I_count=s.%1$I_count+1 '
+      ', %1$I_internal_volume=(SELECT amount_add(s.%1$I_internal_volume, $3))' 
+      ', %1$I_external_volume=(SELECT amount_add(s.%1$I_external_volume, $4))',
+      name);
+    FOREACH frame IN ARRAY enum_range(null::stat_timeframe_enum) LOOP
+      EXECUTE query USING frame, date_trunc(frame::text, now), internal_amount, external_amount;
+    END LOOP;
+  END IF;
 END $$;
 
 CREATE OR REPLACE PROCEDURE config_set_amount(
