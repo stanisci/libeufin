@@ -135,7 +135,7 @@ fun createEbics25DownloadInit(
  *        should receive this receipt.
  * @return receipt request in XML.
  */
-fun createEbics25ReceiptPhase(
+fun createEbics25DownloadReceiptPhase(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     transactionId: String
@@ -163,7 +163,7 @@ fun createEbics25ReceiptPhase(
  * @param transactionId ID of the EBICS transaction that transports all the segments.
  * @return raw XML string of the request.
  */
-fun createEbics25TransferPhase(
+fun createEbics25DownloadTransferPhase(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     segNumber: Int,

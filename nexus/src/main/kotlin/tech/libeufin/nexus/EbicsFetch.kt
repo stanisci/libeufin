@@ -4,8 +4,61 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.*
+import tech.libeufin.util.ebics_h005.Ebics3Request
+import tech.libeufin.util.getXmlDate
+import java.time.Instant
 import kotlin.concurrent.fixedRateTimer
 import kotlin.system.exitProcess
+
+/**
+ * Crafts a date range object, when the caller needs a time range.
+ *
+ * @param startDate inclusive starting date for the returned banking events.
+ * @param endDate inclusive ending date for the returned banking events.
+ * @return [Ebics3Request.DateRange]
+ */
+fun getEbics3DateRange(
+    startDate: Instant,
+    endDate: Instant
+): Ebics3Request.DateRange {
+    return Ebics3Request.DateRange().apply {
+        start = getXmlDate(startDate)
+        end = getXmlDate(endDate)
+    }
+}
+
+/**
+ * Prepares the request for camt.052/intraday records.
+ *
+ * @param startDate inclusive starting date for the returned banking events.
+ * @param endDate inclusive ending date for the returned banking events.  NOTE:
+ *        if startDate is NOT null and endDate IS null, endDate gets defaulted
+ *        to the current UTC time.
+ *
+ * @return [Ebics3Request.OrderDetails.BTOrderParams]
+ */
+fun prepReportRequest(
+    startDate: Instant? = null,
+    endDate: Instant? = null
+): Ebics3Request.OrderDetails.BTOrderParams {
+    val service = Ebics3Request.OrderDetails.Service().apply {
+        serviceName = "STM"
+        scope = "CH"
+        container = Ebics3Request.OrderDetails.Service.Container().apply {
+            containerType = "ZIP"
+        }
+        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+            value = "camt.052"
+            version = "08"
+        }
+    }
+    return Ebics3Request.OrderDetails.BTOrderParams().apply {
+            this.service = service
+            this.dateRange = if (startDate != null)
+                getEbics3DateRange(startDate, endDate ?: Instant.now())
+            else null
+    }
+}
 
 /**
  * Fetches the banking records via EBICS, calling the CAMT

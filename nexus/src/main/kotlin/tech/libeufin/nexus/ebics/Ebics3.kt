@@ -9,10 +9,108 @@ import tech.libeufin.util.PreparedUploadData
 import tech.libeufin.util.XMLUtil
 import tech.libeufin.util.ebics_h005.Ebics3Request
 import tech.libeufin.util.getNonce
-import tech.libeufin.util.toHexString
 import java.math.BigInteger
 import java.util.*
 import javax.xml.datatype.DatatypeFactory
+
+/**
+ * Crafts an EBICS request for the receipt phase of a
+ * download transaction.
+ *
+ * @param cfg config handle
+ * @param clientKeys subscriber private keys.
+ * @param transactionId EBICS transaction ID as assigned by the
+ *        bank to any successful transaction.
+ * @return the raw XML of the EBICS request.
+ */
+fun createEbics3DownloadReceiptPhase(
+    cfg: EbicsSetupConfig,
+    clientKeys: ClientPrivateKeysFile,
+    transactionId: String
+): String {
+    val req = Ebics3Request.createForDownloadReceiptPhase(
+        transactionId,
+        cfg.ebicsHostId
+    )
+    val doc = XMLUtil.convertJaxbToDocument(req)
+    XMLUtil.signEbicsDocument(
+        doc,
+        clientKeys.authentication_private_key,
+        withEbics3 = true
+    )
+    return XMLUtil.convertDomToString(doc)
+}
+
+/**
+ * Crafts an EBICS download request for the transfer phase.
+ *
+ * @param cfg config handle
+ * @param clientKeys subscriber private keys
+ * @param transactionId EBICS transaction ID.  That came from the
+ *        bank after the initialization phase ended successfully.
+ * @param segmentNumber which (payload's) segment number this requests wants.
+ * @param howManySegments total number of segments that the payload is split to.
+ * @return the raw XML EBICS request.
+ */
+fun createEbics3DownloadTransferPhase(
+    cfg: EbicsSetupConfig,
+    clientKeys: ClientPrivateKeysFile,
+    transactionId: String,
+    segmentNumber: Int,
+    howManySegments: Int
+): String {
+    val req = Ebics3Request.createForDownloadTransferPhase(
+        cfg.ebicsHostId,
+        transactionId,
+        segmentNumber,
+        howManySegments
+    )
+    val doc = XMLUtil.convertJaxbToDocument(req)
+    XMLUtil.signEbicsDocument(
+        doc,
+        clientKeys.authentication_private_key,
+        withEbics3 = true
+    )
+    return XMLUtil.convertDomToString(doc)
+}
+
+/**
+ * Creates the EBICS 3 document for the init phase of a download
+ * transaction.
+ *
+ * @param cfg configuration handle.
+ * @param bankkeys bank public keys.
+ * @param clientKeys client private keys.
+ * @param orderService EBICS 3 document defining the request type
+ */
+fun createEbics3DownloadInitialization(
+    cfg: EbicsSetupConfig,
+    bankkeys: BankPublicKeysFile,
+    clientKeys: ClientPrivateKeysFile,
+    orderParams: Ebics3Request.OrderDetails.BTOrderParams
+): String {
+    val nonce = getNonce(128)
+    val req = Ebics3Request.createForDownloadInitializationPhase(
+        cfg.ebicsUserId,
+        cfg.ebicsPartnerId,
+        cfg.ebicsHostId,
+        nonce,
+        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
+        bankAuthPub = bankkeys.bank_authentication_public_key,
+        bankEncPub = bankkeys.bank_encryption_public_key,
+        myOrderParams = orderParams
+    )
+    val doc = XMLUtil.convertJaxbToDocument(
+        req,
+        withSchemaLocation = "urn:org:ebics:H005 ebics_request_H005.xsd"
+    )
+    XMLUtil.signEbicsDocument(
+        doc,
+        clientKeys.authentication_private_key,
+        withEbics3 = true
+    )
+    return XMLUtil.convertDomToString(doc)
+}
 
 /**
  * Creates the EBICS 3 document for the init phase of an upload
@@ -51,8 +149,6 @@ fun createEbics3RequestForUploadInitialization(
         req,
         withSchemaLocation = "urn:org:ebics:H005 ebics_request_H005.xsd"
     )
-    tech.libeufin.util.logger.debug("Created EBICS 3 document for upload initialization," +
-            " nonce: ${nonce.toHexString()}")
     XMLUtil.signEbicsDocument(
         doc,
         clientKeys.authentication_private_key,

@@ -254,7 +254,7 @@ private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
  * @param cfg configuration handle.
  * @param clientKeys client EBICS private keys.
  * @param bankKeys bank EBICS public keys.
- * @param reqXml raw EBICS XML request.
+ * @param reqXml raw EBICS XML request of the init phase.
  * @return the bank response as an XML string, or null if one
  *         error took place.  NOTE: any return code other than
  *         EBICS_OK constitutes an error.
@@ -297,7 +297,7 @@ suspend fun doEbicsDownload(
     // proceed with the transfer phase.
     for (x in 2 .. howManySegments) {
         // request segment number x.
-        val transReq = createEbics25TransferPhase(cfg, clientKeys, x, howManySegments, tId)
+        val transReq = createEbics25DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
         val transResp = postEbics(client, cfg, bankKeys, transReq, isEbics3)
         if (!areCodesOk(transResp)) { // FIXME: consider tolerating EBICS_NO_DOWNLOAD_DATA_AVAILABLE.
             tech.libeufin.nexus.logger.error("EBICS transfer segment #$x failed.")
@@ -317,7 +317,7 @@ suspend fun doEbicsDownload(
         ebicsChunks
     )
     // payload reconstructed, ack to the bank.
-    val ackXml = createEbics25ReceiptPhase(cfg, clientKeys, tId)
+    val ackXml = createEbics25DownloadReceiptPhase(cfg, clientKeys, tId)
     try {
         postEbics(
             client,

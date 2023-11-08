@@ -37,6 +37,7 @@ import java.math.BigInteger
 import java.security.SecureRandom
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
+import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.*
@@ -106,7 +107,11 @@ fun getNonce(size: Int): ByteArray {
     return ret
 }
 
-private fun getXmlDate(d: ZonedDateTime): XMLGregorianCalendar {
+fun getXmlDate(i: Instant): XMLGregorianCalendar {
+    val zonedTimestamp = ZonedDateTime.ofInstant(i, ZoneId.of("UTC"))
+    return getXmlDate(zonedTimestamp)
+}
+fun getXmlDate(d: ZonedDateTime): XMLGregorianCalendar {
     return DatatypeFactory.newInstance()
         .newXMLGregorianCalendar(
             d.year,
@@ -360,39 +365,6 @@ fun createEbicsRequestForDownloadInitialization(
         doc,
         subscriberDetails.customerAuthPriv,
         withEbics3 = false
-    )
-    return XMLUtil.convertDomToString(doc)
-}
-
-fun createEbicsRequestForDownloadInitialization(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    ebics3OrderService: Ebics3Request.OrderDetails.Service,
-    orderParams: EbicsOrderParams,
-): String {
-    val nonce = getNonce(128)
-    val req = Ebics3Request.createForDownloadInitializationPhase(
-        subscriberDetails.userId,
-        subscriberDetails.partnerId,
-        subscriberDetails.hostId,
-        nonce,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar(
-            TimeZone.getTimeZone(ZoneId.systemDefault())
-        )),
-        subscriberDetails.bankEncPub ?: throw EbicsProtocolError(
-            HttpStatusCode.BadRequest,
-            "Invalid subscriber state 'bankEncPub' missing, please send HPB first"
-        ),
-        subscriberDetails.bankAuthPub ?: throw EbicsProtocolError(
-            HttpStatusCode.BadRequest,
-            "Invalid subscriber state 'bankAuthPub' missing, please send HPB first"
-        ),
-        ebics3OrderService
-    )
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    XMLUtil.signEbicsDocument(
-        doc,
-        subscriberDetails.customerAuthPriv,
-        withEbics3 = true
     )
     return XMLUtil.convertDomToString(doc)
 }

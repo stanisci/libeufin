@@ -3,7 +3,6 @@ package tech.libeufin.util.ebics_h005
 import org.apache.xml.security.binding.xmldsig.SignatureType
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.EbicsStandardOrderParams
-import tech.libeufin.util.EbicsOrderParams
 import tech.libeufin.util.makeEbics3DateRange
 import java.math.BigInteger
 import java.security.interfaces.RSAPublicKey
@@ -388,8 +387,7 @@ class Ebics3Request {
             date: XMLGregorianCalendar,
             bankEncPub: RSAPublicKey,
             bankAuthPub: RSAPublicKey,
-            myOrderService: OrderDetails.Service,
-            myOrderParams: EbicsOrderParams? = null
+            myOrderParams: OrderDetails.BTOrderParams
         ): Ebics3Request {
             return Ebics3Request().apply {
                 version = "H005"
@@ -407,16 +405,7 @@ class Ebics3Request {
                         partnerID = partnerId
                         orderDetails = OrderDetails().apply {
                             this.adminOrderType = "BTD"
-                            this.btdOrderParams = OrderDetails.BTOrderParams().apply {
-                                service = myOrderService
-                                // Order params only used for date ranges so far.
-                                when (myOrderParams) {
-                                    is EbicsStandardOrderParams -> {
-                                        this.dateRange = makeEbics3DateRange(myOrderParams.dateRange)
-                                    }
-                                    else -> {}
-                                }
-                            }
+                            this.btdOrderParams = myOrderParams
                         }
                         bankPubKeyDigests = BankPubKeyDigests().apply {
                             authentication = Ebics3Types.PubKeyDigest().apply {
