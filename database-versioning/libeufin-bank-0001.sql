@@ -250,27 +250,31 @@ COMMENT ON COLUMN taler_withdrawal_operations.confirmation_done
 -- end of: Taler integration
 
 -- start of: Statistics
-CREATE TABLE IF NOT EXISTS regional_stats (
+CREATE TABLE IF NOT EXISTS bank_stats (
   timeframe stat_timeframe_enum NOT NULL
   ,start_time timestamp NOT NULL
-  ,cashin_count BIGINT NOT NULL
-  ,cashin_volume_in_fiat taler_amount NOT NULL
-  ,cashout_count BIGINT NOT NULL
-  ,cashout_volume_in_fiat taler_amount NOT NULL
-  ,internal_taler_payments_count BIGINT NOT NULL
-  ,internal_taler_payments_volume taler_amount NOT NULL
+  ,cashin_count BIGINT NOT NULL DEFAULT 0
+  ,cashin_volume taler_amount NOT NULL DEFAULT (0, 0)
+  ,cashout_count BIGINT NOT NULL DEFAULT 0
+  ,cashout_volume taler_amount NOT NULL DEFAULT (0, 0)
+  ,taler_in_count BIGINT NOT NULL DEFAULT 0
+  ,taler_in_volume taler_amount NOT NULL DEFAULT (0, 0)
+  ,taler_out_count BIGINT NOT NULL DEFAULT 0
+  ,taler_out_volume taler_amount NOT NULL DEFAULT (0, 0)
   ,PRIMARY KEY (start_time, timeframe) 
 );
 -- TODO garbage collection
-COMMENT ON TABLE regional_stats IS 'Stores statistics about the regional currency usage.';
-COMMENT ON COLUMN regional_stats.timeframe IS 'particular timeframe that this row accounts for';
-COMMENT ON COLUMN regional_stats.start_time IS 'timestamp of the start of the timeframe that this row accounts for, truncated according to the precision of the timeframe';
-COMMENT ON COLUMN regional_stats.cashin_count IS 'how many cashin operations took place in the timeframe';
-COMMENT ON COLUMN regional_stats.cashin_volume_in_fiat IS 'how much fiat currency was cashed in in the timeframe';
-COMMENT ON COLUMN regional_stats.cashout_count IS 'how many cashout operations took place in the timeframe';
-COMMENT ON COLUMN regional_stats.cashout_volume_in_fiat IS 'how much fiat currency was payed by the bank to customers in the timeframe';
-COMMENT ON COLUMN regional_stats.internal_taler_payments_count IS 'how many internal payments were made by a Taler exchange';
-COMMENT ON COLUMN regional_stats.internal_taler_payments_volume IS 'how much internal currency was paid by a Taler exchange';
+COMMENT ON TABLE bank_stats IS 'Stores statistics about the bank usage.';
+COMMENT ON COLUMN bank_stats.timeframe IS 'particular timeframe that this row accounts for';
+COMMENT ON COLUMN bank_stats.start_time IS 'timestamp of the start of the timeframe that this row accounts for, truncated according to the precision of the timeframe';
+COMMENT ON COLUMN bank_stats.cashin_count IS 'how many cashin operations took place in the timeframe';
+COMMENT ON COLUMN bank_stats.cashin_volume IS 'how much fiat currency was cashed in in the timeframe';
+COMMENT ON COLUMN bank_stats.cashout_count IS 'how many cashout operations took place in the timeframe';
+COMMENT ON COLUMN bank_stats.cashout_volume IS 'how much fiat currency was payed by the bank to customers in the timeframe';
+COMMENT ON COLUMN bank_stats.taler_out_count IS 'how many internal payments were made by a Taler exchange';
+COMMENT ON COLUMN bank_stats.taler_out_volume IS 'how much internal currency was paid by a Taler exchange';
+COMMENT ON COLUMN bank_stats.taler_in_count IS 'how many internal payments were made to a Taler exchange';
+COMMENT ON COLUMN bank_stats.taler_in_volume IS 'how much internal currency was paid to a Taler exchange';
 
 -- end of: Statistics
 

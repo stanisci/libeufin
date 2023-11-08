@@ -621,10 +621,9 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         if (it.getBoolean("out_creditor_is_exchange")) {
             val rowId = it.getLong("out_credit_row_id")
             if (metadata is IncomingTxMetadata) {
-                val stmt = conn.prepareStatement("CALL register_incoming(?, ?, ?)")
+                val stmt = conn.prepareStatement("CALL register_incoming(?, ?)")
                 stmt.setBytes(1, metadata.reservePub.raw)
                 stmt.setLong(2, rowId)
-                stmt.setLong(3, creditorAccountId)
                 stmt.executeUpdate()
             } else {
                 // TODO bounce
@@ -828,14 +827,17 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         val stmt = conn.prepareStatement("""
             SELECT
                 cashin_count
-                ,(cashin_volume_in_fiat).val as cashin_volume_in_fiat_val
-                ,(cashin_volume_in_fiat).frac as cashin_volume_in_fiat_frac
+                ,(cashin_volume).val as cashin_volume_val
+                ,(cashin_volume).frac as cashin_volume_frac
                 ,cashout_count
-                ,(cashout_volume_in_fiat).val as cashout_volume_in_fiat_val
-                ,(cashout_volume_in_fiat).frac as cashout_volume_in_fiat_frac
-                ,internal_taler_payments_count
-                ,(internal_taler_payments_volume).val as internal_taler_payments_volume_val
-                ,(internal_taler_payments_volume).frac as internal_taler_payments_volume_frac
+                ,(cashout_volume).val as cashout_volume_val
+                ,(cashout_volume).frac as cashout_volume_frac
+                ,taler_in_count
+                ,(taler_in_volume).val as taler_in_volume_val
+                ,(taler_in_volume).frac as taler_in_volume_frac
+                ,taler_out_count
+                ,(taler_out_volume).val as taler_out_volume_val
+                ,(taler_out_volume).frac as taler_out_volume_frac
             FROM stats_get_frame(now()::timestamp, ?::stat_timeframe_enum, ?)
         """)
         stmt.setString(1, params.timeframe.name)
@@ -849,28 +851,40 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                 MonitorWithCashout(
                     cashinCount = it.getLong("cashin_count"),
                     cashinExternalVolume = TalerAmount(
-                        value = it.getLong("cashin_volume_in_fiat_val"),
-                        frac = it.getInt("cashin_volume_in_fiat_frac"),
+                        value = it.getLong("cashin_volume_val"),
+                        frac = it.getInt("cashin_volume_frac"),
                         currency = this
                     ),
                     cashoutCount = it.getLong("cashout_count"),
                     cashoutExternalVolume = TalerAmount(
-                        value = it.getLong("cashout_volume_in_fiat_val"),
-                        frac = it.getInt("cashout_volume_in_fiat_frac"),
+                        value = it.getLong("cashout_volume_val"),
+                        frac = it.getInt("cashout_volume_frac"),
                         currency = this
                     ),
-                    talerPayoutCount = it.getLong("internal_taler_payments_count"),
-                    talerPayoutInternalVolume = TalerAmount(
-                        value = it.getLong("internal_taler_payments_volume_val"),
-                        frac = it.getInt("internal_taler_payments_volume_frac"),
+                    talerInCount = it.getLong("taler_in_count"),
+                    talerInInternalVolume = TalerAmount(
+                        value = it.getLong("taler_in_volume_val"),
+                        frac = it.getInt("taler_in_volume_frac"),
+                        currency = bankCurrency
+                    ),
+                    talerOutCount = it.getLong("taler_out_count"),
+                    talerOutInternalVolume = TalerAmount(
+                        value = it.getLong("taler_out_volume_val"),
+                        frac = it.getInt("taler_out_volume_frac"),
                         currency = bankCurrency
                     )
                 )
             } ?:  MonitorJustPayouts(
-                talerPayoutCount = it.getLong("internal_taler_payments_count"),
-                talerPayoutInternalVolume = TalerAmount(
-                    value = it.getLong("internal_taler_payments_volume_val"),
-                    frac = it.getInt("internal_taler_payments_volume_frac"),
+                talerInCount = it.getLong("taler_in_count"),
+                talerInInternalVolume = TalerAmount(
+                    value = it.getLong("taler_in_volume_val"),
+                    frac = it.getInt("taler_in_volume_frac"),
+                    currency = bankCurrency
+                ),
+                talerOutCount = it.getLong("taler_out_count"),
+                talerOutInternalVolume = TalerAmount(
+                    value = it.getLong("taler_out_volume_val"),
+                    frac = it.getInt("taler_out_volume_frac"),
                     currency = bankCurrency
                 )
             )

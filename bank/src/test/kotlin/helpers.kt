@@ -9,6 +9,7 @@ import net.taler.common.errorcodes.TalerErrorCode
 import kotlin.test.*
 import tech.libeufin.bank.*
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.zip.DeflaterOutputStream
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.*
@@ -99,6 +100,47 @@ suspend fun ApplicationTestBuilder.assertBalance(account: String, info: CreditDe
         val balance = json<AccountData>().balance;
         assertEquals(info, balance.credit_debit_indicator)
         assertEquals(TalerAmount(amount), balance.amount)
+    }
+}
+
+suspend fun ApplicationTestBuilder.transfer(amount: String) {
+    client.post("/accounts/exchange/taler-wire-gateway/transfer") {
+        basicAuth("exchange", "exchange-password")
+        jsonBody {
+            "request_uid" to randHashCode()
+            "amount" to TalerAmount(amount)
+            "exchange_base_url" to "http://exchange.example.com/"
+            "wtid" to randShortHashCode()
+            "credit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
+        }
+    }.assertOk()
+}
+
+suspend fun ApplicationTestBuilder.addIncoming(amount: String) {
+    client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
+        basicAuth("admin", "admin-password")
+        jsonBody {
+            "amount" to TalerAmount(amount)
+            "reserve_pub" to randEddsaPublicKey()
+            "debit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
+        }
+    }.assertOk()
+}
+
+suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
+    client.get("/cashout-rate?amount_debit=$amount").assertOk().run {
+        return json<ConversionResponse>().amount_credit
+    }
+}
+
+suspend fun smsCode(info: String): String? {
+    val file = File("/tmp/tan-$info.txt");
+    if (file.exists()) {
+        val code = file.readText()
+        file.delete()
+        return code;
+    } else {
+        return null
     }
 }
 

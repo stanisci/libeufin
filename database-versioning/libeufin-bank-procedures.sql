@@ -265,7 +265,7 @@ DECLARE
   local_amount taler_amount;
   local_bank_account_id BIGINT;
 BEGIN
--- Register outgoing transaction
+-- register outgoing transaction
 INSERT
   INTO taler_exchange_outgoing (
     request_uid,
@@ -279,10 +279,11 @@ INSERT
   in_tx_row_id
 );
 -- TODO check if not drain
+-- update stats
 SELECT (amount).val, (amount).frac, bank_account_id
 INTO local_amount.val, local_amount.frac, local_bank_account_id
 FROM bank_account_transactions WHERE bank_transaction_id=in_tx_row_id;
-CALL stats_register_internal_taler_payment(now()::TIMESTAMP, local_amount);
+CALL stats_register_payment('taler_out', now()::TIMESTAMP, local_amount);
 -- notify new transaction
 PERFORM pg_notify('outgoing_tx', local_bank_account_id || ' ' || in_tx_row_id);
 END $$;
@@ -291,10 +292,12 @@ COMMENT ON PROCEDURE register_outgoing
 
 CREATE OR REPLACE PROCEDURE register_incoming(
   IN in_reserve_pub BYTEA,
-  IN in_tx_row_id BIGINT,
-  IN in_exchange_bank_account_id BIGINT
+  IN in_tx_row_id BIGINT
 )
 LANGUAGE plpgsql AS $$
+DECLARE
+local_amount taler_amount;
+local_bank_account_id BIGINT;
 BEGIN
 -- Register incoming transaction
 INSERT
@@ -305,8 +308,13 @@ INSERT
   in_reserve_pub,
   in_tx_row_id
 );
+-- update stats
+SELECT (amount).val, (amount).frac, bank_account_id
+INTO local_amount.val, local_amount.frac, local_bank_account_id
+FROM bank_account_transactions WHERE bank_transaction_id=in_tx_row_id;
+CALL stats_register_payment('taler_in', now()::TIMESTAMP, local_amount);
 -- notify new transaction
-PERFORM pg_notify('incoming_tx', in_exchange_bank_account_id || ' ' || in_tx_row_id);
+PERFORM pg_notify('incoming_tx', local_bank_account_id || ' ' || in_tx_row_id);
 END $$;
 COMMENT ON PROCEDURE register_incoming
   IS 'Register a bank transaction as a taler incoming transaction';
@@ -484,7 +492,7 @@ IF out_debitor_balance_insufficient THEN
   RETURN;
 END IF;
 -- Register incoming transaction
-CALL register_incoming(in_reserve_pub, out_tx_row_id, exchange_bank_account_id);
+CALL register_incoming(in_reserve_pub, out_tx_row_id);
 END $$;
 -- TODO new comment
 COMMENT ON FUNCTION taler_add_incoming IS 'function that (1) inserts the TWG requests'
@@ -741,7 +749,7 @@ UPDATE taler_withdrawal_operations
   WHERE withdrawal_uuid=in_withdrawal_uuid;
 
 -- Register incoming transaction
-CALL register_incoming(reserve_pub_local, tx_row_id, exchange_bank_account_id);
+CALL register_incoming(reserve_pub_local, tx_row_id);
 END $$;
 COMMENT ON FUNCTION confirm_taler_withdrawal
   IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';
@@ -1188,6 +1196,9 @@ END IF;
 UPDATE cashout_operations
   SET local_transaction = tx_id
   WHERE cashout_uuid=in_cashout_uuid;
+
+-- update stats
+CALL stats_register_payment('cashout', now()::TIMESTAMP, amount_credit_local);
 END $$;
 
 CREATE OR REPLACE FUNCTION challenge_create (
@@ -1282,11 +1293,13 @@ CREATE OR REPLACE FUNCTION stats_get_frame(
   IN in_timeframe stat_timeframe_enum,
   IN which INTEGER,
   OUT cashin_count BIGINT,
-  OUT cashin_volume_in_fiat taler_amount,
+  OUT cashin_volume taler_amount,
   OUT cashout_count BIGINT,
-  OUT cashout_volume_in_fiat taler_amount,
-  OUT internal_taler_payments_count BIGINT,
-  OUT internal_taler_payments_volume taler_amount
+  OUT cashout_volume taler_amount,
+  OUT taler_in_count BIGINT,
+  OUT taler_in_volume taler_amount,
+  OUT taler_out_count BIGINT,
+  OUT taler_out_volume taler_amount
 )
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -1301,61 +1314,55 @@ BEGIN
   END;
   SELECT 
     s.cashin_count
-    ,(s.cashin_volume_in_fiat).val
-    ,(s.cashin_volume_in_fiat).frac
+    ,(s.cashin_volume).val
+    ,(s.cashin_volume).frac
     ,s.cashout_count
-    ,(s.cashout_volume_in_fiat).val
-    ,(s.cashout_volume_in_fiat).frac
-    ,s.internal_taler_payments_count
-    ,(s.internal_taler_payments_volume).val
-    ,(s.internal_taler_payments_volume).frac
+    ,(s.cashout_volume).val
+    ,(s.cashout_volume).frac
+    ,s.taler_in_count
+    ,(s.taler_in_volume).val
+    ,(s.taler_in_volume).frac
+    ,s.taler_out_count
+    ,(s.taler_out_volume).val
+    ,(s.taler_out_volume).frac
   INTO
     cashin_count
-    ,cashin_volume_in_fiat.val
-    ,cashin_volume_in_fiat.frac
+    ,cashin_volume.val
+    ,cashin_volume.frac
     ,cashout_count
-    ,cashout_volume_in_fiat.val
-    ,cashout_volume_in_fiat.frac
-    ,internal_taler_payments_count
-    ,internal_taler_payments_volume.val
-    ,internal_taler_payments_volume.frac
-  FROM regional_stats AS s
+    ,cashout_volume.val
+    ,cashout_volume.frac
+    ,taler_in_count
+    ,taler_in_volume.val
+    ,taler_in_volume.frac
+    ,taler_out_count
+    ,taler_out_volume.val
+    ,taler_out_volume.frac
+  FROM bank_stats AS s
   WHERE s.timeframe = in_timeframe 
     AND s.start_time = local_start_time;
 END $$;
 
-CREATE OR REPLACE PROCEDURE stats_register_internal_taler_payment(
+CREATE OR REPLACE PROCEDURE stats_register_payment(
+  IN name TEXT,
   IN now TIMESTAMP,
   IN amount taler_amount
 )
 LANGUAGE plpgsql AS $$
 DECLARE
   frame stat_timeframe_enum;
+  query TEXT;
 BEGIN
+  query = format('INSERT INTO bank_stats AS s '
+    '(timeframe, start_time, %1$I_count, %1$I_volume) '
+    'VALUES ($1, $2, 1, $3) '
+    'ON CONFLICT (timeframe, start_time) DO UPDATE '
+    'SET %1$I_count=s.%1$I_count+1, '
+    '   %1$I_volume=(SELECT amount_add(s.%1$I_volume, $3))', 
+    name);
+
   FOREACH frame IN ARRAY enum_range(null::stat_timeframe_enum) LOOP
-    INSERT INTO regional_stats AS s (
-      timeframe
-      ,start_time
-      ,cashin_count
-      ,cashin_volume_in_fiat
-      ,cashout_count
-      ,cashout_volume_in_fiat
-      ,internal_taler_payments_count
-      ,internal_taler_payments_volume
-      ) 
-    VALUES (
-        frame
-        ,date_trunc(frame::text, now)
-        ,0
-        ,(0, 0)::taler_amount
-        ,0
-        ,(0, 0)::taler_amount
-        ,1
-        ,amount
-      )
-    ON CONFLICT (timeframe, start_time) DO UPDATE
-    SET internal_taler_payments_count = s.internal_taler_payments_count+1
-        ,internal_taler_payments_volume = (SELECT amount_add(s.internal_taler_payments_volume, amount));
+    EXECUTE query USING frame, date_trunc(frame::text, now), amount;
   END LOOP;
 END $$;
 

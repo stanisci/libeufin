@@ -25,6 +25,7 @@ import io.ktor.server.testing.*
 import java.time.*
 import java.util.*
 import kotlin.test.*
+import kotlin.reflect.full.declaredMemberProperties
 import kotlinx.serialization.json.Json
 import org.junit.Test
 import tech.libeufin.bank.*
@@ -34,37 +35,79 @@ class StatsTest {
     @Test
     fun transfer() = bankSetup { _ ->
         setMaxDebt("exchange", TalerAmount("KUDOS:1000"))
-
-        suspend fun transfer(amount: TalerAmount) {
-            client.post("/accounts/exchange/taler-wire-gateway/transfer") {
-                basicAuth("exchange", "exchange-password")
-                jsonBody {
-                    "request_uid" to randHashCode()
-                    "amount" to amount
-                    "exchange_base_url" to "http://exchange.example.com/"
-                    "wtid" to randShortHashCode()
-                    "credit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
+        setMaxDebt("customer", TalerAmount("KUDOS:1000"))
+        client.patch("/accounts/customer") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json {
+                "cashout_payto_uri" to IbanPayTo(genIbanPaytoUri())
+                "challenge_contact_data" to json {
+                    "phone" to "+99"
                 }
-            }.assertOk()
+            })
+        }.assertNoContent()
+
+        suspend fun cashout(amount: String) {
+            client.post("/accounts/customer/cashouts") {
+                basicAuth("customer", "customer-password")
+                jsonBody(json {
+                    "request_uid" to randShortHashCode()
+                    "amount_debit" to amount
+                    "amount_credit" to convert(amount)
+                })
+            }.assertOk().run {
+                val uuid = json<CashoutPending>().cashout_id
+                client.post("/accounts/customer/cashouts/$uuid/confirm") {
+                    basicAuth("customer", "customer-password")
+                    jsonBody { "tan" to smsCode("+99") }
+                }.assertNoContent()
+            }
         }
 
-        suspend fun monitor(count: Long, amount: TalerAmount) {
+        suspend fun monitor(countName: String, volumeName: String, count: Long, amount: String) {
             Timeframe.entries.forEach { timestamp -> 
                 client.get("/monitor?timestamp=${timestamp.name}") { basicAuth("admin", "admin-password") }.assertOk().run {
                     val resp = json<MonitorResponse>()
-                    assertEquals(count, resp.talerPayoutCount)
-                    assertEquals(amount, resp.talerPayoutInternalVolume)
+                    assertEquals(count, resp.javaClass.kotlin.declaredMemberProperties.first { it.name == countName }.get(resp))
+                    assertEquals(TalerAmount(amount), resp.javaClass.kotlin.declaredMemberProperties.first { it.name == volumeName }.get(resp))
                 }
             }
         }
 
-        monitor(0, TalerAmount("KUDOS:0"))
-        transfer(TalerAmount("KUDOS:10.0"))
-        monitor(1, TalerAmount("KUDOS:10.0"))
-        transfer(TalerAmount("KUDOS:30.5"))
-        monitor(2, TalerAmount("KUDOS:40.5"))
-        transfer(TalerAmount("KUDOS:42"))
-        monitor(3, TalerAmount("KUDOS:82.5"))
+        suspend fun monitorTalerOut(count: Long, amount: String) = monitor("talerOutCount" , "talerOutInternalVolume", count, amount)
+        suspend fun monitorTalerIn(count: Long, amount: String) = monitor("talerInCount" , "talerInInternalVolume", count, amount)
+        suspend fun monitorCashin(count: Long, amount: String) = monitor("cashinCount" , "cashinExternalVolume", count, amount)
+        suspend fun monitorCashout(count: Long, amount: String) = monitor("cashoutCount" , "cashoutExternalVolume", count, amount)
+
+        monitorTalerOut(0, "KUDOS:0")
+        monitorTalerIn(0, "KUDOS:0")
+        monitorCashin(0, "FIAT:0")
+        monitorCashout(0, "FIAT:0")
+        
+        transfer("KUDOS:10.0")
+        monitorTalerOut(1, "KUDOS:10.0")
+        transfer("KUDOS:30.5")
+        monitorTalerOut(2, "KUDOS:40.5")
+        transfer("KUDOS:42")
+        monitorTalerOut(3, "KUDOS:82.5")
+
+        addIncoming("KUDOS:3")
+        monitorTalerIn(1, "KUDOS:3")
+        addIncoming("KUDOS:7.6")
+        monitorTalerIn(2, "KUDOS:10.6")
+        addIncoming("KUDOS:12.3")
+        monitorTalerIn(3, "KUDOS:22.9")
+
+        cashout("KUDOS:3")
+        monitorCashout(1, "FIAT:3.747")
+        cashout("KUDOS:7.6")
+        monitorCashout(2, "FIAT:13.244")
+        cashout("KUDOS:12.3")
+        monitorCashout(3, "FIAT:28.616")
+
+        monitorTalerOut(3, "KUDOS:82.5")
+        monitorTalerIn(3, "KUDOS:22.9")
+        monitorCashin(0, "FIAT:0")
+        monitorCashout(3, "FIAT:28.616")
     }
 
     @Test
@@ -73,7 +116,7 @@ class StatsTest {
             suspend fun register(now: OffsetDateTime, amount: TalerAmount) {
                 val stmt =
                         conn.prepareStatement(
-                                "CALL stats_register_internal_taler_payment(?::timestamp, (?, ?)::taler_amount)"
+                                "CALL stats_register_payment('taler_out', ?::timestamp, (?, ?)::taler_amount)"
                         )
                 stmt.setObject(1, now)
                 stmt.setLong(2, amount.value)
@@ -88,17 +131,14 @@ class StatsTest {
                 count: Long,
                 amount: TalerAmount
             ) {
-                val stmt = conn.prepareStatement(
-                    """
+                val stmt = conn.prepareStatement("""
                     SELECT
-                        internal_taler_payments_count
-                        ,(internal_taler_payments_volume).val as internal_taler_payments_volume_val
-                        ,(internal_taler_payments_volume).frac as internal_taler_payments_volume_frac
+                        taler_out_count
+                        ,(taler_out_volume).val as taler_out_volume_val
+                        ,(taler_out_volume).frac as taler_out_volume_frac
                     FROM stats_get_frame(?::timestamp, ?::stat_timeframe_enum, ?)
-                    """
-                )
+                """)
                 stmt.setObject(1, now)
-                
                 stmt.setString(2, timeframe.name)
                 if (which != null) {
                     stmt.setInt(3, which)
@@ -106,16 +146,15 @@ class StatsTest {
                     stmt.setNull(3, java.sql.Types.INTEGER)
                 }
                 stmt.oneOrNull {
-                    val talerPayoutCount = it.getLong("internal_taler_payments_count")
-                    val talerPayoutInternalVolume =
-                            TalerAmount(
-                                    value = it.getLong("internal_taler_payments_volume_val"),
-                                    frac = it.getInt("internal_taler_payments_volume_frac"),
-                                    currency = "KUDOS"
-                            )
-                    println("$timeframe $talerPayoutCount $talerPayoutInternalVolume")
-                    assertEquals(count, talerPayoutCount)
-                    assertEquals(amount, talerPayoutInternalVolume)
+                    val talerOutCount = it.getLong("taler_out_count")
+                    val talerOutInternalVolume = TalerAmount(
+                        value = it.getLong("taler_out_volume_val"),
+                        frac = it.getInt("taler_out_volume_frac"),
+                        currency = "KUDOS"
+                    )
+                    println("$timeframe $talerOutCount $talerOutInternalVolume")
+                    assertEquals(count, talerOutCount)
+                    assertEquals(amount, talerOutInternalVolume)
                 }!!
             }
 

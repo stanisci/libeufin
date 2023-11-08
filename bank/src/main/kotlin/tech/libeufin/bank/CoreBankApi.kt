@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.future.await
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
 
@@ -527,7 +528,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
                             val process = ProcessBuilder(tanScript, res.tanInfo).start()
                             try {
                                 process.outputWriter().use { it.write(res.tanCode) }
-                                process.waitFor(10, TimeUnit.MINUTES)
+                                process.onExit().await()
                             } catch (e: Exception) {
                                 process.destroy()
                             }

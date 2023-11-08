@@ -1030,26 +1030,6 @@ class CoreBankWithdrawalApiTest {
 
 
 class CoreBankCashoutApiTest {
-    suspend fun smsCode(info: String): String? {
-        val file = File("/tmp/tan-$info.txt");
-        if (file.exists()) {
-            val code = file.readText()
-            file.delete()
-            return code;
-        } else {
-            return null
-        }
-    }
-
-
-    private suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
-        // Check conversion
-        client.get("/cashout-rate?amount_debit=$amount").assertOk().run {
-            val resp = json<ConversionResponse>()
-            return resp.amount_credit
-        }
-    }
-
     // POST /accounts/{USERNAME}/cashouts
     @Test
     fun create() = bankSetup { _ ->
