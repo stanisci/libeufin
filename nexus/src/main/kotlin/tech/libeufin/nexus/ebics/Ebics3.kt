@@ -55,9 +55,9 @@ fun createEbics3DownloadReceiptPhase(
 fun createEbics3DownloadTransferPhase(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
-    transactionId: String,
+    howManySegments: Int,
     segmentNumber: Int,
-    howManySegments: Int
+    transactionId: String
 ): String {
     val req = Ebics3Request.createForDownloadTransferPhase(
         cfg.ebicsHostId,

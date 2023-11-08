@@ -3,9 +3,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.nexus.*
-import tech.libeufin.nexus.ebics.doEbicsCustomDownload
-import tech.libeufin.nexus.ebics.fetchBankAccounts
-import tech.libeufin.nexus.ebics.submitPain001
+import tech.libeufin.nexus.ebics.*
+import tech.libeufin.util.ebics_h005.Ebics3Request
 import tech.libeufin.util.parsePayto
 import java.io.File
 import java.time.Instant
@@ -22,8 +21,86 @@ private fun prep(): EbicsSetupConfig {
     return EbicsSetupConfig(handle)
 }
 
-@Ignore
 class Iso20022 {
+    // Asks a camt.052 report to the test platform.
+
+    @Test
+    fun simulateIncoming() {
+        val cfg = prep()
+        val orderService: Ebics3Request.OrderDetails.Service = Ebics3Request.OrderDetails.Service().apply {
+            serviceName = "OTH"
+            scope = "BIL"
+            messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+                value = "csv"
+            }
+            serviceOption = "CH002LMF"
+        }
+        val instruction = """
+            Product;Channel;Account;Currency;Amount;Reference;Name;Street;Number;Postcode;City;Country;DebtorAddressLine;DebtorAddressLine;DebtorAccount;ReferenceType;UltimateDebtorName;UltimateDebtorStreet;UltimateDebtorNumber;UltimateDebtorPostcode;UltimateDebtorTownName;UltimateDebtorCountry;UltimateDebtorAddressLine;UltimateDebtorAddressLine;RemittanceInformationText
+            QRR;PO;CH9789144829733648596;CHF;1;;D009;Musterstrasse;1;1111;Musterstadt;CH;;;;NON;D009;Musterstrasse;1;1111;Musterstadt;CH;;;Taler-Demo
+        """.trimIndent()
+
+        runBlocking {
+            try {
+                doEbicsUpload(
+                    HttpClient(),
+                    cfg,
+                    loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)!!,
+                    loadBankKeys(cfg.bankPublicKeysFilename)!!,
+                    orderService,
+                    instruction.toByteArray(Charsets.UTF_8)
+                )
+            }
+            catch (e: EbicsUploadException) {
+                logger.error(e.message)
+                logger.error("bank EC: ${e.bankErrorCode}, EBICS EC: ${e.ebicsErrorCode}")
+            }
+        }
+    }
+
+    @Test // asks a pain.002
+    fun getAck() {
+        val pain002 = download(prepAckRequest())
+        println(pain002)
+    }
+
+    @Test
+    fun getStatement() {
+        val inflatedBytes = download(prepStatementRequest())
+        inflatedBytes?.unzipForEach { name, content ->
+            println(name)
+            println(content)
+        }
+    }
+
+    @Test
+    fun getReport() {
+        println(download(prepReportRequest()))
+    }
+
+    fun download(req: Ebics3Request.OrderDetails.BTOrderParams): ByteArray? {
+        val cfg = prep()
+        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)!!
+        val myKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)!!
+        val initXml = createEbics3DownloadInitialization(
+            cfg,
+            bankKeys,
+            myKeys,
+            orderParams = req
+        )
+        return runBlocking {
+            doEbicsDownload(
+                HttpClient(),
+                cfg,
+                myKeys,
+                bankKeys,
+                initXml,
+                isEbics3 = true,
+                tolerateEmptyResult = true
+            )
+        }
+    }
+
     @Test
     fun sendPayment() {
         val cfg = prep()
@@ -36,7 +113,6 @@ class Iso20022 {
             parsePayto("payto://iban/CH9300762011623852957?receiver-name=NotGiven")!!
         )
         runBlocking {
-
             // Not asserting, as it throws in case of errors.
             submitPain001(
                 xml,
@@ -49,7 +125,6 @@ class Iso20022 {
     }
 }
 
-@Ignore
 class PostFinance {
     // Tests sending client keys to the PostFinance test platform.
     @Test
@@ -77,25 +152,25 @@ class PostFinance {
                 keys,
                 HttpClient(),
                 KeysOrderType.HPB
-            )
-            )
+            ))
         }
     }
 
+    // Arbitrary download request for manual tests.
     @Test
     fun customDownload() {
         val cfg = prep()
         val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
         val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
         runBlocking {
-            val xml = doEbicsCustomDownload(
+            val bytes = doEbicsCustomDownload(
                 messageType = "HTD",
                 cfg = cfg,
                 bankKeys = bankKeys!!,
                 clientKeys = clientKeys!!,
                 client = HttpClient()
             )
-            println(xml)
+            println(bytes.toString())
         }
     }
 

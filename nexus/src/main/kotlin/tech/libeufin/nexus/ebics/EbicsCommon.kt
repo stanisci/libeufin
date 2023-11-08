@@ -63,7 +63,6 @@ import java.util.zip.DeflaterInputStream
  * @param encryptionInfo details related to the encrypted payload.
  * @param chunks the several chunks that constitute the whole encrypted payload.
  * @return the plain payload.  Errors throw, so the caller must handle those.
- *
  */
 fun decryptAndDecompressPayload(
     clientEncryptionKey: RSAPrivateCrtKey,
@@ -255,9 +254,14 @@ private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
  * @param clientKeys client EBICS private keys.
  * @param bankKeys bank EBICS public keys.
  * @param reqXml raw EBICS XML request of the init phase.
- * @return the bank response as an XML string, or null if one
- *         error took place.  NOTE: any return code other than
- *         EBICS_OK constitutes an error.
+ * @param isEbics3 true for EBICS 3, false otherwise.
+ * @param tolerateEmptyResult true if the EC EBICS_NO_DOWNLOAD_DATA_AVAILABLE
+ *        should be tolerated as the bank-technical error, false otherwise.
+ * @return the bank response as an uncompressed [ByteArray], or null if one error took place.
+ *         If the request tolerates an empty download content, then the empty
+ *         array is returned.  If the request does not tolerate an empty response
+ *         any non-EBICS_OK error as the EBICS- or bank-technical EC constitutes
+ *         an error.
  */
 suspend fun doEbicsDownload(
     client: HttpClient,
@@ -265,13 +269,29 @@ suspend fun doEbicsDownload(
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     reqXml: String,
-    isEbics3: Boolean
-): String? {
+    isEbics3: Boolean,
+    tolerateEmptyResult: Boolean = false
+): ByteArray? {
     val initResp = postEbics(client, cfg, bankKeys, reqXml, isEbics3)
-    if (!areCodesOk(initResp)) {
-        tech.libeufin.nexus.logger.error("EBICS download: could not get past the EBICS init phase, failing.")
+    logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${initResp.technicalReturnCode}, ${initResp.bankReturnCode}")
+    if (initResp.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
+        logger.error("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
         return null
     }
+    if (initResp.bankReturnCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE && tolerateEmptyResult) {
+        logger.info("Download content is empty")
+        return ByteArray(0)
+    }
+    if (initResp.bankReturnCode != EbicsReturnCode.EBICS_OK) {
+        logger.error("Download init phase has bank-technical error: ${initResp.bankReturnCode}")
+        return null
+    }
+    val tId = initResp.transactionID
+    if (tId == null) {
+        tech.libeufin.nexus.logger.error("Transaction ID not found in the init response, cannot do transfer phase, failing.")
+        return null
+    }
+    logger.debug("EBICS download transaction got ID: $tId")
     val howManySegments = initResp.numSegments
     if (howManySegments == null) {
         tech.libeufin.nexus.logger.error("Init response lacks the quantity of segments, failing.")
@@ -289,15 +309,13 @@ suspend fun doEbicsDownload(
         return null
     }
     ebicsChunks.add(firstDataChunk)
-    val tId = initResp.transactionID
-    if (tId == null) {
-        tech.libeufin.nexus.logger.error("Transaction ID not found in the init response, cannot do transfer phase, failing.")
-        return null
-    }
     // proceed with the transfer phase.
     for (x in 2 .. howManySegments) {
         // request segment number x.
-        val transReq = createEbics25DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
+        val transReq = if (isEbics3)
+            createEbics3DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
+        else createEbics25DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
+
         val transResp = postEbics(client, cfg, bankKeys, transReq, isEbics3)
         if (!areCodesOk(transResp)) { // FIXME: consider tolerating EBICS_NO_DOWNLOAD_DATA_AVAILABLE.
             tech.libeufin.nexus.logger.error("EBICS transfer segment #$x failed.")
@@ -317,7 +335,10 @@ suspend fun doEbicsDownload(
         ebicsChunks
     )
     // payload reconstructed, ack to the bank.
-    val ackXml = createEbics25DownloadReceiptPhase(cfg, clientKeys, tId)
+    val ackXml = if (isEbics3)
+        createEbics3DownloadReceiptPhase(cfg, clientKeys, tId)
+    else createEbics25DownloadReceiptPhase(cfg, clientKeys, tId)
+
     try {
         postEbics(
             client,
@@ -332,7 +353,7 @@ suspend fun doEbicsDownload(
     }
     // receipt phase OK, can now return the payload as an XML string.
     return try {
-        payloadBytes.toString(Charsets.UTF_8)
+        payloadBytes
     } catch (e: Exception) {
         logger.error("Could not get the XML string out of payload bytes.")
         null

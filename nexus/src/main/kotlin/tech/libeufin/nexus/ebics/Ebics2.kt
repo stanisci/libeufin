@@ -24,6 +24,7 @@
 package tech.libeufin.nexus.ebics
 
 import io.ktor.client.*
+import org.bouncycastle.util.encoders.UTF8
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig
@@ -53,7 +54,7 @@ suspend fun doEbicsCustomDownload(
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     client: HttpClient
-): String? {
+): ByteArray? {
     val xmlReq = createEbics25DownloadInit(cfg, clientKeys, bankKeys, messageType)
     return doEbicsDownload(client, cfg, clientKeys, bankKeys, xmlReq, false)
 }
@@ -77,19 +78,21 @@ suspend fun fetchBankAccounts(
     client: HttpClient
 ): HTDResponseOrderData? {
     val xmlReq = createEbics25DownloadInit(cfg, clientKeys, bankKeys, "HTD")
-    val xmlResp = doEbicsDownload(client, cfg, clientKeys, bankKeys, xmlReq, false)
-    if (xmlResp == null) {
+    val bytesResp = doEbicsDownload(client, cfg, clientKeys, bankKeys, xmlReq, false)
+    if (bytesResp == null) {
         logger.error("EBICS HTD transaction failed.")
         return null
     }
+    val xmlResp = bytesResp.toString(Charsets.UTF_8)
     return try {
-        logger.debug("Fetched accounts: $xmlResp")
+        logger.debug("Fetched accounts: $bytesResp")
         XMLUtil.convertStringToJaxb<HTDResponseOrderData>(xmlResp).value
     } catch (e: Exception) {
         logger.error("Could not parse the HTD payload, detail: ${e.message}")
         return null
     }
 }
+
 /**
  * Creates a EBICS 2.5 download init. message.  So far only used
  * to fetch the PostFinance bank accounts.
