@@ -730,7 +730,33 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
 
     /**
     * The following function returns the list of transactions, according
-    * to the history parameters and perform long polling when necessary.
+    * to the page parameters
+    */
+    internal suspend fun <T> page(
+        params: PageParams,
+        idName: String,
+        query: String,
+        bind: PreparedStatement.() -> Int = { 0 },
+        map: (ResultSet) -> T
+    ): List<T> = conn { conn ->
+        val backward = params.delta < 0
+        val query = """
+            $query
+            $idName ${if (backward) '<' else '>'} ?
+            ORDER BY $idName ${if (backward) "DESC" else "ASC"}
+            LIMIT ?
+        """
+        conn.prepareStatement(query).run {
+            val pad = bind()
+            setLong(pad + 1, params.start)
+            setInt(pad + 2, abs(params.delta))
+            all { map(it) }
+        }
+    }
+
+    /**
+    * The following function returns the list of transactions, according
+    * to the history parameters and perform long polling when necessary
     */
     internal suspend fun <T> poolHistory(
         params: HistoryParams, 
@@ -739,43 +765,37 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         query: String,
         map: (ResultSet) -> T
     ): List<T> {
-        val backward = params.delta < 0
-        val nbTx = abs(params.delta) // Number of transaction to query
-        val query = """
-            $query
-            WHERE bank_account_id=? AND
-            bank_transaction_id ${if (backward) '<' else '>'} ?
-            ORDER BY bank_transaction_id ${if (backward) "DESC" else "ASC"}
-            LIMIT ?
-        """
-      
-        suspend fun load(amount: Int): List<T> = conn { conn ->
-            conn.prepareStatement(query).use { stmt ->
-                stmt.setLong(1, bankAccountId)
-                stmt.setLong(2, params.start)
-                stmt.setInt(3, amount)
-                stmt.all { map(it) }
-            }
-        }
+
+        suspend fun load(): List<T> = page(
+            params.page, 
+            "bank_transaction_id", 
+            "$query WHERE bank_account_id=? AND", 
+            {
+                setLong(1, bankAccountId)
+                1
+            },
+            map
+        )
+            
 
         // TODO do we want to handle polling when going backward and there is no transactions yet ?
         // When going backward there is always at least one transaction or none
-        if (!backward && params.poll_ms > 0) {
+        if (params.page.delta >= 0 && params.poll_ms > 0) {
             var history = listOf<T>()
             notifWatcher.(listen)(bankAccountId) { flow ->
                 coroutineScope {
                     // Start buffering notification before loading transactions to not miss any
                     val polling = launch {
                         withTimeoutOrNull(params.poll_ms) {
-                            flow.first { it > params.start } // Always forward so >
+                            flow.first { it > params.page.start } // Always forward so >
                         }
                     }    
                     // Initial loading
-                    history = load(nbTx)
+                    history = load()
                     // Long polling if we found no transactions
                     if (history.isEmpty()) {
                         polling.join()
-                        history = load(nbTx)
+                        history = load()
                     } else {
                         polling.cancel()
                     }
@@ -783,7 +803,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
             }
             return history
         } else {
-            return load(nbTx)
+            return load()
         }
     }
 

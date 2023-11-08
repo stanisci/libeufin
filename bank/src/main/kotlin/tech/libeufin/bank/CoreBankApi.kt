@@ -303,7 +303,11 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
     
             val history: List<BankAccountTransactionInfo> =
                     db.bankPoolHistory(params, bankAccount.bankAccountId)
-            call.respond(BankAccountTransactionsResponse(history))
+            if (history.isEmpty()) {
+                call.respond(HttpStatusCode.NoContent)
+            } else {
+                call.respond(BankAccountTransactionsResponse(history))
+            }
         }
         get("/accounts/{USERNAME}/transactions/{T_ID}") {
             val tId = call.expectUriComponent("T_ID")
@@ -487,7 +491,6 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
             val res = db.cashout.create(
                 accountUsername = username, 
                 requestUid = req.request_uid,
-                cashoutUuid = UUID.randomUUID(), 
                 amountDebit = req.amount_debit, 
                 amountCredit = req.amount_credit, 
                 subject = req.subject ?: "", // TODO default subject
@@ -543,15 +546,15 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
                         }
                         db.cashout.markSent(res.id!!, Instant.now(), TAN_RETRANSMISSION_PERIOD)
                     }
-                    call.respond(CashoutPending(res.id.toString()))
+                    call.respond(CashoutPending(res.id!!))
                 }
             }
         }
         post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort") {
-            val opId = call.uuidUriComponent("CASHOUT_ID")
-            when (db.cashout.abort(opId)) {
+            val id = call.longUriComponent("CASHOUT_ID")
+            when (db.cashout.abort(id)) {
                 AbortResult.NOT_FOUND -> throw notFound(
-                    "Cashout operation $opId not found",
+                    "Cashout operation $id not found",
                     TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
                 )
                 AbortResult.CONFIRMED -> throw conflict(
@@ -563,14 +566,14 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         }
         post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm") {
             val req = call.receive<CashoutConfirm>()
-            val opId = call.uuidUriComponent("CASHOUT_ID")
+            val id = call.longUriComponent("CASHOUT_ID")
             when (db.cashout.confirm(
-                opUuid = opId,
+                id = id,
                 tanCode = req.tan,
                 timestamp = Instant.now()
             )) {
                 CashoutConfirmationResult.OP_NOT_FOUND -> throw notFound(
-                    "Cashout operation $opId not found",
+                    "Cashout operation $id not found",
                     TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
                 )
                 CashoutConfirmationResult.ABORTED -> throw conflict(
@@ -603,16 +606,33 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         }
     }
     auth(db, TokenScope.readonly) {
-        get("/accounts/{USERNAME}/cashouts") {
-            // TODO
-        }
         get("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}") {
-            // TODO
+            val id = call.longUriComponent("CASHOUT_ID")
+            val cashout = db.cashout.get(id) ?: throw notFound(
+                "Cashout operation $id not found", 
+                TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+            )
+            call.respond(cashout)
+        }
+        get("/accounts/{USERNAME}/cashouts") {
+            val params = PageParams.extract(call.request.queryParameters)
+            val cashouts = db.cashout.pageForUser(params, username)
+            if (cashouts.isEmpty()) {
+                call.respond(HttpStatusCode.NoContent)
+            } else {
+                call.respond(Cashouts(cashouts))
+            }
         }
     }
     authAdmin(db, TokenScope.readonly) {
         get("/cashouts") {
-            // TODO
+            val params = PageParams.extract(call.request.queryParameters)
+            val cashouts = db.cashout.pageAll(params)
+            if (cashouts.isEmpty()) {
+                call.respond(HttpStatusCode.NoContent)
+            } else {
+                call.respond(GlobalCashouts(cashouts))
+            }
         }
     }
     get("/cashout-rate") {

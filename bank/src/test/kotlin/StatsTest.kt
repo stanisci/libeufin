@@ -46,23 +46,6 @@ class StatsTest {
             })
         }.assertNoContent()
 
-        suspend fun cashout(amount: String) {
-            client.post("/accounts/customer/cashouts") {
-                basicAuth("customer", "customer-password")
-                jsonBody(json {
-                    "request_uid" to randShortHashCode()
-                    "amount_debit" to amount
-                    "amount_credit" to convert(amount)
-                })
-            }.assertOk().run {
-                val uuid = json<CashoutPending>().cashout_id
-                client.post("/accounts/customer/cashouts/$uuid/confirm") {
-                    basicAuth("customer", "customer-password")
-                    jsonBody { "tan" to smsCode("+99") }
-                }.assertNoContent()
-            }
-        }
-
         suspend fun monitor(countName: String, volumeName: String, count: Long, amount: String) {
             Timeframe.entries.forEach { timestamp -> 
                 client.get("/monitor?timestamp=${timestamp.name}") { basicAuth("admin", "admin-password") }.assertOk().run {
@@ -114,10 +97,9 @@ class StatsTest {
     fun timeframe() = bankSetup { db ->
         db.conn { conn ->
             suspend fun register(now: OffsetDateTime, amount: TalerAmount) {
-                val stmt =
-                        conn.prepareStatement(
-                                "CALL stats_register_payment('taler_out', ?::timestamp, (?, ?)::taler_amount)"
-                        )
+                val stmt = conn.prepareStatement(
+                    "CALL stats_register_payment('taler_out', ?::timestamp, (?, ?)::taler_amount)"
+                )
                 stmt.setObject(1, now)
                 stmt.setLong(2, amount.value)
                 stmt.setInt(3, amount.frac)

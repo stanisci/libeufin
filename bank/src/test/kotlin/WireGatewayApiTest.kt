@@ -181,28 +181,8 @@ class WireGatewayApiTest {
         setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
 
         suspend fun HttpResponse.assertHistory(size: Int) {
-            assertOk()
-            val txt = bodyAsText()
-            val history = Json.decodeFromString<IncomingHistory>(txt)
-            val params = HistoryParams.extract(call.request.url.parameters)
-       
-            // testing the size is like expected.
-            assert(history.incoming_transactions.size == size) {
-                println("incoming_transactions has wrong size: ${history.incoming_transactions.size}")
-                println("Response was: ${txt}")
-            }
-            if (params.delta < 0) {
-                // testing that the first row_id is at most the 'start' query param.
-                assert(history.incoming_transactions[0].row_id <= params.start)
-                // testing that the row_id decreases.
-                if (history.incoming_transactions.size > 1)
-                    assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
-            } else {
-                // testing that the first row_id is at least the 'start' query param.
-                assert(history.incoming_transactions[0].row_id >= params.start)
-                // testing that the row_id increases.
-                if (history.incoming_transactions.size > 1)
-                    assert(history.incoming_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+            assertHistoryIds<IncomingHistory>(size) {
+                it.incoming_transactions.map { it.row_id }
             }
         }
 
@@ -350,28 +330,8 @@ class WireGatewayApiTest {
         setMaxDebt("exchange", TalerAmount("KUDOS:1000000"))
 
         suspend fun HttpResponse.assertHistory(size: Int) {
-            assertOk()
-            val txt = this.bodyAsText()
-            val history = Json.decodeFromString<OutgoingHistory>(txt)
-            val params = HistoryParams.extract(this.call.request.url.parameters)
-       
-            // testing the size is like expected.
-            assert(history.outgoing_transactions.size == size) {
-                println("outgoing_transactions has wrong size: ${history.outgoing_transactions.size}")
-                println("Response was: ${txt}")
-            }
-            if (params.delta < 0) {
-                // testing that the first row_id is at most the 'start' query param.
-                assert(history.outgoing_transactions[0].row_id <= params.start)
-                // testing that the row_id decreases.
-                if (history.outgoing_transactions.size > 1)
-                    assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id > b.row_id })
-            } else {
-                // testing that the first row_id is at least the 'start' query param.
-                assert(history.outgoing_transactions[0].row_id >= params.start)
-                // testing that the row_id increases.
-                if (history.outgoing_transactions.size > 1)
-                    assert(history.outgoing_transactions.windowed(2).all { (a, b) -> a.row_id < b.row_id })
+            assertHistoryIds<OutgoingHistory>(size) {
+                it.outgoing_transactions.map { it.row_id }
             }
         }
 

@@ -1003,7 +1003,6 @@ END $$;
 CREATE OR REPLACE FUNCTION cashout_create(
   IN in_account_username TEXT,
   IN in_request_uid BYTEA,
-  IN in_cashout_uuid uuid,
   IN in_amount_debit taler_amount,
   IN in_amount_credit taler_amount,
   IN in_subject TEXT,
@@ -1020,7 +1019,7 @@ CREATE OR REPLACE FUNCTION cashout_create(
   OUT out_balance_insufficient BOOLEAN,
   OUT out_request_uid_reuse BOOLEAN,
   -- Success return
-  OUT out_cashout_uuid uuid,
+  OUT out_cashout_id BIGINT,
   OUT out_tan_info TEXT,
   OUT out_tan_code TEXT
 )
@@ -1066,14 +1065,13 @@ END IF;
 SELECT (amount_debit != in_amount_debit
           OR subject != in_subject 
           OR bank_account != account_id)
-        ,challenge, cashout_uuid
-  INTO out_request_uid_reuse, challenge_id, out_cashout_uuid
+        , challenge, cashout_id
+  INTO out_request_uid_reuse, challenge_id, out_cashout_id
   FROM cashout_operations
   WHERE request_uid = in_request_uid;
 
 IF NOT found THEN
   -- New cashout
-  out_cashout_uuid = in_cashout_uuid;
   out_tan_code = in_tan_code;
 
   -- Create challenge
@@ -1081,8 +1079,7 @@ IF NOT found THEN
 
   -- Create cashout operation
   INSERT INTO cashout_operations (
-    cashout_uuid
-    ,request_uid
+    request_uid
     ,amount_debit
     ,amount_credit
     ,subject
@@ -1090,22 +1087,21 @@ IF NOT found THEN
     ,bank_account
     ,challenge
   ) VALUES (
-    in_cashout_uuid
-    ,in_request_uid
+    in_request_uid
     ,in_amount_debit
     ,in_amount_credit
     ,in_subject
     ,in_now_date
     ,account_id
     ,challenge_id
-  );
+  ) RETURNING cashout_id INTO out_cashout_id;
 ELSE -- Already exist, check challenge retransmission
   SELECT challenge_resend(challenge_id, in_tan_code, in_now_date, in_validity_period, in_retry_counter) INTO out_tan_code;
 END IF;
 END $$;
 
 CREATE OR REPLACE FUNCTION cashout_confirm(
-  IN in_cashout_uuid uuid,
+  IN in_cashout_id BIGINT,
   IN in_tan_code TEXT,
   IN in_now_date BIGINT,
   OUT out_no_op BOOLEAN,
@@ -1145,7 +1141,7 @@ SELECT
   FROM cashout_operations
     JOIN bank_accounts ON bank_account_id=bank_account
     JOIN customers ON customer_id=owning_customer_id
-  WHERE cashout_uuid=in_cashout_uuid;
+  WHERE cashout_id=in_cashout_id;
 IF NOT FOUND THEN
   out_no_op=TRUE;
   RETURN;
@@ -1195,7 +1191,7 @@ END IF;
 -- Confirm operation
 UPDATE cashout_operations
   SET local_transaction = tx_id
-  WHERE cashout_uuid=in_cashout_uuid;
+  WHERE cashout_id=in_cashout_id;
 
 -- update stats
 CALL stats_register_payment('cashout', now()::TIMESTAMP, amount_credit_local);

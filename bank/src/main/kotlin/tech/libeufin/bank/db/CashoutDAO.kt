@@ -19,7 +19,6 @@
 
 package tech.libeufin.bank
 
-import java.util.UUID
 import java.time.Instant
 import java.time.Duration
 import java.util.concurrent.TimeUnit
@@ -52,7 +51,7 @@ class CashoutDAO(private val db: Database) {
     
     data class CashoutCreation(
         val status: CashoutCreationResult,
-        val id: UUID?,
+        val id: Long?,
         val tanInfo: String?,
         val tanCode: String?
     )
@@ -60,7 +59,6 @@ class CashoutDAO(private val db: Database) {
     suspend fun create(
         accountUsername: String,
         requestUid: ShortHashCode,
-        cashoutUuid: UUID,
         amountDebit: TalerAmount,
         amountCredit: TalerAmount,
         subject: String,
@@ -78,26 +76,25 @@ class CashoutDAO(private val db: Database) {
                 out_missing_tan_info,
                 out_balance_insufficient,
                 out_request_uid_reuse,
-                out_cashout_uuid,
+                out_cashout_id,
                 out_tan_info,
                 out_tan_code
-            FROM cashout_create(?, ?, ?, (?,?)::taler_amount, (?,?)::taler_amount, ?, ?, ?::tan_enum, ?, ?, ?)
+            FROM cashout_create(?, ?, (?,?)::taler_amount, (?,?)::taler_amount, ?, ?, ?::tan_enum, ?, ?, ?)
         """)
         stmt.setString(1, accountUsername)
         stmt.setBytes(2, requestUid.raw)
-        stmt.setObject(3, cashoutUuid)
-        stmt.setLong(4, amountDebit.value)
-        stmt.setInt(5, amountDebit.frac)
-        stmt.setLong(6, amountCredit.value)
-        stmt.setInt(7, amountCredit.frac)
-        stmt.setString(8, subject)
-        stmt.setLong(9, now.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setString(10, tanChannel.name)
-        stmt.setString(11, tanCode)
-        stmt.setInt(12, retryCounter)
-        stmt.setLong(13, TimeUnit.MICROSECONDS.convert(validityPeriod))
+        stmt.setLong(3, amountDebit.value)
+        stmt.setInt(4, amountDebit.frac)
+        stmt.setLong(5, amountCredit.value)
+        stmt.setInt(6, amountCredit.frac)
+        stmt.setString(7, subject)
+        stmt.setLong(8, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setString(9, tanChannel.name)
+        stmt.setString(10, tanCode)
+        stmt.setInt(11, retryCounter)
+        stmt.setLong(12, TimeUnit.MICROSECONDS.convert(validityPeriod))
         stmt.executeQuery().use {
-            var id: UUID? = null
+            var id: Long? = null
             var info: String? = null;
             var code: String? = null;
             val status = when {
@@ -110,7 +107,7 @@ class CashoutDAO(private val db: Database) {
                 it.getBoolean("out_balance_insufficient") -> CashoutCreationResult.BALANCE_INSUFFICIENT
                 it.getBoolean("out_request_uid_reuse") -> CashoutCreationResult.REQUEST_UID_REUSE
                 else -> {
-                    id = it.getObject("out_cashout_uuid") as UUID
+                    id = it.getLong("out_cashout_id")
                     info = it.getString("out_tan_info")
                     code = it.getString("out_tan_code")
                     CashoutCreationResult.SUCCESS
@@ -121,29 +118,29 @@ class CashoutDAO(private val db: Database) {
     }
 
     suspend fun markSent(
-        uuid: UUID,
+        id: Long,
         now: Instant,
         retransmissionPeriod: Duration
     ) = db.conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT challenge_mark_sent(challenge, ?, ?)
             FROM cashout_operations
-            WHERE cashout_uuid=?
+            WHERE cashout_id=?
         """)
         stmt.setLong(1, now.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.setLong(2, TimeUnit.MICROSECONDS.convert(retransmissionPeriod))
-        stmt.setObject(3, uuid)
+        stmt.setLong(3, id)
         stmt.executeQueryCheck()
     }
 
-    suspend fun abort(opUUID: UUID): AbortResult = db.conn { conn ->
+    suspend fun abort(id: Long): AbortResult = db.conn { conn ->
         val stmt = conn.prepareStatement("""
             UPDATE cashout_operations
             SET aborted = local_transaction IS NULL
-            WHERE cashout_uuid=?
+            WHERE cashout_id=?
             RETURNING local_transaction IS NOT NULL
         """)
-        stmt.setObject(1, opUUID)
+        stmt.setLong(1, id)
         when (stmt.oneOrNull { it.getBoolean(1) }) {
             null -> AbortResult.NOT_FOUND
             true -> AbortResult.CONFIRMED
@@ -152,7 +149,7 @@ class CashoutDAO(private val db: Database) {
     }
 
     suspend fun confirm(
-        opUuid: UUID,
+        id: Long,
         tanCode: String,
         timestamp: Instant
     ): CashoutConfirmationResult = db.conn { conn ->
@@ -167,7 +164,7 @@ class CashoutDAO(private val db: Database) {
                 out_no_cashout_payto
             FROM cashout_confirm(?, ?, ?);
         """)
-        stmt.setObject(1, opUuid)
+        stmt.setLong(1, id)
         stmt.setString(2, tanCode)
         stmt.setLong(3, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.executeQuery().use {
@@ -191,12 +188,12 @@ class CashoutDAO(private val db: Database) {
         CONFLICT_ALREADY_CONFIRMED
     }
 
-    suspend fun delete(opUuid: UUID): CashoutDeleteResult = db.conn { conn ->
+    suspend fun delete(id: Long): CashoutDeleteResult = db.conn { conn ->
         val stmt = conn.prepareStatement("""
            SELECT out_already_confirmed
              FROM cashout_delete(?)
         """)
-        stmt.setObject(1, opUuid)
+        stmt.setLong(1, id)
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw internalServerError("Cashout deletion gave no result")
@@ -206,70 +203,95 @@ class CashoutDAO(private val db: Database) {
         }
     }
 
-    suspend fun getFromUuid(opUuid: UUID): Cashout? = db.conn { conn ->
+    suspend fun get(id: Long): CashoutStatusResponse? = db.conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
-                (amount_debit).val as amount_debit_val
+                CASE 
+                    WHEN aborted THEN 'aborted'
+                    WHEN local_transaction IS NOT NULL THEN 'confirmed'
+                    ELSE 'pending'
+                END as status
+                ,(amount_debit).val as amount_debit_val
                 ,(amount_debit).frac as amount_debit_frac
                 ,(amount_credit).val as amount_credit_val
                 ,(amount_credit).frac as amount_credit_frac
-                ,buy_at_ratio
-                ,(buy_in_fee).val as buy_in_fee_val
-                ,(buy_in_fee).frac as buy_in_fee_frac
-                ,sell_at_ratio
-                ,(sell_out_fee).val as sell_out_fee_val
-                ,(sell_out_fee).frac as sell_out_fee_frac
-                ,subject
+                ,cashout_operations.subject
                 ,creation_time
-                ,tan_channel
-                ,tan_code
-                ,bank_account
-                ,credit_payto_uri
-                ,cashout_currency
-                ,tan_confirmation_time
-                ,local_transaction
+                ,transaction_date as confirmation_date
             FROM cashout_operations
-            WHERE cashout_uuid=?;
+                LEFT JOIN bank_account_transactions ON local_transaction=bank_transaction_id
+            WHERE cashout_id=?
         """)
-        stmt.setObject(1, opUuid)
+        stmt.setLong(1, id)
         stmt.oneOrNull {
-            Cashout(
-                amountDebit = TalerAmount(
+            CashoutStatusResponse(
+                status = CashoutStatus.valueOf(it.getString("status")),
+                amount_debit = TalerAmount(
                     value = it.getLong("amount_debit_val"),
                     frac = it.getInt("amount_debit_frac"),
                     db.bankCurrency
                 ),
-                amountCredit = TalerAmount(
+                amount_credit = TalerAmount(
                     value = it.getLong("amount_credit_val"),
                     frac = it.getInt("amount_credit_frac"),
-                    db.bankCurrency
-                ),
-                bankAccount = it.getLong("bank_account"),
-                buyAtRatio = it.getInt("buy_at_ratio"),
-                buyInFee = TalerAmount(
-                    value = it.getLong("buy_in_fee_val"),
-                    frac = it.getInt("buy_in_fee_frac"),
-                    db.bankCurrency
-                ),
-                credit_payto_uri = it.getString("credit_payto_uri"),
-                cashoutCurrency = it.getString("cashout_currency"),
-                cashoutUuid = opUuid,
-                creationTime = it.getLong("creation_time").microsToJavaInstant() ?: throw faultyTimestampByBank(),
-                sellAtRatio = it.getInt("sell_at_ratio"),
-                sellOutFee = TalerAmount(
-                    value = it.getLong("sell_out_fee_val"),
-                    frac = it.getInt("sell_out_fee_frac"),
-                    db.bankCurrency
+                    db.fiatCurrency!!
                 ),
                 subject = it.getString("subject"),
-                tanChannel = TanChannel.valueOf(it.getString("tan_channel")),
-                tanCode = it.getString("tan_code"),
-                localTransaction = it.getLong("local_transaction"),
-                tanConfirmationTime = when (val timestamp = it.getLong("tan_confirmation_time")) {
+                creation_time = TalerProtocolTimestamp(
+                    it.getLong("creation_time").microsToJavaInstant() ?: throw faultyTimestampByBank()
+                ),
+                confirmation_time = when (val timestamp = it.getLong("confirmation_date")) {
                     0L -> null
-                    else -> timestamp.microsToJavaInstant() ?: throw faultyTimestampByBank()
+                    else -> TalerProtocolTimestamp(timestamp.microsToJavaInstant() ?: throw faultyTimestampByBank())
                 }
             )
         }
     }
+
+    suspend fun pageAll(params: PageParams): List<GlobalCashoutInfo> =
+        db.page(params, "cashout_id", """
+            SELECT
+                cashout_id
+                ,login
+                ,CASE 
+                    WHEN aborted THEN 'aborted'
+                    WHEN local_transaction IS NOT NULL THEN 'confirmed'
+                    ELSE 'pending'
+                END as status
+            FROM cashout_operations
+                JOIN bank_accounts ON bank_account=bank_account_id
+                JOIN customers ON owning_customer_id=customer_id
+            WHERE
+        """) {
+            GlobalCashoutInfo(
+                cashout_id = it.getLong("cashout_id"),
+                username = it.getString("login"),
+                status = CashoutStatus.valueOf(it.getString("status"))
+            )
+        }
+
+    suspend fun pageForUser(params: PageParams, login: String): List<CashoutInfo> =
+        db.page(params, "cashout_id", """
+            SELECT
+                cashout_id
+                ,CASE 
+                    WHEN aborted THEN 'aborted'
+                    WHEN local_transaction IS NOT NULL THEN 'confirmed'
+                    ELSE 'pending'
+                END as status
+            FROM cashout_operations
+                JOIN bank_accounts ON bank_account=bank_account_id
+                JOIN customers ON owning_customer_id=customer_id
+            WHERE login = ? AND
+        """, 
+            bind = { 
+                setString(1, login)
+                1
+            }
+        ) {
+            CashoutInfo(
+                cashout_id = it.getLong("cashout_id"),
+                status = CashoutStatus.valueOf(it.getString("status"))
+            )
+        }
 }

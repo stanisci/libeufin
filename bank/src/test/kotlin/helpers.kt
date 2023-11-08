@@ -127,6 +127,23 @@ suspend fun ApplicationTestBuilder.addIncoming(amount: String) {
     }.assertOk()
 }
 
+suspend fun ApplicationTestBuilder.cashout(amount: String) {
+    client.post("/accounts/customer/cashouts") {
+        basicAuth("customer", "customer-password")
+        jsonBody(json {
+            "request_uid" to randShortHashCode()
+            "amount_debit" to amount
+            "amount_credit" to convert(amount)
+        })
+    }.assertOk().run {
+        val id = json<CashoutPending>().cashout_id
+        client.post("/accounts/customer/cashouts/$id/confirm") {
+            basicAuth("customer", "customer-password")
+            jsonBody { "tan" to smsCode("+99") }
+        }.assertNoContent()
+    }
+}
+
 suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
     client.get("/cashout-rate?amount_debit=$amount").assertOk().run {
         return json<ConversionResponse>().amount_credit
@@ -196,6 +213,31 @@ fun assertException(msg: String, lambda: () -> Unit) {
     } catch (e: Exception) {
         assert(e.message!!.startsWith(msg)) { "${e.message}" }
     }
+}
+
+inline suspend fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B) -> List<Long>): B {
+    assertOk()
+    val body = json<B>()
+    val history = ids(body)
+    val params = PageParams.extract(call.request.url.parameters)
+
+    // testing the size is like expected.
+    assertEquals(size, history.size)
+    if (params.delta < 0) {
+        // testing that the first id is at most the 'start' query param.
+        assert(history[0] <= params.start)
+        // testing that the id decreases.
+        if (history.size > 1)
+            assert(history.windowed(2).all { (a, b) -> a > b })
+    } else {
+        // testing that the first id is at least the 'start' query param.
+        assert(history[0] >= params.start)
+        // testing that the id increases.
+        if (history.size > 1)
+            assert(history.windowed(2).all { (a, b) -> a < b })
+    }
+
+    return body
 }
 
 /* ----- Body helper ----- */

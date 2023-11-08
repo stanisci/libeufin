@@ -48,6 +48,7 @@ enum class TransactionDirection {
 
 enum class CashoutStatus {
     pending,
+    aborted,
     confirmed
 }
 
@@ -55,6 +56,13 @@ enum class RoundingMode {
     zero,
     up,
     nearest
+}
+
+enum class Timeframe {
+    hour,
+    day,
+    month,
+    year
 }
 
 /**
@@ -237,29 +245,6 @@ data class TalerWithdrawalOperation(
     val reservePub: EddsaPublicKey?,
     val selectedExchangePayto: IbanPayTo?,
     val walletBankAccount: Long
-)
-
-/**
- * Represents a cashout operation, as it is stored
- * in the respective database table.
- */
-data class Cashout(
-    val cashoutUuid: UUID,
-    val localTransaction: Long? = null,
-    val amountDebit: TalerAmount,
-    val amountCredit: TalerAmount,
-    val buyAtRatio: Int,
-    val buyInFee: TalerAmount,
-    val sellAtRatio: Int,
-    val sellOutFee: TalerAmount,
-    val subject: String,
-    val creationTime: Instant,
-    val tanConfirmationTime: Instant? = null,
-    val tanChannel: TanChannel,
-    val tanCode: String,
-    val bankAccount: Long,
-    val credit_payto_uri: String,
-    val cashoutCurrency: String
 )
 
 // Type to return as GET /config response
@@ -459,7 +444,7 @@ data class CashoutRequest(
 
 @Serializable
 data class CashoutPending(
-    val cashout_id: String,
+    val cashout_id: Long,
 )
 
 @Serializable
@@ -469,7 +454,7 @@ data class Cashouts(
 
 @Serializable
 data class CashoutInfo(
-    val cashout_id: String,
+    val cashout_id: Long,
     val status: CashoutStatus,
 )
 
@@ -481,7 +466,7 @@ data class GlobalCashouts(
 
 @Serializable
 data class GlobalCashoutInfo(
-    val cashout_id: String,
+    val cashout_id: Long,
     val username: String,
     val status: CashoutStatus,
 )
@@ -492,9 +477,8 @@ data class CashoutStatusResponse(
     val amount_debit: TalerAmount,
     val amount_credit: TalerAmount,
     val subject: String,
-    val credit_payto_uri: IbanPayTo,
     val creation_time: TalerProtocolTimestamp,
-    val confirmation_time: TalerProtocolTimestamp?,
+    val confirmation_time: TalerProtocolTimestamp? = null,
 )
 
 @Serializable
