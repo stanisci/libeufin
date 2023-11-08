@@ -872,7 +872,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         }
         stmt.oneOrNull {
             fiatCurrency?.run {
-                MonitorWithCashout(
+                MonitorWithConversion(
                     cashinCount = it.getLong("cashin_count"),
                     cashinInternalVolume = TalerAmount(
                         value = it.getLong("cashin_internal_volume_val"),
@@ -908,7 +908,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                         currency = bankCurrency
                     )
                 )
-            } ?:  MonitorJustPayouts(
+            } ?:  MonitorNoConversion(
                 talerInCount = it.getLong("taler_in_count"),
                 talerInVolume = TalerAmount(
                     value = it.getLong("taler_in_volume_val"),

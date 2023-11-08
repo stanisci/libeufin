@@ -133,8 +133,8 @@ sealed class MonitorResponse {
 }
 
 @Serializable
-@SerialName("just-payouts")
-data class MonitorJustPayouts(
+@SerialName("no-conversions")
+data class MonitorNoConversion(
     override val talerInCount: Long,
     override val talerInVolume: TalerAmount,
     override val talerOutCount: Long,
@@ -142,8 +142,8 @@ data class MonitorJustPayouts(
 ) : MonitorResponse()
 
 @Serializable
-@SerialName("with-cashout")
-data class MonitorWithCashout(
+@SerialName("with-conversions")
+data class MonitorWithConversion(
     val cashinCount: Long,
     val cashinInternalVolume: TalerAmount,
     val cashinExternalVolume: TalerAmount,

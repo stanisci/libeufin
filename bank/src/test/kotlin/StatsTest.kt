@@ -63,17 +63,17 @@ class StatsTest {
         }
 
         suspend fun monitor(
-            dbCount: (MonitorWithCashout) -> Long, 
+            dbCount: (MonitorWithConversion) -> Long, 
             count: Long, 
-            internalVolume: (MonitorWithCashout) -> TalerAmount, 
+            internalVolume: (MonitorWithConversion) -> TalerAmount, 
             internalAmount: String,
-            externalVolume: ((MonitorWithCashout) -> TalerAmount)? = null, 
+            externalVolume: ((MonitorWithConversion) -> TalerAmount)? = null, 
             externalAmount: String? = null
         ) {
             Timeframe.entries.forEach { timestamp -> 
                 client.get("/monitor?timestamp=${timestamp.name}") { basicAuth("admin", "admin-password") }.assertOk().run {
                     println(bodyAsText())
-                    val resp = json<MonitorResponse>() as MonitorWithCashout
+                    val resp = json<MonitorResponse>() as MonitorWithConversion
                     assertEquals(count, dbCount(resp))
                     assertEquals(TalerAmount(internalAmount), internalVolume(resp))
                     externalVolume?.run { assertEquals(TalerAmount(externalAmount!!), this(resp)) }
