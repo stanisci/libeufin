@@ -251,6 +251,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
      * Submits any initiated payment that was not submitted
      * so far and -- according to the configuration -- returns
      * or long-polls (currently not implemented) for new payments.
+     * FIXME: reduce code duplication with the fetch subcommand.
      */
     override fun run() {
         val cfg: EbicsSetupConfig = doOrFail {
@@ -260,7 +261,6 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         if (!isKeyingComplete(cfg)) exitProcess(1)
         val dbCfg = cfg.config.extractDbConfigOrFail()
         val db = Database(dbCfg.dbConnStr)
-        val httpClient = HttpClient()
         val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
         if (!bankKeys.accepted) {
             logger.error("Bank keys are not accepted, yet.  Won't submit any payment.")
@@ -271,6 +271,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
             exitProcess(1)
         }
+        val httpClient = HttpClient()
         if (transient) {
             logger.info("Transient mode: submitting what found and returning.")
             submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
