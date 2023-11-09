@@ -71,9 +71,8 @@ fun getPofiConfig(
     IBAN = CH9789144829733648596
     BIC = POFICHBE
     NAME = LibEuFin
-    BANK_PUBLIC_KEYS_FILE = /tmp/enc-auth-keys.json
-    CLIENT_PRIVATE_KEYS_FILE = /tmp/my-private-keys.json
-    ACCOUNT_META_DATA_FILE = /tmp/ebics-meta.json
+    BANK_PUBLIC_KEYS_FILE = /tmp/pofi-testplatform-bank-keys.json
+    CLIENT_PRIVATE_KEYS_FILE = /tmp/pofi-testplatform-subscriber-keys.json
     BANK_DIALECT = postfinance
 """.trimIndent()
 

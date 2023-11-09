@@ -1,6 +1,5 @@
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
-import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.ebics.*
@@ -8,6 +7,7 @@ import tech.libeufin.util.ebics_h005.Ebics3Request
 import tech.libeufin.util.parsePayto
 import java.io.File
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -22,7 +22,55 @@ private fun prep(): EbicsSetupConfig {
 }
 
 class Iso20022 {
-    // Asks a camt.052 report to the test platform.
+
+    private val yesterday: Instant = Instant.now().minus(1, ChronoUnit.DAYS)
+
+    @Test // asks a pain.002, links with pain.001's MsgId
+    fun getAck() {
+        download(prepAckRequest(startDate = yesterday)
+        )?.unzipForEach { name, content ->
+            println(name)
+            println(content)
+        }
+    }
+
+    /**
+     * With the "mit Detailavisierung" option, each entry has an
+     * AcctSvcrRef & wire transfer subject.
+     */
+    @Test
+    fun getStatement() {
+        val inflatedBytes = download(prepStatementRequest(yesterday))
+        inflatedBytes?.unzipForEach { name, content ->
+            println(name)
+            println(content)
+        }
+    }
+
+    @Test
+    fun getNotification() {
+        val inflatedBytes = download(
+            prepNotificationRequest(
+                // startDate = yesterday,
+                isAppendix = true
+            )
+        )
+        inflatedBytes?.unzipForEach { name, content ->
+            println(name)
+            println(content)
+        }
+    }
+
+    /**
+     * Never shows the subject.
+     */
+    @Test
+    fun getReport() {
+        download(prepReportRequest(yesterday))?.unzipForEach { name, content ->
+            println(name)
+            println(content)
+        }
+    }
 
     @Test
     fun simulateIncoming() {
@@ -56,26 +104,6 @@ class Iso20022 {
                 logger.error("bank EC: ${e.bankErrorCode}, EBICS EC: ${e.ebicsErrorCode}")
             }
         }
-    }
-
-    @Test // asks a pain.002
-    fun getAck() {
-        val pain002 = download(prepAckRequest())
-        println(pain002)
-    }
-
-    @Test
-    fun getStatement() {
-        val inflatedBytes = download(prepStatementRequest())
-        inflatedBytes?.unzipForEach { name, content ->
-            println(name)
-            println(content)
-        }
-    }
-
-    @Test
-    fun getReport() {
-        println(download(prepReportRequest()))
     }
 
     fun download(req: Ebics3Request.OrderDetails.BTOrderParams): ByteArray? {
