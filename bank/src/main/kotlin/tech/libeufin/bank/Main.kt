@@ -74,18 +74,16 @@ private val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB
  */
 val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
     onCallReceive { call ->
-        transformBody { data ->
-            val bytes = ByteArray(MAX_BODY_LENGTH.toInt())
+        // TODO check content lenght as an optimisation
+        transformBody { body ->
+            val bytes = ByteArray(MAX_BODY_LENGTH.toInt() + 1)
             var read = 0;
             if (call.request.headers[HttpHeaders.ContentEncoding] == "deflate") {
+                // Decompress and check decompressed length
                 val inflater = Inflater()
-                
-                while (!inflater.finished()) {
-                    if (read == bytes.size) {
-                        throw badRequest("Decompressed body is suspiciously big")
-                    }
-                    data.read {
-                        inflater.setInput(it)
+                while (!body.isClosedForRead) {
+                    body.read { buf ->
+                        inflater.setInput(buf)
                         try {
                             read += inflater.inflate(bytes, read, bytes.size - read)
                         } catch (e: DataFormatException) {
@@ -96,16 +94,18 @@ val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
                             )
                         }
                     }
+                    if (read > MAX_BODY_LENGTH)
+                        throw badRequest("Decompressed body is suspiciously big")
                 }
             } else {
-                while (!data.isClosedForRead) {
-                    if (read == bytes.size) {
+                // Check body length
+                while (!body.isClosedForRead) {
+                    read += body.readAvailable(bytes, read, bytes.size - read)
+                    if (read > MAX_BODY_LENGTH)
                         throw badRequest("Body is suspiciously big")
-                    }
-                    read  += data.readAvailable(bytes, read, bytes.size - read)
                 }
             }
-            ByteReadChannel(bytes.copyOf(read))
+            ByteReadChannel(bytes, 0, read)
         }
     }
 }
