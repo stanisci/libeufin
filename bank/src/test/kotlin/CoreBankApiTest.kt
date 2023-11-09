@@ -914,7 +914,7 @@ class CoreBankWithdrawalApiTest {
 
     // POST /withdrawals/withdrawal_id/confirm
     @Test
-    fun confirm() = bankSetup { db -> 
+    fun confirm() = bankSetup { _ -> 
         // Check confirm created
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")

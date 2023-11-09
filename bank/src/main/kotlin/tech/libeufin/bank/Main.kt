@@ -46,9 +46,6 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.*
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.encoding.encodeStructure
 import kotlinx.serialization.json.*
 import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
@@ -58,40 +55,58 @@ import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.getVersion
 import tech.libeufin.util.initializeDatabaseTables
 import tech.libeufin.util.resetDatabaseTables
+import tech.libeufin.bank.libeufinError
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.zip.InflaterInputStream
+import java.util.zip.Inflater
+import java.util.zip.DataFormatException
 import kotlin.system.exitProcess
 
 // GLOBALS
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
 val TOKEN_DEFAULT_DURATION: java.time.Duration = Duration.ofDays(1L)
+private val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB
 
 /**
- * This plugin inflates the requests that have "Content-Encoding: deflate"
+ * This plugin check for body lenght limit and inflates the requests that have "Content-Encoding: deflate"
  */
-val corebankDecompressionPlugin = createApplicationPlugin("RequestingBodyDecompression") {
+val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
+    onCall {
+        val contentLenght = it.request.contentLength() 
+            ?: throw badRequest("Missing Content-Length header", TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED)
+    
+        if (contentLenght > MAX_BODY_LENGTH) {
+            throw badRequest("Body is suspiciously big")
+        }
+    }
     onCallReceive { call ->
         transformBody { data ->
             if (call.request.headers[HttpHeaders.ContentEncoding] == "deflate") {
-                logger.debug("Inflating request..")
-                val brc = try {
-                    withContext(Dispatchers.IO) {
-                        val inflated = InflaterInputStream(data.toInputStream())
+                val inflater = Inflater()
+                val bytes = ByteArray(MAX_BODY_LENGTH.toInt())
+                var decoded = 0;
 
-                        @Suppress("BlockingMethodInNonBlockingContext")
-                        val bytes = inflated.readAllBytes()
-                        ByteReadChannel(bytes)
+                while (!inflater.finished()) {
+                    if (decoded == bytes.size) {
+                        throw badRequest("Decompressed body is suspiciously big")
                     }
-                } catch (e: Exception) {
-                    logger.error("Deflated request failed to inflate: ${e.message}")
-                    throw badRequest(
-                        "Could not inflate request",
-                        TalerErrorCode.GENERIC_COMPRESSION_INVALID
-                    )
+                    data.read {
+                        inflater.setInput(it)
+                        try {
+                            decoded += inflater.inflate(bytes, decoded, bytes.size - decoded)
+                        } catch (e: DataFormatException) {
+                            logger.error("Deflated request failed to inflate: ${e.message}")
+                            throw badRequest(
+                                "Could not inflate request",
+                                TalerErrorCode.GENERIC_COMPRESSION_INVALID
+                            )
+                        }
+                    }
                 }
-                brc
+
+                ByteReadChannel(bytes.copyOf(decoded))
             } else data
         }
     }
@@ -117,7 +132,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
         allowMethod(HttpMethod.Delete)
         allowCredentials = true
     }
-    install(corebankDecompressionPlugin)
+    install(bodyPlugin)
     install(IgnoreTrailingSlash)
     install(ContentNegotiation) {
         json(Json {
