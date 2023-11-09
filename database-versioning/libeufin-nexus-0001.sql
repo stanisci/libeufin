@@ -98,4 +98,9 @@ CREATE TABLE IF NOT EXISTS bounced_transactions
    ,initiated_outgoing_transaction_id INT8 NOT NULL UNIQUE REFERENCES initiated_outgoing_transactions(initiated_outgoing_transaction_id) ON DELETE CASCADE
   );
 
+-- Helps to detect the last known incoming transaction.
+-- According to this value, camt.05x date ranges should be adjusted.
+CREATE INDEX IF NOT EXISTS incoming_transaction_timestamp
+  ON incoming_transactions (execution_time); 
+
 COMMIT;
