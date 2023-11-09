@@ -73,29 +73,21 @@ private val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB
  * This plugin check for body lenght limit and inflates the requests that have "Content-Encoding: deflate"
  */
 val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
-    onCall {
-        val contentLenght = it.request.contentLength() 
-            ?: throw badRequest("Missing Content-Length header", TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED)
-    
-        if (contentLenght > MAX_BODY_LENGTH) {
-            throw badRequest("Body is suspiciously big")
-        }
-    }
     onCallReceive { call ->
         transformBody { data ->
+            val bytes = ByteArray(MAX_BODY_LENGTH.toInt())
+            var read = 0;
             if (call.request.headers[HttpHeaders.ContentEncoding] == "deflate") {
                 val inflater = Inflater()
-                val bytes = ByteArray(MAX_BODY_LENGTH.toInt())
-                var decoded = 0;
-
+                
                 while (!inflater.finished()) {
-                    if (decoded == bytes.size) {
+                    if (read == bytes.size) {
                         throw badRequest("Decompressed body is suspiciously big")
                     }
                     data.read {
                         inflater.setInput(it)
                         try {
-                            decoded += inflater.inflate(bytes, decoded, bytes.size - decoded)
+                            read += inflater.inflate(bytes, read, bytes.size - read)
                         } catch (e: DataFormatException) {
                             logger.error("Deflated request failed to inflate: ${e.message}")
                             throw badRequest(
@@ -105,9 +97,15 @@ val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
                         }
                     }
                 }
-
-                ByteReadChannel(bytes.copyOf(decoded))
-            } else data
+            } else {
+                while (!data.isClosedForRead) {
+                    if (read == bytes.size) {
+                        throw badRequest("Body is suspiciously big")
+                    }
+                    read  += data.readAvailable(bytes, read, bytes.size - read)
+                }
+            }
+            ByteReadChannel(bytes.copyOf(read))
         }
     }
 }
