@@ -319,10 +319,12 @@ class Database(dbConfig: String): java.io.Closeable {
         )
         stmt.executeQuery().use {
             if (!it.next()) return@runConn null
-            val timestamp = it.getLong("latest_execution_time").microsToJavaInstant()
-            if (timestamp == null)
+            val timestamp = it.getLong("latest_execution_time")
+            if (timestamp == 0L) return@runConn null
+            val asInstant = timestamp.microsToJavaInstant()
+            if (asInstant == null)
                 throw Exception("Could not convert latest_execution_time to Instant")
-            return@runConn timestamp
+            return@runConn asInstant
         }
     }
 
