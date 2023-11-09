@@ -29,10 +29,19 @@ import tech.libeufin.nexus.ebics.EbicsEarlyException
 import tech.libeufin.nexus.ebics.EbicsUploadException
 import tech.libeufin.nexus.ebics.submitPain001
 import tech.libeufin.util.parsePayto
+import tech.libeufin.util.toDbMicros
+import java.io.File
+import java.nio.file.Path
+import java.text.DateFormat
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.*
 import javax.xml.crypto.Data
 import kotlin.concurrent.fixedRateTimer
+import kotlin.io.path.createDirectories
+import kotlin.io.path.createParentDirectories
+import kotlin.math.log
 import kotlin.system.exitProcess
 
 /**
@@ -126,6 +135,31 @@ private suspend fun submitInitiatedPayment(
             stage = NexusSubmissionStage.ebics,
             cause = permanent
         )
+    }
+    // Submission succeeded, storing the pain.001 to file.
+    val logDir: String? = cfg.config.lookupString(
+        "[neuxs-submit]",
+        "SUBMISSIONS_LOG_DIRECTORY"
+    )
+    if (logDir != null) {
+        try { Path.of(logDir).createDirectories() }
+        catch (e: Exception) {
+            logger.error("Could not create log directory of path: $logDir")
+            exitProcess(1)
+        }
+        val now = Instant.now()
+        val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
+        val f = Path.of(
+            "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}",
+            "${now.toDbMicros()}_requestUid_${initiatedPayment.requestUid}_pain.001.xml"
+        ).toFile()
+        val completePath = Path.of(logDir, f.path)
+        // Very rare: same pain.001 should not be submitted twice in the same microsecond.
+        if (f.exists()) {
+            logger.error("pain.001 log file exists already at: $completePath")
+            exitProcess(1)
+        }
+        completePath.toFile().writeText(xml)
     }
 }
 
