@@ -212,7 +212,6 @@ suspend fun submitPain001(
     bankkeys: BankPublicKeysFile,
     httpClient: HttpClient
 ) {
-    logger.debug("Submitting pain.001: $pain001xml")
     val orderService: Ebics3Request.OrderDetails.Service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "MCT"
         scope = "CH"
