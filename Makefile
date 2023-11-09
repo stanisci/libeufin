@@ -55,7 +55,8 @@ install-nexus:
 	install contrib/libeufin-nexus.conf $(nexus_config_dir)/
 	install -D database-versioning/libeufin-nexus*.sql -t $(nexus_sql_dir)
 	install -D database-versioning/versioning.sql -t $(nexus_sql_dir)
-	./gradlew -q -Pprefix=$(abs_destdir)$(prefix) nexus:installToPrefix
+	./gradlew nexus:installShadowDist
+	cp -r nexus/build/install/nexus-shadow/* -d $(abs_destdir)$(prefix)
 
 .PHONY: assemble
 assemble:

@@ -3,24 +3,27 @@
 import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
-    id 'org.jetbrains.kotlin.jvm' version '1.9.20'
-    id 'idea'
-    id 'java-library'
-    id 'maven-publish'
+    id("org.jetbrains.kotlin.jvm") version "1.9.20"
+    id("idea")
+    id("java-library")
+    id("maven-publish")
 }
 
-group = 'tech.libeufin'
-version = '0.9.3'
+group = "tech.libeufin"
+version = "0.9.3"
 
-if (!JavaVersion.current().isJava11Compatible()){
+if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)){
     throw new GradleException(
-        "This build must be run with java 11 " +
+        "This build must be run with java 17 " +
         "or later (your version is java ${JavaVersion.current()})")
 }
 
 allprojects {
-    ext.set("kotlin_version", "1.9.20")
-    ext.set("ktor_version", "2.3.3")
+    ext {
+        set("kotlin_version", "1.9.20")
+        set("ktor_version", "2.3.6")
+        set("netty_version", "4.1.100.Final")
+    }
 
     repositories {
         mavenCentral()

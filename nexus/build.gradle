@@ -1,95 +1,64 @@
 plugins {
-    id 'kotlin'
-    id 'java'
-    id 'application'
-    id 'org.jetbrains.kotlin.jvm'
-    id "com.github.johnrengelman.shadow" version "8.1.1"
-    id 'org.jetbrains.kotlin.plugin.serialization' version "$kotlin_version"
-}
-
-sourceSets {
-    main.java.srcDirs = ['src/main/kotlin']
-}
-
-task installToPrefix(type: Copy) {
-    dependsOn(installShadowDist)
-    from("build/install/nexus-shadow") {
-        include("**/libeufin-nexus")
-        include("**/*.jar")
-    }
-    into "${project.findProperty('prefix') ?: '/tmp'}" // reads from -Pprefix=foo, defaults to /tmp
-}
-
-apply plugin: 'kotlin-kapt'
-
-java {
-     sourceCompatibility = JavaVersion.VERSION_11
-     targetCompatibility = JavaVersion.VERSION_11
+    id("kotlin")
+    id("application")
+    id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("org.jetbrains.kotlin.plugin.serialization") version "$kotlin_version"
 }
 
 version = rootProject.version
 
-compileKotlin {
-    kotlinOptions {
-        jvmTarget = '11'
-    }
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
-compileTestKotlin {
-    kotlinOptions {
-        jvmTarget = '11'
-    }
-}
+compileKotlin.kotlinOptions.jvmTarget = "17"
+compileTestKotlin.kotlinOptions.jvmTarget = "17"
+
+sourceSets.main.java.srcDirs = ["src/main/kotlin"]
 
 dependencies {
     // Core language libraries
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1-native-mt'
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
     // LibEuFin util library
-    implementation project(":util")
-
-    // Logging
-    implementation 'ch.qos.logback:logback-classic:1.4.5'
+    implementation(project(":util"))
 
     // XML parsing/binding and encryption
-    implementation "javax.xml.bind:jaxb-api:2.3.0"
-    implementation "org.glassfish.jaxb:jaxb-runtime:2.3.1"
-    implementation 'org.apache.santuario:xmlsec:2.2.2'
+    implementation("javax.xml.bind:jaxb-api:2.3.0")
+    implementation("org.glassfish.jaxb:jaxb-runtime:2.3.1")
+    implementation("org.apache.santuario:xmlsec:2.2.2")
 
     // Compression
-    implementation group: 'org.apache.commons', name: 'commons-compress', version: '1.21'
+    implementation("org.apache.commons:commons-compress:1.21")
 
     // Command line parsing
-    implementation "com.github.ajalt.clikt:clikt:4.2.1"
-    // Database
-    implementation 'org.postgresql:postgresql:42.6.0'
-    implementation 'com.zaxxer:HikariCP:5.0.1'
+    implementation("com.github.ajalt.clikt:clikt:4.2.1")
+    implementation("org.postgresql:postgresql:42.6.0")
+    implementation("com.zaxxer:HikariCP:5.0.1")
     // Ktor client library
-    implementation "io.ktor:ktor-client-apache:$ktor_version"
+    implementation("io.ktor:ktor-client-apache:$ktor_version")
 
     // Brings the call-logging library too.
-    implementation "io.ktor:ktor-server-test-host:$ktor_version"
+    implementation("io.ktor:ktor-server-test-host:$ktor_version")
 
     // PDF generation
-    implementation 'com.itextpdf:itext7-core:7.1.16'
+    implementation("com.itextpdf:itext7-core:7.1.16")
 
     // UNIX domain sockets support (used to connect to PostgreSQL)
-    implementation 'com.kohlschutter.junixsocket:junixsocket-core:2.6.2'
+    implementation("com.kohlschutter.junixsocket:junixsocket-core:2.8.1")
 
     // Serialization
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
-    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1"
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 
     // Unit testing
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
-    testImplementation 'io.ktor:ktor-client-mock:2.2.4'
-    testImplementation 'com.kohlschutter.junixsocket:junixsocket-core:2.6.2'
+    testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
+    testImplementation("io.ktor:ktor-client-mock:2.2.4")
 }
 
 test {
-    useJUnit()
     failFast = true
     testLogging.showStandardStreams = false
 }
@@ -98,12 +67,6 @@ application {
     mainClassName = "tech.libeufin.nexus.MainKt"
     applicationName = "libeufin-nexus"
     applicationDefaultJvmArgs = ['-Djava.net.preferIPv6Addresses=true']
-}
-
-jar {
-    manifest {
-        attributes "Main-Class": "tech.libeufin.nexus.MainKt"
-    }
 }
 
 run {

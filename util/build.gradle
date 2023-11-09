@@ -1,56 +1,37 @@
-plugins {
-    id 'java'
-    id 'application'
-    id 'org.jetbrains.kotlin.jvm'
-}
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-java {
-     sourceCompatibility = JavaVersion.VERSION_11
-     targetCompatibility = JavaVersion.VERSION_11
+plugins {
+    id("java")
+    id("kotlin")
 }
 
 version = rootProject.version
 
-compileKotlin {
-
-    kotlinOptions {
-        jvmTarget = "11"
-    }
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
-compileTestKotlin {
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-}
+compileKotlin.kotlinOptions.jvmTarget = "17"
+compileTestKotlin.kotlinOptions.jvmTarget = "17"
 
-sourceSets {
-    main.java.srcDirs = ['src/main/java', 'src/main/kotlin']
-}
-
-def netty_version = '4.1.68.Final'
+sourceSets.main.java.srcDirs = ["src/main/kotlin"]
 
 dependencies {
-    implementation 'ch.qos.logback:logback-classic:1.4.5'
-    implementation 'io.ktor:ktor-server-netty:1.6.1'
+    implementation("ch.qos.logback:logback-classic:1.4.5")
+    implementation("io.ktor:ktor-server-netty:$ktor_version")
     // XML Stuff
-    implementation "javax.xml.bind:jaxb-api:2.3.1"
-    implementation "org.glassfish.jaxb:jaxb-runtime:2.3.1"
-    implementation 'org.apache.santuario:xmlsec:2.2.2'
+    implementation("javax.xml.bind:jaxb-api:2.3.1")
+    implementation("org.glassfish.jaxb:jaxb-runtime:2.3.1")
+    implementation("org.apache.santuario:xmlsec:2.2.2")
     // Crypto
-    implementation group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.69'
+    implementation("org.bouncycastle:bcprov-jdk15on:1.69")
     // Unix domain socket to serve HTTP
-    implementation "io.netty:netty-all:$netty_version"
-    implementation "io.netty:netty-transport-native-epoll:$netty_version"
-    implementation "io.ktor:ktor-server-test-host:$ktor_version"
+    implementation("io.netty:netty-all:$netty_version")
+    implementation("io.netty:netty-transport-native-epoll:$netty_version")
+    implementation("io.ktor:ktor-server-test-host:$ktor_version")
     // Database helper
-    implementation group: 'org.postgresql', name: 'postgresql', version: '42.5.4'
+    implementation("org.postgresql:postgresql:42.6.0")
 
-    testImplementation group: 'junit', name: 'junit', version: '4.13.2'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit:1.5.21'
-    testImplementation 'org.jetbrains.kotlin:kotlin-test:1.5.21'
-}
-
-application {
-    mainClassName = "tech.libeufin.util.MainKt"
+    testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
 }
