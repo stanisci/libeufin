@@ -51,6 +51,50 @@ fun getEbics3DateRange(
 }
 
 /**
+ * Prepares the request for a camt.054 notification from the bank.
+ * Notifications inform the subscriber that some new events occurred
+ * on their account.  One main difference with reports/statements is
+ * that notifications - according to the ISO20022 documentation - do
+ * NOT contain any balance.
+ *
+ * @param startDate inclusive starting date for the returned notification(s).
+ * @param endDate inclusive ending date for the returned notification(s).  NOTE:
+ *        if startDate is NOT null and endDate IS null, endDate gets defaulted
+ *        to the current UTC time.
+ * @param isAppendix if true, the responded camt.054 will be an appendix of
+ *        another camt.053 document, not therefore strictly acting as a notification.
+ *        For example, camt.053 may omit wire transfer subjects and its related
+ *        camt.054 appendix would instead contain those.
+ *
+ * @return [Ebics3Request.OrderDetails.BTOrderParams]
+ */
+fun prepNotificationRequest(
+    startDate: Instant? = null,
+    endDate: Instant? = null,
+    isAppendix: Boolean
+): Ebics3Request.OrderDetails.BTOrderParams {
+    val service = Ebics3Request.OrderDetails.Service().apply {
+        serviceName = "REP"
+        scope = "CH"
+        container = Ebics3Request.OrderDetails.Service.Container().apply {
+            containerType = "ZIP"
+        }
+        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+            value = "camt.054"
+            version = "08"
+        }
+        if (!isAppendix)
+            serviceOption = "XDCI"
+    }
+    return Ebics3Request.OrderDetails.BTOrderParams().apply {
+        this.service = service
+        this.dateRange = if (startDate != null)
+            getEbics3DateRange(startDate, endDate ?: Instant.now())
+        else null
+    }
+}
+
+/**
  * Prepares the request for a pain.002 acknowledgement from the bank.
  *
  * @param startDate inclusive starting date for the returned acknowledgements.
@@ -72,7 +116,7 @@ fun prepAckRequest(
         }
         messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
             value = "pain.002"
-            version = "03"
+            version = "10"
         }
     }
     return Ebics3Request.OrderDetails.BTOrderParams().apply {
