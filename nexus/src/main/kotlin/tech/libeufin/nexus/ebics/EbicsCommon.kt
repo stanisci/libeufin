@@ -214,7 +214,7 @@ fun generateKeysPdf(
  * @param tolerateBankReturnCode Business return code that may be accepted instead of
  *                               EBICS_OK.  Typically, EBICS_NO_DOWNLOAD_DATA_AVAILABLE is tolerated
  *                               when asking for new incoming payments.
- * @return [EbicsResponseContent] or throws [EbicsEarlyException]
+ * @return [EbicsResponseContent] or throws [EbicsSideException]
  */
 suspend fun postEbics(
     client: HttpClient,
@@ -224,9 +224,9 @@ suspend fun postEbics(
     isEbics3: Boolean
 ): EbicsResponseContent {
     val respXml = client.postToBank(cfg.hostBaseUrl, xmlReq)
-        ?: throw EbicsEarlyException(
+        ?: throw EbicsSideException(
             "POSTing to ${cfg.hostBaseUrl} failed",
-            earlyEc = EbicsEarlyErrorCode.HTTP_POST_FAILED
+            sideEc = EbicsSideError.HTTP_POST_FAILED
         )
     return parseAndValidateEbicsResponse(
         bankKeys,
@@ -257,11 +257,12 @@ private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
  * @param isEbics3 true for EBICS 3, false otherwise.
  * @param tolerateEmptyResult true if the EC EBICS_NO_DOWNLOAD_DATA_AVAILABLE
  *        should be tolerated as the bank-technical error, false otherwise.
- * @return the bank response as an uncompressed [ByteArray], or null if one error took place.
- *         If the request tolerates an empty download content, then the empty
- *         array is returned.  If the request does not tolerate an empty response
- *         any non-EBICS_OK error as the EBICS- or bank-technical EC constitutes
- *         an error.
+ * @return the bank response as an uncompressed [ByteArray], or null if one
+ *         error took place.  Definition of error: any EBICS- or bank-technical
+ *         EC pairs where at least one is not EBICS_OK, or if tolerateEmptyResult
+ *         is true, the bank-technical EC EBICS_NO_DOWNLOAD_DATA_AVAILABLE is allowed
+ *         other than EBICS_OK.  If the request tolerates an empty download content,
+ *         then the empty array is returned.  The function may throw [EbicsAdditionalErrors].
  */
 suspend fun doEbicsDownload(
     client: HttpClient,
@@ -287,11 +288,11 @@ suspend fun doEbicsDownload(
         return null
     }
     val tId = initResp.transactionID
-    if (tId == null) {
-        tech.libeufin.nexus.logger.error("Transaction ID not found in the init response, cannot do transfer phase, failing.")
-        return null
-    }
-    logger.debug("EBICS download transaction got ID: $tId")
+        ?: throw EbicsSideException(
+            "EBICS download init phase did not return a transaction ID, cannot do the transfer phase.",
+            sideEc = EbicsSideError.EBICS_UPLOAD_TRANSACTION_ID_MISSING
+        )
+    logger.debug("EBICS download transaction passed the init phase, got ID: $tId")
     val howManySegments = initResp.numSegments
     if (howManySegments == null) {
         tech.libeufin.nexus.logger.error("Init response lacks the quantity of segments, failing.")
@@ -300,13 +301,15 @@ suspend fun doEbicsDownload(
     val ebicsChunks = mutableListOf<String>()
     // Getting the chunk(s)
     val firstDataChunk = initResp.orderDataEncChunk
-    if (firstDataChunk == null) {
-        tech.libeufin.nexus.logger.error("Could not get the first data chunk, although the EBICS_OK return code, failing.")
-        return null
-    }
+        ?: throw EbicsSideException(
+            "OrderData element not found, despite non empty payload, failing.",
+            sideEc = EbicsSideError.ORDER_DATA_ELEMENT_NOT_FOUND
+        )
     val dataEncryptionInfo = initResp.dataEncryptionInfo ?: run {
-        tech.libeufin.nexus.logger.error("EncryptionInfo element not found, despite non empty payload, failing.")
-        return null
+        throw EbicsSideException(
+            "EncryptionInfo element not found, despite non empty payload, failing.",
+            sideEc = EbicsSideError.ENCRYPTION_INFO_ELEMENT_NOT_FOUND
+        )
     }
     ebicsChunks.add(firstDataChunk)
     // proceed with the transfer phase.
@@ -317,9 +320,11 @@ suspend fun doEbicsDownload(
         else createEbics25DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
 
         val transResp = postEbics(client, cfg, bankKeys, transReq, isEbics3)
-        if (!areCodesOk(transResp)) { // FIXME: consider tolerating EBICS_NO_DOWNLOAD_DATA_AVAILABLE.
-            tech.libeufin.nexus.logger.error("EBICS transfer segment #$x failed.")
-            return null
+        if (!areCodesOk(transResp)) {
+            throw EbicsSideException(
+                "EBICS transfer segment #$x failed.",
+                sideEc = EbicsSideError.TRANSFER_SEGMENT_FAILED
+            )
         }
         val chunk = transResp.orderDataEncChunk
         if (chunk == null) {
@@ -334,38 +339,35 @@ suspend fun doEbicsDownload(
         dataEncryptionInfo,
         ebicsChunks
     )
-    // payload reconstructed, ack to the bank.
-    val ackXml = if (isEbics3)
+    // payload reconstructed, receipt to the bank.
+    val receiptXml = if (isEbics3)
         createEbics3DownloadReceiptPhase(cfg, clientKeys, tId)
     else createEbics25DownloadReceiptPhase(cfg, clientKeys, tId)
 
-    try {
-        postEbics(
-            client,
-            cfg,
-            bankKeys,
-            ackXml,
-            isEbics3
-        )
-    } catch (e: EbicsEarlyException) {
-        logger.error("Download receipt phase failed: " + e.message)
-        return null
-    }
-    // receipt phase OK, can now return the payload as an XML string.
-    return try {
-        payloadBytes
-    } catch (e: Exception) {
-        logger.error("Could not get the XML string out of payload bytes.")
-        null
-    }
+    // Sending the receipt to the bank.
+    postEbics(
+        client,
+        cfg,
+        bankKeys,
+        receiptXml,
+        isEbics3
+    )
+    // Receipt didn't throw, can now return the payload.
+    return payloadBytes
 }
 
-enum class EbicsEarlyErrorCode {
+/**
+ * These errors affect an EBICS transaction regardless
+ * of the standard error codes.
+ */
+enum class EbicsSideError {
     BANK_SIGNATURE_DIDNT_VERIFY,
     BANK_RESPONSE_IS_INVALID,
+    ENCRYPTION_INFO_ELEMENT_NOT_FOUND,
+    ORDER_DATA_ELEMENT_NOT_FOUND,
+    TRANSFER_SEGMENT_FAILED,
     /**
-     * That's the bank fault, as this value should be there even
-     * if there was an error.
+     * This might indicate that the EBICS transaction had errors.
      */
     EBICS_UPLOAD_TRANSACTION_ID_MISSING,
     /**
@@ -381,9 +383,9 @@ enum class EbicsEarlyErrorCode {
  * and successfully verify its signature.  They bring therefore NO
  * business meaning and may be retried.
  */
-class EbicsEarlyException(
+class EbicsSideException(
     msg: String,
-    val earlyEc: EbicsEarlyErrorCode
+    val sideEc: EbicsSideError
 ) : Exception(msg)
 
 /**
@@ -393,7 +395,7 @@ class EbicsEarlyException(
  * @param bankKeys provides the bank auth pub, to verify the signature.
  * @param responseStr raw XML response from the bank
  * @param withEbics3 true if the communication is EBICS 3, false otherwise.
- * @return [EbicsResponseContent] or throw [EbicsEarlyException]
+ * @return [EbicsResponseContent] or throw [EbicsSideException]
  */
 fun parseAndValidateEbicsResponse(
     bankKeys: BankPublicKeysFile,
@@ -403,9 +405,9 @@ fun parseAndValidateEbicsResponse(
     val responseDocument = try {
         XMLUtil.parseStringIntoDom(responseStr)
     } catch (e: Exception) {
-        throw EbicsEarlyException(
+        throw EbicsSideException(
             "Bank response apparently invalid",
-            earlyEc = EbicsEarlyErrorCode.BANK_RESPONSE_IS_INVALID
+            sideEc = EbicsSideError.BANK_RESPONSE_IS_INVALID
         )
     }
     if (!XMLUtil.verifyEbicsDocument(
@@ -413,9 +415,9 @@ fun parseAndValidateEbicsResponse(
             bankKeys.bank_authentication_public_key,
             withEbics3
     )) {
-        throw EbicsEarlyException(
+        throw EbicsSideException(
             "Bank signature did not verify",
-            earlyEc = EbicsEarlyErrorCode.BANK_SIGNATURE_DIDNT_VERIFY
+            sideEc = EbicsSideError.BANK_SIGNATURE_DIDNT_VERIFY
         )
     }
     if (withEbics3)
@@ -555,9 +557,9 @@ suspend fun doEbicsUpload(
     )
     // Init phase OK, proceeding with the transfer phase.
     val tId = initResp.transactionID
-        ?: throw EbicsEarlyException(
+        ?: throw EbicsSideException(
             "EBICS upload init phase did not return a transaction ID, cannot do the transfer phase.",
-            earlyEc = EbicsEarlyErrorCode.EBICS_UPLOAD_TRANSACTION_ID_MISSING
+            sideEc = EbicsSideError.EBICS_UPLOAD_TRANSACTION_ID_MISSING
         )
     val transferXml = createEbics3RequestForUploadTransferPhase(
         cfg,

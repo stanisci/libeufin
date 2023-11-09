@@ -1,5 +1,6 @@
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
+import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.ebics.*
@@ -21,6 +22,7 @@ private fun prep(): EbicsSetupConfig {
     return EbicsSetupConfig(handle)
 }
 
+@Ignore
 class Iso20022 {
 
     private val yesterday: Instant = Instant.now().minus(1, ChronoUnit.DAYS)
@@ -40,7 +42,7 @@ class Iso20022 {
      */
     @Test
     fun getStatement() {
-        val inflatedBytes = download(prepStatementRequest(yesterday))
+        val inflatedBytes = download(prepStatementRequest())
         inflatedBytes?.unzipForEach { name, content ->
             println(name)
             println(content)
@@ -153,6 +155,7 @@ class Iso20022 {
     }
 }
 
+@Ignore
 class PostFinance {
     // Tests sending client keys to the PostFinance test platform.
     @Test

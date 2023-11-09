@@ -193,7 +193,7 @@ fun createEbics3RequestForUploadTransferPhase(
 /**
  * Collects all the steps to prepare the submission of a pain.001
  * document to the bank, and finally send it.  Indirectly throws
- * [EbicsEarlyException] or [EbicsUploadException].  The first means
+ * [EbicsSideException] or [EbicsUploadException].  The first means
  * that the bank sent an invalid response or signature, the second
  * that a proper EBICS or business error took place.  The caller must
  * catch those exceptions and decide the retry policy.

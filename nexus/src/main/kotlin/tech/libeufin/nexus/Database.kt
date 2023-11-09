@@ -308,6 +308,25 @@ class Database(dbConfig: String): java.io.Closeable {
     }
 
     /**
+     * Get the last execution time of an incoming transaction.  This
+     * serves as the start date for new requests to the bank.
+     *
+     * @return [Instant] or null if no results were found
+     */
+    suspend fun incomingPaymentLastExecTime(): Instant? = runConn { conn ->
+        val stmt = conn.prepareStatement(
+            "SELECT MAX(execution_time) as latest_execution_time FROM incoming_transactions"
+        )
+        stmt.executeQuery().use {
+            if (!it.next()) return@runConn null
+            val timestamp = it.getLong("latest_execution_time").microsToJavaInstant()
+            if (timestamp == null)
+                throw Exception("Could not convert latest_execution_time to Instant")
+            return@runConn timestamp
+        }
+    }
+
+    /**
      * Creates a new incoming payment record in the database.
      *
      * @param paymentData information related to the incoming payment.

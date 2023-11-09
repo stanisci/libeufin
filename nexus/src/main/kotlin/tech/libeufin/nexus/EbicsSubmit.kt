@@ -24,24 +24,19 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
-import tech.libeufin.nexus.ebics.EbicsEarlyErrorCode
-import tech.libeufin.nexus.ebics.EbicsEarlyException
+import tech.libeufin.nexus.ebics.EbicsSideError
+import tech.libeufin.nexus.ebics.EbicsSideException
 import tech.libeufin.nexus.ebics.EbicsUploadException
 import tech.libeufin.nexus.ebics.submitPain001
 import tech.libeufin.util.parsePayto
 import tech.libeufin.util.toDbMicros
-import java.io.File
 import java.nio.file.Path
-import java.text.DateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.*
-import javax.xml.crypto.Data
 import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
-import kotlin.io.path.createParentDirectories
-import kotlin.math.log
 import kotlin.system.exitProcess
 
 /**
@@ -112,12 +107,12 @@ private suspend fun submitInitiatedPayment(
             bankPublicKeysFile,
             httpClient
         )
-    } catch (early: EbicsEarlyException) {
-        val errorStage = when (early.earlyEc) {
-            EbicsEarlyErrorCode.HTTP_POST_FAILED ->
+    } catch (early: EbicsSideException) {
+        val errorStage = when (early.sideEc) {
+            EbicsSideError.HTTP_POST_FAILED ->
                 NexusSubmissionStage.http // transient error
             /**
-             * Any other [EbicsEarlyErrorCode] should be treated as permanent,
+             * Any other [EbicsSideError] should be treated as permanent,
              * as they involve invalid signatures or an unexpected response
              * format.  For this reason, they get the "ebics" stage assigned
              * below, that will cause the payment as permanently failed and

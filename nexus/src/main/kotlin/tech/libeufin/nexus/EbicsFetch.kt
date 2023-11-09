@@ -4,12 +4,22 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.*
+import kotlinx.coroutines.runBlocking
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
+import tech.libeufin.nexus.ebics.EbicsSideError
+import tech.libeufin.nexus.ebics.EbicsSideException
+import tech.libeufin.nexus.ebics.createEbics3DownloadInitialization
+import tech.libeufin.nexus.ebics.doEbicsDownload
 import tech.libeufin.util.ebics_h005.Ebics3Request
 import tech.libeufin.util.getXmlDate
+import tech.libeufin.util.toDbMicros
+import java.nio.file.Path
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.concurrent.fixedRateTimer
+import kotlin.io.path.createDirectories
 import kotlin.system.exitProcess
 
 /**
@@ -194,8 +204,100 @@ fun prepReportRequest(
 }
 
 /**
- * Fetches the banking records via EBICS, calling the CAMT
- * parsing logic and finally updating the database accordingly.
+ * Downloads content via EBICS, according to the order params passed
+ * by the caller.
+ *
+ * @param cfg configuration handle.
+ * @param bankKeys bank public keys.
+ * @param clientKeys EBICS subscriber private keys.
+ * @param httpClient handle to the HTTP layer.
+ * @param req contains the instructions for the download, namely
+ *            which document is going to be downloaded from the bank.
+ * @return the [ByteArray] payload.  On an empty response, the array
+ *         length is zero.  It returns null, if the bank assigned an
+ *         error to the EBICS transaction.
+ */
+suspend fun downloadRecords(
+    cfg: EbicsSetupConfig,
+    bankKeys: BankPublicKeysFile,
+    clientKeys: ClientPrivateKeysFile,
+    httpClient: HttpClient,
+    req: Ebics3Request.OrderDetails.BTOrderParams
+): ByteArray? {
+    val initXml = createEbics3DownloadInitialization(
+        cfg,
+        bankKeys,
+        clientKeys,
+        orderParams = req
+    )
+    try {
+        return doEbicsDownload(
+            httpClient,
+            cfg,
+            clientKeys,
+            bankKeys,
+            initXml,
+            isEbics3 = true,
+            tolerateEmptyResult = true
+        )
+    } catch (e: EbicsSideException) {
+        logger.error(e.message)
+        /**
+         * Failing regardless of the error being at the client or at the
+         * bank side.  A client with an unreliable bank is not useful, hence
+         * failing here.
+         */
+        exitProcess(1)
+    }
+}
+
+/**
+ * Extracts the archive entries and logs them to the location
+ * optionally specified in the configuration.  It does nothing,
+ * if the configuration lacks the log directory.
+ *
+ * @param cfg config handle.
+ * @param content ZIP bytes from the server.
+ */
+fun maybeLogFile(cfg: EbicsSetupConfig, content: ByteArray) {
+    val maybeLogDir = cfg.config.lookupString(
+        "[neuxs-fetch]",
+        "STATEMENT_LOG_DIRECTORY"
+    ) ?: return
+    try { Path.of(maybeLogDir).createDirectories() }
+    catch (e: Exception) {
+        logger.error("Could not create log directory of path: $maybeLogDir")
+        exitProcess(1)
+    }
+    val now = Instant.now()
+    val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
+    content.unzipForEach { fileName, xmlContent ->
+        val f = Path.of(
+            "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}",
+            "${now.toDbMicros()}_$fileName"
+        ).toFile()
+        val completePath = Path.of(maybeLogDir, f.path)
+        // Rare: cannot download the same file twice in the same microsecond.
+        if (f.exists()) {
+            logger.error("Log file exists already at: $completePath")
+            exitProcess(1)
+        }
+        completePath.toFile().writeText(xmlContent)
+    }
+}
+
+/**
+ * Fetches the banking records via EBICS notifications requests.
+ *
+ * It first checks the last execution_time (db column) among the
+ * incoming transactions.  If that's not found, it asks the bank
+ * about 'unseen notifications' (= does not specify any date range
+ * in the request).  If that's found, it crafts a notification
+ * request with such execution_time as the start date and now as
+ * the end date.
+ *
+ * What this function does NOT do (now): linking documents between
+ * different camt.05x formats and/or pain.002 acknowledgements.
  *
  * @param cfg config handle.
  * @param db database connection
@@ -203,14 +305,28 @@ fun prepReportRequest(
  * @param clientKeys EBICS subscriber private keys.
  * @param bankKeys bank public keys.
  */
-fun fetchHistory(
+suspend fun fetchHistory(
     cfg: EbicsSetupConfig,
     db: Database,
     httpClient: HttpClient,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile
 ) {
-    throw NotImplementedError()
+    // maybe get last execution_date.
+    val lastExecutionTime = db.incomingPaymentLastExecTime()
+    // Asking unseen records.
+    val req = if (lastExecutionTime == null) prepNotificationRequest(isAppendix = false)
+    else prepNotificationRequest(lastExecutionTime, isAppendix = false)
+    val maybeContent = downloadRecords(
+        cfg,
+        bankKeys,
+        clientKeys,
+        httpClient,
+        req
+    ) ?: exitProcess(1) // client is wrong, failing.
+
+    if (maybeContent.isEmpty()) return
+    maybeLogFile(cfg, maybeContent)
 }
 
 class EbicsFetch: CliktCommand("Fetches bank records") {
@@ -252,7 +368,7 @@ class EbicsFetch: CliktCommand("Fetches bank records") {
         val httpClient = HttpClient()
         if (transient) {
             logger.info("Transient mode: fetching once and returning.")
-            fetchHistory(cfg, db, httpClient, clientKeys, bankKeys)
+            runBlocking { fetchHistory(cfg, db, httpClient, clientKeys, bankKeys) }
             return
         }
         val frequency: NexusFrequency = doOrFail {
@@ -263,14 +379,14 @@ class EbicsFetch: CliktCommand("Fetches bank records") {
         logger.debug("Running with a frequency of ${frequency.fromConfig}")
         if (frequency.inSeconds == 0) {
             logger.warn("Long-polling not implemented, running therefore in transient mode")
-            fetchHistory(cfg, db, httpClient, clientKeys, bankKeys)
+            runBlocking { fetchHistory(cfg, db, httpClient, clientKeys, bankKeys) }
             return
         }
         fixedRateTimer(
             name = "ebics submit period",
             period = (frequency.inSeconds * 1000).toLong(),
             action = {
-                fetchHistory(cfg, db, httpClient, clientKeys, bankKeys)
+                runBlocking { fetchHistory(cfg, db, httpClient, clientKeys, bankKeys) }
             }
         )
     }
