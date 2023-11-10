@@ -185,6 +185,8 @@ suspend fun HttpResponse.assertBadRequest(err: TalerErrorCode? = null): HttpResp
     = assertStatus(HttpStatusCode.BadRequest, err)
 suspend fun HttpResponse.assertForbidden(err: TalerErrorCode? = null): HttpResponse 
     = assertStatus(HttpStatusCode.Forbidden, err)
+suspend fun HttpResponse.assertNotImplemented(err: TalerErrorCode? = null): HttpResponse 
+    = assertStatus(HttpStatusCode.NotImplemented, err)
 
 
 suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {

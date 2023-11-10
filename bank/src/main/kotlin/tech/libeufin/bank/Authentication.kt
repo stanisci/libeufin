@@ -75,19 +75,6 @@ val PipelineContext<Unit, ApplicationCall>.isAdmin: Boolean get() = call.isAdmin
 val ApplicationCall.username: String get() = expectUriComponent("USERNAME")
 val ApplicationCall.isAdmin: Boolean get() = attributes.getOrNull(AUTH_IS_ADMIN) ?: false
 
-private fun Route.intercept(callback: Route.() -> Unit, interceptor: suspend PipelineContext<Unit, ApplicationCall>.() -> Unit): Route {
-    val subRoute = createChild(object : RouteSelector() {
-        override fun evaluate(context: RoutingResolveContext, segmentIndex: Int): RouteSelectorEvaluation =
-            RouteSelectorEvaluation.Constant
-    })
-    subRoute.intercept(ApplicationCallPipeline.Plugins) {
-        interceptor()
-        proceed()
-    }
-    
-    callback(subRoute)
-    return subRoute
-}
 /**
  * This function tries to authenticate the call according
  * to the scheme that is mentioned in the Authorization header.

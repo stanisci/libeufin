@@ -1505,6 +1505,9 @@ class CoreBankCashoutApiTest {
             val resp = json<ConversionResponse>()
             assertEquals(TalerAmount("FIAT:1.247"), resp.amount_credit)
         }
+        // Not implemented (yet)
+        client.get("/cashout-rate?amount_credit=FIAT:1")
+            .assertNotImplemented()
 
         // Too small
         client.get("/cashout-rate?amount_debit=KUDOS:0.08")
@@ -1539,6 +1542,9 @@ class CoreBankCashoutApiTest {
                 assertEquals(TalerAmount("KUDOS:$converted"), resp.amount_credit)
             }
         }
+        // Not implemented (yet)
+        client.get("/cashin-rate?amount_credit=KUDOS:1")
+            .assertNotImplemented()
 
         // No amount
         client.get("/cashin-rate")
@@ -1556,5 +1562,15 @@ class CoreBankCashoutApiTest {
             .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
         client.get("/cashin-rate?amount_credit=FIAT:1")
             .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
+    }
+
+    @Test
+    fun notImplemented() = bankSetup("test_restrict.conf") { _ ->
+        client.get("/cashin-rate")
+            .assertNotImplemented()
+        client.get("/cashout-rate")
+            .assertNotImplemented()
+        client.get("/accounts/customer/cashouts")
+            .assertNotImplemented()
     }
 }

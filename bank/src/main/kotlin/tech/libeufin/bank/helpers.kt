@@ -24,7 +24,12 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.util.*
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.RouteSelector
+import io.ktor.server.routing.RoutingResolveContext
+import io.ktor.server.routing.RouteSelectorEvaluation
 import io.ktor.util.valuesOf
+import io.ktor.util.pipeline.PipelineContext
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
@@ -157,3 +162,24 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? =
         CustomerCreationResult.SUCCESS -> true
     }
 }
+
+fun Route.intercept(callback: Route.() -> Unit, interceptor: suspend PipelineContext<Unit, ApplicationCall>.() -> Unit): Route {
+    val subRoute = createChild(object : RouteSelector() {
+        override fun evaluate(context: RoutingResolveContext, segmentIndex: Int): RouteSelectorEvaluation =
+            RouteSelectorEvaluation.Constant
+    })
+    subRoute.intercept(ApplicationCallPipeline.Plugins) {
+        interceptor()
+        proceed()
+    }
+    
+    callback(subRoute)
+    return subRoute
+}
+
+fun Route.conditional(implemented: Boolean, callback: Route.() -> Unit): Route =
+    intercept(callback) {
+        if (!implemented) {
+            throw libeufinError(HttpStatusCode.NotImplemented, "API not implemented", TalerErrorCode.END)
+        }
+    }
