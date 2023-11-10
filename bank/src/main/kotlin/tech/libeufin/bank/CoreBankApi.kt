@@ -580,7 +580,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
                     "Cannot confirm an aborted cashout",
                     TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
                 )
-                CashoutConfirmationResult.BAD_TAN_CODE -> throw forbidden(
+                CashoutConfirmationResult.BAD_TAN_CODE -> throw conflict(
                     "Incorrect TAN code",
                     TalerErrorCode.BANK_TAN_CHALLENGE_FAILED
                 )

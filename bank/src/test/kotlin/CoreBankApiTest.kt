@@ -1234,7 +1234,7 @@ class CoreBankCashoutApiTest {
             client.post("/accounts/customer/cashouts/$id/confirm") {
                 basicAuth("customer", "customer-password")
                 jsonBody { "tan" to "nice-try" } 
-            }.assertForbidden(TalerErrorCode.BANK_TAN_CHALLENGE_FAILED)
+            }.assertConflict(TalerErrorCode.BANK_TAN_CHALLENGE_FAILED)
 
             val code = smsCode("+99")
            
