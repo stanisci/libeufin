@@ -36,21 +36,21 @@ import java.time.temporal.*
 import java.util.*
 
 fun Parameters.expect(name: String): String 
-    = get(name) ?: throw badRequest("Missing '$name' parameter")
+    = get(name) ?: throw badRequest("Missing '$name' parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)
 fun Parameters.int(name: String): Int? 
-    = get(name)?.run { toIntOrNull() ?: throw badRequest("Param 'which' not a number") }
+    = get(name)?.run { toIntOrNull() ?: throw badRequest("Param 'which' not a number", TalerErrorCode.GENERIC_PARAMETER_MALFORMED) }
 fun Parameters.expectInt(name: String): Int 
-    = int(name) ?: throw badRequest("Missing '$name' number parameter")
+    = int(name) ?: throw badRequest("Missing '$name' number parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)
 fun Parameters.long(name: String): Long? 
-    = get(name)?.run { toLongOrNull() ?: throw badRequest("Param 'which' not a number") }
+    = get(name)?.run { toLongOrNull() ?: throw badRequest("Param 'which' not a number", TalerErrorCode.GENERIC_PARAMETER_MALFORMED) }
 fun Parameters.expectLong(name: String): Long 
-    = long(name) ?: throw badRequest("Missing '$name' number parameter")
+    = long(name) ?: throw badRequest("Missing '$name' number parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)
 fun Parameters.amount(name: String): TalerAmount? 
     = get(name)?.run { 
         try {
             TalerAmount(this)
         } catch (e: Exception) {
-            throw badRequest("Param '$name' not a taler amount")
+            throw badRequest("Param '$name' not a taler amount", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
         }
     }
 
@@ -114,8 +114,10 @@ data class RateParams(
             val debit = params.amount("amount_debit")
             val credit =  params.amount("amount_credit")
             if (debit == null && credit == null) {
-                throw badRequest("Either param 'amount_debit' or 'amount_credit' is required")
-            } 
+                throw badRequest("Either param 'amount_debit' or 'amount_credit' is required", TalerErrorCode.GENERIC_PARAMETER_MISSING)
+            } else if (debit != null && credit != null) {
+                throw badRequest("Cannot have both 'amount_debit' and 'amount_credit' params", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+            }
             return RateParams(debit, credit)
         }
     }

@@ -1506,11 +1506,20 @@ class CoreBankCashoutApiTest {
             assertEquals(TalerAmount("FIAT:1.247"), resp.amount_credit)
         }
 
-        // No amount
-        client.get("/cashout-rate").assertBadRequest()
         // Too small
         client.get("/cashout-rate?amount_debit=KUDOS:0.08")
             .assertConflict(TalerErrorCode.BANK_BAD_CONVERSION)
+        // No amount
+        client.get("/cashout-rate")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MISSING)
+        // Both amount
+        client.get("/cashout-rate?amount_debit=FIAT:1&amount_credit=KUDOS:1")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+        // Wrong format
+        client.get("/cashout-rate?amount_debit=1")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+        client.get("/cashout-rate?amount_credit=1")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
         // Wrong currency
         client.get("/cashout-rate?amount_debit=FIAT:1")
             .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
@@ -1532,7 +1541,16 @@ class CoreBankCashoutApiTest {
         }
 
         // No amount
-        client.get("/cashin-rate").assertBadRequest()
+        client.get("/cashin-rate")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MISSING)
+        // Both amount
+        client.get("/cashin-rate?amount_debit=KUDOS:1&amount_credit=FIAT:1")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+        // Wrong format
+        client.get("/cashin-rate?amount_debit=1")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+        client.get("/cashin-rate?amount_credit=1")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
         // Wrong currency
         client.get("/cashin-rate?amount_debit=KUDOS:1")
             .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)

@@ -55,7 +55,7 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Databas
 internal fun faultyTimestampByBank() = internalServerError("Bank took overflowing timestamp")
 internal fun faultyDurationByClient() = badRequest("Overflowing duration, please specify 'forever' instead.")
 
-class Database(dbConfig: String, internal val bankCurrency: String, internal val fiatCurrency: String?): java.io.Closeable {
+class Database(dbConfig: String, internal val bankCurrency: String, internal val externalCurrency: String?): java.io.Closeable {
     val dbPool: HikariDataSource
     internal val notifWatcher: NotificationWatcher
 
@@ -871,7 +871,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
             stmt.setNull(2, java.sql.Types.INTEGER)
         }
         stmt.oneOrNull {
-            fiatCurrency?.run {
+            externalCurrency?.run {
                 MonitorWithConversion(
                     cashinCount = it.getLong("cashin_count"),
                     cashinInternalVolume = TalerAmount(

@@ -82,6 +82,6 @@ class ConversionDAO(private val db: Database) {
         }
     }
 
-    suspend fun internalToFiat(amount: TalerAmount): TalerAmount? = conversion(amount, "sell", db.fiatCurrency!!)
-    suspend fun fiatToInternal(amount: TalerAmount): TalerAmount? = conversion(amount, "buy", db.bankCurrency)
+    suspend fun internalToExternal(amount: TalerAmount): TalerAmount? = conversion(amount, "sell", db.externalCurrency!!)
+    suspend fun externalToInternal(amount: TalerAmount): TalerAmount? = conversion(amount, "buy", db.bankCurrency)
 }

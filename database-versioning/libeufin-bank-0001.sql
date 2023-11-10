@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS customers
   );
 
 COMMENT ON COLUMN customers.cashout_payto
-  IS 'RFC 8905 payto URI to collect fiat payments that come from the conversion of regional currency cash-out operations.';
+  IS 'RFC 8905 payto URI to collect external payments that come from the conversion of internal currency cash-out operations.';
 COMMENT ON COLUMN customers.name
   IS 'Full name of the customer.';
 

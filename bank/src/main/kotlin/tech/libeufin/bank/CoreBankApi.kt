@@ -47,7 +47,7 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
             Config(
                 currency = ctx.currencySpecification,
                 have_cashout = ctx.haveCashout,
-                fiat_currency = ctx.fiatCurrency,
+                external_currency = ctx.externalCurrency,
                 conversion_info = ctx.conversionInfo,
                 allow_registrations = !ctx.restrictRegistration,
                 allow_deletions = !ctx.restrictAccountDeletion
@@ -476,7 +476,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
             val req = call.receive<CashoutRequest>()
 
             ctx.checkInternalCurrency(req.amount_debit)
-            ctx.checkFiatCurrency(req.amount_credit)
+            ctx.checkexternalCurrency(req.amount_credit)
 
             val tanChannel = req.tan_channel ?: TanChannel.sms
             val tanScript = when (tanChannel) {
@@ -639,10 +639,10 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         val params = RateParams.extract(call.request.queryParameters)
 
         params.debit?.let { ctx.checkInternalCurrency(it) }
-        params.credit?.let { ctx.checkFiatCurrency(it) }
+        params.credit?.let { ctx.checkexternalCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversion.internalToFiat(params.debit) ?:
+            val credit = db.conversion.internalToExternal(params.debit) ?:
                 throw conflict(
                     "${params.debit} is too small to be converted",
                     TalerErrorCode.BANK_BAD_CONVERSION
@@ -655,11 +655,11 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
     get("/cashin-rate") {
         val params = RateParams.extract(call.request.queryParameters)
 
-        params.debit?.let { ctx.checkFiatCurrency(it) }
+        params.debit?.let { ctx.checkexternalCurrency(it) }
         params.credit?.let { ctx.checkInternalCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversion.fiatToInternal(params.debit) ?:
+            val credit = db.conversion.externalToInternal(params.debit) ?:
                 throw conflict(
                     "${params.debit} is too small to be converted",
                     TalerErrorCode.BANK_BAD_CONVERSION

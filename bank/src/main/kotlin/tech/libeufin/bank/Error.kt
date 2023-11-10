@@ -91,9 +91,9 @@ fun BankConfig.checkInternalCurrency(amount: TalerAmount) {
     )
 }
 
-fun BankConfig.checkFiatCurrency(amount: TalerAmount) {
-    if (amount.currency != fiatCurrency) throw badRequest(
-        "Wrong currency: expected fiat currency $fiatCurrency got ${amount.currency}",
+fun BankConfig.checkexternalCurrency(amount: TalerAmount) {
+    if (amount.currency != externalCurrency) throw badRequest(
+        "Wrong currency: expected external currency $externalCurrency got ${amount.currency}",
         TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
 }

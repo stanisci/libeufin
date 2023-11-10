@@ -254,7 +254,7 @@ data class TalerWithdrawalOperation(
 data class Config(
     val currency: CurrencySpecification,
     val have_cashout: Boolean,
-    val fiat_currency: String?,
+    val external_currency: String?,
     val conversion_info: ConversionInfo?,
     val allow_registrations: Boolean,
     val allow_deletions: Boolean

@@ -303,7 +303,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
             logger.info("Can only serve libeufin-bank via TCP")
             exitProcess(1)
         }
-        val db = Database(dbCfg.dbConnStr, ctx.currency, ctx.fiatCurrency)
+        val db = Database(dbCfg.dbConnStr, ctx.currency, ctx.externalCurrency)
         runBlocking {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
                 exitProcess(1)
@@ -326,7 +326,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val cfg = talerConfig(configFile)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
-        val db = Database(dbCfg.dbConnStr, ctx.currency, ctx.fiatCurrency)
+        val db = Database(dbCfg.dbConnStr, ctx.currency, ctx.externalCurrency)
         runBlocking {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
