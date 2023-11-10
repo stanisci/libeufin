@@ -51,7 +51,7 @@ import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin-nexus", "libeufin-nexus")
-val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus.Main")
+val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 val myJson = Json {
     this.serializersModule = SerializersModule {
         contextual(RSAPrivateCrtKey::class) { RSAPrivateCrtKeySerializer }
@@ -207,6 +207,21 @@ data class BankPublicKeysFile(
     @Contextual val bank_authentication_public_key: RSAPublicKey,
     var accepted: Boolean
 )
+
+/**
+ * Runs the argument and fails the process, if that throws
+ * an exception.
+ *
+ * @param getLambda function that might return a value.
+ * @return the value from getLambda.
+ */
+fun <T>doOrFail(getLambda: () -> T): T =
+    try {
+        getLambda()
+    } catch (e: Exception) {
+        logger.error(e.message)
+        exitProcess(1)
+    }
 
 /**
  * Load the bank keys file from disk.

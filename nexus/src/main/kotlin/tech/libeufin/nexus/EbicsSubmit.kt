@@ -52,7 +52,7 @@ enum class NexusSubmissionStage {
      * They are both considered transient (non-200 responses
      * can be fixed by changing and reloading the configuration).
      */
-    http
+    reachability
 }
 
 /**
@@ -111,7 +111,7 @@ private suspend fun submitInitiatedPayment(
     } catch (early: EbicsSideException) {
         val errorStage = when (early.sideEc) {
             EbicsSideError.HTTP_POST_FAILED ->
-                NexusSubmissionStage.http // transient error
+                NexusSubmissionStage.reachability // transient error
             /**
              * Any other [EbicsSideError] should be treated as permanent,
              * as they involve invalid signatures or an unexpected response
@@ -142,11 +142,7 @@ private suspend fun submitInitiatedPayment(
         val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
         val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
         val dirs = Path.of(logDir, subDir)
-        try { dirs.createDirectories() }
-        catch (e: Exception) {
-            logger.error("Could not create log directory of path: $dirs")
-            exitProcess(1)
-        }
+        doOrFail { dirs.createDirectories() }
         val f = File(
             dirs.toString(),
             "${now.toDbMicros()}_requestUid_${initiatedPayment.requestUid}_pain.001.xml"
@@ -156,7 +152,7 @@ private suspend fun submitInitiatedPayment(
             logger.error("pain.001 log file exists already at: $f")
             exitProcess(1)
         }
-        f.writeText(xml)
+        doOrFail { f.writeText(xml) }
     }
 }
 
@@ -254,7 +250,7 @@ private fun submitBatch(
                      * cases, the initiated payment stored in the database may still be correct,
                      * therefore we set this error as transient, and it'll be retried.
                      */
-                    NexusSubmissionStage.http -> DatabaseSubmissionState.transient_failure
+                    NexusSubmissionStage.reachability -> DatabaseSubmissionState.transient_failure
                     /**
                      * As in the pain.001 case, there is a fundamental problem in the document
                      * being submitted, so it should not be retried.

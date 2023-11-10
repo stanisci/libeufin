@@ -272,11 +272,7 @@ fun maybeLogFile(cfg: EbicsSetupConfig, content: ByteArray) {
     val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
     // Creating the combined dir.
     val dirs = Path.of(maybeLogDir, subDir)
-    try { dirs.createDirectories() }
-    catch (e: Exception) {
-        logger.error("Could not create log directory of path: $dirs") // check how dirs stringifies.
-        exitProcess(1)
-    }
+    doOrFail { dirs.createDirectories() }
     // Write each ZIP entry in the combined dir.
     content.unzipForEach { fileName, xmlContent ->
         val f  = File(dirs.toString(), "${now.toDbMicros()}_$fileName")
@@ -285,7 +281,7 @@ fun maybeLogFile(cfg: EbicsSetupConfig, content: ByteArray) {
             logger.error("Log file exists already at: ${f.path}")
             exitProcess(1)
         }
-        f.writeText(xmlContent)
+        doOrFail { f.writeText(xmlContent) }
     }
 }
 

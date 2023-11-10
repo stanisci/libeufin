@@ -8,21 +8,6 @@ import tech.libeufin.util.resetDatabaseTables
 import kotlin.system.exitProcess
 
 /**
- * Runs the argument and fails the process, if that throws
- * an exception.
- *
- * @param getLambda function that might return a value.
- * @return the value from getLambda.
- */
-fun <T>doOrFail(getLambda: () -> T): T =
-    try {
-        getLambda()
-    } catch (e: Exception) {
-        logger.error(e.message)
-        exitProcess(1)
-    }
-
-/**
  * This subcommand tries to load the SQL files that define
  * the Nexus DB schema.  Admits the --reset option to delete
  * the data first.
