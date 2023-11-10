@@ -303,6 +303,10 @@ fun maybeLogFile(cfg: EbicsSetupConfig, content: ByteArray) {
  * @param httpClient HTTP client handle to reach the bank
  * @param clientKeys EBICS subscriber private keys.
  * @param bankKeys bank public keys.
+ * @param pinnedStart explicit start date for the downloaded documents.
+ *        This parameter makes the last incoming transaction timestamp in
+ *        the database IGNORED.  Only useful when running in --transient
+ *        mode to download past documents / debug.
  */
 private suspend fun fetchDocuments(
     cfg: EbicsSetupConfig,
@@ -310,16 +314,17 @@ private suspend fun fetchDocuments(
     httpClient: HttpClient,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
-    whichDocument: SupportedDocument = SupportedDocument.CAMT_054
+    whichDocument: SupportedDocument = SupportedDocument.CAMT_054,
+    pinnedStart: Instant? = null
 ) {
     // maybe get last execution_date.
-    val lastExecutionTime: Instant? = db.incomingPaymentLastExecTime()
+    val lastExecutionTime: Instant? = pinnedStart ?: db.incomingPaymentLastExecTime()
     logger.debug("Fetching documents from timestamp: $lastExecutionTime")
     val req = when(whichDocument) {
-        SupportedDocument.PAIN_002 -> prepAckRequest(startDate = lastExecutionTime)
-        SupportedDocument.CAMT_052 -> prepReportRequest(startDate = lastExecutionTime)
-        SupportedDocument.CAMT_053 -> prepStatementRequest(startDate = lastExecutionTime)
-        SupportedDocument.CAMT_054 -> prepNotificationRequest(startDate = lastExecutionTime, isAppendix = false)
+        SupportedDocument.PAIN_002 -> prepAckRequest(lastExecutionTime)
+        SupportedDocument.CAMT_052 -> prepReportRequest(lastExecutionTime)
+        SupportedDocument.CAMT_053 -> prepStatementRequest(lastExecutionTime)
+        SupportedDocument.CAMT_054 -> prepNotificationRequest(lastExecutionTime, isAppendix = true)
     }
     val maybeContent = downloadHelper(
         cfg,
@@ -332,6 +337,19 @@ private suspend fun fetchDocuments(
     if (maybeContent.isEmpty()) return
     maybeLogFile(cfg, maybeContent)
 }
+
+/**
+ * Turns a YYYY-MM-DD date string into Instant.  Used
+ * to parse the --pinned-start CLI options.  Fails the
+ * process, if the input is invalid.
+ *
+ * @param dashedDate pinned start command line option.
+ * @return [Instant]
+ */
+fun parseDashedDate(dashedDate: String): Instant =
+    doOrFail {
+        LocalDate.parse(dashedDate).atStartOfDay(ZoneId.of("UTC")).toInstant()
+    }
 
 enum class SupportedDocument {
     PAIN_002,
@@ -353,6 +371,20 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
     private val onlyStatements by option(
         help = "Downloads only camt.053 statements"
     ).flag(default = false)
+
+    private val onlyAck by option(
+        help = "Downloads only pain.002 acknowledgements"
+    ).flag(default = false)
+
+    private val onlyReports by option(
+        help = "Downloads only camt.052 intraday reports"
+    ).flag(default = false)
+
+    private val pinnedStart by option(
+        help = "constant YYYY-MM-DD date for the earliest document to download " +
+                "(only consumed in --transient mode).  The latest document is always" +
+                " until the current time."
+    )
 
     /**
      * This function collects the main steps of fetching banking records.
@@ -380,9 +412,19 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             exitProcess(1)
         }
         val httpClient = HttpClient()
-        val whichDoc = if (onlyStatements) SupportedDocument.CAMT_053 else SupportedDocument.CAMT_054
+
+        var whichDoc = SupportedDocument.CAMT_054
+        if (onlyAck) whichDoc = SupportedDocument.PAIN_002
+        if (onlyReports) whichDoc = SupportedDocument.CAMT_052
+        if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
+
         if (transient) {
             logger.info("Transient mode: fetching once and returning.")
+            val pinnedStartVal = pinnedStart
+            val pinnedStartArg = if (pinnedStartVal != null) {
+                logger.debug("Pinning start date to: $pinnedStartVal")
+                parseDashedDate(pinnedStartVal)
+            } else null
             runBlocking {
                 fetchDocuments(
                     cfg,
@@ -390,7 +432,8 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                     httpClient,
                     clientKeys,
                     bankKeys,
-                    whichDoc
+                    whichDoc,
+                    pinnedStartArg
                 )
             }
             return

@@ -134,7 +134,7 @@ private suspend fun submitInitiatedPayment(
     }
     // Submission succeeded, storing the pain.001 to file.
     val logDir: String? = cfg.config.lookupString(
-        "[neuxs-submit]",
+        "neuxs-submit",
         "SUBMISSIONS_LOG_DIRECTORY"
     )
     if (logDir != null) {

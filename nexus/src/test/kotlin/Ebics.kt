@@ -15,7 +15,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class Ebics {
-
     // Checks XML is valid and INI.
     @Test
     fun iniMessage() {
