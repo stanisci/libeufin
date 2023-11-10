@@ -1349,11 +1349,11 @@ CREATE OR REPLACE FUNCTION stats_get_frame(
   IN in_timeframe stat_timeframe_enum,
   IN which INTEGER,
   OUT cashin_count BIGINT,
-  OUT cashin_internal_volume taler_amount,
-  OUT cashin_external_volume taler_amount,
+  OUT cashin_regional_volume taler_amount,
+  OUT cashin_fiat_volume taler_amount,
   OUT cashout_count BIGINT,
-  OUT cashout_internal_volume taler_amount,
-  OUT cashout_external_volume taler_amount,
+  OUT cashout_regional_volume taler_amount,
+  OUT cashout_fiat_volume taler_amount,
   OUT taler_in_count BIGINT,
   OUT taler_in_volume taler_amount,
   OUT taler_out_count BIGINT,
@@ -1372,15 +1372,15 @@ BEGIN
   END;
   SELECT 
     s.cashin_count
-    ,(s.cashin_internal_volume).val
-    ,(s.cashin_internal_volume).frac
-    ,(s.cashin_external_volume).val
-    ,(s.cashin_external_volume).frac
+    ,(s.cashin_regional_volume).val
+    ,(s.cashin_regional_volume).frac
+    ,(s.cashin_fiat_volume).val
+    ,(s.cashin_fiat_volume).frac
     ,s.cashout_count
-    ,(s.cashout_internal_volume).val
-    ,(s.cashout_internal_volume).frac
-    ,(s.cashout_external_volume).val
-    ,(s.cashout_external_volume).frac
+    ,(s.cashout_regional_volume).val
+    ,(s.cashout_regional_volume).frac
+    ,(s.cashout_fiat_volume).val
+    ,(s.cashout_fiat_volume).frac
     ,s.taler_in_count
     ,(s.taler_in_volume).val
     ,(s.taler_in_volume).frac
@@ -1389,15 +1389,15 @@ BEGIN
     ,(s.taler_out_volume).frac
   INTO
     cashin_count
-    ,cashin_internal_volume.val
-    ,cashin_internal_volume.frac
-    ,cashin_external_volume.val
-    ,cashin_external_volume.frac
+    ,cashin_regional_volume.val
+    ,cashin_regional_volume.frac
+    ,cashin_fiat_volume.val
+    ,cashin_fiat_volume.frac
     ,cashout_count
-    ,cashout_internal_volume.val
-    ,cashout_internal_volume.frac
-    ,cashout_external_volume.val
-    ,cashout_external_volume.frac
+    ,cashout_regional_volume.val
+    ,cashout_regional_volume.frac
+    ,cashout_fiat_volume.val
+    ,cashout_fiat_volume.frac
     ,taler_in_count
     ,taler_in_volume.val
     ,taler_in_volume.frac
@@ -1412,15 +1412,15 @@ END $$;
 CREATE OR REPLACE PROCEDURE stats_register_payment(
   IN name TEXT,
   IN now TIMESTAMP,
-  IN internal_amount taler_amount,
-  IN external_amount taler_amount
+  IN regional_amount taler_amount,
+  IN fiat_amount taler_amount
 )
 LANGUAGE plpgsql AS $$
 DECLARE
   frame stat_timeframe_enum;
   query TEXT;
 BEGIN
-  IF external_amount IS NULL THEN
+  IF fiat_amount IS NULL THEN
     query = format('INSERT INTO bank_stats AS s '
       '(timeframe, start_time, %1$I_count, %1$I_volume) '
       'VALUES ($1, $2, 1, $3) '
@@ -1429,19 +1429,19 @@ BEGIN
       ', %1$I_volume=(SELECT amount_add(s.%1$I_volume, $3))', 
       name);
     FOREACH frame IN ARRAY enum_range(null::stat_timeframe_enum) LOOP
-      EXECUTE query USING frame, date_trunc(frame::text, now), internal_amount;
+      EXECUTE query USING frame, date_trunc(frame::text, now), regional_amount;
     END LOOP;
   ELSE
     query = format('INSERT INTO bank_stats AS s '
-      '(timeframe, start_time, %1$I_count, %1$I_internal_volume, %1$I_external_volume) '
+      '(timeframe, start_time, %1$I_count, %1$I_regional_volume, %1$I_fiat_volume) '
       'VALUES ($1, $2, 1, $3, $4)'
       'ON CONFLICT (timeframe, start_time) DO UPDATE '
       'SET %1$I_count=s.%1$I_count+1 '
-      ', %1$I_internal_volume=(SELECT amount_add(s.%1$I_internal_volume, $3))' 
-      ', %1$I_external_volume=(SELECT amount_add(s.%1$I_external_volume, $4))',
+      ', %1$I_regional_volume=(SELECT amount_add(s.%1$I_regional_volume, $3))' 
+      ', %1$I_fiat_volume=(SELECT amount_add(s.%1$I_fiat_volume, $4))',
       name);
     FOREACH frame IN ARRAY enum_range(null::stat_timeframe_enum) LOOP
-      EXECUTE query USING frame, date_trunc(frame::text, now), internal_amount, external_amount;
+      EXECUTE query USING frame, date_trunc(frame::text, now), regional_amount, fiat_amount;
     END LOOP;
   END IF;
 END $$;

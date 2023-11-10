@@ -234,7 +234,7 @@ class CashoutDAO(private val db: Database) {
                 amount_credit = TalerAmount(
                     value = it.getLong("amount_credit_val"),
                     frac = it.getInt("amount_credit_frac"),
-                    db.externalCurrency!!
+                    db.fiatCurrency!!
                 ),
                 subject = it.getString("subject"),
                 creation_time = TalerProtocolTimestamp(

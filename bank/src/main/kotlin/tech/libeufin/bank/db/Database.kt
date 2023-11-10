@@ -55,7 +55,7 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Databas
 internal fun faultyTimestampByBank() = internalServerError("Bank took overflowing timestamp")
 internal fun faultyDurationByClient() = badRequest("Overflowing duration, please specify 'forever' instead.")
 
-class Database(dbConfig: String, internal val bankCurrency: String, internal val externalCurrency: String?): java.io.Closeable {
+class Database(dbConfig: String, internal val bankCurrency: String, internal val fiatCurrency: String?): java.io.Closeable {
     val dbPool: HikariDataSource
     internal val notifWatcher: NotificationWatcher
 
@@ -847,15 +847,15 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         val stmt = conn.prepareStatement("""
             SELECT
                 cashin_count
-                ,(cashin_internal_volume).val as cashin_internal_volume_val
-                ,(cashin_internal_volume).frac as cashin_internal_volume_frac
-                ,(cashin_external_volume).val as cashin_external_volume_val
-                ,(cashin_external_volume).frac as cashin_external_volume_frac
+                ,(cashin_regional_volume).val as cashin_regional_volume_val
+                ,(cashin_regional_volume).frac as cashin_regional_volume_frac
+                ,(cashin_fiat_volume).val as cashin_fiat_volume_val
+                ,(cashin_fiat_volume).frac as cashin_fiat_volume_frac
                 ,cashout_count
-                ,(cashout_internal_volume).val as cashout_internal_volume_val
-                ,(cashout_internal_volume).frac as cashout_internal_volume_frac
-                ,(cashout_external_volume).val as cashout_external_volume_val
-                ,(cashout_external_volume).frac as cashout_external_volume_frac
+                ,(cashout_regional_volume).val as cashout_regional_volume_val
+                ,(cashout_regional_volume).frac as cashout_regional_volume_frac
+                ,(cashout_fiat_volume).val as cashout_fiat_volume_val
+                ,(cashout_fiat_volume).frac as cashout_fiat_volume_frac
                 ,taler_in_count
                 ,(taler_in_volume).val as taler_in_volume_val
                 ,(taler_in_volume).frac as taler_in_volume_frac
@@ -871,28 +871,28 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
             stmt.setNull(2, java.sql.Types.INTEGER)
         }
         stmt.oneOrNull {
-            externalCurrency?.run {
+            fiatCurrency?.run {
                 MonitorWithConversion(
                     cashinCount = it.getLong("cashin_count"),
-                    cashinInternalVolume = TalerAmount(
-                        value = it.getLong("cashin_internal_volume_val"),
-                        frac = it.getInt("cashin_internal_volume_frac"),
+                    cashinRegionalVolume = TalerAmount(
+                        value = it.getLong("cashin_regional_volume_val"),
+                        frac = it.getInt("cashin_regional_volume_frac"),
                         currency = bankCurrency
                     ),
-                    cashinExternalVolume = TalerAmount(
-                        value = it.getLong("cashin_external_volume_val"),
-                        frac = it.getInt("cashin_external_volume_frac"),
+                    cashinFiatVolume = TalerAmount(
+                        value = it.getLong("cashin_fiat_volume_val"),
+                        frac = it.getInt("cashin_fiat_volume_frac"),
                         currency = this
                     ),
                     cashoutCount = it.getLong("cashout_count"),
-                    cashoutInternalVolume = TalerAmount(
-                        value = it.getLong("cashout_internal_volume_val"),
-                        frac = it.getInt("cashout_internal_volume_frac"),
+                    cashoutRegionalVolume = TalerAmount(
+                        value = it.getLong("cashout_regional_volume_val"),
+                        frac = it.getInt("cashout_regional_volume_frac"),
                         currency = bankCurrency
                     ),
-                    cashoutExternalVolume = TalerAmount(
-                        value = it.getLong("cashout_external_volume_val"),
-                        frac = it.getInt("cashout_external_volume_frac"),
+                    cashoutFiatVolume = TalerAmount(
+                        value = it.getLong("cashout_fiat_volume_val"),
+                        frac = it.getInt("cashout_fiat_volume_frac"),
                         currency = this
                     ),
                     talerInCount = it.getLong("taler_in_count"),

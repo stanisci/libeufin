@@ -47,7 +47,7 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
             Config(
                 currency = ctx.currencySpecification,
                 have_cashout = ctx.haveCashout,
-                external_currency = ctx.externalCurrency,
+                fiat_currency = ctx.fiatCurrency,
                 conversion_info = ctx.conversionInfo,
                 allow_registrations = !ctx.restrictRegistration,
                 allow_deletions = !ctx.restrictAccountDeletion
@@ -218,7 +218,7 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readwrite, allowAdmin = true) {
         patch("/accounts/{USERNAME}") {
             val req = call.receive<AccountReconfiguration>()
-            req.debit_threshold?.run { ctx.checkInternalCurrency(this) }
+            req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
 
             if (req.is_taler_exchange != null && username == "admin")
                 throw forbidden("admin account cannot be an exchange")
@@ -348,7 +348,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
             val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
             val amount =
                     tx.payto_uri.amount ?: tx.amount ?: throw badRequest("Wire transfer lacks amount")
-            ctx.checkInternalCurrency(amount)
+            ctx.checkRegionalCurrency(amount)
             val result = db.bankTransaction(
                 creditAccountPayto = tx.payto_uri,
                 debitAccountUsername = username,
@@ -383,7 +383,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/withdrawals") {
             val req = call.receive<BankAccountCreateWithdrawalRequest>()
-            ctx.checkInternalCurrency(req.amount)
+            ctx.checkRegionalCurrency(req.amount)
             val opId = UUID.randomUUID()
             when (db.withdrawal.create(username, opId, req.amount)) {
                 WithdrawalCreationResult.ACCOUNT_NOT_FOUND -> throw notFound(
@@ -475,8 +475,8 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
         post("/accounts/{USERNAME}/cashouts") {
             val req = call.receive<CashoutRequest>()
 
-            ctx.checkInternalCurrency(req.amount_debit)
-            ctx.checkexternalCurrency(req.amount_credit)
+            ctx.checkRegionalCurrency(req.amount_debit)
+            ctx.checkFiatCurrency(req.amount_credit)
 
             val tanChannel = req.tan_channel ?: TanChannel.sms
             val tanScript = when (tanChannel) {
@@ -638,11 +638,11 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
     get("/cashout-rate") {
         val params = RateParams.extract(call.request.queryParameters)
 
-        params.debit?.let { ctx.checkInternalCurrency(it) }
-        params.credit?.let { ctx.checkexternalCurrency(it) }
+        params.debit?.let { ctx.checkRegionalCurrency(it) }
+        params.credit?.let { ctx.checkFiatCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversion.internalToExternal(params.debit) ?:
+            val credit = db.conversion.regionalToFiat(params.debit) ?:
                 throw conflict(
                     "${params.debit} is too small to be converted",
                     TalerErrorCode.BANK_BAD_CONVERSION
@@ -655,11 +655,11 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) {
     get("/cashin-rate") {
         val params = RateParams.extract(call.request.queryParameters)
 
-        params.debit?.let { ctx.checkexternalCurrency(it) }
-        params.credit?.let { ctx.checkInternalCurrency(it) }
+        params.debit?.let { ctx.checkFiatCurrency(it) }
+        params.credit?.let { ctx.checkRegionalCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversion.externalToInternal(params.debit) ?:
+            val credit = db.conversion.fiatToRegional(params.debit) ?:
                 throw conflict(
                     "${params.debit} is too small to be converted",
                     TalerErrorCode.BANK_BAD_CONVERSION

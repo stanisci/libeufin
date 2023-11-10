@@ -84,16 +84,16 @@ fun badRequest(
 ): LibeufinBankException = libeufinError(HttpStatusCode.BadRequest, hint, error)
 
 
-fun BankConfig.checkInternalCurrency(amount: TalerAmount) {
+fun BankConfig.checkRegionalCurrency(amount: TalerAmount) {
     if (amount.currency != currency) throw badRequest(
-        "Wrong currency: expected internal currency $currency got ${amount.currency}",
+        "Wrong currency: expected regional currency $currency got ${amount.currency}",
         TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
 }
 
-fun BankConfig.checkexternalCurrency(amount: TalerAmount) {
-    if (amount.currency != externalCurrency) throw badRequest(
-        "Wrong currency: expected external currency $externalCurrency got ${amount.currency}",
+fun BankConfig.checkFiatCurrency(amount: TalerAmount) {
+    if (amount.currency != fiatCurrency) throw badRequest(
+        "Wrong currency: expected fiat currency $fiatCurrency got ${amount.currency}",
         TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
 }

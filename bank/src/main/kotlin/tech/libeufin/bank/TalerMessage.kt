@@ -95,7 +95,7 @@ data class RegisterAccountRequest(
     val is_public: Boolean = false,
     val is_taler_exchange: Boolean = false,
     val challenge_contact_data: ChallengeContactData? = null,
-    // External bank account where to send cashout amounts.
+    // Fiat bank account where to send cashout amounts.
     val cashout_payto_uri: IbanPayTo? = null,
     // Bank account internal to Libeufin-Bank.
     val internal_payto_uri: IbanPayTo? = null
@@ -145,11 +145,11 @@ data class MonitorNoConversion(
 @SerialName("with-conversions")
 data class MonitorWithConversion(
     val cashinCount: Long,
-    val cashinInternalVolume: TalerAmount,
-    val cashinExternalVolume: TalerAmount,
+    val cashinRegionalVolume: TalerAmount,
+    val cashinFiatVolume: TalerAmount,
     val cashoutCount: Long,
-    val cashoutInternalVolume: TalerAmount,
-    val cashoutExternalVolume: TalerAmount,
+    val cashoutRegionalVolume: TalerAmount,
+    val cashoutFiatVolume: TalerAmount,
     override val talerInCount: Long,
     override val talerInVolume: TalerAmount,
     override val talerOutCount: Long,
@@ -254,7 +254,7 @@ data class TalerWithdrawalOperation(
 data class Config(
     val currency: CurrencySpecification,
     val have_cashout: Boolean,
-    val external_currency: String?,
+    val fiat_currency: String?,
     val conversion_info: ConversionInfo?,
     val allow_registrations: Boolean,
     val allow_deletions: Boolean

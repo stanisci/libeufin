@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS customers
   );
 
 COMMENT ON COLUMN customers.cashout_payto
-  IS 'RFC 8905 payto URI to collect external payments that come from the conversion of internal currency cash-out operations.';
+  IS 'RFC 8905 payto URI to collect fiat payments that come from the conversion of regional currency cash-out operations.';
 COMMENT ON COLUMN customers.name
   IS 'Full name of the customer.';
 
@@ -253,32 +253,32 @@ COMMENT ON COLUMN taler_withdrawal_operations.confirmation_done
 CREATE TABLE IF NOT EXISTS bank_stats (
   timeframe stat_timeframe_enum NOT NULL
   ,start_time timestamp NOT NULL
-  ,cashin_count BIGINT NOT NULL DEFAULT 0
-  ,cashin_internal_volume taler_amount NOT NULL DEFAULT (0, 0)
-  ,cashin_external_volume taler_amount NOT NULL DEFAULT (0, 0)
-  ,cashout_count BIGINT NOT NULL DEFAULT 0
-  ,cashout_internal_volume taler_amount NOT NULL DEFAULT (0, 0)
-  ,cashout_external_volume taler_amount NOT NULL DEFAULT (0, 0)
   ,taler_in_count BIGINT NOT NULL DEFAULT 0
   ,taler_in_volume taler_amount NOT NULL DEFAULT (0, 0)
   ,taler_out_count BIGINT NOT NULL DEFAULT 0
   ,taler_out_volume taler_amount NOT NULL DEFAULT (0, 0)
+  ,cashin_count BIGINT NOT NULL DEFAULT 0
+  ,cashin_regional_volume taler_amount NOT NULL DEFAULT (0, 0)
+  ,cashin_fiat_volume taler_amount NOT NULL DEFAULT (0, 0)
+  ,cashout_count BIGINT NOT NULL DEFAULT 0
+  ,cashout_regional_volume taler_amount NOT NULL DEFAULT (0, 0)
+  ,cashout_fiat_volume taler_amount NOT NULL DEFAULT (0, 0)
   ,PRIMARY KEY (start_time, timeframe) 
 );
 -- TODO garbage collection
 COMMENT ON TABLE bank_stats IS 'Stores statistics about the bank usage.';
 COMMENT ON COLUMN bank_stats.timeframe IS 'particular timeframe that this row accounts for';
 COMMENT ON COLUMN bank_stats.start_time IS 'timestamp of the start of the timeframe that this row accounts for, truncated according to the precision of the timeframe';
-COMMENT ON COLUMN bank_stats.cashin_count IS 'how many cashin operations took place in the timeframe';
-COMMENT ON COLUMN bank_stats.cashin_internal_volume IS 'how much internal currency was cashed in in the timeframe';
-COMMENT ON COLUMN bank_stats.cashin_external_volume IS 'how much external currency was cashed in in the timeframe';
-COMMENT ON COLUMN bank_stats.cashout_count IS 'how many cashout operations took place in the timeframe';
-COMMENT ON COLUMN bank_stats.cashout_internal_volume IS 'how much internal currency was payed by the bank to customers in the timeframe';
-COMMENT ON COLUMN bank_stats.cashout_external_volume IS 'how much external currency was payed by the bank to customers in the timeframe';
 COMMENT ON COLUMN bank_stats.taler_out_count IS 'how many internal payments were made by a Taler exchange';
 COMMENT ON COLUMN bank_stats.taler_out_volume IS 'how much internal currency was paid by a Taler exchange';
 COMMENT ON COLUMN bank_stats.taler_in_count IS 'how many internal payments were made to a Taler exchange';
 COMMENT ON COLUMN bank_stats.taler_in_volume IS 'how much internal currency was paid to a Taler exchange';
+COMMENT ON COLUMN bank_stats.cashin_count IS 'how many cashin operations took place in the timeframe';
+COMMENT ON COLUMN bank_stats.cashin_regional_volume IS 'how much regional currency was cashed in in the timeframe';
+COMMENT ON COLUMN bank_stats.cashin_fiat_volume IS 'how much fiat currency was cashed in in the timeframe';
+COMMENT ON COLUMN bank_stats.cashout_count IS 'how many cashout operations took place in the timeframe';
+COMMENT ON COLUMN bank_stats.cashout_regional_volume IS 'how much regional currency was payed by the bank to customers in the timeframe';
+COMMENT ON COLUMN bank_stats.cashout_fiat_volume IS 'how much fiat currency was payed by the bank to customers in the timeframe';
 
 -- end of: Statistics
 

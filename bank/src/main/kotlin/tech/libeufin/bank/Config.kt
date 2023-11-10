@@ -36,7 +36,7 @@ private val BANK_CONFIG_SOURCE = ConfigSource("libeufin-bank", "libeufin-bank")
  */
 data class BankConfig(
     /**
-     * Main, internal currency of the bank.
+     * Main, regional currency of the bank.
      */
     val currency: String,
     val currencySpecification: CurrencySpecification,
@@ -78,7 +78,7 @@ data class BankConfig(
      */
     val spaCaptchaURL: String?,
     val haveCashout: Boolean,
-    val externalCurrency: String?,
+    val fiatCurrency: String?,
     val conversionInfo: ConversionInfo?,
     val tanSms: String?,
     val tanEmail: String?,
@@ -128,12 +128,12 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
     val currencySpecification = sections.find {
         it.startsWith("CURRENCY-") && requireBoolean(it, "enabled") && requireString(it, "code") == currency
     }?.let { loadCurrencySpecification(it) } ?: throw TalerConfigError("missing currency specification for $currency")
-    var externalCurrency: String? = null;
+    var fiatCurrency: String? = null;
     var conversionInfo: ConversionInfo? = null;
     val haveCashout = lookupBoolean("libeufin-bank", "have_cashout") ?: false;
     if (haveCashout) {
-        externalCurrency = requireString("libeufin-bank", "external_currency");
-        conversionInfo = loadConversionInfo(currency, externalCurrency)
+        fiatCurrency = requireString("libeufin-bank", "fiat_currency");
+        conversionInfo = loadConversionInfo(currency, fiatCurrency)
     }
     BankConfig(
         currency = currency,
@@ -147,23 +147,23 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
         restrictAccountDeletion = lookupBoolean("libeufin-bank", "restrict_account_deletion") ?: true,
         currencySpecification = currencySpecification,
         haveCashout = haveCashout,
-        externalCurrency = externalCurrency,
+        fiatCurrency = fiatCurrency,
         conversionInfo = conversionInfo,
         tanSms = lookupPath("libeufin-bank", "tan_sms"),
         tanEmail = lookupPath("libeufin-bank", "tan_email"),
     )
 }
 
-private fun TalerConfig.loadConversionInfo(currency: String, externalCurrency: String): ConversionInfo = catchError {
+private fun TalerConfig.loadConversionInfo(currency: String, fiatCurrency: String): ConversionInfo = catchError {
     ConversionInfo(
         buy_ratio = requireDecimalNumber("libeufin-bank-conversion", "buy_ratio"),
         buy_fee = requireDecimalNumber("libeufin-bank-conversion", "buy_fee"),
         buy_tiny_amount = amount("libeufin-bank-conversion", "buy_tiny_amount", currency) ?: TalerAmount(0, 1, currency),
         buy_rounding_mode = RoundingMode("libeufin-bank-conversion", "buy_rounding_mode") ?: RoundingMode.zero,
-        buy_min_amount = amount("libeufin-bank-conversion", "buy_min_amount", externalCurrency) ?: TalerAmount(0, 0, externalCurrency),
+        buy_min_amount = amount("libeufin-bank-conversion", "buy_min_amount", fiatCurrency) ?: TalerAmount(0, 0, fiatCurrency),
         sell_ratio = requireDecimalNumber("libeufin-bank-conversion", "sell_ratio"),
         sell_fee = requireDecimalNumber("libeufin-bank-conversion", "sell_fee"),
-        sell_tiny_amount = amount("libeufin-bank-conversion", "sell_tiny_amount", externalCurrency) ?: TalerAmount(0, 1, externalCurrency),
+        sell_tiny_amount = amount("libeufin-bank-conversion", "sell_tiny_amount", fiatCurrency) ?: TalerAmount(0, 1, fiatCurrency),
         sell_rounding_mode = RoundingMode("libeufin-bank-conversion", "sell_rounding_mode") ?: RoundingMode.zero,
         sell_min_amount = amount("libeufin-bank-conversion", "sell_min_amount", currency) ?: TalerAmount(0, 0, currency),
     )

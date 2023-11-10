@@ -45,7 +45,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
             val req = call.receive<TransferRequest>()
-            ctx.checkInternalCurrency(req.amount)
+            ctx.checkRegionalCurrency(req.amount)
             val dbRes = db.exchange.transfer(
                 req = req,
                 username = username,
@@ -117,7 +117,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
     authAdmin(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming") {
             val req = call.receive<AddIncomingRequest>()
-            ctx.checkInternalCurrency(req.amount)
+            ctx.checkRegionalCurrency(req.amount)
             val timestamp = Instant.now()
             val dbRes = db.exchange.addIncoming(
                 req = req,

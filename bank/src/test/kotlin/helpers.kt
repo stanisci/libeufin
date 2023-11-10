@@ -25,7 +25,7 @@ fun setup(
     resetDatabaseTables(dbCfg, "libeufin-bank")
     initializeDatabaseTables(dbCfg, "libeufin-bank")
     val ctx = config.loadBankConfig()
-    Database(dbCfg.dbConnStr, ctx.currency, ctx.externalCurrency).use {
+    Database(dbCfg.dbConnStr, ctx.currency, ctx.fiatCurrency).use {
         runBlocking {
             ctx.conversionInfo?.run { it.conversion.updateConfig(this) }
             lambda(it, ctx)

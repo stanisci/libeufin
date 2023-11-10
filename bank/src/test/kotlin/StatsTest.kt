@@ -65,18 +65,18 @@ class StatsTest {
         suspend fun monitor(
             dbCount: (MonitorWithConversion) -> Long, 
             count: Long, 
-            internalVolume: (MonitorWithConversion) -> TalerAmount, 
-            internalAmount: String,
-            externalVolume: ((MonitorWithConversion) -> TalerAmount)? = null, 
-            externalAmount: String? = null
+            regionalVolume: (MonitorWithConversion) -> TalerAmount, 
+            regionalAmount: String,
+            fiatVolume: ((MonitorWithConversion) -> TalerAmount)? = null, 
+            fiatAmount: String? = null
         ) {
             Timeframe.entries.forEach { timestamp -> 
                 client.get("/monitor?timestamp=${timestamp.name}") { basicAuth("admin", "admin-password") }.assertOk().run {
                     println(bodyAsText())
                     val resp = json<MonitorResponse>() as MonitorWithConversion
                     assertEquals(count, dbCount(resp))
-                    assertEquals(TalerAmount(internalAmount), internalVolume(resp))
-                    externalVolume?.run { assertEquals(TalerAmount(externalAmount!!), this(resp)) }
+                    assertEquals(TalerAmount(regionalAmount), regionalVolume(resp))
+                    fiatVolume?.run { assertEquals(TalerAmount(fiatAmount!!), this(resp)) }
                 }
             }
         }
@@ -85,10 +85,10 @@ class StatsTest {
             monitor({it.talerInCount}, count, {it.talerInVolume}, amount)
         suspend fun monitorTalerOut(count: Long, amount: String) = 
             monitor({it.talerOutCount}, count, {it.talerOutVolume}, amount)
-        suspend fun monitorCashin(count: Long, internalAmount: String, externalAmount: String) =
-            monitor({it.cashinCount}, count, {it.cashinInternalVolume}, internalAmount, {it.cashinExternalVolume}, externalAmount)
-        suspend fun monitorCashout(count: Long, internalAmount: String, externalAmount: String) =
-            monitor({it.cashoutCount}, count, {it.cashoutInternalVolume}, internalAmount, {it.cashoutExternalVolume}, externalAmount)
+        suspend fun monitorCashin(count: Long, regionalAmount: String, fiatAmount: String) =
+            monitor({it.cashinCount}, count, {it.cashinRegionalVolume}, regionalAmount, {it.cashinFiatVolume}, fiatAmount)
+        suspend fun monitorCashout(count: Long, regionalAmount: String, fiatAmount: String) =
+            monitor({it.cashoutCount}, count, {it.cashoutRegionalVolume}, regionalAmount, {it.cashoutFiatVolume}, fiatAmount)
 
         monitorTalerIn(0, "KUDOS:0")
         monitorTalerOut(0, "KUDOS:0")
@@ -165,14 +165,14 @@ class StatsTest {
                 }
                 stmt.oneOrNull {
                     val talerOutCount = it.getLong("taler_out_count")
-                    val talerOutInternalVolume = TalerAmount(
+                    val talerOutVolume = TalerAmount(
                         value = it.getLong("taler_out_volume_val"),
                         frac = it.getInt("taler_out_volume_frac"),
                         currency = "KUDOS"
                     )
-                    println("$timeframe $talerOutCount $talerOutInternalVolume")
+                    println("$timeframe $talerOutCount $talerOutVolume")
                     assertEquals(count, talerOutCount)
-                    assertEquals(amount, talerOutInternalVolume)
+                    assertEquals(amount, talerOutVolume)
                 }!!
             }
 
