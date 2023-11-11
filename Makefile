@@ -48,7 +48,7 @@ install-bank:
 	./gradlew bank:installShadowDist
 	install -d $(abs_destdir)$(prefix)
 	cp -r bank/build/install/bank-shadow/* -d $(abs_destdir)$(prefix)
-	cp -r contrib/libeufin-tan-*.sh -d $(abs_destdir)$(prefix)
+	cp -r contrib/libeufin-tan-*.sh -d $(abs_destdir)$(prefix)/bin
 
 install-nexus:
 	install -d $(nexus_config_dir)
