@@ -59,8 +59,8 @@ data class EbicsProtocolError(
 ) : Exception(reason)
 
 data class EbicsDateRange(
-    val start: ZonedDateTime,
-    val end: ZonedDateTime
+    val start: Instant,
+    val end: Instant
 )
 
 sealed class EbicsOrderParams
@@ -150,15 +150,6 @@ fun makeOrderParams(orderParams: EbicsOrderParams): EbicsRequest.OrderParams {
             }
         }
     }
-}
-
-fun makeEbics3DateRange(ebicsDateRange: EbicsDateRange?): Ebics3Request.DateRange? {
-    return if (ebicsDateRange != null)
-        return Ebics3Request.DateRange().apply {
-            this.start = getXmlDate(ebicsDateRange.start)
-            this.end = getXmlDate(ebicsDateRange.end)
-        }
-    else null
 }
 
 fun signOrder(

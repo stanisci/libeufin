@@ -42,16 +42,56 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import org.apache.commons.compress.archivers.zip.ZipFile
+import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
 import tech.libeufin.nexus.*
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h005.Ebics3Request
 import tech.libeufin.util.logger
 import java.io.ByteArrayOutputStream
 import java.security.interfaces.RSAPrivateCrtKey
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.zip.DeflaterInputStream
+
+/**
+ * Available EBICS versions.
+ */
+enum class EbicsVersion { two, three }
+
+/**
+ * Which documents can be downloaded via EBICS.
+ */
+enum class SupportedDocument {
+    PAIN_002,
+    CAMT_053,
+    CAMT_052,
+    CAMT_054
+}
+
+
+/**
+ * Unzips the ByteArray and runs the lambda over each entry.
+ *
+ * @param lambda function that gets the (fileName, fileContent) pair
+ *        for each entry in the ZIP archive as input.
+ */
+fun ByteArray.unzipForEach(lambda: (String, String) -> Unit) {
+    if (this.isEmpty()) {
+        tech.libeufin.nexus.logger.warn("Empty archive")
+        return
+    }
+    val mem = SeekableInMemoryByteChannel(this)
+    val zipFile = ZipFile(mem)
+    zipFile.getEntriesInPhysicalOrder().iterator().forEach {
+        lambda(
+            it.name, zipFile.getInputStream(it).readAllBytes().toString(Charsets.UTF_8)
+        )
+    }
+    zipFile.close()
+}
 
 /**
  * Decrypts and decompresses the business payload that was

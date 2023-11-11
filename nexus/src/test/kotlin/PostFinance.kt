@@ -29,7 +29,7 @@ class Iso20022 {
 
     @Test // asks a pain.002, links with pain.001's MsgId
     fun getAck() {
-        download(prepAckRequest(startDate = yesterday)
+        download(prepAckRequest3(startDate = yesterday)
         )?.unzipForEach { name, content ->
             println(name)
             println(content)
@@ -42,7 +42,7 @@ class Iso20022 {
      */
     @Test
     fun getStatement() {
-        val inflatedBytes = download(prepStatementRequest())
+        val inflatedBytes = download(prepStatementRequest3())
         inflatedBytes?.unzipForEach { name, content ->
             println(name)
             println(content)
@@ -52,7 +52,7 @@ class Iso20022 {
     @Test
     fun getNotification() {
         val inflatedBytes = download(
-            prepNotificationRequest(
+            prepNotificationRequest3(
                 // startDate = yesterday,
                 isAppendix = true
             )
@@ -68,7 +68,7 @@ class Iso20022 {
      */
     @Test
     fun getReport() {
-        download(prepReportRequest(yesterday))?.unzipForEach { name, content ->
+        download(prepReportRequest3(yesterday))?.unzipForEach { name, content ->
             println(name)
             println(content)
         }

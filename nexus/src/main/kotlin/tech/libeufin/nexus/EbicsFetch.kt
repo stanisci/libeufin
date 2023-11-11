@@ -7,9 +7,8 @@ import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
-import tech.libeufin.nexus.ebics.EbicsSideException
-import tech.libeufin.nexus.ebics.createEbics3DownloadInitialization
-import tech.libeufin.nexus.ebics.doEbicsDownload
+import tech.libeufin.nexus.ebics.*
+import tech.libeufin.util.EbicsOrderParams
 import tech.libeufin.util.ebics_h005.Ebics3Request
 import tech.libeufin.util.getXmlDate
 import tech.libeufin.util.toDbMicros
@@ -20,224 +19,85 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
+import kotlin.reflect.typeOf
 import kotlin.system.exitProcess
 
 /**
- * Unzips the ByteArray and runs the lambda over each entry.
- *
- * @param lambda function that gets the (fileName, fileContent) pair
- *        for each entry in the ZIP archive as input.
+ * Necessary data to perform a download.
  */
-fun ByteArray.unzipForEach(lambda: (String, String) -> Unit) {
-    if (this.isEmpty()) {
-        logger.warn("Empty archive")
-        return
-    }
-    val mem = SeekableInMemoryByteChannel(this)
-    val zipFile = ZipFile(mem)
-    zipFile.getEntriesInPhysicalOrder().iterator().forEach {
-        lambda(
-            it.name, zipFile.getInputStream(it).readAllBytes().toString(Charsets.UTF_8)
-        )
-    }
-    zipFile.close()
-}
-
-/**
- * Crafts a date range object, when the caller needs a time range.
- *
- * @param startDate inclusive starting date for the returned banking events.
- * @param endDate inclusive ending date for the returned banking events.
- * @return [Ebics3Request.DateRange]
- */
-fun getEbics3DateRange(
-    startDate: Instant,
-    endDate: Instant
-): Ebics3Request.DateRange {
-    return Ebics3Request.DateRange().apply {
-        start = getXmlDate(startDate)
-        end = getXmlDate(endDate)
-    }
-}
-
-/**
- * Prepares the request for a camt.054 notification from the bank.
- * Notifications inform the subscriber that some new events occurred
- * on their account.  One main difference with reports/statements is
- * that notifications - according to the ISO20022 documentation - do
- * NOT contain any balance.
- *
- * @param startDate inclusive starting date for the returned notification(s).
- * @param endDate inclusive ending date for the returned notification(s).  NOTE:
- *        if startDate is NOT null and endDate IS null, endDate gets defaulted
- *        to the current UTC time.
- * @param isAppendix if true, the responded camt.054 will be an appendix of
- *        another camt.053 document, not therefore strictly acting as a notification.
- *        For example, camt.053 may omit wire transfer subjects and its related
- *        camt.054 appendix would instead contain those.
- *
- * @return [Ebics3Request.OrderDetails.BTOrderParams]
- */
-fun prepNotificationRequest(
-    startDate: Instant? = null,
-    endDate: Instant? = null,
-    isAppendix: Boolean
-): Ebics3Request.OrderDetails.BTOrderParams {
-    val service = Ebics3Request.OrderDetails.Service().apply {
-        serviceName = "REP"
-        scope = "CH"
-        container = Ebics3Request.OrderDetails.Service.Container().apply {
-            containerType = "ZIP"
-        }
-        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-            value = "camt.054"
-            version = "08"
-        }
-        if (!isAppendix)
-            serviceOption = "XDCI"
-    }
-    return Ebics3Request.OrderDetails.BTOrderParams().apply {
-        this.service = service
-        this.dateRange = if (startDate != null)
-            getEbics3DateRange(startDate, endDate ?: Instant.now())
-        else null
-    }
-}
-
-/**
- * Prepares the request for a pain.002 acknowledgement from the bank.
- *
- * @param startDate inclusive starting date for the returned acknowledgements.
- * @param endDate inclusive ending date for the returned acknowledgements.  NOTE:
- *        if startDate is NOT null and endDate IS null, endDate gets defaulted
- *        to the current UTC time.
- *
- * @return [Ebics3Request.OrderDetails.BTOrderParams]
- */
-fun prepAckRequest(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics3Request.OrderDetails.BTOrderParams {
-    val service = Ebics3Request.OrderDetails.Service().apply {
-        serviceName = "PSR"
-        scope = "CH"
-        container = Ebics3Request.OrderDetails.Service.Container().apply {
-            containerType = "ZIP"
-        }
-        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-            value = "pain.002"
-            version = "10"
-        }
-    }
-    return Ebics3Request.OrderDetails.BTOrderParams().apply {
-        this.service = service
-        this.dateRange = if (startDate != null)
-            getEbics3DateRange(startDate, endDate ?: Instant.now())
-        else null
-    }
-}
-
-/**
- * Prepares the request for (a) camt.053/statement(s).
- *
- * @param startDate inclusive starting date for the returned banking events.
- * @param endDate inclusive ending date for the returned banking events.  NOTE:
- *        if startDate is NOT null and endDate IS null, endDate gets defaulted
- *        to the current UTC time.
- *
- * @return [Ebics3Request.OrderDetails.BTOrderParams]
- */
-fun prepStatementRequest(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics3Request.OrderDetails.BTOrderParams {
-    val service = Ebics3Request.OrderDetails.Service().apply {
-        serviceName = "EOP"
-        scope = "CH"
-        container = Ebics3Request.OrderDetails.Service.Container().apply {
-            containerType = "ZIP"
-        }
-        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-            value = "camt.053"
-            version = "08"
-        }
-    }
-    return Ebics3Request.OrderDetails.BTOrderParams().apply {
-        this.service = service
-        this.dateRange = if (startDate != null)
-            getEbics3DateRange(startDate, endDate ?: Instant.now())
-        else null
-    }
-}
-
-/**
- * Prepares the request for camt.052/intraday records.
- *
- * @param startDate inclusive starting date for the returned banking events.
- * @param endDate inclusive ending date for the returned banking events.  NOTE:
- *        if startDate is NOT null and endDate IS null, endDate gets defaulted
- *        to the current UTC time.
- *
- * @return [Ebics3Request.OrderDetails.BTOrderParams]
- */
-fun prepReportRequest(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics3Request.OrderDetails.BTOrderParams {
-    val service = Ebics3Request.OrderDetails.Service().apply {
-        serviceName = "STM"
-        scope = "CH"
-        container = Ebics3Request.OrderDetails.Service.Container().apply {
-            containerType = "ZIP"
-        }
-        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-            value = "camt.052"
-            version = "08"
-        }
-    }
-    return Ebics3Request.OrderDetails.BTOrderParams().apply {
-            this.service = service
-            this.dateRange = if (startDate != null)
-                getEbics3DateRange(startDate, endDate ?: Instant.now())
-            else null
-    }
-}
+data class FetchContext(
+    /**
+     * Config handle.
+     */
+    val cfg: EbicsSetupConfig,
+    /**
+     * HTTP client handle to reach the bank
+     */
+    val httpClient: HttpClient,
+    /**
+     * EBICS subscriber private keys.
+     */
+    val clientKeys: ClientPrivateKeysFile,
+    /**
+     * Bank public keys.
+     */
+    val bankKeys: BankPublicKeysFile,
+    /**
+     * Type of document to download.
+     */
+    val whichDocument: SupportedDocument,
+    /**
+     * EBICS version.
+     */
+    val ebicsVersion: EbicsVersion = EbicsVersion.three,
+    /**
+     * Start date of the returned documents.  Only
+     * used in --transient mode.
+     */
+    var pinnedStart: Instant? = null
+)
 
 /**
  * Downloads content via EBICS, according to the order params passed
  * by the caller.
  *
- * @param cfg configuration handle.
- * @param bankKeys bank public keys.
- * @param clientKeys EBICS subscriber private keys.
- * @param httpClient handle to the HTTP layer.
+ * @param T [Ebics2Request] for EBICS 2 or [Ebics3Request.OrderDetails.BTOrderParams] for EBICS 3
+ * @param ctx [FetchContext]
  * @param req contains the instructions for the download, namely
  *            which document is going to be downloaded from the bank.
  * @return the [ByteArray] payload.  On an empty response, the array
  *         length is zero.  It returns null, if the bank assigned an
  *         error to the EBICS transaction.
  */
-private suspend fun downloadHelper(
-    cfg: EbicsSetupConfig,
-    bankKeys: BankPublicKeysFile,
-    clientKeys: ClientPrivateKeysFile,
-    httpClient: HttpClient,
-    req: Ebics3Request.OrderDetails.BTOrderParams
+private suspend inline fun downloadHelper(
+    ctx: FetchContext,
+    lastExecutionTime: Instant? = null
 ): ByteArray? {
-    val initXml = createEbics3DownloadInitialization(
-        cfg,
-        bankKeys,
-        clientKeys,
-        orderParams = req
-    )
+    val initXml = if (ctx.ebicsVersion == EbicsVersion.three) {
+        createEbics3DownloadInitialization(
+            ctx.cfg,
+            ctx.bankKeys,
+            ctx.clientKeys,
+            prepEbics3Document(ctx.whichDocument, lastExecutionTime)
+        )
+    } else {
+        val ebics2Req = prepEbics2Document(ctx.whichDocument, lastExecutionTime)
+        createEbics25DownloadInit(
+            ctx.cfg,
+            ctx.clientKeys,
+            ctx.bankKeys,
+            ebics2Req.messageType,
+            ebics2Req.orderParams
+        )
+    }
     try {
         return doEbicsDownload(
-            httpClient,
-            cfg,
-            clientKeys,
-            bankKeys,
+            ctx.httpClient,
+            ctx.cfg,
+            ctx.clientKeys,
+            ctx.bankKeys,
             initXml,
-            isEbics3 = true,
+            isEbics3 = ctx.ebicsVersion == EbicsVersion.three,
             tolerateEmptyResult = true
         )
     } catch (e: EbicsSideException) {
@@ -298,65 +158,25 @@ fun maybeLogFile(cfg: EbicsSetupConfig, content: ByteArray) {
  * What this function does NOT do (now): linking documents between
  * different camt.05x formats and/or pain.002 acknowledgements.
  *
- * @param cfg config handle.
  * @param db database connection
- * @param httpClient HTTP client handle to reach the bank
- * @param clientKeys EBICS subscriber private keys.
- * @param bankKeys bank public keys.
+ * @param ctx [FetchContext]
  * @param pinnedStart explicit start date for the downloaded documents.
  *        This parameter makes the last incoming transaction timestamp in
  *        the database IGNORED.  Only useful when running in --transient
  *        mode to download past documents / debug.
  */
 private suspend fun fetchDocuments(
-    cfg: EbicsSetupConfig,
     db: Database,
-    httpClient: HttpClient,
-    clientKeys: ClientPrivateKeysFile,
-    bankKeys: BankPublicKeysFile,
-    whichDocument: SupportedDocument = SupportedDocument.CAMT_054,
-    pinnedStart: Instant? = null
+    ctx: FetchContext
 ) {
     // maybe get last execution_date.
-    val lastExecutionTime: Instant? = pinnedStart ?: db.incomingPaymentLastExecTime()
+    val lastExecutionTime: Instant? = ctx.pinnedStart ?: db.incomingPaymentLastExecTime()
     logger.debug("Fetching documents from timestamp: $lastExecutionTime")
-    val req = when(whichDocument) {
-        SupportedDocument.PAIN_002 -> prepAckRequest(lastExecutionTime)
-        SupportedDocument.CAMT_052 -> prepReportRequest(lastExecutionTime)
-        SupportedDocument.CAMT_053 -> prepStatementRequest(lastExecutionTime)
-        SupportedDocument.CAMT_054 -> prepNotificationRequest(lastExecutionTime, isAppendix = true)
-    }
-    val maybeContent = downloadHelper(
-        cfg,
-        bankKeys,
-        clientKeys,
-        httpClient,
-        req
-    ) ?: exitProcess(1) // client is wrong, failing.
-
+    val maybeContent = downloadHelper(ctx, lastExecutionTime) ?: exitProcess(1) // client is wrong, failing.
     if (maybeContent.isEmpty()) return
-    maybeLogFile(cfg, maybeContent)
+    maybeLogFile(ctx.cfg, maybeContent)
 }
 
-/**
- * Turns a YYYY-MM-DD date string into Instant.  Used
- * to parse the --pinned-start CLI options.  Fails the
- * process, if the input is invalid.
- *
- * @param dashedDate pinned start command line option.
- * @return [Instant]
- */
-fun parseDashedDate(dashedDate: String): Instant =
-    doOrFail {
-        LocalDate.parse(dashedDate).atStartOfDay(ZoneId.of("UTC")).toInstant()
-    }
-
-enum class SupportedDocument {
-    PAIN_002,
-    CAMT_053,
-    CAMT_052,
-    CAMT_054
-}
 class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 notifications") {
     private val configFile by option(
         "--config", "-c",
@@ -411,30 +231,33 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
             exitProcess(1)
         }
-        val httpClient = HttpClient()
-
+        // Deciding what to download.
         var whichDoc = SupportedDocument.CAMT_054
         if (onlyAck) whichDoc = SupportedDocument.PAIN_002
         if (onlyReports) whichDoc = SupportedDocument.CAMT_052
         if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
+
+        val ctx = FetchContext(
+            cfg,
+            HttpClient(),
+            clientKeys,
+            bankKeys,
+            whichDoc
+        )
 
         if (transient) {
             logger.info("Transient mode: fetching once and returning.")
             val pinnedStartVal = pinnedStart
             val pinnedStartArg = if (pinnedStartVal != null) {
                 logger.debug("Pinning start date to: $pinnedStartVal")
-                parseDashedDate(pinnedStartVal)
+                doOrFail {
+                    // Converting YYYY-MM-DD to Instant.
+                    LocalDate.parse(pinnedStartVal).atStartOfDay(ZoneId.of("UTC")).toInstant()
+                }
             } else null
+            ctx.pinnedStart = pinnedStartArg
             runBlocking {
-                fetchDocuments(
-                    cfg,
-                    db,
-                    httpClient,
-                    clientKeys,
-                    bankKeys,
-                    whichDoc,
-                    pinnedStartArg
-                )
+                fetchDocuments(db, ctx)
             }
             return
         }
@@ -447,14 +270,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (frequency.inSeconds == 0) {
             logger.warn("Long-polling not implemented, running therefore in transient mode")
             runBlocking {
-                fetchDocuments(
-                    cfg,
-                    db,
-                    httpClient,
-                    clientKeys,
-                    bankKeys,
-                    whichDoc
-                )
+                fetchDocuments(db, ctx)
             }
             return
         }
@@ -463,14 +279,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             period = (frequency.inSeconds * 1000).toLong(),
             action = {
                 runBlocking {
-                    fetchDocuments(
-                        cfg,
-                        db,
-                        httpClient,
-                        clientKeys,
-                        bankKeys,
-                        whichDoc
-                    )
+                    fetchDocuments(db, ctx)
                 }
             }
         )
