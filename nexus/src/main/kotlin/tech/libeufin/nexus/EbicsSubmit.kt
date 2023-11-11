@@ -56,6 +56,28 @@ enum class NexusSubmissionStage {
 }
 
 /**
+ * Groups useful parameters to submit pain.001 via EBICS.
+ */
+data class SubmissionContext(
+    /**
+     * HTTP connection handle.
+     */
+    val httpClient: HttpClient,
+    /**
+     * Configuration handle.
+     */
+    val cfg: EbicsSetupConfig,
+    /**
+     * Subscriber EBICS private keys.
+     */
+    val clientPrivateKeysFile: ClientPrivateKeysFile,
+    /**
+     * Bank EBICS public keys.
+     */
+    val bankPublicKeysFile: BankPublicKeysFile
+)
+
+/**
  * Expresses one error that occurred while submitting one pain.001
  * document via EBICS.
  */
@@ -70,20 +92,11 @@ class NexusSubmitException(
  * database, sanity-checks it, makes the pain.001 document and finally
  * submits it via EBICS to the bank.
  *
- * @param httpClient HTTP client to connect to the bank.
- * @param cfg configuration handle.  Contains the bank URL and EBICS IDs.
- * @param clientPrivateKeysFile client's private EBICS keys.
- * @param bankPublicKeysFile bank's public EBICS keys.
- * @param initiatedPayment payment initiation from the database.
- * @param debtor bank account information of the debited party.
- *               This values needs the BIC and the name.
+ * @param ctx [SubmissionContext]
  * @return true on success, false otherwise.
  */
 private suspend fun submitInitiatedPayment(
-    httpClient: HttpClient,
-    cfg: EbicsSetupConfig,
-    clientPrivateKeysFile: ClientPrivateKeysFile,
-    bankPublicKeysFile: BankPublicKeysFile,
+    ctx: SubmissionContext,
     initiatedPayment: InitiatedPayment
 ) {
     val creditor = parsePayto(initiatedPayment.creditPaytoUri)
@@ -97,16 +110,16 @@ private suspend fun submitInitiatedPayment(
         initiationTimestamp = initiatedPayment.initiationTime,
         amount = initiatedPayment.amount,
         creditAccount = creditor,
-        debitAccount = cfg.myIbanAccount,
+        debitAccount = ctx.cfg.myIbanAccount,
         wireTransferSubject = initiatedPayment.wireTransferSubject
     )
     try {
         submitPain001(
             xml,
-            cfg,
-            clientPrivateKeysFile,
-            bankPublicKeysFile,
-            httpClient
+            ctx.cfg,
+            ctx.clientPrivateKeysFile,
+            ctx.bankPublicKeysFile,
+            ctx.httpClient
         )
     } catch (early: EbicsSideException) {
         val errorStage = when (early.sideEc) {
@@ -133,7 +146,7 @@ private suspend fun submitInitiatedPayment(
         )
     }
     // Submission succeeded, storing the pain.001 to file.
-    val logDir: String? = cfg.config.lookupString(
+    val logDir: String? = ctx.cfg.config.lookupString(
         "neuxs-submit",
         "SUBMISSIONS_LOG_DIRECTORY"
     )
@@ -157,83 +170,25 @@ private suspend fun submitInitiatedPayment(
 }
 
 /**
- * Converts human-readable duration in how many seconds.  Supports
- * the suffixes 's' (seconds), 'm' (minute), 'h' (hours).  A valid
- * duration is therefore, for example, Nm, where N is the number of
- * minutes.
+ * Searches the database for payments to submit and calls
+ * the submitter helper.
  *
- * @param trimmed duration
- * @return how many seconds is the duration input, or null if the input
- *         is not valid.
+ * @param cfg configuration handle.
+ * @param db database connection.
+ * @param httpClient HTTP connection handle.
+ * @param clientKeys subscriber private keys.
+ * @param bankKeys bank public keys.
  */
-fun getFrequencyInSeconds(humanFormat: String): Int? {
-    val trimmed = humanFormat.trim()
-    if (trimmed.isEmpty()) {
-        logger.error("Input was empty")
-        return null
-    }
-    val lastChar = trimmed.last()
-    val howManySeconds: Int = when (lastChar) {
-        's' -> {1}
-        'm' -> {60}
-        'h' -> {60 * 60}
-        else -> {
-            logger.error("Duration symbol not one of s, m, h.  '$lastChar' was found instead")
-            return null
-        }
-    }
-    val maybeNumber = trimmed.dropLast(1)
-    val howMany = try {
-        maybeNumber.trimEnd().toInt()
-    } catch (e: Exception) {
-        logger.error("Prefix was not a valid input: '$maybeNumber'")
-        return null
-    }
-    if (howMany == 0) return 0
-    val ret = howMany * howManySeconds
-    if (howMany != ret / howManySeconds) {
-        logger.error("Result overflew")
-        return null
-    }
-    return ret
-}
-
-/**
- * Sanity-checks the frequency found in the configuration and
- * either returns it or fails the process.  Note: the returned
- * value is also guaranteed to be non-negative.
- *
- * @param foundInConfig frequency value as found in the configuration.
- * @return the duration in seconds of the value found in the configuration.
- */
-fun checkFrequency(foundInConfig: String): Int {
-    val frequencySeconds = getFrequencyInSeconds(foundInConfig)
-        ?: throw Exception("Invalid frequency value in config section nexus-submit: $foundInConfig")
-    if (frequencySeconds < 0) {
-        throw Exception("Configuration error: cannot operate with a negative submit frequency ($foundInConfig)")
-    }
-    return frequencySeconds
-}
-
 private fun submitBatch(
-    cfg: EbicsSetupConfig,
+    ctx: SubmissionContext,
     db: Database,
-    httpClient: HttpClient,
-    clientKeys: ClientPrivateKeysFile,
-    bankKeys: BankPublicKeysFile
 ) {
     logger.debug("Running submit at: ${Instant.now()}")
     runBlocking {
-        db.initiatedPaymentsUnsubmittedGet(cfg.currency).forEach {
+        db.initiatedPaymentsUnsubmittedGet(ctx.cfg.currency).forEach {
             logger.debug("Submitting payment initiation with row ID: ${it.key}")
             val submissionState = try {
-                submitInitiatedPayment(
-                    httpClient,
-                    cfg,
-                    clientKeys,
-                    bankKeys,
-                    initiatedPayment = it.value
-                )
+                submitInitiatedPayment(ctx, initiatedPayment = it.value)
                 DatabaseSubmissionState.success
             } catch (e: NexusSubmitException) {
                 logger.error(e.message)
@@ -298,10 +253,32 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
             exitProcess(1)
         }
-        val httpClient = HttpClient()
+        val ctx = SubmissionContext(
+            cfg = cfg,
+            bankPublicKeysFile = bankKeys,
+            clientPrivateKeysFile = clientKeys,
+            httpClient = HttpClient()
+        )
+        // If STDIN has data, we run in debug mode: submit and return.
+        val maybeStdin = generateSequence(::readLine).joinToString("\n")
+        if (maybeStdin.isNotEmpty()) {
+            logger.info("Submitting STDIN to the bank")
+            doOrFail {
+                runBlocking {
+                    submitPain001(
+                        maybeStdin,
+                        ctx.cfg,
+                        ctx.clientPrivateKeysFile,
+                        ctx.bankPublicKeysFile,
+                        ctx.httpClient
+                    )
+                }
+            }
+            return
+        }
         if (transient) {
             logger.info("Transient mode: submitting what found and returning.")
-            submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
+            submitBatch(ctx, db)
             return
         }
         val frequency: NexusFrequency = doOrFail {
@@ -312,14 +289,14 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         logger.debug("Running with a frequency of ${frequency.fromConfig}")
         if (frequency.inSeconds == 0) {
             logger.warn("Long-polling not implemented, running therefore in transient mode")
-            submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
+            submitBatch(ctx, db)
             return
         }
         fixedRateTimer(
             name = "ebics submit period",
             period = (frequency.inSeconds * 1000).toLong(),
             action = {
-                submitBatch(cfg, db, httpClient, clientKeys, bankKeys)
+                submitBatch(ctx, db)
             }
         )
     }

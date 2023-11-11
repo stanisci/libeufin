@@ -85,6 +85,66 @@ data class NexusFrequency(
 )
 
 /**
+ * Converts human-readable duration in how many seconds.  Supports
+ * the suffixes 's' (seconds), 'm' (minute), 'h' (hours).  A valid
+ * duration is therefore, for example, Nm, where N is the number of
+ * minutes.
+ *
+ * @param trimmed duration
+ * @return how many seconds is the duration input, or null if the input
+ *         is not valid.
+ */
+fun getFrequencyInSeconds(humanFormat: String): Int? {
+    val trimmed = humanFormat.trim()
+    if (trimmed.isEmpty()) {
+        logger.error("Input was empty")
+        return null
+    }
+    val lastChar = trimmed.last()
+    val howManySeconds: Int = when (lastChar) {
+        's' -> {1}
+        'm' -> {60}
+        'h' -> {60 * 60}
+        else -> {
+            logger.error("Duration symbol not one of s, m, h.  '$lastChar' was found instead")
+            return null
+        }
+    }
+    val maybeNumber = trimmed.dropLast(1)
+    val howMany = try {
+        maybeNumber.trimEnd().toInt()
+    } catch (e: Exception) {
+        logger.error("Prefix was not a valid input: '$maybeNumber'")
+        return null
+    }
+    if (howMany == 0) return 0
+    val ret = howMany * howManySeconds
+    if (howMany != ret / howManySeconds) {
+        logger.error("Result overflew")
+        return null
+    }
+    return ret
+}
+
+/**
+ * Sanity-checks the frequency found in the configuration and
+ * either returns it or fails the process.  Note: the returned
+ * value is also guaranteed to be non-negative.
+ *
+ * @param foundInConfig frequency value as found in the configuration.
+ * @return the duration in seconds of the value found in the configuration.
+ */
+fun checkFrequency(foundInConfig: String): Int {
+    val frequencySeconds = getFrequencyInSeconds(foundInConfig)
+        ?: throw Exception("Invalid frequency value in config section nexus-submit: $foundInConfig")
+    if (frequencySeconds < 0) {
+        throw Exception("Configuration error: cannot operate with a negative submit frequency ($foundInConfig)")
+    }
+    return frequencySeconds
+}
+
+
+/**
  * Keeps all the options of the ebics-setup subcommand.  The
  * caller has to handle TalerConfigError if values are missing.
  * If even one of the fields could not be instantiated, then
