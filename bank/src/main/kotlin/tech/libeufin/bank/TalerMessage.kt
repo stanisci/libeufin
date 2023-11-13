@@ -609,5 +609,6 @@ data class PublicAccount(
  */
 @Serializable
 data class AccountPasswordChange(
-    val new_password: String
+    val new_password: String,
+    val old_password: String? = null
 )

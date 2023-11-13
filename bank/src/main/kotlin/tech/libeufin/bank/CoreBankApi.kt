@@ -221,7 +221,10 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
             req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
 
             if (req.is_taler_exchange != null && username == "admin")
-                throw forbidden("admin account cannot be an exchange")
+                throw conflict(
+                    "admin account cannot be an exchange",
+                    TalerErrorCode.BANK_PATCH_ADMIN_EXCHANGE
+                )
 
             val res = db.accountReconfig(
                 login = username,
@@ -239,27 +242,38 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
                     "Account '$username' not found",
                     TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
-                CustomerPatchResult.CONFLICT_LEGAL_NAME -> 
-                    throw forbidden("non-admin user cannot change their legal name")
-                CustomerPatchResult.CONFLICT_DEBT_LIMIT -> 
-                    throw forbidden("non-admin user cannot change their debt limit")
+                CustomerPatchResult.CONFLICT_LEGAL_NAME -> throw conflict(
+                    "non-admin user cannot change their legal name",
+                    TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
+                )
+                CustomerPatchResult.CONFLICT_DEBT_LIMIT -> throw conflict(
+                    "non-admin user cannot change their debt limit",
+                    TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+                )
             }
         }
-    }
-    auth(db, TokenScope.readwrite) {
         patch("/accounts/{USERNAME}/auth") {
             val req = call.receive<AccountPasswordChange>()
-            val hashedPassword = CryptoUtil.hashpw(req.new_password)
-            if (!db.customerChangePassword(username, hashedPassword))
-                throw notFound(
+            if (!isAdmin && req.old_password == null) {
+                throw conflict(
+                    "non-admin user cannot change password without providing old password",
+                    TalerErrorCode.BANK_NON_ADMIN_PATCH_MISSING_OLD_PASSWORD
+                )
+            }
+            when (db.accountReconfigPassword(username, req.new_password, req.old_password)) {
+                CustomerPatchAuthResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+                CustomerPatchAuthResult.ACCOUNT_NOT_FOUND -> throw notFound(
                     "Account '$username' not found",
                     TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
-            call.respond(HttpStatusCode.NoContent)
+                CustomerPatchAuthResult.CONFLICT_BAD_PASSWORD -> throw conflict(
+                    "old password does not match",
+                    TalerErrorCode.BANK_PATCH_BAD_OLD_PASSWORD
+                )
+            }
         }
     }
     get("/public-accounts") {
-        // no authentication here.
         val publicAccounts = db.accountsGetPublic(ctx.currency)
         if (publicAccounts.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)

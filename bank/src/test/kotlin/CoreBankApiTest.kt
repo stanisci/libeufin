@@ -352,12 +352,12 @@ class CoreBankAccountsMgmtApiTest {
             jsonBody(req)
         }.assertNoContent()
 
-        suspend fun checkAdminOnly(req: JsonElement) {
+        suspend fun checkAdminOnly(req: JsonElement, error: TalerErrorCode) {
             // Checking ordinary user doesn't get to patch
             client.patch("/accounts/merchant") {
                 basicAuth("merchant", "merchant-password")
                 jsonBody(req)
-            }.assertForbidden()
+            }.assertConflict(error)
             // Finally checking that admin does get to patch
             client.patch("/accounts/merchant") {
                 basicAuth("admin", "admin-password")
@@ -365,14 +365,20 @@ class CoreBankAccountsMgmtApiTest {
             }.assertNoContent()
         }
 
-        checkAdminOnly(json(req) { "name" to "Another Foo" })
-        checkAdminOnly(json(req) { "debit_threshold" to "KUDOS:100" })
+        checkAdminOnly(
+            json(req) { "name" to "Another Foo" },
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
+        )
+        checkAdminOnly(
+            json(req) { "debit_threshold" to "KUDOS:100" },
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+        )
 
         // Check admin account cannot be exchange
         client.patch("/accounts/admin") {
             basicAuth("admin", "admin-password")
             jsonBody { "is_taler_exchange" to true }
-        }.assertForbidden()
+        }.assertConflict(TalerErrorCode.BANK_PATCH_ADMIN_EXCHANGE)
         // But we can change its debt limit
         client.patch("/accounts/admin") {
             basicAuth("admin", "admin-password")
@@ -402,21 +408,49 @@ class CoreBankAccountsMgmtApiTest {
     @Test
     fun passwordChangeTest() = bankSetup { _ -> 
         // Changing the password.
-        client.patch("/accounts/merchant/auth") {
-            basicAuth("merchant", "merchant-password")
+        client.patch("/accounts/customer/auth") {
+            basicAuth("customer", "customer-password")
             jsonBody {
+                "old_password" to "customer-password"
                 "new_password" to "new-password"
             }
         }.assertNoContent()
         // Previous password should fail.
-        client.patch("/accounts/merchant/auth") {
-            basicAuth("merchant", "merchant-password")
+        client.patch("/accounts/customer/auth") {
+            basicAuth("customer", "customer-password")
         }.assertUnauthorized()
         // New password should succeed.
-        client.patch("/accounts/merchant/auth") {
-            basicAuth("merchant", "new-password")
+        client.patch("/accounts/customer/auth") {
+            basicAuth("customer", "new-password")
             jsonBody {
-                "new_password" to "merchant-password"
+                "old_password" to "new-password"
+                "new_password" to "customer-password"
+            }
+        }.assertNoContent()
+
+
+        // Check require test old password
+        client.patch("/accounts/customer/auth") {
+            basicAuth("customer", "customer-password")
+            jsonBody {
+                "old_password" to "bad-password"
+                "new_password" to "new-password"
+            }
+        }.assertConflict(TalerErrorCode.BANK_PATCH_BAD_OLD_PASSWORD)
+
+        // Check require old password for user
+        client.patch("/accounts/customer/auth") {
+            basicAuth("customer", "customer-password")
+            jsonBody {
+                "new_password" to "new-password"
+            }
+        }.assertConflict(TalerErrorCode.BANK_NON_ADMIN_PATCH_MISSING_OLD_PASSWORD)
+
+        // Check admin 
+        client.patch("/accounts/customer/auth") {
+            basicAuth("admin", "admin-password")
+            jsonBody {
+                "new_password" to "new-password"
             }
         }.assertNoContent()
     }

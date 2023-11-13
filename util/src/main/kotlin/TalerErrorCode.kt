@@ -666,6 +666,14 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
+   * The exchange failed to start a KYC attribute conversion helper process. It is likely configured incorrectly.
+   * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  EXCHANGE_GENERIC_KYC_CONVERTER_FAILED(1037),
+
+
+  /**
    * The exchange did not find information about the specified transaction in the database.
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
@@ -3423,6 +3431,46 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   BANK_TAN_CHALLENGE_FAILED(5134),
+
+
+  /**
+   * A non-admin user has tried to change their legal name.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_NON_ADMIN_PATCH_LEGAL_NAME(5135),
+
+
+  /**
+   * A non-admin user has tried to change their debt limit.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_NON_ADMIN_PATCH_DEBT_LIMIT(5136),
+
+
+  /**
+   * A non-admin user has tried to change their password whihout providing the current one.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_NON_ADMIN_PATCH_MISSING_OLD_PASSWORD(5137),
+
+
+  /**
+   * Provided old password does not match current password.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_PATCH_BAD_OLD_PASSWORD(5138),
+
+
+  /**
+   * An admin user has tried to become an exchange.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_PATCH_ADMIN_EXCHANGE(5139),
 
 
   /**

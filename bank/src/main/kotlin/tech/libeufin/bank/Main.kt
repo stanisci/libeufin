@@ -331,7 +331,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
 
-            if (!db.customerChangePassword(account, CryptoUtil.hashpw(password))) {
+            if (db.accountReconfigPassword(account, password, null) != CustomerPatchAuthResult.SUCCESS) {
                 println("password change failed")
                 exitProcess(1)
             } else {

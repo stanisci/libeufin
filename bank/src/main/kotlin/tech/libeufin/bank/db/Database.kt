@@ -110,15 +110,6 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         }
     }
 
-    suspend fun customerChangePassword(customerName: String, passwordHash: String): Boolean = conn { conn ->
-        val stmt = conn.prepareStatement("""
-            UPDATE customers SET password_hash=? where login=?
-        """)
-        stmt.setString(1, passwordHash)
-        stmt.setString(2, customerName)
-        stmt.executeUpdateCheck()
-    }
-
     suspend fun customerPasswordHashFromLogin(login: String): String? = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT password_hash FROM customers WHERE login=?
@@ -434,6 +425,30 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                 it.getBoolean("out_legal_name_change") -> CustomerPatchResult.CONFLICT_LEGAL_NAME
                 it.getBoolean("out_debt_limit_change") -> CustomerPatchResult.CONFLICT_DEBT_LIMIT
                 else -> CustomerPatchResult.SUCCESS
+            }
+        }
+    }
+
+    suspend fun accountReconfigPassword(login: String, newPw: String, oldPw: String?): CustomerPatchAuthResult = conn {
+        it.transaction { conn ->
+            val currentPwh = conn.prepareStatement("""
+                SELECT password_hash FROM customers WHERE login=?
+            """).run {
+                setString(1, login)
+                oneOrNull { it.getString(1) }
+            }
+            if (currentPwh == null) {
+                CustomerPatchAuthResult.ACCOUNT_NOT_FOUND
+            } else if (oldPw != null && !CryptoUtil.checkpw(oldPw, currentPwh)) {
+                CustomerPatchAuthResult.CONFLICT_BAD_PASSWORD
+            } else {
+                val stmt = conn.prepareStatement("""
+                    UPDATE customers SET password_hash=? where login=?
+                """)
+                stmt.setString(1, CryptoUtil.hashpw(newPw))
+                stmt.setString(2, login)
+                stmt.executeUpdateCheck()
+                CustomerPatchAuthResult.SUCCESS
             }
         }
     }
@@ -940,6 +955,13 @@ enum class CustomerPatchResult {
     ACCOUNT_NOT_FOUND,
     CONFLICT_LEGAL_NAME,
     CONFLICT_DEBT_LIMIT,
+    SUCCESS
+}
+
+/** Result status of customer account auth patch */
+enum class CustomerPatchAuthResult {
+    ACCOUNT_NOT_FOUND,
+    CONFLICT_BAD_PASSWORD,
     SUCCESS
 }
 
