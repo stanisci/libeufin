@@ -1073,7 +1073,7 @@ class CoreBankCashoutApiTest {
             jsonBody(req) {
                 "tan_channel" to "email"
             }
-        }.assertStatus(HttpStatusCode.BadGateway, TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED)
+        }.assertConflict(TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED)
 
         // Check OK
         client.post("/accounts/customer/cashouts") {
