@@ -29,6 +29,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
     private class CountedSharedFlow(val flow: MutableSharedFlow<Long>, var count: Int)
 
     private val bankTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
+    private val revenueTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
     private val outgoingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
     private val incomingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
 
@@ -46,32 +47,25 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                             conn.getNotifications(0) // Block until we receive at least one notification
                                 .forEach {
                                 if (it.name == "bank_tx") {
-                                    val info = it.parameter.split(' ', limit = 4).map { it.toLong() }
-                                    val debtorAccount = info[0];
-                                    val creditorAccount = info[1];
-                                    val debitRow = info[2];
-                                    val creditRow = info[3];
-                                    
-                                    bankTxFlows[debtorAccount]?.run {
+                                    val (debtor, creditor, debitRow, creditRow) = it.parameter.split(' ', limit = 4).map { it.toLong() }
+                                    bankTxFlows[debtor]?.run {
                                         flow.emit(debitRow)
+                                    }
+                                    bankTxFlows[creditor]?.run {
                                         flow.emit(creditRow)
                                     }
-                                    bankTxFlows[creditorAccount]?.run {
+                                } else if (it.name == "outgoing_tx") {
+                                    val (account, merchant, debitRow, creditRow) = it.parameter.split(' ', limit = 4).map { it.toLong() }
+                                    outgoingTxFlows[account]?.run {
                                         flow.emit(debitRow)
+                                    }
+                                    revenueTxFlows[merchant]?.run {
                                         flow.emit(creditRow)
                                     }
                                 } else {
-                                    val info = it.parameter.split(' ', limit = 2).map { it.toLong() }
-                                    val account = info[0];
-                                    val row = info[1];
-                                    if (it.name == "outgoing_tx") {
-                                        outgoingTxFlows[account]?.run {
-                                            flow.emit(row)
-                                        }
-                                    } else {
-                                        incomingTxFlows[account]?.run {
-                                            flow.emit(row)
-                                        }
+                                    val (account, row) = it.parameter.split(' ', limit = 2).map { it.toLong() }
+                                    incomingTxFlows[account]?.run {
+                                        flow.emit(row)
                                     }
                                 }
                             }
@@ -114,5 +108,9 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
 
     suspend fun listenIncoming(account: Long, lambda: suspend (Flow<Long>) -> Unit) {
         listen(incomingTxFlows, account, lambda)
+    }
+
+    suspend fun listenRevenue(account: Long, lambda: suspend (Flow<Long>) -> Unit) {
+        listen(revenueTxFlows, account, lambda)
     }
 }

@@ -106,9 +106,42 @@ class ExchangeDAO(private val db: Database) {
                     it.getInt("amount_frac"),
                     db.bankCurrency
                 ),
-                credit_account = IbanPayTo(it.getString("creditor_payto_uri")),
+                credit_account = it.getString("creditor_payto_uri"),
                 wtid = ShortHashCode(it.getBytes("wtid")),
-                exchange_base_url = ExchangeUrl(it.getString("exchange_base_url"))
+                exchange_base_url = it.getString("exchange_base_url")
+            )
+        }
+
+    suspend fun revenueHistory(
+        params: HistoryParams, 
+        bankAccountId: Long
+    ): List<MerchantIncomingBankTransaction> 
+        = db.poolHistory(params, bankAccountId, NotificationWatcher::listenRevenue, """
+            SELECT
+                bank_transaction_id
+                ,transaction_date
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,debtor_payto_uri
+                ,wtid
+                ,exchange_base_url
+            FROM taler_exchange_outgoing AS tfr
+                JOIN bank_account_transactions AS txs
+                    ON bank_transaction=txs.bank_transaction_id
+        """, "creditor_account_id") {
+            MerchantIncomingBankTransaction(
+                row_id = it.getLong("bank_transaction_id"),
+                date = TalerProtocolTimestamp(
+                    it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()
+                ),
+                amount = TalerAmount(
+                    it.getLong("amount_val"),
+                    it.getInt("amount_frac"),
+                    db.bankCurrency
+                ),
+                debit_account = it.getString("debtor_payto_uri"),
+                wtid = ShortHashCode(it.getBytes("wtid")),
+                exchange_url = it.getString("exchange_base_url")
             )
         }
 

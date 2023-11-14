@@ -386,7 +386,7 @@ class CoreBankAccountsApiTest {
         }.assertOk().run { 
             val obj: AccountData = json()
             assertEquals("Another Foo", obj.name)
-            assertEquals(cashout.canonical, obj.cashout_payto_uri?.canonical)
+            assertEquals(cashout.canonical, obj.cashout_payto_uri)
             assertEquals("+99", obj.contact_data?.phone)
             assertEquals("foo@example.com", obj.contact_data?.email)
             assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
@@ -1119,15 +1119,7 @@ class CoreBankCashoutApiTest {
     @Test
     fun abort() = bankSetup { _ ->
         // TODO auth routine
-        client.patch("/accounts/customer") {
-            basicAuth("customer", "customer-password")
-            jsonBody(json {
-                "cashout_payto_uri" to IbanPayTo(genIbanPaytoUri())
-                "challenge_contact_data" to json {
-                    "phone" to "+99"
-                }
-            })
-        }.assertNoContent()
+        fillCashoutInfo("customer")
         
         val req = json {
             "request_uid" to randShortHashCode()
@@ -1214,15 +1206,7 @@ class CoreBankCashoutApiTest {
                 basicAuth("customer", "customer-password")
                 jsonBody { "tan" to "code" }
             }.assertConflict(TalerErrorCode.BANK_CONFIRM_INCOMPLETE)
-            client.patch("/accounts/customer") {
-                basicAuth("customer", "customer-password")
-                jsonBody(json {
-                    "cashout_payto_uri" to IbanPayTo(genIbanPaytoUri())
-                    "challenge_contact_data" to json {
-                        "phone" to "+99"
-                    }
-                })
-            }.assertNoContent()
+            fillCashoutInfo("customer")
 
             // Check bad TAN code
             client.post("/accounts/customer/cashouts/$id/confirm") {
@@ -1314,16 +1298,7 @@ class CoreBankCashoutApiTest {
     @Test
     fun get() = bankSetup { _ ->
         // TODO auth routine
-
-        client.patch("/accounts/customer") {
-            basicAuth("customer", "customer-password")
-            jsonBody(json {
-                "cashout_payto_uri" to IbanPayTo(genIbanPaytoUri())
-                "challenge_contact_data" to json {
-                    "phone" to "+99"
-                }
-            })
-        }.assertNoContent()
+        fillCashoutInfo("customer")
 
         val amountDebit = TalerAmount("KUDOS:1.5")
         val amountCredit = convert("KUDOS:1.5")
@@ -1396,15 +1371,7 @@ class CoreBankCashoutApiTest {
     fun history() = bankSetup { _ ->
         // TODO auth routine
 
-        client.patch("/accounts/customer") {
-            basicAuth("customer", "customer-password")
-            jsonBody(json {
-                "cashout_payto_uri" to IbanPayTo(genIbanPaytoUri())
-                "challenge_contact_data" to json {
-                    "phone" to "+99"
-                }
-            })
-        }.assertNoContent()
+        fillCashoutInfo("customer")
 
         suspend fun HttpResponse.assertHistory(size: Int) {
             assertHistoryIds<Cashouts>(size) {
@@ -1443,15 +1410,7 @@ class CoreBankCashoutApiTest {
     fun globalHistory() = bankSetup { _ ->
         // TODO admin auth routine
 
-        client.patch("/accounts/customer") {
-            basicAuth("customer", "customer-password")
-            jsonBody(json {
-                "cashout_payto_uri" to IbanPayTo(genIbanPaytoUri())
-                "challenge_contact_data" to json {
-                    "phone" to "+99"
-                }
-            })
-        }.assertNoContent()
+        fillCashoutInfo("customer")
 
         suspend fun HttpResponse.assertHistory(size: Int) {
             assertHistoryIds<GlobalCashouts>(size) {

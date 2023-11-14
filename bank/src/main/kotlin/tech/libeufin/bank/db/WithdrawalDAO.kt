@@ -106,7 +106,7 @@ class WithdrawalDAO(private val db: Database) {
                 selection_done = it.getBoolean("selection_done"),
                 confirmation_done = it.getBoolean("confirmation_done"),
                 aborted = it.getBoolean("aborted"),
-                selected_exchange_account = it.getString("selected_exchange_payto")?.run(::IbanPayTo),
+                selected_exchange_account = it.getString("selected_exchange_payto"),
                 selected_reserve_pub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey),
             )
         }

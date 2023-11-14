@@ -165,6 +165,18 @@ suspend fun ApplicationTestBuilder.cashout(amount: String) {
     }
 }
 
+suspend fun ApplicationTestBuilder.fillCashoutInfo(account: String) {
+    client.patch("/accounts/$account") {
+        basicAuth("$account", "$account-password")
+        jsonBody(json {
+            "cashout_payto_uri" to unknownPayto
+            "challenge_contact_data" to json {
+                "phone" to "+99"
+            }
+        })
+    }.assertNoContent()
+}
+
 suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
     client.get("/cashout-rate?amount_debit=$amount").assertOk().run {
         return json<ConversionResponse>().amount_credit

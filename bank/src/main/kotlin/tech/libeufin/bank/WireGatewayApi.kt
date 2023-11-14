@@ -103,7 +103,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             if (items.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)
             } else {
-                call.respond(reduce(items, bankAccount.internalPaytoUri.canonical))
+                call.respond(reduce(items, bankAccount.internalPaytoUri))
             }
         }
         get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {

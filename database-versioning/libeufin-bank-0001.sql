@@ -220,6 +220,9 @@ CREATE TABLE IF NOT EXISTS taler_exchange_outgoing
     REFERENCES bank_account_transactions(bank_transaction_id)
       ON DELETE RESTRICT
       ON UPDATE RESTRICT
+  ,creditor_account_id BIGINT NOT NULL
+    REFERENCES bank_accounts(bank_account_id)
+    ON DELETE CASCADE ON UPDATE RESTRICT
   );
 
 CREATE TABLE IF NOT EXISTS taler_exchange_incoming

@@ -383,8 +383,8 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                     email = it.getString("email"),
                     phone = it.getString("phone")
                 ),
-                cashout_payto_uri = it.getString("cashout_payto")?.run(::IbanPayTo),
-                payto_uri = IbanPayTo(it.getString("internal_payto_uri")),
+                cashout_payto_uri = it.getString("cashout_payto"),
+                payto_uri = it.getString("internal_payto_uri"),
                 balance = Balance(
                     amount = TalerAmount(
                         it.getLong("balance_val"),
@@ -600,7 +600,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
 
         stmt.oneOrNull {
             BankAccount(
-                internalPaytoUri = IbanPayTo(it.getString("internal_payto_uri")),
+                internalPaytoUri = it.getString("internal_payto_uri"),
                 isTalerExchange = it.getBoolean("is_taler_exchange"),
                 bankAccountId = it.getLong("bank_account_id")
             )
@@ -622,7 +622,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
 
         stmt.oneOrNull {
             BankAccount(
-                internalPaytoUri = IbanPayTo(it.getString("internal_payto_uri")),
+                internalPaytoUri = it.getString("internal_payto_uri"),
                 isTalerExchange = it.getBoolean("is_taler_exchange"),
                 bankAccountId = it.getLong("bank_account_id")
             )
@@ -630,40 +630,6 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
     }
 
     // BANK ACCOUNT TRANSACTIONS
-
-    private fun handleExchangeTx(
-        conn: PgConnection,
-        subject: String,
-        creditorAccountId: Long,
-        debtorAccountId: Long,
-        it: ResultSet
-    ) {
-        val metadata = TxMetadata.parse(subject)
-        if (it.getBoolean("out_creditor_is_exchange")) {
-            val rowId = it.getLong("out_credit_row_id")
-            if (metadata is IncomingTxMetadata) {
-                val stmt = conn.prepareStatement("CALL register_incoming(?, ?)")
-                stmt.setBytes(1, metadata.reservePub.raw)
-                stmt.setLong(2, rowId)
-                stmt.executeUpdate()
-            } else {
-                // TODO bounce
-                logger.warn("exchange account $creditorAccountId received a transaction $rowId with malformed metadata, will bounce in future version")
-            }
-        }
-        if (it.getBoolean("out_debtor_is_exchange")) {
-            val rowId = it.getLong("out_debit_row_id")
-            if (metadata is OutgoingTxMetadata) {
-                val stmt = conn.prepareStatement("CALL register_outgoing(NULL, ?, ?, ?)")
-                stmt.setBytes(1, metadata.wtid.raw)
-                stmt.setString(2, metadata.exchangeBaseUrl.url)
-                stmt.setLong(3, rowId)
-                stmt.executeUpdate()
-            } else {
-                logger.warn("exchange account $debtorAccountId sent a transaction $rowId with malformed metadata")
-            }
-        }
-    }
 
     suspend fun bankTransaction(
         creditAccountPayto: IbanPayTo,
@@ -703,8 +669,39 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                     it.getBoolean("out_same_account") -> BankTransactionResult.SAME_ACCOUNT
                     it.getBoolean("out_balance_insufficient") -> BankTransactionResult.BALANCE_INSUFFICIENT
                     else -> {
-                        handleExchangeTx(conn, subject, it.getLong("out_credit_bank_account_id"), it.getLong("out_debit_bank_account_id"), it)
-                        rowId = it.getLong("out_debit_row_id");
+                        val creditAccountId = it.getLong("out_credit_bank_account_id")
+                        val creditRowId = it.getLong("out_credit_row_id")
+                        val debitAccountId = it.getLong("out_debit_bank_account_id")
+                        val debitRowId = it.getLong("out_debit_row_id")
+                        val metadata = TxMetadata.parse(subject)
+                        if (it.getBoolean("out_creditor_is_exchange")) {
+                            if (metadata is IncomingTxMetadata) {
+                                conn.prepareStatement("CALL register_incoming(?, ?)").run {
+                                    setBytes(1, metadata.reservePub.raw)
+                                    setLong(2, creditRowId)
+                                    executeUpdate()
+                                }
+                            } else {
+                                // TODO bounce
+                                logger.warn("exchange account $creditAccountId received a transaction $creditRowId with malformed metadata, will bounce in future version")
+                            }
+                        }
+                        if (it.getBoolean("out_debtor_is_exchange")) {
+                            if (metadata is OutgoingTxMetadata) {
+                                conn.prepareStatement("CALL register_outgoing(NULL, ?, ?, ?, ?, ?, ?)").run {
+                                    setBytes(1, metadata.wtid.raw)
+                                    setString(2, metadata.exchangeBaseUrl.url)
+                                    setLong(3, debitAccountId)
+                                    setLong(4, creditAccountId)
+                                    setLong(5, debitRowId)
+                                    setLong(6, creditRowId)
+                                    executeUpdate()
+                                }
+                            } else {
+                                logger.warn("exchange account $debitAccountId sent a transaction $debitRowId with malformed metadata")
+                            }
+                        }
+                        rowId = debitRowId;
                         BankTransactionResult.SUCCESS
                     }
                 }
@@ -785,13 +782,14 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         bankAccountId: Long,
         listen: suspend NotificationWatcher.(Long, suspend (Flow<Long>) -> Unit) -> Unit,
         query: String,
+        accountColumn: String = "bank_account_id",
         map: (ResultSet) -> T
     ): List<T> {
 
         suspend fun load(): List<T> = page(
             params.page, 
             "bank_transaction_id", 
-            "$query WHERE bank_account_id=? AND", 
+            "$query WHERE $accountColumn=? AND", 
             {
                 setLong(1, bankAccountId)
                 1

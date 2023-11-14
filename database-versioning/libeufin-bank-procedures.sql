@@ -258,7 +258,10 @@ CREATE OR REPLACE PROCEDURE register_outgoing(
   IN in_request_uid BYTEA,
   IN in_wtid BYTEA,
   IN in_exchange_base_url TEXT,
-  IN in_tx_row_id BIGINT
+  IN in_debtor_account_id BIGINT,
+  IN in_creditor_account_id BIGINT,
+  IN in_debit_row_id BIGINT,
+  IN in_credit_row_id BIGINT
 )
 LANGUAGE plpgsql AS $$
 DECLARE 
@@ -271,21 +274,23 @@ INSERT
     request_uid,
     wtid,
     exchange_base_url,
-    bank_transaction
+    bank_transaction,
+    creditor_account_id
 ) VALUES (
   in_request_uid,
   in_wtid,
   in_exchange_base_url,
-  in_tx_row_id
+  in_debit_row_id,
+  in_creditor_account_id
 );
 -- TODO check if not drain
 -- update stats
 SELECT (amount).val, (amount).frac, bank_account_id
 INTO local_amount.val, local_amount.frac, local_bank_account_id
-FROM bank_account_transactions WHERE bank_transaction_id=in_tx_row_id;
+FROM bank_account_transactions WHERE bank_transaction_id=in_debit_row_id;
 CALL stats_register_payment('taler_out', now()::TIMESTAMP, local_amount, null);
 -- notify new transaction
-PERFORM pg_notify('outgoing_tx', local_bank_account_id || ' ' || in_tx_row_id);
+PERFORM pg_notify('outgoing_tx', in_debtor_account_id || ' ' || in_creditor_account_id || ' ' || in_debit_row_id || ' ' || in_credit_row_id);
 END $$;
 COMMENT ON PROCEDURE register_outgoing
   IS 'Register a bank transaction as a taler outgoing transaction';
@@ -344,6 +349,7 @@ LANGUAGE plpgsql AS $$
 DECLARE
 exchange_bank_account_id BIGINT;
 receiver_bank_account_id BIGINT;
+credit_row_id BIGINT;
 BEGIN
 -- Check for idempotence and conflict
 SELECT (amount != in_amount 
@@ -388,10 +394,10 @@ END IF;
 -- Perform bank transfer
 SELECT
   out_balance_insufficient,
-  out_debit_row_id
+  out_debit_row_id, out_credit_row_id
   INTO
     out_exchange_balance_insufficient,
-    out_tx_row_id
+    out_tx_row_id, credit_row_id
   FROM bank_wire_transfer(
     receiver_bank_account_id,
     exchange_bank_account_id,
@@ -407,7 +413,7 @@ IF out_exchange_balance_insufficient THEN
 END IF;
 out_timestamp=in_timestamp;
 -- Register outgoing transaction
-CALL register_outgoing(in_request_uid, in_wtid, in_exchange_base_url, out_tx_row_id);
+CALL register_outgoing(in_request_uid, in_wtid, in_exchange_base_url, exchange_bank_account_id, receiver_bank_account_id, out_tx_row_id, credit_row_id);
 END $$;
 -- TODO new comment
 COMMENT ON FUNCTION taler_transfer IS 'function that (1) inserts the TWG requests'

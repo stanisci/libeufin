@@ -217,6 +217,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
         coreBankApi(db, ctx)
         bankIntegrationApi(db, ctx)
         wireGatewayApi(db, ctx)
+        revenueApi(db)
     }
 }
 

@@ -39,15 +39,7 @@ class StatsTest {
         setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
         setMaxDebt("exchange", TalerAmount("KUDOS:1000"))
         setMaxDebt("customer", TalerAmount("KUDOS:1000"))
-        client.patch("/accounts/customer") {
-            basicAuth("customer", "customer-password")
-            jsonBody(json {
-                "cashout_payto_uri" to IbanPayTo(genIbanPaytoUri())
-                "challenge_contact_data" to json {
-                    "phone" to "+99"
-                }
-            })
-        }.assertNoContent()
+        fillCashoutInfo("customer")
 
         suspend fun cashin(amount: String) {
             db.conn { conn ->

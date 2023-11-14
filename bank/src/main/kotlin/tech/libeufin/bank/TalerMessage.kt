@@ -161,7 +161,7 @@ data class MonitorWithConversion(
  * from/to the database.
  */
 data class BankAccount(
-    val internalPaytoUri: IbanPayTo,
+    val internalPaytoUri: String,
     val bankAccountId: Long,
     val isTalerExchange: Boolean,
 )
@@ -249,10 +249,10 @@ data class ListBankAccountsResponse(
 data class AccountData(
     val name: String,
     val balance: Balance,
-    val payto_uri: IbanPayTo,
+    val payto_uri: String,
     val debit_threshold: TalerAmount,
     val contact_data: ChallengeContactData? = null,
-    val cashout_payto_uri: IbanPayTo? = null,
+    val cashout_payto_uri: String? = null,
 )
 
 @Serializable
@@ -306,7 +306,7 @@ data class BankAccountGetWithdrawalResponse(
     val confirmation_done: Boolean,
     val selection_done: Boolean,
     val selected_reserve_pub: EddsaPublicKey? = null,
-    val selected_exchange_account: IbanPayTo? = null
+    val selected_exchange_account: String? = null
 )
 
 // GET /config response from the Taler Integration API.
@@ -512,9 +512,25 @@ data class OutgoingTransaction(
     val row_id: Long, // DB row ID of the payment.
     val date: TalerProtocolTimestamp,
     val amount: TalerAmount,
-    val credit_account: IbanPayTo, // Payto of the receiver.
+    val credit_account: String, // Payto of the receiver.
     val wtid: ShortHashCode,
-    val exchange_base_url: ExchangeUrl,
+    val exchange_base_url: String,
+)
+
+@Serializable
+data class MerchantIncomingHistory(
+    val incoming_transactions : List<MerchantIncomingBankTransaction>,
+    val credit_account: String
+)
+
+@Serializable
+data class MerchantIncomingBankTransaction(
+    val row_id: Long,
+    val date: TalerProtocolTimestamp,
+    val amount: TalerAmount,
+    val debit_account: String,
+    val exchange_url: String,
+    val wtid: ShortHashCode
 )
 
 /**
