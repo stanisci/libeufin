@@ -162,14 +162,8 @@ data class MonitorWithConversion(
  */
 data class BankAccount(
     val internalPaytoUri: IbanPayTo,
-    // Database row ID of the customer that owns this bank account.
-    val owningCustomerId: Long,
     val bankAccountId: Long,
-    val isPublic: Boolean,
     val isTalerExchange: Boolean,
-    val balance: TalerAmount,
-    val hasDebt: Boolean,
-    val maxDebt: TalerAmount
 )
 
 // Allowed values for cashout TAN channels.
@@ -203,50 +197,6 @@ data class BearerToken(
      * customer that created the very first token.
      */
     val bankCustomer: Long
-)
-
-/**
- * Convenience type representing bank transactions as they
- * are in the respective database table.  Only used to _get_
- * the information from the database.
- */
-data class BankAccountTransaction(
-    val creditorPaytoUri: String,
-    val creditorName: String,
-    val debtorPaytoUri: String,
-    val debtorName: String,
-    val subject: String,
-    val amount: TalerAmount,
-    val transactionDate: Instant,
-    /**
-     * Is the transaction debit, or credit for the
-     * bank account pointed by this object?
-     */
-    val direction: TransactionDirection,
-    /**
-     * database row ID of the bank account that is
-     * impacted by the direction.  For example, if the
-     * direction is debit, then this value points to the
-     * bank account of the payer.
-     */
-    val bankAccountId: Long,
-    // Null if this type is used to _create_ one transaction.
-    val dbRowId: Long
-)
-
-/**
- * Represents a Taler withdrawal operation, as it is
- * stored in the respective database table.
- */
-data class TalerWithdrawalOperation(
-    val withdrawalUuid: UUID,
-    val amount: TalerAmount,
-    val selectionDone: Boolean,
-    val aborted: Boolean,
-    val confirmationDone: Boolean,
-    val reservePub: EddsaPublicKey?,
-    val selectedExchangePayto: IbanPayTo?,
-    val walletBankAccount: Long
 )
 
 // Type to return as GET /config response
@@ -305,13 +255,15 @@ data class AccountData(
     val cashout_payto_uri: IbanPayTo? = null,
 )
 
-/**
- * Response type of corebank API transaction initiation.
- */
 @Serializable
-data class BankAccountTransactionCreate(
+data class TransactionCreateRequest(
     val payto_uri: IbanPayTo,
     val amount: TalerAmount?
+)
+
+@Serializable
+data class TransactionCreateResponse(
+    val row_id: Long
 )
 
 /* History element, either from GET /transactions/T_ID

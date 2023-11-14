@@ -103,6 +103,17 @@ suspend fun ApplicationTestBuilder.assertBalance(account: String, info: CreditDe
     }
 }
 
+suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String): Long {
+    return client.post("/accounts/$from/transactions") {
+        basicAuth("$from", "$from-password")
+        jsonBody {
+            "payto_uri" to "payto://iban/$to-IBAN-XYZ?message=tx&amount=$amount"
+        }
+    }.assertOk().run {
+        json<TransactionCreateResponse>().row_id
+    }
+}
+
 suspend fun ApplicationTestBuilder.transfer(amount: String) {
     client.post("/accounts/exchange/taler-wire-gateway/transfer") {
         basicAuth("exchange", "exchange-password")

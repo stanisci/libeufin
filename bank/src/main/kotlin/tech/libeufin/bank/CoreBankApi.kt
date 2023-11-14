@@ -61,7 +61,7 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
         }
     }
     coreBankTokenApi(db)
-    coreBankAccountsMgmtApi(db, ctx)
+    coreBankAccountsApi(db, ctx)
     coreBankTransactionsApi(db, ctx)
     coreBankWithdrawalApi(db, ctx)
     coreBankCashoutApi(db, ctx)
@@ -144,7 +144,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
     }
 }
 
-private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
+private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     authAdmin(db, TokenScope.readwrite, ctx.restrictRegistration) {
         post("/accounts") {
             val req = call.receive<RegisterAccountRequest>()
@@ -274,7 +274,8 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
         }
     }
     get("/public-accounts") {
-        val publicAccounts = db.accountsGetPublic(ctx.currency)
+        val params = AccountParams.extract(call.request.queryParameters)
+        val publicAccounts = db.accountsGetPublic(params)
         if (publicAccounts.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
         } else {
@@ -283,14 +284,8 @@ private fun Routing.coreBankAccountsMgmtApi(db: Database, ctx: BankConfig) {
     }
     authAdmin(db, TokenScope.readonly) {
         get("/accounts") {
-            // Get optional param.
-            val maybeFilter: String? = call.request.queryParameters["filter_name"]
-            logger.debug("Filtering on '${maybeFilter}'")
-            val queryParam =
-                    if (maybeFilter != null) {
-                        "%${maybeFilter}%"
-                    } else "%"
-            val accounts = db.accountsGetForAdmin(queryParam)
+            val params = AccountParams.extract(call.request.queryParameters)
+            val accounts = db.accountsGetForAdmin(params)
             if (accounts.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)
             } else {
@@ -324,46 +319,25 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
             }
         }
         get("/accounts/{USERNAME}/transactions/{T_ID}") {
-            val tId = call.expectUriComponent("T_ID")
-            val txRowId =
-                    try {
-                        tId.toLong()
-                    } catch (e: Exception) {
-                        logger.error(e.message)
-                        throw badRequest("TRANSACTION_ID is not a number: ${tId}")
-                    }
-    
+            val tId = call.longUriComponent("T_ID")
             val bankAccount = call.bankAccount(db)
-            val tx =
-                    db.bankTransactionGetFromInternalId(txRowId)
-                            ?: throw notFound(
-                                    "Bank transaction '$tId' not found",
-                                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-                            )
-            if (tx.bankAccountId != bankAccount.bankAccountId) // TODO not found ?
-             throw unauthorized("Client has no rights over the bank transaction: $tId")
-    
-            call.respond(
-                BankAccountTransactionInfo(
-                    amount = tx.amount,
-                    creditor_payto_uri = tx.creditorPaytoUri,
-                    debtor_payto_uri = tx.debtorPaytoUri,
-                    date = TalerProtocolTimestamp(tx.transactionDate),
-                    direction = tx.direction,
-                    subject = tx.subject,
-                    row_id = txRowId
+            val (tx, accountId) = db.bankTransactionGetFromInternalId(tId) ?: throw notFound(
+                    "Bank transaction '$tId' not found",
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
                 )
-            )
+            if (accountId != bankAccount.bankAccountId) // TODO not found ?
+                throw unauthorized("Client has no rights over the bank transaction: $tId")
+            call.respond(tx)
         }
     }
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/transactions") {
-            val tx = call.receive<BankAccountTransactionCreate>()
+            val tx = call.receive<TransactionCreateRequest>()
             val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
             val amount =
                     tx.payto_uri.amount ?: tx.amount ?: throw badRequest("Wire transfer lacks amount")
             ctx.checkRegionalCurrency(amount)
-            val result = db.bankTransaction(
+            val (result, id) = db.bankTransaction(
                 creditAccountPayto = tx.payto_uri,
                 debitAccountUsername = username,
                 subject = subject,
@@ -387,7 +361,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
                     "Insufficient funds",
                     TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
-                BankTransactionResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+                BankTransactionResult.SUCCESS -> call.respond(TransactionCreateResponse(id!!))
             }
         }
     }
@@ -426,17 +400,12 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         }
     }
     get("/withdrawals/{withdrawal_id}") {
-        val op = call.getWithdrawal(db, "withdrawal_id")
-        call.respond(
-            BankAccountGetWithdrawalResponse(
-                amount = op.amount,
-                aborted = op.aborted,
-                confirmation_done = op.confirmationDone,
-                selection_done = op.selectionDone,
-                selected_exchange_account = op.selectedExchangePayto,
-                selected_reserve_pub = op.reservePub
-            )
+        val uuid = call.uuidUriComponent("withdrawal_id")
+        val op = db.withdrawal.get(uuid) ?: throw notFound(
+            "Withdrawal operation '$uuid' not found", 
+            TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
         )
+        call.respond(op)
     }
     post("/withdrawals/{withdrawal_id}/abort") {
         val opId = call.uuidUriComponent("withdrawal_id")

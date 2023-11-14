@@ -25,7 +25,7 @@ class WireGatewayApiTest {
             amount = TalerAmount("KUDOS:10"),
             timestamp = Instant.now(),
         ).run {
-            assertEquals(BankTransactionResult.SUCCESS, this)
+            assertEquals(BankTransactionResult.SUCCESS, first)
         }
     }
 

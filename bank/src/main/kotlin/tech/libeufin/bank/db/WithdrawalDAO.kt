@@ -82,36 +82,63 @@ class WithdrawalDAO(private val db: Database) {
         }
     }
 
-    suspend fun get(uuid: UUID): TalerWithdrawalOperation? = db.conn { conn ->
+    suspend fun get(uuid: UUID): BankAccountGetWithdrawalResponse? = db.conn { conn -> 
         val stmt = conn.prepareStatement("""
             SELECT
               (amount).val as amount_val
               ,(amount).frac as amount_frac
-              ,withdrawal_uuid
               ,selection_done     
               ,aborted     
               ,confirmation_done     
               ,reserve_pub
               ,selected_exchange_payto 
-	          ,wallet_bank_account
             FROM taler_withdrawal_operations
             WHERE withdrawal_uuid=?
         """)
         stmt.setObject(1, uuid)
         stmt.oneOrNull {
-            TalerWithdrawalOperation(
+            BankAccountGetWithdrawalResponse(
                 amount = TalerAmount(
                     it.getLong("amount_val"),
                     it.getInt("amount_frac"),
                     db.bankCurrency
                 ),
-                selectionDone = it.getBoolean("selection_done"),
-                selectedExchangePayto = it.getString("selected_exchange_payto")?.run(::IbanPayTo),
-                walletBankAccount = it.getLong("wallet_bank_account"),
-                confirmationDone = it.getBoolean("confirmation_done"),
+                selection_done = it.getBoolean("selection_done"),
+                confirmation_done = it.getBoolean("confirmation_done"),
                 aborted = it.getBoolean("aborted"),
-                reservePub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey),
-                withdrawalUuid = it.getObject("withdrawal_uuid") as UUID
+                selected_exchange_account = it.getString("selected_exchange_payto")?.run(::IbanPayTo),
+                selected_reserve_pub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey),
+            )
+        }
+    }
+
+    suspend fun getStatus(uuid: UUID): BankWithdrawalOperationStatus? = db.conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT
+              (amount).val as amount_val
+              ,(amount).frac as amount_frac
+              ,selection_done     
+              ,aborted     
+              ,confirmation_done      
+              ,internal_payto_uri
+            FROM taler_withdrawal_operations
+                JOIN bank_accounts ON (wallet_bank_account=bank_account_id)
+            WHERE withdrawal_uuid=?
+        """)
+        stmt.setObject(1, uuid)
+        stmt.oneOrNull {
+            BankWithdrawalOperationStatus(
+                amount = TalerAmount(
+                    it.getLong("amount_val"),
+                    it.getInt("amount_frac"),
+                    db.bankCurrency
+                ),
+                selection_done = it.getBoolean("selection_done"),
+                transfer_done = it.getBoolean("confirmation_done"),
+                aborted = it.getBoolean("aborted"),
+                sender_wire = it.getString("internal_payto_uri"),
+                confirm_transfer_url = null,
+                suggested_exchange = null
             )
         }
     }

@@ -41,7 +41,7 @@ class SecurityTest {
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
             jsonBody(valid_req)
-        }.assertNoContent()
+        }.assertOk()
 
         // Check body too big
         client.post("/accounts/merchant/transactions") {

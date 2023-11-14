@@ -48,7 +48,7 @@ class AmountTest {
 
             // Check bank transaction
             stmt.executeUpdate()
-            val txRes = db.bankTransaction(
+            val (txRes, _) = db.bankTransaction(
                 creditAccountPayto = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
                 debitAccountUsername = "merchant",
                 subject = "test",

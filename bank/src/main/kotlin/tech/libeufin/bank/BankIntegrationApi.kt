@@ -39,26 +39,20 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     // Note: wopid acts as an authentication token.
     get("/taler-integration/withdrawal-operation/{wopid}") {
         // TODO long poll
-        val op = call.getWithdrawal(db, "wopid") // throws 404 if not found.
-        val relatedBankAccount = db.bankAccountGetFromOwnerId(op.walletBankAccount)
-            ?: throw internalServerError("Bank has a withdrawal not related to any bank account.")
-        val suggestedExchange = ctx.suggestedWithdrawalExchange
-        val confirmUrl = if (ctx.spaCaptchaURL == null) null else
-            getWithdrawalConfirmUrl(
-                baseUrl = ctx.spaCaptchaURL,
-                wopId = op.withdrawalUuid
-            )
-        call.respond(
-            BankWithdrawalOperationStatus(
-                aborted = op.aborted,
-                selection_done = op.selectionDone,
-                transfer_done = op.confirmationDone,
-                amount = op.amount,
-                sender_wire = relatedBankAccount.internalPaytoUri.canonical,
-                suggested_exchange = suggestedExchange,
-                confirm_transfer_url = confirmUrl
-            )
+        val uuid = call.uuidUriComponent("wopid")
+        val op = db.withdrawal.getStatus(uuid) ?: throw notFound(
+            "Withdrawal operation '$uuid' not found", 
+            TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
         )
+        call.respond(op.copy(
+            suggested_exchange = ctx.suggestedWithdrawalExchange,
+            confirm_transfer_url = ctx.spaCaptchaURL?.run {
+                getWithdrawalConfirmUrl(
+                    baseUrl = this,
+                    wopId = uuid
+                )
+            }
+        ))
     }
     post("/taler-integration/withdrawal-operation/{wopid}") {
         val opId = call.uuidUriComponent("wopid")

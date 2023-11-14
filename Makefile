@@ -36,13 +36,15 @@ deb:
 .PHONY: install
 install: install-bank
 
-.PHONY: install-bank
-install-bank:
+install-bank-files:
 	install -d $(bank_config_dir)
 	install contrib/libeufin-bank.conf $(bank_config_dir)/
 	install contrib/currencies.conf $(bank_config_dir)/
 	install -D database-versioning/libeufin-bank*.sql -t $(bank_sql_dir)
 	install -D database-versioning/versioning.sql -t $(bank_sql_dir)
+
+.PHONY: install-bank
+install-bank: install-bank-files
 	install -d $(spa_dir)
 	cp contrib/wallet-core/demobank/* $(spa_dir)/
 	./gradlew bank:installShadowDist
@@ -63,5 +65,5 @@ assemble:
 	./gradlew assemble
 
 .PHONY: check
-check:
+check: install-bank-files
 	./gradlew check

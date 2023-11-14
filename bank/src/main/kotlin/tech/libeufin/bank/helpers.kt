@@ -114,22 +114,6 @@ fun ApplicationCall.longUriComponent(name: String): Long {
 }
 
 /**
- * This handler factors out the checking of the query param
- * and the retrieval of the related withdrawal database row.
- * It throws 404 if the operation is not found, and throws 400
- * if the query param doesn't parse into a UUID.  Currently
- * used by the Taler Web/SPA and Integration API handlers.
- */
-suspend fun ApplicationCall.getWithdrawal(db: Database, name: String): TalerWithdrawalOperation {
-    val opId = uuidUriComponent(name)
-    val op = db.withdrawal.get(opId) ?: throw notFound(
-        "Withdrawal operation $opId not found", 
-        TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-    )
-    return op
-}
-
-/**
  * This function creates the admin account ONLY IF it was
  * NOT found in the database.  It sets it to a random password that
  * is only meant to be overridden by a dedicated CLI tool.

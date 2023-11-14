@@ -93,6 +93,17 @@ data class HistoryParams(
     }
 }
 
+data class AccountParams(
+    val page: PageParams, val loginFilter: String
+) {
+    companion object {
+        fun extract(params: Parameters): AccountParams {
+            val loginFilter = params.get("filter_name")?.run { "%$this%" } ?: "%"
+            return AccountParams(PageParams.extract(params), loginFilter)
+        }
+    }
+}
+
 data class PageParams(
     val delta: Int, val start: Long
 ) {

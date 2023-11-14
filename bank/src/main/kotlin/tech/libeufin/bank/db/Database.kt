@@ -460,8 +460,11 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
      *
      * Returns an empty list, if no public account was found.
      */
-    suspend fun accountsGetPublic(internalCurrency: String, loginFilter: String = "%"): List<PublicAccount> = conn { conn ->
-        val stmt = conn.prepareStatement("""
+    suspend fun accountsGetPublic(params: AccountParams): List<PublicAccount>
+        = page(
+            params.page,
+            "bank_account_id",
+            """
             SELECT
               (balance).val AS balance_val,
               (balance).frac AS balance_frac,
@@ -470,10 +473,13 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
               c.login      
               FROM bank_accounts JOIN customers AS c
                 ON owning_customer_id = c.customer_id
-                WHERE is_public=true AND c.login LIKE ?;
-        """)
-        stmt.setString(1, loginFilter)
-        stmt.all {
+                WHERE is_public=true AND c.login LIKE ? AND
+            """,
+            {
+                setString(1, params.loginFilter)
+                1
+            }
+        ) {
             PublicAccount(
                 account_name = it.getString("login"),
                 payto_uri = it.getString("internal_payto_uri"),
@@ -481,7 +487,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                     amount = TalerAmount(
                         value = it.getLong("balance_val"),
                         frac = it.getInt("balance_frac"),
-                        currency = internalCurrency
+                        currency = bankCurrency
                     ),
                     credit_debit_indicator = if (it.getBoolean("has_debt")) {
                         CreditDebitInfo.debit 
@@ -491,7 +497,6 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                 )
             )
         }
-    }
 
     /**
      * Gets a minimal set of account data, as outlined in the GET /accounts
@@ -499,22 +504,28 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
      * LIKE operator.  If it's null, it defaults to the "%" wildcard, meaning
      * that it returns ALL the existing accounts.
      */
-    suspend fun accountsGetForAdmin(nameFilter: String = "%"): List<AccountMinimalData> = conn { conn ->
-        val stmt = conn.prepareStatement("""
+    suspend fun accountsGetForAdmin(params: AccountParams): List<AccountMinimalData>
+        = page(
+            params.page,
+            "bank_account_id",
+            """
             SELECT
-              login,
-              name,
-              (b.balance).val AS balance_val,
-              (b.balance).frac AS balance_frac,
-              (b).has_debt AS balance_has_debt,
-              (max_debt).val as max_debt_val,
-              (max_debt).frac as max_debt_frac
-              FROM customers JOIN bank_accounts AS b
-                ON customer_id = b.owning_customer_id
-              WHERE name LIKE ?;
-        """)
-        stmt.setString(1, nameFilter)
-        stmt.all {
+            login,
+            name,
+            (b.balance).val AS balance_val,
+            (b.balance).frac AS balance_frac,
+            (b).has_debt AS balance_has_debt,
+            (max_debt).val as max_debt_val,
+            (max_debt).frac as max_debt_frac
+            FROM customers JOIN bank_accounts AS b
+              ON customer_id = b.owning_customer_id
+            WHERE name LIKE ? AND
+            """,
+            {
+                setString(1, params.loginFilter)
+                1
+            }
+        ) {
             AccountMinimalData(
                 username = it.getString("login"),
                 name = it.getString("name"),
@@ -537,7 +548,6 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                 )
             )
         }
-    }
 
     // BANK ACCOUNTS
 
@@ -545,14 +555,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         val stmt = conn.prepareStatement("""
             SELECT
             internal_payto_uri
-             ,owning_customer_id
-             ,is_public
              ,is_taler_exchange
-             ,(balance).val AS balance_val
-             ,(balance).frac AS balance_frac
-             ,has_debt
-             ,(max_debt).val AS max_debt_val
-             ,(max_debt).frac AS max_debt_frac
              ,bank_account_id
             FROM bank_accounts
             WHERE owning_customer_id=?
@@ -562,20 +565,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         stmt.oneOrNull {
             BankAccount(
                 internalPaytoUri = IbanPayTo(it.getString("internal_payto_uri")),
-                balance = TalerAmount(
-                    it.getLong("balance_val"),
-                    it.getInt("balance_frac"),
-                    bankCurrency
-                ),
-                owningCustomerId = it.getLong("owning_customer_id"),
-                hasDebt = it.getBoolean("has_debt"),
                 isTalerExchange = it.getBoolean("is_taler_exchange"),
-                isPublic = it.getBoolean("is_public"),
-                maxDebt = TalerAmount(
-                    value = it.getLong("max_debt_val"),
-                    frac = it.getInt("max_debt_frac"),
-                    bankCurrency
-                ),
                 bankAccountId = it.getLong("bank_account_id")
             )
         }
@@ -585,15 +575,8 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         val stmt = conn.prepareStatement("""
             SELECT
              bank_account_id
-             ,owning_customer_id
              ,internal_payto_uri
-             ,is_public
              ,is_taler_exchange
-             ,(balance).val AS balance_val
-             ,(balance).frac AS balance_frac
-             ,has_debt
-             ,(max_debt).val AS max_debt_val
-             ,(max_debt).frac AS max_debt_frac
             FROM bank_accounts
                 JOIN customers 
                 ON customer_id=owning_customer_id
@@ -604,20 +587,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         stmt.oneOrNull {
             BankAccount(
                 internalPaytoUri = IbanPayTo(it.getString("internal_payto_uri")),
-                balance = TalerAmount(
-                    it.getLong("balance_val"),
-                    it.getInt("balance_frac"),
-                    bankCurrency
-                ),
-                owningCustomerId = it.getLong("owning_customer_id"),
-                hasDebt = it.getBoolean("has_debt"),
                 isTalerExchange = it.getBoolean("is_taler_exchange"),
-                maxDebt = TalerAmount(
-                    value = it.getLong("max_debt_val"),
-                    frac = it.getInt("max_debt_frac"),
-                    bankCurrency
-                ),
-                isPublic = it.getBoolean("is_public"),
                 bankAccountId = it.getLong("bank_account_id")
             )
         }
@@ -665,7 +635,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         subject: String,
         amount: TalerAmount,
         timestamp: Instant,
-    ): BankTransactionResult = conn { conn ->
+    ): Pair<BankTransactionResult, Long?> = conn { conn ->
         conn.transaction {
             val stmt = conn.prepareStatement("""
                 SELECT 
@@ -689,7 +659,8 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
             stmt.setInt(5, amount.frac)
             stmt.setLong(6, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
             stmt.executeQuery().use {
-                when {
+                var rowId: Long? = null;
+                val result = when {
                     !it.next() -> throw internalServerError("Bank transaction didn't properly return")
                     it.getBoolean("out_creditor_not_found") -> BankTransactionResult.NO_CREDITOR
                     it.getBoolean("out_debtor_not_found") -> BankTransactionResult.NO_DEBTOR
@@ -697,21 +668,21 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                     it.getBoolean("out_balance_insufficient") -> BankTransactionResult.BALANCE_INSUFFICIENT
                     else -> {
                         handleExchangeTx(conn, subject, it.getLong("out_credit_bank_account_id"), it.getLong("out_debit_bank_account_id"), it)
+                        rowId = it.getLong("out_debit_row_id");
                         BankTransactionResult.SUCCESS
                     }
                 }
+                Pair(result, rowId)
             }
         }
     }
     
     // Get the bank transaction whose row ID is rowId
-    suspend fun bankTransactionGetFromInternalId(rowId: Long): BankAccountTransaction? = conn { conn ->
+    suspend fun bankTransactionGetFromInternalId(rowId: Long): Pair<BankAccountTransactionInfo, Long>? = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT 
               creditor_payto_uri
-              ,creditor_name
               ,debtor_payto_uri
-              ,debtor_name
               ,subject
               ,(amount).val AS amount_val
               ,(amount).frac AS amount_frac
@@ -724,21 +695,21 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         """)
         stmt.setLong(1, rowId)
         stmt.oneOrNull {
-            BankAccountTransaction(
-                creditorPaytoUri = it.getString("creditor_payto_uri"),
-                creditorName = it.getString("creditor_name"),
-                debtorPaytoUri = it.getString("debtor_payto_uri"),
-                debtorName = it.getString("debtor_name"),
-                amount = TalerAmount(
-                    it.getLong("amount_val"),
-                    it.getInt("amount_frac"),
-                    bankCurrency
+            Pair(
+                BankAccountTransactionInfo(
+                    creditor_payto_uri = it.getString("creditor_payto_uri"),
+                    debtor_payto_uri = it.getString("debtor_payto_uri"),
+                    amount = TalerAmount(
+                        it.getLong("amount_val"),
+                        it.getInt("amount_frac"),
+                        bankCurrency
+                    ),
+                    direction = TransactionDirection.valueOf(it.getString("direction")),
+                    subject = it.getString("subject"),
+                    date = TalerProtocolTimestamp(it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()),
+                    row_id = it.getLong("bank_transaction_id")
                 ),
-                direction = TransactionDirection.valueOf(it.getString("direction")),
-                bankAccountId = it.getLong("bank_account_id"),
-                subject = it.getString("subject"),
-                transactionDate = it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank(),
-                dbRowId = it.getLong("bank_transaction_id")
+                it.getLong("bank_account_id")
             )
         }
     }
