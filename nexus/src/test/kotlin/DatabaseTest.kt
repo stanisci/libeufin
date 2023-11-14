@@ -1,11 +1,10 @@
 import kotlinx.coroutines.runBlocking
-import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.nexus.*
 import java.time.Instant
+import kotlin.random.Random
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 
@@ -43,7 +42,7 @@ class OutgoingPaymentsTest {
     }
 }
 
-@Ignore // enable after having modified the bouncing logic in Kotlin
+// @Ignore // enable after having modified the bouncing logic in Kotlin
 class IncomingPaymentsTest {
     // Tests creating and bouncing incoming payments in one DB transaction.
     @Test
@@ -51,17 +50,21 @@ class IncomingPaymentsTest {
         val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
         runBlocking {
             // creating and bouncing one incoming transaction.
-            db.incomingPaymentCreateBounced(
+            assertTrue(db.incomingPaymentCreateBounced(
                 genIncPay("incoming and bounced"),
                 "UID"
-            )
+            ))
             db.runConn {
-                // check the bounced flaag is true
+                // Checking one incoming got created
+                val checkIncoming = it.prepareStatement("""
+                    SELECT 1 FROM incoming_transactions WHERE incoming_transaction_id = 1;
+                """).executeQuery()
+                assertTrue(checkIncoming.next())
+                // Checking the bounced table got its row.
                 val checkBounced = it.prepareStatement("""
-                    SELECT bounced FROM incoming_transactions WHERE incoming_transaction_id = 1;
+                    SELECT 1 FROM bounced_transactions WHERE incoming_transaction_id = 1;
                 """).executeQuery()
                 assertTrue(checkBounced.next())
-                assertTrue(checkBounced.getBoolean("bounced"))
                 // check the related initiated payment exists.
                 val checkInitiated = it.prepareStatement("""
                     SELECT 
@@ -74,55 +77,22 @@ class IncomingPaymentsTest {
         }
     }
 
-    // Tests the function that flags incoming payments as bounced.
+    // Tests the creation of a talerable incoming payment.
     @Test
-    fun incomingPaymentBounce() {
+    fun incomingTalerableCreation() {
         val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
-        runBlocking {
-            // creating one incoming payment.
-            assertTrue(db.incomingPaymentCreate(genIncPay("to be bounced"))) // row ID == 1.
-            db.runConn {
-                val bouncedSql = """
-                    SELECT bounced
-                      FROM incoming_transactions
-                      WHERE incoming_transaction_id = 1"""
-                // asserting is NOT bounced.
-                val expectNotBounced = it.execSQLQuery(bouncedSql)
-                assertTrue(expectNotBounced.next())
-                assertFalse(expectNotBounced.getBoolean("bounced"))
-                // now bouncing it.
-                assertTrue(db.incomingPaymentSetAsBounced(1, "unique 0"))
-                // asserting it got flagged as bounced.
-                val expectBounced = it.execSQLQuery(bouncedSql)
-                assertTrue(expectBounced.next())
-                assertTrue(expectBounced.getBoolean("bounced"))
-                // Trying to bounce a non-existing payment.
-                assertFalse(db.incomingPaymentSetAsBounced(5, "unique 1"))
-            }
-        }
-    }
+        val reservePub = ByteArray(32)
+        Random.nextBytes(reservePub)
 
-    // Tests the creation of an incoming payment.
-    @Test
-    fun incomingPaymentCreation() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
-        val countRows = "SELECT count(*) AS how_many FROM incoming_transactions"
         runBlocking {
-            // Asserting the table is empty.
-            db.runConn {
-                val res = it.execSQLQuery(countRows)
-                assertTrue(res.next())
-                assertEquals(0, res.getInt("how_many"))
-            }
-            assertTrue(db.incomingPaymentCreate(genIncPay("singleton")))
-            // Asserting the table has one.
-            db.runConn {
-                val res = it.execSQLQuery(countRows)
-                assertTrue(res.next())
-                assertEquals(1, res.getInt("how_many"))
-            }
-            // Checking insertion of null (allowed) subjects.
-            assertTrue(db.incomingPaymentCreate(genIncPay()))
+            // Checking the reserve is not found.
+            assertFalse(db.isReservePubFound(reservePub))
+            assertTrue(db.incomingTalerablePaymentCreate(
+                genIncPay("reserve-pub"),
+                reservePub
+            ))
+            // Checking the reserve is not found.
+            assertTrue(db.isReservePubFound(reservePub))
         }
     }
 }

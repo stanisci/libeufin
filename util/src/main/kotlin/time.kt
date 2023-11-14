@@ -20,8 +20,8 @@
 package tech.libeufin.util
 
 import java.time.*
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.TimeUnit
 
 /**
  * Converts the 'this' Instant to the number of nanoseconds
@@ -79,4 +79,16 @@ fun Long.microsToJavaInstant(): Instant? {
         logger.error(e.message)
         return null
     }
+}
+
+/**
+ * Parses one timestamp from the ISO 8601 format.
+ *
+ * @param timeFromXml input time string from the XML
+ * @return [Instant] in the UTC timezone
+ */
+fun parseGregorianTime(timeFromXml: String): Instant {
+    val formatter = DateTimeFormatter.ISO_DATE_TIME.parse(timeFromXml)
+    return Instant.from(formatter)
+
 }

@@ -9,8 +9,12 @@ CREATE OR REPLACE FUNCTION create_incoming_and_bounce(
   ,IN in_bank_transfer_id TEXT
   ,IN in_timestamp BIGINT
   ,IN in_request_uid TEXT
-) RETURNS void
+  ,OUT out_ok BOOLEAN
+) RETURNS BOOLEAN
 LANGUAGE plpgsql AS $$
+DECLARE
+new_tx_id INT8;
+new_init_id INT8;
 BEGIN
 -- creating the bounced incoming transaction.
 INSERT INTO incoming_transactions (
@@ -19,15 +23,14 @@ INSERT INTO incoming_transactions (
   ,execution_time
   ,debit_payto_uri
   ,bank_transfer_id
-  ,bounced
   ) VALUES (
     in_amount
     ,in_wire_transfer_subject
     ,in_execution_time
     ,in_debit_payto_uri
     ,in_bank_transfer_id
-    ,true
-  );
+  ) RETURNING incoming_transaction_id INTO new_tx_id;
+
 -- creating its reimbursement.
 INSERT INTO initiated_outgoing_transactions (
   amount
@@ -41,7 +44,16 @@ INSERT INTO initiated_outgoing_transactions (
     ,in_debit_payto_uri
     ,in_timestamp
     ,in_request_uid
-  );
+  ) RETURNING initiated_outgoing_transaction_id INTO new_init_id;
+
+INSERT INTO bounced_transactions (
+  incoming_transaction_id
+  ,initiated_outgoing_transaction_id
+) VALUES (
+  new_tx_id
+  ,new_init_id
+);
+out_ok = TRUE;
 END $$;
 
 COMMENT ON FUNCTION create_incoming_and_bounce(taler_amount, TEXT, BIGINT, TEXT, TEXT, BIGINT, TEXT)
@@ -141,3 +153,44 @@ UPDATE incoming_transactions
 END $$;
 
 COMMENT ON FUNCTION bounce_payment(BIGINT, BIGINT, TEXT) IS 'Marks an incoming payment as bounced and initiates its refunding payment';
+
+CREATE OR REPLACE FUNCTION create_incoming_talerable(
+  IN in_amount taler_amount
+  ,IN in_wire_transfer_subject TEXT
+  ,IN in_execution_time BIGINT
+  ,IN in_debit_payto_uri TEXT
+  ,IN in_bank_transfer_id TEXT
+  ,IN in_reserve_public_key BYTEA
+  ,OUT out_ok BOOLEAN
+) RETURNS BOOLEAN
+LANGUAGE plpgsql AS $$
+DECLARE
+new_tx_id INT8;
+BEGIN
+INSERT INTO incoming_transactions (
+  amount
+  ,wire_transfer_subject
+  ,execution_time
+  ,debit_payto_uri
+  ,bank_transfer_id
+  ) VALUES (
+    in_amount
+    ,in_wire_transfer_subject
+    ,in_execution_time
+    ,in_debit_payto_uri
+    ,in_bank_transfer_id
+  ) RETURNING incoming_transaction_id INTO new_tx_id;
+INSERT INTO talerable_incoming_transactions (
+  incoming_transaction_id
+  ,reserve_public_key
+) VALUES (
+  new_tx_id
+  ,in_reserve_public_key
+);
+out_ok = TRUE;
+END $$;
+
+COMMENT ON FUNCTION create_incoming_talerable(taler_amount, TEXT, BIGINT, TEXT, TEXT, BYTEA) IS '
+Creates one row in the incoming transactions table and one row
+in the talerable transactions table.  The talerable row links the
+incoming one.';

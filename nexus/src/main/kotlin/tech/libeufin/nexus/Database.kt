@@ -39,7 +39,7 @@ fun TalerAmount.stringify(): String {
  */
 data class IncomingPayment(
     val amount: TalerAmount,
-    val wireTransferSubject: String?,
+    val wireTransferSubject: String,
     val debitPaytoUri: String,
     val executionTime: Instant,
     val bankTransferId: String
@@ -281,13 +281,13 @@ class Database(dbConfig: String): java.io.Closeable {
     suspend fun incomingPaymentCreateBounced(
         paymentData: IncomingPayment,
         requestUid: String
-        ) = runConn { conn ->
+        ): Boolean = runConn { conn ->
         val refundTimestamp = Instant.now().toDbMicros()
             ?: throw Exception("Could not convert refund execution time from Instant.now() to microsends.")
         val executionTime = paymentData.executionTime.toDbMicros()
             ?: throw Exception("Could not convert payment execution time from Instant to microseconds.")
         val stmt = conn.prepareStatement("""
-            SELECT create_incoming_and_bounce (
+            SELECT out_ok FROM create_incoming_and_bounce (
               (?,?)::taler_amount
               ,?
               ,?
@@ -304,7 +304,11 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setString(6, paymentData.bankTransferId)
         stmt.setLong(7, refundTimestamp)
         stmt.setString(8, requestUid)
-        stmt.executeQuery()
+        val res = stmt.executeQuery()
+        res.use {
+            if (!it.next()) return@runConn false
+            return@runConn it.getBoolean("out_ok")
+        }
     }
 
     /**
@@ -329,7 +333,78 @@ class Database(dbConfig: String): java.io.Closeable {
     }
 
     /**
-     * Creates a new incoming payment record in the database.
+     * Checks if the reserve public key already exists.
+     *
+     * @param maybeReservePub reserve public key to look up
+     * @return true if found, false otherwise
+     */
+    suspend fun isReservePubFound(maybeReservePub: ByteArray): Boolean = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+             SELECT 1
+               FROM talerable_incoming_transactions
+               WHERE reserve_public_key = ?;
+        """)
+        stmt.setBytes(1, maybeReservePub)
+        val res = stmt.executeQuery()
+        res.use {
+            return@runConn it.next()
+        }
+    }
+
+    /**
+     * Creates an incoming transaction row and  links a new talerable
+     * row to it.
+     *
+     * @param paymentData incoming talerable payment.
+     * @param reservePub reserve public key.  The caller is
+     *        responsible to check it.
+     */
+    suspend fun incomingTalerablePaymentCreate(
+        paymentData: IncomingPayment,
+        reservePub: ByteArray
+    ): Boolean = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+           SELECT out_ok FROM create_incoming_talerable(
+              (?,?)::taler_amount
+              ,?
+              ,?
+              ,?
+              ,?
+              ,?
+           )""")
+        bindIncomingPayment(paymentData, stmt)
+        stmt.setBytes(7, reservePub)
+        stmt.executeQuery().use {
+            if (!it.next()) return@runConn false
+            return@runConn it.getBoolean("out_ok")
+        }
+    }
+
+    /**
+     * Binds the values of an incoming payment to the prepared
+     * statement's placeholders.  Warn: may easily break in case
+     * the placeholders get their positions changed!
+     *
+     * @param data incoming payment to bind to the placeholders
+     * @param stmt statement to receive the values in its placeholders
+     */
+    private fun bindIncomingPayment(
+        data: IncomingPayment,
+        stmt: PreparedStatement
+    ) {
+        stmt.setLong(1, data.amount.value)
+        stmt.setInt(2, data.amount.fraction)
+        stmt.setString(3, data.wireTransferSubject)
+        val executionTime = data.executionTime.toDbMicros() ?: run {
+            throw Exception("Execution time could not be converted to microseconds for the database.")
+        }
+        stmt.setLong(4, executionTime)
+        stmt.setString(5, data.debitPaytoUri)
+        stmt.setString(6, data.bankTransferId)
+    }
+    /**
+     * Creates a new incoming payment record in the database.  It does NOT
+     * update the "talerable" table.
      *
      * @param paymentData information related to the incoming payment.
      * @return true on success, false otherwise.
@@ -350,15 +425,7 @@ class Database(dbConfig: String): java.io.Closeable {
               ,?
             )
         """)
-        stmt.setLong(1, paymentData.amount.value)
-        stmt.setInt(2, paymentData.amount.fraction)
-        stmt.setString(3, paymentData.wireTransferSubject)
-        val executionTime = paymentData.executionTime.toDbMicros() ?: run {
-            throw Exception("Execution time could not be converted to microseconds for the database.")
-        }
-        stmt.setLong(4, executionTime)
-        stmt.setString(5, paymentData.debitPaytoUri)
-        stmt.setString(6, paymentData.bankTransferId)
+        bindIncomingPayment(paymentData, stmt)
         return@runConn stmt.maybeUpdate()
     }
 

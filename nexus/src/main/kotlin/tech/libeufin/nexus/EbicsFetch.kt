@@ -5,21 +5,21 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
-import org.apache.commons.compress.archivers.zip.ZipFile
-import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
+import net.taler.wallet.crypto.Base32Crockford
+import net.taler.wallet.crypto.EncodingException
 import tech.libeufin.nexus.ebics.*
-import tech.libeufin.util.EbicsOrderParams
+import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h005.Ebics3Request
-import tech.libeufin.util.getXmlDate
-import tech.libeufin.util.toDbMicros
 import java.io.File
+import java.io.IOException
+import java.lang.StringBuilder
 import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.UUID
 import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
-import kotlin.reflect.typeOf
 import kotlin.system.exitProcess
 
 /**
@@ -159,6 +159,239 @@ fun maybeLogFile(
 }
 
 /**
+ * Converts the given fractional value to the sub-cent 8 digits
+ * fraction used in Taler.  Note: this value has very likely a <2
+ * length, but the function is general, for each fraction with at
+ * most 8 digits.
+ *
+ * @param bankFrac fractional value
+ * @return the Taler fractional value with at most 8 digits.
+ */
+fun makeTalerFrac(bankFrac: String): Int {
+    if (bankFrac.length > 8) throw Exception("Fractional value has more than 8 digits")
+    var buf = bankFrac.toIntOrNull() ?: throw Exception("Fractional value not an Int: $bankFrac")
+    repeat(8 - bankFrac.length) {
+        buf *= 10
+    }
+    return buf
+}
+
+/**
+ * Gets Taler amount from a currency-agnostic value.
+ *
+ * @param noCurrencyAmount currency-agnostic value coming from the bank.
+ * @param currency currency to set to the result.
+ * @return [TalerAmount]
+ */
+fun getTalerAmount(
+    noCurrencyAmount: String,
+    currency: String
+): TalerAmount {
+    if (currency.isEmpty()) throw Exception("Currency is empty")
+    val split = noCurrencyAmount.split(".")
+    // only 1 (no fraction) or 2 (with fraction) sizes allowed.
+    if (split.size != 1 && split.size != 2) throw Exception("Invalid amount: ${noCurrencyAmount}")
+    val value = split[0].toLongOrNull() ?: throw Exception("value part not a long")
+    if (split.size == 1) return TalerAmount(
+        value = value,
+        fraction = 0,
+        currency = currency
+    )
+    return TalerAmount(
+        value = value,
+        fraction = makeTalerFrac(split[1]),
+        currency = currency
+    )
+}
+
+/**
+ * Searches for incoming transactions in a camt.054 document, that
+ * was downloaded via EBICS notification.
+ *
+ * @param notifXml the input document.
+ * @return any incoming payment as a list of [IncomingPayment]
+ */
+fun findIncomingTxInNotification(
+    notifXml: String,
+    acceptedCurrency: String
+): List<IncomingPayment> {
+    val notifDoc = XMLUtil.parseStringIntoDom(notifXml)
+    val ret = mutableListOf<IncomingPayment>()
+    destructXml(notifDoc) {
+        requireRootElement("Document") {
+            requireUniqueChildNamed("BkToCstmrDbtCdtNtfctn") {
+                mapEachChildNamed("Ntfctn") {
+                    mapEachChildNamed("Ntry") {
+                        mapEachChildNamed("NtryDtls") {
+                            mapEachChildNamed("TxDtls") maybeDbit@{
+
+                                // currently, only incoming payments are considered.
+                                if (requireUniqueChildNamed("CdtDbtInd") {
+                                        focusElement.textContent == "DBIT"
+                                }) return@maybeDbit
+
+                                // Obtaining the amount.
+                                val amount: TalerAmount = requireUniqueChildNamed("Amt") {
+                                    val currency = focusElement.getAttribute("Ccy")
+                                    if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+                                    getTalerAmount(focusElement.textContent, currency)
+                                }
+                                // Obtaining payment UID.
+                                val uidFromBank: String = requireUniqueChildNamed("Refs") {
+                                    requireUniqueChildNamed("AcctSvcrRef") {
+                                        focusElement.textContent
+                                    }
+                                }
+                                // Obtaining payment subject.
+                                val subject = StringBuilder()
+                                requireUniqueChildNamed("RmtInf") {
+                                    this.mapEachChildNamed("Ustrd") {
+                                        val piece = this.focusElement.textContent
+                                        subject.append(piece)
+                                    }
+                                }
+                                // Obtaining the execution time.
+                                val executionTime: Instant = requireUniqueChildNamed("RltdDts") {
+                                    requireUniqueChildNamed("AccptncDtTm") {
+                                        parseGregorianTime(focusElement.textContent)
+                                    }
+                                }
+                                // Obtaining the payer's details
+                                val debtorPayto = StringBuilder("payto://iban/")
+                                requireUniqueChildNamed("RltdPties") {
+                                    requireUniqueChildNamed("DbtrAcct") {
+                                        requireUniqueChildNamed("Id") {
+                                            requireUniqueChildNamed("IBAN") {
+                                                debtorPayto.append(focusElement.textContent)
+                                            }
+                                        }
+                                    }
+                                    // warn: it might need the postal address too..
+                                    requireUniqueChildNamed("Dbtr") {
+                                        requireUniqueChildNamed("Nm") {
+                                            debtorPayto.append("?receiver-name=${focusElement.textContent}")
+                                        }
+                                    }
+                                }
+                                val incomingPayment = IncomingPayment(
+                                    amount = amount,
+                                    bankTransferId = uidFromBank,
+                                    debitPaytoUri = debtorPayto.toString(),
+                                    executionTime = executionTime,
+                                    wireTransferSubject = subject.toString()
+                                )
+                                ret.add(incomingPayment)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return ret
+}
+
+/**
+ * Converts valid reserve pubs to its binary representation.
+ *
+ * @param maybeReservePub input.
+ * @return [ByteArray] or null if not valid.
+ */
+fun isReservePub(maybeReservePub: String): ByteArray? {
+    val dec = try {
+        Base32Crockford.decode(maybeReservePub)
+    } catch (e: EncodingException) {
+        logger.error("Not a reserve pub: $maybeReservePub")
+        return null
+    }
+    logger.debug("Reserve how many bytes: ${dec.size}")
+    if (dec.size != 32) {
+        logger.error("Not a reserve pub, wrong length: ${dec.size}")
+        return null
+    }
+    return dec
+}
+/**
+ * Checks the two conditions that may invalidate one incoming
+ * payment: subject validity and availability.
+ *
+ * @param db database connection.
+ * @param payment incoming payment whose subject is to be checked.
+ * @return [ByteArray] as the reserve public key, or null if the
+ *         payment cannot lead to a Taler withdrawal.
+ */
+suspend fun isTalerable(
+    db: Database,
+    payment: IncomingPayment
+): ByteArray? {
+    // Checking validity first.
+    val dec = isReservePub(payment.wireTransferSubject) ?: return null
+    // Now checking availability.
+    val maybeUnavailable = db.isReservePubFound(dec)
+    if (maybeUnavailable) {
+        logger.error("Incoming payment with subject '${payment.wireTransferSubject}' exists already")
+        return null
+    }
+    return dec
+}
+
+/**
+ * Parses the response of an EBICS notification looking for
+ * incoming payments.  As a result, it either creates a Taler
+ * withdrawal or bounces the incoming payment.  In detail, this
+ * function extracts the camt.054 from the ZIP archive, invokes
+ * the lower-level camt.054 parser and updates the database.
+ *
+ * @param db database connection.
+ * @param content the ZIP file that contains the EBICS
+ *        notification as camt.054 records.
+ * @return true if the ingestion succeeded, false otherwise.
+ *         False should fail the process, since it means that
+ *         the notification could not be parsed.
+ */
+fun ingestNotification(
+    db: Database,
+    ctx: FetchContext,
+    content: ByteArray
+): Boolean {
+    val incomingPayments = mutableListOf<IncomingPayment>()
+    try {
+        content.unzipForEach { fileName, xmlContent ->
+            // discarding plain "avisierung", since they don't bring any payment subject.
+            if (!fileName.startsWith("camt.054_P_")) return@unzipForEach
+            val found = findIncomingTxInNotification(xmlContent, ctx.cfg.currency)
+            incomingPayments += found
+        }
+    } catch (e: IOException) {
+        logger.error("Could not open any ZIP archive")
+        return false
+    } catch (e: Exception) {
+        logger.error(e.message)
+        return false
+    }
+    // Distinguishing now valid and invalid payments.
+    // Any error at this point is only due to Nexus.
+    try {
+        incomingPayments.forEach {
+            runBlocking {
+                val reservePub = isTalerable(db, it)
+                if (reservePub == null) {
+                    db.incomingPaymentCreateBounced(
+                        it, UUID.randomUUID().toString().take(35)
+                    )
+                    return@runBlocking
+                }
+                db.incomingTalerablePaymentCreate(it, reservePub)
+            }
+        }
+    } catch (e: Exception) {
+        logger.error(e.message)
+        return false
+    }
+    return true
+}
+
+/**
  * Fetches the banking records via EBICS notifications requests.
  *
  * It first checks the last execution_time (db column) among the
@@ -184,14 +417,25 @@ private suspend fun fetchDocuments(
 ) {
     // maybe get last execution_date.
     val lastExecutionTime: Instant? = ctx.pinnedStart ?: db.incomingPaymentLastExecTime()
-    logger.debug("Fetching documents from timestamp: $lastExecutionTime")
+    logger.debug("Fetching ${ctx.whichDocument} from timestamp: $lastExecutionTime")
+    // downloading the content
     val maybeContent = downloadHelper(ctx, lastExecutionTime) ?: exitProcess(1) // client is wrong, failing.
     if (maybeContent.isEmpty()) return
+    // logging, if the configuration wants.
     maybeLogFile(
         ctx.cfg,
         maybeContent,
         nonZip = ctx.whichDocument == SupportedDocument.PAIN_002_LOGS
     )
+    // Parsing the XML: only camt.054 (Detailavisierung) supported currently.
+    if (ctx.whichDocument != SupportedDocument.CAMT_054) {
+        logger.warn("Not parsing ${ctx.whichDocument}.  Only camt.054 notifications supported.")
+        return
+    }
+    if (!ingestNotification(db, ctx, maybeContent)) {
+        logger.error("Ingesting notifications failed")
+        exitProcess(1)
+    }
 }
 
 class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 notifications") {
@@ -218,13 +462,15 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
     ).flag(default = false)
 
     private val onlyLogs by option(
-        help = "Downloads only EBICS activity logs via pain.002, only available to --transient mode.  Config needs log directory"
+        help = "Downloads only EBICS activity logs via pain.002," +
+                " only available to --transient mode.  Config needs" +
+                " log directory"
     ).flag(default = false)
 
     private val pinnedStart by option(
-        help = "constant YYYY-MM-DD date for the earliest document to download " +
-                "(only consumed in --transient mode).  The latest document is always" +
-                " until the current time."
+        help = "constant YYYY-MM-DD date for the earliest document" +
+                " to download (only consumed in --transient mode).  The" +
+                " latest document is always until the current time."
     )
 
     /**
@@ -252,6 +498,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
             exitProcess(1)
         }
+
         // Deciding what to download.
         var whichDoc = SupportedDocument.CAMT_054
         if (onlyAck) whichDoc = SupportedDocument.PAIN_002
@@ -266,7 +513,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             bankKeys,
             whichDoc
         )
-
         if (transient) {
             logger.info("Transient mode: fetching once and returning.")
             val pinnedStartVal = pinnedStart
