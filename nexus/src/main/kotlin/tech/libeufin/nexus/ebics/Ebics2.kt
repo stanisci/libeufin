@@ -384,6 +384,28 @@ private fun prepNotificationRequest2(
 }
 
 /**
+ * Prepares an EBICS 2 request to get logs from the bank about any
+ * uploaded or downloaded document.
+ *
+ * @param startDate earliest timestamp of the returned document(s).  If
+ *        null, it defaults to download the unseen documents.
+ * @param endDate latest timestamp of the returned document(s).  If
+ *        null, it defaults to the current time.
+ * @return [Ebics2Request] object to be first converted in XML and
+ *         then be passed to the EBICS downloader.
+ */
+private fun prepLogsRequest2(
+    startDate: Instant? = null,
+    endDate: Instant? = null
+): Ebics2Request {
+    val maybeDateRange = if (startDate != null) EbicsDateRange(startDate, endDate ?: Instant.now()) else null
+    return Ebics2Request(
+        messageType = "HAC",
+        orderParams = EbicsStandardOrderParams(dateRange = maybeDateRange)
+    )
+}
+
+/**
  * Abstracts EBICS 2 request creation of a download init phase.
  *
  * @param whichDoc type of wanted document.
@@ -402,4 +424,5 @@ fun prepEbics2Document(
         SupportedDocument.CAMT_052 -> prepReportRequest2(startDate)
         SupportedDocument.CAMT_053 -> prepStatementRequest2(startDate)
         SupportedDocument.CAMT_054 -> prepNotificationRequest2(startDate)
+        SupportedDocument.PAIN_002_LOGS -> prepLogsRequest2(startDate)
     }

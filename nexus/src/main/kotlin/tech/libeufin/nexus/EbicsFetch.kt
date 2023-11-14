@@ -47,9 +47,9 @@ data class FetchContext(
      */
     val whichDocument: SupportedDocument,
     /**
-     * EBICS version.
+     * EBICS version.  For the HAC message type, version gets switched to EBICS 2.
      */
-    val ebicsVersion: EbicsVersion = EbicsVersion.three,
+    var ebicsVersion: EbicsVersion = EbicsVersion.three,
     /**
      * Start date of the returned documents.  Only
      * used in --transient mode.
@@ -118,8 +118,13 @@ private suspend inline fun downloadHelper(
  *
  * @param cfg config handle.
  * @param content ZIP bytes from the server.
+ * @param nonZip only true when downloading via HAC (EBICS 2)
  */
-fun maybeLogFile(cfg: EbicsSetupConfig, content: ByteArray) {
+fun maybeLogFile(
+    cfg: EbicsSetupConfig,
+    content: ByteArray,
+    nonZip: Boolean = false
+) {
     // Main dir.
     val maybeLogDir = cfg.config.lookupString(
         "nexus-fetch",
@@ -133,15 +138,23 @@ fun maybeLogFile(cfg: EbicsSetupConfig, content: ByteArray) {
     // Creating the combined dir.
     val dirs = Path.of(maybeLogDir, subDir)
     doOrFail { dirs.createDirectories() }
-    // Write each ZIP entry in the combined dir.
-    content.unzipForEach { fileName, xmlContent ->
-        val f  = File(dirs.toString(), "${now.toDbMicros()}_$fileName")
-        // Rare: cannot download the same file twice in the same microsecond.
+    fun maybeWrite(f: File, xml: String) {
         if (f.exists()) {
             logger.error("Log file exists already at: ${f.path}")
             exitProcess(1)
         }
-        doOrFail { f.writeText(xmlContent) }
+        doOrFail { f.writeText(xml) }
+    }
+    if (nonZip) {
+        val f  = File(dirs.toString(), "${now.toDbMicros()}_HAC_response.pain.002.xml")
+        maybeWrite(f, content.toString(Charsets.UTF_8))
+        return
+    }
+    // Write each ZIP entry in the combined dir.
+    content.unzipForEach { fileName, xmlContent ->
+        val f  = File(dirs.toString(), "${now.toDbMicros()}_$fileName")
+        // Rare: cannot download the same file twice in the same microsecond.
+        maybeWrite(f, xmlContent)
     }
 }
 
@@ -174,7 +187,11 @@ private suspend fun fetchDocuments(
     logger.debug("Fetching documents from timestamp: $lastExecutionTime")
     val maybeContent = downloadHelper(ctx, lastExecutionTime) ?: exitProcess(1) // client is wrong, failing.
     if (maybeContent.isEmpty()) return
-    maybeLogFile(ctx.cfg, maybeContent)
+    maybeLogFile(
+        ctx.cfg,
+        maybeContent,
+        nonZip = ctx.whichDocument == SupportedDocument.PAIN_002_LOGS
+    )
 }
 
 class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 notifications") {
@@ -198,6 +215,10 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
 
     private val onlyReports by option(
         help = "Downloads only camt.052 intraday reports"
+    ).flag(default = false)
+
+    private val onlyLogs by option(
+        help = "Downloads only EBICS activity logs via pain.002, only available to --transient mode.  Config needs log directory"
     ).flag(default = false)
 
     private val pinnedStart by option(
@@ -236,6 +257,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (onlyAck) whichDoc = SupportedDocument.PAIN_002
         if (onlyReports) whichDoc = SupportedDocument.CAMT_052
         if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
+        if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
 
         val ctx = FetchContext(
             cfg,
@@ -256,6 +278,8 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 }
             } else null
             ctx.pinnedStart = pinnedStartArg
+            if (whichDoc == SupportedDocument.PAIN_002_LOGS)
+                ctx.ebicsVersion = EbicsVersion.two
             runBlocking {
                 fetchDocuments(db, ctx)
             }

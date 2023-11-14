@@ -272,7 +272,7 @@ private fun getEbics3DateRange(
  *
  * @return [Ebics3Request.OrderDetails.BTOrderParams]
  */
-private fun prepNotificationRequest3(
+fun prepNotificationRequest3(
     startDate: Instant? = null,
     endDate: Instant? = null,
     isAppendix: Boolean
@@ -309,7 +309,7 @@ private fun prepNotificationRequest3(
  *
  * @return [Ebics3Request.OrderDetails.BTOrderParams]
  */
-private fun prepAckRequest3(
+fun prepAckRequest3(
     startDate: Instant? = null,
     endDate: Instant? = null
 ): Ebics3Request.OrderDetails.BTOrderParams {
@@ -342,7 +342,7 @@ private fun prepAckRequest3(
  *
  * @return [Ebics3Request.OrderDetails.BTOrderParams]
  */
-private fun prepStatementRequest3(
+fun prepStatementRequest3(
     startDate: Instant? = null,
     endDate: Instant? = null
 ): Ebics3Request.OrderDetails.BTOrderParams {
@@ -375,7 +375,7 @@ private fun prepStatementRequest3(
  *
  * @return [Ebics3Request.OrderDetails.BTOrderParams]
  */
-private fun prepReportRequest3(
+fun prepReportRequest3(
     startDate: Instant? = null,
     endDate: Instant? = null
 ): Ebics3Request.OrderDetails.BTOrderParams {
@@ -417,4 +417,5 @@ fun prepEbics3Document(
         SupportedDocument.CAMT_052 -> prepReportRequest3(startDate)
         SupportedDocument.CAMT_053 -> prepStatementRequest3(startDate)
         SupportedDocument.CAMT_054 -> prepReportRequest3(startDate)
+        SupportedDocument.PAIN_002_LOGS -> throw Exception("HAC (--only-logs) not available in EBICS 3")
     }
