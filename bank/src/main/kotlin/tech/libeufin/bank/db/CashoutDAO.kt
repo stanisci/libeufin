@@ -67,7 +67,7 @@ class CashoutDAO(private val db: Database) {
         now: Instant,
         retryCounter: Int,
         validityPeriod: Duration
-    ): CashoutCreation = db.conn { conn ->
+    ): CashoutCreation = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
                 out_bad_conversion,
@@ -121,7 +121,7 @@ class CashoutDAO(private val db: Database) {
         id: Long,
         now: Instant,
         retransmissionPeriod: Duration
-    ) = db.conn { conn ->
+    ) = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT challenge_mark_sent(challenge, ?, ?)
             FROM cashout_operations
@@ -133,7 +133,7 @@ class CashoutDAO(private val db: Database) {
         stmt.executeQueryCheck()
     }
 
-    suspend fun abort(id: Long): AbortResult = db.conn { conn ->
+    suspend fun abort(id: Long): AbortResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             UPDATE cashout_operations
             SET aborted = local_transaction IS NULL
@@ -152,7 +152,7 @@ class CashoutDAO(private val db: Database) {
         id: Long,
         tanCode: String,
         timestamp: Instant
-    ): CashoutConfirmationResult = db.conn { conn ->
+    ): CashoutConfirmationResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
                 out_no_op,
@@ -188,7 +188,7 @@ class CashoutDAO(private val db: Database) {
         CONFLICT_ALREADY_CONFIRMED
     }
 
-    suspend fun delete(id: Long): CashoutDeleteResult = db.conn { conn ->
+    suspend fun delete(id: Long): CashoutDeleteResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
            SELECT out_already_confirmed
              FROM cashout_delete(?)

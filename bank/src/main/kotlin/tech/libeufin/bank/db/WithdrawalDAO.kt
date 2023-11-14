@@ -58,7 +58,7 @@ class WithdrawalDAO(private val db: Database) {
         walletAccountUsername: String,
         uuid: UUID,
         amount: TalerAmount
-    ): WithdrawalCreationResult = db.conn { conn ->
+    ): WithdrawalCreationResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
                 out_account_not_found,
@@ -147,7 +147,7 @@ class WithdrawalDAO(private val db: Database) {
      * Aborts one Taler withdrawal, only if it wasn't previously
      * confirmed.  It returns false if the UPDATE didn't succeed.
      */
-    suspend fun abort(uuid: UUID): AbortResult = db.conn { conn ->
+    suspend fun abort(uuid: UUID): AbortResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             UPDATE taler_withdrawal_operations
             SET aborted = NOT confirmation_done
@@ -174,7 +174,7 @@ class WithdrawalDAO(private val db: Database) {
         uuid: UUID,
         exchangePayto: IbanPayTo,
         reservePub: EddsaPublicKey
-    ): Pair<WithdrawalSelectionResult, Boolean> = db.conn { conn ->
+    ): Pair<WithdrawalSelectionResult, Boolean> = db.serializable { conn ->
         val subject = IncomingTxMetadata(reservePub).encode()
         val stmt = conn.prepareStatement("""
             SELECT
@@ -213,7 +213,7 @@ class WithdrawalDAO(private val db: Database) {
     suspend fun confirm(
         uuid: UUID,
         now: Instant
-    ): WithdrawalConfirmationResult = db.conn { conn ->
+    ): WithdrawalConfirmationResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
               out_no_op,

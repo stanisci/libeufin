@@ -33,8 +33,11 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.*
 import com.zaxxer.hikari.*
 import tech.libeufin.util.*
+import io.ktor.http.HttpStatusCode
+import net.taler.common.errorcodes.TalerErrorCode
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
+private val SERIALIZATION_RETRY: Int = 10;
 
 /**
  * This error occurs in case the timestamp took by the bank for some
@@ -63,7 +66,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         val pgSource = pgDataSource(dbConfig)
         val config = HikariConfig();
         config.dataSource = pgSource
-        config.connectionInitSql = "SET search_path TO libeufin_bank;"
+        config.connectionInitSql = "SET search_path TO libeufin_bank;SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE;"
         config.validate()
         dbPool = HikariDataSource(config);
         notifWatcher = NotificationWatcher(pgSource)
@@ -86,13 +89,31 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         }
     }
 
+
+    suspend fun <R> serializable(lambda: suspend (PgConnection) -> R): R = conn { conn ->
+        repeat(SERIALIZATION_RETRY) {
+            try {
+                return@conn lambda(conn);
+            } catch (e: SQLException) {
+                logger.error(e.message)
+                if (e.sqlState != "40001") // serialization_failure
+                    throw e // rethrowing, not to hide other types of errors.
+            }
+        }
+        throw libeufinError(
+            HttpStatusCode.InternalServerError,
+            "Transaction serialization failure",
+            TalerErrorCode.BANK_SOFT_EXCEPTION
+        )
+    }
+
     // CUSTOMERS
 
     /**
      * Deletes a customer (including its bank account row) from
      * the database.  The bank account gets deleted by the cascade.
      */
-    suspend fun customerDeleteIfBalanceIsZero(login: String): CustomerDeletionResult = conn { conn ->
+    suspend fun customerDeleteIfBalanceIsZero(login: String): CustomerDeletionResult = serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
               out_nx_customer,
@@ -138,7 +159,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         expirationTime: Instant,
         scope: TokenScope,
         isRefreshable: Boolean
-    ): Boolean = conn { conn ->
+    ): Boolean = serializable { conn ->
         val bankCustomer = conn.prepareStatement("""
             SELECT customer_id FROM customers WHERE login=?
         """).run {
@@ -192,7 +213,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
      * if deletion succeeds or false if the token could not be
      * deleted (= not found).
      */
-    suspend fun bearerTokenDelete(token: ByteArray): Boolean = conn { conn ->
+    suspend fun bearerTokenDelete(token: ByteArray): Boolean = serializable { conn ->
         val stmt = conn.prepareStatement("""
             DELETE FROM bearer_tokens
               WHERE content = ?
@@ -216,7 +237,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         isTalerExchange: Boolean,
         maxDebt: TalerAmount,
         bonus: TalerAmount?
-    ): CustomerCreationResult = conn { it ->
+    ): CustomerCreationResult = serializable { it ->
         val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank();
         it.transaction { conn ->
             val idempotent = conn.prepareStatement("""
@@ -409,7 +430,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         isTalerExchange: Boolean?,
         debtLimit: TalerAmount?,
         isAdmin: Boolean
-    ): CustomerPatchResult = conn { conn ->
+    ): CustomerPatchResult = serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
                 out_not_found,
@@ -444,7 +465,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         }
     }
 
-    suspend fun accountReconfigPassword(login: String, newPw: String, oldPw: String?): CustomerPatchAuthResult = conn {
+    suspend fun accountReconfigPassword(login: String, newPw: String, oldPw: String?): CustomerPatchAuthResult = serializable {
         it.transaction { conn ->
             val currentPwh = conn.prepareStatement("""
                 SELECT password_hash FROM customers WHERE login=?
@@ -650,7 +671,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         subject: String,
         amount: TalerAmount,
         timestamp: Instant,
-    ): Pair<BankTransactionResult, Long?> = conn { conn ->
+    ): Pair<BankTransactionResult, Long?> = serializable { conn ->
         conn.transaction {
             val stmt = conn.prepareStatement("""
                 SELECT 

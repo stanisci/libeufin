@@ -127,7 +127,7 @@ class ExchangeDAO(private val db: Database) {
         req: TransferRequest,
         username: String,
         timestamp: Instant
-    ): TransferResult = db.conn { conn ->
+    ): TransferResult = db.serializable { conn ->
         val subject = OutgoingTxMetadata(req.wtid, req.exchange_base_url).encode()
         val stmt = conn.prepareStatement("""
             SELECT
@@ -195,7 +195,7 @@ class ExchangeDAO(private val db: Database) {
         req: AddIncomingRequest,
         username: String,
         timestamp: Instant
-        ): AddIncomingResult = db.conn { conn ->
+        ): AddIncomingResult = db.serializable { conn ->
             val subject = IncomingTxMetadata(req.reserve_pub).encode()
         val stmt = conn.prepareStatement("""
             SELECT

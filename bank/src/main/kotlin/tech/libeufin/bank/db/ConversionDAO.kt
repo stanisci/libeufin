@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 import tech.libeufin.util.*
 
 class ConversionDAO(private val db: Database) {
-    suspend fun updateConfig(cfg: ConversionInfo) = db.conn {
+    suspend fun updateConfig(cfg: ConversionInfo) = db.serializable {
         it.transaction { conn -> 
             var stmt = conn.prepareStatement("CALL config_set_amount(?, (?, ?)::taler_amount)")
             for ((name, amount) in listOf(

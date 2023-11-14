@@ -30,6 +30,12 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlin.experimental.inv
 import kotlin.test.*
+import kotlinx.coroutines.*
+import io.ktor.http.*
+import io.ktor.client.plugins.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.client.HttpClient
 
 class DatabaseTest {
     // Testing the helper that update conversion config
@@ -47,6 +53,33 @@ class DatabaseTest {
         assert(maybeCreateAdminAccount(db, ctx))
         // Checking idempotency
         assert(maybeCreateAdminAccount(db, ctx))
+    }
+
+    @Test
+    fun serialisation() = bankSetup {
+        assertBalance("customer", CreditDebitInfo.credit, "KUDOS:0")
+        assertBalance("merchant", CreditDebitInfo.credit, "KUDOS:0")
+        coroutineScope {
+            repeat(10) { 
+                launch {
+                    tx("customer", "KUDOS:0.$it", "merchant", "concurrent $it")
+                }
+            }
+        }
+        assertBalance("customer", CreditDebitInfo.debit, "KUDOS:4.5")
+        assertBalance("merchant", CreditDebitInfo.credit, "KUDOS:4.5")
+        coroutineScope {
+            repeat(5) { 
+                launch {
+                    tx("customer", "KUDOS:0.0$it", "merchant", "concurrent 0$it")
+                }
+                launch {
+                    client.get("/accounts/merchant/transactions") {
+                        basicAuth("merchant", "merchant-password")
+                    }.assertOk()
+                }
+            }
+        }
     }
 
     @Test
