@@ -11,7 +11,6 @@ import net.taler.common.errorcodes.TalerErrorCode
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.CryptoUtil
-import tech.libeufin.util.stripIbanPayto
 import java.util.*
 import java.time.Instant
 import kotlin.test.*
@@ -53,7 +52,7 @@ class BankIntegrationApiTest {
         val reserve_pub = randEddsaPublicKey()
         val req = json {
             "reserve_pub" to reserve_pub
-            "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+            "selected_exchange" to exchangePayto
         }
 
         // Check bad UUID
@@ -104,14 +103,14 @@ class BankIntegrationApiTest {
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to IbanPayTo("payto://iban/UNKNOWN-IBAN-XYZ")
+                    "selected_exchange" to unknownPayto
                 }
             }.assertConflict(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
             // Check account not exchange
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ")
+                    "selected_exchange" to merchantPayto
                 }
             }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)
         }

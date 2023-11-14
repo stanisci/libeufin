@@ -16,6 +16,16 @@ import tech.libeufin.util.*
 
 /* ----- Setup ----- */
 
+val merchantPayto = IbanPayTo(genIbanPaytoUri())
+val exchangePayto = IbanPayTo(genIbanPaytoUri())
+val customerPayto = IbanPayTo(genIbanPaytoUri())
+val unknownPayto = IbanPayTo(genIbanPaytoUri())
+val paytos = mapOf(
+    "merchant" to merchantPayto, 
+    "exchange" to exchangePayto, 
+    "customer" to customerPayto
+)
+
 fun setup(
     conf: String = "test.conf",
     lambda: suspend (Database, BankConfig) -> Unit
@@ -43,7 +53,7 @@ fun bankSetup(
             login = "merchant",
             password = "merchant-password",
             name = "Merchant",
-            internalPaytoUri = IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"),
+            internalPaytoUri = merchantPayto,
             maxDebt = TalerAmount(10, 0, "KUDOS"),
             isTalerExchange = false,
             isPublic = false,
@@ -53,7 +63,7 @@ fun bankSetup(
             login = "exchange",
             password = "exchange-password",
             name = "Exchange",
-            internalPaytoUri = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
+            internalPaytoUri = exchangePayto,
             maxDebt = TalerAmount(10, 0, "KUDOS"),
             isTalerExchange = true,
             isPublic = false,
@@ -63,7 +73,7 @@ fun bankSetup(
             login = "customer",
             password = "customer-password",
             name = "Customer",
-            internalPaytoUri = IbanPayTo("payto://iban/CUSTOMER-IBAN-XYZ"),
+            internalPaytoUri = customerPayto,
             maxDebt = TalerAmount(10, 0, "KUDOS"),
             isTalerExchange = false,
             isPublic = false,
@@ -103,11 +113,11 @@ suspend fun ApplicationTestBuilder.assertBalance(account: String, info: CreditDe
     }
 }
 
-suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String): Long {
+suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String, subject: String = "payout"): Long {
     return client.post("/accounts/$from/transactions") {
         basicAuth("$from", "$from-password")
         jsonBody {
-            "payto_uri" to "payto://iban/$to-IBAN-XYZ?message=tx&amount=$amount"
+            "payto_uri" to "${paytos[to]}?message=${subject.encodeURLQueryComponent()}&amount=$amount"
         }
     }.assertOk().run {
         json<TransactionCreateResponse>().row_id
@@ -122,7 +132,7 @@ suspend fun ApplicationTestBuilder.transfer(amount: String) {
             "amount" to TalerAmount(amount)
             "exchange_base_url" to "http://exchange.example.com/"
             "wtid" to randShortHashCode()
-            "credit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
+            "credit_account" to merchantPayto
         }
     }.assertOk()
 }
@@ -133,7 +143,7 @@ suspend fun ApplicationTestBuilder.addIncoming(amount: String) {
         jsonBody {
             "amount" to TalerAmount(amount)
             "reserve_pub" to randEddsaPublicKey()
-            "debit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
+            "debit_account" to merchantPayto
         }
     }.assertOk()
 }

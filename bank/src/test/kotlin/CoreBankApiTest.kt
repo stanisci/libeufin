@@ -634,7 +634,7 @@ class CoreBankTransactionsApiTest {
         authRoutine("/accounts/merchant/transactions/1", method = HttpMethod.Get)
 
         // Create transaction
-        tx("merchant", "KUDOS:0.3", "exchange")
+        tx("merchant", "KUDOS:0.3", "exchange", "tx")
         // Check OK
         client.get("/accounts/merchant/transactions/1") {
             basicAuth("merchant", "merchant-password")
@@ -657,7 +657,7 @@ class CoreBankTransactionsApiTest {
     @Test
     fun create() = bankSetup { _ -> 
         val valid_req = json {
-            "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout"
+            "payto_uri" to "$exchangePayto?message=payout"
             "amount" to "KUDOS:0.3"
         }
 
@@ -682,7 +682,7 @@ class CoreBankTransactionsApiTest {
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
             jsonBody {
-                "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout2&amount=KUDOS:1.05"
+                "payto_uri" to "$exchangePayto?message=payout2&amount=KUDOS:1.05"
             }
         }.assertOk().run {
             val id = json<TransactionCreateResponse>().row_id
@@ -699,7 +699,7 @@ class CoreBankTransactionsApiTest {
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
             jsonBody {
-                "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ?message=payout3&amount=KUDOS:1.05"
+                "payto_uri" to "$exchangePayto?message=payout3&amount=KUDOS:1.05"
                 "amount" to "KUDOS:10.003"
             }
         }.assertOk().run {
@@ -732,7 +732,7 @@ class CoreBankTransactionsApiTest {
             basicAuth("merchant", "merchant-password")
             contentType(ContentType.Application.Json)
             jsonBody(valid_req) {
-                "payto_uri" to "payto://iban/EXCHANGE-IBAN-XYZ"
+                "payto_uri" to "$exchangePayto"
             }
         }.assertBadRequest()
         // Unknown creditor
@@ -740,7 +740,7 @@ class CoreBankTransactionsApiTest {
             basicAuth("merchant", "merchant-password")
             contentType(ContentType.Application.Json)
             jsonBody(valid_req) {
-                "payto_uri" to "payto://iban/UNKNOWN-IBAN-XYZ?message=payout"
+                "payto_uri" to "$unknownPayto?message=payout"
             }
         }.assertConflict(TalerErrorCode.BANK_UNKNOWN_CREDITOR)
         // Transaction to self
@@ -748,7 +748,7 @@ class CoreBankTransactionsApiTest {
             basicAuth("merchant", "merchant-password")
             contentType(ContentType.Application.Json)
             jsonBody(valid_req) {
-                "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout"
+                "payto_uri" to "$merchantPayto?message=payout"
             }
         }.assertConflict(TalerErrorCode.BANK_SAME_ACCOUNT)
 
@@ -782,17 +782,12 @@ class CoreBankTransactionsApiTest {
         checkBalance(true, "KUDOS:2.4", false, "KUDOS:0")
         // Send 2 times 3
         repeat(2) {
-            client.post("/accounts/merchant/transactions") {
-                basicAuth("merchant", "merchant-password")
-                jsonBody {
-                    "payto_uri" to "payto://iban/CUSTOMER-IBAN-XYZ?message=payout2&amount=KUDOS:3"
-                }
-            }.assertOk()
+            tx("merchant", "KUDOS:3", "customer")
         }
         client.post("/accounts/merchant/transactions") {
             basicAuth("merchant", "merchant-password")
             jsonBody {
-                "payto_uri" to "payto://iban/CUSTOMER-IBAN-XYZ?message=payout2&amount=KUDOS:3"
+                "payto_uri" to "$customerPayto?message=payout2&amount=KUDOS:3"
             }
         }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
         checkBalance(true, "KUDOS:8.4", false, "KUDOS:6")
@@ -800,7 +795,7 @@ class CoreBankTransactionsApiTest {
         client.post("/accounts/customer/transactions") {
             basicAuth("customer", "customer-password")
             jsonBody {
-                "payto_uri" to "payto://iban/MERCHANT-IBAN-XYZ?message=payout2&amount=KUDOS:10"
+                "payto_uri" to "$merchantPayto?message=payout2&amount=KUDOS:10"
             }
         }.assertOk()
         checkBalance(false, "KUDOS:1.6", true, "KUDOS:4")
@@ -879,7 +874,7 @@ class CoreBankWithdrawalApiTest {
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                    "selected_exchange" to exchangePayto
                 }
             }.assertOk()
 
@@ -899,7 +894,7 @@ class CoreBankWithdrawalApiTest {
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                    "selected_exchange" to exchangePayto
                 }
             }.assertOk()
             client.post("/withdrawals/$uuid/confirm").assertNoContent()
@@ -943,7 +938,7 @@ class CoreBankWithdrawalApiTest {
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                    "selected_exchange" to exchangePayto
                 }
             }.assertOk()
 
@@ -963,7 +958,7 @@ class CoreBankWithdrawalApiTest {
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                    "selected_exchange" to exchangePayto
                 }
             }.assertOk()
             client.post("/withdrawals/$uuid/abort").assertNoContent()
@@ -983,7 +978,7 @@ class CoreBankWithdrawalApiTest {
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                    "selected_exchange" to exchangePayto
                 }
             }.assertOk()
 

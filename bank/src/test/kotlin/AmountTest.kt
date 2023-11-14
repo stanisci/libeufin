@@ -31,13 +31,13 @@ class AmountTest {
     @Test
     fun computationTest() = bankSetup { db ->  
         val conn = db.dbPool.getConnection().unwrap(PgConnection::class.java)
-        conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 100000 WHERE internal_payto_uri = '${IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ").canonical}'")
+        conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 100000 WHERE internal_payto_uri = '$exchangePayto'")
         val stmt = conn.prepareStatement("""
             UPDATE libeufin_bank.bank_accounts 
                 SET balance = (?, ?)::taler_amount
                     ,has_debt = ?
                     ,max_debt = (?, ?)::taler_amount
-            WHERE internal_payto_uri = '${IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ").canonical}'
+            WHERE internal_payto_uri = '$merchantPayto'
         """)
         suspend fun routine(balance: TalerAmount, due: TalerAmount, hasBalanceDebt: Boolean, maxDebt: TalerAmount): Boolean {
             stmt.setLong(1, balance.value)
@@ -49,7 +49,7 @@ class AmountTest {
             // Check bank transaction
             stmt.executeUpdate()
             val (txRes, _) = db.bankTransaction(
-                creditAccountPayto = IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ"),
+                creditAccountPayto = exchangePayto,
                 debitAccountUsername = "merchant",
                 subject = "test",
                 amount = due,

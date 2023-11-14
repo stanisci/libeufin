@@ -53,7 +53,7 @@ class StatsTest {
             db.conn { conn ->
                 val stmt = conn.prepareStatement("SELECT 0 FROM cashin(?, ?, (?, ?)::taler_amount, ?)")
                 stmt.setLong(1, Instant.now().toDbMicros()!!)
-                stmt.setString(2, IbanPayTo("payto://iban/CUSTOMER-IBAN-XYZ").canonical)
+                stmt.setString(2, customerPayto.canonical)
                 val amount = TalerAmount(amount)
                 stmt.setLong(3, amount.value)
                 stmt.setInt(4, amount.frac)

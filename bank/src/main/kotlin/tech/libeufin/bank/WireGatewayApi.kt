@@ -31,7 +31,6 @@ import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.extractReservePubFromSubject
-import tech.libeufin.util.stripIbanPayto
 import java.time.Instant
 import kotlin.math.abs
 

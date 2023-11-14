@@ -29,6 +29,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 import java.util.*
+import java.math.BigInteger
 import java.net.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.*
@@ -43,9 +44,7 @@ import org.slf4j.event.Level
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.TalerCommon")
 const val MAX_SAFE_INTEGER = 9007199254740991L; // 2^53 - 1
 
-/**
- * 32-byte Crockford's Base32 encoded data.
- */
+/** 32-byte Crockford's Base32 encoded data */
 @Serializable(with = Base32Crockford32B.Serializer::class)
 class Base32Crockford32B {
     private var encoded: String? = null
@@ -98,9 +97,7 @@ class Base32Crockford32B {
     }
 }
 
-/**
- * 64-byte Crockford's Base32 encoded data.
- */
+/** 64-byte Crockford's Base32 encoded data */
 @Serializable(with = Base32Crockford64B.Serializer::class)
 class Base32Crockford64B {
     private var encoded: String? = null
@@ -153,9 +150,9 @@ class Base32Crockford64B {
     }
 }
 
-/** 32-byte hash code. */
+/** 32-byte hash code */
 typealias ShortHashCode = Base32Crockford32B;
-/** 64-byte hash code. */
+/** 64-byte hash code */
 typealias HashCode = Base32Crockford64B;
 /**
  * EdDSA and ECDHE public keys always point on Curve25519
@@ -164,9 +161,7 @@ typealias HashCode = Base32Crockford64B;
  */
 typealias EddsaPublicKey = Base32Crockford32B;
 
-/**
- * Timestamp containing the number of seconds since epoch.
- */
+/** Timestamp containing the number of seconds since epoch */
 @Serializable
 data class TalerProtocolTimestamp(
     @Serializable(with = TalerProtocolTimestamp.Serializer::class)
@@ -234,18 +229,31 @@ class TalerAmount {
         this.currency = currency
     }
     constructor(encoded: String) {
-        fun badAmount(hint: String): Exception = 
-            badRequest(hint, TalerErrorCode.BANK_BAD_FORMAT_AMOUNT)
-        
-        val match = PATTERN.matchEntire(encoded) ?: throw badAmount("Invalid amount format");
+        val match = PATTERN.matchEntire(encoded) ?: throw badRequest(
+            "Invalid amount format",
+            TalerErrorCode.BANK_BAD_FORMAT_AMOUNT
+        );
         val (currency, value, frac) = match.destructured
         this.currency = currency
-        this.value = value.toLongOrNull() ?: throw badAmount("Invalid value")
-        if (this.value > MAX_VALUE) throw badAmount("Value specified in amount is too large")
+        this.value = value.toLongOrNull() ?: throw badRequest(
+            "Invalid value",
+            TalerErrorCode.BANK_BAD_FORMAT_AMOUNT
+        )
+        if (this.value > MAX_VALUE) throw badRequest(
+            "Value specified in amount is too large",
+            TalerErrorCode.BANK_NUMBER_TOO_BIG
+        )
         this.frac = if (frac.isEmpty()) {
             0
         } else {
-            var tmp = frac.toIntOrNull() ?: throw badAmount("Invalid fractional value")
+            var tmp = frac.toIntOrNull() ?: throw badRequest(
+                "Invalid fractional value",
+                TalerErrorCode.BANK_BAD_FORMAT_AMOUNT
+            )
+            if (tmp > FRACTION_BASE) throw badRequest(
+                "Fractional calue specified in amount is too large",
+                TalerErrorCode.BANK_NUMBER_TOO_BIG
+            )
             repeat(8 - frac.length) {
                 tmp *= 10
             }
@@ -295,17 +303,14 @@ class DecimalNumber {
     val frac: Int
 
     constructor(encoded: String) {
-        fun badAmount(hint: String): Exception = 
-            badRequest(hint, TalerErrorCode.BANK_BAD_FORMAT_AMOUNT)
-        
-        val match = PATTERN.matchEntire(encoded) ?: throw badAmount("Invalid decimal number format");
+        val match = PATTERN.matchEntire(encoded) ?: throw badRequest("Invalid decimal number format");
         val (value, frac) = match.destructured
-        this.value = value.toLongOrNull() ?: throw badAmount("Invalid value")
-        if (this.value > TalerAmount.MAX_VALUE) throw badAmount("Value specified in decimal number is too large")
+        this.value = value.toLongOrNull() ?: throw badRequest("Invalid value")
+        if (this.value > TalerAmount.MAX_VALUE) throw badRequest("Value specified in decimal number is too large")
         this.frac = if (frac.isEmpty()) {
             0
         } else {
-            var tmp = frac.toIntOrNull() ?: throw badAmount("Invalid fractional value")
+            var tmp = frac.toIntOrNull() ?: throw badRequest("Invalid fractional value")
             repeat(8 - frac.length) {
                 tmp *= 10
             }
@@ -422,6 +427,7 @@ sealed class PaytoUri {
 class IbanPayTo: PaytoUri {
     val parsed: URI
     val canonical: String
+    val iban: String
     override val amount: TalerAmount?
     override val message: String?
     override val receiverName: String?
@@ -433,8 +439,9 @@ class IbanPayTo: PaytoUri {
 
         val splitPath = parsed.path.split("/").filter { it.isNotEmpty() }
         require(splitPath.size < 3 && splitPath.isNotEmpty()) { "too many path segments" }
-        val iban = (if (splitPath.size == 1) splitPath[0] else splitPath[1]).replace("-", "").uppercase()
-        // TODO normalize && check IBAN ?
+        val rawIban = if (splitPath.size == 1) splitPath[0] else splitPath[1]
+        iban = rawIban.uppercase().replace(SEPARATOR, "")
+        checkIban(iban)
         canonical = "payto://iban/$iban"
     
         val params = (parsed.query ?: "").parseUrlEncodedParameters();
@@ -442,6 +449,8 @@ class IbanPayTo: PaytoUri {
         message = params["message"]
         receiverName = params["receiver-name"]
     }
+
+    override fun toString(): String = canonical
 
     internal object Serializer : KSerializer<IbanPayTo> {
         override val descriptor: SerialDescriptor =
@@ -453,6 +462,24 @@ class IbanPayTo: PaytoUri {
 
         override fun deserialize(decoder: Decoder): IbanPayTo {
             return IbanPayTo(decoder.decodeString())
+        }
+    }
+
+    companion object {
+        private val SEPARATOR = Regex("[\\ \\-]");
+
+        fun checkIban(iban: String) {
+            val builder = StringBuilder(iban.length + iban.asSequence().map { if (it.isDigit()) 1 else 2 }.sum())
+            (iban.subSequence(4, iban.length).asSequence() + iban.subSequence(0, 4).asSequence()).forEach {
+                if (it.isDigit()) {
+                    builder.append(it)
+                } else {
+                    builder.append((it.code - 'A'.code) + 10)
+                }
+            }
+            val str = builder.toString()
+            val mod = str.toBigInteger().mod(97.toBigInteger()).toInt();
+            if (mod != 1) throw badRequest("Iban malformed, modulo is $mod expected 1")
         }
     }
 }

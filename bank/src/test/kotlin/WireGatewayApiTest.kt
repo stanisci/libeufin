@@ -17,18 +17,6 @@ import kotlin.test.assertNotNull
 import randHashCode
 
 class WireGatewayApiTest {
-    suspend fun Database.genTransaction(from: String, to: IbanPayTo, subject: String) {
-        bankTransaction(
-            creditAccountPayto = to,
-            debitAccountUsername = from,
-            subject = subject,
-            amount = TalerAmount("KUDOS:10"),
-            timestamp = Instant.now(),
-        ).run {
-            assertEquals(BankTransactionResult.SUCCESS, first)
-        }
-    }
-
     // Test endpoint is correctly authenticated 
     suspend fun ApplicationTestBuilder.authRoutine(path: String, body: JsonObject? = null, method: HttpMethod = HttpMethod.Post, requireAdmin: Boolean = false) {
         // No body when authentication must happen before parsing the body
@@ -78,7 +66,7 @@ class WireGatewayApiTest {
             "amount" to "KUDOS:55"
             "exchange_base_url" to "http://exchange.example.com/"
             "wtid" to randShortHashCode()
-            "credit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
+            "credit_account" to merchantPayto
         };
 
         authRoutine("/accounts/merchant/taler-wire-gateway/transfer", valid_req)
@@ -125,7 +113,7 @@ class WireGatewayApiTest {
             jsonBody(valid_req) { 
                 "request_uid" to randHashCode()
                 "wtid" to randShortHashCode()
-                "credit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
+                "credit_account" to unknownPayto
             }
         }.assertConflict(TalerErrorCode.BANK_UNKNOWN_CREDITOR)
 
@@ -135,7 +123,7 @@ class WireGatewayApiTest {
             jsonBody(valid_req) { 
                 "request_uid" to randHashCode()
                 "wtid" to randShortHashCode()
-                "credit_account" to "payto://iban/EXCHANGE-IBAN-XYZ"
+                "credit_account" to exchangePayto
             }
         }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
 
@@ -176,7 +164,7 @@ class WireGatewayApiTest {
      * Testing the /history/incoming call from the TWG API.
      */
     @Test
-    fun historyIncoming() = bankSetup { db -> 
+    fun historyIncoming() = bankSetup { 
         // Give Foo reasonable debt allowance:
         setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
 
@@ -198,11 +186,11 @@ class WireGatewayApiTest {
             addIncoming("KUDOS:10")
         }
         // Should not show up in the taler wire gateway API history
-        db.genTransaction("merchant", IbanPayTo("payto://iban/exchange-IBAN-XYZ"), "bogus")
+        tx("merchant", "KUDOS:10", "exchange", "bogus")
         // Exchange pays merchant once, but that should not appear in the result
-        db.genTransaction("exchange", IbanPayTo("payto://iban/merchant-IBAN-XYZ"), "ignored")
+        tx("exchange", "KUDOS:10", "merchant", "ignored")
         // Gen one transaction using raw bank transaction logic
-        db.genTransaction("merchant", IbanPayTo("payto://iban/exchange-IBAN-XYZ"), IncomingTxMetadata(randShortHashCode()).encode())
+        tx("merchant", "KUDOS:10", "exchange", IncomingTxMetadata(randShortHashCode()).encode())
         // Gen one transaction using withdraw logic
         client.post("/accounts/merchant/withdrawals") {
             basicAuth("merchant", "merchant-password")
@@ -213,7 +201,7 @@ class WireGatewayApiTest {
             client.post("/taler-integration/withdrawal-operation/${uuid}") {
                 jsonBody {
                     "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                    "selected_exchange" to exchangePayto
                 }
             }.assertOk()
             client.post("/withdrawals/${uuid}/confirm") {
@@ -274,7 +262,7 @@ class WireGatewayApiTest {
                 }
             }
             delay(200)
-            db.genTransaction("merchant", IbanPayTo("payto://iban/exchange-IBAN-XYZ"), IncomingTxMetadata(randShortHashCode()).encode())
+            tx("merchant", "KUDOS:10", "exchange", IncomingTxMetadata(randShortHashCode()).encode())
         }
 
         // Test trigger by withdraw operationr
@@ -296,7 +284,7 @@ class WireGatewayApiTest {
                 client.post("/taler-integration/withdrawal-operation/${uuid}") {
                     jsonBody {
                         "reserve_pub" to randEddsaPublicKey()
-                        "selected_exchange" to IbanPayTo("payto://iban/EXCHANGE-IBAN-XYZ")
+                        "selected_exchange" to exchangePayto
                     }
                 }.assertOk()
                 client.post("/withdrawals/${uuid}/confirm") {
@@ -326,7 +314,7 @@ class WireGatewayApiTest {
      * Testing the /history/outgoing call from the TWG API.
      */
     @Test
-    fun historyOutgoing() = bankSetup { db -> 
+    fun historyOutgoing() = bankSetup {
         setMaxDebt("exchange", TalerAmount("KUDOS:1000000"))
 
         suspend fun HttpResponse.assertHistory(size: Int) {
@@ -347,12 +335,12 @@ class WireGatewayApiTest {
             transfer("KUDOS:10")
         }
         // Should not show up in the taler wire gateway API history
-        db.genTransaction("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"), "bogus")
+        tx("exchange", "KUDOS:10", "merchant", "bogus")
         // Merchant pays exchange once, but that should not appear in the result
-        db.genTransaction("merchant", IbanPayTo("payto://iban/exchange-IBAN-XYZ"), "ignored")
+        tx("merchant", "KUDOS:10", "exchange", "ignored")
         // Gen two transactions using raw bank transaction logic
         repeat(2) {
-            db.genTransaction("exchange", IbanPayTo("payto://iban/MERCHANT-IBAN-XYZ"), OutgoingTxMetadata(randShortHashCode(), ExchangeUrl("http://exchange.example.com/")).encode())
+            tx("exchange", "KUDOS:10", "merchant", OutgoingTxMetadata(randShortHashCode(), ExchangeUrl("http://exchange.example.com/")).encode())
         }
 
         // Check ignore bogus subject
@@ -420,7 +408,7 @@ class WireGatewayApiTest {
         val valid_req = json {
             "amount" to "KUDOS:44"
             "reserve_pub" to randEddsaPublicKey()
-            "debit_account" to "payto://iban/MERCHANT-IBAN-XYZ"
+            "debit_account" to merchantPayto
         };
 
         authRoutine("/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req, requireAdmin = true)
@@ -455,7 +443,7 @@ class WireGatewayApiTest {
             basicAuth("admin", "admin-password")
             jsonBody(valid_req) { 
                 "reserve_pub" to randEddsaPublicKey()
-                "debit_account" to "payto://iban/UNKNOWN-IBAN-XYZ"
+                "debit_account" to unknownPayto
             }
         }.assertConflict(TalerErrorCode.BANK_UNKNOWN_DEBTOR)
 
@@ -464,7 +452,7 @@ class WireGatewayApiTest {
             basicAuth("admin", "admin-password")
             jsonBody(valid_req) { 
                 "reserve_pub" to randEddsaPublicKey()
-                "debit_account" to "payto://iban/EXCHANGE-IBAN-XYZ"
+                "debit_account" to exchangePayto
             }
         }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
 

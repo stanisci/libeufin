@@ -217,6 +217,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         maxDebt: TalerAmount,
         bonus: TalerAmount?
     ): CustomerCreationResult = conn { it ->
+        val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank();
         it.transaction { conn ->
             val idempotent = conn.prepareStatement("""
                 SELECT password_hash, name=?
@@ -270,6 +271,20 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                     setString(6, cashoutPayto?.canonical)
                     oneOrNull { it.getLong("customer_id") }!!
                 }
+
+                conn.prepareStatement("""
+                    INSERT INTO iban_history(
+                        iban
+                        ,creation_time
+                    ) VALUES (?, ?)
+                """).run {
+                    setString(1, internalPaytoUri.iban)
+                    setLong(2, now)
+                    if (!executeUpdateViolation()) {
+                        conn.rollback()
+                        return@transaction CustomerCreationResult.CONFLICT_PAY_TO
+                    }
+                }
             
                 conn.prepareStatement("""
                     INSERT INTO bank_accounts(
@@ -300,7 +315,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                         setString(1, internalPaytoUri.canonical)
                         setLong(2, bonus.value)
                         setInt(3, bonus.frac)
-                        setLong(4, Instant.now().toDbMicros() ?: throw faultyTimestampByBank())
+                        setLong(4, now)
                         executeQuery().use {
                             when {
                                 !it.next() -> throw internalServerError("Bank transaction didn't properly return")
