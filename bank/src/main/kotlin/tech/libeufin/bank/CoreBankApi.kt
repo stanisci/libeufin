@@ -552,7 +552,8 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
                             process.exitValue()
                         }
                         if (exitValue != 0) {
-                            throw conflict(
+                            throw libeufinError(
+                                HttpStatusCode.BadGateway,
                                 "Tan channel script failure with exit value $exitValue",
                                 TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED
                             )
