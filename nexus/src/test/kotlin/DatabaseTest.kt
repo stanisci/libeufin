@@ -85,14 +85,14 @@ class IncomingPaymentsTest {
         Random.nextBytes(reservePub)
 
         runBlocking {
+            val inc = genIncPay("reserve-pub")
             // Checking the reserve is not found.
             assertFalse(db.isReservePubFound(reservePub))
-            assertTrue(db.incomingTalerablePaymentCreate(
-                genIncPay("reserve-pub"),
-                reservePub
-            ))
+            assertFalse(db.isIncomingPaymentSeen(inc.bankTransferId))
+            assertTrue(db.incomingTalerablePaymentCreate(inc, reservePub))
             // Checking the reserve is not found.
             assertTrue(db.isReservePubFound(reservePub))
+            assertTrue(db.isIncomingPaymentSeen(inc.bankTransferId))
         }
     }
 }
