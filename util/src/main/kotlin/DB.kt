@@ -37,50 +37,6 @@ fun getCurrentUser(): String = System.getProperty("user.name")
 
 
 // Check GANA (https://docs.gnunet.org/gana/index.html) for numbers allowance.
-/**
- * Note: every domain is ALWAYS meant to be salted with
- * a unique identifier that points to the user waiting for
- * a notification.  The reference function for salting is:
- * "buildChannelName()", in this file.
- */
-enum class NotificationsChannelDomains(val value: Int) {
-    // When payments with well-formed Taler subject arrive.
-    LIBEUFIN_TALER_INCOMING(3000),
-
-    // A transaction happened for a particular user.  The payload
-    // informs about the direction.
-    LIBEUFIN_REGIO_TX(3001),
-
-    // When an incoming fiat payment is downloaded from Nexus.
-    // Happens when a customer wants to withdraw Taler coins in the
-    // regional currency.
-    LIBEUFIN_SANDBOX_FIAT_INCOMING(3002),
-
-    // When Nexus has ingested a new transactions from the bank it
-    // is connected to.  This event carries incoming and outgoing
-    // payments, and it specifies that in its payload.  The direction
-    // codename is the same as CaMt (DBIT, CRDT), as that is also
-    // used in the database.
-    LIBEUFIN_NEXUS_TX(3003)
-}
-
-/**
- * Helper that builds a LISTEN-NOTIFY channel name.
- * 'salt' should be any value that would uniquely deliver the
- * message to its receiver.  IBANs are ideal, but they cost DB queries.
- */
-
-fun buildChannelName(
-    domain: NotificationsChannelDomains,
-    salt: String,
-    separator: String = "_"
-): String {
-    val channelElements = "${domain.value}$separator$salt"
-    val ret = "X${Base32Crockford.encode(CryptoUtil.hashStringSHA256(channelElements))}"
-    logger.debug("Defining db channel name for salt: $salt, domain: ${domain.name}, resulting in: $ret")
-    return ret
-}
-
 
 /**
  * This function converts postgresql:// URIs to JDBC URIs.

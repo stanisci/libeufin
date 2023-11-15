@@ -25,15 +25,9 @@
 package tech.libeufin.util
 
 import io.ktor.http.HttpStatusCode
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import tech.libeufin.util.ebics_h004.*
-import tech.libeufin.util.ebics_h005.Ebics3Request
 import tech.libeufin.util.ebics_h005.Ebics3Response
-import tech.libeufin.util.ebics_hev.HEVRequest
-import tech.libeufin.util.ebics_hev.HEVResponse
 import tech.libeufin.util.ebics_s001.UserSignatureData
-import java.math.BigInteger
 import java.security.SecureRandom
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
@@ -41,7 +35,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.*
-import java.util.zip.DeflaterInputStream
 import javax.xml.bind.JAXBElement
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
@@ -198,33 +191,6 @@ fun signOrderEbics3(
     return userSignatureData
 }
 
-fun createEbicsRequestForDownloadReceipt(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    transactionID: String?,
-    withEbics3: Boolean = false
-): String {
-    val doc = if (withEbics3) {
-        val req = Ebics3Request.createForDownloadReceiptPhase(
-            transactionID,
-            subscriberDetails.hostId
-        )
-        XMLUtil.convertJaxbToDocument(req)
-
-    } else {
-        val req = EbicsRequest.createForDownloadReceiptPhase(
-            transactionID,
-            subscriberDetails.hostId
-        )
-        XMLUtil.convertJaxbToDocument(req)
-    }
-    XMLUtil.signEbicsDocument(
-        doc,
-        subscriberDetails.customerAuthPriv,
-        withEbics3
-    )
-    return XMLUtil.convertDomToString(doc)
-}
-
 data class PreparedUploadData(
     val transactionKey: ByteArray,
     val userSignatureDataEncrypted: ByteArray,
@@ -250,176 +216,6 @@ data class PreparedUploadData(
         result = 31 * result + encryptedPayloadChunks.hashCode()
         return result
     }
-}
-
-// Creates the EBICS 3 upload init request.
-fun createEbicsRequestForUploadInitialization(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    ebics3OrderService: Ebics3Request.OrderDetails.Service,
-    orderParams: EbicsOrderParams? = null,
-    preparedUploadData: PreparedUploadData
-): String {
-    val nonce = getNonce(128)
-    val req = Ebics3Request.createForUploadInitializationPhase(
-        preparedUploadData.transactionKey,
-        preparedUploadData.userSignatureDataEncrypted,
-        preparedUploadData.dataDigest,
-        subscriberDetails.hostId,
-        nonce,
-        subscriberDetails.partnerId,
-        subscriberDetails.userId,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
-        subscriberDetails.bankAuthPub!!,
-        subscriberDetails.bankEncPub!!,
-        BigInteger.ONE,
-        ebics3OrderService
-    )
-    val doc = XMLUtil.convertJaxbToDocument(
-        req,
-        withSchemaLocation = "urn:org:ebics:H005 ebics_request_H005.xsd"
-    )
-    logger.debug("Created EBICS 3 document for upload initialization," +
-            " nonce: ${nonce.toHexString()}")
-    XMLUtil.signEbicsDocument(
-        doc,
-        subscriberDetails.customerAuthPriv,
-        withEbics3 = true
-    )
-    return XMLUtil.convertDomToString(doc)
-}
-
-/**
- * Create an EBICS request for the initialization phase of an upload EBICS transaction.
- *
- * The payload is only passed to generate the signature.
- */
-fun createEbicsRequestForUploadInitialization(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    orderType: String,
-    orderParams: EbicsOrderParams,
-    preparedUploadData: PreparedUploadData
-): String {
-    val nonce = getNonce(128)
-    val req = EbicsRequest.createForUploadInitializationPhase(
-        preparedUploadData.transactionKey,
-        preparedUploadData.userSignatureDataEncrypted,
-        subscriberDetails.hostId,
-        nonce,
-        subscriberDetails.partnerId,
-        subscriberDetails.userId,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
-        subscriberDetails.bankAuthPub!!,
-        subscriberDetails.bankEncPub!!,
-        BigInteger.ONE,
-        orderType,
-        makeOrderParams(orderParams)
-    )
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    logger.debug("Created EBICS $orderType document for upload initialization," +
-            " nonce: ${nonce.toHexString()}")
-    XMLUtil.signEbicsDocument(
-        doc,
-        subscriberDetails.customerAuthPriv
-    )
-    return XMLUtil.convertDomToString(doc)
-}
-
-// Generates a EBICS 2.5 signed document for the download init phase.
-fun createEbicsRequestForDownloadInitialization(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    orderType: String,
-    orderParams: EbicsOrderParams
-): String {
-    val nonce = getNonce(128)
-    val req = EbicsRequest.createForDownloadInitializationPhase(
-        subscriberDetails.userId,
-        subscriberDetails.partnerId,
-        subscriberDetails.hostId,
-        nonce,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar(
-            TimeZone.getTimeZone(ZoneId.systemDefault())
-        )),
-        subscriberDetails.bankEncPub ?: throw EbicsProtocolError(
-            HttpStatusCode.BadRequest,
-            "Invalid subscriber state 'bankEncPub' missing, please send HPB first"
-        ),
-        subscriberDetails.bankAuthPub ?: throw EbicsProtocolError(
-            HttpStatusCode.BadRequest,
-            "Invalid subscriber state 'bankAuthPub' missing, please send HPB first"
-        ),
-        orderType,
-        makeOrderParams(orderParams)
-    )
-    logger.debug("Created EBICS document for download initialization, nonce: ${nonce.toHexString()}")
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    XMLUtil.signEbicsDocument(
-        doc,
-        subscriberDetails.customerAuthPriv,
-        withEbics3 = false
-    )
-    return XMLUtil.convertDomToString(doc)
-}
-
-fun createEbicsRequestForDownloadTransferPhase(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    transactionID: String?,
-    segmentNumber: Int,
-    numSegments: Int,
-    withEbics3: Boolean = false
-): String {
-    val doc = if (withEbics3) {
-        val req = Ebics3Request.createForDownloadTransferPhase(
-            subscriberDetails.hostId,
-            transactionID,
-            segmentNumber,
-            numSegments
-        )
-        XMLUtil.convertJaxbToDocument(req)
-    } else {
-        val req = EbicsRequest.createForDownloadTransferPhase(
-            subscriberDetails.hostId,
-            transactionID,
-            segmentNumber,
-            numSegments
-        )
-        XMLUtil.convertJaxbToDocument(req)
-    }
-    XMLUtil.signEbicsDocument(
-        doc,
-        subscriberDetails.customerAuthPriv,
-        withEbics3 = withEbics3
-    )
-    return XMLUtil.convertDomToString(doc)
-}
-
-fun createEbicsRequestForUploadTransferPhase(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    transactionID: String?,
-    preparedUploadData: PreparedUploadData,
-    chunkIndex: Int,
-    withEbics3: Boolean = false
-): String {
-    val doc = if (withEbics3) {
-        val req = Ebics3Request.createForUploadTransferPhase(
-            subscriberDetails.hostId,
-            transactionID,
-            // chunks are 1-indexed
-            BigInteger.valueOf(chunkIndex.toLong() + 1),
-            preparedUploadData.encryptedPayloadChunks[chunkIndex]
-        )
-        XMLUtil.convertJaxbToDocument(req)
-    } else {
-        val req = EbicsRequest.createForUploadTransferPhase(
-            subscriberDetails.hostId,
-            transactionID,
-            // chunks are 1-indexed
-            BigInteger.valueOf(chunkIndex.toLong() + 1),
-            preparedUploadData.encryptedPayloadChunks[chunkIndex]
-        )
-        XMLUtil.convertJaxbToDocument(req)
-    }
-    XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv, withEbics3)
-    return XMLUtil.convertDomToString(doc)
 }
 
 data class DataEncryptionInfo(
@@ -496,33 +292,6 @@ data class EbicsKeyManagementResponseContent(
     val orderData: ByteArray?
 )
 
-fun parseAndDecryptEbicsKeyManagementResponse(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    responseStr: String
-): EbicsKeyManagementResponseContent {
-    val resp = try {
-        XMLUtil.convertStringToJaxb<EbicsKeyManagementResponse>(responseStr)
-    } catch (e: Exception) {
-        throw EbicsProtocolError(HttpStatusCode.InternalServerError, "Invalid XML received from bank")
-    }
-    val retCode = EbicsReturnCode.lookup(resp.value.header.mutable.returnCode)
-
-    val daeXml = resp.value.body.dataTransfer?.dataEncryptionInfo
-    val orderData = if (daeXml != null) {
-        val dae = DataEncryptionInfo(daeXml.transactionKey, daeXml.encryptionPubKeyDigest.value)
-        val encOrderData = resp.value.body.dataTransfer?.orderData?.value ?: throw EbicsProtocolError(
-            HttpStatusCode.InternalServerError, "Invalid XML/orderData received from bank"
-        )
-        decryptAndDecompressResponse(subscriberDetails, dae, listOf(encOrderData))
-    } else {
-        null
-    }
-
-    val bankReturnCodeStr = resp.value.body.returnCode.value
-    val bankReturnCode = EbicsReturnCode.lookup(bankReturnCodeStr)
-
-    return EbicsKeyManagementResponseContent(retCode, bankReturnCode, orderData)
-}
 
 class HpbResponseData(
     val hostID: String,
@@ -627,37 +396,6 @@ fun ebics25toInternalRepr(response: String): EbicsResponseContent {
         segmentNumber = resp.value.header.mutable.segmentNumber?.value?.toInt()
     )
 }
-fun parseAndValidateEbicsResponse(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    responseStr: String,
-    withEbics3: Boolean = false
-): EbicsResponseContent {
-    val responseDocument = try {
-        XMLUtil.parseStringIntoDom(responseStr)
-    } catch (e: Exception) {
-        throw EbicsProtocolError(
-            HttpStatusCode.InternalServerError,
-            "Invalid XML (as EbicsResponse) received from bank"
-        )
-    }
-    if (!XMLUtil.verifyEbicsDocument(
-            responseDocument,
-            subscriberDetails.bankAuthPub ?: throw EbicsProtocolError(
-                HttpStatusCode.InternalServerError,
-                "Bank's signature verification failed"
-            ),
-            withEbics3 = withEbics3
-        )
-    ) {
-        throw EbicsProtocolError(
-            HttpStatusCode.InternalServerError,
-            "Bank's signature verification failed"
-        )
-    }
-    if (withEbics3)
-        return ebics3toInternalRepr(responseStr)
-    return ebics25toInternalRepr(responseStr)
-}
 
 /**
  * Get the private key that matches the given public key digest.
@@ -676,32 +414,6 @@ fun getDecryptionKey(subscriberDetails: EbicsClientSubscriberDetails, pubDigest:
     throw EbicsProtocolError(HttpStatusCode.NotFound, "Could not find customer's public key")
 }
 
-/**
- * Wrapper around the lower decryption routine, that takes a EBICS response
- * object containing a encrypted payload, and return the plain version of it
- * (including decompression).
- */
-fun decryptAndDecompressResponse(
-    subscriberDetails: EbicsClientSubscriberDetails,
-    encryptionInfo: DataEncryptionInfo,
-    chunks: List<String>
-): ByteArray {
-    val privateKey = getDecryptionKey(subscriberDetails, encryptionInfo.bankPubDigest)
-    val buf = StringBuilder()
-    chunks.forEach { buf.append(it) }
-    val decoded = Base64.getDecoder().decode(buf.toString())
-    val er = CryptoUtil.EncryptionResult(
-        encryptionInfo.transactionKey,
-        encryptionInfo.bankPubDigest,
-        decoded
-    )
-    val dataCompr = CryptoUtil.decryptEbicsE002(
-        er,
-        privateKey
-    )
-    return EbicsOrderUtil.decodeOrderData(dataCompr)
-}
-
 data class EbicsVersionSpec(
     val protocol: String,
     val version: String
@@ -710,74 +422,3 @@ data class EbicsVersionSpec(
 data class EbicsHevDetails(
     val versions: List<EbicsVersionSpec>
 )
-
-fun makeEbicsHEVRequest(subscriberDetails: EbicsClientSubscriberDetails): String {
-    val req = HEVRequest().apply {
-        hostId = subscriberDetails.hostId
-    }
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    return XMLUtil.convertDomToString(doc)
-}
-
-fun makeEbicsHEVRequestRaw(hostID: String): String {
-    val h = hostID
-    val req = HEVRequest().apply {
-        hostId = h
-    }
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    return XMLUtil.convertDomToString(doc)
-}
-
-fun parseEbicsHEVResponse(respStr: String): EbicsHevDetails {
-    val resp = try {
-        XMLUtil.convertStringToJaxb<HEVResponse>(respStr)
-    } catch (e: Exception) {
-        logger.error("Exception while parsing HEV response", e)
-        throw EbicsProtocolError(HttpStatusCode.InternalServerError, "Invalid HEV received from bank")
-    }
-    val versions = resp.value.versionNumber.map { versionNumber ->
-        EbicsVersionSpec(versionNumber.protocolVersion, versionNumber.value)
-    }
-    return EbicsHevDetails(versions)
-}
-
-fun makeEbicsIniRequest(subscriberDetails: EbicsClientSubscriberDetails): String {
-    val iniRequest = EbicsUnsecuredRequest.createIni(
-        subscriberDetails.hostId,
-        subscriberDetails.userId,
-        subscriberDetails.partnerId,
-        subscriberDetails.customerSignPriv
-    )
-    val doc = XMLUtil.convertJaxbToDocument(iniRequest)
-    return XMLUtil.convertDomToString(doc)
-}
-
-fun makeEbicsHiaRequest(subscriberDetails: EbicsClientSubscriberDetails): String {
-    val hiaRequest = EbicsUnsecuredRequest.createHia(
-        subscriberDetails.hostId,
-        subscriberDetails.userId,
-        subscriberDetails.partnerId,
-        subscriberDetails.customerAuthPriv,
-        subscriberDetails.customerEncPriv
-    )
-    val doc = XMLUtil.convertJaxbToDocument(hiaRequest)
-    return XMLUtil.convertDomToString(doc)
-}
-
-fun makeEbicsHpbRequest(subscriberDetails: EbicsClientSubscriberDetails): String {
-    val hpbRequest = EbicsNpkdRequest.createRequest(
-        subscriberDetails.hostId,
-        subscriberDetails.partnerId,
-        subscriberDetails.userId,
-        getNonce(128),
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
-    )
-    val doc = XMLUtil.convertJaxbToDocument(hpbRequest)
-    XMLUtil.signEbicsDocument(doc, subscriberDetails.customerAuthPriv)
-    return XMLUtil.convertDomToString(doc)
-}
-
-fun dumpEbicsSubscriber(ebicsHeader: EbicsUnsecuredRequest.StaticHeaderType): String {
-    return "userID: ${ebicsHeader.userID}, partnerID: ${ebicsHeader.partnerID}, systemID: ${ebicsHeader.systemID}"
-
-}

@@ -4,8 +4,6 @@ import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.netty.channel.unix.Errors
-import logger
-import java.net.BindException
 import kotlin.system.exitProcess
 
 const val EAFNOSUPPORT = -97 // Netty defines errors negatively.

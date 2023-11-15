@@ -21,8 +21,6 @@ package tech.libeufin.util
 
 import com.sun.xml.bind.marshaller.NamespacePrefixMapper
 import io.ktor.http.*
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import org.w3c.dom.Document
 import org.w3c.dom.Node
 import org.w3c.dom.NodeList
@@ -61,7 +59,6 @@ import javax.xml.validation.Validator
 import javax.xml.xpath.XPath
 import javax.xml.xpath.XPathConstants
 import javax.xml.xpath.XPathFactory
-import logger
 
 class DefaultNamespaces : NamespacePrefixMapper() {
     override fun getPreferredPrefix(namespaceUri: String?, suggestion: String?, requirePrefix: Boolean): String? {

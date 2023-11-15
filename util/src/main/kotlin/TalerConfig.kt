@@ -17,6 +17,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
+import tech.libeufin.util.logger
 import java.io.File
 import java.nio.file.Paths
 import kotlin.io.path.Path

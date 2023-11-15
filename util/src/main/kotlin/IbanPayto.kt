@@ -1,9 +1,7 @@
 package tech.libeufin.util
 
-import logger
 import java.net.URI
 import java.net.URLDecoder
-import java.net.URLEncoder
 
 // Payto information.
 data class IbanPayto(
@@ -80,30 +78,4 @@ fun parsePayto(payto: String): IbanPayto? {
         message = getQueryParamOrNull("message", params),
         receiverName = getQueryParamOrNull("receiver-name", params)
     )
-}
-
-fun buildIbanPaytoUri(
-    iban: String,
-    bic: String,
-    receiverName: String,
-    message: String? = null
-): String {
-    val nameUrlEnc = URLEncoder.encode(receiverName, "utf-8")
-    val ret = "payto://iban/$bic/$iban?receiver-name=$nameUrlEnc"
-    if (message != null) {
-        val messageUrlEnc = URLEncoder.encode(message, "utf-8")
-        return "$ret&message=$messageUrlEnc"
-    }
-    return ret
-}
-
-/**
- * Strip a payto://iban URI of everything except the IBAN.
- * Return null on an invalid URI, letting the caller decide
- * how to handle the problem.
- */
-fun stripIbanPayto(paytoUri: String): String? {
-    val parsedPayto = parsePayto(paytoUri) ?: return null
-    val canonIban = parsedPayto.iban.uppercase()
-    return "payto://iban/${canonIban}"
 }

@@ -4,7 +4,6 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.util.*
-import logger
 
 // Get the base URL of a request, returns null if any problem occurs.
 fun ApplicationRequest.getBaseUrl(): String? {
@@ -85,15 +84,4 @@ fun getAuthorizationDetails(authorizationHeader: String): AuthorizationDetails? 
         return null
     }
     return AuthorizationDetails(scheme = split[0], content = split[1])
-}
-
-// Gets a long from the URI param named 'uriParamName',
-// or null if that is not found.
-fun ApplicationCall.maybeLong(uriParamName: String): Long? {
-    val maybeParam = this.parameters[uriParamName] ?: return null
-    return try { maybeParam.toLong() }
-    catch (e: Exception) {
-        logger.error("Could not convert '$uriParamName' to Long")
-        return null
-    }
 }
