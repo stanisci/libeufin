@@ -34,27 +34,24 @@ import kotlinx.coroutines.*
 class SecurityTest {
     @Test
     fun bodySizeLimit() = bankSetup { _ ->
-        val valid_req = json {
+        val valid_req = obj {
             "payto_uri" to "$exchangePayto?message=payout"
             "amount" to "KUDOS:0.3"
         }
-        client.post("/accounts/merchant/transactions") {
-            basicAuth("merchant", "merchant-password")
-            jsonBody(valid_req)
+        client.postA("/accounts/merchant/transactions") {
+            json(valid_req)
         }.assertOk()
 
         // Check body too big
-        client.post("/accounts/merchant/transactions") {
-            basicAuth("merchant", "merchant-password")
-            jsonBody(valid_req) {
+        client.postA("/accounts/merchant/transactions") {
+            json(valid_req) {
                 "payto_uri" to "$exchangePayto?message=payout${"A".repeat(4100)}"
             }
         }.assertBadRequest()
 
         // Check body too big even after compression
-        client.post("/accounts/merchant/transactions") {
-            basicAuth("merchant", "merchant-password")
-            jsonBody(valid_req, deflate = true) {
+        client.postA("/accounts/merchant/transactions") {
+            json(valid_req, deflate = true) {
                 "payto_uri" to "$exchangePayto?message=payout${"A".repeat(4100)}"
             }
         }.assertBadRequest()

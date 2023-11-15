@@ -27,11 +27,9 @@ class BankIntegrationApiTest {
     @Test
     fun get() = bankSetup { _ ->
         // Check OK
-        client.post("/accounts/merchant/withdrawals") {
-            basicAuth("merchant", "merchant-password")
-            jsonBody { "amount" to "KUDOS:9" } 
-        }.assertOk().run {
-            val resp = json<BankAccountCreateWithdrawalResponse>()
+        client.postA("/accounts/merchant/withdrawals") {
+            json { "amount" to "KUDOS:9" } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse> { resp ->
             val uuid = resp.taler_withdraw_uri.split("/").last()
             client.get("/taler-integration/withdrawal-operation/$uuid")
                 .assertOk()
@@ -50,65 +48,61 @@ class BankIntegrationApiTest {
     @Test
     fun select() = bankSetup { _ ->
         val reserve_pub = randEddsaPublicKey()
-        val req = json {
+        val req = obj {
             "reserve_pub" to reserve_pub
             "selected_exchange" to exchangePayto
         }
 
         // Check bad UUID
         client.post("/taler-integration/withdrawal-operation/chocolate") {
-            jsonBody(req)
+            json(req)
         }.assertBadRequest()
 
         // Check unknown
         client.post("/taler-integration/withdrawal-operation/${UUID.randomUUID()}") {
-            jsonBody(req)
+            json(req)
         }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
 
-        client.post("/accounts/merchant/withdrawals") {
-            basicAuth("merchant", "merchant-password")
-            jsonBody { "amount" to "KUDOS:1" } 
-        }.assertOk().run {
-            val resp = json<BankAccountCreateWithdrawalResponse>()
-            val uuid = resp.taler_withdraw_uri.split("/").last()
+        client.postA("/accounts/merchant/withdrawals") {
+            json { "amount" to "KUDOS:1" } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse> {
+            val uuid = it.taler_withdraw_uri.split("/").last()
 
             // Check OK
             client.post("/taler-integration/withdrawal-operation/$uuid") {
-                jsonBody(req)
+                json(req)
             }.assertOk()
             // Check idempotence
             client.post("/taler-integration/withdrawal-operation/$uuid") {
-                jsonBody(req)
+                json(req)
             }.assertOk()
             // Check already selected
             client.post("/taler-integration/withdrawal-operation/$uuid") {
-                jsonBody(req) {
+                json(req) {
                     "reserve_pub" to randEddsaPublicKey()
                 }
             }.assertConflict(TalerErrorCode.BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT)
         }   
 
-        client.post("/accounts/merchant/withdrawals") {
-            basicAuth("merchant", "merchant-password")
-            jsonBody {  "amount" to "KUDOS:1"  } 
-        }.assertOk().run {
-            val resp = json<BankAccountCreateWithdrawalResponse>()
-            val uuid = resp.taler_withdraw_uri.split("/").last()
+        client.postA("/accounts/merchant/withdrawals") {
+            json { "amount" to "KUDOS:1" } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse> {
+            val uuid = it.taler_withdraw_uri.split("/").last()
 
             // Check reserve_pub_reuse
             client.post("/taler-integration/withdrawal-operation/$uuid") {
-                jsonBody(req)
+                json(req)
             }.assertConflict(TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT)
             // Check unknown account
             client.post("/taler-integration/withdrawal-operation/$uuid") {
-                jsonBody {
+                json {
                     "reserve_pub" to randEddsaPublicKey()
                     "selected_exchange" to unknownPayto
                 }
             }.assertConflict(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
             // Check account not exchange
             client.post("/taler-integration/withdrawal-operation/$uuid") {
-                jsonBody {
+                json {
                     "reserve_pub" to randEddsaPublicKey()
                     "selected_exchange" to merchantPayto
                 }

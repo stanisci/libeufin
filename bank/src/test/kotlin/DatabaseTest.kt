@@ -74,9 +74,7 @@ class DatabaseTest {
                     tx("customer", "KUDOS:0.0$it", "merchant", "concurrent 0$it")
                 }
                 launch {
-                    client.get("/accounts/merchant/transactions") {
-                        basicAuth("merchant", "merchant-password")
-                    }.assertOk()
+                    client.getA("/accounts/merchant/transactions").assertOk()
                 }
             }
         }

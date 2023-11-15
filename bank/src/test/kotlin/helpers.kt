@@ -1,6 +1,7 @@
 import io.ktor.http.*
 import io.ktor.client.statement.*
 import io.ktor.client.request.*
+import io.ktor.client.HttpClient
 import io.ktor.server.testing.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
@@ -98,16 +99,16 @@ fun dbSetup(lambda: suspend (Database) -> Unit) {
 
 suspend fun ApplicationTestBuilder.setMaxDebt(account: String, maxDebt: TalerAmount) {
     client.patch("/accounts/$account") { 
-        basicAuth("admin", "admin-password")
-        jsonBody {  "debit_threshold" to maxDebt  }
+        pwAuth("admin")
+        json { "debit_threshold" to maxDebt }
     }.assertNoContent()
 }
 
 suspend fun ApplicationTestBuilder.assertBalance(account: String, info: CreditDebitInfo, amount: String) {
     client.get("/accounts/$account") { 
-        basicAuth("admin", "admin-password")
-    }.assertOk().run { 
-        val balance = json<AccountData>().balance;
+        pwAuth("admin")
+    }.assertOkJson<AccountData> {
+        val balance = it.balance;
         assertEquals(info, balance.credit_debit_indicator)
         assertEquals(TalerAmount(amount), balance.amount)
     }
@@ -116,18 +117,16 @@ suspend fun ApplicationTestBuilder.assertBalance(account: String, info: CreditDe
 suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String, subject: String = "payout"): Long {
     return client.post("/accounts/$from/transactions") {
         basicAuth("$from", "$from-password")
-        jsonBody {
+        json {
             "payto_uri" to "${paytos[to]}?message=${subject.encodeURLQueryComponent()}&amount=$amount"
         }
-    }.assertOk().run {
-        json<TransactionCreateResponse>().row_id
-    }
+    }.assertOkJson<TransactionCreateResponse>().row_id
 }
 
 suspend fun ApplicationTestBuilder.transfer(amount: String) {
     client.post("/accounts/exchange/taler-wire-gateway/transfer") {
-        basicAuth("exchange", "exchange-password")
-        jsonBody {
+        pwAuth("exchange")
+        json {
             "request_uid" to randHashCode()
             "amount" to TalerAmount(amount)
             "exchange_base_url" to "http://exchange.example.com/"
@@ -139,8 +138,8 @@ suspend fun ApplicationTestBuilder.transfer(amount: String) {
 
 suspend fun ApplicationTestBuilder.addIncoming(amount: String) {
     client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-        basicAuth("admin", "admin-password")
-        jsonBody {
+        pwAuth("admin")
+        json {
             "amount" to TalerAmount(amount)
             "reserve_pub" to randEddsaPublicKey()
             "debit_account" to merchantPayto
@@ -149,38 +148,33 @@ suspend fun ApplicationTestBuilder.addIncoming(amount: String) {
 }
 
 suspend fun ApplicationTestBuilder.cashout(amount: String) {
-    client.post("/accounts/customer/cashouts") {
-        basicAuth("customer", "customer-password")
-        jsonBody(json {
+    client.postA("/accounts/customer/cashouts") {
+        json {
             "request_uid" to randShortHashCode()
             "amount_debit" to amount
             "amount_credit" to convert(amount)
-        })
-    }.assertOk().run {
-        val id = json<CashoutPending>().cashout_id
-        client.post("/accounts/customer/cashouts/$id/confirm") {
-            basicAuth("customer", "customer-password")
-            jsonBody { "tan" to smsCode("+99") }
+        }
+    }.assertOkJson<CashoutPending> {
+        client.postA("/accounts/customer/cashouts/${it.cashout_id}/confirm") {
+            json { "tan" to smsCode("+99") }
         }.assertNoContent()
     }
 }
 
 suspend fun ApplicationTestBuilder.fillCashoutInfo(account: String) {
-    client.patch("/accounts/$account") {
-        basicAuth("$account", "$account-password")
-        jsonBody(json {
+    client.patchA("/accounts/$account") {
+        json {
             "cashout_payto_uri" to unknownPayto
-            "challenge_contact_data" to json {
+            "challenge_contact_data" to obj {
                 "phone" to "+99"
             }
-        })
+        }
     }.assertNoContent()
 }
 
 suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
-    client.get("/cashout-rate?amount_debit=$amount").assertOk().run {
-        return json<ConversionResponse>().amount_credit
-    }
+    return client.get("/cashout-rate?amount_debit=$amount")
+        .assertOkJson<ConversionResponse>().amount_credit
 }
 
 suspend fun smsCode(info: String): String? {
@@ -277,7 +271,7 @@ inline suspend fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B)
 
 /* ----- Body helper ----- */
 
-inline fun <reified B> HttpRequestBuilder.jsonBody(b: B, deflate: Boolean = false) {
+inline fun <reified B> HttpRequestBuilder.json(b: B, deflate: Boolean = false) {
     val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b);
     contentType(ContentType.Application.Json)
     if (deflate) {
@@ -292,20 +286,66 @@ inline fun <reified B> HttpRequestBuilder.jsonBody(b: B, deflate: Boolean = fals
     }
 }
 
-inline fun HttpRequestBuilder.jsonBody(
+inline fun HttpRequestBuilder.json(
     from: JsonObject = JsonObject(emptyMap()), 
     deflate: Boolean = false, 
     builderAction: JsonBuilder.() -> Unit
 ) {
-    jsonBody(json(from, builderAction), deflate)
+    json(obj(from, builderAction), deflate)
 }
 
 inline suspend fun <reified B> HttpResponse.json(): B =
     Json.decodeFromString(kotlinx.serialization.serializer<B>(), bodyAsText())
 
+inline suspend fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
+    assertOk()
+    val body = json<B>()
+    lambda(body)
+    return body
+}
+
+/* ----- Auth ----- */
+
+/** Auto auth get request */
+inline suspend fun HttpClient.getA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return get(url) {
+        pwAuth()
+        builder(this)
+    }
+}
+
+/** Auto auth post request */
+inline suspend fun HttpClient.postA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return post(url) {
+        pwAuth()
+        builder(this)
+    }
+}
+
+/** Auto auth patch request */
+inline suspend fun HttpClient.patchA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return patch(url) {
+        pwAuth()
+        builder(this)
+    }
+}
+
+fun HttpRequestBuilder.pwAuth(username: String? = null) {
+    if (username != null) {
+        basicAuth("$username", "$username-password")
+    } else if (url.pathSegments.contains("admin")) {
+        basicAuth("admin", "admin-password")
+    } else if (url.pathSegments[1] == "accounts") {
+        // Extract username from path
+        val login = url.pathSegments[2]
+        basicAuth("$login", "$login-password")
+    }
+    
+}
+
 /* ----- Json DSL ----- */
 
-inline fun json(from: JsonObject = JsonObject(emptyMap()), builderAction: JsonBuilder.() -> Unit): JsonObject {
+inline fun obj(from: JsonObject = JsonObject(emptyMap()), builderAction: JsonBuilder.() -> Unit): JsonObject {
     val builder = JsonBuilder(from)
     builder.apply(builderAction)
     return JsonObject(builder.content)

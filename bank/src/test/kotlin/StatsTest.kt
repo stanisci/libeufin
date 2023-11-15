@@ -63,9 +63,8 @@ class StatsTest {
             fiatAmount: String? = null
         ) {
             Timeframe.entries.forEach { timestamp -> 
-                client.get("/monitor?timestamp=${timestamp.name}") { basicAuth("admin", "admin-password") }.assertOk().run {
-                    println(bodyAsText())
-                    val resp = json<MonitorResponse>() as MonitorWithConversion
+                client.get("/monitor?timestamp=${timestamp.name}") { pwAuth("admin") }.assertOkJson<MonitorResponse> {
+                    val resp = it as MonitorWithConversion
                     assertEquals(count, dbCount(resp))
                     assertEquals(TalerAmount(regionalAmount), regionalVolume(resp))
                     fiatVolume?.run { assertEquals(TalerAmount(fiatAmount!!), this(resp)) }
