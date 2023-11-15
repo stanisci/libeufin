@@ -1,10 +1,10 @@
-import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import org.junit.jupiter.api.assertThrows
 import tech.libeufin.nexus.TalerAmount
 import tech.libeufin.nexus.getAmountNoCurrency
 import tech.libeufin.nexus.getTalerAmount
 import tech.libeufin.nexus.isReservePub
+import tech.libeufin.util.parseCamtTime
 import java.lang.StringBuilder
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -12,6 +12,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class Parsing {
+
+    @Test
+    fun gregorianTime() {
+        parseCamtTime("2023-11-06T20:00:00")
+        assertThrows<Exception> { parseCamtTime("2023-11-06T20:00:00+01:00") }
+        assertThrows<Exception> { parseCamtTime("2023-11-06T20:00:00Z") }
+    }
     @Test // Could be moved in a dedicated Amounts.kt test module.
     fun generateCurrencyAgnosticAmount() {
         assertThrows<Exception> {

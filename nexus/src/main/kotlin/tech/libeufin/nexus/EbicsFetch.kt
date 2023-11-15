@@ -251,7 +251,7 @@ fun findIncomingTxInNotification(
                                 // Obtaining the execution time.
                                 val executionTime: Instant = requireUniqueChildNamed("RltdDts") {
                                     requireUniqueChildNamed("AccptncDtTm") {
-                                        parseGregorianTime(focusElement.textContent)
+                                        parseCamtTime(focusElement.textContent)
                                     }
                                 }
                                 // Obtaining the payer's details

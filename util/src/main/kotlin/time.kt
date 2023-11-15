@@ -82,13 +82,14 @@ fun Long.microsToJavaInstant(): Instant? {
 }
 
 /**
- * Parses one timestamp from the ISO 8601 format.
+ * Parses timestamps found in camt.054 documents.  They have
+ * the following format: yyy-MM-ddThh:mm:ss, without any timezone.
  *
  * @param timeFromXml input time string from the XML
  * @return [Instant] in the UTC timezone
  */
-fun parseGregorianTime(timeFromXml: String): Instant {
-    val formatter = DateTimeFormatter.ISO_DATE_TIME.parse(timeFromXml)
-    return Instant.from(formatter)
-
+fun parseCamtTime(timeFromCamt: String): Instant {
+    val t = LocalDateTime.parse(timeFromCamt)
+    val utc = ZoneId.of("UTC")
+    return t.toInstant(utc.rules.getOffset(t))
 }
