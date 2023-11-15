@@ -296,6 +296,10 @@ fun findIncomingTxInNotification(
  * @return [ByteArray] or null if not valid.
  */
 fun isReservePub(maybeReservePub: String): ByteArray? {
+    if (maybeReservePub.length != 52) {
+        logger.error("Not a reserve pub, length (${maybeReservePub.length}) is not 52")
+        return null
+    }
     val dec = try {
         Base32Crockford.decode(maybeReservePub)
     } catch (e: EncodingException) {
@@ -303,6 +307,7 @@ fun isReservePub(maybeReservePub: String): ByteArray? {
         return null
     }
     logger.debug("Reserve how many bytes: ${dec.size}")
+    // this check would only be effective after #7980
     if (dec.size != 32) {
         logger.error("Not a reserve pub, wrong length: ${dec.size}")
         return null
