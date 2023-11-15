@@ -1,5 +1,8 @@
+import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import org.junit.jupiter.api.assertThrows
+import tech.libeufin.nexus.TalerAmount
+import tech.libeufin.nexus.getAmountNoCurrency
 import tech.libeufin.nexus.getTalerAmount
 import tech.libeufin.nexus.isReservePub
 import java.lang.StringBuilder
@@ -9,6 +12,29 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class Parsing {
+    @Test // Could be moved in a dedicated Amounts.kt test module.
+    fun generateCurrencyAgnosticAmount() {
+        assertThrows<Exception> {
+            // Too many fractional digits.
+            getAmountNoCurrency(TalerAmount(1, 123456789, "KUDOS"))
+        }
+        assertThrows<Exception> {
+            // Nexus doesn't support sub-cents.
+            getAmountNoCurrency(TalerAmount(1, 12345678, "KUDOS"))
+        }
+        assertThrows<Exception> {
+            // Nexus doesn't support sub-cents.
+            getAmountNoCurrency(TalerAmount(0, 1, "KUDOS"))
+        }
+        assertEquals(
+            "0.01",
+            getAmountNoCurrency(TalerAmount(0, 1000000, "KUDOS"))
+        )
+        assertEquals(
+            "0.1",
+            getAmountNoCurrency(TalerAmount(0, 10000000, "KUDOS"))
+        )
+    }
     @Test // parses amounts as found in the camt.05x documents.
     fun parseCurrencyAgnosticAmount() {
         assertTrue {

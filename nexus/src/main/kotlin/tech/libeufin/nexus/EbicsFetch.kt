@@ -159,16 +159,14 @@ fun maybeLogFile(
 }
 
 /**
- * Converts the given fractional value to the sub-cent 8 digits
- * fraction used in Taler.  Note: this value has very likely a <2
- * length, but the function is general, for each fraction with at
- * most 8 digits.
+ * Converts the 2-digits fraction value as given by the bank
+ * (postfinance dialect), to the Taler 8-digit value (db representation).
  *
  * @param bankFrac fractional value
  * @return the Taler fractional value with at most 8 digits.
  */
 fun makeTalerFrac(bankFrac: String): Int {
-    if (bankFrac.length > 8) throw Exception("Fractional value has more than 8 digits")
+    if (bankFrac.length > 2) throw Exception("Fractional value has more than 2 digits")
     var buf = bankFrac.toIntOrNull() ?: throw Exception("Fractional value not an Int: $bankFrac")
     repeat(8 - bankFrac.length) {
         buf *= 10
@@ -355,10 +353,10 @@ fun ingestNotification(
     content: ByteArray
 ): Boolean {
     val incomingPayments = mutableListOf<IncomingPayment>()
+    val filenamePrefix = "camt.054_P_" // Only these files have all the details.
     try {
         content.unzipForEach { fileName, xmlContent ->
-            // discarding plain "avisierung", since they don't bring any payment subject.
-            if (!fileName.startsWith("camt.054_P_")) return@unzipForEach
+            if (!fileName.startsWith(filenamePrefix)) return@unzipForEach
             val found = findIncomingTxInNotification(xmlContent, ctx.cfg.currency)
             incomingPayments += found
         }
@@ -510,6 +508,24 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
         if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
 
+        // If STDIN has data, we run in debug mode: parse, print, and return.
+        val maybeStdin = generateSequence(::readLine).joinToString("\n")
+        if (maybeStdin.isNotEmpty()) {
+            logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
+            when(whichDoc) {
+                SupportedDocument.CAMT_054 -> {
+                    val incoming = findIncomingTxInNotification(maybeStdin, cfg.currency)
+                    incoming.forEach {
+                        println(it)
+                    }
+                }
+                else -> {
+                    logger.error("Parsing $whichDoc not supported")
+                    exitProcess(1)
+                }
+            }
+            return
+        }
         val ctx = FetchContext(
             cfg,
             HttpClient(),

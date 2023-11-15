@@ -22,6 +22,8 @@ data class Pain001Namespaces(
  * @return [String] of the amount number without the currency.
  */
 fun getAmountNoCurrency(amount: TalerAmount): String {
+    if (amount.fraction.toString().length > 8)
+        throw Exception("Taler amount must have at most 8 fractional digits")
     if (amount.fraction == 0) {
         return amount.value.toString()
     } else {

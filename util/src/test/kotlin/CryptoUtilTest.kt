@@ -156,11 +156,13 @@ class CryptoUtilTest {
     }
 
     @Test(expected = EncodingException::class)
-    // from Crockford32 encoding to binary.
     fun base32ToBytesTest() {
-        val expectedEncoding = "C9P6YRG"
+        val expectedEncoding = "C9P6YRG" // decodes to 'blob'
         assert(Base32Crockford.decode(expectedEncoding).toString(Charsets.UTF_8) == "blob")
-        Base32Crockford.decode("-".repeat(52)) // fulfills the "expected = .." above.
+        val validKey = "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"
+        val obj = Base32Crockford.decode(validKey)
+        val roundTrip = Base32Crockford.encode(obj)
+        assertEquals(validKey, roundTrip)
     }
 
     @Test
