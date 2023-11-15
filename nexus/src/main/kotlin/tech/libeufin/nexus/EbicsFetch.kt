@@ -374,6 +374,10 @@ fun ingestNotification(
     try {
         incomingPayments.forEach {
             runBlocking {
+                if (db.isIncomingPaymentSeen(it.bankTransferId)) {
+                    logger.debug("Incoming payment with UID '${it.bankTransferId}' already seen.")
+                    return@runBlocking
+                }
                 val reservePub = isTalerable(db, it)
                 if (reservePub == null) {
                     db.incomingPaymentCreateBounced(
@@ -429,7 +433,7 @@ private suspend fun fetchDocuments(
     )
     // Parsing the XML: only camt.054 (Detailavisierung) supported currently.
     if (ctx.whichDocument != SupportedDocument.CAMT_054) {
-        logger.warn("Not parsing ${ctx.whichDocument}.  Only camt.054 notifications supported.")
+        logger.warn("Not ingesting ${ctx.whichDocument}.  Only camt.054 notifications supported.")
         return
     }
     if (!ingestNotification(db, ctx, maybeContent)) {

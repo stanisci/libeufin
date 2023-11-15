@@ -14,6 +14,26 @@ data class Pain001Namespaces(
 )
 
 /**
+ * Gets the amount number, also converting it from the
+ * Taler-friendly 8 fractional digits to the more bank
+ * friendly with 2.
+ *
+ * @param amount the Taler amount where to extract the number
+ * @return [String] of the amount number without the currency.
+ */
+fun getAmountNoCurrency(amount: TalerAmount): String {
+    if (amount.fraction == 0) {
+        return amount.value.toString()
+    } else {
+        val fractionFormat = amount.fraction.toString().padStart(8, '0').dropLastWhile { it == '0' }
+        if (fractionFormat.length > 2) throw Exception("Sub-cent amounts not supported")
+        return "${amount.value}.${fractionFormat}"
+    }
+}
+
+
+
+/**
  * Create a pain.001 document.  It requires the debtor BIC.
  *
  * @param requestUid UID of this request, helps to make this request idempotent.
@@ -43,13 +63,7 @@ fun createPain001(
         xsdFilename = "pain.001.001.09.ch.03.xsd"
     )
     val zonedTimestamp = ZonedDateTime.ofInstant(initiationTimestamp, ZoneId.of("UTC"))
-    val amountWithoutCurrency: String = amount.stringify().split(":").run {
-        if (this.size != 2) throw NexusSubmitException(
-            "Invalid stringified amount: $amount",
-            stage=NexusSubmissionStage.pain
-        )
-        return@run this[1]
-    }
+    val amountWithoutCurrency: String = getAmountNoCurrency(amount)
     val creditorName: String = creditAccount.receiverName
         ?: throw NexusSubmitException(
             "Cannot operate without the creditor name",

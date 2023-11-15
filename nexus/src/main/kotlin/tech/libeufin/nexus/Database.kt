@@ -11,26 +11,9 @@ import java.time.Instant
 
 data class TalerAmount(
     val value: Long,
-    val fraction: Int,
+    val fraction: Int, // has at most 8 digits.
     val currency: String
 )
-
-/**
- * Stringifies TalerAmount's.  NOTE: the caller must enforce
- * length-checks on the output fractional part, to ensure compatibility
- * with the bank.
- *
- * @return the amount in the $currency:x.y format.
- */
-fun TalerAmount.stringify(): String {
-    if (fraction == 0) {
-        return "$currency:$value"
-    } else {
-        val fractionFormat = this.fraction.toString().padStart(8, '0').dropLastWhile { it == '0' }
-        if (fractionFormat.length > 2) throw Exception("Sub-cent amounts not supported")
-        return "$currency:$value.$fractionFormat"
-    }
-}
 
 // INCOMING PAYMENTS STRUCTS
 
@@ -329,6 +312,26 @@ class Database(dbConfig: String): java.io.Closeable {
             if (asInstant == null)
                 throw Exception("Could not convert latest_execution_time to Instant")
             return@runConn asInstant
+        }
+    }
+
+    /**
+     * Checks if the incoming payment was already processed by Nexus.
+     *
+     * @param bankUid unique identifier assigned by the bank to the payment.
+     *        Normally, that's the <AcctSvcrRef> value found in camt.05x records.
+     * @return true if found, false otherwise
+     */
+    suspend fun isIncomingPaymentSeen(bankUid: String): Boolean = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+             SELECT 1
+               FROM incoming_transactions
+               WHERE bank_transfer_id = ?;
+        """)
+        stmt.setString(1, bankUid)
+        val res = stmt.executeQuery()
+        res.use {
+            return@runConn it.next()
         }
     }
 
