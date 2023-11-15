@@ -229,6 +229,9 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
                 "ignoring the 'frequency' configuration value"
     ).flag(default = false)
 
+    private val debug by option(
+        help = "Reads the pain.001 document from STDIN and submits it to the bank"
+    ).flag(default = false)
     /**
      * Submits any initiated payment that was not submitted
      * so far and -- according to the configuration -- returns
@@ -259,10 +262,9 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             clientPrivateKeysFile = clientKeys,
             httpClient = HttpClient()
         )
-        // If STDIN has data, we run in debug mode: submit and return.
-        val maybeStdin = generateSequence(::readLine).joinToString("\n")
-        if (maybeStdin.isNotEmpty()) {
-            logger.info("Submitting STDIN to the bank")
+        if (debug) {
+            logger.info("Running in debug mode, submitting STDIN to the bank")
+            val maybeStdin = generateSequence(::readLine).joinToString("\n")
             doOrFail {
                 runBlocking {
                     submitPain001(

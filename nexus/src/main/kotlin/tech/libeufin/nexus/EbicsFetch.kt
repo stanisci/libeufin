@@ -482,6 +482,12 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 " latest document is always until the current time."
     )
 
+    private val debug by option(
+        help = "Reads one ISO20022 document from STDIN and prints " +
+                "the parsing results.  It does not affect the database."
+    ).flag(default = false)
+
+
     /**
      * This function collects the main steps of fetching banking records.
      * In this current version, it does not implement long polling, instead
@@ -515,10 +521,9 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
         if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
 
-        // If STDIN has data, we run in debug mode: parse, print, and return.
-        val maybeStdin = generateSequence(::readLine).joinToString("\n")
-        if (maybeStdin.isNotEmpty()) {
+        if (debug) {
             logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
+            val maybeStdin = generateSequence(::readLine).joinToString("\n")
             when(whichDoc) {
                 SupportedDocument.CAMT_054 -> {
                     val incoming = findIncomingTxInNotification(maybeStdin, cfg.currency)
