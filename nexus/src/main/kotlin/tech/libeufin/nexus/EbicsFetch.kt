@@ -13,6 +13,7 @@ import tech.libeufin.util.ebics_h005.Ebics3Request
 import java.io.File
 import java.io.IOException
 import java.lang.StringBuilder
+import java.net.URLEncoder
 import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDate
@@ -267,7 +268,8 @@ fun findIncomingTxInNotification(
                                     // warn: it might need the postal address too..
                                     requireUniqueChildNamed("Dbtr") {
                                         requireUniqueChildNamed("Nm") {
-                                            debtorPayto.append("?receiver-name=${focusElement.textContent}")
+                                            val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
+                                            debtorPayto.append("?receiver-name=$urlEncName")
                                         }
                                     }
                                 }
