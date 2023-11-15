@@ -647,10 +647,10 @@ class CoreBankTransactionsApiTest {
         client.get("/accounts/merchant/transactions/3") {
             basicAuth("merchant", "merchant-password")
         }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
-        // Check wrong transaction
+        // Check another user's transaction
         client.get("/accounts/merchant/transactions/2") {
             basicAuth("merchant", "merchant-password")
-        }.assertUnauthorized() // Should be NOT_FOUND ?
+        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
     // POST /transactions
@@ -1173,6 +1173,19 @@ class CoreBankCashoutApiTest {
             basicAuth("customer", "customer-password")
             jsonBody { "tan" to "code" } 
         }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+
+        // Check abort another user's operation
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json(req) { "request_uid" to randShortHashCode() }) 
+        }.assertOk().run {
+            val id = json<CashoutPending>().cashout_id
+
+            // Check error
+            client.post("/accounts/merchant/cashouts/$id/abort") {
+                basicAuth("merchant", "merchant-password")
+            }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        }
     }
 
     // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm
@@ -1226,6 +1239,23 @@ class CoreBankCashoutApiTest {
                 basicAuth("customer", "customer-password")
                 jsonBody { "tan" to code }
             }.assertNoContent()
+        }
+
+        // Check confirm another user's operation
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json(req) { 
+                "request_uid" to randShortHashCode()
+                "amount_credit" to convert("KUDOS:1")
+            })
+        }.assertOk().run {
+            val id = json<CashoutPending>().cashout_id
+
+            // Check error
+            client.post("/accounts/merchant/cashouts/$id/confirm") {
+                basicAuth("merchant", "merchant-password")
+                jsonBody { "tan" to "unused" }
+            }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
         }
 
         // Check bad conversion
@@ -1364,6 +1394,19 @@ class CoreBankCashoutApiTest {
         client.get("/accounts/customer/cashouts/42") {
             basicAuth("customer", "customer-password")
         }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+
+        // Check get another user's operation
+        client.post("/accounts/customer/cashouts") {
+            basicAuth("customer", "customer-password")
+            jsonBody(json(req) { "request_uid" to randShortHashCode() }) 
+        }.assertOk().run {
+            val id = json<CashoutPending>().cashout_id
+
+            // Check error
+            client.get("/accounts/merchant/cashouts/$id") {
+                basicAuth("merchant", "merchant-password")
+            }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        }
     }
 
     // GET /accounts/{USERNAME}/cashouts

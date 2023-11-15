@@ -711,7 +711,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
     }
     
     // Get the bank transaction whose row ID is rowId
-    suspend fun bankTransactionGetFromInternalId(rowId: Long): Pair<BankAccountTransactionInfo, Long>? = conn { conn ->
+    suspend fun bankTransactionGetFromInternalId(rowId: Long, login: String): BankAccountTransactionInfo? = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT 
               creditor_payto_uri
@@ -721,28 +721,27 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
               ,(amount).frac AS amount_frac
               ,transaction_date
               ,direction
-              ,bank_account_id
               ,bank_transaction_id
             FROM bank_account_transactions
-	        WHERE bank_transaction_id=?
+                JOIN bank_accounts ON bank_account_transactions.bank_account_id=bank_accounts.bank_account_id
+                JOIN customers ON customer_id=owning_customer_id 
+	        WHERE bank_transaction_id=? AND login=?
         """)
         stmt.setLong(1, rowId)
+        stmt.setString(2, login)
         stmt.oneOrNull {
-            Pair(
-                BankAccountTransactionInfo(
-                    creditor_payto_uri = it.getString("creditor_payto_uri"),
-                    debtor_payto_uri = it.getString("debtor_payto_uri"),
-                    amount = TalerAmount(
-                        it.getLong("amount_val"),
-                        it.getInt("amount_frac"),
-                        bankCurrency
-                    ),
-                    direction = TransactionDirection.valueOf(it.getString("direction")),
-                    subject = it.getString("subject"),
-                    date = TalerProtocolTimestamp(it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()),
-                    row_id = it.getLong("bank_transaction_id")
+            BankAccountTransactionInfo(
+                creditor_payto_uri = it.getString("creditor_payto_uri"),
+                debtor_payto_uri = it.getString("debtor_payto_uri"),
+                amount = TalerAmount(
+                    it.getLong("amount_val"),
+                    it.getInt("amount_frac"),
+                    bankCurrency
                 ),
-                it.getLong("bank_account_id")
+                direction = TransactionDirection.valueOf(it.getString("direction")),
+                subject = it.getString("subject"),
+                date = TalerProtocolTimestamp(it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()),
+                row_id = it.getLong("bank_transaction_id")
             )
         }
     }

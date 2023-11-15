@@ -1168,6 +1168,7 @@ END $$;
 
 CREATE OR REPLACE FUNCTION cashout_confirm(
   IN in_cashout_id BIGINT,
+  IN in_login TEXT,
   IN in_tan_code TEXT,
   IN in_now_date BIGINT,
   OUT out_no_op BOOLEAN,
@@ -1207,7 +1208,7 @@ SELECT
   FROM cashout_operations
     JOIN bank_accounts ON bank_account_id=bank_account
     JOIN customers ON customer_id=owning_customer_id
-  WHERE cashout_id=in_cashout_id;
+  WHERE cashout_id=in_cashout_id AND login=in_login;
 IF NOT FOUND THEN
   out_no_op=TRUE;
   RETURN;

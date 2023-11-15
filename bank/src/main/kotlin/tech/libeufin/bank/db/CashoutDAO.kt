@@ -133,14 +133,16 @@ class CashoutDAO(private val db: Database) {
         stmt.executeQueryCheck()
     }
 
-    suspend fun abort(id: Long): AbortResult = db.serializable { conn ->
+    suspend fun abort(id: Long, login: String): AbortResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             UPDATE cashout_operations
             SET aborted = local_transaction IS NULL
-            WHERE cashout_id=?
+            FROM bank_accounts JOIN customers ON customer_id=owning_customer_id
+            WHERE cashout_id=? AND bank_account=bank_account_id AND login=?
             RETURNING local_transaction IS NOT NULL
         """)
         stmt.setLong(1, id)
+        stmt.setString(2, login)
         when (stmt.oneOrNull { it.getBoolean(1) }) {
             null -> AbortResult.NOT_FOUND
             true -> AbortResult.CONFIRMED
@@ -150,6 +152,7 @@ class CashoutDAO(private val db: Database) {
 
     suspend fun confirm(
         id: Long,
+        login: String,
         tanCode: String,
         timestamp: Instant
     ): CashoutConfirmationResult = db.serializable { conn ->
@@ -162,11 +165,12 @@ class CashoutDAO(private val db: Database) {
                 out_aborted,
                 out_no_retry,
                 out_no_cashout_payto
-            FROM cashout_confirm(?, ?, ?);
+            FROM cashout_confirm(?, ?, ?, ?);
         """)
         stmt.setLong(1, id)
-        stmt.setString(2, tanCode)
-        stmt.setLong(3, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setString(2, login)
+        stmt.setString(3, tanCode)
+        stmt.setLong(4, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.executeQuery().use {
             when {
                 !it.next() ->
@@ -203,7 +207,7 @@ class CashoutDAO(private val db: Database) {
         }
     }
 
-    suspend fun get(id: Long): CashoutStatusResponse? = db.conn { conn ->
+    suspend fun get(id: Long, login: String): CashoutStatusResponse? = db.conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
                 CASE 
@@ -219,10 +223,13 @@ class CashoutDAO(private val db: Database) {
                 ,creation_time
                 ,transaction_date as confirmation_date
             FROM cashout_operations
+                JOIN bank_accounts ON bank_account=bank_account_id
+                JOIN customers ON owning_customer_id=customer_id
                 LEFT JOIN bank_account_transactions ON local_transaction=bank_transaction_id
-            WHERE cashout_id=?
+            WHERE cashout_id=? AND login=?
         """)
         stmt.setLong(1, id)
+        stmt.setString(2, login)
         stmt.oneOrNull {
             CashoutStatusResponse(
                 status = CashoutStatus.valueOf(it.getString("status")),

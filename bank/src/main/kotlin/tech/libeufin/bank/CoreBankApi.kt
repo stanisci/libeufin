@@ -320,13 +320,10 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
         }
         get("/accounts/{USERNAME}/transactions/{T_ID}") {
             val tId = call.longUriComponent("T_ID")
-            val bankAccount = call.bankAccount(db)
-            val (tx, accountId) = db.bankTransactionGetFromInternalId(tId) ?: throw notFound(
+            val tx = db.bankTransactionGetFromInternalId(tId, username) ?: throw notFound(
                     "Bank transaction '$tId' not found",
                     TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
                 )
-            if (accountId != bankAccount.bankAccountId) // TODO not found ?
-                throw unauthorized("Client has no rights over the bank transaction: $tId")
             call.respond(tx)
         }
     }
@@ -535,7 +532,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
         }
         post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort") {
             val id = call.longUriComponent("CASHOUT_ID")
-            when (db.cashout.abort(id)) {
+            when (db.cashout.abort(id, username)) {
                 AbortResult.NOT_FOUND -> throw notFound(
                     "Cashout operation $id not found",
                     TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
@@ -552,6 +549,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
             val id = call.longUriComponent("CASHOUT_ID")
             when (db.cashout.confirm(
                 id = id,
+                login = username,
                 tanCode = req.tan,
                 timestamp = Instant.now()
             )) {
@@ -591,7 +589,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
     auth(db, TokenScope.readonly) {
         get("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}") {
             val id = call.longUriComponent("CASHOUT_ID")
-            val cashout = db.cashout.get(id) ?: throw notFound(
+            val cashout = db.cashout.get(id, username) ?: throw notFound(
                 "Cashout operation $id not found", 
                 TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
             )
