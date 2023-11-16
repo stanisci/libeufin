@@ -31,44 +31,6 @@ END $$;
 COMMENT ON FUNCTION amount_add
   IS 'Returns the normalized sum of two amounts. It raises an exception when the resulting .val is larger than 2^52';
 
-CREATE OR REPLACE FUNCTION amount_mul(
-   IN a taler_amount
-  ,IN b taler_amount
-  ,IN tiny taler_amount -- Product is rounded around the tiny amount
-  ,IN rounding rounding_mode
-  ,OUT product taler_amount
-)
-LANGUAGE plpgsql AS $$
-DECLARE
-  product_numeric NUMERIC(33, 8); -- 16 digit for val, 8 for frac and 1 for rounding error
-  tiny_numeric NUMERIC(24);
-  rounding_error int2;
-BEGIN
-  -- Perform multiplication using big numbers
-  product_numeric = (a.val::numeric(24) * 100000000 + a.frac::numeric(24)) * (b.val::numeric(24, 8) + b.frac::numeric(24, 8) / 100000000);
-
-  -- Round to tiny amounts
-  tiny_numeric = (tiny.val::numeric(24) * 100000000 + tiny.frac::numeric(24));
-  product_numeric = product_numeric / tiny_numeric;
-  rounding_error = (product_numeric * 10 % 10)::int2;
-  product_numeric = trunc(product_numeric) * tiny_numeric;
-  
-  -- Apply rounding mode
-  IF (rounding = 'nearest'::rounding_mode AND rounding_error >= 5)
-    OR (rounding = 'up'::rounding_mode AND rounding_error > 0) THEN
-    product_numeric = product_numeric + tiny_numeric;
-  END IF;
-
-  -- Extract product parts
-  product = (trunc(product_numeric / 100000000)::int8, (product_numeric % 100000000)::int4);
-
-  IF (product.val > 1::bigint<<52) THEN
-    RAISE EXCEPTION 'amount value overflowed';
-  END IF;
-END $$;
-COMMENT ON FUNCTION amount_mul
-  IS 'Returns the product of two amounts. It raises an exception when the resulting .val is larger than 2^52';
-
 CREATE OR REPLACE FUNCTION amount_left_minus_right(
   IN l taler_amount
  ,IN r taler_amount
@@ -1040,9 +1002,9 @@ SELECT bank_account_id
   WHERE login = 'admin';
 
 -- Perform conversion
-SELECT (to_amount).val, (to_amount).frac, too_small 
+SELECT (converted).val, (converted).frac, too_small 
   INTO converted_amount.val, converted_amount.frac, out_too_small 
-  FROM conversion_to(in_amount, 'buy'::text);
+  FROM conversion_to(in_amount, 'cashin'::text);
 IF out_too_small THEN
   RETURN;
 END IF;
@@ -1098,7 +1060,7 @@ account_id BIGINT;
 challenge_id BIGINT;
 BEGIN
 -- check conversion
-SELECT too_small OR in_amount_credit!=to_amount INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'sell'::text);
+SELECT too_small OR in_amount_credit!=converted INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'cashout'::text);
 IF out_bad_conversion THEN
   RETURN;
 END IF;
@@ -1220,7 +1182,7 @@ ELSIF already_confirmed OR out_aborted OR out_no_cashout_payto THEN
 END IF;
 
 -- check conversion
-SELECT too_small OR amount_credit_local!=to_amount INTO out_bad_conversion FROM conversion_to(amount_debit_local, 'sell'::text);
+SELECT too_small OR amount_credit_local!=converted INTO out_bad_conversion FROM conversion_to(amount_debit_local, 'cashout'::text);
 IF out_bad_conversion THEN
   RETURN;
 END IF;
@@ -1474,10 +1436,86 @@ LANGUAGE sql AS $$
     ON CONFLICT (key) DO UPDATE SET value = excluded.value
 $$;
 
+CREATE OR REPLACE FUNCTION conversion_apply_ratio(
+   IN amount taler_amount
+  ,IN ratio taler_amount
+  ,IN tiny taler_amount       -- Result is rounded to this amount
+  ,IN rounding rounding_mode  -- With this rounding mode
+  ,OUT result taler_amount
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+  product_numeric NUMERIC(33, 8); -- 16 digit for val, 8 for frac and 1 for rounding error
+  tiny_numeric NUMERIC(24);
+  rounding_error real;
+BEGIN
+  -- Perform multiplication using big numbers
+  product_numeric = (amount.val::numeric(24) * 100000000 + amount.frac::numeric(24)) * (ratio.val::numeric(24, 8) + ratio.frac::numeric(24, 8) / 100000000);
+
+  -- Round to tiny amounts
+  tiny_numeric = (tiny.val::numeric(24) * 100000000 + tiny.frac::numeric(24));
+  product_numeric = product_numeric / tiny_numeric;
+  rounding_error = (product_numeric % 1)::real;
+  product_numeric = trunc(product_numeric) * tiny_numeric;
+  
+  -- Apply rounding mode
+  IF (rounding = 'nearest'::rounding_mode AND rounding_error >= 0.5)
+    OR (rounding = 'up'::rounding_mode AND rounding_error > 0.0) THEN
+    product_numeric = product_numeric + tiny_numeric;
+  END IF;
+
+  -- Extract product parts
+  result = (trunc(product_numeric / 100000000)::int8, (product_numeric % 100000000)::int4);
+
+  IF (result.val > 1::bigint<<52) THEN
+    RAISE EXCEPTION 'amount value overflowed';
+  END IF;
+END $$;
+COMMENT ON FUNCTION conversion_apply_ratio
+  IS 'Apply a ratio to an amount rouding the result to a tiny amount following a rounding mode. It raises an exception when the resulting .val is larger than 2^52';
+
+CREATE OR REPLACE FUNCTION conversion_revert_ratio(
+   IN amount taler_amount
+  ,IN ratio taler_amount
+  ,IN tiny taler_amount       -- Result is rounded to this amount
+  ,IN rounding rounding_mode  -- With this rounding mode
+  ,OUT result taler_amount
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+  fraction_numeric NUMERIC(33, 8); -- 16 digit for val, 8 for frac and 1 for rounding error
+  tiny_numeric NUMERIC(24);
+  rounding_error real;
+BEGIN
+  -- Perform division using big numbers
+  fraction_numeric = (amount.val::numeric(24) * 100000000 + amount.frac::numeric(24)) / (ratio.val::numeric(24, 8) + ratio.frac::numeric(24, 8) / 100000000);
+
+  -- Round to tiny amounts
+  tiny_numeric = (tiny.val::numeric(24) * 100000000 + tiny.frac::numeric(24));
+  fraction_numeric = fraction_numeric / tiny_numeric;
+  rounding_error = (fraction_numeric % 1)::real;
+  fraction_numeric = trunc(fraction_numeric) * tiny_numeric;
+
+  -- Recover potentially lost tiny amount
+  IF (rounding = 'zero'::rounding_mode AND rounding_error > 0) THEN
+    fraction_numeric = fraction_numeric + tiny_numeric;
+  END IF;
+
+  -- Extract division parts
+  result = (trunc(fraction_numeric / 100000000)::int8, (fraction_numeric % 100000000)::int4);
+
+  IF (result.val > 1::bigint<<52) THEN
+    RAISE EXCEPTION 'amount value overflowed';
+  END IF;
+END $$;
+COMMENT ON FUNCTION conversion_revert_ratio
+  IS 'Revert the application of a ratio. This function does not always return the smallest possible amount. It raises an exception when the resulting .val is larger than 2^52';
+
+
 CREATE OR REPLACE FUNCTION conversion_to(
-  IN from_amount taler_amount,
-  IN name TEXT,
-  OUT to_amount taler_amount,
+  IN amount taler_amount,
+  IN direction TEXT,
+  OUT converted taler_amount,
   OUT too_small BOOLEAN
 )
 LANGUAGE plpgsql AS $$
@@ -1489,24 +1527,55 @@ DECLARE
   mode rounding_mode;
 BEGIN
   -- Check min amount
-  SELECT value['val']::int8, value['frac']::int4 INTO min_amount.val, min_amount.frac FROM config WHERE key=name||'_min_amount';
-  SELECT NOT ok INTO too_small FROM amount_left_minus_right(from_amount, min_amount);
+  SELECT value['val']::int8, value['frac']::int4 INTO min_amount.val, min_amount.frac FROM config WHERE key=direction||'_min_amount';
+  SELECT NOT ok INTO too_small FROM amount_left_minus_right(amount, min_amount);
   IF too_small THEN
-    to_amount = (0, 0);
+    converted = (0, 0);
     RETURN;
   END IF;
 
   -- Perform conversion
-  SELECT value['val']::int8, value['frac']::int4 INTO at_ratio.val, at_ratio.frac FROM config WHERE key=name||'_ratio';
-  SELECT value['val']::int8, value['frac']::int4 INTO out_fee.val, out_fee.frac FROM config WHERE key=name||'_fee';
-  SELECT value['val']::int8, value['frac']::int4 INTO tiny_amount.val, tiny_amount.frac FROM config WHERE key=name||'_tiny_amount';
-  SELECT (value->>'mode')::rounding_mode INTO mode FROM config WHERE key=name||'_rounding_mode';
+  SELECT value['val']::int8, value['frac']::int4 INTO at_ratio.val, at_ratio.frac FROM config WHERE key=direction||'_ratio';
+  SELECT value['val']::int8, value['frac']::int4 INTO out_fee.val, out_fee.frac FROM config WHERE key=direction||'_fee';
+  SELECT value['val']::int8, value['frac']::int4 INTO tiny_amount.val, tiny_amount.frac FROM config WHERE key=direction||'_tiny_amount';
+  SELECT (value->>'mode')::rounding_mode INTO mode FROM config WHERE key=direction||'_rounding_mode';
 
-  SELECT product.val, product.frac INTO to_amount.val, to_amount.frac FROM amount_mul(from_amount, at_ratio, tiny_amount, mode) as product;
-  SELECT (diff).val, (diff).frac, NOT ok INTO to_amount.val, to_amount.frac, too_small FROM amount_left_minus_right(to_amount, out_fee);
+  SELECT (diff).val, (diff).frac, NOT ok INTO converted.val, converted.frac, too_small 
+    FROM amount_left_minus_right(conversion_apply_ratio(amount, at_ratio, tiny_amount, mode), out_fee);
 
   IF too_small THEN
-    to_amount = (0, 0);
+    converted = (0, 0);
+  END IF;
+END $$;
+
+CREATE OR REPLACE FUNCTION conversion_from(
+  IN amount taler_amount,
+  IN direction TEXT,
+  OUT converted taler_amount,
+  OUT too_small BOOLEAN
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+  at_ratio taler_amount;
+  out_fee taler_amount;
+  tiny_amount taler_amount;
+  min_amount taler_amount;
+  mode rounding_mode;
+BEGIN
+  -- Perform conversion
+  SELECT value['val']::int8, value['frac']::int4 INTO at_ratio.val, at_ratio.frac FROM config WHERE key=direction||'_ratio';
+  SELECT value['val']::int8, value['frac']::int4 INTO out_fee.val, out_fee.frac FROM config WHERE key=direction||'_fee';
+  SELECT value['val']::int8, value['frac']::int4 INTO tiny_amount.val, tiny_amount.frac FROM config WHERE key=direction||'_tiny_amount';
+  SELECT (value->>'mode')::rounding_mode INTO mode FROM config WHERE key=direction||'_rounding_mode';
+
+  SELECT result.val, result.frac INTO converted.val, converted.frac 
+    FROM conversion_revert_ratio(amount_add(amount, out_fee), at_ratio, tiny_amount, mode) as result;
+  
+  -- Check min amount
+  SELECT value['val']::int8, value['frac']::int4 INTO min_amount.val, min_amount.frac FROM config WHERE key=direction||'_min_amount';
+  SELECT NOT ok INTO too_small FROM amount_left_minus_right(converted, min_amount);
+  IF too_small THEN
+    converted = (0, 0);
   END IF;
 END $$;
 

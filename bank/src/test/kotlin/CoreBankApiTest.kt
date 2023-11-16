@@ -1134,16 +1134,16 @@ class CoreBankCashoutApiTest {
             val id = it.cashout_id
 
             db.conversion.updateConfig(ConversionInfo(
-                buy_ratio = DecimalNumber("1"),
-                buy_fee = DecimalNumber("1"),
-                buy_tiny_amount = TalerAmount("KUDOS:0.0001"),
-                buy_rounding_mode = RoundingMode.nearest,
-                buy_min_amount = TalerAmount("FIAT:0.0001"),
-                sell_ratio = DecimalNumber("1"),
-                sell_fee = DecimalNumber("1"),
-                sell_tiny_amount = TalerAmount("FIAT:0.0001"),
-                sell_rounding_mode = RoundingMode.nearest,
-                sell_min_amount = TalerAmount("KUDOS:0.0001"),
+                cashin_ratio = DecimalNumber("1"),
+                cashin_fee = TalerAmount("KUDOS:0.1"),
+                cashin_tiny_amount = TalerAmount("KUDOS:0.0001"),
+                cashin_rounding_mode = RoundingMode.nearest,
+                cashin_min_amount = TalerAmount("FIAT:0.0001"),
+                cashout_ratio = DecimalNumber("1"),
+                cashout_fee = TalerAmount("FIAT:0.1"),
+                cashout_tiny_amount = TalerAmount("FIAT:0.0001"),
+                cashout_rounding_mode = RoundingMode.nearest,
+                cashout_min_amount = TalerAmount("KUDOS:0.0001"),
             ))
 
             client.postA("/accounts/customer/cashouts/$id/confirm"){
@@ -1334,13 +1334,16 @@ class CoreBankCashoutApiTest {
     // GET /cashout-rate
     @Test
     fun cashoutRate() = bankSetup { _ ->
-        // Check conversion
+        // Check conversion to
         client.get("/cashout-rate?amount_debit=KUDOS:1").assertOkJson<ConversionResponse> {
+            assertEquals(TalerAmount("KUDOS:1"), it.amount_debit)
             assertEquals(TalerAmount("FIAT:1.247"), it.amount_credit)
         }
-        // Not implemented (yet)
-        client.get("/cashout-rate?amount_credit=FIAT:1")
-            .assertNotImplemented()
+        // Check conversion from
+        client.get("/cashout-rate?amount_credit=FIAT:1.247").assertOkJson<ConversionResponse> {
+            assertEquals(TalerAmount("KUDOS:1"), it.amount_debit)
+            assertEquals(TalerAmount("FIAT:1.247"), it.amount_credit)
+        }
 
         // Too small
         client.get("/cashout-rate?amount_debit=KUDOS:0.08")
@@ -1366,17 +1369,21 @@ class CoreBankCashoutApiTest {
     // GET /cashin-rate
     @Test
     fun cashinRate() = bankSetup { _ ->
-        // Check conversion
+       
         for ((amount, converted) in listOf(
-            Pair(0.75, 0.58), Pair(0.33, 0.24), Pair(0.66, 0.51)
+            Pair(0.75, 0.58), Pair(0.32, 0.24), Pair(0.66, 0.51)
         )) {
+             // Check conversion to
             client.get("/cashin-rate?amount_debit=FIAT:$amount").assertOkJson<ConversionResponse> {
                 assertEquals(TalerAmount("KUDOS:$converted"), it.amount_credit)
+                assertEquals(TalerAmount("FIAT:$amount"), it.amount_debit)
+            }
+            // Check conversion from
+            client.get("/cashin-rate?amount_credit=KUDOS:$converted").assertOkJson<ConversionResponse> {
+                assertEquals(TalerAmount("KUDOS:$converted"), it.amount_credit)
+                assertEquals(TalerAmount("FIAT:$amount"), it.amount_debit)
             }
         }
-        // Not implemented (yet)
-        client.get("/cashin-rate?amount_credit=KUDOS:1")
-            .assertNotImplemented()
 
         // No amount
         client.get("/cashin-rate")

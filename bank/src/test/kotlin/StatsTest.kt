@@ -161,7 +161,6 @@ class StatsTest {
                         frac = it.getInt("taler_out_volume_frac"),
                         currency = "KUDOS"
                     )
-                    println("$timeframe $talerOutCount $talerOutVolume")
                     assertEquals(count, talerOutCount)
                     assertEquals(amount, talerOutVolume)
                 }!!

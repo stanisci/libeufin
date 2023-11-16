@@ -86,16 +86,16 @@ data class BankConfig(
 
 @Serializable
 data class ConversionInfo (
-    val buy_ratio: DecimalNumber,
-    val buy_fee: DecimalNumber,
-    val buy_tiny_amount: TalerAmount,
-    val buy_rounding_mode: RoundingMode,
-    val buy_min_amount: TalerAmount,
-    val sell_ratio: DecimalNumber,
-    val sell_fee: DecimalNumber,
-    val sell_tiny_amount: TalerAmount,
-    val sell_rounding_mode: RoundingMode,
-    val sell_min_amount: TalerAmount,
+    val cashin_ratio: DecimalNumber,
+    val cashin_fee: TalerAmount,
+    val cashin_tiny_amount: TalerAmount,
+    val cashin_rounding_mode: RoundingMode,
+    val cashin_min_amount: TalerAmount,
+    val cashout_ratio: DecimalNumber,
+    val cashout_fee: TalerAmount,
+    val cashout_tiny_amount: TalerAmount,
+    val cashout_rounding_mode: RoundingMode,
+    val cashout_min_amount: TalerAmount,
 )
 
 data class ServerConfig(
@@ -156,16 +156,16 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
 
 private fun TalerConfig.loadConversionInfo(currency: String, fiatCurrency: String): ConversionInfo = catchError {
     ConversionInfo(
-        buy_ratio = requireDecimalNumber("libeufin-bank-conversion", "buy_ratio"),
-        buy_fee = requireDecimalNumber("libeufin-bank-conversion", "buy_fee"),
-        buy_tiny_amount = amount("libeufin-bank-conversion", "buy_tiny_amount", currency) ?: TalerAmount(0, 1, currency),
-        buy_rounding_mode = RoundingMode("libeufin-bank-conversion", "buy_rounding_mode") ?: RoundingMode.zero,
-        buy_min_amount = amount("libeufin-bank-conversion", "buy_min_amount", fiatCurrency) ?: TalerAmount(0, 0, fiatCurrency),
-        sell_ratio = requireDecimalNumber("libeufin-bank-conversion", "sell_ratio"),
-        sell_fee = requireDecimalNumber("libeufin-bank-conversion", "sell_fee"),
-        sell_tiny_amount = amount("libeufin-bank-conversion", "sell_tiny_amount", fiatCurrency) ?: TalerAmount(0, 1, fiatCurrency),
-        sell_rounding_mode = RoundingMode("libeufin-bank-conversion", "sell_rounding_mode") ?: RoundingMode.zero,
-        sell_min_amount = amount("libeufin-bank-conversion", "sell_min_amount", currency) ?: TalerAmount(0, 0, currency),
+        cashin_ratio = requireDecimalNumber("libeufin-bank-conversion", "cashin_ratio"),
+        cashin_fee = requireAmount("libeufin-bank-conversion", "cashin_fee", currency),
+        cashin_tiny_amount = amount("libeufin-bank-conversion", "cashin_tiny_amount", currency) ?: TalerAmount(0, 1, currency),
+        cashin_rounding_mode = RoundingMode("libeufin-bank-conversion", "cashin_rounding_mode") ?: RoundingMode.zero,
+        cashin_min_amount = amount("libeufin-bank-conversion", "cashin_min_amount", fiatCurrency) ?: TalerAmount(0, 0, fiatCurrency),
+        cashout_ratio = requireDecimalNumber("libeufin-bank-conversion", "cashout_ratio"),
+        cashout_fee = requireAmount("libeufin-bank-conversion", "cashout_fee", fiatCurrency),
+        cashout_tiny_amount = amount("libeufin-bank-conversion", "cashout_tiny_amount", fiatCurrency) ?: TalerAmount(0, 1, fiatCurrency),
+        cashout_rounding_mode = RoundingMode("libeufin-bank-conversion", "cashout_rounding_mode") ?: RoundingMode.zero,
+        cashout_min_amount = amount("libeufin-bank-conversion", "cashout_min_amount", currency) ?: TalerAmount(0, 0, currency),
     )
 }
 

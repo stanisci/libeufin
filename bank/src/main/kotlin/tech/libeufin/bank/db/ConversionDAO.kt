@@ -30,10 +30,8 @@ class ConversionDAO(private val db: Database) {
         it.transaction { conn -> 
             var stmt = conn.prepareStatement("CALL config_set_amount(?, (?, ?)::taler_amount)")
             for ((name, amount) in listOf(
-                Pair("buy_ratio", cfg.buy_ratio),
-                Pair("buy_fee", cfg.buy_fee),
-                Pair("sell_ratio", cfg.sell_ratio),
-                Pair("sell_fee", cfg.sell_fee),
+                Pair("cashin_ratio", cfg.cashin_ratio),
+                Pair("cashout_ratio", cfg.cashout_ratio),
             )) {
                 stmt.setString(1, name)
                 stmt.setLong(2, amount.value)
@@ -41,10 +39,12 @@ class ConversionDAO(private val db: Database) {
                 stmt.executeUpdate()
             }
             for ((name, amount) in listOf(
-                Pair("buy_tiny_amount", cfg.buy_tiny_amount),
-                Pair("buy_min_amount", cfg.buy_min_amount),
-                Pair("sell_tiny_amount", cfg.sell_tiny_amount),
-                Pair("sell_min_amount", cfg.sell_min_amount),
+                Pair("cashin_fee", cfg.cashin_fee),
+                Pair("cashin_tiny_amount", cfg.cashin_tiny_amount),
+                Pair("cashin_min_amount", cfg.cashin_min_amount),
+                Pair("cashout_fee", cfg.cashout_fee),
+                Pair("cashout_tiny_amount", cfg.cashout_tiny_amount),
+                Pair("cashout_min_amount", cfg.cashout_min_amount),
             )) {
                 stmt.setString(1, name)
                 stmt.setLong(2, amount.value)
@@ -53,8 +53,8 @@ class ConversionDAO(private val db: Database) {
             }
             stmt = conn.prepareStatement("CALL config_set_rounding_mode(?, ?::rounding_mode)")
             for ((name, value) in listOf(
-                Pair("buy_rounding_mode", cfg.buy_rounding_mode),
-                Pair("sell_rounding_mode", cfg.sell_rounding_mode)
+                Pair("cashin_rounding_mode", cfg.cashin_rounding_mode),
+                Pair("cashout_rounding_mode", cfg.cashout_rounding_mode)
             )) {
                 stmt.setString(1, name)
                 stmt.setString(2, value.name)
@@ -63,11 +63,11 @@ class ConversionDAO(private val db: Database) {
         }
     }
 
-    private suspend fun conversion(amount: TalerAmount, name: String, currency: String): TalerAmount? = db.conn { conn ->
-        val stmt = conn.prepareStatement("SELECT too_small, (to_amount).val AS amount_val, (to_amount).frac AS amount_frac FROM conversion_to((?, ?)::taler_amount, ?)")
-        stmt.setLong(1, amount.value)
-        stmt.setInt(2, amount.frac)
-        stmt.setString(3, name)
+    private suspend fun conversion(from: TalerAmount, direction: String, function: String, currency: String): TalerAmount? = db.conn { conn ->
+        val stmt = conn.prepareStatement("SELECT too_small, (converted).val AS amount_val, (converted).frac AS amount_frac FROM $function((?, ?)::taler_amount, ?)")
+        stmt.setLong(1, from.value)
+        stmt.setInt(2, from.frac)
+        stmt.setString(3, direction)
         stmt.executeQuery().use {
             it.next()
             if (!it.getBoolean("too_small")) {
@@ -82,6 +82,8 @@ class ConversionDAO(private val db: Database) {
         }
     }
 
-    suspend fun regionalToFiat(amount: TalerAmount): TalerAmount? = conversion(amount, "sell", db.fiatCurrency!!)
-    suspend fun fiatToRegional(amount: TalerAmount): TalerAmount? = conversion(amount, "buy", db.bankCurrency)
+    suspend fun toCashout(amount: TalerAmount): TalerAmount? = conversion(amount, "cashout", "conversion_to", db.fiatCurrency!!)
+    suspend fun toCashin(amount: TalerAmount): TalerAmount? = conversion(amount, "cashin", "conversion_to", db.bankCurrency)
+    suspend fun fromCashout(amount: TalerAmount): TalerAmount? = conversion(amount, "cashout", "conversion_from",  db.bankCurrency)
+    suspend fun fromCashin(amount: TalerAmount): TalerAmount? = conversion(amount, "cashin", "conversion_from", db.fiatCurrency!!)
 }

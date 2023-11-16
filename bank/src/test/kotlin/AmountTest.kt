@@ -204,11 +204,10 @@ class AmountTest {
     }
 
     @Test
-    fun mul() = dbSetup { db ->
+    fun conversionApply() = dbSetup { db ->
         db.conn { conn ->
-            val stmt = conn.prepareStatement("SELECT product.val, product.frac FROM amount_mul((?, ?)::taler_amount, (?, ?)::taler_amount, (?, ?)::taler_amount, ?::rounding_mode) as product")
-
-            fun mul(nb: TalerAmount, times: DecimalNumber, tiny: DecimalNumber = DecimalNumber("0.00000001"), roundingMode: String = "zero"): TalerAmount? {
+            fun apply(nb: TalerAmount, times: DecimalNumber, tiny: DecimalNumber = DecimalNumber("0.00000001"), roundingMode: String = "zero"): TalerAmount? {
+                val stmt = conn.prepareStatement("SELECT amount.val, amount.frac FROM conversion_apply_ratio((?, ?)::taler_amount, (?, ?)::taler_amount, (?, ?)::taler_amount, ?::rounding_mode) as amount")
                 stmt.setLong(1, nb.value)
                 stmt.setInt(2, nb.frac)
                 stmt.setLong(3, times.value)
@@ -225,14 +224,14 @@ class AmountTest {
                 }!!
             }
     
-            assertEquals(TalerAmount("EUR:30.0629"), mul(TalerAmount("EUR:6.41"), DecimalNumber("4.69")))
-            assertEquals(TalerAmount("EUR:6.41000641"), mul(TalerAmount("EUR:6.41"), DecimalNumber("1.000001")))
-            assertEquals(TalerAmount("EUR:2.49999997"), mul(TalerAmount("EUR:0.99999999"), DecimalNumber("2.5")))
-            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), mul(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), DecimalNumber("1")))
-            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}"), mul(TalerAmount("EUR:${TalerAmount.MAX_VALUE/4}"), DecimalNumber("4")))
-            assertException("ERROR: amount value overflowed") { mul(TalerAmount(TalerAmount.MAX_VALUE/3, 0, "EUR"), DecimalNumber("3.00000001")) }
-            assertException("ERROR: amount value overflowed") { mul(TalerAmount((TalerAmount.MAX_VALUE+2)/2, 0, "EUR"), DecimalNumber("2")) }
-            assertException("ERROR: numeric field overflow") { mul(TalerAmount(Long.MAX_VALUE, 0, "EUR"), DecimalNumber("1")) }
+            assertEquals(TalerAmount("EUR:30.0629"), apply(TalerAmount("EUR:6.41"), DecimalNumber("4.69")))
+            assertEquals(TalerAmount("EUR:6.41000641"), apply(TalerAmount("EUR:6.41"), DecimalNumber("1.000001")))
+            assertEquals(TalerAmount("EUR:2.49999997"), apply(TalerAmount("EUR:0.99999999"), DecimalNumber("2.5")))
+            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), apply(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), DecimalNumber("1")))
+            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}"), apply(TalerAmount("EUR:${TalerAmount.MAX_VALUE/4}"), DecimalNumber("4")))
+            assertException("ERROR: amount value overflowed") { apply(TalerAmount(TalerAmount.MAX_VALUE/3, 0, "EUR"), DecimalNumber("3.00000001")) }
+            assertException("ERROR: amount value overflowed") { apply(TalerAmount((TalerAmount.MAX_VALUE+2)/2, 0, "EUR"), DecimalNumber("2")) }
+            assertException("ERROR: numeric field overflow") { apply(TalerAmount(Long.MAX_VALUE, 0, "EUR"), DecimalNumber("1")) }
 
             // Check rounding mode
             for ((mode, rounding) in listOf(
@@ -243,21 +242,92 @@ class AmountTest {
                 for ((rounded, amounts) in rounding) {
                     for (amount in amounts) {
                         // Check euro
-                        assertEquals(TalerAmount("EUR:0.0$rounded"), mul(TalerAmount("EUR:$amount"), DecimalNumber("0.001001"), DecimalNumber("0.01"), mode))
+                        assertEquals(TalerAmount("EUR:0.0$rounded"), apply(TalerAmount("EUR:$amount"), DecimalNumber("0.001"), DecimalNumber("0.01"), mode))
                         // Check kudos
-                        assertEquals(TalerAmount("KUDOS:0.0000000$rounded"), mul(TalerAmount("KUDOS:0.$amount"), DecimalNumber("0.0000001"), roundingMode = mode))
+                        assertEquals(TalerAmount("KUDOS:0.0000000$rounded"), apply(TalerAmount("KUDOS:0.$amount"), DecimalNumber("0.0000001"), roundingMode = mode))
                     }
                 }
             }
             
             // Check hungarian rounding
-            for ((rounded, amounts) in listOf(
-                Pair(10, listOf(10, 11, 12)),
-                Pair(15, listOf(13, 14, 15, 16, 17)),
-                Pair(20, listOf(18, 19)),
+            for ((mode, rounding) in listOf(
+                Pair("zero", listOf(Pair(10, listOf(10, 11, 12, 13, 14)), Pair(15, listOf(15, 16, 17, 18, 19)))),
+                Pair("up", listOf(Pair(10, listOf(10)), Pair(15, listOf(11, 12, 13, 14, 15)), Pair(20, listOf(16, 17, 18, 19)))),
+                Pair("nearest", listOf(Pair(10, listOf(10, 11, 12)), Pair(15, listOf(13, 14, 15, 16, 17)), Pair(20, listOf(18, 19))))
             )) {
-                for (amount in amounts) {
-                    assertEquals(TalerAmount("HUF:$rounded"), mul(TalerAmount("HUF:$amount"), DecimalNumber("1.01"), DecimalNumber("5"), "nearest"))
+                for ((rounded, amounts) in rounding) {
+                    for (amount in amounts) {
+                        assertEquals(TalerAmount("HUF:$rounded"), apply(TalerAmount("HUF:$amount"), DecimalNumber("1"), DecimalNumber("5"), mode))
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun conversionRevert() = dbSetup { db ->
+        db.conn { conn ->
+            fun TalerAmount.apply(ratio: DecimalNumber, tiny: DecimalNumber = DecimalNumber("0.00000001"), roundingMode: String = "zero"): TalerAmount? {
+                val stmt = conn.prepareStatement("SELECT amount.val, amount.frac FROM conversion_apply_ratio((?, ?)::taler_amount, (?, ?)::taler_amount, (?, ?)::taler_amount, ?::rounding_mode) as amount")
+                stmt.setLong(1, this.value)
+                stmt.setInt(2, this.frac)
+                stmt.setLong(3, ratio.value)
+                stmt.setInt(4, ratio.frac)
+                stmt.setLong(5, tiny.value)
+                stmt.setInt(6, tiny.frac)
+                stmt.setString(7, roundingMode)
+                return stmt.oneOrNull {
+                    TalerAmount(
+                        it.getLong(1),
+                        it.getInt(2),
+                        currency
+                    )
+                }!!
+            }
+
+            fun TalerAmount.revert(ratio: DecimalNumber, tiny: DecimalNumber = DecimalNumber("0.00000001"), roundingMode: String = "zero"): TalerAmount? {
+                val stmt = conn.prepareStatement("SELECT amount.val, amount.frac FROM conversion_revert_ratio((?, ?)::taler_amount, (?, ?)::taler_amount, (?, ?)::taler_amount, ?::rounding_mode) as amount")
+                stmt.setLong(1, this.value)
+                stmt.setInt(2, this.frac)
+                stmt.setLong(3, ratio.value)
+                stmt.setInt(4, ratio.frac)
+                stmt.setLong(5, tiny.value)
+                stmt.setInt(6, tiny.frac)
+                stmt.setString(7, roundingMode)
+                return stmt.oneOrNull {
+                    TalerAmount(
+                        it.getLong(1),
+                        it.getInt(2),
+                        currency
+                    )
+                }!!
+            }
+    
+            assertEquals(TalerAmount("EUR:6.41"), TalerAmount("EUR:30.0629").revert(DecimalNumber("4.69")))
+            assertEquals(TalerAmount("EUR:6.41"), TalerAmount("EUR:6.41000641").revert(DecimalNumber("1.000001")))
+            assertEquals(TalerAmount("EUR:0.99999999"), TalerAmount("EUR:2.49999997").revert(DecimalNumber("2.5")))
+            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999").revert(DecimalNumber("1")))
+            assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}"), TalerAmount("EUR:${TalerAmount.MAX_VALUE/4}").revert(DecimalNumber("0.25")))
+            assertException("ERROR: amount value overflowed") { TalerAmount(TalerAmount.MAX_VALUE/4, 0, "EUR").revert(DecimalNumber("0.24999999")) }
+            assertException("ERROR: amount value overflowed") { TalerAmount((TalerAmount.MAX_VALUE+2)/2, 0, "EUR").revert(DecimalNumber("0.5")) }
+            assertException("ERROR: numeric field overflow") { TalerAmount(Long.MAX_VALUE, 0, "EUR").revert(DecimalNumber("1")) }
+
+            for (mode in listOf("zero", "up", "nearest")) {
+                for (amount in listOf(10, 11, 12, 12, 14, 15, 16, 17, 18, 19)) {
+                    for (tiny in listOf("0.01", "0.00000001", "5")) {
+                        for (ratio in listOf("0.341", "0.00000001")) {
+                            val tiny = DecimalNumber(tiny)
+                            val ratio = DecimalNumber(ratio)
+                            val base = TalerAmount("EUR:$amount")
+                            // Apply ratio
+                            val rounded = base.apply(ratio, tiny, mode)!!
+                            // Revert ratio  
+                            val revert = rounded.revert(ratio, tiny, mode)!!
+                            // Check applying ratio again give the same result
+                            val check = revert.apply(ratio, tiny, mode)!!
+                            assertEquals(rounded, check)
+                        }
+                    }
                 }
             }
         }

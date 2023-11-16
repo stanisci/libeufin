@@ -623,14 +623,19 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
         params.credit?.let { ctx.checkFiatCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversion.regionalToFiat(params.debit) ?:
+            val credit = db.conversion.toCashout(params.debit) ?:
                 throw conflict(
                     "${params.debit} is too small to be converted",
                     TalerErrorCode.BANK_BAD_CONVERSION
                 )
             call.respond(ConversionResponse(params.debit, credit))
         } else {
-            call.respond(HttpStatusCode.NotImplemented) // TODO
+            val debit = db.conversion.fromCashout(params.credit!!) ?:
+            throw conflict(
+                "${params.debit} is too small to be converted",
+                TalerErrorCode.BANK_BAD_CONVERSION
+            )
+            call.respond(ConversionResponse(debit, params.credit))
         }
     }
     get("/cashin-rate") {
@@ -640,14 +645,19 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
         params.credit?.let { ctx.checkRegionalCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversion.fiatToRegional(params.debit) ?:
+            val credit = db.conversion.toCashin(params.debit) ?:
                 throw conflict(
                     "${params.debit} is too small to be converted",
                     TalerErrorCode.BANK_BAD_CONVERSION
                 )
             call.respond(ConversionResponse(params.debit, credit))
         } else {
-            call.respond(HttpStatusCode.NotImplemented) // TODO
+            val debit = db.conversion.fromCashin(params.credit!!) ?:
+            throw conflict(
+                "${params.debit} is too small to be converted",
+                TalerErrorCode.BANK_BAD_CONVERSION
+            )
+            call.respond(ConversionResponse(debit, params.credit))
         }
     }
 }

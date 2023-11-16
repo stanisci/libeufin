@@ -67,3 +67,7 @@ assemble:
 .PHONY: check
 check: install-bank-files
 	./gradlew check
+
+.PHONY: test
+test: install-bank-files
+	./gradlew test --tests $(test) -i
