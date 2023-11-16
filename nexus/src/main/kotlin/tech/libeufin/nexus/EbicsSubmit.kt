@@ -74,7 +74,12 @@ data class SubmissionContext(
     /**
      * Bank EBICS public keys.
      */
-    val bankPublicKeysFile: BankPublicKeysFile
+    val bankPublicKeysFile: BankPublicKeysFile,
+
+    /**
+     * Causes EBICS messages to be logged to STDERR.
+     */
+    val ebicsExtraLog: Boolean = false
 )
 
 /**
@@ -232,6 +237,10 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
     private val debug by option(
         help = "Reads the pain.001 document from STDIN and submits it to the bank"
     ).flag(default = false)
+
+    private val ebicsExtraLog by option(
+        help = "Logs init phase of uploaded EBICS messages to STDERR"
+    ).flag(default = false)
     /**
      * Submits any initiated payment that was not submitted
      * so far and -- according to the configuration -- returns
@@ -260,7 +269,8 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             cfg = cfg,
             bankPublicKeysFile = bankKeys,
             clientPrivateKeysFile = clientKeys,
-            httpClient = HttpClient()
+            httpClient = HttpClient(),
+            ebicsExtraLog = ebicsExtraLog
         )
         if (debug) {
             logger.info("Running in debug mode, submitting STDIN to the bank")
@@ -272,7 +282,8 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
                         ctx.cfg,
                         ctx.clientPrivateKeysFile,
                         ctx.bankPublicKeysFile,
-                        ctx.httpClient
+                        ctx.httpClient,
+                        ctx.ebicsExtraLog
                     )
                 }
             }

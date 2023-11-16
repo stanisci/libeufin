@@ -590,7 +590,8 @@ suspend fun doEbicsUpload(
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     orderService: Ebics3Request.OrderDetails.Service,
-    payload: ByteArray
+    payload: ByteArray,
+    extraLog: Boolean = false
 ): EbicsResponseContent {
     val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload, isEbics3 = true)
     val initXml = createEbics3RequestForUploadInitialization(
@@ -600,6 +601,7 @@ suspend fun doEbicsUpload(
         clientKeys,
         orderService
     )
+    if (extraLog) logger.debug(initXml)
     val initResp = postEbics( // may throw EbicsEarlyException
             client,
             cfg,

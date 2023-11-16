@@ -440,7 +440,6 @@ class Ebics3Request {
             bankEncPub: RSAPublicKey,
             segmentsNumber: BigInteger,
             aOrderService: OrderDetails.Service,
-            // aOrderParams: OrderParamsEbics? = null
         ): Ebics3Request {
 
             return Ebics3Request().apply {

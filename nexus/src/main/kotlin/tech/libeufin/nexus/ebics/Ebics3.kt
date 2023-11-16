@@ -212,7 +212,8 @@ suspend fun submitPain001(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankkeys: BankPublicKeysFile,
-    httpClient: HttpClient
+    httpClient: HttpClient,
+    ebicsExtraLog: Boolean = false
 ) {
     val orderService: Ebics3Request.OrderDetails.Service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "MCT"
@@ -228,7 +229,8 @@ suspend fun submitPain001(
         clientKeys,
         bankkeys,
         orderService,
-        pain001xml.toByteArray(Charsets.UTF_8)
+        pain001xml.toByteArray(Charsets.UTF_8),
+        ebicsExtraLog
     )
     logger.debug("Payment submitted, report text is: ${maybeUploaded.reportText}," +
             " EBICS technical code is: ${maybeUploaded.technicalReturnCode}," +
