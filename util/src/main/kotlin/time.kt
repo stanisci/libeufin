@@ -93,3 +93,15 @@ fun parseCamtTime(timeFromCamt: String): Instant {
     val utc = ZoneId.of("UTC")
     return t.toInstant(utc.rules.getOffset(t))
 }
+
+/**
+ * Parses a date string as found in the booking date of
+ * camt.054 reports.  They have this format: yyyy-MM-dd.
+ *
+ * @param bookDate input to parse
+ * @return [Instant] to the UTC.
+ */
+fun parseBookDate(bookDate: String): Instant {
+    val l = LocalDate.parse(bookDate)
+    return Instant.from(l.atStartOfDay(ZoneId.of("UTC")))
+}

@@ -94,7 +94,7 @@ enum class PaymentInitiationOutcome {
 
 data class OutgoingPayment(
     val amount: TalerAmount,
-    val wireTransferSubject: String?,
+    val wireTransferSubject: String,
     val executionTime: Instant,
     val creditPaytoUri: String,
     val bankTransferId: String
@@ -221,6 +221,27 @@ class Database(dbConfig: String): java.io.Closeable {
                 return@runConn OutgoingPaymentOutcome.INITIATED_COUNTERPART_NOT_FOUND
         }
         return@runConn OutgoingPaymentOutcome.SUCCESS
+    }
+
+    /**
+     * Checks if the outgoing payment was already processed by Nexus.
+     *
+     * @param bankUid unique identifier assigned by the bank to the payment.
+     *        Normally, that's the <UETR> value found in camt.05x records.  Outgoing
+     *        payment have been observed to _lack_ the <AcctSvcrRef> element.
+     * @return true if found, false otherwise
+     */
+    suspend fun isOutgoingPaymentSeen(bankUid: String): Boolean = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+             SELECT 1
+               FROM outgoing_transactions
+               WHERE bank_transfer_id = ?;
+        """)
+        stmt.setString(1, bankUid)
+        val res = stmt.executeQuery()
+        res.use {
+            return@runConn it.next()
+        }
     }
 
     // INCOMING PAYMENTS METHODS
@@ -576,5 +597,31 @@ class Database(dbConfig: String): java.io.Closeable {
          * as the row ID would never fall into the following problem.
          */
         return@runConn PaymentInitiationOutcome.UNIQUE_CONSTRAINT_VIOLATION
+    }
+
+    /**
+     * Gets the ID of an initiated payment.  Useful to link it to its
+     * outgoing payment witnessed in a bank record.
+     *
+     * @param uid UID as given by Nexus when it initiated the payment.
+     *        This value then gets specified as the MsgId of pain.001,
+     *        and it gets associated by the bank to the booked entries
+     *        in camt.05x reports.
+     * @retrun the initiated payment row ID, or null if not found.  NOTE:
+     *         null gets returned even when the initiated payment exists,
+     *         *but* it was NOT flagged as submitted.
+     */
+    suspend fun initiatedPaymentGetFromUid(uid: String): Long? = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+           SELECT initiated_outgoing_transaction_id
+             FROM initiated_outgoing_transactions
+             WHERE request_uid = ? AND submitted = 'success';
+        """)
+        stmt.setString(1, uid)
+        val res = stmt.executeQuery()
+        res.use {
+            if (!it.next()) return@runConn null
+            return@runConn it.getLong("initiated_outgoing_transaction_id")
+        }
     }
 }

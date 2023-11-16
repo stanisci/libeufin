@@ -4,6 +4,7 @@ import tech.libeufin.nexus.TalerAmount
 import tech.libeufin.nexus.getAmountNoCurrency
 import tech.libeufin.nexus.getTalerAmount
 import tech.libeufin.nexus.isReservePub
+import tech.libeufin.util.parseBookDate
 import tech.libeufin.util.parseCamtTime
 import java.lang.StringBuilder
 import kotlin.test.assertEquals
@@ -19,6 +20,12 @@ class Parsing {
         assertThrows<Exception> { parseCamtTime("2023-11-06T20:00:00+01:00") }
         assertThrows<Exception> { parseCamtTime("2023-11-06T20:00:00Z") }
     }
+
+    @Test
+    fun bookDateTest() {
+        parseBookDate("1970-01-01")
+    }
+
     @Test // Could be moved in a dedicated Amounts.kt test module.
     fun generateCurrencyAgnosticAmount() {
         assertThrows<Exception> {

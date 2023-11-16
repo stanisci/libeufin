@@ -3,9 +3,8 @@ import org.junit.Test
 import tech.libeufin.nexus.*
 import java.time.Instant
 import kotlin.random.Random
+import kotlin.test.*
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 
 class OutgoingPaymentsTest {
@@ -19,10 +18,12 @@ class OutgoingPaymentsTest {
         val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
         runBlocking {
             // inserting without reconciling
+            assertFalse(db.isOutgoingPaymentSeen("entropic"))
             assertEquals(
                 OutgoingPaymentOutcome.SUCCESS,
                 db.outgoingPaymentCreate(genOutPay("paid by nexus"))
             )
+            assertTrue(db.isOutgoingPaymentSeen("entropic"))
             // inserting trying to reconcile with a non-existing initiated payment.
             assertEquals(
                 OutgoingPaymentOutcome.INITIATED_COUNTERPART_NOT_FOUND,
@@ -171,6 +172,7 @@ class PaymentInitiationsTest {
             initiationTime = Instant.now()
         )
         runBlocking {
+            assertNull(db.initiatedPaymentGetFromUid("unique"))
             assertEquals(db.initiatedPaymentCreate(initPay), PaymentInitiationOutcome.SUCCESS)
             assertEquals(db.initiatedPaymentCreate(initPay), PaymentInitiationOutcome.UNIQUE_CONSTRAINT_VIOLATION)
             val haveOne = db.initiatedPaymentsUnsubmittedGet("KUDOS")
@@ -179,6 +181,8 @@ class PaymentInitiationsTest {
                         && haveOne.containsKey(1)
                         && haveOne[1]?.requestUid == "unique"
             }
+            db.initiatedPaymentSetSubmittedState(1, DatabaseSubmissionState.success)
+            assertNotNull(db.initiatedPaymentGetFromUid("unique"))
         }
     }
 

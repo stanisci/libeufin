@@ -12,7 +12,6 @@ import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h005.Ebics3Request
 import java.io.File
 import java.io.IOException
-import java.lang.StringBuilder
 import java.net.URLEncoder
 import java.nio.file.Path
 import java.time.Instant
@@ -22,6 +21,7 @@ import java.util.UUID
 import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
 import kotlin.system.exitProcess
+import kotlin.text.StringBuilder
 
 /**
  * Necessary data to perform a download.
@@ -203,6 +203,131 @@ fun getTalerAmount(
     )
 }
 
+private fun XmlElementDestructor.extractOutgoingTxNotif(
+    acceptedCurrency: String,
+    bookDate: Instant
+): OutgoingPaymentWithLink {
+    // Obtaining the amount.
+    val amount: TalerAmount = requireUniqueChildNamed("Amt") {
+        val currency = focusElement.getAttribute("Ccy")
+        if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+        getTalerAmount(focusElement.textContent, currency)
+    }
+    /**
+     * Obtaining payment UID.  Outgoing tx don't get any AcctSvcrRef,
+     * but UETR.  They however echo the MsgId that was used in the original
+     * pain.001, but that's given by us, rather than by the bank.
+     */
+    val uidFromBank = StringBuilder()
+    val link = StringBuilder()
+    requireUniqueChildNamed("Refs") {
+        requireUniqueChildNamed("UETR") {
+            uidFromBank.append(focusElement.textContent)
+        }
+        requireUniqueChildNamed("MsgId") {
+            link.append(focusElement.textContent)
+        }
+    }
+    // Obtaining payment subject.
+    val subject = StringBuilder()
+    requireUniqueChildNamed("RmtInf") {
+        this.mapEachChildNamed("Ustrd") {
+            val piece = this.focusElement.textContent
+            subject.append(piece)
+        }
+    }
+
+    // Obtaining the payer's details
+    val creditorPayto = StringBuilder("payto://iban/")
+    requireUniqueChildNamed("RltdPties") {
+        requireUniqueChildNamed("CdtrAcct") {
+            requireUniqueChildNamed("Id") {
+                requireUniqueChildNamed("IBAN") {
+                    creditorPayto.append(focusElement.textContent)
+                }
+            }
+        }
+        requireUniqueChildNamed("Cdtr") {
+            requireUniqueChildNamed("Pty") {
+                requireUniqueChildNamed("Nm") {
+                    val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
+                    creditorPayto.append("?receiver-name=$urlEncName")
+                }
+            }
+        }
+    }
+    val payment = OutgoingPayment(
+        amount = amount,
+        bankTransferId = uidFromBank.toString(),
+        creditPaytoUri = creditorPayto.toString(),
+        executionTime = bookDate,
+        wireTransferSubject = subject.toString()
+    )
+    return OutgoingPaymentWithLink(payment, link.toString())
+}
+
+private fun XmlElementDestructor.extractIncomingTxNotif(
+    acceptedCurrency: String,
+    bookDate: Instant
+): IncomingPayment {
+    // Obtaining the amount.
+    val amount: TalerAmount = requireUniqueChildNamed("Amt") {
+        val currency = focusElement.getAttribute("Ccy")
+        if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+        getTalerAmount(focusElement.textContent, currency)
+    }
+    // Obtaining payment UID.
+    val uidFromBank: String = requireUniqueChildNamed("Refs") {
+        requireUniqueChildNamed("AcctSvcrRef") {
+            focusElement.textContent
+        }
+    }
+    // Obtaining payment subject.
+    val subject = StringBuilder()
+    requireUniqueChildNamed("RmtInf") {
+        this.mapEachChildNamed("Ustrd") {
+            val piece = this.focusElement.textContent
+            subject.append(piece)
+        }
+    }
+
+    // Obtaining the payer's details
+    val debtorPayto = StringBuilder("payto://iban/")
+    requireUniqueChildNamed("RltdPties") {
+        requireUniqueChildNamed("DbtrAcct") {
+            requireUniqueChildNamed("Id") {
+                requireUniqueChildNamed("IBAN") {
+                    debtorPayto.append(focusElement.textContent)
+                }
+            }
+        }
+        // warn: it might need the postal address too..
+        requireUniqueChildNamed("Dbtr") {
+            requireUniqueChildNamed("Nm") {
+                val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
+                debtorPayto.append("?receiver-name=$urlEncName")
+            }
+        }
+    }
+    return IncomingPayment(
+        amount = amount,
+        bankTransferId = uidFromBank,
+        debitPaytoUri = debtorPayto.toString(),
+        executionTime = bookDate,
+        wireTransferSubject = subject.toString()
+    )
+}
+
+data class OutgoingPaymentWithLink(
+    val outgoingPayment: OutgoingPayment,
+    val initiatedPaymentLink: String
+)
+
+data class Camt054Result(
+    val incoming: MutableList<IncomingPayment> = mutableListOf(),
+    val outgoing: MutableList<OutgoingPaymentWithLink> = mutableListOf()
+)
+
 /**
  * Searches for incoming transactions in a camt.054 document, that
  * was downloaded via EBICS notification.
@@ -210,77 +335,33 @@ fun getTalerAmount(
  * @param notifXml the input document.
  * @return any incoming payment as a list of [IncomingPayment]
  */
-fun findIncomingTxInNotification(
+fun parseNotification(
     notifXml: String,
     acceptedCurrency: String
-): List<IncomingPayment> {
+): Camt054Result {
     val notifDoc = XMLUtil.parseStringIntoDom(notifXml)
-    val ret = mutableListOf<IncomingPayment>()
+    val ret = Camt054Result()
     destructXml(notifDoc) {
         requireRootElement("Document") {
             requireUniqueChildNamed("BkToCstmrDbtCdtNtfctn") {
                 mapEachChildNamed("Ntfctn") {
                     mapEachChildNamed("Ntry") {
+                        val bookDate: Instant = requireUniqueChildNamed("BookgDt") {
+                            requireUniqueChildNamed("Dt") {
+                                parseBookDate(focusElement.textContent)
+                            }
+                        }
                         mapEachChildNamed("NtryDtls") {
-                            mapEachChildNamed("TxDtls") maybeDbit@{
-
-                                // currently, only incoming payments are considered.
+                            mapEachChildNamed("TxDtls") {
                                 if (requireUniqueChildNamed("CdtDbtInd") {
                                         focusElement.textContent == "DBIT"
-                                }) return@maybeDbit
-
-                                // Obtaining the amount.
-                                val amount: TalerAmount = requireUniqueChildNamed("Amt") {
-                                    val currency = focusElement.getAttribute("Ccy")
-                                    if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
-                                    getTalerAmount(focusElement.textContent, currency)
+                                }) {
+                                    val outgoingPayment = extractOutgoingTxNotif(acceptedCurrency, bookDate)
+                                    ret.outgoing.add(outgoingPayment)
+                                } else {
+                                    val incomingPayment = extractIncomingTxNotif(acceptedCurrency, bookDate)
+                                    ret.incoming.add(incomingPayment)
                                 }
-                                // Obtaining payment UID.
-                                val uidFromBank: String = requireUniqueChildNamed("Refs") {
-                                    requireUniqueChildNamed("AcctSvcrRef") {
-                                        focusElement.textContent
-                                    }
-                                }
-                                // Obtaining payment subject.
-                                val subject = StringBuilder()
-                                requireUniqueChildNamed("RmtInf") {
-                                    this.mapEachChildNamed("Ustrd") {
-                                        val piece = this.focusElement.textContent
-                                        subject.append(piece)
-                                    }
-                                }
-                                // Obtaining the execution time.
-                                val executionTime: Instant = requireUniqueChildNamed("RltdDts") {
-                                    requireUniqueChildNamed("AccptncDtTm") {
-                                        parseCamtTime(focusElement.textContent)
-                                    }
-                                }
-                                // Obtaining the payer's details
-                                val debtorPayto = StringBuilder("payto://iban/")
-                                requireUniqueChildNamed("RltdPties") {
-                                    requireUniqueChildNamed("DbtrAcct") {
-                                        requireUniqueChildNamed("Id") {
-                                            requireUniqueChildNamed("IBAN") {
-                                                debtorPayto.append(focusElement.textContent)
-                                            }
-                                        }
-                                    }
-                                    // warn: it might need the postal address too..
-                                    requireUniqueChildNamed("Dbtr") {
-                                        requireUniqueChildNamed("Nm") {
-                                            val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
-                                            debtorPayto.append("?receiver-name=$urlEncName")
-                                        }
-                                    }
-                                }
-                                val incomingPayment = IncomingPayment(
-                                    amount = amount,
-                                    bankTransferId = uidFromBank,
-                                    debitPaytoUri = debtorPayto.toString(),
-                                    executionTime = executionTime,
-                                    wireTransferSubject = subject.toString()
-                                )
-                                ret.add(incomingPayment)
                             }
                         }
                     }
@@ -325,7 +406,7 @@ fun isReservePub(maybeReservePub: String): ByteArray? {
  * @return [ByteArray] as the reserve public key, or null if the
  *         payment cannot lead to a Taler withdrawal.
  */
-suspend fun isTalerable(
+suspend fun getTalerReservePub(
     db: Database,
     payment: IncomingPayment
 ): ByteArray? {
@@ -338,6 +419,66 @@ suspend fun isTalerable(
         return null
     }
     return dec
+}
+
+/**
+ * Ingests any outgoing payment that was NOT ingested yet.  It
+ * links it to the initiated outgoing transaction that originated
+ * it.
+ *
+ * @param db database handle.
+ * @param payment payment to (maybe) ingest.
+ */
+private suspend fun ingestOutgoingPayment(
+    db: Database,
+    payment: OutgoingPaymentWithLink
+) {
+    // Check if the payment was ingested already.
+    if (db.isOutgoingPaymentSeen(payment.outgoingPayment.bankTransferId)) {
+        logger.debug("Outgoing payment with UID '${payment.outgoingPayment.bankTransferId}' already seen.")
+        return
+    }
+    // Get the initiate payment to link to this.
+    val initId: Long? = db.initiatedPaymentGetFromUid(payment.initiatedPaymentLink)
+    if (initId == null) {
+        throw Exception("Outgoing payment lacks (submitted) initiated " +
+                "counterpart with UID ${payment.initiatedPaymentLink}"
+        )
+    }
+    // store the payment and its linked init
+    val insertionResult = db.outgoingPaymentCreate(payment.outgoingPayment, initId)
+    if (insertionResult != OutgoingPaymentOutcome.SUCCESS) {
+        throw Exception("Could not store outgoing payment with bank-given" +
+                "UID '${payment.outgoingPayment.bankTransferId}' " +
+                "and update its related initiation.  DB result: $insertionResult"
+        )
+    }
+}
+
+/**
+ * Ingests any incoming payment that was NOT ingested yet.  Stores
+ * the payment into valid talerable ones or bounces it, according
+ * to the subject.
+ *
+ * @param db database handle.
+ * @param incomingPayment payment to (maybe) ingest.
+ */
+private suspend fun ingestIncomingPayment(
+    db: Database,
+    incomingPayment: IncomingPayment
+) {
+    if (db.isIncomingPaymentSeen(incomingPayment.bankTransferId)) {
+        logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}' already seen.")
+        return
+    }
+    val reservePub = getTalerReservePub(db, incomingPayment)
+    if (reservePub == null) {
+        db.incomingPaymentCreateBounced(
+            incomingPayment, UUID.randomUUID().toString().take(35)
+        )
+        return
+    }
+    db.incomingTalerablePaymentCreate(incomingPayment, reservePub)
 }
 
 /**
@@ -360,12 +501,14 @@ fun ingestNotification(
     content: ByteArray
 ): Boolean {
     val incomingPayments = mutableListOf<IncomingPayment>()
+    val outgoingPayments = mutableListOf<OutgoingPaymentWithLink>()
     val filenamePrefix = "camt.054_P_" // Only these files have all the details.
     try {
         content.unzipForEach { fileName, xmlContent ->
             if (!fileName.startsWith(filenamePrefix)) return@unzipForEach
-            val found = findIncomingTxInNotification(xmlContent, ctx.cfg.currency)
-            incomingPayments += found
+            val found = parseNotification(xmlContent, ctx.cfg.currency)
+            incomingPayments += found.incoming
+            outgoingPayments += found.outgoing
         }
     } catch (e: IOException) {
         logger.error("Could not open any ZIP archive")
@@ -374,23 +517,14 @@ fun ingestNotification(
         logger.error(e.message)
         return false
     }
-    // Distinguishing now valid and invalid payments.
-    // Any error at this point is only due to Nexus.
+
     try {
-        incomingPayments.forEach {
-            runBlocking {
-                if (db.isIncomingPaymentSeen(it.bankTransferId)) {
-                    logger.debug("Incoming payment with UID '${it.bankTransferId}' already seen.")
-                    return@runBlocking
-                }
-                val reservePub = isTalerable(db, it)
-                if (reservePub == null) {
-                    db.incomingPaymentCreateBounced(
-                        it, UUID.randomUUID().toString().take(35)
-                    )
-                    return@runBlocking
-                }
-                db.incomingTalerablePaymentCreate(it, reservePub)
+        runBlocking {
+            incomingPayments.forEach {
+                ingestIncomingPayment(db, it)
+            }
+            outgoingPayments.forEach {
+                ingestOutgoingPayment(db, it)
             }
         }
     } catch (e: Exception) {
@@ -526,8 +660,8 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             val maybeStdin = generateSequence(::readLine).joinToString("\n")
             when(whichDoc) {
                 SupportedDocument.CAMT_054 -> {
-                    val incoming = findIncomingTxInNotification(maybeStdin, cfg.currency)
-                    incoming.forEach {
+                    val res = parseNotification(maybeStdin, cfg.currency)
+                    res.incoming.forEach {
                         println(it)
                     }
                 }

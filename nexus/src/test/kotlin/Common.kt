@@ -97,7 +97,7 @@ fun genIncPay(subject: String = "test wire transfer") =
     )
 
 // Generates an outgoing payment, given its subject.
-fun genOutPay(subject: String? = null) =
+fun genOutPay(subject: String = "outgoing payment") =
     OutgoingPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
         creditPaytoUri = "payto://iban/TEST-IBAN?receiver-name=Test",
