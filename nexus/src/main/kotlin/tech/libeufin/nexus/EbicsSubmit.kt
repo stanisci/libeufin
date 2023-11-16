@@ -239,7 +239,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
     ).flag(default = false)
 
     private val ebicsExtraLog by option(
-        help = "Logs init phase of uploaded EBICS 3 messages to STDERR"
+        help = "Logs init phase of uploaded messages to STDERR.  Only available for EBICS 3"
     ).flag(default = false)
     /**
      * Submits any initiated payment that was not submitted
