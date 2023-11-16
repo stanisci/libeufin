@@ -746,10 +746,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         }
     }
 
-    /**
-    * The following function returns the list of transactions, according
-    * to the page parameters
-    */
+    /** Apply paging logic to a sql query */
     internal suspend fun <T> page(
         params: PageParams,
         idName: String,
@@ -779,7 +776,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
     internal suspend fun <T> poolHistory(
         params: HistoryParams, 
         bankAccountId: Long,
-        listen: suspend NotificationWatcher.(Long, suspend (Flow<Long>) -> Unit) -> Unit,
+        listen: suspend NotificationWatcher.(Long, suspend (Flow<Long>) -> List<T>) -> List<T>,
         query: String,
         accountColumn: String = "bank_account_id",
         map: (ResultSet) -> T
@@ -799,30 +796,29 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
 
         // TODO do we want to handle polling when going backward and there is no transactions yet ?
         // When going backward there is always at least one transaction or none
-        if (params.page.delta >= 0 && params.poll_ms > 0) {
-            var history = listOf<T>()
+        return if (params.page.delta >= 0 && params.polling.poll_ms > 0) {
             notifWatcher.(listen)(bankAccountId) { flow ->
                 coroutineScope {
                     // Start buffering notification before loading transactions to not miss any
                     val polling = launch {
-                        withTimeoutOrNull(params.poll_ms) {
+                        withTimeoutOrNull(params.polling.poll_ms) {
                             flow.first { it > params.page.start } // Always forward so >
                         }
                     }    
                     // Initial loading
-                    history = load()
+                    val init = load()
                     // Long polling if we found no transactions
-                    if (history.isEmpty()) {
+                    if (init.isEmpty()) {
                         polling.join()
-                        history = load()
+                        load()
                     } else {
                         polling.cancel()
+                        init
                     }
                 }
             }
-            return history
         } else {
-            return load()
+            load()
         }
     }
 

@@ -560,32 +560,32 @@ class CoreBankTransactionsApiTest {
         }
 
         // Check no useless polling
-        assertTime(0, 200) {
+        assertTime(0, 100) {
             client.get("/accounts/merchant/transactions?delta=-6&start=11&long_poll_ms=1000") {
                 pwAuth("merchant")
             }.assertHistory(5)
         }
 
         // Check no polling when find transaction
-        assertTime(0, 200) {
+        assertTime(0, 100) {
             client.getA("/accounts/merchant/transactions?delta=6&long_poll_ms=1000") 
                 .assertHistory(5)
         }
 
         coroutineScope {
             launch { // Check polling succeed
-                assertTime(200, 1000) {
+                assertTime(100, 200) {
                     client.getA("/accounts/merchant/transactions?delta=2&start=10&long_poll_ms=1000")
                         .assertHistory(1)
                 }
             }
             launch { // Check polling timeout
-                assertTime(200, 400) {
-                    client.getA("/accounts/merchant/transactions?delta=1&start=11&long_poll_ms=300")
+                assertTime(200, 300) {
+                    client.getA("/accounts/merchant/transactions?delta=1&start=11&long_poll_ms=200")
                         .assertNoContent()
                 }
             }
-            delay(200)
+            delay(100)
             tx("merchant", "KUDOS:4.2", "exchange")
         }
 
@@ -762,13 +762,20 @@ class CoreBankWithdrawalApiTest {
     // GET /withdrawals/withdrawal_id
     @Test
     fun get() = bankSetup { _ ->
+        val amount = TalerAmount("KUDOS:9.0")
         // Check OK
         client.postA("/accounts/merchant/withdrawals") {
-            json { "amount" to "KUDOS:9.0" }
+            json { "amount" to amount}
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             client.get("/withdrawals/${it.withdrawal_id}") {
                 pwAuth("merchant")
-            }.assertOk()
+            }.assertOkJson<BankAccountGetWithdrawalResponse> {
+                assert(!it.selection_done)
+                assert(!it.aborted)
+                assert(!it.confirmation_done)
+                assertEquals(amount, it.amount)
+                // TODO check all status
+            }
         }
 
         // Check bad UUID
@@ -799,12 +806,7 @@ class CoreBankWithdrawalApiTest {
             json { "amount" to "KUDOS:1" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
-            client.post("/taler-integration/withdrawal-operation/$uuid") {
-                json {
-                    "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to exchangePayto
-                }
-            }.assertOk()
+            withdrawalSelect(uuid)
 
             // Check OK
             client.post("/withdrawals/$uuid/abort").assertNoContent()
@@ -817,12 +819,7 @@ class CoreBankWithdrawalApiTest {
             json { "amount" to "KUDOS:1" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
-            client.post("/taler-integration/withdrawal-operation/$uuid") {
-                json {
-                    "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to exchangePayto
-                }
-            }.assertOk()
+            withdrawalSelect(uuid)
             client.post("/withdrawals/$uuid/confirm").assertNoContent()
 
             // Check error
@@ -857,12 +854,7 @@ class CoreBankWithdrawalApiTest {
             json { "amount" to "KUDOS:1" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
-            client.post("/taler-integration/withdrawal-operation/$uuid") {
-                json {
-                    "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to exchangePayto
-                }
-            }.assertOk()
+            withdrawalSelect(uuid)
 
             // Check OK
             client.post("/withdrawals/$uuid/confirm").assertNoContent()
@@ -875,12 +867,7 @@ class CoreBankWithdrawalApiTest {
             json { "amount" to "KUDOS:1" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
-            client.post("/taler-integration/withdrawal-operation/$uuid") {
-                json {
-                    "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to exchangePayto
-                }
-            }.assertOk()
+            withdrawalSelect(uuid)
             client.post("/withdrawals/$uuid/abort").assertNoContent()
 
             // Check error
@@ -893,12 +880,7 @@ class CoreBankWithdrawalApiTest {
             json { "amount" to "KUDOS:5" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
-            client.post("/taler-integration/withdrawal-operation/$uuid") {
-                json {
-                    "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to exchangePayto
-                }
-            }.assertOk()
+            withdrawalSelect(uuid)
 
             // Send too much money
             tx("merchant", "KUDOS:5", "exchange")

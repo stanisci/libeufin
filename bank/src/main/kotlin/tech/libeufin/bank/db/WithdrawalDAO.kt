@@ -24,6 +24,8 @@ import java.time.Instant
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import tech.libeufin.util.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.*
 
 /** Result status of withdrawal operation creation */
 enum class WithdrawalCreationResult {
@@ -112,34 +114,62 @@ class WithdrawalDAO(private val db: Database) {
         }
     }
 
-    suspend fun getStatus(uuid: UUID): BankWithdrawalOperationStatus? = db.conn { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT
-              (amount).val as amount_val
-              ,(amount).frac as amount_frac
-              ,selection_done     
-              ,aborted     
-              ,confirmation_done      
-              ,internal_payto_uri
-            FROM taler_withdrawal_operations
-                JOIN bank_accounts ON (wallet_bank_account=bank_account_id)
-            WHERE withdrawal_uuid=?
-        """)
-        stmt.setObject(1, uuid)
-        stmt.oneOrNull {
-            BankWithdrawalOperationStatus(
-                amount = TalerAmount(
-                    it.getLong("amount_val"),
-                    it.getInt("amount_frac"),
-                    db.bankCurrency
-                ),
-                selection_done = it.getBoolean("selection_done"),
-                transfer_done = it.getBoolean("confirmation_done"),
-                aborted = it.getBoolean("aborted"),
-                sender_wire = it.getString("internal_payto_uri"),
-                confirm_transfer_url = null,
-                suggested_exchange = null
-            )
+    suspend fun pollStatus(uuid: UUID, params: PollingParams): BankWithdrawalOperationStatus? {
+        suspend fun load(): BankWithdrawalOperationStatus? = db.conn { conn ->
+            val stmt = conn.prepareStatement("""
+                SELECT
+                  (amount).val as amount_val
+                  ,(amount).frac as amount_frac
+                  ,selection_done     
+                  ,aborted     
+                  ,confirmation_done      
+                  ,internal_payto_uri
+                FROM taler_withdrawal_operations
+                    JOIN bank_accounts ON (wallet_bank_account=bank_account_id)
+                WHERE withdrawal_uuid=?
+            """)
+            stmt.setObject(1, uuid)
+            stmt.oneOrNull {
+                BankWithdrawalOperationStatus(
+                    amount = TalerAmount(
+                        it.getLong("amount_val"),
+                        it.getInt("amount_frac"),
+                        db.bankCurrency
+                    ),
+                    selection_done = it.getBoolean("selection_done"),
+                    transfer_done = it.getBoolean("confirmation_done"),
+                    aborted = it.getBoolean("aborted"),
+                    sender_wire = it.getString("internal_payto_uri"),
+                    confirm_transfer_url = null,
+                    suggested_exchange = null
+                )
+            }
+        }
+            
+
+        return if (params.poll_ms > 0) {
+            db.notifWatcher.listenWithdrawals { flow ->
+                coroutineScope {
+                    // Start buffering notification before loading transactions to not miss any
+                    val polling = launch {
+                        withTimeoutOrNull(params.poll_ms) {
+                            flow.first { it == uuid }
+                        }
+                    }    
+                    // Initial loading
+                    val init = load()
+                    // Long polling if there is no operation or its not confirmed
+                    if (init?.run { transfer_done == false } ?: true) {
+                        polling.join()
+                        load()
+                    } else {
+                        polling.cancel()
+                        init
+                    }
+                }
+            }
+        } else {
+            load()
         }
     }
 

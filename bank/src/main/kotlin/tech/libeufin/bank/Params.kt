@@ -81,18 +81,6 @@ data class MonitorParams(
     }
 }
 
-data class HistoryParams(
-    val page: PageParams, val poll_ms: Long
-) {
-    companion object {
-        fun extract(params: Parameters): HistoryParams {
-            val poll_ms: Long = params.long("long_poll_ms") ?: 0
-            // TODO check poll_ms range
-            return HistoryParams(PageParams.extract(params), poll_ms)
-        }
-    }
-}
-
 data class AccountParams(
     val page: PageParams, val loginFilter: String
 ) {
@@ -111,8 +99,31 @@ data class PageParams(
         fun extract(params: Parameters): PageParams {
             val delta: Int = params.int("delta") ?: -20
             val start: Long = params.long("start") ?: if (delta >= 0) 0L else Long.MAX_VALUE
+            if (start < 0) throw badRequest("Param 'start' must be a positive number", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
             // TODO enforce delta limit
             return PageParams(delta, start)
+        }
+    }
+}
+
+data class PollingParams(
+    val poll_ms: Long
+) {
+    companion object {
+        fun extract(params: Parameters): PollingParams {
+            val poll_ms: Long = params.long("long_poll_ms") ?: 0
+            if (poll_ms < 0) throw badRequest("Param 'long_poll_ms' must be a positive number", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+            return PollingParams(poll_ms)
+        }
+    }
+}
+
+data class HistoryParams(
+    val page: PageParams, val polling: PollingParams
+) {
+    companion object {
+        fun extract(params: Parameters): HistoryParams {
+            return HistoryParams(PageParams.extract(params), PollingParams.extract(params))
         }
     }
 }

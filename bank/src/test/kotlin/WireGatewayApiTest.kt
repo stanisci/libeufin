@@ -184,12 +184,7 @@ class WireGatewayApiTest {
             json { "amount" to "KUDOS:9" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
-            client.post("/taler-integration/withdrawal-operation/${uuid}") {
-                json {
-                    "reserve_pub" to randEddsaPublicKey()
-                    "selected_exchange" to exchangePayto
-                }
-            }.assertOk()
+            withdrawalSelect(uuid)
             client.post("/withdrawals/${uuid}/confirm") {
                 pwAuth("merchant")
             }.assertNoContent()
@@ -204,65 +199,60 @@ class WireGatewayApiTest {
             .assertHistory(5)
         
         // Check no useless polling
-        assertTime(0, 200) {
+        assertTime(0, 100) {
             client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-6&start=15&long_poll_ms=1000")
                 .assertHistory(5)
         }
 
         // Check no polling when find transaction
-        assertTime(0, 200) {
-            client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=60")
+        assertTime(0, 100) {
+            client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=6&long_poll_ms=1000")
                 .assertHistory(5)
         }
 
         coroutineScope {
             launch {  // Check polling succeed
-                assertTime(200, 300) {
+                assertTime(100, 200) {
                     client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=2&start=14&long_poll_ms=1000")
                         .assertHistory(1)
                 }
             }
             launch {  // Check polling timeout
-                assertTime(200, 400) {
-                    client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=1&start=16&long_poll_ms=300")
+                assertTime(200, 300) {
+                    client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=1&start=16&long_poll_ms=200")
                         .assertNoContent()
                 }
             }
-            delay(200)
+            delay(100)
             addIncoming("KUDOS:10")
         }
 
         // Test trigger by raw transaction
         coroutineScope {
             launch {
-                assertTime(200, 300) {
+                assertTime(100, 200) {
                     client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7&start=16&long_poll_ms=1000")
                         .assertHistory(1)
                 }
             }
-            delay(200)
+            delay(100)
             tx("merchant", "KUDOS:10", "exchange", IncomingTxMetadata(randShortHashCode()).encode())
         }
 
         // Test trigger by withdraw operationr
         coroutineScope {
             launch {
-                assertTime(200, 300) {
+                assertTime(100, 200) {
                     client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7&start=18&long_poll_ms=1000") 
                         .assertHistory(1)
                 }
             }
-            delay(200)
+            delay(100)
             client.postA("/accounts/merchant/withdrawals") {
                 json { "amount" to "KUDOS:9" } 
             }.assertOkJson<BankAccountCreateWithdrawalResponse> {
                 val uuid = it.taler_withdraw_uri.split("/").last()
-                client.post("/taler-integration/withdrawal-operation/${uuid}") {
-                    json {
-                        "reserve_pub" to randEddsaPublicKey()
-                        "selected_exchange" to exchangePayto
-                    }
-                }.assertOk()
+                withdrawalSelect(uuid)
                 client.postA("/withdrawals/${uuid}/confirm")
                     .assertNoContent()
             }
@@ -324,31 +314,31 @@ class WireGatewayApiTest {
             .assertHistory(5)
 
         // Check no useless polling
-        assertTime(0, 200) {
+        assertTime(0, 100) {
             client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-6&start=15&long_poll_ms=1000")
                 .assertHistory(5)
         }
 
         // Check no polling when find transaction
-        assertTime(0, 200) {
+        assertTime(0, 100) {
             client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=6&long_poll_ms=1000")
                 .assertHistory(5)
         }
 
         coroutineScope {
             launch {  // Check polling succeed forward
-                assertTime(200, 300) {
+                assertTime(100, 200) {
                     client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=2&start=14&long_poll_ms=1000")
                         .assertHistory(1)
                 }
             }
             launch {  // Check polling timeout forward
-                assertTime(200, 400) {
-                    client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=1&start=16&long_poll_ms=300")
+                assertTime(200, 300) {
+                    client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=1&start=16&long_poll_ms=200")
                         .assertNoContent()
                 }
             }
-            delay(200)
+            delay(100)
             transfer("KUDOS:10")
         }
 

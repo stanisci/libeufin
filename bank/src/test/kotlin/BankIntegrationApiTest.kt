@@ -26,14 +26,52 @@ class BankIntegrationApiTest {
     // GET /taler-integration/withdrawal-operation/UUID
     @Test
     fun get() = bankSetup { _ ->
+        val amount = TalerAmount("KUDOS:9.0")
         // Check OK
-        client.postA("/accounts/merchant/withdrawals") {
-            json { "amount" to "KUDOS:9" } 
+        client.postA("/accounts/customer/withdrawals") {
+            json { "amount" to amount } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> { resp ->
             val uuid = resp.taler_withdraw_uri.split("/").last()
             client.get("/taler-integration/withdrawal-operation/$uuid")
-                .assertOk()
+                .assertOkJson<BankWithdrawalOperationStatus> {
+                assert(!it.selection_done)
+                assert(!it.aborted)
+                assert(!it.transfer_done)
+                assertEquals(amount, it.amount)
+                // TODO check all status
+            }
         }
+
+        // Check polling
+        client.postA("/accounts/customer/withdrawals") {
+            json { "amount" to amount } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse> { resp ->
+            val never_confirmed_uuid = resp.taler_withdraw_uri.split("/").last()
+            val confirmed_uuid = client.postA("/accounts/customer/withdrawals") {
+                json { "amount" to amount } 
+            }.assertOkJson<BankAccountCreateWithdrawalResponse>()
+                .taler_withdraw_uri.split("/").last()
+            withdrawalSelect(confirmed_uuid)
+
+            coroutineScope {
+                launch {  // Check polling succeed forward
+                    assertTime(100, 200) {
+                        client.get("/taler-integration/withdrawal-operation/$confirmed_uuid?long_poll_ms=1000")
+                            .assertOkJson<BankWithdrawalOperationStatus> { assert(it.selection_done) }
+                    }
+                }
+                launch {  // Check polling timeout forward
+                    assertTime(200, 300) {
+                        client.get("/taler-integration/withdrawal-operation/$never_confirmed_uuid?long_poll_ms=200")
+                            .assertOkJson<BankWithdrawalOperationStatus> { assert(!it.selection_done) }
+                    }
+                }
+                delay(100)
+                client.post("/withdrawals/$confirmed_uuid/confirm").assertNoContent()
+            }
+        }
+
+        
 
         // Check unknown
         client.get("/taler-integration/withdrawal-operation/${UUID.randomUUID()}")

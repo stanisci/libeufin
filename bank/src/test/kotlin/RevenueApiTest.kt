@@ -56,31 +56,31 @@ class RevenueApiTest {
             .assertHistory(5)
 
         // Check no useless polling
-        assertTime(0, 200) {
+        assertTime(0, 100) {
             client.getA("/accounts/merchant/taler-revenue/history?delta=-6&start=14&long_poll_ms=1000")
                 .assertHistory(5)
         }
 
         // Check no polling when find transaction
-        assertTime(0, 200) {
+        assertTime(0, 100) {
             client.getA("/accounts/merchant/taler-revenue/history?delta=6&long_poll_ms=1000")
                 .assertHistory(5)
         }
 
         coroutineScope {
             launch {  // Check polling succeed forward
-                assertTime(200, 300) {
+                assertTime(100, 200) {
                     client.getA("/accounts/merchant/taler-revenue/history?delta=2&start=13&long_poll_ms=1000")
                         .assertHistory(1)
                 }
             }
             launch {  // Check polling timeout forward
-                assertTime(200, 400) {
-                    client.getA("/accounts/merchant/taler-revenue/history?delta=1&start=15&long_poll_ms=300")
+                assertTime(200, 300) {
+                    client.getA("/accounts/merchant/taler-revenue/history?delta=1&start=16&long_poll_ms=200")
                         .assertNoContent()
                 }
             }
-            delay(200)
+            delay(100)
             transfer("KUDOS:10")
         }
 

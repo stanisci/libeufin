@@ -12,6 +12,7 @@ import tech.libeufin.bank.*
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.DeflaterOutputStream
+import java.util.UUID
 import tech.libeufin.util.CryptoUtil
 import tech.libeufin.util.*
 
@@ -170,6 +171,15 @@ suspend fun ApplicationTestBuilder.fillCashoutInfo(account: String) {
             }
         }
     }.assertNoContent()
+}
+
+suspend fun ApplicationTestBuilder.withdrawalSelect(uuid: String) {
+    client.post("/taler-integration/withdrawal-operation/$uuid") {
+        json {
+            "reserve_pub" to randEddsaPublicKey()
+            "selected_exchange" to exchangePayto
+        }
+    }.assertOk()
 }
 
 suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {

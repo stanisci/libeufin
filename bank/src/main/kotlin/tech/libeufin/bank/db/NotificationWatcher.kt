@@ -21,6 +21,7 @@ package tech.libeufin.bank
 
 import org.postgresql.ds.PGSimpleDataSource
 import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.*
 import tech.libeufin.util.*
@@ -29,9 +30,10 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
     private class CountedSharedFlow(val flow: MutableSharedFlow<Long>, var count: Int)
 
     private val bankTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
-    private val revenueTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
     private val outgoingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
     private val incomingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
+    private val revenueTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
+    private val withdrawalFlow = MutableSharedFlow<UUID>()
 
     init {
         kotlin.concurrent.thread(isDaemon = true) { 
@@ -42,30 +44,39 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                         conn.execSQLUpdate("LISTEN bank_tx")
                         conn.execSQLUpdate("LISTEN outgoing_tx")
                         conn.execSQLUpdate("LISTEN incoming_tx")
+                        conn.execSQLUpdate("LISTEN withdrawal_confirm")
 
                         while (true) {
                             conn.getNotifications(0) // Block until we receive at least one notification
                                 .forEach {
-                                if (it.name == "bank_tx") {
-                                    val (debtor, creditor, debitRow, creditRow) = it.parameter.split(' ', limit = 4).map { it.toLong() }
-                                    bankTxFlows[debtor]?.run {
-                                        flow.emit(debitRow)
+                                when (it.name) {
+                                    "bank_tx" -> {
+                                        val (debtor, creditor, debitRow, creditRow) = it.parameter.split(' ', limit = 4).map { it.toLong() }
+                                        bankTxFlows[debtor]?.run {
+                                            flow.emit(debitRow)
+                                        }
+                                        bankTxFlows[creditor]?.run {
+                                            flow.emit(creditRow)
+                                        }
                                     }
-                                    bankTxFlows[creditor]?.run {
-                                        flow.emit(creditRow)
+                                    "outgoing_tx" -> {
+                                        val (account, merchant, debitRow, creditRow) = it.parameter.split(' ', limit = 4).map { it.toLong() }
+                                        outgoingTxFlows[account]?.run {
+                                            flow.emit(debitRow)
+                                        }
+                                        revenueTxFlows[merchant]?.run {
+                                            flow.emit(creditRow)
+                                        }
                                     }
-                                } else if (it.name == "outgoing_tx") {
-                                    val (account, merchant, debitRow, creditRow) = it.parameter.split(' ', limit = 4).map { it.toLong() }
-                                    outgoingTxFlows[account]?.run {
-                                        flow.emit(debitRow)
+                                    "incoming_tx" -> {
+                                        val (account, row) = it.parameter.split(' ', limit = 2).map { it.toLong() }
+                                        incomingTxFlows[account]?.run {
+                                            flow.emit(row)
+                                        }
                                     }
-                                    revenueTxFlows[merchant]?.run {
-                                        flow.emit(creditRow)
-                                    }
-                                } else {
-                                    val (account, row) = it.parameter.split(' ', limit = 2).map { it.toLong() }
-                                    incomingTxFlows[account]?.run {
-                                        flow.emit(row)
+                                    "withdrawal_confirm" -> {
+                                        val uuid = UUID.fromString(it.parameter)
+                                        withdrawalFlow.emit(uuid)
                                     }
                                 }
                             }
@@ -78,7 +89,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         }
     }
 
-    private suspend fun listen(map: ConcurrentHashMap<Long, CountedSharedFlow>, account: Long, lambda: suspend (Flow<Long>) -> Unit) {
+    private suspend fun <R> listen(map: ConcurrentHashMap<Long, CountedSharedFlow>, account: Long, lambda: suspend (Flow<Long>) -> R): R {
         // Register listener
         val flow = map.compute(account) { _, v ->
             val tmp = v ?: CountedSharedFlow(MutableSharedFlow(), 0);
@@ -87,7 +98,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         }!!.flow;
 
         try {
-            lambda(flow)
+            return lambda(flow)
         } finally {
             // Unregister listener
             map.compute(account) { _, v ->
@@ -98,19 +109,18 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         }
     } 
 
-    suspend fun listenBank(account: Long, lambda: suspend (Flow<Long>) -> Unit) {
-        listen(bankTxFlows, account, lambda)
-    }
+    suspend fun <R> listenBank(account: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(bankTxFlows, account, lambda)
 
-    suspend fun listenOutgoing(account: Long, lambda: suspend (Flow<Long>) -> Unit) {
-        listen(outgoingTxFlows, account, lambda)
-    }
+    suspend fun <R> listenOutgoing(account: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(outgoingTxFlows, account, lambda)
 
-    suspend fun listenIncoming(account: Long, lambda: suspend (Flow<Long>) -> Unit) {
-        listen(incomingTxFlows, account, lambda)
-    }
+    suspend fun <R> listenIncoming(account: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(incomingTxFlows, account, lambda)
 
-    suspend fun listenRevenue(account: Long, lambda: suspend (Flow<Long>) -> Unit) {
-        listen(revenueTxFlows, account, lambda)
-    }
+    suspend fun <R> listenRevenue(account: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(revenueTxFlows, account, lambda)
+
+    suspend fun <R> listenWithdrawals(lambda: suspend (Flow<UUID>) -> R): R
+        = lambda(withdrawalFlow)
 }

@@ -756,6 +756,9 @@ UPDATE taler_withdrawal_operations
 
 -- Register incoming transaction
 CALL register_incoming(reserve_pub_local, tx_row_id);
+
+-- Notify new transaction
+PERFORM pg_notify('withdrawal_confirm', in_withdrawal_uuid::text);
 END $$;
 COMMENT ON FUNCTION confirm_taler_withdrawal
   IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';

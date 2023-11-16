@@ -27,6 +27,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import net.taler.common.errorcodes.TalerErrorCode
 import java.util.*
+import tech.libeufin.bank.PollingParams
 
 fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     get("/taler-integration/config") {
@@ -38,9 +39,9 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
 
     // Note: wopid acts as an authentication token.
     get("/taler-integration/withdrawal-operation/{wopid}") {
-        // TODO long poll
         val uuid = call.uuidUriComponent("wopid")
-        val op = db.withdrawal.getStatus(uuid) ?: throw notFound(
+        val params = PollingParams.extract(call.request.queryParameters)
+        val op = db.withdrawal.pollStatus(uuid, params) ?: throw notFound(
             "Withdrawal operation '$uuid' not found", 
             TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
         )
