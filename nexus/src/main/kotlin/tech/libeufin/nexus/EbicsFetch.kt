@@ -661,9 +661,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             when(whichDoc) {
                 SupportedDocument.CAMT_054 -> {
                     val res = parseNotification(maybeStdin, cfg.currency)
-                    res.incoming.forEach {
-                        println(it)
-                    }
+                    println(res)
                 }
                 else -> {
                     logger.error("Parsing $whichDoc not supported")
