@@ -418,6 +418,6 @@ fun prepEbics3Document(
         SupportedDocument.PAIN_002 -> prepAckRequest3(startDate)
         SupportedDocument.CAMT_052 -> prepReportRequest3(startDate)
         SupportedDocument.CAMT_053 -> prepStatementRequest3(startDate)
-        SupportedDocument.CAMT_054 -> prepReportRequest3(startDate)
+        SupportedDocument.CAMT_054 -> prepNotificationRequest3(startDate, isAppendix = true)
         SupportedDocument.PAIN_002_LOGS -> throw Exception("HAC (--only-logs) not available in EBICS 3")
     }
