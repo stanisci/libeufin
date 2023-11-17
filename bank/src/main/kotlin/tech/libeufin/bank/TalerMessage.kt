@@ -199,12 +199,11 @@ data class BearerToken(
     val bankCustomer: Long
 )
 
-// Type to return as GET /config response
 @Serializable
 data class Config(
-    val currency: CurrencySpecification,
-    val have_cashout: Boolean,
-    val fiat_currency: String?,
+    val currency: String,
+    val currency_specification: CurrencySpecification,
+    val allow_conversion: Boolean,
     val allow_registrations: Boolean,
     val allow_deletions: Boolean
 ) {
@@ -214,8 +213,10 @@ data class Config(
 
 @Serializable
 data class ConversionConfig(
-    val currency: String,
-    val fiat_currency: String?,
+    val regional_currency: String,
+    val regional_currency_specification: CurrencySpecification,
+    val fiat_currency: String,
+    val fiat_currency_specification: CurrencySpecification,
     val cashin_ratio: DecimalNumber,
     val cashin_fee: TalerAmount,
     val cashin_tiny_amount: TalerAmount,
@@ -229,6 +230,15 @@ data class ConversionConfig(
 ) {
     val name: String = "taler-conversion-info"
     val version: String = "0:0:0"
+}
+
+@Serializable
+data class TalerIntegrationConfigResponse(
+    val currency: String,
+    val currency_specification: CurrencySpecification,
+) {
+    val name: String = "taler-bank-integration";
+    val version: String = "0:0:0";
 }
 
 enum class CreditDebitInfo {
@@ -327,24 +337,13 @@ data class BankAccountGetWithdrawalResponse(
     val selected_exchange_account: String? = null
 )
 
-// GET /config response from the Taler Integration API.
-@Serializable
-data class TalerIntegrationConfigResponse(
-    val currency: String,
-    val currency_specification: CurrencySpecification,
-) {
-    val name: String = "taler-bank-integration";
-    val version: String = "0:0:0";
-}
-
 @Serializable
 data class CurrencySpecification(
     val name: String,
-    val decimal_separator: String,
+    val code: String,
     val num_fractional_input_digits: Int,
     val num_fractional_normal_digits: Int,
     val num_fractional_trailing_zero_digits: Int,
-    val is_currency_name_leading: Boolean,
     val alt_unit_names: Map<String, String>
 )
 

@@ -48,9 +48,9 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
     get("/config") {
         call.respond(
             Config(
-                currency = ctx.currencySpecification,
-                have_cashout = ctx.haveCashout,
-                fiat_currency = ctx.fiatCurrency,
+                currency = ctx.currency,
+                currency_specification = ctx.currencySpecification,
+                allow_conversion = ctx.allowConversion,
                 allow_registrations = !ctx.restrictRegistration,
                 allow_deletions = !ctx.restrictAccountDeletion
             )
@@ -438,7 +438,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     }
 }
 
-private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditional(ctx.haveCashout) {
+private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
     val TAN_RETRY_COUNTER: Int = 3;
     val TAN_VALIDITY_PERIOD: Duration = Duration.ofHours(1)
     val TAN_RETRANSMISSION_PERIOD: Duration = Duration.ofMinutes(1)

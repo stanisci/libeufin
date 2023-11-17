@@ -80,8 +80,8 @@ class StatsTest {
 
         monitorTalerIn(0, "KUDOS:0")
         monitorTalerOut(0, "KUDOS:0")
-        monitorCashin(0, "KUDOS:0", "FIAT:0")
-        monitorCashout(0, "KUDOS:0", "FIAT:0")
+        monitorCashin(0, "KUDOS:0", "EUR:0")
+        monitorCashout(0, "KUDOS:0", "EUR:0")
 
         addIncoming("KUDOS:3")
         monitorTalerIn(1, "KUDOS:3")
@@ -97,24 +97,24 @@ class StatsTest {
         transfer("KUDOS:42")
         monitorTalerOut(3, "KUDOS:82.5")
 
-        cashin("FIAT:10")
-        monitorCashin(1, "KUDOS:7.98", "FIAT:10")
-        cashin("FIAT:20")
-        monitorCashin(2, "KUDOS:23.96", "FIAT:30")
-        cashin("FIAT:40")
-        monitorCashin(3, "KUDOS:55.94", "FIAT:70")
+        cashin("EUR:10")
+        monitorCashin(1, "KUDOS:7.98", "EUR:10")
+        cashin("EUR:20")
+        monitorCashin(2, "KUDOS:23.96", "EUR:30")
+        cashin("EUR:40")
+        monitorCashin(3, "KUDOS:55.94", "EUR:70")
 
         cashout("KUDOS:3")
-        monitorCashout(1, "KUDOS:3", "FIAT:3.747")
+        monitorCashout(1, "KUDOS:3", "EUR:3.747")
         cashout("KUDOS:7.6")
-        monitorCashout(2, "KUDOS:10.6", "FIAT:13.244")
+        monitorCashout(2, "KUDOS:10.6", "EUR:13.244")
         cashout("KUDOS:12.3")
-        monitorCashout(3, "KUDOS:22.9", "FIAT:28.616")
+        monitorCashout(3, "KUDOS:22.9", "EUR:28.616")
 
         monitorTalerIn(3, "KUDOS:22.9")
         monitorTalerOut(3, "KUDOS:82.5")
-        monitorCashin(3, "KUDOS:55.94", "FIAT:70")
-        monitorCashout(3, "KUDOS:22.9", "FIAT:28.616")
+        monitorCashin(3, "KUDOS:55.94", "EUR:70")
+        monitorCashout(3, "KUDOS:22.9", "EUR:28.616")
     }
 
     @Test

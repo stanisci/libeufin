@@ -43,12 +43,12 @@ class ConversionApiTest {
         // Check conversion to
         client.get("/conversion-info/cashout-rate?amount_debit=KUDOS:1").assertOkJson<ConversionResponse> {
             assertEquals(TalerAmount("KUDOS:1"), it.amount_debit)
-            assertEquals(TalerAmount("FIAT:1.247"), it.amount_credit)
+            assertEquals(TalerAmount("EUR:1.247"), it.amount_credit)
         }
         // Check conversion from
-        client.get("/conversion-info/cashout-rate?amount_credit=FIAT:1.247").assertOkJson<ConversionResponse> {
+        client.get("/conversion-info/cashout-rate?amount_credit=EUR:1.247").assertOkJson<ConversionResponse> {
             assertEquals(TalerAmount("KUDOS:1"), it.amount_debit)
-            assertEquals(TalerAmount("FIAT:1.247"), it.amount_credit)
+            assertEquals(TalerAmount("EUR:1.247"), it.amount_credit)
         }
 
         // Too small
@@ -58,7 +58,7 @@ class ConversionApiTest {
         client.get("/conversion-info/cashout-rate")
             .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MISSING)
         // Both amount
-        client.get("/conversion-info/cashout-rate?amount_debit=FIAT:1&amount_credit=KUDOS:1")
+        client.get("/conversion-info/cashout-rate?amount_debit=EUR:1&amount_credit=KUDOS:1")
             .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
         // Wrong format
         client.get("/conversion-info/cashout-rate?amount_debit=1")
@@ -66,7 +66,7 @@ class ConversionApiTest {
         client.get("/conversion-info/cashout-rate?amount_credit=1")
             .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
         // Wrong currency
-        client.get("/conversion-info/cashout-rate?amount_debit=FIAT:1")
+        client.get("/conversion-info/cashout-rate?amount_debit=EUR:1")
             .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
         client.get("/conversion-info/cashout-rate?amount_credit=KUDOS:1")
             .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
@@ -79,14 +79,14 @@ class ConversionApiTest {
             Pair(0.75, 0.58), Pair(0.32, 0.24), Pair(0.66, 0.51)
         )) {
                 // Check conversion to
-            client.get("/conversion-info/cashin-rate?amount_debit=FIAT:$amount").assertOkJson<ConversionResponse> {
+            client.get("/conversion-info/cashin-rate?amount_debit=EUR:$amount").assertOkJson<ConversionResponse> {
                 assertEquals(TalerAmount("KUDOS:$converted"), it.amount_credit)
-                assertEquals(TalerAmount("FIAT:$amount"), it.amount_debit)
+                assertEquals(TalerAmount("EUR:$amount"), it.amount_debit)
             }
             // Check conversion from
             client.get("/conversion-info/cashin-rate?amount_credit=KUDOS:$converted").assertOkJson<ConversionResponse> {
                 assertEquals(TalerAmount("KUDOS:$converted"), it.amount_credit)
-                assertEquals(TalerAmount("FIAT:$amount"), it.amount_debit)
+                assertEquals(TalerAmount("EUR:$amount"), it.amount_debit)
             }
         }
 
@@ -94,7 +94,7 @@ class ConversionApiTest {
         client.get("/conversion-info/cashin-rate")
             .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MISSING)
         // Both amount
-        client.get("/conversion-info/cashin-rate?amount_debit=KUDOS:1&amount_credit=FIAT:1")
+        client.get("/conversion-info/cashin-rate?amount_debit=KUDOS:1&amount_credit=EUR:1")
             .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
         // Wrong format
         client.get("/conversion-info/cashin-rate?amount_debit=1")
@@ -104,7 +104,7 @@ class ConversionApiTest {
         // Wrong currency
         client.get("/conversion-info/cashin-rate?amount_debit=KUDOS:1")
             .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
-        client.get("/conversion-info/cashin-rate?amount_credit=FIAT:1")
+        client.get("/conversion-info/cashin-rate?amount_credit=EUR:1")
             .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
     }
 

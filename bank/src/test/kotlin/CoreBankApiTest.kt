@@ -993,7 +993,7 @@ class CoreBankCashoutApiTest {
         }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
         client.postA("/accounts/customer/cashouts") {
             json(req) {
-                "amount_credit" to "EUR:1"
+                "amount_credit" to "KUDOS:1"
             } 
         }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
     }
@@ -1149,10 +1149,10 @@ class CoreBankCashoutApiTest {
                 cashin_fee = TalerAmount("KUDOS:0.1"),
                 cashin_tiny_amount = TalerAmount("KUDOS:0.0001"),
                 cashin_rounding_mode = RoundingMode.nearest,
-                cashin_min_amount = TalerAmount("FIAT:0.0001"),
+                cashin_min_amount = TalerAmount("EUR:0.0001"),
                 cashout_ratio = DecimalNumber("1"),
-                cashout_fee = TalerAmount("FIAT:0.1"),
-                cashout_tiny_amount = TalerAmount("FIAT:0.0001"),
+                cashout_fee = TalerAmount("EUR:0.1"),
+                cashout_tiny_amount = TalerAmount("EUR:0.0001"),
                 cashout_rounding_mode = RoundingMode.nearest,
                 cashout_min_amount = TalerAmount("KUDOS:0.0001"),
             ))

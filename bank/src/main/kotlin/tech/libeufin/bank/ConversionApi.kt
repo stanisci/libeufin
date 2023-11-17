@@ -27,12 +27,14 @@ import java.util.*
 import tech.libeufin.util.*
 import net.taler.common.errorcodes.TalerErrorCode
 
-fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.haveCashout) {
+fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
     get("/conversion-info/config") {
         call.respond(
             ConversionConfig(
-                currency = ctx.currency,
-                fiat_currency = ctx.fiatCurrency,
+                regional_currency = ctx.currency,
+                regional_currency_specification = ctx.currencySpecification,
+                fiat_currency = ctx.fiatCurrency!!,
+                fiat_currency_specification = ctx.fiatCurrencySpecification!!,
                 cashin_ratio = ctx.conversionInfo!!.cashin_ratio,
                 cashin_fee = ctx.conversionInfo.cashin_fee,
                 cashin_tiny_amount = ctx.conversionInfo.cashin_tiny_amount,
