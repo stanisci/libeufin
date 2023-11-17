@@ -209,12 +209,25 @@ fun getTalerAmount(
     )
 }
 
+class WrongPaymentDirection(val msg: String) : Exception(msg)
+
+/**
+ * Parses a camt.054 document looking for outgoing payments.
+ *
+ * @param notifXml input document.
+ * @param acceptedCurrency currency accepted by Nexus
+ * @return the list of outgoing payments.
+ */
 private fun parseOutgoingTxNotif(
     notifXml: String,
     acceptedCurrency: String,
 ): List<OutgoingPayment> {
     val ret = mutableListOf<OutgoingPayment>()
     notificationForEachTx(notifXml) { bookDate ->
+        requireUniqueChildNamed("CdtDbtInd") {
+            if (focusElement.textContent != "DBIT")
+                throw WrongPaymentDirection("The payment is not outgoing, won't parse it")
+        }
         // Obtaining the amount.
         val amount: TalerAmount = requireUniqueChildNamed("Amt") {
             val currency = focusElement.getAttribute("Ccy")
@@ -236,14 +249,15 @@ private fun parseOutgoingTxNotif(
                 uidFromBank.append(focusElement.textContent)
             }
         }
+
         // Obtaining payment subject.
         val subject = StringBuilder()
-        requireUniqueChildNamed("RmtInf") {
-            this.mapEachChildNamed("Ustrd") {
-                val piece = this.focusElement.textContent
-                subject.append(piece)
+            requireUniqueChildNamed("RmtInf") {
+              this.mapEachChildNamed("Ustrd") {
+                  val piece = this.focusElement.textContent
+                  subject.append(piece)
+              }
             }
-        }
 
         // Obtaining the payer's details
         val creditorPayto = StringBuilder("payto://iban/")
@@ -291,7 +305,7 @@ private fun parseIncomingTxNotif(
         // Check the direction first.
         requireUniqueChildNamed("CdtDbtInd") {
             if (focusElement.textContent != "CRDT")
-                throw Exception("The payment is not incoming, won't parse it")
+                throw WrongPaymentDirection("The payment is not incoming, won't parse it")
         }
         val amount: TalerAmount = requireUniqueChildNamed("Amt") {
             val currency = focusElement.getAttribute("Ccy")
@@ -700,10 +714,16 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             val maybeStdin = generateSequence(::readLine).joinToString("\n")
             when(whichDoc) {
                 SupportedDocument.CAMT_054 -> {
-                    val outgoing = parseOutgoingTxNotif(maybeStdin, cfg.currency)
-                    val incoming = parseIncomingTxNotif(maybeStdin, cfg.currency)
-                    println(incoming)
-                    println(outgoing)
+                    try {
+                        println(parseIncomingTxNotif(maybeStdin, cfg.currency))
+                    } catch (e: WrongPaymentDirection) {
+                        logger.info("Input doesn't contain incoming payments")
+                    }
+                    try {
+                        println(parseOutgoingTxNotif(maybeStdin, cfg.currency))
+                    } catch (e: WrongPaymentDirection) {
+                        logger.debug("Input doesn't contain outgoing payments")
+                    }
                 }
                 else -> {
                     logger.error("Parsing $whichDoc not supported")
