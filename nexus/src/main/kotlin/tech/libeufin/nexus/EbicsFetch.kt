@@ -55,7 +55,11 @@ data class FetchContext(
      * Start date of the returned documents.  Only
      * used in --transient mode.
      */
-    var pinnedStart: Instant? = null
+    var pinnedStart: Instant? = null,
+    /**
+     * Logs to STDERR the init phase of an EBICS download request.
+     */
+    val ebicsExtraLog: Boolean = false
 )
 
 /**
@@ -91,6 +95,8 @@ private suspend inline fun downloadHelper(
             ebics2Req.orderParams
         )
     }
+    if (ctx.ebicsExtraLog)
+        logger.debug(initXml)
     try {
         return doEbicsDownload(
             ctx.httpClient,
@@ -505,6 +511,8 @@ fun ingestNotification(
     val filenamePrefix = "camt.054_P_" // Only these files have all the details.
     try {
         content.unzipForEach { fileName, xmlContent ->
+            if (!fileName.contains("camt.054", ignoreCase = true))
+                throw Exception("Asked for notification but did NOT get a camt.054")
             if (!fileName.startsWith(filenamePrefix)) return@unzipForEach
             val found = parseNotification(xmlContent, ctx.cfg.currency)
             incomingPayments += found.incoming
@@ -621,6 +629,9 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 "the parsing results.  It does not affect the database."
     ).flag(default = false)
 
+    private val ebicsExtraLog by option(
+        help = "Logs to STDERR the init phase of an EBICS download request"
+    ).flag(default = false)
 
     /**
      * This function collects the main steps of fetching banking records.
@@ -675,7 +686,8 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             HttpClient(),
             clientKeys,
             bankKeys,
-            whichDoc
+            whichDoc,
+            ebicsExtraLog = ebicsExtraLog
         )
         if (transient) {
             logger.info("Transient mode: fetching once and returning.")
