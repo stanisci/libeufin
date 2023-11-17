@@ -201,7 +201,7 @@ suspend fun ApplicationTestBuilder.withdrawalSelect(uuid: String) {
 }
 
 suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
-    return client.get("/cashout-rate?amount_debit=$amount")
+    return client.get("/conversion-info/cashout-rate?amount_debit=$amount")
         .assertOkJson<ConversionResponse>().amount_credit
 }
 

@@ -209,6 +209,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     }
     routing {
         coreBankApi(db, ctx)
+        conversionApi(db, ctx)
         bankIntegrationApi(db, ctx)
         wireGatewayApi(db, ctx)
         revenueApi(db)

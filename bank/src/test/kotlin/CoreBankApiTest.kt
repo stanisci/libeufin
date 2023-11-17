@@ -1342,84 +1342,8 @@ class CoreBankCashoutApiTest {
         }.assertHistory(10)
     }
 
-    // GET /cashout-rate
-    @Test
-    fun cashoutRate() = bankSetup { _ ->
-        // Check conversion to
-        client.get("/cashout-rate?amount_debit=KUDOS:1").assertOkJson<ConversionResponse> {
-            assertEquals(TalerAmount("KUDOS:1"), it.amount_debit)
-            assertEquals(TalerAmount("FIAT:1.247"), it.amount_credit)
-        }
-        // Check conversion from
-        client.get("/cashout-rate?amount_credit=FIAT:1.247").assertOkJson<ConversionResponse> {
-            assertEquals(TalerAmount("KUDOS:1"), it.amount_debit)
-            assertEquals(TalerAmount("FIAT:1.247"), it.amount_credit)
-        }
-
-        // Too small
-        client.get("/cashout-rate?amount_debit=KUDOS:0.08")
-            .assertConflict(TalerErrorCode.BANK_BAD_CONVERSION)
-        // No amount
-        client.get("/cashout-rate")
-            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MISSING)
-        // Both amount
-        client.get("/cashout-rate?amount_debit=FIAT:1&amount_credit=KUDOS:1")
-            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
-        // Wrong format
-        client.get("/cashout-rate?amount_debit=1")
-            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
-        client.get("/cashout-rate?amount_credit=1")
-            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
-        // Wrong currency
-        client.get("/cashout-rate?amount_debit=FIAT:1")
-            .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
-        client.get("/cashout-rate?amount_credit=KUDOS:1")
-            .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
-    }
-
-    // GET /cashin-rate
-    @Test
-    fun cashinRate() = bankSetup { _ ->
-       
-        for ((amount, converted) in listOf(
-            Pair(0.75, 0.58), Pair(0.32, 0.24), Pair(0.66, 0.51)
-        )) {
-             // Check conversion to
-            client.get("/cashin-rate?amount_debit=FIAT:$amount").assertOkJson<ConversionResponse> {
-                assertEquals(TalerAmount("KUDOS:$converted"), it.amount_credit)
-                assertEquals(TalerAmount("FIAT:$amount"), it.amount_debit)
-            }
-            // Check conversion from
-            client.get("/cashin-rate?amount_credit=KUDOS:$converted").assertOkJson<ConversionResponse> {
-                assertEquals(TalerAmount("KUDOS:$converted"), it.amount_credit)
-                assertEquals(TalerAmount("FIAT:$amount"), it.amount_debit)
-            }
-        }
-
-        // No amount
-        client.get("/cashin-rate")
-            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MISSING)
-        // Both amount
-        client.get("/cashin-rate?amount_debit=KUDOS:1&amount_credit=FIAT:1")
-            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
-        // Wrong format
-        client.get("/cashin-rate?amount_debit=1")
-            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
-        client.get("/cashin-rate?amount_credit=1")
-            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
-        // Wrong currency
-        client.get("/cashin-rate?amount_debit=KUDOS:1")
-            .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
-        client.get("/cashin-rate?amount_credit=FIAT:1")
-            .assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
-    }
-
     @Test
     fun notImplemented() = bankSetup("test_restrict.conf") { _ ->
-        client.get("/cashin-rate")
-            .assertNotImplemented()
-        client.get("/cashout-rate")
-            .assertNotImplemented()
         client.get("/accounts/customer/cashouts")
             .assertNotImplemented()
     }
