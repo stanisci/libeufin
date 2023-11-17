@@ -23,27 +23,14 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import java.time.Duration
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 import java.util.*
-import java.util.concurrent.TimeUnit
-import java.io.File
-import kotlin.random.Random
-import net.taler.common.errorcodes.TalerErrorCode
-import net.taler.wallet.crypto.Base32Crockford
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.future.await
 
 fun Routing.revenueApi(db: Database) { 
     auth(db, TokenScope.readonly) {
         get("/accounts/{USERNAME}/taler-revenue/history") {
             val params = HistoryParams.extract(context.request.queryParameters)
-            val bankAccount = call.bankAccount(db)
+            val bankAccount = call.bankInfo(db)
             val items = db.exchange.revenueHistory(params, bankAccount.bankAccountId);
         
             if (items.isEmpty()) {

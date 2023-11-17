@@ -24,16 +24,11 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.request.*
 import io.ktor.server.util.*
-import io.ktor.util.valuesOf
-import net.taler.common.errorcodes.TalerErrorCode
-import net.taler.wallet.crypto.Base32Crockford
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-import tech.libeufin.util.*
-import java.net.URL
 import java.time.*
 import java.time.temporal.*
 import java.util.*
+import net.taler.common.errorcodes.TalerErrorCode
+import tech.libeufin.util.*
 
 fun Parameters.expect(name: String): String 
     = get(name) ?: throw badRequest("Missing '$name' parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)

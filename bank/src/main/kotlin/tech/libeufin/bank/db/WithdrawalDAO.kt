@@ -27,37 +27,19 @@ import tech.libeufin.util.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.*
 
-/** Result status of withdrawal operation creation */
-enum class WithdrawalCreationResult {
-    SUCCESS,
-    ACCOUNT_NOT_FOUND,
-    ACCOUNT_IS_EXCHANGE,
-    BALANCE_INSUFFICIENT
-}
-
-/** Result status of withdrawal operation selection */
-enum class WithdrawalSelectionResult {
-    SUCCESS,
-    OP_NOT_FOUND,
-    ALREADY_SELECTED,
-    RESERVE_PUB_REUSE,
-    ACCOUNT_NOT_FOUND,
-    ACCOUNT_IS_NOT_EXCHANGE
-}
-
-/** Result status of withdrawal operation confirmation */
-enum class WithdrawalConfirmationResult {
-    SUCCESS,
-    OP_NOT_FOUND,
-    EXCHANGE_NOT_FOUND,
-    BALANCE_INSUFFICIENT,
-    NOT_SELECTED,
-    ABORTED
-}
-
+/** Data access logic for withdrawal operations */
 class WithdrawalDAO(private val db: Database) {
+    /** Result status of withdrawal operation creation */
+    enum class WithdrawalCreationResult {
+        Success,
+        UnknownAccount,
+        AccountIsExchange,
+        BalanceInsufficient
+    }
+
+    /** Create a new withdrawal operation */
     suspend fun create(
-        walletAccountUsername: String,
+        login: String,
         uuid: UUID,
         amount: TalerAmount
     ): WithdrawalCreationResult = db.serializable { conn ->
@@ -68,7 +50,7 @@ class WithdrawalDAO(private val db: Database) {
                 out_balance_insufficient
             FROM create_taler_withdrawal(?, ?, (?,?)::taler_amount);
         """)
-        stmt.setString(1, walletAccountUsername)
+        stmt.setString(1, login)
         stmt.setObject(2, uuid)
         stmt.setLong(3, amount.value)
         stmt.setInt(4, amount.frac)
@@ -76,14 +58,119 @@ class WithdrawalDAO(private val db: Database) {
             when {
                 !it.next() ->
                     throw internalServerError("No result from DB procedure create_taler_withdrawal")
-                it.getBoolean("out_account_not_found") -> WithdrawalCreationResult.ACCOUNT_NOT_FOUND
-                it.getBoolean("out_account_is_exchange") -> WithdrawalCreationResult.ACCOUNT_IS_EXCHANGE
-                it.getBoolean("out_balance_insufficient") -> WithdrawalCreationResult.BALANCE_INSUFFICIENT
-                else -> WithdrawalCreationResult.SUCCESS
+                it.getBoolean("out_account_not_found") -> WithdrawalCreationResult.UnknownAccount
+                it.getBoolean("out_account_is_exchange") -> WithdrawalCreationResult.AccountIsExchange
+                it.getBoolean("out_balance_insufficient") -> WithdrawalCreationResult.BalanceInsufficient
+                else -> WithdrawalCreationResult.Success
             }
         }
     }
 
+    /** Abort withdrawal operation [uuid] */
+    suspend fun abort(uuid: UUID): AbortResult = db.serializable { conn ->
+        val stmt = conn.prepareStatement("""
+            UPDATE taler_withdrawal_operations
+            SET aborted = NOT confirmation_done
+            WHERE withdrawal_uuid=?
+            RETURNING confirmation_done
+        """
+        )
+        stmt.setObject(1, uuid)
+        when (stmt.oneOrNull { it.getBoolean(1) }) {
+            null -> AbortResult.UnknownOperation
+            true -> AbortResult.AlreadyConfirmed
+            false -> AbortResult.Success
+        }
+    }
+
+    /** Result withdrawal operation selection */
+    sealed class WithdrawalSelectionResult {
+        data class Success(val confirmed: Boolean): WithdrawalSelectionResult()
+        object UnknownOperation: WithdrawalSelectionResult()
+        object AlreadySelected: WithdrawalSelectionResult()
+        object RequestPubReuse: WithdrawalSelectionResult()
+        object UnknownAccount: WithdrawalSelectionResult()
+        object AccountIsNotExchange: WithdrawalSelectionResult()
+    }
+
+    /** Set details ([exchangePayto] & [reservePub]) for withdrawal operation [uuid] */
+    suspend fun setDetails(
+        uuid: UUID,
+        exchangePayto: IbanPayTo,
+        reservePub: EddsaPublicKey
+    ): WithdrawalSelectionResult = db.serializable { conn ->
+        val subject = IncomingTxMetadata(reservePub).encode()
+        val stmt = conn.prepareStatement("""
+            SELECT
+                out_no_op,
+                out_already_selected,
+                out_reserve_pub_reuse,
+                out_account_not_found,
+                out_account_is_not_exchange,
+                out_confirmation_done
+            FROM select_taler_withdrawal(?, ?, ?, ?);
+        """
+        )
+        stmt.setObject(1, uuid)
+        stmt.setBytes(2, reservePub.raw)
+        stmt.setString(3, subject)
+        stmt.setString(4, exchangePayto.canonical)
+        stmt.executeQuery().use {
+            when {
+                !it.next() ->
+                    throw internalServerError("No result from DB procedure select_taler_withdrawal")
+                it.getBoolean("out_no_op") -> WithdrawalSelectionResult.UnknownOperation
+                it.getBoolean("out_already_selected") -> WithdrawalSelectionResult.AlreadySelected
+                it.getBoolean("out_reserve_pub_reuse") -> WithdrawalSelectionResult.RequestPubReuse
+                it.getBoolean("out_account_not_found") -> WithdrawalSelectionResult.UnknownAccount
+                it.getBoolean("out_account_is_not_exchange") -> WithdrawalSelectionResult.AccountIsNotExchange
+                else -> WithdrawalSelectionResult.Success(it.getBoolean("out_confirmation_done"))
+            }
+        }
+    }
+
+    /** Result status of withdrawal operation confirmation */
+    enum class WithdrawalConfirmationResult {
+        Success,
+        UnknownOperation,
+        UnknownExchange,
+        BalanceInsufficient,
+        NotSelected,
+        AlreadyAborted
+    }
+
+    /** Confirm withdrawal operation [uuid] */
+    suspend fun confirm(
+        uuid: UUID,
+        now: Instant
+    ): WithdrawalConfirmationResult = db.serializable { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT
+              out_no_op,
+              out_exchange_not_found,
+              out_balance_insufficient,
+              out_not_selected,
+              out_aborted
+            FROM confirm_taler_withdrawal(?, ?);
+        """
+        )
+        stmt.setObject(1, uuid)
+        stmt.setLong(2, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.executeQuery().use {
+            when {
+                !it.next() ->
+                    throw internalServerError("No result from DB procedure confirm_taler_withdrawal")
+                it.getBoolean("out_no_op") -> WithdrawalConfirmationResult.UnknownOperation
+                it.getBoolean("out_exchange_not_found") -> WithdrawalConfirmationResult.UnknownExchange
+                it.getBoolean("out_balance_insufficient") -> WithdrawalConfirmationResult.BalanceInsufficient
+                it.getBoolean("out_not_selected") -> WithdrawalConfirmationResult.NotSelected
+                it.getBoolean("out_aborted") -> WithdrawalConfirmationResult.AlreadyAborted
+                else -> WithdrawalConfirmationResult.Success
+            }
+        }
+    }
+
+    /** Get withdrawal operation [uuid] */
     suspend fun get(uuid: UUID): BankAccountGetWithdrawalResponse? = db.conn { conn -> 
         val stmt = conn.prepareStatement("""
             SELECT
@@ -100,11 +187,7 @@ class WithdrawalDAO(private val db: Database) {
         stmt.setObject(1, uuid)
         stmt.oneOrNull {
             BankAccountGetWithdrawalResponse(
-                amount = TalerAmount(
-                    it.getLong("amount_val"),
-                    it.getInt("amount_frac"),
-                    db.bankCurrency
-                ),
+                amount = it.getAmount("amount", db.bankCurrency),
                 selection_done = it.getBoolean("selection_done"),
                 confirmation_done = it.getBoolean("confirmation_done"),
                 aborted = it.getBoolean("aborted"),
@@ -114,6 +197,7 @@ class WithdrawalDAO(private val db: Database) {
         }
     }
 
+    /** Pool public status of operation [uuid] */
     suspend fun pollStatus(uuid: UUID, params: PollingParams): BankWithdrawalOperationStatus? {
         suspend fun load(): BankWithdrawalOperationStatus? = db.conn { conn ->
             val stmt = conn.prepareStatement("""
@@ -131,11 +215,7 @@ class WithdrawalDAO(private val db: Database) {
             stmt.setObject(1, uuid)
             stmt.oneOrNull {
                 BankWithdrawalOperationStatus(
-                    amount = TalerAmount(
-                        it.getLong("amount_val"),
-                        it.getInt("amount_frac"),
-                        db.bankCurrency
-                    ),
+                    amount = it.getAmount("amount", db.bankCurrency),
                     selection_done = it.getBoolean("selection_done"),
                     transfer_done = it.getBoolean("confirmation_done"),
                     aborted = it.getBoolean("aborted"),
@@ -170,103 +250,6 @@ class WithdrawalDAO(private val db: Database) {
             }
         } else {
             load()
-        }
-    }
-
-    /**
-     * Aborts one Taler withdrawal, only if it wasn't previously
-     * confirmed.  It returns false if the UPDATE didn't succeed.
-     */
-    suspend fun abort(uuid: UUID): AbortResult = db.serializable { conn ->
-        val stmt = conn.prepareStatement("""
-            UPDATE taler_withdrawal_operations
-            SET aborted = NOT confirmation_done
-            WHERE withdrawal_uuid=?
-            RETURNING confirmation_done
-        """
-        )
-        stmt.setObject(1, uuid)
-        when (stmt.oneOrNull { it.getBoolean(1) }) {
-            null -> AbortResult.NOT_FOUND
-            true -> AbortResult.CONFIRMED
-            false -> AbortResult.SUCCESS
-        }
-    }
-
-    /**
-     * Associates a reserve public key and an exchange to
-     * a Taler withdrawal.  Returns true on success, false
-     * otherwise.
-     *
-     * Checking for idempotency is entirely on the Kotlin side.
-     */
-    suspend fun setDetails(
-        uuid: UUID,
-        exchangePayto: IbanPayTo,
-        reservePub: EddsaPublicKey
-    ): Pair<WithdrawalSelectionResult, Boolean> = db.serializable { conn ->
-        val subject = IncomingTxMetadata(reservePub).encode()
-        val stmt = conn.prepareStatement("""
-            SELECT
-                out_no_op,
-                out_already_selected,
-                out_reserve_pub_reuse,
-                out_account_not_found,
-                out_account_is_not_exchange,
-                out_confirmation_done
-            FROM select_taler_withdrawal(?, ?, ?, ?);
-        """
-        )
-        stmt.setObject(1, uuid)
-        stmt.setBytes(2, reservePub.raw)
-        stmt.setString(3, subject)
-        stmt.setString(4, exchangePayto.canonical)
-        stmt.executeQuery().use {
-            val status = when {
-                !it.next() ->
-                    throw internalServerError("No result from DB procedure select_taler_withdrawal")
-                it.getBoolean("out_no_op") -> WithdrawalSelectionResult.OP_NOT_FOUND
-                it.getBoolean("out_already_selected") -> WithdrawalSelectionResult.ALREADY_SELECTED
-                it.getBoolean("out_reserve_pub_reuse") -> WithdrawalSelectionResult.RESERVE_PUB_REUSE
-                it.getBoolean("out_account_not_found") -> WithdrawalSelectionResult.ACCOUNT_NOT_FOUND
-                it.getBoolean("out_account_is_not_exchange") -> WithdrawalSelectionResult.ACCOUNT_IS_NOT_EXCHANGE
-                else -> WithdrawalSelectionResult.SUCCESS
-            }
-            Pair(status, it.getBoolean("out_confirmation_done"))
-        }
-    }
-
-    /**
-     * Confirms a Taler withdrawal: flags the operation as
-     * confirmed and performs the related wire transfer.
-     */
-    suspend fun confirm(
-        uuid: UUID,
-        now: Instant
-    ): WithdrawalConfirmationResult = db.serializable { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT
-              out_no_op,
-              out_exchange_not_found,
-              out_balance_insufficient,
-              out_not_selected,
-              out_aborted
-            FROM confirm_taler_withdrawal(?, ?);
-        """
-        )
-        stmt.setObject(1, uuid)
-        stmt.setLong(2, now.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.executeQuery().use {
-            when {
-                !it.next() ->
-                    throw internalServerError("No result from DB procedure confirm_taler_withdrawal")
-                it.getBoolean("out_no_op") -> WithdrawalConfirmationResult.OP_NOT_FOUND
-                it.getBoolean("out_exchange_not_found") -> WithdrawalConfirmationResult.EXCHANGE_NOT_FOUND
-                it.getBoolean("out_balance_insufficient") -> WithdrawalConfirmationResult.BALANCE_INSUFFICIENT
-                it.getBoolean("out_not_selected") -> WithdrawalConfirmationResult.NOT_SELECTED
-                it.getBoolean("out_aborted") -> WithdrawalConfirmationResult.ABORTED
-                else -> WithdrawalConfirmationResult.SUCCESS
-            }
         }
     }
 }

@@ -21,15 +21,13 @@ package tech.libeufin.bank
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.routing.Route
-import io.ktor.server.routing.RouteSelector
-import io.ktor.server.routing.RoutingResolveContext
-import io.ktor.server.routing.RouteSelectorEvaluation
 import io.ktor.util.AttributeKey
 import io.ktor.util.pipeline.PipelineContext
-import net.taler.common.errorcodes.TalerErrorCode
-import tech.libeufin.util.*
-import net.taler.wallet.crypto.Base32Crockford
 import java.time.Instant
+import net.taler.common.errorcodes.TalerErrorCode
+import net.taler.wallet.crypto.Base32Crockford
+import tech.libeufin.bank.AccountDAO.*
+import tech.libeufin.util.*
 
 private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin");
 
@@ -136,7 +134,7 @@ private suspend fun doBasicAuth(db: Database, encodedCredentials: String): Strin
         TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     val (login, plainPassword) = userAndPassSplit
-    val passwordHash = db.customerPasswordHashFromLogin(login) ?: throw unauthorized()
+    val passwordHash = db.account.passwordHash(login) ?: throw unauthorized()
     if (!CryptoUtil.checkpw(plainPassword, passwordHash)) return null
     return login
 }
@@ -171,7 +169,7 @@ private suspend fun doTokenAuth(
             e.message, TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
         )
     }
-    val maybeToken: BearerToken? = db.bearerTokenGet(tokenBytes)
+    val maybeToken: BearerToken? = db.token.get(tokenBytes)
     if (maybeToken == null) {
         logger.error("Auth token not found")
         return null
@@ -189,7 +187,7 @@ private suspend fun doTokenAuth(
         return null
     }
     // Getting the related username.
-    return db.customerLoginFromId(maybeToken.bankCustomer) ?: throw libeufinError(
+    return db.account.login(maybeToken.bankCustomer) ?: throw libeufinError(
         HttpStatusCode.InternalServerError,
         "Customer not found, despite token mentions it.",
         TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE

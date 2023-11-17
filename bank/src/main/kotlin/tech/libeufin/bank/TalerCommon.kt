@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2019 Stanisci and Dold.
+ * Copyright (C) 2023 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -20,26 +20,24 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
-import kotlinx.serialization.Serializable
-import net.taler.wallet.crypto.Base32Crockford
-import net.taler.wallet.crypto.EncodingException
+import java.net.*
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.TimeUnit
 import java.util.*
-import java.math.BigInteger
-import java.net.*
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.*
-import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.*
 import net.taler.common.errorcodes.TalerErrorCode
+import net.taler.wallet.crypto.Base32Crockford
+import net.taler.wallet.crypto.EncodingException
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.slf4j.event.Level
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.TalerCommon")
 const val MAX_SAFE_INTEGER = 9007199254740991L; // 2^53 - 1

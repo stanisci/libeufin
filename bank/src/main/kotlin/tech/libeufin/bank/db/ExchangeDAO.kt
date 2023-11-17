@@ -25,34 +25,14 @@ import java.time.Duration
 import java.util.concurrent.TimeUnit
 import tech.libeufin.util.*
 
-/** Result status of taler transfer transaction */
-enum class TalerTransferResult {
-    NO_DEBITOR,
-    NOT_EXCHANGE,
-    NO_CREDITOR,
-    BOTH_EXCHANGE,
-    REQUEST_UID_REUSE,
-    BALANCE_INSUFFICIENT,
-    SUCCESS
-}
-
-/** Result status of taler add incoming transaction */
-enum class TalerAddIncomingResult {
-    NO_DEBITOR,
-    NOT_EXCHANGE,
-    NO_CREDITOR,
-    BOTH_EXCHANGE,
-    RESERVE_PUB_REUSE,
-    BALANCE_INSUFFICIENT,
-    SUCCESS
-}
-
+/** Data access logic for exchange specific logic */
 class ExchangeDAO(private val db: Database) {
+    /** Query [exchangeId] history of taler incoming transactions  */
     suspend fun incomingHistory(
         params: HistoryParams, 
-        bankAccountId: Long
+        exchangeId: Long
     ): List<IncomingReserveTransaction> 
-        = db.poolHistory(params, bankAccountId, NotificationWatcher::listenIncoming,  """
+        = db.poolHistory(params, exchangeId, NotificationWatcher::listenIncoming,  """
             SELECT
                 bank_transaction_id
                 ,transaction_date
@@ -66,24 +46,19 @@ class ExchangeDAO(private val db: Database) {
         """) {
             IncomingReserveTransaction(
                 row_id = it.getLong("bank_transaction_id"),
-                date = TalerProtocolTimestamp(
-                    it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()
-                ),
-                amount = TalerAmount(
-                    it.getLong("amount_val"),
-                    it.getInt("amount_frac"),
-                    db.bankCurrency
-                ),
+                date = it.getTalerTimestamp("transaction_date"),
+                amount = it.getAmount("amount", db.bankCurrency),
                 debit_account = it.getString("debtor_payto_uri"),
                 reserve_pub = EddsaPublicKey(it.getBytes("reserve_pub")),
             )
         }
-
+    
+    /** Query [exchangeId] history of taler outgoing transactions  */
     suspend fun outgoingHistory(
         params: HistoryParams, 
-        bankAccountId: Long
+        exchangeId: Long
     ): List<OutgoingTransaction> 
-        = db.poolHistory(params, bankAccountId, NotificationWatcher::listenOutgoing,  """
+        = db.poolHistory(params, exchangeId, NotificationWatcher::listenOutgoing,  """
             SELECT
                 bank_transaction_id
                 ,transaction_date
@@ -98,25 +73,20 @@ class ExchangeDAO(private val db: Database) {
         """) {
             OutgoingTransaction(
                 row_id = it.getLong("bank_transaction_id"),
-                date = TalerProtocolTimestamp(
-                    it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()
-                ),
-                amount = TalerAmount(
-                    it.getLong("amount_val"),
-                    it.getInt("amount_frac"),
-                    db.bankCurrency
-                ),
+                date = it.getTalerTimestamp("transaction_date"),
+                amount = it.getAmount("amount", db.bankCurrency),
                 credit_account = it.getString("creditor_payto_uri"),
                 wtid = ShortHashCode(it.getBytes("wtid")),
                 exchange_base_url = it.getString("exchange_base_url")
             )
         }
 
+    /** Query [merchantId] history of taler outgoing transactions to its account */
     suspend fun revenueHistory(
         params: HistoryParams, 
-        bankAccountId: Long
+        merchantId: Long
     ): List<MerchantIncomingBankTransaction> 
-        = db.poolHistory(params, bankAccountId, NotificationWatcher::listenRevenue, """
+        = db.poolHistory(params, merchantId, NotificationWatcher::listenRevenue, """
             SELECT
                 bank_transaction_id
                 ,transaction_date
@@ -131,35 +101,31 @@ class ExchangeDAO(private val db: Database) {
         """, "creditor_account_id") {
             MerchantIncomingBankTransaction(
                 row_id = it.getLong("bank_transaction_id"),
-                date = TalerProtocolTimestamp(
-                    it.getLong("transaction_date").microsToJavaInstant() ?: throw faultyTimestampByBank()
-                ),
-                amount = TalerAmount(
-                    it.getLong("amount_val"),
-                    it.getInt("amount_frac"),
-                    db.bankCurrency
-                ),
+                date = it.getTalerTimestamp("transaction_date"),
+                amount = it.getAmount("amount", db.bankCurrency),
                 debit_account = it.getString("debtor_payto_uri"),
                 wtid = ShortHashCode(it.getBytes("wtid")),
                 exchange_url = it.getString("exchange_base_url")
             )
         }
 
-    data class TransferResult(
-        val txResult: TalerTransferResult,
-        /**
-         * bank transaction that backs this Taler transfer request.
-         * This is the debit transactions associated to the exchange
-         * bank account.
-         */
-        val txRowId: Long? = null,
-        val timestamp: TalerProtocolTimestamp? = null
-    )
+    /** Result of taler transfer transaction creation */
+    sealed class TransferResult {
+        /** Transaction [id] and wire transfer [timestamp] */
+        data class Success(val id: Long, val timestamp: TalerProtocolTimestamp): TransferResult()
+        object NotAnExchange: TransferResult()
+        object UnknownExchange: TransferResult()
+        object UnknownCreditor: TransferResult()
+        object BothPartyAreExchange: TransferResult()
+        object BalanceInsufficient: TransferResult()
+        object ReserveUidReuse: TransferResult()
+    }
 
+    /** Perform a Taler transfer */
     suspend fun transfer(
         req: TransferRequest,
-        username: String,
-        timestamp: Instant
+        login: String,
+        now: Instant
     ): TransferResult = db.serializable { conn ->
         val subject = OutgoingTxMetadata(req.wtid, req.exchange_base_url).encode()
         val stmt = conn.prepareStatement("""
@@ -187,49 +153,46 @@ class ExchangeDAO(private val db: Database) {
         stmt.setInt(5, req.amount.frac)
         stmt.setString(6, req.exchange_base_url.url)
         stmt.setString(7, req.credit_account.canonical)
-        stmt.setString(8, username)
-        stmt.setLong(9, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setString(8, login)
+        stmt.setLong(9, now.toDbMicros() ?: throw faultyTimestampByBank())
 
         stmt.executeQuery().use {
             when {
                 !it.next() ->
                     throw internalServerError("SQL function taler_transfer did not return anything.")
-                it.getBoolean("out_debtor_not_found") ->
-                    TransferResult(TalerTransferResult.NO_DEBITOR)
-                it.getBoolean("out_debtor_not_exchange") ->
-                    TransferResult(TalerTransferResult.NOT_EXCHANGE)
-                it.getBoolean("out_creditor_not_found") ->
-                    TransferResult(TalerTransferResult.NO_CREDITOR)
-                it.getBoolean("out_both_exchanges") ->
-                    TransferResult(TalerTransferResult.BOTH_EXCHANGE)
-                it.getBoolean("out_exchange_balance_insufficient") ->
-                    TransferResult(TalerTransferResult.BALANCE_INSUFFICIENT)
-                it.getBoolean("out_request_uid_reuse") ->
-                    TransferResult(TalerTransferResult.REQUEST_UID_REUSE)
-                else -> {
-                    TransferResult(
-                        txResult = TalerTransferResult.SUCCESS,
-                        txRowId = it.getLong("out_tx_row_id"),
-                        timestamp = TalerProtocolTimestamp(
-                            it.getLong("out_timestamp").microsToJavaInstant() ?: throw faultyTimestampByBank()
-                        )
-                    )
-                }
+                it.getBoolean("out_debtor_not_found") -> TransferResult.UnknownExchange
+                it.getBoolean("out_debtor_not_exchange") -> TransferResult.NotAnExchange
+                it.getBoolean("out_creditor_not_found") -> TransferResult.UnknownCreditor
+                it.getBoolean("out_both_exchanges") -> TransferResult.BothPartyAreExchange
+                it.getBoolean("out_exchange_balance_insufficient") -> TransferResult.BalanceInsufficient
+                it.getBoolean("out_request_uid_reuse") -> TransferResult.ReserveUidReuse
+                else -> TransferResult.Success(
+                    id = it.getLong("out_tx_row_id"),
+                    timestamp = it.getTalerTimestamp("out_timestamp")
+                )
             }
         }
     }
 
-    data class AddIncomingResult(
-        val txResult: TalerAddIncomingResult,
-        val txRowId: Long? = null
-    )
+    /** Result of taler add incoming transaction creation */
+    sealed class AddIncomingResult {
+        /** Transaction [id] and wire transfer [timestamp] */
+        data class Success(val id: Long, val timestamp: TalerProtocolTimestamp): AddIncomingResult()
+        object NotAnExchange: AddIncomingResult()
+        object UnknownExchange: AddIncomingResult()
+        object UnknownDebtor: AddIncomingResult()
+        object BothPartyAreExchange: AddIncomingResult()
+        object ReservePubReuse: AddIncomingResult()
+        object BalanceInsufficient: AddIncomingResult()
+    }
 
+     /** Add a new taler incoming transaction */
     suspend fun addIncoming(
         req: AddIncomingRequest,
-        username: String,
-        timestamp: Instant
-        ): AddIncomingResult = db.serializable { conn ->
-            val subject = IncomingTxMetadata(req.reserve_pub).encode()
+        login: String,
+        now: Instant
+    ): AddIncomingResult = db.serializable { conn ->
+        val subject = IncomingTxMetadata(req.reserve_pub).encode()
         val stmt = conn.prepareStatement("""
             SELECT
                 out_creditor_not_found
@@ -252,31 +215,23 @@ class ExchangeDAO(private val db: Database) {
         stmt.setLong(3, req.amount.value)
         stmt.setInt(4, req.amount.frac)
         stmt.setString(5, req.debit_account.canonical)
-        stmt.setString(6, username)
-        stmt.setLong(7, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setString(6, login)
+        stmt.setLong(7, now.toDbMicros() ?: throw faultyTimestampByBank())
 
         stmt.executeQuery().use {
             when {
                 !it.next() ->
                     throw internalServerError("SQL function taler_add_incoming did not return anything.")
-                it.getBoolean("out_creditor_not_found") ->
-                    AddIncomingResult(TalerAddIncomingResult.NO_CREDITOR)
-                it.getBoolean("out_creditor_not_exchange") ->
-                    AddIncomingResult(TalerAddIncomingResult.NOT_EXCHANGE)
-                it.getBoolean("out_debtor_not_found") ->
-                    AddIncomingResult(TalerAddIncomingResult.NO_DEBITOR)
-                it.getBoolean("out_both_exchanges") ->
-                    AddIncomingResult(TalerAddIncomingResult.BOTH_EXCHANGE)
-                it.getBoolean("out_debitor_balance_insufficient") ->
-                    AddIncomingResult(TalerAddIncomingResult.BALANCE_INSUFFICIENT)
-                it.getBoolean("out_reserve_pub_reuse") ->
-                    AddIncomingResult(TalerAddIncomingResult.RESERVE_PUB_REUSE)
-                else -> {
-                    AddIncomingResult(
-                        txResult = TalerAddIncomingResult.SUCCESS,
-                        txRowId = it.getLong("out_tx_row_id")
-                    )
-                }
+                it.getBoolean("out_creditor_not_found") -> AddIncomingResult.UnknownExchange 
+                it.getBoolean("out_creditor_not_exchange") -> AddIncomingResult.NotAnExchange
+                it.getBoolean("out_debtor_not_found") -> AddIncomingResult.UnknownDebtor
+                it.getBoolean("out_both_exchanges") -> AddIncomingResult.BothPartyAreExchange
+                it.getBoolean("out_debitor_balance_insufficient") -> AddIncomingResult.BalanceInsufficient
+                it.getBoolean("out_reserve_pub_reuse") -> AddIncomingResult.ReservePubReuse
+                else -> AddIncomingResult.Success(
+                    id = it.getLong("out_tx_row_id"),
+                    timestamp = TalerProtocolTimestamp(now)
+                )
             }
         }
     }

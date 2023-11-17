@@ -1,19 +1,37 @@
-import io.ktor.http.*
-import io.ktor.client.statement.*
-import io.ktor.client.request.*
+/*
+ * This file is part of LibEuFin.
+ * Copyright (C) 2023 Taler Systems S.A.
+
+ * LibEuFin is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation; either version 3, or
+ * (at your option) any later version.
+
+ * LibEuFin is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General
+ * Public License for more details.
+
+ * You should have received a copy of the GNU Affero General Public
+ * License along with LibEuFin; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>
+ */
+
 import io.ktor.client.HttpClient
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import io.ktor.server.testing.*
-import kotlinx.coroutines.*
-import kotlinx.serialization.json.*
-import net.taler.wallet.crypto.Base32Crockford
-import net.taler.common.errorcodes.TalerErrorCode
-import kotlin.test.*
-import tech.libeufin.bank.*
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.DeflaterOutputStream
-import java.util.UUID
-import tech.libeufin.util.CryptoUtil
+import kotlin.test.*
+import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
+import net.taler.common.errorcodes.TalerErrorCode
+import net.taler.wallet.crypto.Base32Crockford
+import tech.libeufin.bank.*
+import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.*
 
 /* ----- Setup ----- */
@@ -51,7 +69,7 @@ fun bankSetup(
 ) {
     setup(conf) { db, ctx -> 
         // Creating the exchange and merchant accounts first.
-        assertEquals(CustomerCreationResult.SUCCESS, db.accountCreate(
+        assertEquals(AccountCreationResult.Success, db.account.create(
             login = "merchant",
             password = "merchant-password",
             name = "Merchant",
@@ -61,7 +79,7 @@ fun bankSetup(
             isPublic = false,
             bonus = null
         ))
-        assertEquals(CustomerCreationResult.SUCCESS, db.accountCreate(
+        assertEquals(AccountCreationResult.Success, db.account.create(
             login = "exchange",
             password = "exchange-password",
             name = "Exchange",
@@ -71,7 +89,7 @@ fun bankSetup(
             isPublic = false,
             bonus = null
         ))
-        assertEquals(CustomerCreationResult.SUCCESS, db.accountCreate(
+        assertEquals(AccountCreationResult.Success, db.account.create(
             login = "customer",
             password = "customer-password",
             name = "Customer",
@@ -230,10 +248,6 @@ suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
     val err = json<TalerError>()
     assertEquals(code.code, err.code)
     return this
-}
-
-fun BankTransactionResult.assertSuccess() {
-    assertEquals(BankTransactionResult.SUCCESS, this)
 }
 
 suspend fun assertTime(min: Int, max: Int, lambda: suspend () -> Unit) {

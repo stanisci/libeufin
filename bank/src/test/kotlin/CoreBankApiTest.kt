@@ -1,28 +1,39 @@
+/*
+ * This file is part of LibEuFin.
+ * Copyright (C) 2023 Taler Systems S.A.
+
+ * LibEuFin is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation; either version 3, or
+ * (at your option) any later version.
+
+ * LibEuFin is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General
+ * Public License for more details.
+
+ * You should have received a copy of the GNU Affero General Public
+ * License along with LibEuFin; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>
+ */
+
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.client.HttpClient
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.engine.*
 import io.ktor.server.testing.*
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import net.taler.wallet.crypto.Base32Crockford
-import net.taler.common.errorcodes.TalerErrorCode
-import org.junit.Test
-import org.postgresql.jdbc.PgConnection
-import tech.libeufin.bank.*
-import tech.libeufin.util.CryptoUtil
-import java.sql.DriverManager
 import java.time.Duration
 import java.time.Instant
-import java.time.temporal.ChronoUnit
 import java.util.*
-import java.io.File
-import kotlin.random.Random
 import kotlin.test.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.JsonElement
+import net.taler.common.errorcodes.TalerErrorCode
+import net.taler.wallet.crypto.Base32Crockford
+import org.junit.Test
+import tech.libeufin.bank.*
 
 class CoreBankConfigTest {
     // GET /config
@@ -60,7 +71,7 @@ class CoreBankTokenApiTest {
             json { "scope" to "readonly" }
         }.assertOkJson<TokenSuccessResponse> {
             // Checking that the token lifetime defaulted to 24 hours.
-            val token = db.bearerTokenGet(Base32Crockford.decode(it.access_token))
+            val token = db.token.get(Base32Crockford.decode(it.access_token))
             val lifeTime = Duration.between(token!!.creationTime, token.expirationTime)
             assertEquals(Duration.ofDays(1), lifeTime)
         }
@@ -70,7 +81,7 @@ class CoreBankTokenApiTest {
             json { "scope" to "readonly" }
         }.assertOkJson<TokenSuccessResponse> {
             // Checking that the token lifetime defaulted to 24 hours.
-            val token = db.bearerTokenGet(Base32Crockford.decode(it.access_token))
+            val token = db.token.get(Base32Crockford.decode(it.access_token))
             val lifeTime = Duration.between(token!!.creationTime, token.expirationTime)
             assertEquals(Duration.ofDays(1), lifeTime)
         }

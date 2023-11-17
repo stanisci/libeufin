@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Stanisci and Dold.
+ * Copyright (C) 2023 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -23,22 +23,21 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.request.*
-import io.ktor.server.util.*
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.RouteSelector
-import io.ktor.server.routing.RoutingResolveContext
 import io.ktor.server.routing.RouteSelectorEvaluation
-import io.ktor.util.valuesOf
+import io.ktor.server.routing.RoutingResolveContext
+import io.ktor.server.util.*
 import io.ktor.util.pipeline.PipelineContext
-import net.taler.common.errorcodes.TalerErrorCode
-import net.taler.wallet.crypto.Base32Crockford
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-import tech.libeufin.util.*
 import java.net.URL
 import java.time.*
 import java.time.temporal.*
 import java.util.*
+import net.taler.common.errorcodes.TalerErrorCode
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import tech.libeufin.bank.AccountDAO.*
+import tech.libeufin.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers")
 val reservedAccounts = setOf("admin", "bank")
@@ -50,8 +49,8 @@ fun ApplicationCall.expectUriComponent(componentName: String) =
     )
 
 /** Retrieve the bank account info for the selected username*/
-suspend fun ApplicationCall.bankAccount(db: Database): BankAccount
-    = db.bankAccountGetFromCustomerLogin(username) ?: throw notFound(
+suspend fun ApplicationCall.bankInfo(db: Database): BankInfo
+    = db.account.bankInfo(username) ?: throw notFound(
         "Bank account for customer $username not found",
         TalerErrorCode.BANK_UNKNOWN_ACCOUNT
     )
@@ -129,7 +128,7 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? =
         pwStr = String(pwBuf, Charsets.UTF_8)
     }
     
-    val res = db.accountCreate(
+    val res = db.account.create(
         login = "admin",
         password = pwStr,
         name = "Bank administrator",
@@ -140,10 +139,10 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? =
         bonus = null
     )
     return when (res) {
-        CustomerCreationResult.BALANCE_INSUFFICIENT -> false
-        CustomerCreationResult.CONFLICT_LOGIN -> true
-        CustomerCreationResult.CONFLICT_PAY_TO -> false
-        CustomerCreationResult.SUCCESS -> true
+        AccountCreationResult.BonusBalanceInsufficient -> false
+        AccountCreationResult.LoginReuse -> true
+        AccountCreationResult.PayToReuse -> false
+        AccountCreationResult.Success -> true
     }
 }
 

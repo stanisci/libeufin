@@ -19,28 +19,35 @@
 
 package tech.libeufin.bank
 
-import org.postgresql.ds.PGSimpleDataSource
-import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
-import kotlinx.coroutines.flow.*
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import org.postgresql.ds.PGSimpleDataSource
 import tech.libeufin.util.*
 
+/** Postgres notification collector and distributor */
 internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
+    // Transaction id ShareFlow that are manually counted for manual garbage collection
     private class CountedSharedFlow(val flow: MutableSharedFlow<Long>, var count: Int)
 
+    // Transaction flows, the keys are the bank account id
     private val bankTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
     private val outgoingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
     private val incomingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
     private val revenueTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
+    // Withdrawal confirmation flow, the key is the public withdrawal UUID
     private val withdrawalFlow = MutableSharedFlow<UUID>()
 
     init {
+        // Run notification logic in a separated thread
         kotlin.concurrent.thread(isDaemon = true) { 
             runBlocking {
                 while (true) {
                     try {
                         val conn = pgSource.pgConnection()
+
+                        // Listen to all notifications channels
                         conn.execSQLUpdate("LISTEN bank_tx")
                         conn.execSQLUpdate("LISTEN outgoing_tx")
                         conn.execSQLUpdate("LISTEN incoming_tx")
@@ -49,6 +56,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                         while (true) {
                             conn.getNotifications(0) // Block until we receive at least one notification
                                 .forEach {
+                                // Extract informations and dispatch
                                 when (it.name) {
                                     "bank_tx" -> {
                                         val (debtor, creditor, debitRow, creditRow) = it.parameter.split(' ', limit = 4).map { it.toLong() }
@@ -89,8 +97,9 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         }
     }
 
+    /** Listen to transaction ids flow from [map] for [account] using [lambda]*/
     private suspend fun <R> listen(map: ConcurrentHashMap<Long, CountedSharedFlow>, account: Long, lambda: suspend (Flow<Long>) -> R): R {
-        // Register listener
+        // Register listener, create a new flow if missing
         val flow = map.compute(account) { _, v ->
             val tmp = v ?: CountedSharedFlow(MutableSharedFlow(), 0);
             tmp.count++;
@@ -100,7 +109,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         try {
             return lambda(flow)
         } finally {
-            // Unregister listener
+            // Unregister listener, removing unused flow
             map.compute(account) { _, v ->
                 v!!;
                 v.count--;
@@ -109,18 +118,19 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         }
     } 
 
+    /** Listen for new bank transactions for [account] */
     suspend fun <R> listenBank(account: Long, lambda: suspend (Flow<Long>) -> R): R
         = listen(bankTxFlows, account, lambda)
-
-    suspend fun <R> listenOutgoing(account: Long, lambda: suspend (Flow<Long>) -> R): R
-        = listen(outgoingTxFlows, account, lambda)
-
-    suspend fun <R> listenIncoming(account: Long, lambda: suspend (Flow<Long>) -> R): R
-        = listen(incomingTxFlows, account, lambda)
-
-    suspend fun <R> listenRevenue(account: Long, lambda: suspend (Flow<Long>) -> R): R
-        = listen(revenueTxFlows, account, lambda)
-
+    /** Listen for new taler outgoing transactions from [account] */
+    suspend fun <R> listenOutgoing(exchange: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(outgoingTxFlows, exchange, lambda)
+    /** Listen for new taler incoming transactions to [account] */
+    suspend fun <R> listenIncoming(exchange: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(incomingTxFlows, exchange, lambda)
+    /** Listen for new taler outgoing transactions to [account] */
+    suspend fun <R> listenRevenue(merchant: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(revenueTxFlows, merchant, lambda)
+    /** Listen for new withdrawal confirmations */
     suspend fun <R> listenWithdrawals(lambda: suspend (Flow<UUID>) -> R): R
         = lambda(withdrawalFlow)
 }

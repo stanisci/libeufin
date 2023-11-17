@@ -25,9 +25,9 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import net.taler.common.errorcodes.TalerErrorCode
 import java.util.*
-import tech.libeufin.bank.PollingParams
+import net.taler.common.errorcodes.TalerErrorCode
+import tech.libeufin.bank.WithdrawalDAO.*
 
 fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     get("/taler-integration/config") {
@@ -59,39 +59,39 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
         val opId = call.uuidUriComponent("wopid")
         val req = call.receive<BankWithdrawalOperationPostRequest>()
 
-        val (result, confirmationDone) = db.withdrawal.setDetails(
+        val res = db.withdrawal.setDetails(
             opId, req.selected_exchange, req.reserve_pub
         )
-        when (result) {
-            WithdrawalSelectionResult.OP_NOT_FOUND -> throw notFound(
+        when (res) {
+            is WithdrawalSelectionResult.UnknownOperation -> throw notFound(
                 "Withdrawal operation $opId not found", 
                 TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
             )
-            WithdrawalSelectionResult.ALREADY_SELECTED -> throw conflict(
+            is WithdrawalSelectionResult.AlreadySelected -> throw conflict(
                 "Cannot select different exchange and reserve pub. under the same withdrawal operation",
                 TalerErrorCode.BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT
             )
-            WithdrawalSelectionResult.RESERVE_PUB_REUSE -> throw conflict(
+            is WithdrawalSelectionResult.RequestPubReuse -> throw conflict(
                 "Reserve pub. already used", 
                 TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT
             )
-            WithdrawalSelectionResult.ACCOUNT_NOT_FOUND -> throw conflict(
+            is WithdrawalSelectionResult.UnknownAccount -> throw conflict(
                 "Account ${req.selected_exchange.canonical} not found",
                 TalerErrorCode.BANK_UNKNOWN_ACCOUNT
             )
-            WithdrawalSelectionResult.ACCOUNT_IS_NOT_EXCHANGE -> throw conflict(
+            is WithdrawalSelectionResult.AccountIsNotExchange -> throw conflict(
                 "Account ${req.selected_exchange.canonical} is not an exchange",
                 TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
             )
-            WithdrawalSelectionResult.SUCCESS -> {
-                val confirmUrl: String? = if (ctx.spaCaptchaURL !== null && !confirmationDone) {
+            is WithdrawalSelectionResult.Success -> {
+                val confirmUrl: String? = if (ctx.spaCaptchaURL !== null && !res.confirmed) {
                     getWithdrawalConfirmUrl(
                         baseUrl = ctx.spaCaptchaURL,
                         wopId = opId
                     )
                 } else null
                 call.respond(BankWithdrawalOperationPostResponse(
-                    transfer_done = confirmationDone, confirm_transfer_url = confirmUrl
+                    transfer_done = res.confirmed, confirm_transfer_url = confirmUrl
                 ))
             }
         }

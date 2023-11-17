@@ -17,16 +17,17 @@
  * <http://www.gnu.org/licenses/>
  */
 
+import java.time.Instant
+import java.util.*
+import kotlin.test.*
 import org.junit.Test
 import org.postgresql.jdbc.PgConnection
 import tech.libeufin.bank.*
+import tech.libeufin.bank.TransactionDAO.*
+import tech.libeufin.bank.WithdrawalDAO.*
 import tech.libeufin.util.*
-import kotlin.test.*
-import java.time.Instant
-import java.util.*
 
 class AmountTest {
-    
     // Test amount computation in database
     @Test
     fun computationTest() = bankSetup { db ->  
@@ -48,7 +49,7 @@ class AmountTest {
 
             // Check bank transaction
             stmt.executeUpdate()
-            val (txRes, _) = db.bankTransaction(
+            val txRes = db.transaction.create(
                 creditAccountPayto = exchangePayto,
                 debitAccountUsername = "merchant",
                 subject = "test",
@@ -56,21 +57,21 @@ class AmountTest {
                 timestamp = Instant.now(),
             )
             val txBool = when (txRes) {
-                BankTransactionResult.BALANCE_INSUFFICIENT -> false
-                BankTransactionResult.SUCCESS -> true
+                BankTransactionResult.BalanceInsufficient -> false
+                is BankTransactionResult.Success -> true
                 else -> throw Exception("Unexpected error $txRes")
             }
 
             // Check whithdraw 
             stmt.executeUpdate()
             val wRes = db.withdrawal.create(
-                walletAccountUsername = "merchant",
+                login = "merchant",
                 uuid = UUID.randomUUID(),
                 amount = due,
             )
             val wBool = when (wRes) {
-                WithdrawalCreationResult.BALANCE_INSUFFICIENT -> false
-                WithdrawalCreationResult.SUCCESS -> true
+                WithdrawalCreationResult.BalanceInsufficient -> false
+                WithdrawalCreationResult.Success -> true
                 else -> throw Exception("Unexpected error $txRes")
             }
 

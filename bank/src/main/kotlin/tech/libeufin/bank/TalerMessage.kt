@@ -157,10 +157,10 @@ data class MonitorWithConversion(
 ) : MonitorResponse()
 
 /**
- * Convenience type to get and set bank account information
+ * Convenience type to get bank account information
  * from/to the database.
  */
-data class BankAccount(
+data class BankInfo(
     val internalPaytoUri: String,
     val bankAccountId: Long,
     val isTalerExchange: Boolean,

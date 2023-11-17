@@ -19,13 +19,11 @@
 
 package tech.libeufin.bank
 
-import java.util.UUID
-import java.time.Instant
-import java.time.Duration
-import java.util.concurrent.TimeUnit
 import tech.libeufin.util.*
 
+/** Data access logic for conversion */
 class ConversionDAO(private val db: Database) {
+    /** Update in-db conversion config */
     suspend fun updateConfig(cfg: ConversionInfo) = db.serializable {
         it.transaction { conn -> 
             var stmt = conn.prepareStatement("CALL config_set_amount(?, (?, ?)::taler_amount)")
@@ -63,27 +61,28 @@ class ConversionDAO(private val db: Database) {
         }
     }
 
-    private suspend fun conversion(from: TalerAmount, direction: String, function: String, currency: String): TalerAmount? = db.conn { conn ->
+    /** Perform [direction] conversion of [amount] using in-db [function] */
+    private suspend fun conversion(amount: TalerAmount, direction: String, function: String): TalerAmount? = db.conn { conn ->
         val stmt = conn.prepareStatement("SELECT too_small, (converted).val AS amount_val, (converted).frac AS amount_frac FROM $function((?, ?)::taler_amount, ?)")
-        stmt.setLong(1, from.value)
-        stmt.setInt(2, from.frac)
+        stmt.setLong(1, amount.value)
+        stmt.setInt(2, amount.frac)
         stmt.setString(3, direction)
         stmt.executeQuery().use {
             it.next()
             if (!it.getBoolean("too_small")) {
-                TalerAmount(
-                    value = it.getLong("amount_val"),
-                    frac = it.getInt("amount_frac"),
-                    currency = currency
-                )
+                it.getAmount("amount", if (amount.currency == db.bankCurrency) db.fiatCurrency!! else db.bankCurrency)
             } else {
                 null
             }
         }
     }
 
-    suspend fun toCashout(amount: TalerAmount): TalerAmount? = conversion(amount, "cashout", "conversion_to", db.fiatCurrency!!)
-    suspend fun toCashin(amount: TalerAmount): TalerAmount? = conversion(amount, "cashin", "conversion_to", db.bankCurrency)
-    suspend fun fromCashout(amount: TalerAmount): TalerAmount? = conversion(amount, "cashout", "conversion_from",  db.bankCurrency)
-    suspend fun fromCashin(amount: TalerAmount): TalerAmount? = conversion(amount, "cashin", "conversion_from", db.fiatCurrency!!)
+    /** Convert [regional] amount to fiat using cashout rate */
+    suspend fun toCashout(regional: TalerAmount): TalerAmount? = conversion(regional, "cashout", "conversion_to")
+    /** Convert [fiat] amount to regional using cashin rate */
+    suspend fun toCashin(fiat: TalerAmount): TalerAmount? = conversion(fiat, "cashin", "conversion_to")
+    /** Convert [fiat] amount to regional using inverse cashout rate */
+    suspend fun fromCashout(fiat: TalerAmount): TalerAmount? = conversion(fiat, "cashout", "conversion_from")
+    /** Convert [regional] amount to fiat using inverse cashin rate */
+    suspend fun fromCashin(regional: TalerAmount): TalerAmount? = conversion(regional, "cashin", "conversion_from")
 }

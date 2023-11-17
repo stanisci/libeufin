@@ -1,20 +1,33 @@
+/*
+ * This file is part of LibEuFin.
+ * Copyright (C) 2023 Taler Systems S.A.
+
+ * LibEuFin is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation; either version 3, or
+ * (at your option) any later version.
+
+ * LibEuFin is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General
+ * Public License for more details.
+
+ * You should have received a copy of the GNU Affero General Public
+ * License along with LibEuFin; see the file COPYING.  If not, see
+ * <http://www.gnu.org/licenses/>
+ */
+
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.client.HttpClient
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import kotlinx.serialization.json.*
+import java.util.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
+import net.taler.common.errorcodes.TalerErrorCode
 import org.junit.Test
 import tech.libeufin.bank.*
-import tech.libeufin.util.CryptoUtil
-import net.taler.common.errorcodes.TalerErrorCode
-import java.util.*
-import java.time.Instant
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import randHashCode
 
 class WireGatewayApiTest {
     // Test endpoint is correctly authenticated 

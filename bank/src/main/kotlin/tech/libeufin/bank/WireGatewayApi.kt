@@ -27,12 +27,11 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.util.pipeline.PipelineContext
+import java.time.Instant
 import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.util.extractReservePubFromSubject
-import java.time.Instant
-import kotlin.math.abs
+import tech.libeufin.bank.ExchangeDAO.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
@@ -45,40 +44,40 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
         post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
             val req = call.receive<TransferRequest>()
             ctx.checkRegionalCurrency(req.amount)
-            val dbRes = db.exchange.transfer(
+            val res = db.exchange.transfer(
                 req = req,
-                username = username,
-                timestamp = Instant.now()
+                login = username,
+                now = Instant.now()
             )
-            when (dbRes.txResult) {
-                TalerTransferResult.NO_DEBITOR -> throw notFound(
+            when (res) {
+                is TransferResult.UnknownExchange -> throw notFound(
                     "Account '$username' not found",
                     TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
-                TalerTransferResult.NOT_EXCHANGE -> throw conflict(
+                is TransferResult.NotAnExchange -> throw conflict(
                     "$username is not an exchange account.",
                     TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
-                TalerTransferResult.NO_CREDITOR -> throw conflict(
+                is TransferResult.UnknownCreditor -> throw conflict(
                     "Creditor account was not found",
                     TalerErrorCode.BANK_UNKNOWN_CREDITOR
                 )
-                TalerTransferResult.BOTH_EXCHANGE -> throw conflict(
+                is TransferResult.BothPartyAreExchange -> throw conflict(
                     "Wire transfer attempted with credit and debit party being both exchange account",
                     TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
                 )
-                TalerTransferResult.REQUEST_UID_REUSE -> throw conflict(
+                is TransferResult.ReserveUidReuse -> throw conflict(
                     "request_uid used already",
                     TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED
                 )
-                TalerTransferResult.BALANCE_INSUFFICIENT -> throw conflict(
+                is TransferResult.BalanceInsufficient -> throw conflict(
                     "Insufficient balance for exchange",
                     TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
-                TalerTransferResult.SUCCESS -> call.respond(
+                is TransferResult.Success -> call.respond(
                     TransferResponse(
-                        timestamp = dbRes.timestamp!!,
-                        row_id = dbRes.txRowId!!
+                        timestamp = res.timestamp,
+                        row_id = res.id
                     )
                 )
             }
@@ -90,7 +89,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             dbLambda: suspend ExchangeDAO.(HistoryParams, Long) -> List<T>
         ) {
             val params = HistoryParams.extract(context.request.queryParameters)
-            val bankAccount = call.bankAccount(db)
+            val bankAccount = call.bankInfo(db)
             
             if (!bankAccount.isTalerExchange)
                 throw conflict(
@@ -118,40 +117,40 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             val req = call.receive<AddIncomingRequest>()
             ctx.checkRegionalCurrency(req.amount)
             val timestamp = Instant.now()
-            val dbRes = db.exchange.addIncoming(
+            val res = db.exchange.addIncoming(
                 req = req,
-                username = username,
-                timestamp = timestamp
+                login = username,
+                now = timestamp
             )
-            when (dbRes.txResult) {
-                TalerAddIncomingResult.NO_CREDITOR -> throw notFound(
+            when (res) {
+                is AddIncomingResult.UnknownExchange -> throw notFound(
                     "Account '$username' not found",
                     TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
-                TalerAddIncomingResult.NOT_EXCHANGE -> throw conflict(
+                is AddIncomingResult.NotAnExchange -> throw conflict(
                     "$username is not an exchange account.",
                     TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
-                TalerAddIncomingResult.NO_DEBITOR -> throw conflict(
+                is AddIncomingResult.UnknownDebtor -> throw conflict(
                     "Debtor account was not found",
                     TalerErrorCode.BANK_UNKNOWN_DEBTOR
                 )
-                TalerAddIncomingResult.BOTH_EXCHANGE -> throw conflict(
+                is AddIncomingResult.BothPartyAreExchange -> throw conflict(
                     "Wire transfer attempted with credit and debit party being both exchange account",
                     TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
                 )
-                TalerAddIncomingResult.RESERVE_PUB_REUSE -> throw conflict(
+                is AddIncomingResult.ReservePubReuse -> throw conflict(
                     "reserve_pub used already",
                     TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT
                 )
-                TalerAddIncomingResult.BALANCE_INSUFFICIENT -> throw conflict(
+                is AddIncomingResult.BalanceInsufficient -> throw conflict(
                     "Insufficient balance for debitor",
                     TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
-                TalerAddIncomingResult.SUCCESS -> call.respond(
+                is AddIncomingResult.Success -> call.respond(
                     AddIncomingResponse(
                         timestamp = TalerProtocolTimestamp(timestamp),
-                        row_id = dbRes.txRowId!!
+                        row_id = res.id
                     )
                 )
             }

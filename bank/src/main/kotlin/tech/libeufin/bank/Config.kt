@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2019 Stanisci and Dold.
+ * Copyright (C) 2023 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -21,10 +21,10 @@ package tech.libeufin.bank
 import ConfigSource
 import TalerConfig
 import TalerConfigError
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.Serializable
 import tech.libeufin.util.DatabaseConfig
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Config")

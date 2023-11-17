@@ -17,25 +17,19 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import org.junit.Test
-import org.postgresql.jdbc.PgConnection
-import tech.libeufin.bank.*
-import tech.libeufin.util.*
-import java.sql.DriverManager
-import java.time.Instant
-import java.time.Duration
-import java.time.temporal.ChronoUnit
-import java.util.Random
-import java.util.UUID
-import java.util.concurrent.TimeUnit
-import kotlin.experimental.inv
-import kotlin.test.*
-import kotlinx.coroutines.*
-import io.ktor.http.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.client.HttpClient
+import io.ktor.http.*
+import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.concurrent.TimeUnit
+import kotlin.test.*
+import kotlinx.coroutines.*
+import org.junit.Test
+import tech.libeufin.bank.*
+import tech.libeufin.util.*
 
 class DatabaseTest {
     // Testing the helper that update conversion config

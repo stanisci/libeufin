@@ -115,6 +115,7 @@ ELSE -- not a debt account
   END IF;
 END IF;
 END $$;
+COMMENT ON FUNCTION account_balance_is_sufficient IS 'Check if an account have enough fund to transfer an amount.';
 
 CREATE OR REPLACE FUNCTION account_reconfig(
   IN in_login TEXT,
@@ -255,7 +256,7 @@ CALL stats_register_payment('taler_out', now()::TIMESTAMP, local_amount, null);
 PERFORM pg_notify('outgoing_tx', in_debtor_account_id || ' ' || in_creditor_account_id || ' ' || in_debit_row_id || ' ' || in_credit_row_id);
 END $$;
 COMMENT ON PROCEDURE register_outgoing
-  IS 'Register a bank transaction as a taler outgoing transaction';
+  IS 'Register a bank transaction as a taler outgoing transaction and announce it';
 
 CREATE OR REPLACE PROCEDURE register_incoming(
   IN in_reserve_pub BYTEA,
@@ -284,7 +285,7 @@ CALL stats_register_payment('taler_in', now()::TIMESTAMP, local_amount, null);
 PERFORM pg_notify('incoming_tx', local_bank_account_id || ' ' || in_tx_row_id);
 END $$;
 COMMENT ON PROCEDURE register_incoming
-  IS 'Register a bank transaction as a taler incoming transaction';
+  IS 'Register a bank transaction as a taler incoming transaction and announce it';
 
 
 CREATE OR REPLACE FUNCTION taler_transfer(
@@ -377,11 +378,7 @@ out_timestamp=in_timestamp;
 -- Register outgoing transaction
 CALL register_outgoing(in_request_uid, in_wtid, in_exchange_base_url, exchange_bank_account_id, receiver_bank_account_id, out_tx_row_id, credit_row_id);
 END $$;
--- TODO new comment
-COMMENT ON FUNCTION taler_transfer IS 'function that (1) inserts the TWG requests'
-     'details into the database and (2) performs '
-     'the actual bank transaction to pay the merchant';
-
+COMMENT ON FUNCTION taler_transfer IS 'Create an outgoing taler transaction and register it';
 
 CREATE OR REPLACE FUNCTION taler_add_incoming(
   IN in_reserve_pub BYTEA,
@@ -462,10 +459,7 @@ END IF;
 -- Register incoming transaction
 CALL register_incoming(in_reserve_pub, out_tx_row_id);
 END $$;
--- TODO new comment
-COMMENT ON FUNCTION taler_add_incoming IS 'function that (1) inserts the TWG requests'
-     'details into the database and (2) performs '
-     'the actual bank transaction to pay the merchant';
+COMMENT ON FUNCTION taler_add_incoming IS 'Create an incoming taler transaction and register it';
 
 CREATE OR REPLACE FUNCTION bank_transaction(
   IN in_credit_account_payto TEXT,
@@ -537,6 +531,7 @@ IF out_balance_insufficient THEN
   RETURN;
 END IF;
 END $$;
+COMMENT ON FUNCTION bank_transaction IS 'Create a bank transaction';
 
 CREATE OR REPLACE FUNCTION create_taler_withdrawal(
   IN in_account_username TEXT,
@@ -575,6 +570,7 @@ INSERT INTO taler_withdrawal_operations
     (withdrawal_uuid, wallet_bank_account, amount)
   VALUES (in_withdrawal_uuid, account_id, in_amount);
 END $$;
+COMMENT ON FUNCTION create_taler_withdrawal IS 'Create a new withdrawal operation';
 
 CREATE OR REPLACE FUNCTION select_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
@@ -636,7 +632,7 @@ IF NOT out_confirmation_done AND not_selected THEN
     WHERE withdrawal_uuid=in_withdrawal_uuid;
 END IF;
 END $$;
-
+COMMENT ON FUNCTION select_taler_withdrawal IS 'Set details of a withdrawal operation';
 
 CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
@@ -1029,6 +1025,7 @@ END IF;
 -- update stats
 CALL stats_register_payment('cashin', now()::TIMESTAMP, converted_amount, in_amount);
 END $$;
+COMMENT ON FUNCTION cashin IS 'Perform a cashin operation';
 
 
 CREATE OR REPLACE FUNCTION cashout_create(

@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Stanisci and Dold.
+ * Copyright (C) 2023 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -18,11 +18,10 @@
  */
 package tech.libeufin.bank
 
+import io.ktor.http.*
+import kotlinx.serialization.Serializable
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.*
-import kotlinx.serialization.Serializable
-import io.ktor.http.*
-
 /**
  * Convenience type to throw errors along the bank activity
  * and that is meant to be caught by Ktor and responded to the

@@ -26,9 +26,6 @@ import java.time.*
 import java.time.Instant
 import java.util.*
 import kotlin.test.*
-import kotlin.reflect.full.declaredMemberProperties
-import kotlin.suspend
-import kotlinx.serialization.json.Json
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.util.*

@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2019 Stanisci and Dold.
+ * Copyright (C) 2023 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -21,7 +21,6 @@
 package tech.libeufin.bank
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
@@ -42,27 +41,22 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.jvm.javaio.*
+import java.time.Duration
+import java.util.zip.DataFormatException
+import java.util.zip.Inflater
+import kotlin.system.exitProcess
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.json.*
 import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
-import tech.libeufin.util.CryptoUtil
+import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.getVersion
 import tech.libeufin.util.initializeDatabaseTables
 import tech.libeufin.util.resetDatabaseTables
-import tech.libeufin.bank.libeufinError
-import java.time.Duration
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-import java.util.zip.InflaterInputStream
-import java.util.zip.Inflater
-import java.util.zip.DataFormatException
-import kotlin.system.exitProcess
 
 // GLOBALS
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
@@ -332,7 +326,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
             if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
             exitProcess(1)
 
-            if (db.accountReconfigPassword(account, password, null) != CustomerPatchAuthResult.SUCCESS) {
+            if (db.account.reconfigPassword(account, password, null) != AccountPatchAuthResult.Success) {
                 println("password change failed")
                 exitProcess(1)
             } else {

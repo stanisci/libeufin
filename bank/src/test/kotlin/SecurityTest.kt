@@ -17,19 +17,17 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import org.junit.Test
-import org.postgresql.jdbc.PgConnection
-import tech.libeufin.bank.*
-import tech.libeufin.util.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.client.HttpClient
 import io.ktor.http.content.*
 import io.ktor.server.engine.*
 import io.ktor.server.testing.*
 import kotlin.test.*
 import kotlinx.coroutines.*
+import org.junit.Test
+import tech.libeufin.bank.*
+import tech.libeufin.util.*
 
 class SecurityTest {
     @Test
