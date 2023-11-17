@@ -1,9 +1,6 @@
 import org.junit.Test
 import org.junit.jupiter.api.assertThrows
-import tech.libeufin.nexus.TalerAmount
-import tech.libeufin.nexus.getAmountNoCurrency
-import tech.libeufin.nexus.getTalerAmount
-import tech.libeufin.nexus.isReservePub
+import tech.libeufin.nexus.*
 import tech.libeufin.util.parseBookDate
 import tech.libeufin.util.parseCamtTime
 import java.lang.StringBuilder
@@ -24,6 +21,48 @@ class Parsing {
     @Test
     fun bookDateTest() {
         parseBookDate("1970-01-01")
+        assertThrows<Exception> { parseBookDate("1970-01-01T00:00:01Z") }
+    }
+
+    @Test
+    fun reservePublicKey() {
+        assertNull(removeSubjectNoise("does not contain any reserve"))
+        // 4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0
+        assertNotNull(removeSubjectNoise("4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"))
+        assertEquals(
+            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
+            removeSubjectNoise(
+                "noise 4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0 noise"
+            )
+        )
+        assertEquals(
+            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
+            removeSubjectNoise(
+                "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0 noise to the right"
+            )
+        )
+        assertEquals(
+            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
+            removeSubjectNoise(
+                "noise to the left 4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"
+            )
+        )
+        assertEquals(
+            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
+            removeSubjectNoise(
+                "    4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0     "
+            )
+        )
+        assertEquals(
+            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
+            removeSubjectNoise("""
+                noise
+                4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0
+                noise
+            """)
+        )
+        // Got the first char removed.
+        assertNull(removeSubjectNoise("MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"))
     }
 
     @Test // Could be moved in a dedicated Amounts.kt test module.

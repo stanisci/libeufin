@@ -329,6 +329,10 @@ data class OutgoingPaymentWithLink(
     val initiatedPaymentLink: String
 )
 
+/**
+ * Collects incoming and outgoing payments which are
+ * the result of parsing one camt.054 notification.
+ */
 data class Camt054Result(
     val incoming: MutableList<IncomingPayment> = mutableListOf(),
     val outgoing: MutableList<OutgoingPaymentWithLink> = mutableListOf()
@@ -403,6 +407,21 @@ fun isReservePub(maybeReservePub: String): ByteArray? {
     }
     return dec
 }
+
+/**
+ * Extract the part of the subject that might represent a
+ * valid Taler reserve public key.  That addresses some bank
+ * policies of adding extra information around the payment
+ * subject.
+ *
+ * @param subject raw subject as read from the bank.
+ */
+fun removeSubjectNoise(subject: String): String? {
+    val re = "\\b[a-z0-9A-Z]{52}\\b".toRegex()
+    val result = re.find(subject.replace("[\n]+".toRegex(), "")) ?: return null
+    return result.value
+}
+
 /**
  * Checks the two conditions that may invalidate one incoming
  * payment: subject validity and availability.
@@ -416,8 +435,10 @@ suspend fun getTalerReservePub(
     db: Database,
     payment: IncomingPayment
 ): ByteArray? {
+    // Removing noise around the potential reserve public key.
+    val maybeReservePub = removeSubjectNoise(payment.wireTransferSubject) ?: return null
     // Checking validity first.
-    val dec = isReservePub(payment.wireTransferSubject) ?: return null
+    val dec = isReservePub(maybeReservePub) ?: return null
     // Now checking availability.
     val maybeUnavailable = db.isReservePubFound(dec)
     if (maybeUnavailable) {

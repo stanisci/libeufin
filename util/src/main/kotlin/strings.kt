@@ -83,15 +83,3 @@ fun getQueryParam(uriQueryString: String, param: String): String? {
     return null
 }
 
-fun extractReservePubFromSubject(rawSubject: String): String? {
-    val re = "\\b[a-z0-9A-Z]{52}\\b".toRegex()
-    val result = re.find(rawSubject.replace("[\n]+".toRegex(), "")) ?: return null
-    try {
-        Base32Crockford.decode(result.value)
-    } catch (e: Exception) {
-        logger.debug("Not containing a reserve pub: $rawSubject")
-        return null
-    }
-    return result.value.uppercase()
-}
-
