@@ -345,6 +345,12 @@ fun notificationForEachTx(
             requireUniqueChildNamed("BkToCstmrDbtCdtNtfctn") {
                 mapEachChildNamed("Ntfctn") {
                     mapEachChildNamed("Ntry") {
+                        requireUniqueChildNamed("Sts") {
+                            if (focusElement.textContent != "BOOK")
+                                throw Exception("Found non booked transaction, " +
+                                        "stop parsing.  Status was: ${focusElement.textContent}"
+                                )
+                        }
                         val bookDate: Instant = requireUniqueChildNamed("BookgDt") {
                             requireUniqueChildNamed("Dt") {
                                 parseBookDate(focusElement.textContent)
