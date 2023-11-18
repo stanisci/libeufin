@@ -440,6 +440,7 @@ private suspend fun ingestOutgoingPayment(
     db: Database,
     payment: OutgoingPayment
 ) {
+    logger.debug("Ingesting outgoing payment UID ${payment.bankTransferId}, subject ${payment.wireTransferSubject}")
     // Check if the payment was ingested already.
     if (db.isOutgoingPaymentSeen(payment.bankTransferId)) {
         logger.debug("Outgoing payment with UID '${payment.bankTransferId}' already seen.")
@@ -452,9 +453,7 @@ private suspend fun ingestOutgoingPayment(
      */
     val initId: Long? = db.initiatedPaymentGetFromUid(payment.bankTransferId);
     if (initId == null)
-        logger.info("Outgoing payment lacks (submitted) initiated " +
-                "counterpart with UID ${payment.bankTransferId}"
-        )
+        logger.info("Outgoing payment lacks initiated counterpart with UID ${payment.bankTransferId}")
     // store the payment and its (maybe null) linked init
     val insertionResult = db.outgoingPaymentCreate(payment, initId)
     if (insertionResult != OutgoingPaymentOutcome.SUCCESS) {
@@ -477,6 +476,7 @@ private suspend fun ingestIncomingPayment(
     db: Database,
     incomingPayment: IncomingPayment
 ) {
+    logger.debug("Ingesting incoming payment UID: ${incomingPayment.bankTransferId}, subject: ${incomingPayment.wireTransferSubject}")
     if (db.isIncomingPaymentSeen(incomingPayment.bankTransferId)) {
         logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}' already seen.")
         return
@@ -527,14 +527,10 @@ fun ingestNotification(
                 logger.debug("Ignoring camt.054: $fileName")
                 return@unzipForEach
             }
-            /**
-             * if (fileName.startsWith(filenamePrefixForIncoming))
-             *     incomingPayments += parseNotificationForIncoming()
-             * else
-             *     outgoingPayments += parseNotificationForOutgoing()
-             *
-             * FIXME: TBD.
-             */
+
+            if (fileName.startsWith(filenamePrefixForIncoming))
+                incomingPayments += parseIncomingTxNotif(xmlContent, ctx.cfg.currency)
+            else outgoingPayments += parseOutgoingTxNotif(xmlContent, ctx.cfg.currency)
         }
     } catch (e: IOException) {
         logger.error("Could not open any ZIP archive")
