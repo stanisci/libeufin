@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS outgoing_transactions
   ,amount taler_amount NOT NULL
   ,wire_transfer_subject TEXT
   ,execution_time INT8 NOT NULL
-  ,credit_payto_uri TEXT NOT NULL
+  ,credit_payto_uri TEXT
   ,bank_transfer_id TEXT NOT NULL
   );
 

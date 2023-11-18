@@ -92,12 +92,15 @@ enum class PaymentInitiationOutcome {
 
 // OUTGOING PAYMENTS STRUCTS
 
+/**
+ * Collects data of a booked outgoing payment.
+ */
 data class OutgoingPayment(
     val amount: TalerAmount,
-    val wireTransferSubject: String,
     val executionTime: Instant,
-    val creditPaytoUri: String,
-    val bankTransferId: String
+    val bankTransferId: String,
+    val creditPaytoUri: String? = null, // not showing in camt.054
+    val wireTransferSubject: String? = null // not showing in camt.054
 )
 
 /**
@@ -183,8 +186,8 @@ class Database(dbConfig: String): java.io.Closeable {
      *
      * @param paymentData information about the outgoing payment.
      * @param reconcileId optional row ID of the initiated payment
-     *        that will reference this one.  Note: if this value is
-     *        not found, then NO row gets inserted in the database.
+     *        that will reference this one.  If null, then only the
+     *        outgoing payment record gets inserted.
      * @return operation outcome enum.
      */
     suspend fun outgoingPaymentCreate(
