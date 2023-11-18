@@ -250,40 +250,10 @@ private fun parseOutgoingTxNotif(
             }
         }
 
-        // Obtaining payment subject.
-        val subject = StringBuilder()
-            requireUniqueChildNamed("RmtInf") {
-              this.mapEachChildNamed("Ustrd") {
-                  val piece = this.focusElement.textContent
-                  subject.append(piece)
-              }
-            }
-
-        // Obtaining the payer's details
-        val creditorPayto = StringBuilder("payto://iban/")
-        requireUniqueChildNamed("RltdPties") {
-            requireUniqueChildNamed("CdtrAcct") {
-                requireUniqueChildNamed("Id") {
-                    requireUniqueChildNamed("IBAN") {
-                        creditorPayto.append(focusElement.textContent)
-                    }
-                }
-            }
-            requireUniqueChildNamed("Cdtr") {
-                requireUniqueChildNamed("Pty") {
-                    requireUniqueChildNamed("Nm") {
-                        val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
-                        creditorPayto.append("?receiver-name=$urlEncName")
-                    }
-                }
-            }
-        }
         ret.add(OutgoingPayment(
             amount = amount,
             bankTransferId = uidFromBank.toString(),
-            creditPaytoUri = creditorPayto.toString(),
-            executionTime = bookDate,
-            wireTransferSubject = subject.toString()
+            executionTime = bookDate
         ))
     }
     return ret
@@ -475,12 +445,17 @@ private suspend fun ingestOutgoingPayment(
         logger.debug("Outgoing payment with UID '${payment.bankTransferId}' already seen.")
         return
     }
-    // Get the initiate payment to link to this.
-    val initId: Long = db.initiatedPaymentGetFromUid(payment.bankTransferId)
-        ?: throw Exception("Outgoing payment lacks (submitted) initiated " +
+    /**
+     * Getting the initiate payment to link to this.  A missing initiated
+     * payment could mean that a third party is downloading the bank account
+     * history (to conduct an audit, for example)
+     */
+    val initId: Long? = db.initiatedPaymentGetFromUid(payment.bankTransferId);
+    if (initId == null)
+        logger.info("Outgoing payment lacks (submitted) initiated " +
                 "counterpart with UID ${payment.bankTransferId}"
         )
-    // store the payment and its linked init
+    // store the payment and its (maybe null) linked init
     val insertionResult = db.outgoingPaymentCreate(payment, initId)
     if (insertionResult != OutgoingPaymentOutcome.SUCCESS) {
         throw Exception("Could not store outgoing payment with UID " +
