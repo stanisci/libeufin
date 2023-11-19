@@ -161,7 +161,7 @@ class PaymentInitiationsTest {
     fun paymentInitiation() {
         val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
         runBlocking {
-            val beEmpty = db.initiatedPaymentsUnsubmittedGet("KUDOS")// expect no records.
+            val beEmpty = db.initiatedPaymentsSubmittableGet("KUDOS") // expect no records.
             assertEquals(beEmpty.size, 0)
         }
         val initPay = InitiatedPayment(
@@ -175,14 +175,52 @@ class PaymentInitiationsTest {
             assertNull(db.initiatedPaymentGetFromUid("unique"))
             assertEquals(db.initiatedPaymentCreate(initPay), PaymentInitiationOutcome.SUCCESS)
             assertEquals(db.initiatedPaymentCreate(initPay), PaymentInitiationOutcome.UNIQUE_CONSTRAINT_VIOLATION)
-            val haveOne = db.initiatedPaymentsUnsubmittedGet("KUDOS")
+            val haveOne = db.initiatedPaymentsSubmittableGet("KUDOS")
             assertTrue {
                 haveOne.size == 1
                         && haveOne.containsKey(1)
                         && haveOne[1]?.requestUid == "unique"
             }
-            db.initiatedPaymentSetSubmittedState(1, DatabaseSubmissionState.success)
+            assertTrue(db.initiatedPaymentSetSubmittedState(1, DatabaseSubmissionState.success))
             assertNotNull(db.initiatedPaymentGetFromUid("unique"))
+        }
+    }
+
+    /**
+     * The SQL that gets submittable payments checks multiple
+     * statuses from them.  Checking it here.
+     */
+    @Test
+    fun submittablePayments() {
+        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        runBlocking {
+            val beEmpty = db.initiatedPaymentsSubmittableGet("KUDOS")
+            assertEquals(0, beEmpty.size)
+            assertEquals(
+                db.initiatedPaymentCreate(genInitPay(requestUid = "first")),
+                PaymentInitiationOutcome.SUCCESS
+            )
+            assertEquals(
+                db.initiatedPaymentCreate(genInitPay(requestUid = "second")),
+                PaymentInitiationOutcome.SUCCESS
+            )
+            assertEquals(
+                db.initiatedPaymentCreate(genInitPay(requestUid = "third")),
+                PaymentInitiationOutcome.SUCCESS
+            )
+
+            // Setting the first as "transient_failure", must be found.
+            assertTrue(db.initiatedPaymentSetSubmittedState(
+                1, DatabaseSubmissionState.transient_failure
+            ))
+            // Setting the second as "success", must not be found.
+            assertTrue(db.initiatedPaymentSetSubmittedState(
+                2, DatabaseSubmissionState.success
+            ))
+            val expectTwo = db.initiatedPaymentsSubmittableGet("KUDOS")
+            // the third initiation keeps the default "unsubmitted"
+            // state, must be found.  Total 2.
+            assertEquals(2, expectTwo.size)
         }
     }
 
@@ -207,7 +245,7 @@ class PaymentInitiationsTest {
             }
 
             // Expecting all the payments BUT the #3 in the result.
-            db.initiatedPaymentsUnsubmittedGet("KUDOS").apply {
+            db.initiatedPaymentsSubmittableGet("KUDOS").apply {
                 assertEquals(3, this.size)
                 assertEquals("#1", this[1]?.wireTransferSubject)
                 assertEquals("#2", this[2]?.wireTransferSubject)

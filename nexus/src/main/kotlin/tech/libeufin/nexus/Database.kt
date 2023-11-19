@@ -519,7 +519,7 @@ class Database(dbConfig: String): java.io.Closeable {
      * @param currency in which currency should the payment be submitted to the bank.
      * @return [Map] of the initiated payment row ID and [InitiatedPayment]
      */
-    suspend fun initiatedPaymentsUnsubmittedGet(currency: String): Map<Long, InitiatedPayment> = runConn { conn ->
+    suspend fun initiatedPaymentsSubmittableGet(currency: String): Map<Long, InitiatedPayment> = runConn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
               initiated_outgoing_transaction_id
@@ -530,7 +530,8 @@ class Database(dbConfig: String): java.io.Closeable {
              ,initiation_time
              ,request_uid
              FROM initiated_outgoing_transactions
-             WHERE submitted='unsubmitted';
+             WHERE submitted='unsubmitted'
+               OR submitted='transient_failure';
         """)
         val maybeMap = mutableMapOf<Long, InitiatedPayment>()
         stmt.executeQuery().use {

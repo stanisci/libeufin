@@ -8,6 +8,10 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 
+/**
+ * Collects details to define the pain.001 namespace
+ * XML attributes.
+ */
 data class Pain001Namespaces(
     val fullNamespace: String,
     val xsdFilename: String
@@ -73,8 +77,14 @@ fun createPain001(
         )
     return constructXml(indent = true) {
         root("Document") {
-            attribute("xmlns", namespace.fullNamespace)
-            attribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
+            attribute(
+                "xmlns",
+                namespace.fullNamespace
+            )
+            attribute(
+                "xmlns:xsi",
+                "http://www.w3.org/2001/XMLSchema-instance"
+            )
             attribute(
                 "xsi:schemaLocation",
                 "${namespace.fullNamespace} ${namespace.xsdFilename}"
@@ -100,22 +110,13 @@ fun createPain001(
                 }
                 element("PmtInf") {
                     element("PmtInfId") {
-                        text("NOT GIVEN")
+                        text("NOTPROVIDED")
                     }
                     element("PmtMtd") {
                         text("TRF")
                     }
                     element("BtchBookg") {
                         text("true")
-                    }
-                    element("NbOfTxs") {
-                        text("1")
-                    }
-                    element("CtrlSum") {
-                        text(amountWithoutCurrency)
-                    }
-                    element("PmtTpInf/SvcLvl/Cd") {
-                        text("SDVA")
                     }
                     element("ReqdExctnDt") {
                         element("Dt") {
@@ -128,30 +129,17 @@ fun createPain001(
                     element("DbtrAcct/Id/IBAN") {
                         text(debitAccount.iban)
                     }
-                    element("DbtrAgt/FinInstnId") {
-                        element("BICFI") {
-                            text(debitAccount.bic)
-                        }
-                    }
-                    element("ChrgBr") {
-                        text("SLEV")
+                    element("DbtrAgt/FinInstnId/BICFI") {
+                        text(debitAccount.bic)
                     }
                     element("CdtTrfTxInf") {
                         element("PmtId") {
-                            element("InstrId") { text("NOT PROVIDED") }
-                            element("EndToEndId") { text("NOT PROVIDED") }
+                            element("InstrId") { text("NOTPROVIDED") }
+                            element("EndToEndId") { text("NOTPROVIDED") }
                         }
                         element("Amt/InstdAmt") {
                             attribute("Ccy", amount.currency)
                             text(amountWithoutCurrency)
-                        }
-                        creditAccount.bic.apply {
-                            if (this != null)
-                                element("CdtrAgt/FinInstnId") {
-                                    element("BICFI") {
-                                        text(this@apply)
-                                    }
-                                }
                         }
                         element("Cdtr/Nm") {
                             text(creditorName)

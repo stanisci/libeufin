@@ -92,10 +92,49 @@ class NexusSubmitException(
     val stage: NexusSubmissionStage
 ) : Exception(msg, cause)
 
+
 /**
- * Takes the initiated payment data, as it was returned from the
- * database, sanity-checks it, makes the pain.001 document and finally
- * submits it via EBICS to the bank.
+ * Optionally logs the pain.001 in the log directory, if the
+ * configuration had this latter.
+ *
+ * @param maybeLogDir log directory.  Null if the configuration
+ *        lacks it.
+ * @param xml the pain.001 document to log.
+ * @param requestUid UID of the payment request (normally equals
+ *                   the pain.001 MsgId element), will be part of
+ *                   the filename.
+ */
+fun maybeLog(
+    maybeLogDir: String?,
+    xml: String,
+    requestUid: String
+) {
+    if (maybeLogDir == null) {
+        logger.info("Logging pain.001 to files is disabled")
+        return
+    }
+    logger.debug("Logging to $maybeLogDir")
+    val now = Instant.now()
+    val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
+    val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
+    val dirs = Path.of(maybeLogDir, subDir)
+    doOrFail { dirs.createDirectories() }
+    val f = File(
+        dirs.toString(),
+        "${now.toDbMicros()}_requestUid_${requestUid}_pain.001.xml"
+    )
+    // Very rare: same pain.001 should not be submitted twice in the same microsecond.
+    if (f.exists()) {
+        logger.error("pain.001 log file exists already at: $f")
+        exitProcess(1)
+    }
+    doOrFail { f.writeText(xml) }
+}
+
+/**
+ * Takes the initiated payment data as it was returned from the
+ * database, sanity-checks it, gets the pain.001 from the helper
+ * function and finally submits it via EBICS to the bank.
  *
  * @param ctx [SubmissionContext]
  * @return true on success, false otherwise.
@@ -117,6 +156,16 @@ private suspend fun submitInitiatedPayment(
         creditAccount = creditor,
         debitAccount = ctx.cfg.myIbanAccount,
         wireTransferSubject = initiatedPayment.wireTransferSubject
+    )
+    // Logging first!
+    val maybeLogDir: String? = ctx.cfg.config.lookupString(
+        "nexus-submit",
+        "SUBMISSIONS_LOG_DIRECTORY"
+    )
+    maybeLog(
+        maybeLogDir,
+        xml,
+        initiatedPayment.requestUid
     )
     try {
         submitPain001(
@@ -150,28 +199,6 @@ private suspend fun submitInitiatedPayment(
             cause = permanent
         )
     }
-    // Submission succeeded, storing the pain.001 to file.
-    val logDir: String? = ctx.cfg.config.lookupString(
-        "neuxs-submit",
-        "SUBMISSIONS_LOG_DIRECTORY"
-    )
-    if (logDir != null) {
-        val now = Instant.now()
-        val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
-        val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
-        val dirs = Path.of(logDir, subDir)
-        doOrFail { dirs.createDirectories() }
-        val f = File(
-            dirs.toString(),
-            "${now.toDbMicros()}_requestUid_${initiatedPayment.requestUid}_pain.001.xml"
-            )
-        // Very rare: same pain.001 should not be submitted twice in the same microsecond.
-        if (f.exists()) {
-            logger.error("pain.001 log file exists already at: $f")
-            exitProcess(1)
-        }
-        doOrFail { f.writeText(xml) }
-    }
 }
 
 /**
@@ -190,7 +217,7 @@ private fun submitBatch(
 ) {
     logger.debug("Running submit at: ${Instant.now()}")
     runBlocking {
-        db.initiatedPaymentsUnsubmittedGet(ctx.cfg.currency).forEach {
+        db.initiatedPaymentsSubmittableGet(ctx.cfg.currency).forEach {
             logger.debug("Submitting payment initiation with row ID: ${it.key}")
             val submissionState = try {
                 submitInitiatedPayment(ctx, initiatedPayment = it.value)

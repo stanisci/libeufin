@@ -77,13 +77,16 @@ fun getPofiConfig(
 """.trimIndent()
 
 // Generates a payment initiation, given its subject.
-fun genInitPay(subject: String = "init payment", rowUid: String = "unique") =
+fun genInitPay(
+    subject: String = "init payment",
+    requestUid: String = "unique"
+) =
     InitiatedPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
         creditPaytoUri = "payto://iban/TEST-IBAN?receiver-name=Test",
         wireTransferSubject = subject,
         initiationTime = Instant.now(),
-        requestUid = rowUid
+        requestUid = requestUid
     )
 
 // Generates an incoming payment, given its subject.
