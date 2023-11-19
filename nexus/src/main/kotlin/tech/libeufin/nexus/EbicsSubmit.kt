@@ -104,7 +104,7 @@ class NexusSubmitException(
  *                   the pain.001 MsgId element), will be part of
  *                   the filename.
  */
-fun maybeLog(
+private fun maybeLog(
     maybeLogDir: String?,
     xml: String,
     requestUid: String

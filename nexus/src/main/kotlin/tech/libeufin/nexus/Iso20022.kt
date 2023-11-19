@@ -1,7 +1,7 @@
 package tech.libeufin.nexus
 
-import tech.libeufin.util.IbanPayto
-import tech.libeufin.util.constructXml
+import tech.libeufin.util.*
+import java.net.URLEncoder
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -36,8 +36,6 @@ fun getAmountNoCurrency(amount: TalerAmount): String {
         return "${amount.value}.${fractionFormat}"
     }
 }
-
-
 
 /**
  * Create a pain.001 document.  It requires the debtor BIC.
@@ -149,6 +147,171 @@ fun createPain001(
                         }
                         element("RmtInf/Ustrd") {
                             text(wireTransferSubject)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Thrown if the parser expects DBIT but the transaction
+ * is CRDT, and vice-versa.
+ */
+class WrongPaymentDirection(val msg: String) : Exception(msg)
+
+/**
+ * Parses a camt.054 document looking for outgoing payments.
+ *
+ * @param notifXml input document.
+ * @param acceptedCurrency currency accepted by Nexus
+ * @return the list of outgoing payments.
+ */
+fun parseOutgoingTxNotif(
+    notifXml: String,
+    acceptedCurrency: String,
+): List<OutgoingPayment> {
+    val ret = mutableListOf<OutgoingPayment>()
+    notificationForEachTx(notifXml) { bookDate ->
+        requireUniqueChildNamed("CdtDbtInd") {
+            if (focusElement.textContent != "DBIT")
+                throw WrongPaymentDirection("The payment is not outgoing, won't parse it")
+        }
+        // Obtaining the amount.
+        val amount: TalerAmount = requireUniqueChildNamed("Amt") {
+            val currency = focusElement.getAttribute("Ccy")
+            if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+            getTalerAmount(focusElement.textContent, currency)
+        }
+
+        /**
+         * The MsgId extracted in the block below matches the one that
+         * was specified as the MsgId element in the pain.001 that originated
+         * this outgoing payment.  MsgId is considered unique because the
+         * bank enforces its uniqueness.  Associating MsgId to this outgoing
+         * payment is also convenient to match its initiated outgoing payment
+         * in the database for reconciliation.
+         */
+        val uidFromBank = StringBuilder()
+        requireUniqueChildNamed("Refs") {
+            requireUniqueChildNamed("MsgId") {
+                uidFromBank.append(focusElement.textContent)
+            }
+        }
+
+        ret.add(
+            OutgoingPayment(
+            amount = amount,
+            bankTransferId = uidFromBank.toString(),
+            executionTime = bookDate
+        )
+        )
+    }
+    return ret
+}
+
+/**
+ * Searches incoming payments in a camt.054 (Detailavisierung) document.
+ *
+ * @param notifXml camt.054 input document
+ * @param acceptedCurrency currency accepted by Nexus.
+ * @return the list of incoming payments to ingest in the database.
+ */
+fun parseIncomingTxNotif(
+    notifXml: String,
+    acceptedCurrency: String
+): List<IncomingPayment> {
+    val ret = mutableListOf<IncomingPayment>()
+    notificationForEachTx(notifXml) { bookDate ->
+        // Check the direction first.
+        requireUniqueChildNamed("CdtDbtInd") {
+            if (focusElement.textContent != "CRDT")
+                throw WrongPaymentDirection("The payment is not incoming, won't parse it")
+        }
+        val amount: TalerAmount = requireUniqueChildNamed("Amt") {
+            val currency = focusElement.getAttribute("Ccy")
+            if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+            getTalerAmount(focusElement.textContent, currency)
+        }
+        // Obtaining payment UID.
+        val uidFromBank: String = requireUniqueChildNamed("Refs") {
+            requireUniqueChildNamed("AcctSvcrRef") {
+                focusElement.textContent
+            }
+        }
+        // Obtaining payment subject.
+        val subject = StringBuilder()
+        requireUniqueChildNamed("RmtInf") {
+            this.mapEachChildNamed("Ustrd") {
+                val piece = this.focusElement.textContent
+                subject.append(piece)
+            }
+        }
+
+        // Obtaining the payer's details
+        val debtorPayto = StringBuilder("payto://iban/")
+        requireUniqueChildNamed("RltdPties") {
+            requireUniqueChildNamed("DbtrAcct") {
+                requireUniqueChildNamed("Id") {
+                    requireUniqueChildNamed("IBAN") {
+                        debtorPayto.append(focusElement.textContent)
+                    }
+                }
+            }
+            // warn: it might need the postal address too..
+            requireUniqueChildNamed("Dbtr") {
+                requireUniqueChildNamed("Nm") {
+                    val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
+                    debtorPayto.append("?receiver-name=$urlEncName")
+                }
+            }
+        }
+        ret.add(
+            IncomingPayment(
+                amount = amount,
+                bankTransferId = uidFromBank,
+                debitPaytoUri = debtorPayto.toString(),
+                executionTime = bookDate,
+                wireTransferSubject = subject.toString()
+            )
+        )
+    }
+    return ret
+}
+
+/**
+ * Navigates the camt.054 (Detailavisierung) until its leaves, where
+ * then it invokes the related parser, according to the payment direction.
+ *
+ * @param notifXml the input document.
+ * @return any incoming payment as a list of [IncomingPayment]
+ */
+private fun notificationForEachTx(
+    notifXml: String,
+    directionLambda: XmlElementDestructor.(Instant) -> Unit
+) {
+    val notifDoc = XMLUtil.parseStringIntoDom(notifXml)
+    destructXml(notifDoc) {
+        requireRootElement("Document") {
+            requireUniqueChildNamed("BkToCstmrDbtCdtNtfctn") {
+                mapEachChildNamed("Ntfctn") {
+                    mapEachChildNamed("Ntry") {
+                        requireUniqueChildNamed("Sts") {
+                            if (focusElement.textContent != "BOOK")
+                                throw Exception("Found non booked transaction, " +
+                                        "stop parsing.  Status was: ${focusElement.textContent}"
+                                )
+                        }
+                        val bookDate: Instant = requireUniqueChildNamed("BookgDt") {
+                            requireUniqueChildNamed("Dt") {
+                                parseBookDate(focusElement.textContent)
+                            }
+                        }
+                        mapEachChildNamed("NtryDtls") {
+                            mapEachChildNamed("TxDtls") {
+                                directionLambda(this, bookDate)
+                            }
                         }
                     }
                 }
