@@ -73,7 +73,7 @@ fun createPain001(
             "Cannot operate without the creditor name",
             stage=NexusSubmissionStage.pain
         )
-    return constructXml(indent = true) {
+    return constructXml {
         root("Document") {
             attribute(
                 "xmlns",
