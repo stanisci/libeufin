@@ -84,7 +84,19 @@ data class TokenSuccessResponse(
 data class ChallengeContactData(
     val email: String? = null,
     val phone: String? = null
-)
+) {
+    init {
+        if (email != null && !EMAIL_PATTERN.matches(email))
+            throw badRequest("email contact data '$email' is malformed")
+
+        if (phone != null && !PHONE_PATTERN.matches(phone))
+            throw badRequest("phone contact data '$phone' is malformed")
+    }
+    companion object {
+        private val EMAIL_PATTERN = Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}")
+        private val PHONE_PATTERN = Regex("^\\+?[0-9]+$")
+    }
+}
 
 // Type expected at POST /accounts
 @Serializable
