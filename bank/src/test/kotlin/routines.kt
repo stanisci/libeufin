@@ -21,7 +21,63 @@ import tech.libeufin.bank.*
 import io.ktor.client.statement.HttpResponse
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.client.request.*
+import io.ktor.http.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
+import net.taler.common.errorcodes.TalerErrorCode
+
+// Test endpoint is correctly authenticated 
+suspend fun ApplicationTestBuilder.authRoutine(
+    method: HttpMethod, 
+    path: String, 
+    body: JsonObject? = null, 
+    requireExchange: Boolean = false, 
+    requireAdmin: Boolean = false,
+    withAdmin: Boolean = false
+) {
+    // No body when authentication must happen before parsing the body
+    
+    // Unknown account
+    client.request(path) {
+        this.method = method
+        basicAuth("unknown", "password")
+    }.assertUnauthorized()
+
+    // Wrong password
+    client.request(path) {
+        this.method = method
+        basicAuth("merchant", "wrong-password")
+    }.assertUnauthorized()
+
+    // Wrong account
+    client.request(path) {
+        this.method = method
+        basicAuth("exchange", "merchant-password")
+    }.assertUnauthorized()
+
+    if (requireAdmin) {
+         // Not exchange account
+        client.request(path) {
+            this.method = method
+            pwAuth("merchant")
+        }.assertUnauthorized()
+    } else if (!withAdmin) {
+        // Check no admin
+        client.request(path) {
+            this.method = method
+            pwAuth("admin")
+        }.assertUnauthorized()
+    }
+
+    if (requireExchange) {
+        // Not exchange account
+        client.request(path) {
+            this.method = method
+            if (body != null) json(body)
+            pwAuth(if (requireAdmin) "admin" else "merchant")
+        }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)
+    }
+}
 
 inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
     url: String,

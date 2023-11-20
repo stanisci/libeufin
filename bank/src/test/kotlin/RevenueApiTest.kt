@@ -33,7 +33,7 @@ class RevenueApiTest {
     @Test
     fun history() = bankSetup {
         setMaxDebt("exchange", TalerAmount("KUDOS:1000000"))
-        // TODO auth routine
+        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-revenue/history")
         historyRoutine<MerchantIncomingHistory>(
             url = "/accounts/merchant/taler-revenue/history",
             ids = { it.incoming_transactions.map { it.row_id } },

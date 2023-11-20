@@ -30,47 +30,6 @@ import org.junit.Test
 import tech.libeufin.bank.*
 
 class WireGatewayApiTest {
-    // Test endpoint is correctly authenticated 
-    suspend fun ApplicationTestBuilder.authRoutine(path: String, body: JsonObject? = null, method: HttpMethod = HttpMethod.Post, requireAdmin: Boolean = false) {
-        // No body when authentication must happen before parsing the body
-        
-        // Unknown account
-        client.request(path) {
-            this.method = method
-            basicAuth("unknown", "password")
-        }.assertUnauthorized()
-
-        // Wrong password
-        client.request(path) {
-            this.method = method
-            basicAuth("merchant", "wrong-password")
-        }.assertUnauthorized()
-
-        // Wrong account
-        client.request(path) {
-            this.method = method
-            basicAuth("exchange", "merchant-password")
-        }.assertUnauthorized()
-
-        if (requireAdmin) {
-             // Not exchange account
-            client.request(path) {
-                this.method = method
-                if (body != null) json(body)
-                pwAuth("merchant")
-            }.assertUnauthorized()
-        }
-
-        // Not exchange account
-        client.request(path) {
-            this.method = method
-            if (body != null) json(body)
-            if (requireAdmin)
-                pwAuth("admin")
-            else pwAuth("merchant")
-        }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)
-    }
-
     // Testing the POST /transfer call from the TWG API.
     @Test
     fun transfer() = bankSetup { _ -> 
@@ -82,7 +41,7 @@ class WireGatewayApiTest {
             "credit_account" to merchantPayto
         };
 
-        authRoutine("/accounts/merchant/taler-wire-gateway/transfer", valid_req)
+        authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/transfer", valid_req)
 
         // Checking exchange debt constraint.
         client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
@@ -169,7 +128,7 @@ class WireGatewayApiTest {
     fun historyIncoming() = bankSetup { 
         // Give Foo reasonable debt allowance:
         setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
-        authRoutine("/accounts/merchant/taler-wire-gateway/history/incoming?delta=7", method = HttpMethod.Get)
+        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/history/incoming")
         historyRoutine<IncomingHistory>(
             url = "/accounts/exchange/taler-wire-gateway/history/incoming",
             ids = { it.incoming_transactions.map { it.row_id } },
@@ -207,7 +166,7 @@ class WireGatewayApiTest {
     @Test
     fun historyOutgoing() = bankSetup {
         setMaxDebt("exchange", TalerAmount("KUDOS:1000000"))
-        authRoutine("/accounts/merchant/taler-wire-gateway/history/outgoing?delta=7", method = HttpMethod.Get)
+        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/history/outgoing")
         historyRoutine<OutgoingHistory>(
             url = "/accounts/exchange/taler-wire-gateway/history/outgoing",
             ids = { it.outgoing_transactions.map { it.row_id } },
@@ -243,7 +202,7 @@ class WireGatewayApiTest {
             "debit_account" to merchantPayto
         };
 
-        authRoutine("/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req, requireAdmin = true)
+        authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req, requireAdmin = true)
 
         // Checking exchange debt constraint.
         client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {

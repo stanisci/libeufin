@@ -45,15 +45,11 @@ class CoreBankConfigTest {
     // GET /monitor
     @Test
     fun monitor() = bankSetup { _ -> 
+        authRoutine(HttpMethod.Get, "/monitor", requireAdmin = true)
         // Check OK
         client.get("/monitor?timeframe=hour") {
             pwAuth("admin")
         }.assertOk()
-
-        // Check only admin
-        client.get("/monitor") {
-            pwAuth("exchange")
-        }.assertUnauthorized()
     }
 }
 
@@ -61,10 +57,7 @@ class CoreBankTokenApiTest {
     // POST /accounts/USERNAME/token
     @Test
     fun post() = bankSetup { db -> 
-        // Wrong user
-        client.post("/accounts/merchant/token") {
-            pwAuth("exchange")
-        }.assertUnauthorized()
+        authRoutine(HttpMethod.Post, "/accounts/merchant/token")
 
         // New default token
         client.postA("/accounts/merchant/token") {
@@ -259,19 +252,14 @@ class CoreBankAccountsApiTest {
     // Test admin-only account creation
     @Test
     fun createAccountRestrictedTest() = bankSetup(conf = "test_restrict.conf") { _ -> 
-        val req = obj {
-            "username" to "baz"
-            "password" to "xyz"
-            "name" to "Mallory"
-        }
-
-        client.post("/accounts") {
-            pwAuth("merchant")
-            json(req)
-        }.assertUnauthorized()
+        authRoutine(HttpMethod.Post, "/accounts", requireAdmin = true)
         client.post("/accounts") {
             pwAuth("admin")
-            json(req)
+            json {
+                "username" to "baz"
+                "password" to "xyz"
+                "name" to "Mallory"
+            }
         }.assertCreated()
     }
 
@@ -321,6 +309,8 @@ class CoreBankAccountsApiTest {
     // PATCH /accounts/USERNAME
     @Test
     fun accountReconfig() = bankSetup { _ -> 
+        authRoutine(HttpMethod.Patch, "/accounts/merchant", withAdmin = true)
+
         // Successful attempt now.
         val cashout = IbanPayTo(genIbanPaytoUri())
         val req = obj {
@@ -390,6 +380,8 @@ class CoreBankAccountsApiTest {
     // PATCH /accounts/USERNAME/auth
     @Test
     fun passwordChangeTest() = bankSetup { _ -> 
+        authRoutine(HttpMethod.Patch, "/accounts/merchant/auth", withAdmin = true)
+
         // Changing the password.
         client.patch("/accounts/customer/auth") {
             basicAuth("customer", "customer-password")
@@ -441,6 +433,7 @@ class CoreBankAccountsApiTest {
     // GET /public-accounts and GET /accounts
     @Test
     fun accountsListTest() = bankSetup { _ -> 
+        authRoutine(HttpMethod.Get, "/accounts", requireAdmin = true)
         // Remove default accounts
         listOf("merchant", "exchange", "customer").forEach {
             client.delete("/accounts/$it") {
@@ -502,53 +495,19 @@ class CoreBankAccountsApiTest {
     // GET /accounts/USERNAME
     @Test
     fun getAccountTest() = bankSetup { _ -> 
+        authRoutine(HttpMethod.Get, "/accounts/merchant", withAdmin = true)
         // Check ok
         client.getA("/accounts/merchant").assertOkJson<AccountData> {
             assertEquals("Merchant", it.name)
         }
-
-        // Check admin ok
-        client.get("/accounts/merchant") {
-            pwAuth("admin")
-        }.assertOk()
-
-        // Check wrong user
-        client.get("/accounts/exchange") {
-            pwAuth("merchant")
-        }.assertUnauthorized()
     }
 }
 
 class CoreBankTransactionsApiTest {
-    // Test endpoint is correctly authenticated 
-    suspend fun ApplicationTestBuilder.authRoutine(path: String, withAdmin: Boolean = true, method: HttpMethod = HttpMethod.Post) {
-        // No body when authentication must happen before parsing the body
-        
-        // Unknown account
-        client.request(path) {
-            this.method = method
-            basicAuth("unknown", "password")
-        }.assertUnauthorized()
-
-        // Wrong password
-        client.request(path) {
-            this.method = method
-            basicAuth("merchant", "wrong-password")
-        }.assertUnauthorized()
-
-        // Wrong account
-        client.request(path) {
-            this.method = method
-            basicAuth("exchange", "merchant-password")
-        }.assertUnauthorized()
-
-        // TODO check admin rights
-    }
-
     // GET /transactions
     @Test
     fun testHistory() = bankSetup { _ -> 
-        authRoutine("/accounts/customer/transactions", method = HttpMethod.Get)
+        authRoutine(HttpMethod.Get, "/accounts/merchant/transactions")
         historyRoutine<BankAccountTransactionsResponse>(
             url = "/accounts/customer/transactions",
             ids = { it.transactions.map { it.row_id } },
@@ -586,7 +545,7 @@ class CoreBankTransactionsApiTest {
     // GET /transactions/T_ID
     @Test
     fun testById() = bankSetup { _ -> 
-        authRoutine("/accounts/merchant/transactions/1", method = HttpMethod.Get)
+        authRoutine(HttpMethod.Get, "/accounts/merchant/transactions/42")
 
         // Create transaction
         tx("merchant", "KUDOS:0.3", "exchange", "tx")
@@ -607,12 +566,12 @@ class CoreBankTransactionsApiTest {
     // POST /transactions
     @Test
     fun create() = bankSetup { _ -> 
+        authRoutine(HttpMethod.Post, "/accounts/merchant/transactions")
+
         val valid_req = obj {
             "payto_uri" to "$exchangePayto?message=payout"
             "amount" to "KUDOS:0.3"
         }
-
-        authRoutine("/accounts/merchant/transactions")
 
         // Check OK
         client.postA("/accounts/merchant/transactions") {
@@ -732,6 +691,8 @@ class CoreBankWithdrawalApiTest {
     // POST /accounts/USERNAME/withdrawals
     @Test
     fun create() = bankSetup { _ ->
+        authRoutine(HttpMethod.Post, "/accounts/merchant/withdrawals")
+        
         // Check OK
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:9.0" } 
@@ -894,7 +855,8 @@ class CoreBankCashoutApiTest {
     // POST /accounts/{USERNAME}/cashouts
     @Test
     fun create() = bankSetup { _ ->
-        // TODO auth routine
+        authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts")
+
         val req = obj {
             "request_uid" to randShortHashCode()
             "amount_debit" to "KUDOS:1"
@@ -994,7 +956,8 @@ class CoreBankCashoutApiTest {
     // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort
     @Test
     fun abort() = bankSetup { _ ->
-        // TODO auth routine
+        authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts/42/abort")
+
         fillCashoutInfo("customer")
         
         val req = obj {
@@ -1057,7 +1020,8 @@ class CoreBankCashoutApiTest {
     // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm
     @Test
     fun confirm() = bankSetup { db -> 
-        // TODO auth routine
+        authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts/42/confirm")
+
         client.patchA("/accounts/customer") {
             json {
                 "challenge_contact_data" to obj {
@@ -1177,7 +1141,7 @@ class CoreBankCashoutApiTest {
     // GET /accounts/{USERNAME}/cashouts/{CASHOUT_ID}
     @Test
     fun get() = bankSetup { _ ->
-        // TODO auth routine
+        authRoutine(HttpMethod.Get, "/accounts/merchant/cashouts/42")
         fillCashoutInfo("customer")
 
         val amountDebit = TalerAmount("KUDOS:1.5")
@@ -1249,7 +1213,7 @@ class CoreBankCashoutApiTest {
     // GET /accounts/{USERNAME}/cashouts
     @Test
     fun history() = bankSetup { _ ->
-        // TODO auth routine
+        authRoutine(HttpMethod.Get, "/accounts/merchant/cashouts")
         historyRoutine<Cashouts>(
             url = "/accounts/customer/cashouts",
             ids = { it.cashouts.map { it.cashout_id } },
@@ -1261,7 +1225,7 @@ class CoreBankCashoutApiTest {
     // GET /cashouts
     @Test
     fun globalHistory() = bankSetup { _ ->
-        // TODO admin auth routine
+        authRoutine(HttpMethod.Get, "/cashouts", requireAdmin = true)
         historyRoutine<GlobalCashouts>(
             url = "/cashouts",
             ids = { it.cashouts.map { it.cashout_id } },
