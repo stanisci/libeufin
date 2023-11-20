@@ -9,6 +9,8 @@ import java.sql.PreparedStatement
 import java.sql.SQLException
 import java.time.Instant
 
+// Remove this once TalerAmount from the bank
+// module gets moved to the 'util' module.
 data class TalerAmount(
     val value: Long,
     val fraction: Int, // has at most 8 digits.
