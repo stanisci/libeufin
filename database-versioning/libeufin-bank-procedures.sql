@@ -973,7 +973,6 @@ CREATE OR REPLACE FUNCTION cashin(
   IN in_amount taler_amount,
   IN in_subject TEXT,
   -- Error status
-  OUT out_no_account BOOLEAN,
   OUT out_too_small BOOLEAN,
   OUT out_balance_insufficient BOOLEAN
 )

@@ -38,7 +38,7 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
     get("/taler-wire-gateway/config") {
         call.respond(TWGConfigResponse(
-            currency = ctx.currency
+            currency = ctx.regional_currency.currency
         ))
         return@get
     }
