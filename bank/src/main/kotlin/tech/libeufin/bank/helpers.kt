@@ -29,7 +29,7 @@ import io.ktor.server.routing.RouteSelectorEvaluation
 import io.ktor.server.routing.RoutingResolveContext
 import io.ktor.server.util.*
 import io.ktor.util.pipeline.PipelineContext
-import java.net.URL
+import java.net.*
 import java.time.*
 import java.time.temporal.*
 import java.util.*
@@ -56,7 +56,7 @@ suspend fun ApplicationCall.bankInfo(db: Database): BankInfo
     )
 
 // Generates a new Payto-URI with IBAN scheme.
-fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
+fun genIbanPaytoUri(): String = "payto://iban/${getIban()}"
 
 /**
  *  Builds the taler://withdraw-URI.  Such URI will serve the requests
@@ -67,7 +67,7 @@ fun genIbanPaytoUri(): String = "payto://iban/SANDBOXX/${getIban()}"
  *      https://$BANK_URL/taler-integration
  */
 fun getTalerWithdrawUri(baseUrl: String, woId: String) = url {
-    val baseUrlObj = URL(baseUrl)
+    val baseUrlObj = URI(baseUrl).toURL()
     protocol = URLProtocol(
         name = "taler".plus(if (baseUrlObj.protocol.lowercase() == "http") "+http" else ""), defaultPort = -1
     )
@@ -98,8 +98,7 @@ fun ApplicationCall.uuidUriComponent(name: String): UUID {
     try {
         return UUID.fromString(expectUriComponent(name))
     } catch (e: Exception) {
-        logger.error(e.message)
-        throw badRequest("UUID uri component malformed")
+        throw badRequest("UUID uri component malformed: ${e.message}")
     }
 }
 
@@ -107,8 +106,7 @@ fun ApplicationCall.longUriComponent(name: String): Long {
     try {
         return expectUriComponent(name).toLong()
     } catch (e: Exception) {
-        logger.error(e.message)
-        throw badRequest("UUID uri component malformed")
+        throw badRequest("Long uri component malformed: ${e.message}")
     }
 }
 

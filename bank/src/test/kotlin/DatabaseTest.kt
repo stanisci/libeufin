@@ -171,6 +171,19 @@ class DatabaseTest {
             assertEquals(Pair(true, false), cTry(this, "new-code", expired))
         }
     }}
+
+    // Testing iban payto uri normalization
+    @Test
+    fun ibanPayto() = setup { db, ctx ->
+        val expected = "payto://iban/CH9300762011623852957"
+        val inputs = listOf(
+            "payto://iban/BIC/CH9300762011623852957?receiver-name=NotGiven",
+            "payto://iban/ch%209300-7620-1162-3852-957",
+        )
+        for (input in inputs) {
+            assertEquals(expected, IbanPayTo(input).canonical)
+        }
+    }
 }
 
 
