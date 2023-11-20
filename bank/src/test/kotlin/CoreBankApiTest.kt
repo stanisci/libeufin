@@ -548,70 +548,39 @@ class CoreBankTransactionsApiTest {
     // GET /transactions
     @Test
     fun testHistory() = bankSetup { _ -> 
-        suspend fun HttpResponse.assertHistory(size: Int) {
-            assertHistoryIds<BankAccountTransactionsResponse>(size) {
-                it.transactions.map { it.row_id }
-            }
-        }
-
-        authRoutine("/accounts/merchant/transactions", method = HttpMethod.Get)
-
-        // Check error when no transactions
-        client.get("/accounts/merchant/transactions") {
-            pwAuth("merchant")
-        }.assertNoContent()
-        
-        // Gen three transactions from merchant to exchange
-        repeat(3) {
-            tx("merchant", "KUDOS:0.$it", "customer")
-        }
-        // Gen two transactions from exchange to merchant
-        repeat(2) {
-            tx("customer", "KUDOS:0.$it", "merchant")
-        }
-
-        // Check no useless polling
-        assertTime(0, 100) {
-            client.get("/accounts/merchant/transactions?delta=-6&start=11&long_poll_ms=1000") {
-                pwAuth("merchant")
-            }.assertHistory(5)
-        }
-
-        // Check no polling when find transaction
-        assertTime(0, 100) {
-            client.getA("/accounts/merchant/transactions?delta=6&long_poll_ms=1000") 
-                .assertHistory(5)
-        }
-
-        coroutineScope {
-            launch { // Check polling succeed
-                assertTime(100, 200) {
-                    client.getA("/accounts/merchant/transactions?delta=2&start=10&long_poll_ms=1000")
-                        .assertHistory(1)
+        authRoutine("/accounts/customer/transactions", method = HttpMethod.Get)
+        historyRoutine<BankAccountTransactionsResponse>(
+            url = "/accounts/customer/transactions",
+            ids = { it.transactions.map { it.row_id } },
+            registered = listOf(
+                { 
+                    // Transactions from merchant to exchange
+                    tx("merchant", "KUDOS:0.1", "customer")
+                },
+                { 
+                    // Transactions from exchange to merchant
+                    tx("customer", "KUDOS:0.1", "merchant")
+                },
+                { 
+                    // Transactions from merchant to exchange
+                    tx("merchant", "KUDOS:0.1", "customer")
+                },
+                { 
+                    // Cashout from merchant
+                    cashout("KUDOS:0.1")
                 }
-            }
-            launch { // Check polling timeout
-                assertTime(200, 300) {
-                    client.getA("/accounts/merchant/transactions?delta=1&start=11&long_poll_ms=200")
-                        .assertNoContent()
+            ),
+            ignored = listOf(
+                {
+                    // Ignore transactions of other accounts
+                    tx("merchant", "KUDOS:0.1", "exchange")
+                },
+                {
+                    // Ignore transactions of other accounts
+                    tx("exchange", "KUDOS:0.1", "merchant",)
                 }
-            }
-            delay(100)
-            tx("merchant", "KUDOS:4.2", "customer")
-        }
-
-        // Testing ranges. 
-        repeat(30) {
-            tx("merchant", "KUDOS:0.001", "customer")
-        }
-
-        // forward range:
-        client.getA("/accounts/merchant/transactions?delta=10&start=20")
-            .assertHistory(10)
-
-        // backward range:
-        client.getA("/accounts/merchant/transactions?delta=-10&start=25")
-            .assertHistory(10)
+            )
+        )
     }
 
     // GET /transactions/T_ID
@@ -1281,70 +1250,25 @@ class CoreBankCashoutApiTest {
     @Test
     fun history() = bankSetup { _ ->
         // TODO auth routine
-
-        suspend fun HttpResponse.assertHistory(size: Int) {
-            assertHistoryIds<Cashouts>(size) {
-                it.cashouts.map { it.cashout_id }
-            }
-        }
-
-        // Empty
-        client.getA("/accounts/customer/cashouts")
-            .assertNoContent()
-
-        // Testing ranges. 
-        repeat(30) {
-            cashout("KUDOS:0.${it+1}")
-        }
-
-        // Default
-        client.getA("/accounts/customer/cashouts")
-            .assertHistory(20)
-
-        // Forward range:
-        client.getA("/accounts/customer/cashouts?delta=10&start=20")
-            .assertHistory(10)
-
-        // Fackward range:
-        client.getA("/accounts/customer/cashouts?delta=-10&start=25")
-            .assertHistory(10)
+        historyRoutine<Cashouts>(
+            url = "/accounts/customer/cashouts",
+            ids = { it.cashouts.map { it.cashout_id } },
+            registered = listOf({ cashout("KUDOS:0.1") }),
+            polling = false
+        )
     }
 
     // GET /cashouts
     @Test
     fun globalHistory() = bankSetup { _ ->
         // TODO admin auth routine
-
-        suspend fun HttpResponse.assertHistory(size: Int) {
-            assertHistoryIds<GlobalCashouts>(size) {
-                it.cashouts.map { it.cashout_id }
-            }
-        }
-
-        // Empty
-        client.get("/cashouts") {
-            pwAuth("admin")
-        }.assertNoContent()
-
-        // Testing ranges. 
-        repeat(30) {
-            cashout("KUDOS:0.${it+1}")
-        }
-
-        // Default
-        client.get("/cashouts") {
-            pwAuth("admin")
-        }.assertHistory(20)
-
-        // Forward range:
-        client.get("/cashouts?delta=10&start=20") {
-            pwAuth("admin")
-        }.assertHistory(10)
-
-        // Fackward range:
-        client.get("/cashouts?delta=-10&start=25") {
-            pwAuth("admin")
-        }.assertHistory(10)
+        historyRoutine<GlobalCashouts>(
+            url = "/cashouts",
+            ids = { it.cashouts.map { it.cashout_id } },
+            registered = listOf({ cashout("KUDOS:0.1") }),
+            polling = false,
+            auth = "admin"
+        )
     }
 
     @Test
