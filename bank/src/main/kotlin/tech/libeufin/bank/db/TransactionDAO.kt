@@ -43,6 +43,7 @@ class TransactionDAO(private val db: Database) {
         amount: TalerAmount,
         timestamp: Instant,
     ): BankTransactionResult = db.serializable { conn ->
+        val now = timestamp.toDbMicros() ?: throw faultyTimestampByBank();
         conn.transaction {
             val stmt = conn.prepareStatement("""
                 SELECT 
@@ -64,7 +65,7 @@ class TransactionDAO(private val db: Database) {
             stmt.setString(3, subject)
             stmt.setLong(4, amount.value)
             stmt.setInt(5, amount.frac)
-            stmt.setLong(6, timestamp.toDbMicros() ?: throw faultyTimestampByBank())
+            stmt.setLong(6, now)
             stmt.executeQuery().use {
                 when {
                     !it.next() -> throw internalServerError("Bank transaction didn't properly return")
@@ -78,31 +79,65 @@ class TransactionDAO(private val db: Database) {
                         val debitAccountId = it.getLong("out_debit_bank_account_id")
                         val debitRowId = it.getLong("out_debit_row_id")
                         val metadata = TxMetadata.parse(subject)
-                        if (it.getBoolean("out_creditor_is_exchange")) {
-                            if (metadata is IncomingTxMetadata) {
-                                conn.prepareStatement("CALL register_incoming(?, ?)").run {
+                        val exchangeCreditor = it.getBoolean("out_creditor_is_exchange")
+                        val exchangeDebtor = it.getBoolean("out_debtor_is_exchange")
+                        if (exchangeCreditor && exchangeDebtor) {
+                            val kind = when (metadata) {
+                                is IncomingTxMetadata -> "an incoming taler "
+                                is OutgoingTxMetadata -> "an outgoing taler"
+                                null -> "a common"
+                            };
+                            logger.warn("exchange account $exchangeDebtor sent $kind transaction to exchange account $exchangeCreditor, this should never happens and is not bounced to prevent bouncing loop")
+                        } else if (exchangeCreditor) {
+                            val bounce = if (metadata is IncomingTxMetadata) {
+                                val registered = conn.prepareStatement("CALL register_incoming(?, ?)").run {
                                     setBytes(1, metadata.reservePub.raw)
                                     setLong(2, creditRowId)
-                                    executeUpdate() // TODO check reserve pub reuse
+                                    executeProcedureViolation()
                                 }
+                                if (!registered) {
+                                    logger.warn("exchange account $creditAccountId received an incoming taler transaction $creditRowId with an already used reserve public key")
+                                
+                                }
+                                !registered
                             } else {
-                                // TODO bounce
-                                logger.warn("exchange account $creditAccountId received a transaction $creditRowId with malformed metadata, will bounce in future version")
+                                logger.warn("exchange account $creditAccountId received a transaction $creditRowId with malformed metadata")
+                                true
                             }
-                        }
-                        if (it.getBoolean("out_debtor_is_exchange")) {
+                            if (bounce) {
+                                // No error can happens because an opposite transaction already took place in the same transaction
+                                conn.prepareStatement("""
+                                    SELECT bank_wire_transfer(
+                                        ?, ?, ?, (?, ?)::taler_amount, ?,
+                                        NULL, NULL, NULL
+                                    );
+                                """
+                                ).run {
+                                    setLong(1, debitAccountId)
+                                    setLong(2, creditAccountId)
+                                    setString(3, "Bounce $creditRowId") // TODO better subject
+                                    setLong(4, amount.value)
+                                    setInt(5, amount.frac)
+                                    setLong(6, now)
+                                    executeQuery()
+                                }
+                            }
+                        } else if (exchangeDebtor) {
                             if (metadata is OutgoingTxMetadata) {
-                                conn.prepareStatement("CALL register_outgoing(NULL, ?, ?, ?, ?, ?, ?)").run {
+                                val registered = conn.prepareStatement("CALL register_outgoing(NULL, ?, ?, ?, ?, ?, ?)").run {
                                     setBytes(1, metadata.wtid.raw)
                                     setString(2, metadata.exchangeBaseUrl.url)
                                     setLong(3, debitAccountId)
                                     setLong(4, creditAccountId)
                                     setLong(5, debitRowId)
                                     setLong(6, creditRowId)
-                                    executeUpdate() // TODO check wtid reuse
+                                    executeProcedureViolation()
+                                }
+                                if (!registered) {
+                                    logger.warn("exchange account $debitAccountId sent an outgoing taler transaction $debitRowId with an already used withdraw ID, use the API to catch this error")
                                 }
                             } else {
-                                logger.warn("exchange account $debitAccountId sent a transaction $debitRowId with malformed metadata")
+                                logger.warn("exchange account $debitAccountId sent a transaction $debitRowId with malformed metadata, use the API instead")
                             }
                         }
                         BankTransactionResult.Success(debitRowId)

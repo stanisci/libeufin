@@ -240,9 +240,9 @@ class CoreBankAccountsApiTest {
                     "username" to "foo$it"
                 }
             }.assertCreated()
-            assertBalance("foo$it", CreditDebitInfo.credit, "KUDOS:100")
+            assertBalance("foo$it", "+KUDOS:100")
         }
-        assertBalance("admin", CreditDebitInfo.debit, "KUDOS:10000")
+        assertBalance("admin", "-KUDOS:10000")
         
         // Check unsufficient fund
         client.post("/accounts") {
@@ -308,11 +308,11 @@ class CoreBankAccountsApiTest {
 
         
         // fail to delete, due to a non-zero balance.
-        tx("exchange", "KUDOS:1", "merchant")
+        tx("customer", "KUDOS:1", "merchant")
         client.delete("/accounts/merchant") {
             pwAuth("admin")
         }.assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
-        tx("merchant", "KUDOS:1", "exchange")
+        tx("merchant", "KUDOS:1", "customer")
         client.delete("/accounts/merchant") {
             pwAuth("admin")
         }.assertNoContent()
@@ -563,11 +563,11 @@ class CoreBankTransactionsApiTest {
         
         // Gen three transactions from merchant to exchange
         repeat(3) {
-            tx("merchant", "KUDOS:0.$it", "exchange")
+            tx("merchant", "KUDOS:0.$it", "customer")
         }
         // Gen two transactions from exchange to merchant
         repeat(2) {
-            tx("exchange", "KUDOS:0.$it", "merchant")
+            tx("customer", "KUDOS:0.$it", "merchant")
         }
 
         // Check no useless polling
@@ -597,12 +597,12 @@ class CoreBankTransactionsApiTest {
                 }
             }
             delay(100)
-            tx("merchant", "KUDOS:4.2", "exchange")
+            tx("merchant", "KUDOS:4.2", "customer")
         }
 
         // Testing ranges. 
         repeat(30) {
-            tx("merchant", "KUDOS:0.001", "exchange")
+            tx("merchant", "KUDOS:0.001", "customer")
         }
 
         // forward range:
@@ -713,19 +713,9 @@ class CoreBankTransactionsApiTest {
             }
         }.assertConflict(TalerErrorCode.BANK_SAME_ACCOUNT)
 
-        suspend fun checkBalance(
-            merchantDebt: Boolean,
-            merchantAmount: String,
-            customerDebt: Boolean,
-            customerAmount: String,
-        ) {
-            assertBalance("merchant", if (merchantDebt) CreditDebitInfo.debit else CreditDebitInfo.credit, merchantAmount)
-            assertBalance("customer", if (customerDebt) CreditDebitInfo.debit else CreditDebitInfo.credit, customerAmount)
-        }
-
         // Init state
-        assertBalance("merchant", CreditDebitInfo.debit, "KUDOS:2.4")
-        assertBalance("customer", CreditDebitInfo.credit, "KUDOS:0")
+        assertBalance("merchant", "+KUDOS:0")
+        assertBalance("customer", "+KUDOS:0")
         // Send 2 times 3
         repeat(2) {
             tx("merchant", "KUDOS:3", "customer")
@@ -733,20 +723,39 @@ class CoreBankTransactionsApiTest {
         client.post("/accounts/merchant/transactions") {
             pwAuth("merchant")
             json {
-                "payto_uri" to "$customerPayto?message=payout2&amount=KUDOS:3"
+                "payto_uri" to "$customerPayto?message=payout2&amount=KUDOS:5"
             }
         }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
-        assertBalance("merchant", CreditDebitInfo.debit, "KUDOS:8.4")
-        assertBalance("customer", CreditDebitInfo.credit, "KUDOS:6")
+        assertBalance("merchant", "-KUDOS:6")
+        assertBalance("customer", "+KUDOS:6")
         // Send throught debt
-        client.post("/accounts/customer/transactions") {
-            pwAuth("customer")
-            json {
-                "payto_uri" to "$merchantPayto?message=payout2&amount=KUDOS:10"
-            }
-        }.assertOk()
-        assertBalance("merchant", CreditDebitInfo.credit, "KUDOS:1.6")
-        assertBalance("customer", CreditDebitInfo.debit, "KUDOS:4")
+        tx("customer", "KUDOS:10", "merchant")
+        assertBalance("merchant", "+KUDOS:4")
+        assertBalance("customer", "-KUDOS:4")
+        tx("merchant", "KUDOS:4", "customer")
+
+        // Check bounce
+        assertBalance("merchant", "+KUDOS:0")
+        assertBalance("exchange", "+KUDOS:0")
+        tx("merchant", "KUDOS:1", "exchange", "") // Bounce common to transaction
+        tx("merchant", "KUDOS:1", "exchange", "Malformed") // Bounce malformed transaction
+        val reserve_pub = randShortHashCode();
+        tx("merchant", "KUDOS:1", "exchange", IncomingTxMetadata(reserve_pub).encode()) // Accept incoming
+        tx("merchant", "KUDOS:1", "exchange", IncomingTxMetadata(reserve_pub).encode()) // Bounce reserve_pub reuse
+        assertBalance("merchant", "-KUDOS:1")
+        assertBalance("exchange", "+KUDOS:1")
+        
+        // Check warn
+        assertBalance("merchant", "-KUDOS:1")
+        assertBalance("exchange", "+KUDOS:1")
+        tx("exchange", "KUDOS:1", "merchant", "") // Warn common to transaction
+        tx("exchange", "KUDOS:1", "merchant", "Malformed") // Warn malformed transaction
+        val wtid = randShortHashCode()
+        val exchange = ExchangeUrl("http://exchange.example.com/")
+        tx("exchange", "KUDOS:1", "merchant", OutgoingTxMetadata(wtid, exchange).encode()) // Accept outgoing
+        tx("exchange", "KUDOS:1", "merchant", OutgoingTxMetadata(wtid, exchange).encode()) // Warn wtid reuse
+        assertBalance("merchant", "+KUDOS:3")
+        assertBalance("exchange", "-KUDOS:3")
     }
 }
 
@@ -894,7 +903,7 @@ class CoreBankWithdrawalApiTest {
             withdrawalSelect(uuid)
 
             // Send too much money
-            tx("merchant", "KUDOS:5", "exchange")
+            tx("merchant", "KUDOS:5", "customer")
             client.post("/withdrawals/$uuid/confirm")
                 .assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
@@ -1273,8 +1282,6 @@ class CoreBankCashoutApiTest {
     fun history() = bankSetup { _ ->
         // TODO auth routine
 
-        fillCashoutInfo("customer")
-
         suspend fun HttpResponse.assertHistory(size: Int) {
             assertHistoryIds<Cashouts>(size) {
                 it.cashouts.map { it.cashout_id }
@@ -1307,8 +1314,6 @@ class CoreBankCashoutApiTest {
     @Test
     fun globalHistory() = bankSetup { _ ->
         // TODO admin auth routine
-
-        fillCashoutInfo("customer")
 
         suspend fun HttpResponse.assertHistory(size: Int) {
             assertHistoryIds<GlobalCashouts>(size) {

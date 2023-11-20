@@ -176,6 +176,25 @@ class WireGatewayApiTest {
             }
         }
 
+        suspend fun latestId(): Long {
+            return client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-1")
+                .assertOkJson<IncomingHistory>().incoming_transactions[0].row_id
+        }
+
+        suspend fun testTrigger(trigger: suspend () -> Unit) {
+            coroutineScope {
+                val id = latestId()
+                launch {
+                    assertTime(100, 200) {
+                        client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7&start=$id&long_poll_ms=1000") 
+                            .assertHistory(1)
+                    }
+                }
+                delay(100)
+                trigger()
+            }
+        }
+
         authRoutine("/accounts/merchant/taler-wire-gateway/history/incoming?delta=7", method = HttpMethod.Get)
 
         // Check error when no transactions
@@ -193,15 +212,7 @@ class WireGatewayApiTest {
         // Gen one transaction using raw bank transaction logic
         tx("merchant", "KUDOS:10", "exchange", IncomingTxMetadata(randShortHashCode()).encode())
         // Gen one transaction using withdraw logic
-        client.postA("/accounts/merchant/withdrawals") {
-            json { "amount" to "KUDOS:9" } 
-        }.assertOkJson<BankAccountCreateWithdrawalResponse> {
-            val uuid = it.taler_withdraw_uri.split("/").last()
-            withdrawalSelect(uuid)
-            client.post("/withdrawals/${uuid}/confirm") {
-                pwAuth("merchant")
-            }.assertNoContent()
-        }
+        withdrawal("KUDOS:9")
 
         // Check ignore bogus subject
         client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7") 
@@ -213,7 +224,7 @@ class WireGatewayApiTest {
         
         // Check no useless polling
         assertTime(0, 100) {
-            client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-6&start=15&long_poll_ms=1000")
+            client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-6&long_poll_ms=1000")
                 .assertHistory(5)
         }
 
@@ -224,15 +235,16 @@ class WireGatewayApiTest {
         }
 
         coroutineScope {
+            val id = latestId()
             launch {  // Check polling succeed
                 assertTime(100, 200) {
-                    client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=2&start=14&long_poll_ms=1000")
+                    client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=2&start=$id&long_poll_ms=1000")
                         .assertHistory(1)
                 }
             }
             launch {  // Check polling timeout
                 assertTime(200, 300) {
-                    client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=1&start=16&long_poll_ms=200")
+                    client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=1&start=${id+2}&long_poll_ms=200")
                         .assertNoContent()
                 }
             }
@@ -241,47 +253,30 @@ class WireGatewayApiTest {
         }
 
         // Test trigger by raw transaction
-        coroutineScope {
-            launch {
-                assertTime(100, 200) {
-                    client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7&start=16&long_poll_ms=1000")
-                        .assertHistory(1)
-                }
-            }
-            delay(100)
+        testTrigger { 
             tx("merchant", "KUDOS:10", "exchange", IncomingTxMetadata(randShortHashCode()).encode())
-        }
+        } 
+        // Test trigger by withdraw operation
+        testTrigger { withdrawal("KUDOS:9") }
+        // Test trigger by incoming
+        testTrigger { addIncoming("KUDOS:9") }
 
-        // Test trigger by withdraw operationr
-        coroutineScope {
-            launch {
-                assertTime(100, 200) {
-                    client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=7&start=18&long_poll_ms=1000") 
-                        .assertHistory(1)
-                }
-            }
-            delay(100)
-            client.postA("/accounts/merchant/withdrawals") {
-                json { "amount" to "KUDOS:9" } 
-            }.assertOkJson<BankAccountCreateWithdrawalResponse> {
-                val uuid = it.taler_withdraw_uri.split("/").last()
-                withdrawalSelect(uuid)
-                client.postA("/withdrawals/${uuid}/confirm")
-                    .assertNoContent()
-            }
-        }
-
-        // Testing ranges. 
-        repeat(20) {
+        // Testing ranges.
+        repeat(5) {
             addIncoming("KUDOS:10")
         }
+        val id = latestId()
 
         // forward range:
-        client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=10&start=20")
+        client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=10")
+            .assertHistory(10)
+        client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=10&start=4")
             .assertHistory(10)
 
         // backward range:
-        client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-10&start=25")
+        client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-10")
+            .assertHistory(10)
+        client.getA("/accounts/exchange/taler-wire-gateway/history/incoming?delta=-10&start=${id-4}")
             .assertHistory(10)
     }
 
@@ -296,6 +291,25 @@ class WireGatewayApiTest {
         suspend fun HttpResponse.assertHistory(size: Int) {
             assertHistoryIds<OutgoingHistory>(size) {
                 it.outgoing_transactions.map { it.row_id }
+            }
+        }
+
+        suspend fun latestId(): Long {
+            return client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-1")
+                .assertOkJson<OutgoingHistory>().outgoing_transactions[0].row_id
+        }
+
+        suspend fun testTrigger(trigger: suspend () -> Unit) {
+            coroutineScope {
+                val id = latestId()
+                launch {
+                    assertTime(100, 200) {
+                        client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=7&start=$id&long_poll_ms=1000") 
+                            .assertHistory(1)
+                    }
+                }
+                delay(100)
+                trigger()
             }
         }
 
@@ -328,7 +342,7 @@ class WireGatewayApiTest {
 
         // Check no useless polling
         assertTime(0, 100) {
-            client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-6&start=15&long_poll_ms=1000")
+            client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-6&long_poll_ms=1000")
                 .assertHistory(5)
         }
 
@@ -339,15 +353,16 @@ class WireGatewayApiTest {
         }
 
         coroutineScope {
+            val id = latestId()
             launch {  // Check polling succeed forward
                 assertTime(100, 200) {
-                    client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=2&start=14&long_poll_ms=1000")
+                    client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=2&start=$id&long_poll_ms=1000")
                         .assertHistory(1)
                 }
             }
             launch {  // Check polling timeout forward
                 assertTime(200, 300) {
-                    client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=1&start=16&long_poll_ms=200")
+                    client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=1&start=${id+2}&long_poll_ms=200")
                         .assertNoContent()
                 }
             }
@@ -355,17 +370,29 @@ class WireGatewayApiTest {
             transfer("KUDOS:10")
         }
 
-        // Testing ranges.
-        repeat(20) {
+        // Test trigger by raw transaction
+        testTrigger { 
+            tx("exchange", "KUDOS:10", "merchant", OutgoingTxMetadata(randShortHashCode(), ExchangeUrl("http://exchange.example.com/")).encode())
+        } 
+        // Test trigger by outgoing
+        testTrigger { transfer("KUDOS:9") }
+
+        // Testing ranges
+        repeat(5) {
             transfer("KUDOS:10")
         }
+        val id = latestId()
 
         // forward range:
-        client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=10&start=20") 
+        client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=10")
+            .assertHistory(10)
+        client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=10&start=4")
             .assertHistory(10)
 
         // backward range:
-        client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-10&start=25") 
+        client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-10")
+            .assertHistory(10)
+        client.getA("/accounts/exchange/taler-wire-gateway/history/outgoing?delta=-10&start=${id-4}")
             .assertHistory(10)
     }
 

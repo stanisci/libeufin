@@ -51,8 +51,8 @@ class DatabaseTest {
 
     @Test
     fun serialisation() = bankSetup {
-        assertBalance("customer", CreditDebitInfo.credit, "KUDOS:0")
-        assertBalance("merchant", CreditDebitInfo.credit, "KUDOS:0")
+        assertBalance("customer", "+KUDOS:0")
+        assertBalance("merchant", "+KUDOS:0")
         coroutineScope {
             repeat(10) { 
                 launch {
@@ -60,8 +60,8 @@ class DatabaseTest {
                 }
             }
         }
-        assertBalance("customer", CreditDebitInfo.debit, "KUDOS:4.5")
-        assertBalance("merchant", CreditDebitInfo.credit, "KUDOS:4.5")
+        assertBalance("customer", "-KUDOS:4.5")
+        assertBalance("merchant", "+KUDOS:4.5")
         coroutineScope {
             repeat(5) { 
                 launch {

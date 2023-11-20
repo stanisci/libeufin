@@ -176,6 +176,19 @@ fun PreparedStatement.executeUpdateViolation(): Boolean {
     }
 }
 
+fun PreparedStatement.executeProcedureViolation(): Boolean {
+    val savepoint = connection.setSavepoint();
+    return try {
+        executeUpdate()
+        connection.releaseSavepoint(savepoint)
+        true
+    } catch (e: SQLException) {
+        connection.rollback(savepoint);
+        if (e.sqlState == "23505") return false // unique_violation
+        throw e // rethrowing, not to hide other types of errors.
+    }
+}
+
 // sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
 fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
     logger.info("doing DB initialization, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")

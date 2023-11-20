@@ -36,7 +36,6 @@ class StatsTest {
         setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
         setMaxDebt("exchange", TalerAmount("KUDOS:1000"))
         setMaxDebt("customer", TalerAmount("KUDOS:1000"))
-        fillCashoutInfo("customer")
 
         suspend fun cashin(amount: String) {
             db.conn { conn ->

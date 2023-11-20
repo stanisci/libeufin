@@ -116,6 +116,7 @@ fun dbSetup(lambda: suspend (Database) -> Unit) {
 
 /* ----- Common actions ----- */
 
+/** Set [account] debit threshold to [maxDebt] amount */
 suspend fun ApplicationTestBuilder.setMaxDebt(account: String, maxDebt: TalerAmount) {
     client.patch("/accounts/$account") { 
         pwAuth("admin")
@@ -123,16 +124,18 @@ suspend fun ApplicationTestBuilder.setMaxDebt(account: String, maxDebt: TalerAmo
     }.assertNoContent()
 }
 
-suspend fun ApplicationTestBuilder.assertBalance(account: String, info: CreditDebitInfo, amount: String) {
+/** Check [account] balance is [amount], [amount] is prefixed with + for credit and - for debit */
+suspend fun ApplicationTestBuilder.assertBalance(account: String, amount: String) {
     client.get("/accounts/$account") { 
         pwAuth("admin")
     }.assertOkJson<AccountData> {
         val balance = it.balance;
-        assertEquals(info, balance.credit_debit_indicator)
-        assertEquals(TalerAmount(amount), balance.amount)
+        val fmt = "${if (balance.credit_debit_indicator == CreditDebitInfo.debit) '-' else '+'}${balance.amount}"
+        assertEquals(amount, fmt, "For $account")
     }
 }
 
+/** Perform a bank transaction of [amount] [from] account [to] account with [subject} */
 suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String, subject: String = "payout"): Long {
     return client.post("/accounts/$from/transactions") {
         basicAuth("$from", "$from-password")
@@ -142,6 +145,7 @@ suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String, 
     }.assertOkJson<TransactionCreateResponse>().row_id
 }
 
+/** Perform a taler outgoing transaction of [amount] from exchange to merchant */
 suspend fun ApplicationTestBuilder.transfer(amount: String) {
     client.post("/accounts/exchange/taler-wire-gateway/transfer") {
         pwAuth("exchange")
@@ -155,6 +159,7 @@ suspend fun ApplicationTestBuilder.transfer(amount: String) {
     }.assertOk()
 }
 
+/** Perform a taler incoming transaction of [amount] from merchant to exchange */
 suspend fun ApplicationTestBuilder.addIncoming(amount: String) {
     client.post("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
         pwAuth("admin")
@@ -166,17 +171,43 @@ suspend fun ApplicationTestBuilder.addIncoming(amount: String) {
     }.assertOk()
 }
 
+/** Perform a cashout operation of [amount] from customer */
 suspend fun ApplicationTestBuilder.cashout(amount: String) {
-    client.postA("/accounts/customer/cashouts") {
+    val res = client.postA("/accounts/customer/cashouts") {
         json {
             "request_uid" to randShortHashCode()
             "amount_debit" to amount
             "amount_credit" to convert(amount)
         }
+    } 
+    if (res.status == HttpStatusCode.Conflict) {
+        // Retry with cashout info
+        fillCashoutInfo("customer")
+        client.postA("/accounts/customer/cashouts") {
+            json {
+                "request_uid" to randShortHashCode()
+                "amount_debit" to amount
+                "amount_credit" to convert(amount)
+            }
+        } 
+    } else { 
+        res
     }.assertOkJson<CashoutPending> {
         client.postA("/accounts/customer/cashouts/${it.cashout_id}/confirm") {
             json { "tan" to smsCode("+99") }
         }.assertNoContent()
+    }
+}
+
+/** Perform a whithrawal operation of [amount] from customer */
+suspend fun ApplicationTestBuilder.withdrawal(amount: String) {
+    client.postA("/accounts/merchant/withdrawals") {
+        json { "amount" to amount } 
+    }.assertOkJson<BankAccountCreateWithdrawalResponse> {
+        val uuid = it.taler_withdraw_uri.split("/").last()
+        withdrawalSelect(uuid)
+        client.postA("/withdrawals/${uuid}/confirm")
+            .assertNoContent()
     }
 }
 
