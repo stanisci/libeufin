@@ -20,6 +20,7 @@ import java.time.ZoneId
 import java.util.UUID
 import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
+import kotlin.math.min
 import kotlin.system.exitProcess
 import kotlin.text.StringBuilder
 
@@ -427,8 +428,19 @@ private suspend fun fetchDocuments(
     db: Database,
     ctx: FetchContext
 ) {
-    // maybe get last execution_date.
-    val lastExecutionTime: Instant? = ctx.pinnedStart ?: db.incomingPaymentLastExecTime()
+    /**
+     * Getting the least execution between the latest incoming
+     * and outgoing payments.  This way, if ingesting outgoing
+     * (incoming) payments crashed, we make sure we request from
+     * the last successful outgoing (incoming) payment execution
+     * time, to obtain again from the bank those payments that did
+     * not make it to the database due to the crash.
+     */
+    val lastIncomingTime = db.incomingPaymentLastExecTime()
+    val lastOutgoingTime = db.outgoingPaymentLastExecTime()
+    val requestFrom: Instant? = minTimestamp(lastIncomingTime, lastOutgoingTime)
+
+    val lastExecutionTime: Instant? = ctx.pinnedStart ?: requestFrom
     logger.debug("Fetching ${ctx.whichDocument} from timestamp: $lastExecutionTime")
     // downloading the content
     val maybeContent = downloadHelper(ctx, lastExecutionTime) ?: exitProcess(1) // client is wrong, failing.

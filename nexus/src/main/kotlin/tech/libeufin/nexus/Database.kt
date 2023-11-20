@@ -321,8 +321,25 @@ class Database(dbConfig: String): java.io.Closeable {
     }
 
     /**
-     * Get the last execution time of an incoming transaction.  This
-     * serves as the start date for new requests to the bank.
+     * Get the last execution time of outgoing transactions.
+     *
+     * @return [Instant] or null if no results were found
+     */
+    suspend fun outgoingPaymentLastExecTime(): Instant? = runConn { conn ->
+        val stmt = conn.prepareStatement(
+            "SELECT MAX(execution_time) as latest_execution_time FROM outgoing_transactions"
+        )
+        stmt.executeQuery().use {
+            if (!it.next()) return@runConn null
+            val timestamp = it.getLong("latest_execution_time")
+            if (timestamp == 0L) return@runConn null
+            return@runConn timestamp.microsToJavaInstant()
+                ?: throw Exception("Could not convert latest_execution_time to Instant")
+        }
+    }
+
+    /**
+     * Get the last execution time of an incoming transaction.
      *
      * @return [Instant] or null if no results were found
      */
@@ -334,10 +351,8 @@ class Database(dbConfig: String): java.io.Closeable {
             if (!it.next()) return@runConn null
             val timestamp = it.getLong("latest_execution_time")
             if (timestamp == 0L) return@runConn null
-            val asInstant = timestamp.microsToJavaInstant()
-            if (asInstant == null)
-                throw Exception("Could not convert latest_execution_time to Instant")
-            return@runConn asInstant
+            return@runConn timestamp.microsToJavaInstant()
+                ?: throw Exception("Could not convert latest_execution_time to Instant")
         }
     }
 

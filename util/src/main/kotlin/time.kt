@@ -105,3 +105,30 @@ fun parseBookDate(bookDate: String): Instant {
     val l = LocalDate.parse(bookDate)
     return Instant.from(l.atStartOfDay(ZoneId.of("UTC")))
 }
+
+/**
+ * Returns the minimum instant between two.
+ *
+ * @param a input [Instant]
+ * @param b input [Instant]
+ * @return the minimum [Instant] or null if even one is null.
+ */
+fun minTimestamp(a: Instant?, b: Instant?): Instant? {
+    if (a == null || b == null) return null
+    if (a.isBefore(b)) return a
+    return b // includes the case where a == b.
+}
+
+/**
+ * Returns the max instant between two.
+ *
+ * @param a input [Instant]
+ * @param b input [Instant]
+ * @return the max [Instant] or null if both are null
+ */
+fun maxTimestamp(a: Instant?, b: Instant?): Instant? {
+    if (a == null) return b
+    if (b == null) return a
+    if (a.isAfter(b)) return a
+    return b // includes the case where a == b
+}
