@@ -63,8 +63,10 @@ fun forbidden(
     error: TalerErrorCode = TalerErrorCode.END
 ): LibeufinBankException = libeufinError(HttpStatusCode.Forbidden, hint, error)
 
-fun unauthorized(hint: String? = "Login failed"): LibeufinBankException 
-    = libeufinError(HttpStatusCode.Unauthorized, hint, TalerErrorCode.GENERIC_UNAUTHORIZED)
+fun unauthorized(
+    hint: String,
+    error: TalerErrorCode = TalerErrorCode.GENERIC_UNAUTHORIZED
+): LibeufinBankException = libeufinError(HttpStatusCode.Unauthorized, hint, error)
 
 fun internalServerError(hint: String?): LibeufinBankException 
     = libeufinError(HttpStatusCode.InternalServerError, hint, TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE)

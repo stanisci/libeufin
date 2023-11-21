@@ -21,6 +21,7 @@ package tech.libeufin.bank
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.routing.Route
+import io.ktor.server.response.header
 import io.ktor.util.AttributeKey
 import io.ktor.util.pipeline.PipelineContext
 import java.time.Instant
@@ -84,10 +85,16 @@ val ApplicationCall.isAdmin: Boolean get() = attributes.getOrNull(AUTH_IS_ADMIN)
  */
 private suspend fun ApplicationCall.authenticateBankRequest(db: Database, requiredScope: TokenScope): String? {
     // Extracting the Authorization header.
-    val header = getAuthorizationRawHeader(this.request) ?: throw badRequest(
-        "Authorization header not found.",
-        TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
-    )
+    val header = getAuthorizationRawHeader(this.request)
+    if (header == null) {
+        // Basic auth challenge
+        response.header(HttpHeaders.WWWAuthenticate, "Basic")
+        throw unauthorized(
+            "Authorization header not found.",
+            TalerErrorCode.GENERIC_PARAMETER_MISSING
+        )
+    }
+    
     val authDetails = getAuthorizationDetails(header) ?: throw badRequest(
         "Authorization is invalid.",
         TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
@@ -95,7 +102,7 @@ private suspend fun ApplicationCall.authenticateBankRequest(db: Database, requir
     return when (authDetails.scheme) {
         "Basic" -> doBasicAuth(db, authDetails.content)
         "Bearer" -> doTokenAuth(db, authDetails.content, requiredScope)
-        else -> throw unauthorized("Authorization method wrong or not supported.") // TODO basic auth challenge
+        else -> throw unauthorized("Authorization method wrong or not supported.")
     }
 }
 
@@ -134,7 +141,7 @@ private suspend fun doBasicAuth(db: Database, encodedCredentials: String): Strin
         TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     val (login, plainPassword) = userAndPassSplit
-    val passwordHash = db.account.passwordHash(login) ?: throw unauthorized()
+    val passwordHash = db.account.passwordHash(login) ?: throw unauthorized("Bad password")
     if (!CryptoUtil.checkpw(plainPassword, passwordHash)) return null
     return login
 }

@@ -54,8 +54,7 @@ fun ApplicationCall.maybeUriComponent(name: String): String? {
 
 // Extracts the Authorization:-header line, or returns null if not found.
 fun getAuthorizationRawHeader(request: ApplicationRequest): String? {
-    val authorization = request.headers["Authorization"]
-    return authorization ?: run {
+    return request.headers["Authorization"] ?: run {
         logger.error("Authorization header not found")
         return null
     }

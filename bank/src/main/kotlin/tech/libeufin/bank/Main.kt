@@ -180,17 +180,8 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                 )
             )
         }
-        /**
-         * This branch triggers when a bank handler throws it, and namely
-         * after one logical failure of the request(-handling).  This branch
-         * should be preferred to catch errors, as it allows to include the
-         * Taler specific error detail.
-         */
         exception<LibeufinBankException> { call, cause ->
             logger.error(cause.talerError.hint)
-            // Stacktrace if bank's fault
-            if (cause.httpStatus.toString().startsWith('5'))
-                cause.printStackTrace()
             call.respond(
                 status = cause.httpStatus,
                 message = cause.talerError
