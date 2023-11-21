@@ -25,6 +25,7 @@ import kotlinx.coroutines.coroutineScope
 import net.taler.wallet.crypto.Base32Crockford
 import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.jdbc.PgConnection
+import org.postgresql.util.PSQLState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -171,7 +172,7 @@ fun PreparedStatement.executeUpdateViolation(): Boolean {
         executeUpdateCheck()
     } catch (e: SQLException) {
         logger.error(e.message)
-        if (e.sqlState == "23505") return false // unique_violation
+        if (e.sqlState == PSQLState.UNIQUE_VIOLATION.state) return false
         throw e // rethrowing, not to hide other types of errors.
     }
 }
@@ -184,7 +185,7 @@ fun PreparedStatement.executeProcedureViolation(): Boolean {
         true
     } catch (e: SQLException) {
         connection.rollback(savepoint);
-        if (e.sqlState == "23505") return false // unique_violation
+        if (e.sqlState == PSQLState.UNIQUE_VIOLATION.state) return false
         throw e // rethrowing, not to hide other types of errors.
     }
 }

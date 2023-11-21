@@ -21,6 +21,7 @@ package tech.libeufin.bank
 
 import org.postgresql.jdbc.PgConnection
 import org.postgresql.ds.PGSimpleDataSource
+import org.postgresql.util.PSQLState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -150,16 +151,16 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
             try {
                 return@conn lambda(conn);
             } catch (e: SQLException) {
-                logger.error(e.message)
-                if (e.sqlState != "40001") // serialization_failure
-                    throw e // rethrowing, not to hide other types of errors.
+                if (e.sqlState != PSQLState.SERIALIZATION_FAILURE.state)
+                    throw e
             }
         }
-        throw libeufinError(
-            HttpStatusCode.InternalServerError,
-            "Transaction serialization failure",
-            TalerErrorCode.BANK_SOFT_EXCEPTION
-        )
+        try {
+            return@conn lambda(conn)
+        } catch(e: SQLException) {
+            logger.warn("Serialization failure after $SERIALIZATION_RETRY retry")
+            throw e
+        }
     }
 
     /** Apply paging logic to a sql query */

@@ -44,6 +44,7 @@ import io.ktor.utils.io.jvm.javaio.*
 import java.time.Duration
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
+import java.sql.SQLException
 import kotlin.system.exitProcess
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -53,6 +54,7 @@ import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
+import org.postgresql.util.PSQLState
 import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.getVersion
 import tech.libeufin.util.initializeDatabaseTables
@@ -194,16 +196,36 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                 message = cause.talerError
             )
         }
+        exception<SQLException> { call, cause ->
+            val err = when (cause.sqlState) {
+                PSQLState.SERIALIZATION_FAILURE.state -> libeufinError(
+                    HttpStatusCode.InternalServerError,
+                    "Transaction serialization failure",
+                    TalerErrorCode.BANK_SOFT_EXCEPTION
+                )
+                else -> libeufinError(
+                    HttpStatusCode.InternalServerError,
+                    "Unexpected sql error with state ${cause.sqlState}",
+                    TalerErrorCode.BANK_UNMANAGED_EXCEPTION
+                )
+            }
+            logger.error(err.talerError.hint)
+            call.respond(
+                status = err.httpStatus,
+                message = err.talerError
+            )
+        }
         // Catch-all branch to mean that the bank wasn't able to manage one error.
         exception<Exception> { call, cause ->
-            cause.printStackTrace()
-            logger.error(cause.message)
+            val err = libeufinError(
+                HttpStatusCode.InternalServerError,
+                cause.message,
+                TalerErrorCode.BANK_UNMANAGED_EXCEPTION
+            )
+            logger.error(err.talerError.hint)
             call.respond(
-                status = HttpStatusCode.InternalServerError,
-                message = TalerError(
-                    code = TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE.code,
-                    hint = cause.message
-                )
+                status = err.httpStatus,
+                message = err.talerError
             )
         }
     }

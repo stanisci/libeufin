@@ -3,6 +3,7 @@ package tech.libeufin.nexus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.postgresql.jdbc.PgConnection
+import org.postgresql.util.PSQLState
 import com.zaxxer.hikari.*
 import tech.libeufin.util.*
 import java.sql.PreparedStatement
@@ -137,7 +138,7 @@ private fun PreparedStatement.maybeUpdate(): Boolean {
         this.executeUpdate()
     } catch (e: SQLException) {
         logger.error(e.message)
-        if (e.sqlState == "23505") return false // unique_violation
+        if (e.sqlState == PSQLState.UNIQUE_VIOLATION.state) return false
         throw e // rethrowing, not to hide other types of errors.
     }
     return updateCount > 0
