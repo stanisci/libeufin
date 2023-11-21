@@ -37,7 +37,8 @@ data class BankConfig(
     /**
      * Main, regional currency of the bank.
      */
-    val regional_currency: CurrencySpecification,
+    val regionalCurrency: String,
+    val regionalCurrencySpec: CurrencySpecification,
     /**
      * Restrict account registration to the administrator.
      */
@@ -76,7 +77,8 @@ data class BankConfig(
      */
     val spaCaptchaURL: String?,
     val allowConversion: Boolean,
-    val fiatCurrency: CurrencySpecification?,
+    val fiatCurrency: String?,
+    val fiatCurrencySpec: CurrencySpecification?,
     val conversionInfo: ConversionInfo?,
     val tanSms: String?,
     val tanEmail: String?,
@@ -122,27 +124,30 @@ fun TalerConfig.loadServerConfig(): ServerConfig = catchError  {
 }
 
 fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
-    val currency = requireString("libeufin-bank", "currency")
-    var fiatCurrencySpecification: CurrencySpecification? = null
+    val regionalCurrency = requireString("libeufin-bank", "currency")
+    var fiatCurrency: String? = null;
+    var fiatCurrencySpec: CurrencySpecification? = null
     var conversionInfo: ConversionInfo? = null;
     val allowConversion = lookupBoolean("libeufin-bank", "allow_conversion") ?: false;
     if (allowConversion) {
-        val fiatCurrency = requireString("libeufin-bank", "fiat_currency");
-        fiatCurrencySpecification = currencySpecificationFor(fiatCurrency) 
-        conversionInfo = loadConversionInfo(currency, fiatCurrency)
+        fiatCurrency = requireString("libeufin-bank", "fiat_currency");
+        fiatCurrencySpec = currencySpecificationFor(fiatCurrency) 
+        conversionInfo = loadConversionInfo(regionalCurrency, fiatCurrency)
     }
     BankConfig(
-        regional_currency =  currencySpecificationFor(currency),
+        regionalCurrency = regionalCurrency,
+        regionalCurrencySpec =  currencySpecificationFor(regionalCurrency),
         restrictRegistration = lookupBoolean("libeufin-bank", "restrict_registration") ?: false,
-        defaultCustomerDebtLimit = requireAmount("libeufin-bank", "default_customer_debt_limit", currency),
+        defaultCustomerDebtLimit = requireAmount("libeufin-bank", "default_customer_debt_limit", regionalCurrency),
         registrationBonusEnabled = lookupBoolean("libeufin-bank", "registration_bonus_enabled") ?: false,
-        registrationBonus = requireAmount("libeufin-bank", "registration_bonus", currency),
+        registrationBonus = requireAmount("libeufin-bank", "registration_bonus", regionalCurrency),
         suggestedWithdrawalExchange = lookupString("libeufin-bank", "suggested_withdrawal_exchange"),
-        defaultAdminDebtLimit = requireAmount("libeufin-bank", "default_admin_debt_limit", currency),
+        defaultAdminDebtLimit = requireAmount("libeufin-bank", "default_admin_debt_limit", regionalCurrency),
         spaCaptchaURL = lookupString("libeufin-bank", "spa_captcha_url"),
         restrictAccountDeletion = lookupBoolean("libeufin-bank", "restrict_account_deletion") ?: true,
         allowConversion = allowConversion,
-        fiatCurrency = fiatCurrencySpecification,
+        fiatCurrency = fiatCurrency,
+        fiatCurrencySpec = fiatCurrencySpec,
         conversionInfo = conversionInfo,
         tanSms = lookupPath("libeufin-bank", "tan_sms"),
         tanEmail = lookupPath("libeufin-bank", "tan_email"),
@@ -173,7 +178,6 @@ private fun TalerConfig.loadConversionInfo(currency: String, fiatCurrency: Strin
 private fun TalerConfig.loadCurrencySpecification(section: String): CurrencySpecification = catchError {
     CurrencySpecification(
         name = requireString(section, "name"),
-        currency = requireString(section, "code"),
         num_fractional_input_digits = requireNumber(section, "fractional_input_digits"),
         num_fractional_normal_digits = requireNumber(section, "fractional_normal_digits"),
         num_fractional_trailing_zero_digits = requireNumber(section, "fractional_trailing_zero_digits"),

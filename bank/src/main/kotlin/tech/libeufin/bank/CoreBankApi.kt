@@ -48,7 +48,8 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
     get("/config") {
         call.respond(
             Config(
-                currency = ctx.regional_currency,
+                currency = ctx.regionalCurrency,
+                currency_specification = ctx.regionalCurrencySpec,
                 allow_conversion = ctx.allowConversion,
                 allow_registrations = !ctx.restrictRegistration,
                 allow_deletions = !ctx.restrictAccountDeletion

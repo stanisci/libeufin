@@ -31,8 +31,10 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
     get("/conversion-info/config") {
         call.respond(
             ConversionConfig(
-                regional_currency = ctx.regional_currency,
+                regional_currency = ctx.regionalCurrency,
+                regional_currency_specification = ctx.regionalCurrencySpec,
                 fiat_currency = ctx.fiatCurrency!!,
+                fiat_currency_specification = ctx.fiatCurrencySpec!!,
                 cashin_ratio = ctx.conversionInfo!!.cashin_ratio,
                 cashin_fee = ctx.conversionInfo.cashin_fee,
                 cashin_tiny_amount = ctx.conversionInfo.cashin_tiny_amount,

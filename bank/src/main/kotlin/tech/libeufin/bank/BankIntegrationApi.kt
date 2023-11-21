@@ -32,7 +32,8 @@ import tech.libeufin.bank.WithdrawalDAO.*
 fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     get("/taler-integration/config") {
         call.respond(TalerIntegrationConfigResponse(
-            currency = ctx.regional_currency
+            currency = ctx.regionalCurrency,
+            currency_specification = ctx.regionalCurrencySpec
         ))
     }
 

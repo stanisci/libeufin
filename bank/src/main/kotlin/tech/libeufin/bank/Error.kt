@@ -86,15 +86,15 @@ fun badRequest(
 
 
 fun BankConfig.checkRegionalCurrency(amount: TalerAmount) {
-    if (amount.currency != regional_currency.currency) throw badRequest(
-        "Wrong currency: expected regional currency ${regional_currency.currency} got ${amount.currency}",
+    if (amount.currency != regionalCurrency) throw badRequest(
+        "Wrong currency: expected regional currency $regionalCurrency got ${amount.currency}",
         TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
 }
 
 fun BankConfig.checkFiatCurrency(amount: TalerAmount) {
-    if (amount.currency != fiatCurrency?.currency) throw badRequest(
-        "Wrong currency: expected fiat currency ${fiatCurrency?.currency} got ${amount.currency}",
+    if (amount.currency != fiatCurrency) throw badRequest(
+        "Wrong currency: expected fiat currency $fiatCurrency got ${amount.currency}",
         TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
 }

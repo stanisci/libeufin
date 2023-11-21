@@ -213,7 +213,8 @@ data class BearerToken(
 
 @Serializable
 data class Config(
-    val currency: CurrencySpecification,
+    val currency: String,
+    val currency_specification: CurrencySpecification,
     val allow_conversion: Boolean,
     val allow_registrations: Boolean,
     val allow_deletions: Boolean
@@ -224,8 +225,10 @@ data class Config(
 
 @Serializable
 data class ConversionConfig(
-    val regional_currency: CurrencySpecification,
-    val fiat_currency: CurrencySpecification,
+    val regional_currency: String,
+    val regional_currency_specification: CurrencySpecification,
+    val fiat_currency: String,
+    val fiat_currency_specification: CurrencySpecification,
     val cashin_ratio: DecimalNumber,
     val cashin_fee: TalerAmount,
     val cashin_tiny_amount: TalerAmount,
@@ -243,7 +246,8 @@ data class ConversionConfig(
 
 @Serializable
 data class TalerIntegrationConfigResponse(
-    val currency: CurrencySpecification,
+    val currency: String,
+    val currency_specification: CurrencySpecification
 ) {
     val name: String = "taler-bank-integration";
     val version: String = "0:0:0";
@@ -348,7 +352,6 @@ data class BankAccountGetWithdrawalResponse(
 @Serializable
 data class CurrencySpecification(
     val name: String,
-    val currency: String,
     val num_fractional_input_digits: Int,
     val num_fractional_normal_digits: Int,
     val num_fractional_trailing_zero_digits: Int,
