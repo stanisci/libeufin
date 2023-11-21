@@ -51,16 +51,21 @@ data class FetchContext(
     /**
      * EBICS version.  For the HAC message type, version gets switched to EBICS 2.
      */
-    var ebicsVersion: EbicsVersion = EbicsVersion.three,
+    var ebicsVersion: EbicsVersion,
+    /**
+     * Logs to STDERR the init phase of an EBICS download request.
+     */
+    val ebicsExtraLog: Boolean,
+    /**
+     * Not triggering any Taler logic, if the incoming amount
+     * is below the following value.
+     */
+    val minimumAmount: TalerAmount?,
     /**
      * Start date of the returned documents.  Only
      * used in --transient mode.
      */
-    var pinnedStart: Instant? = null,
-    /**
-     * Logs to STDERR the init phase of an EBICS download request.
-     */
-    val ebicsExtraLog: Boolean = false
+    var pinnedStart: Instant? = null
 )
 
 /**
@@ -191,13 +196,14 @@ private fun makeTalerFrac(bankFrac: String): Int {
  */
 fun getTalerAmount(
     noCurrencyAmount: String,
-    currency: String
+    currency: String,
+    errorMessagePrefix: String = ""
 ): TalerAmount {
-    if (currency.isEmpty()) throw Exception("Currency is empty")
+    if (currency.isEmpty()) throw Exception("Wrong helper invocation: currency is empty")
     val split = noCurrencyAmount.split(".")
     // only 1 (no fraction) or 2 (with fraction) sizes allowed.
-    if (split.size != 1 && split.size != 2) throw Exception("Invalid amount: ${noCurrencyAmount}")
-    val value = split[0].toLongOrNull() ?: throw Exception("value part not a long")
+    if (split.size != 1 && split.size != 2) throw Exception("${errorMessagePrefix}invalid amount: $noCurrencyAmount")
+    val value = split[0].toLongOrNull() ?: throw Exception("${errorMessagePrefix}value part not a long")
     if (split.size == 1) return TalerAmount(
         value = value,
         fraction = 0,
@@ -322,6 +328,7 @@ private suspend fun ingestOutgoingPayment(
  */
 private suspend fun ingestIncomingPayment(
     db: Database,
+    ctx: FetchContext,
     incomingPayment: IncomingPayment
 ) {
     logger.debug("Ingesting incoming payment UID: ${incomingPayment.bankTransferId}, subject: ${incomingPayment.wireTransferSubject}")
@@ -329,14 +336,53 @@ private suspend fun ingestIncomingPayment(
         logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}' already seen.")
         return
     }
+    if (
+        ctx.minimumAmount != null &&
+        firstLessThanSecond(
+            incomingPayment.amount,
+            ctx.minimumAmount
+        )) {
+        /**
+         * Setting the refund amount to zero makes the initiated
+         * payment _never_ paid back.  Inserting this row merely
+         * logs the incoming payment event, for which the policy
+         * has no reimbursement.
+         */
+        db.incomingPaymentCreateBounced(
+            incomingPayment,
+            UUID.randomUUID().toString().take(35),
+            TalerAmount(0, 0, ctx.cfg.currency)
+        )
+        return
+    }
     val reservePub = getTalerReservePub(db, incomingPayment)
     if (reservePub == null) {
         db.incomingPaymentCreateBounced(
-            incomingPayment, UUID.randomUUID().toString().take(35)
+            incomingPayment,
+            UUID.randomUUID().toString().take(35)
         )
         return
     }
     db.incomingTalerablePaymentCreate(incomingPayment, reservePub)
+}
+
+/**
+ * Compares amounts.
+ *
+ * @param a first argument
+ * @param b second argument
+ * @return true if the first argument
+ *         is less than the second
+ */
+fun firstLessThanSecond(
+    a: TalerAmount,
+    b: TalerAmount
+): Boolean {
+    if (a.currency != b.currency)
+        throw Exception("different currencies: ${a.currency} vs. ${b.currency}")
+    if (a.value == b.value)
+        return a.fraction < b.fraction
+    return a.value < b.value
 }
 
 /**
@@ -391,7 +437,7 @@ private fun ingestNotification(
     try {
         runBlocking {
             incomingPayments.forEach {
-                ingestIncomingPayment(db, it)
+                ingestIncomingPayment(db, ctx, it)
             }
             outgoingPayments.forEach {
                 ingestOutgoingPayment(db, it)
@@ -562,13 +608,29 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             }
             return
         }
+        val minAmountCfg: String? = cfg.config.lookupString(
+            "nexus-fetch",
+            "minimum_amount"
+        )
+        var minAmount: TalerAmount? = null
+        if (minAmountCfg != null) {
+            minAmount = doOrFail {
+                getTalerAmount(
+                    cfg.currency,
+                    minAmountCfg,
+                    "[nexus-fetch]/minimum_amount, "
+                )
+            }
+        }
         val ctx = FetchContext(
             cfg,
             HttpClient(),
             clientKeys,
             bankKeys,
             whichDoc,
-            ebicsExtraLog = ebicsExtraLog
+            EbicsVersion.three,
+            ebicsExtraLog,
+            minAmount
         )
         if (transient) {
             logger.info("Transient mode: fetching once and returning.")

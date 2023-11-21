@@ -11,6 +11,18 @@ import kotlin.test.assertTrue
 
 class Parsing {
 
+    @Test // move eventually to util (#7987)
+    fun amountComparison() {
+        val one = TalerAmount(1, 0, "KUDOS")
+        val two = TalerAmount(2, 0, "KUDOS")
+        val moreFrac = TalerAmount(2, 4, "KUDOS")
+        val lessFrac = TalerAmount(2, 3, "KUDOS")
+        val zeroMoreFrac = TalerAmount(0, 4, "KUDOS")
+        val zeroLessFrac = TalerAmount(0, 3, "KUDOS")
+        assertTrue(firstLessThanSecond(one, two))
+        assertTrue(firstLessThanSecond(lessFrac, moreFrac))
+        assertTrue(firstLessThanSecond(zeroLessFrac, zeroMoreFrac))
+    }
     @Test
     fun gregorianTime() {
         parseCamtTime("2023-11-06T20:00:00")
@@ -120,7 +132,7 @@ class Parsing {
             getTalerAmount("1.", "KUDOS")
         }
         assertThrows<Exception> {
-            getTalerAmount("0.123456789", "KUDOS")
+            getTalerAmount("0.123", "KUDOS")
         }
         assertThrows<Exception> {
             getTalerAmount("noise", "KUDOS")

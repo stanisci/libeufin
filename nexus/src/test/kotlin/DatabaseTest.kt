@@ -176,7 +176,7 @@ class PaymentInitiationsTest {
             assertEquals(db.initiatedPaymentCreate(initPay), PaymentInitiationOutcome.SUCCESS)
             assertEquals(db.initiatedPaymentCreate(initPay), PaymentInitiationOutcome.UNIQUE_CONSTRAINT_VIOLATION)
             val haveOne = db.initiatedPaymentsSubmittableGet("KUDOS")
-            assertTrue {
+            assertTrue("Size ${haveOne.size} instead of 1") {
                 haveOne.size == 1
                         && haveOne.containsKey(1)
                         && haveOne[1]?.requestUid == "unique"

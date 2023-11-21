@@ -11,7 +11,7 @@ import java.sql.SQLException
 import java.time.Instant
 
 // Remove this once TalerAmount from the bank
-// module gets moved to the 'util' module.
+// module gets moved to the 'util' module (#7987).
 data class TalerAmount(
     val value: Long,
     val fraction: Int, // has at most 8 digits.
@@ -287,10 +287,14 @@ class Database(dbConfig: String): java.io.Closeable {
      * @param paymentData information related to the incoming payment.
      * @param requestUid unique identifier of the outgoing payment to
      *                   initiate, in order to reimburse the bounced tx.
+     * @param refundAmount amount to send back to the original debtor.  If
+     *                     null, it defaults to the amount of the bounced
+     *                     incoming payment.
      */
     suspend fun incomingPaymentCreateBounced(
         paymentData: IncomingPayment,
-        requestUid: String
+        requestUid: String,
+        refundAmount: TalerAmount? = null
         ): Boolean = runConn { conn ->
         val refundTimestamp = Instant.now().toDbMicros()
             ?: throw Exception("Could not convert refund execution time from Instant.now() to microsends.")
@@ -306,8 +310,12 @@ class Database(dbConfig: String): java.io.Closeable {
               ,?
               ,?
             )""")
-        stmt.setLong(1, paymentData.amount.value)
-        stmt.setInt(2, paymentData.amount.fraction)
+
+        var finalAmount = paymentData.amount
+        if (refundAmount != null) finalAmount = refundAmount
+
+        stmt.setLong(1, finalAmount.value)
+        stmt.setInt(2, finalAmount.fraction)
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.debitPaytoUri)
@@ -548,8 +556,8 @@ class Database(dbConfig: String): java.io.Closeable {
              ,initiation_time
              ,request_uid
              FROM initiated_outgoing_transactions
-             WHERE submitted='unsubmitted'
-               OR submitted='transient_failure';
+             WHERE (submitted='unsubmitted' OR submitted='transient_failure')
+               AND ((amount).val != 0 OR (amount).frac != 0);
         """)
         val maybeMap = mutableMapOf<Long, InitiatedPayment>()
         stmt.executeQuery().use {
