@@ -229,16 +229,7 @@ data class ConversionConfig(
     val regional_currency_specification: CurrencySpecification,
     val fiat_currency: String,
     val fiat_currency_specification: CurrencySpecification,
-    val cashin_ratio: DecimalNumber,
-    val cashin_fee: TalerAmount,
-    val cashin_tiny_amount: TalerAmount,
-    val cashin_rounding_mode: RoundingMode,
-    val cashin_min_amount: TalerAmount,
-    val cashout_ratio: DecimalNumber,
-    val cashout_fee: TalerAmount,
-    val cashout_tiny_amount: TalerAmount,
-    val cashout_rounding_mode: RoundingMode,
-    val cashout_min_amount: TalerAmount,
+    val conversion_info: ConversionInfo
 ) {
     val name: String = "taler-conversion-info"
     val version: String = "0:0:0"

@@ -35,16 +35,7 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
                 regional_currency_specification = ctx.regionalCurrencySpec,
                 fiat_currency = ctx.fiatCurrency!!,
                 fiat_currency_specification = ctx.fiatCurrencySpec!!,
-                cashin_ratio = ctx.conversionInfo!!.cashin_ratio,
-                cashin_fee = ctx.conversionInfo.cashin_fee,
-                cashin_tiny_amount = ctx.conversionInfo.cashin_tiny_amount,
-                cashin_rounding_mode = ctx.conversionInfo.cashin_rounding_mode,
-                cashin_min_amount = ctx.conversionInfo.cashin_min_amount,
-                cashout_ratio = ctx.conversionInfo.cashout_ratio,
-                cashout_fee = ctx.conversionInfo.cashout_fee,
-                cashout_tiny_amount = ctx.conversionInfo.cashout_tiny_amount,
-                cashout_rounding_mode = ctx.conversionInfo.cashout_rounding_mode,
-                cashout_min_amount = ctx.conversionInfo.cashout_min_amount
+                conversion_info = ctx.conversionInfo!!
             )
         )
     }
@@ -73,10 +64,8 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
     get("/conversion-info/cashin-rate") {
         val params = RateParams.extract(call.request.queryParameters)
 
-        params.debit?.let { ctx.checkFiatCurrency(it) }
-        params.credit?.let { ctx.checkRegionalCurrency(it) }
-
         if (params.debit != null) {
+            ctx.checkFiatCurrency(params.debit)
             val credit = db.conversion.toCashin(params.debit) ?:
                 throw conflict(
                     "${params.debit} is too small to be converted",
@@ -84,9 +73,10 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
                 )
             call.respond(ConversionResponse(params.debit, credit))
         } else {
-            val debit = db.conversion.fromCashin(params.credit!!) ?:
+            ctx.checkRegionalCurrency(params.credit!!)
+            val debit = db.conversion.fromCashin(params.credit) ?:
             throw conflict(
-                "${params.debit} is too small to be converted",
+                "${params.credit} is too small to be converted",
                 TalerErrorCode.BANK_BAD_CONVERSION
             )
             call.respond(ConversionResponse(debit, params.credit))
