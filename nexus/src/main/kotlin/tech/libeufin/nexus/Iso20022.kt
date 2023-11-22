@@ -261,9 +261,11 @@ fun parseIncomingTxNotif(
             }
             // warn: it might need the postal address too..
             requireUniqueChildNamed("Dbtr") {
-                requireUniqueChildNamed("Nm") {
-                    val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
-                    debtorPayto.append("?receiver-name=$urlEncName")
+                requireUniqueChildNamed("Pty") {
+                    requireUniqueChildNamed("Nm") {
+                        val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
+                        debtorPayto.append("?receiver-name=$urlEncName")
+                    }
                 }
             }
         }
@@ -298,10 +300,12 @@ private fun notificationForEachTx(
                 mapEachChildNamed("Ntfctn") {
                     mapEachChildNamed("Ntry") {
                         requireUniqueChildNamed("Sts") {
-                            if (focusElement.textContent != "BOOK")
-                                throw Exception("Found non booked transaction, " +
-                                        "stop parsing.  Status was: ${focusElement.textContent}"
-                                )
+                            requireUniqueChildNamed("Cd") {
+                                if (focusElement.textContent != "BOOK")
+                                    throw Exception("Found non booked transaction, " +
+                                            "stop parsing.  Status was: ${focusElement.textContent}"
+                                    )
+                            }
                         }
                         val bookDate: Instant = requireUniqueChildNamed("BookgDt") {
                             requireUniqueChildNamed("Dt") {
