@@ -202,8 +202,10 @@ fun getTalerAmount(
     if (currency.isEmpty()) throw Exception("Wrong helper invocation: currency is empty")
     val split = noCurrencyAmount.split(".")
     // only 1 (no fraction) or 2 (with fraction) sizes allowed.
-    if (split.size != 1 && split.size != 2) throw Exception("${errorMessagePrefix}invalid amount: $noCurrencyAmount")
-    val value = split[0].toLongOrNull() ?: throw Exception("${errorMessagePrefix}value part not a long")
+    if (split.size != 1 && split.size != 2)
+        throw Exception("${errorMessagePrefix}invalid amount: $noCurrencyAmount")
+    val value = split[0].toLongOrNull()
+        ?: throw Exception("${errorMessagePrefix}value part '${split[0]}' not a long")
     if (split.size == 1) return TalerAmount(
         value = value,
         fraction = 0,
@@ -342,6 +344,10 @@ private suspend fun ingestIncomingPayment(
             incomingPayment.amount,
             ctx.minimumAmount
         )) {
+        logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}'" +
+                " is too low: ${incomingPayment.amount}."
+        )
+
         /**
          * Setting the refund amount to zero makes the initiated
          * payment _never_ paid back.  Inserting this row merely
@@ -357,6 +363,9 @@ private suspend fun ingestIncomingPayment(
     }
     val reservePub = getTalerReservePub(db, incomingPayment)
     if (reservePub == null) {
+        logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}'" +
+                " has invalid subject: ${incomingPayment.wireTransferSubject}."
+        )
         db.incomingPaymentCreateBounced(
             incomingPayment,
             UUID.randomUUID().toString().take(35)
@@ -616,9 +625,9 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (minAmountCfg != null) {
             minAmount = doOrFail {
                 getTalerAmount(
-                    cfg.currency,
-                    minAmountCfg,
-                    "[nexus-fetch]/minimum_amount, "
+                    noCurrencyAmount = minAmountCfg,
+                    currency = cfg.currency,
+                    "[nexus-fetch]/minimum_amount '$minAmountCfg', "
                 )
             }
         }
