@@ -29,6 +29,7 @@ import kotlin.test.*
 import kotlinx.coroutines.*
 import org.junit.Test
 import tech.libeufin.bank.*
+import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.*
 
 class DatabaseTest {
@@ -44,9 +45,9 @@ class DatabaseTest {
     @Test
     fun createAdmin() = setup { db, ctx ->
         // Create admin account
-        assert(maybeCreateAdminAccount(db, ctx))
+        assertEquals(AccountCreationResult.Success, maybeCreateAdminAccount(db, ctx))
         // Checking idempotency
-        assert(maybeCreateAdminAccount(db, ctx))
+        assertEquals(AccountCreationResult.LoginReuse, maybeCreateAdminAccount(db, ctx))
     }
 
     @Test

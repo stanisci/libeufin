@@ -117,8 +117,7 @@ fun ApplicationCall.longUriComponent(name: String): Long {
  *
  * It returns false in case of problems, true otherwise.
  */
-suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? = null): Boolean {
-    logger.debug("Creating admin's account")
+suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? = null): AccountCreationResult {
     var pwStr = pw;
     if (pwStr == null) {
         val pwBuf = ByteArray(32)
@@ -126,7 +125,7 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? =
         pwStr = String(pwBuf, Charsets.UTF_8)
     }
     
-    val res = db.account.create(
+    return db.account.create(
         login = "admin",
         password = pwStr,
         name = "Bank administrator",
@@ -136,12 +135,6 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? =
         maxDebt = ctx.defaultAdminDebtLimit,
         bonus = null
     )
-    return when (res) {
-        AccountCreationResult.BonusBalanceInsufficient -> false
-        AccountCreationResult.LoginReuse -> true
-        AccountCreationResult.PayToReuse -> false
-        AccountCreationResult.Success -> true
-    }
 }
 
 fun Route.intercept(callback: Route.() -> Unit, interceptor: suspend PipelineContext<Unit, ApplicationCall>.() -> Unit): Route {

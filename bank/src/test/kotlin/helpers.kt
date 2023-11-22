@@ -100,7 +100,7 @@ fun bankSetup(
             bonus = null
         ))
         // Create admin account
-        assert(maybeCreateAdminAccount(db, ctx, "admin-password"))
+        assertEquals(AccountCreationResult.Success, maybeCreateAdminAccount(db, ctx, "admin-password"))
         testApplication {
             application {
                 corebankWebApp(db, ctx)

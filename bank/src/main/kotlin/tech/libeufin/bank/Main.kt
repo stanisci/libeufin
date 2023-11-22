@@ -289,11 +289,35 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
     ).flag()
 
     override fun run() {
-        val cfg = talerConfig(configFile).loadDbConfig()
+        val config = talerConfig(configFile)
+        val cfg = config.loadDbConfig()
         if (requestReset) {
             resetDatabaseTables(cfg, sqlFilePrefix = "libeufin-bank")
         }
         initializeDatabaseTables(cfg, sqlFilePrefix = "libeufin-bank")
+        val ctx = config.loadBankConfig();
+        val db = Database(cfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
+        runBlocking {
+            // Create admin account if missing
+            val res = maybeCreateAdminAccount(db, ctx) // logs provided by the helper
+            when (res) {
+                AccountCreationResult.BonusBalanceInsufficient -> {}
+                AccountCreationResult.LoginReuse -> {}
+                AccountCreationResult.PayToReuse -> {
+                    logger.error("Failed to create admin's account")
+                    exitProcess(1)
+                }
+                AccountCreationResult.Success -> {
+                    logger.info("Admin's account created")
+                }
+            }
+                
+            // Load conversion config
+            ctx.conversionInfo?.run { 
+            logger.info("load conversion config in DB")
+                db.conversion.updateConfig(this)
+            }
+        }
     }
 }
 
@@ -313,10 +337,6 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
             exitProcess(1)
         }
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
-        runBlocking {
-            if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
-                exitProcess(1)
-        }
         embeddedServer(Netty, port = serverCfg.port) {
             corebankWebApp(db, ctx)
         }.start(wait = true)
@@ -337,9 +357,6 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
-            if (!maybeCreateAdminAccount(db, ctx)) // logs provided by the helper
-            exitProcess(1)
-
             if (db.account.reconfigPassword(account, password, null) != AccountPatchAuthResult.Success) {
                 println("password change failed")
                 exitProcess(1)
