@@ -309,19 +309,19 @@ class Database(dbConfig: String): java.io.Closeable {
               ,?
               ,?
               ,?
+              ,(?,?)::taler_amount
             )""")
-
-        var finalAmount = paymentData.amount
-        if (refundAmount != null) finalAmount = refundAmount
-
-        stmt.setLong(1, finalAmount.value)
-        stmt.setInt(2, finalAmount.fraction)
+        stmt.setLong(1, paymentData.amount.value)
+        stmt.setInt(2, paymentData.amount.fraction)
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.debitPaytoUri)
         stmt.setString(6, paymentData.bankTransferId)
         stmt.setLong(7, refundTimestamp)
         stmt.setString(8, requestUid)
+        val finalRefundAmount: TalerAmount = refundAmount ?: paymentData.amount
+        stmt.setLong(9, finalRefundAmount.value)
+        stmt.setInt(10, finalRefundAmount.fraction)
         val res = stmt.executeQuery()
         res.use {
             if (!it.next()) return@runConn false

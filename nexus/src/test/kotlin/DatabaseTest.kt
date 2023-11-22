@@ -45,6 +45,59 @@ class OutgoingPaymentsTest {
 
 // @Ignore // enable after having modified the bouncing logic in Kotlin
 class IncomingPaymentsTest {
+    @Test
+    fun bounceWithCustomRefund() {
+        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        runBlocking {
+            // creating and bouncing one incoming transaction.
+            assertTrue(
+                db.incomingPaymentCreateBounced(
+                    genIncPay("incoming and bounced"),
+                    "UID",
+                    TalerAmount(2, 53000000, "KUDOS")
+                )
+            )
+            db.runConn {
+                // check incoming shows up.
+                val checkIncoming = it.prepareStatement("""
+                    SELECT 
+                      (amount).val as amount_value
+                      ,(amount).frac as amount_frac
+                     FROM incoming_transactions
+                     WHERE incoming_transaction_id = 1;
+                """).executeQuery()
+                assertTrue(checkIncoming.next())
+                assertEquals(44, checkIncoming.getLong("amount_value"))
+                assertEquals(0, checkIncoming.getLong("amount_frac"))
+                // check bounced has the custom value
+                val findBounced = it.prepareStatement("""
+                    SELECT 
+                      initiated_outgoing_transaction_id
+                      FROM bounced_transactions
+                      WHERE incoming_transaction_id = 1;
+                """).executeQuery()
+                assertTrue(findBounced.next())
+                val initiatedId = findBounced.getLong("initiated_outgoing_transaction_id")
+                assertEquals(1, initiatedId)
+                val findInitiatedAmount = it.prepareStatement("""
+                    SELECT
+                      (amount).val as amount_value
+                      ,(amount).frac as amount_frac
+                    FROM initiated_outgoing_transactions
+                    WHERE initiated_outgoing_transaction_id = 1;
+                """).executeQuery()
+                assertTrue(findInitiatedAmount.next())
+                assertEquals(
+                    53000000,
+                    findInitiatedAmount.getInt("amount_frac")
+                )
+                assertEquals(
+                    2,
+                    findInitiatedAmount.getInt("amount_value")
+                )
+            }
+        }
+    }
     // Tests creating and bouncing incoming payments in one DB transaction.
     @Test
     fun incomingAndBounce() {

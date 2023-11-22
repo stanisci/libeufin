@@ -9,6 +9,7 @@ CREATE OR REPLACE FUNCTION create_incoming_and_bounce(
   ,IN in_bank_transfer_id TEXT
   ,IN in_timestamp BIGINT
   ,IN in_request_uid TEXT
+  ,IN in_refund_amount taler_amount
   ,OUT out_ok BOOLEAN
 ) RETURNS BOOLEAN
 LANGUAGE plpgsql AS $$
@@ -39,7 +40,7 @@ INSERT INTO initiated_outgoing_transactions (
   ,initiation_time
   ,request_uid
   ) VALUES (
-    in_amount
+    in_refund_amount
     ,'refund: ' || in_wire_transfer_subject
     ,in_debit_payto_uri
     ,in_timestamp
@@ -56,7 +57,7 @@ INSERT INTO bounced_transactions (
 out_ok = TRUE;
 END $$;
 
-COMMENT ON FUNCTION create_incoming_and_bounce(taler_amount, TEXT, BIGINT, TEXT, TEXT, BIGINT, TEXT)
+COMMENT ON FUNCTION create_incoming_and_bounce(taler_amount, TEXT, BIGINT, TEXT, TEXT, BIGINT, TEXT, taler_amount)
   IS 'creates one incoming transaction with a bounced state and initiates its related refund.';
 
 CREATE OR REPLACE FUNCTION create_outgoing_payment(
