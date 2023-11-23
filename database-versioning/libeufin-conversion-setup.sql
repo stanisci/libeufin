@@ -34,7 +34,7 @@ LANGUAGE plpgsql AS $$
   END;
 $$;
 
-CREATE OR REPLACE TRIGGER cashout_link BEFORE INSERT OR UPDATE ON cashout_operations
+CREATE OR REPLACE TRIGGER cashout_link BEFORE INSERT OR UPDATE ON libeufin_bank.cashout_operations
     FOR EACH ROW EXECUTE FUNCTION cashout_link();
 
 CREATE OR REPLACE FUNCTION cashin_link() 
