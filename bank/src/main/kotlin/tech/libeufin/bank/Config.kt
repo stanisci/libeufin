@@ -130,7 +130,7 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
     var conversionInfo: ConversionInfo? = null;
     val allowConversion = lookupBoolean("libeufin-bank", "allow_conversion") ?: false;
     if (allowConversion) {
-        fiatCurrency = requireString("libeufin-bank", "fiat_currency");
+        fiatCurrency = requireString("nexus-ebics", "currency");
         fiatCurrencySpec = currencySpecificationFor(fiatCurrency) 
         conversionInfo = loadConversionInfo(regionalCurrency, fiatCurrency)
     }

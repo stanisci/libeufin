@@ -41,7 +41,7 @@ install-bank-files:
 	install contrib/libeufin-bank.conf $(bank_config_dir)/
 	install contrib/currencies.conf $(bank_config_dir)/
 	install -D database-versioning/libeufin-bank*.sql -t $(bank_sql_dir)
-	install -D database-versioning/libeufin-conversion.sql -t $(bank_sql_dir)
+	install -D database-versioning/libeufin-conversion*.sql -t $(bank_sql_dir)
 	install -D database-versioning/versioning.sql -t $(bank_sql_dir)
 
 .PHONY: install-bank

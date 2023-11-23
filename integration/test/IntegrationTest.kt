@@ -69,7 +69,6 @@ class IntegrationTest {
         nexusCmd.run("dbinit -c ../bank/conf/test.conf -r")
         val bankCmd = LibeufinBankCommand();
         bankCmd.run("dbinit -c ../bank/conf/test.conf -r")
-        bankCmd.run("conversion-setup -c ../bank/conf/test.conf")
         kotlin.concurrent.thread(isDaemon = true)  {
             bankCmd.run("serve -c ../bank/conf/test.conf")
         }
@@ -99,43 +98,48 @@ class IntegrationTest {
             }.assertCreated()
 
             // Cashin
-            val reservePub = randBytes(32);
-            nexusDb.incomingTalerablePaymentCreate(IncomingPayment(
-                amount = NexusAmount(44, 0, "EUR"),
-                debitPaytoUri = userPayTo.canonical,
-                wireTransferSubject = "cashin test",
-                executionTime = Instant.now(),
-                bankTransferId = "entropic"), 
-            reservePub)
-            val converted = client.get("http://0.0.0.0:8080/conversion-info/cashin-rate?amount_debit=EUR:44.0")
-                .assertOkJson<ConversionResponse>().amount_credit
-            client.get("http://0.0.0.0:8080/accounts/customer/transactions") {
-                basicAuth("customer", "password")
-            }.assertOkJson<BankAccountTransactionsResponse> {
-                val tx = it.transactions[0]
-                assertEquals(userPayTo.canonical, tx.creditor_payto_uri)
-                assertEquals("cashin test", tx.subject)
-                assertEquals(converted, tx.amount)
+            repeat(3) { i ->
+                val reservePub = randBytes(32);
+                val amount = NexusAmount(20L + i, 0, "EUR")
+                nexusDb.incomingTalerablePaymentCreate(IncomingPayment(
+                    amount = amount,
+                    debitPaytoUri = userPayTo.canonical,
+                    wireTransferSubject = "cashin test $i",
+                    executionTime = Instant.now(),
+                    bankTransferId = "entropic"), 
+                reservePub)
+                val converted = client.get("http://0.0.0.0:8080/conversion-info/cashin-rate?amount_debit=EUR:${20 + i}")
+                    .assertOkJson<ConversionResponse>().amount_credit
+                client.get("http://0.0.0.0:8080/accounts/customer/transactions") {
+                    basicAuth("customer", "password")
+                }.assertOkJson<BankAccountTransactionsResponse> {
+                    val tx = it.transactions.first()
+                    assertEquals(userPayTo.canonical, tx.creditor_payto_uri)
+                    assertEquals("cashin test $i", tx.subject)
+                    assertEquals(converted, tx.amount)
+                }
             }
 
             // Cashout
-            val requestUid = randBytes(32);
-            val amount = BankAmount("KUDOS:25")
-            val convert = client.get("http://0.0.0.0:8080/conversion-info/cashout-rate?amount_debit=$amount")
-                .assertOkJson<ConversionResponse>().amount_credit;
-            client.post("http://0.0.0.0:8080/accounts/customer/cashouts") {
-                basicAuth("customer", "password")
-                json {
-                    "request_uid" to ShortHashCode(requestUid)
-                    "amount_debit" to amount
-                    "amount_credit" to convert
-                }
-            }.assertOkJson<CashoutPending> {
-                val code = File("/tmp/tan-+99.txt").readText()
-                client.post("http://0.0.0.0:8080/accounts/customer/cashouts/${it.cashout_id}/confirm") {
+            repeat(3) { i ->  
+                val requestUid = randBytes(32);
+                val amount = BankAmount("KUDOS:${10+i}")
+                val convert = client.get("http://0.0.0.0:8080/conversion-info/cashout-rate?amount_debit=$amount")
+                    .assertOkJson<ConversionResponse>().amount_credit;
+                client.post("http://0.0.0.0:8080/accounts/customer/cashouts") {
                     basicAuth("customer", "password")
-                    json { "tan" to code }
-                }.assertNoContent()
+                    json {
+                        "request_uid" to ShortHashCode(requestUid)
+                        "amount_debit" to amount
+                        "amount_credit" to convert
+                    }
+                }.assertOkJson<CashoutPending> {
+                    val code = File("/tmp/tan-+99.txt").readText()
+                    client.post("http://0.0.0.0:8080/accounts/customer/cashouts/${it.cashout_id}/confirm") {
+                        basicAuth("customer", "password")
+                        json { "tan" to code }
+                    }.assertNoContent()
+                }
             }
         }
     }

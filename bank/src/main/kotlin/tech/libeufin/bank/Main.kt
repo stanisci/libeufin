@@ -321,35 +321,6 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
     }
 }
 
-class ConversionSetupCmd : CliktCommand("Setup conversion support", name = "conversion-setup") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
-
-    override fun run() {
-        val config = talerConfig(configFile)
-        val cfg = config.loadDbConfig()
-        val ctx = config.loadBankConfig();
-        val db = Database(cfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
-        runBlocking {
-            logger.info("doing DB initialization, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
-            val sqlProcedures = File("${cfg.sqlDir}/libeufin-conversion.sql")
-            if (!sqlProcedures.exists()) {
-                logger.info("Missing libeufin-conversion.sql file")
-                exitProcess(1)
-            }
-            pgDataSource(cfg.dbConnStr).pgConnection().execSQLUpdate(sqlProcedures.readText())
-                
-            // Load conversion config
-            ctx.conversionInfo?.run { 
-            logger.info("loading conversion config in DB")
-                db.conversion.updateConfig(this)
-            }
-        }
-    }
-}
-
 class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") {
     private val configFile by option(
         "--config", "-c",
@@ -366,6 +337,32 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
             exitProcess(1)
         }
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
+        runBlocking {
+            if (ctx.allowConversion) {
+                logger.info("ensure conversion is enabled")
+                val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
+                if (!sqlProcedures.exists()) {
+                    logger.info("Missing libeufin-conversion-setup.sql file")
+                    exitProcess(1)
+                }
+                pgDataSource(dbCfg.dbConnStr).pgConnection().execSQLUpdate(sqlProcedures.readText())
+            } else {
+                logger.info("ensure conversion is disabled")
+                val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-drop.sql")
+                if (!sqlProcedures.exists()) {
+                    logger.info("Missing libeufin-conversion-drop.sql file")
+                    exitProcess(1)
+                }
+                pgDataSource(dbCfg.dbConnStr).pgConnection().execSQLUpdate(sqlProcedures.readText())
+                // Remove conversion info from the database ?
+            }
+                
+            // Load conversion config
+            ctx.conversionInfo?.run { 
+            logger.info("loading conversion config in DB")
+                db.conversion.updateConfig(this)
+            }
+        }
         embeddedServer(Netty, port = serverCfg.port) {
             corebankWebApp(db, ctx)
         }.start(wait = true)
@@ -467,7 +464,7 @@ class BankConfigCmd : CliktCommand("Dump the configuration", name = "config") {
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), ConversionSetupCmd(), ChangePw(), BankConfigCmd())
+        subcommands(ServeBank(), BankDbInit(), ChangePw(), BankConfigCmd())
     }
 
     override fun run() = Unit

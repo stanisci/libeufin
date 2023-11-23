@@ -1,7 +1,7 @@
 BEGIN;
-SET search_path TO libeufin_conversion;
+SET search_path TO libeufin_bank;
 
-CREATE OR REPLACE FUNCTION cashout() 
+CREATE OR REPLACE FUNCTION cashout_link() 
 RETURNS trigger 
 LANGUAGE plpgsql AS $$
   DECLARE
@@ -27,17 +27,17 @@ LANGUAGE plpgsql AS $$
           ,NEW.subject
           ,payto_uri
           ,now_date
-          ,'TODO' -- How to generate this
+          ,LEFT(gen_random_uuid()::text, 35)
       );
     END IF;
     RETURN NEW;
   END;
 $$;
 
-CREATE OR REPLACE TRIGGER cashout BEFORE INSERT OR UPDATE ON libeufin_bank.cashout_operations
-    FOR EACH ROW EXECUTE FUNCTION cashout();
+CREATE OR REPLACE TRIGGER cashout_link BEFORE INSERT OR UPDATE ON cashout_operations
+    FOR EACH ROW EXECUTE FUNCTION cashout_link();
 
-CREATE OR REPLACE FUNCTION cashin() 
+CREATE OR REPLACE FUNCTION cashin_link() 
 RETURNS trigger 
 LANGUAGE plpgsql AS $$
   DECLARE
@@ -57,7 +57,7 @@ LANGUAGE plpgsql AS $$
     SELECT out_too_small, out_balance_insufficient, out_no_account
       INTO too_small, balance_insufficient, no_account
       FROM libeufin_bank.cashin(now_date, payto_uri, local_amount, subject);
-    SET search_path TO libeufin_conversion;
+    SET search_path TO libeufin_nexus;
 
     IF no_account THEN
       RAISE EXCEPTION 'TODO soft error bounce: unknown account';
@@ -72,7 +72,7 @@ LANGUAGE plpgsql AS $$
   END;
 $$;
 
-CREATE OR REPLACE TRIGGER cashin BEFORE INSERT ON libeufin_nexus.talerable_incoming_transactions
-    FOR EACH ROW EXECUTE FUNCTION cashin();
+CREATE OR REPLACE TRIGGER cashin_link BEFORE INSERT ON libeufin_nexus.talerable_incoming_transactions
+    FOR EACH ROW EXECUTE FUNCTION cashin_link();
 
 COMMIT;
