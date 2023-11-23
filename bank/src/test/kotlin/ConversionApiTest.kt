@@ -109,6 +109,19 @@ class ConversionApiTest {
     }
 
     @Test
+    fun noRate() = bankSetup { db ->
+        db.conversion.clearConfig()
+        client.get("/conversion-info/cashin-rate")
+            .assertBadRequest()
+        client.get("/conversion-info/cashout-rate")
+            .assertBadRequest()
+        client.get("/conversion-info/cashin-rate?amount_credit=KUDOS:1")
+            .assertNotImplemented()
+        client.get("/conversion-info/cashout-rate?amount_credit=EUR:1")
+            .assertNotImplemented()
+    }
+
+    @Test
     fun notImplemented() = bankSetup("test_restrict.conf") { _ ->
         client.get("/conversion-info/cashin-rate")
             .assertNotImplemented()

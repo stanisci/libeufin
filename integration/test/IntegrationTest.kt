@@ -72,6 +72,7 @@ class IntegrationTest {
         kotlin.concurrent.thread(isDaemon = true)  {
             bankCmd.run("serve -c ../bank/conf/test.conf")
         }
+        
         runBlocking {
             val client = HttpClient(CIO) {
                 install(HttpRequestRetry) {

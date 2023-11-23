@@ -48,14 +48,15 @@ LANGUAGE plpgsql AS $$
     too_small BOOLEAN;
     balance_insufficient BOOLEAN;
     no_account BOOLEAN;
+    no_config BOOLEAN;
   BEGIN
     SELECT (amount).val, (amount).frac, wire_transfer_subject, execution_time, debit_payto_uri
       INTO local_amount.val, local_amount.frac, subject, now_date, payto_uri
       FROM libeufin_nexus.incoming_transactions
       WHERE incoming_transaction_id = NEW.incoming_transaction_id;
     SET search_path TO libeufin_bank;
-    SELECT out_too_small, out_balance_insufficient, out_no_account
-      INTO too_small, balance_insufficient, no_account
+    SELECT out_too_small, out_balance_insufficient, out_no_account, out_no_config
+      INTO too_small, balance_insufficient, no_account, no_config
       FROM libeufin_bank.cashin(now_date, payto_uri, local_amount, subject);
     SET search_path TO libeufin_nexus;
 
@@ -66,7 +67,10 @@ LANGUAGE plpgsql AS $$
       RAISE EXCEPTION 'TODO soft error bounce: too small amount';
     END IF;
     IF balance_insufficient THEN
-      RAISE EXCEPTION 'TODO hard error bounce';
+      RAISE EXCEPTION 'TODO hard error bounce: admin balance insufficient';
+    END IF;
+    IF no_config THEN
+      RAISE EXCEPTION 'TODO hard error bounce: missing conversion rate config';
     END IF;
     RETURN NEW;
   END;

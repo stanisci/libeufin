@@ -975,6 +975,7 @@ CREATE OR REPLACE FUNCTION cashin(
   -- Error status
   OUT out_no_account BOOLEAN,
   OUT out_too_small BOOLEAN,
+  OUT out_no_config BOOLEAN,
   OUT out_balance_insufficient BOOLEAN
 )
 LANGUAGE plpgsql AS $$ 
@@ -1002,10 +1003,10 @@ SELECT bank_account_id
   WHERE login = 'admin';
 
 -- Perform conversion
-SELECT (converted).val, (converted).frac, too_small 
-  INTO converted_amount.val, converted_amount.frac, out_too_small 
+SELECT (converted).val, (converted).frac, too_small, no_config
+  INTO converted_amount.val, converted_amount.frac, out_too_small, out_no_config
   FROM conversion_to(in_amount, 'cashin'::text);
-IF out_too_small THEN
+IF out_too_small OR out_no_config THEN
   RETURN;
 END IF;
 
@@ -1061,7 +1062,7 @@ account_id BIGINT;
 challenge_id BIGINT;
 BEGIN
 -- check conversion
-SELECT too_small OR in_amount_credit!=converted INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'cashout'::text);
+SELECT too_small OR no_config OR in_amount_credit!=converted INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'cashout'::text);
 IF out_bad_conversion THEN
   RETURN;
 END IF;
@@ -1183,7 +1184,7 @@ ELSIF already_confirmed OR out_aborted OR out_no_cashout_payto THEN
 END IF;
 
 -- check conversion
-SELECT too_small OR amount_credit_local!=converted INTO out_bad_conversion FROM conversion_to(amount_debit_local, 'cashout'::text);
+SELECT too_small OR no_config OR amount_credit_local!=converted INTO out_bad_conversion FROM conversion_to(amount_debit_local, 'cashout'::text);
 IF out_bad_conversion THEN
   RETURN;
 END IF;
@@ -1517,7 +1518,8 @@ CREATE OR REPLACE FUNCTION conversion_to(
   IN amount taler_amount,
   IN direction TEXT,
   OUT converted taler_amount,
-  OUT too_small BOOLEAN
+  OUT too_small BOOLEAN,
+  OUT no_config BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -1529,6 +1531,10 @@ DECLARE
 BEGIN
   -- Check min amount
   SELECT value['val']::int8, value['frac']::int4 INTO min_amount.val, min_amount.frac FROM config WHERE key=direction||'_min_amount';
+  IF NOT FOUND THEN
+    no_config = true;
+    RETURN;
+  END IF;
   SELECT NOT ok INTO too_small FROM amount_left_minus_right(amount, min_amount);
   IF too_small THEN
     converted = (0, 0);
@@ -1553,7 +1559,8 @@ CREATE OR REPLACE FUNCTION conversion_from(
   IN amount taler_amount,
   IN direction TEXT,
   OUT converted taler_amount,
-  OUT too_small BOOLEAN
+  OUT too_small BOOLEAN,
+  OUT no_config BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -1568,7 +1575,10 @@ BEGIN
   SELECT value['val']::int8, value['frac']::int4 INTO out_fee.val, out_fee.frac FROM config WHERE key=direction||'_fee';
   SELECT value['val']::int8, value['frac']::int4 INTO tiny_amount.val, tiny_amount.frac FROM config WHERE key=direction||'_tiny_amount';
   SELECT (value->>'mode')::rounding_mode INTO mode FROM config WHERE key=direction||'_rounding_mode';
-
+  IF NOT FOUND THEN
+    no_config = true;
+    RETURN;
+  END IF;
   SELECT result.val, result.frac INTO converted.val, converted.frac 
     FROM conversion_revert_ratio(amount_add(amount, out_fee), at_ratio, tiny_amount, mode) as result;
   

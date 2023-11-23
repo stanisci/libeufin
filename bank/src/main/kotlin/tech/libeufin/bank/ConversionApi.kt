@@ -25,6 +25,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import java.util.*
 import tech.libeufin.util.*
+import tech.libeufin.bank.ConversionDAO.*
 import net.taler.common.errorcodes.TalerErrorCode
 
 fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
@@ -39,6 +40,24 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
             )
         )
     }
+    suspend fun ApplicationCall.convert(
+        input: TalerAmount, 
+        conversion: suspend ConversionDAO.(TalerAmount) -> ConversionResult,
+        output: (TalerAmount) -> ConversionResponse
+    ) {
+        when (val res = db.conversion.(conversion)(input)) {
+            is ConversionResult.Success -> respond(output(res.converted))
+            is ConversionResult.ToSmall -> throw conflict(
+                "$input is too small to be converted",
+                TalerErrorCode.BANK_BAD_CONVERSION
+            )
+            is ConversionResult.MissingConfig -> throw libeufinError(
+                HttpStatusCode.NotImplemented, 
+                "conversion rate not configured yet", 
+                TalerErrorCode.END
+            )
+        }
+    }
     get("/conversion-info/cashout-rate") {
         val params = RateParams.extract(call.request.queryParameters)
 
@@ -46,40 +65,29 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
         params.credit?.let { ctx.checkFiatCurrency(it) }
 
         if (params.debit != null) {
-            val credit = db.conversion.toCashout(params.debit) ?:
-                throw conflict(
-                    "${params.debit} is too small to be converted",
-                    TalerErrorCode.BANK_BAD_CONVERSION
-                )
-            call.respond(ConversionResponse(params.debit, credit))
+            call.convert(params.debit, ConversionDAO::toCashout) {
+                ConversionResponse(params.debit, it)
+            }
         } else {
-            val debit = db.conversion.fromCashout(params.credit!!) ?:
-            throw conflict(
-                "${params.debit} is too small to be converted",
-                TalerErrorCode.BANK_BAD_CONVERSION
-            )
-            call.respond(ConversionResponse(debit, params.credit))
+            call.convert(params.credit!!, ConversionDAO::fromCashout) {
+                ConversionResponse(it, params.credit)
+            }
         }
     }
     get("/conversion-info/cashin-rate") {
         val params = RateParams.extract(call.request.queryParameters)
 
+        params.debit?.let { ctx.checkFiatCurrency(it) }
+        params.credit?.let { ctx.checkRegionalCurrency(it) }
+
         if (params.debit != null) {
-            ctx.checkFiatCurrency(params.debit)
-            val credit = db.conversion.toCashin(params.debit) ?:
-                throw conflict(
-                    "${params.debit} is too small to be converted",
-                    TalerErrorCode.BANK_BAD_CONVERSION
-                )
-            call.respond(ConversionResponse(params.debit, credit))
+            call.convert(params.debit, ConversionDAO::toCashin) {
+                ConversionResponse(params.debit, it)
+            }
         } else {
-            ctx.checkRegionalCurrency(params.credit!!)
-            val debit = db.conversion.fromCashin(params.credit) ?:
-            throw conflict(
-                "${params.credit} is too small to be converted",
-                TalerErrorCode.BANK_BAD_CONVERSION
-            )
-            call.respond(ConversionResponse(debit, params.credit))
+            call.convert(params.credit!!, ConversionDAO::fromCashin) {
+                ConversionResponse(it, params.credit)
+            }
         }
     }
 }

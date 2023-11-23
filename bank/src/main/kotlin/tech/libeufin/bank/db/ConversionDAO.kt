@@ -61,28 +61,43 @@ class ConversionDAO(private val db: Database) {
         }
     }
 
+    /** Clear in-db conversion config */
+    suspend fun clearConfig() = db.serializable { conn ->
+        conn.prepareStatement("DELETE FROM config WHERE key LIKE 'cashin%' OR key like 'cashout%'").executeUpdate()
+    }
+
+    /** Result of conversions operations */
+    sealed class ConversionResult {
+        data class Success(val converted: TalerAmount): ConversionResult()
+        object ToSmall: ConversionResult()
+        object MissingConfig: ConversionResult()
+    }
+
     /** Perform [direction] conversion of [amount] using in-db [function] */
-    private suspend fun conversion(amount: TalerAmount, direction: String, function: String): TalerAmount? = db.conn { conn ->
-        val stmt = conn.prepareStatement("SELECT too_small, (converted).val AS amount_val, (converted).frac AS amount_frac FROM $function((?, ?)::taler_amount, ?)")
+    private suspend fun conversion(amount: TalerAmount, direction: String, function: String): ConversionResult = db.conn { conn ->
+        val stmt = conn.prepareStatement("SELECT too_small, no_config, (converted).val AS amount_val, (converted).frac AS amount_frac FROM $function((?, ?)::taler_amount, ?)")
         stmt.setLong(1, amount.value)
         stmt.setInt(2, amount.frac)
         stmt.setString(3, direction)
         stmt.executeQuery().use {
-            it.next()
-            if (!it.getBoolean("too_small")) {
-                it.getAmount("amount", if (amount.currency == db.bankCurrency) db.fiatCurrency!! else db.bankCurrency)
-            } else {
-                null
+            when {
+                !it.next() ->
+                    throw internalServerError("No result from DB procedure $function")
+                it.getBoolean("no_config") -> ConversionResult.MissingConfig
+                it.getBoolean("too_small") -> ConversionResult.ToSmall
+                else -> ConversionResult.Success(
+                    it.getAmount("amount", if (amount.currency == db.bankCurrency) db.fiatCurrency!! else db.bankCurrency)
+                )
             }
         }
     }
-
+ 
     /** Convert [regional] amount to fiat using cashout rate */
-    suspend fun toCashout(regional: TalerAmount): TalerAmount? = conversion(regional, "cashout", "conversion_to")
+    suspend fun toCashout(regional: TalerAmount): ConversionResult = conversion(regional, "cashout", "conversion_to")
     /** Convert [fiat] amount to regional using cashin rate */
-    suspend fun toCashin(fiat: TalerAmount): TalerAmount? = conversion(fiat, "cashin", "conversion_to")
+    suspend fun toCashin(fiat: TalerAmount): ConversionResult = conversion(fiat, "cashin", "conversion_to")
     /** Convert [fiat] amount to regional using inverse cashout rate */
-    suspend fun fromCashout(fiat: TalerAmount): TalerAmount? = conversion(fiat, "cashout", "conversion_from")
+    suspend fun fromCashout(fiat: TalerAmount): ConversionResult = conversion(fiat, "cashout", "conversion_from")
     /** Convert [regional] amount to fiat using inverse cashin rate */
-    suspend fun fromCashin(regional: TalerAmount): TalerAmount? = conversion(regional, "cashin", "conversion_from")
+    suspend fun fromCashin(regional: TalerAmount): ConversionResult = conversion(regional, "cashin", "conversion_from")
 }
