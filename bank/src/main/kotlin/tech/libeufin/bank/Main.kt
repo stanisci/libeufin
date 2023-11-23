@@ -45,6 +45,7 @@ import java.time.Duration
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
 import java.sql.SQLException
+import java.io.File
 import kotlin.system.exitProcess
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -56,9 +57,7 @@ import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import org.postgresql.util.PSQLState
 import tech.libeufin.bank.AccountDAO.*
-import tech.libeufin.util.getVersion
-import tech.libeufin.util.initializeDatabaseTables
-import tech.libeufin.util.resetDatabaseTables
+import tech.libeufin.util.*
 
 // GLOBALS
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
@@ -188,6 +187,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
             )
         }
         exception<SQLException> { call, cause ->
+            cause.printStackTrace()
             val err = when (cause.sqlState) {
                 PSQLState.SERIALIZATION_FAILURE.state -> libeufinError(
                     HttpStatusCode.InternalServerError,
@@ -321,6 +321,35 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
     }
 }
 
+class ConversionSetupCmd : CliktCommand("Setup conversion support", name = "conversion-setup") {
+    private val configFile by option(
+        "--config", "-c",
+        help = "set the configuration file"
+    )
+
+    override fun run() {
+        val config = talerConfig(configFile)
+        val cfg = config.loadDbConfig()
+        val ctx = config.loadBankConfig();
+        val db = Database(cfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
+        runBlocking {
+            logger.info("doing DB initialization, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
+            val sqlProcedures = File("${cfg.sqlDir}/libeufin-conversion.sql")
+            if (!sqlProcedures.exists()) {
+                logger.info("Missing libeufin-conversion.sql file")
+                exitProcess(1)
+            }
+            pgDataSource(cfg.dbConnStr).pgConnection().execSQLUpdate(sqlProcedures.readText())
+                
+            // Load conversion config
+            ctx.conversionInfo?.run { 
+            logger.info("loading conversion config in DB")
+                db.conversion.updateConfig(this)
+            }
+        }
+    }
+}
+
 class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") {
     private val configFile by option(
         "--config", "-c",
@@ -438,7 +467,7 @@ class BankConfigCmd : CliktCommand("Dump the configuration", name = "config") {
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), ChangePw(), BankConfigCmd())
+        subcommands(ServeBank(), BankDbInit(), ConversionSetupCmd(), ChangePw(), BankConfigCmd())
     }
 
     override fun run() = Unit

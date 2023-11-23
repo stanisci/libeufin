@@ -326,32 +326,6 @@ inline suspend fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B)
 
 /* ----- Body helper ----- */
 
-inline fun <reified B> HttpRequestBuilder.json(b: B, deflate: Boolean = false) {
-    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b);
-    contentType(ContentType.Application.Json)
-    if (deflate) {
-        headers.set("Content-Encoding", "deflate")
-        val bos = ByteArrayOutputStream()
-        val ios = DeflaterOutputStream(bos)
-        ios.write(json.toByteArray())
-        ios.finish()
-        setBody(bos.toByteArray())
-    } else {
-        setBody(json)
-    }
-}
-
-inline fun HttpRequestBuilder.json(
-    from: JsonObject = JsonObject(emptyMap()), 
-    deflate: Boolean = false, 
-    builderAction: JsonBuilder.() -> Unit
-) {
-    json(obj(from, builderAction), deflate)
-}
-
-inline suspend fun <reified B> HttpResponse.json(): B =
-    Json.decodeFromString(kotlinx.serialization.serializer<B>(), bodyAsText())
-
 inline suspend fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
     assertOk()
     val body = json<B>()
@@ -396,23 +370,6 @@ fun HttpRequestBuilder.pwAuth(username: String? = null) {
         basicAuth("$login", "$login-password")
     }
     
-}
-
-/* ----- Json DSL ----- */
-
-inline fun obj(from: JsonObject = JsonObject(emptyMap()), builderAction: JsonBuilder.() -> Unit): JsonObject {
-    val builder = JsonBuilder(from)
-    builder.apply(builderAction)
-    return JsonObject(builder.content)
-}
-
-class JsonBuilder(from: JsonObject) {
-    val content: MutableMap<String, JsonElement> = from.toMutableMap()
-
-    infix inline fun <reified T> String.to(v: T) {
-        val json = Json.encodeToJsonElement(kotlinx.serialization.serializer<T>(), v);
-        content.put(this, json)
-    }
 }
 
 /* ----- Random data generation ----- */

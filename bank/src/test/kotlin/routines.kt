@@ -18,6 +18,7 @@
  */
 
 import tech.libeufin.bank.*
+import tech.libeufin.util.*
 import io.ktor.client.statement.HttpResponse
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.client.request.*

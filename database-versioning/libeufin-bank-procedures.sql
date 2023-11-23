@@ -973,6 +973,7 @@ CREATE OR REPLACE FUNCTION cashin(
   IN in_amount taler_amount,
   IN in_subject TEXT,
   -- Error status
+  OUT out_no_account BOOLEAN,
   OUT out_too_small BOOLEAN,
   OUT out_balance_insufficient BOOLEAN
 )
@@ -987,6 +988,10 @@ SELECT bank_account_id
   INTO wallet_account_id
   FROM bank_accounts
   WHERE internal_payto_uri = in_payto_uri;
+IF NOT FOUND THEN
+  out_no_account = true;
+  RETURN;
+END IF;
 
 -- Retrieve admin account id
 SELECT bank_account_id
