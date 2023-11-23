@@ -221,6 +221,8 @@ data class Config(
 ) {
     val name: String = "libeufin-bank"
     val version: String = "0:0:0"
+    val bank_name: String = "Stater Bank"
+    val show_demo_nav: Boolean = false
 }
 
 @Serializable

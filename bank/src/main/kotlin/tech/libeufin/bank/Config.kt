@@ -82,6 +82,7 @@ data class BankConfig(
     val conversionInfo: ConversionInfo?,
     val tanSms: String?,
     val tanEmail: String?,
+    val spaPath: String?
 )
 
 @Serializable
@@ -144,6 +145,7 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
         suggestedWithdrawalExchange = lookupString("libeufin-bank", "suggested_withdrawal_exchange"),
         defaultAdminDebtLimit = requireAmount("libeufin-bank", "default_admin_debt_limit", regionalCurrency),
         spaCaptchaURL = lookupString("libeufin-bank", "spa_captcha_url"),
+        spaPath = lookupPath("libeufin-bank", "spa"),
         restrictAccountDeletion = lookupBoolean("libeufin-bank", "restrict_account_deletion") ?: true,
         allowConversion = allowConversion,
         fiatCurrency = fiatCurrency,

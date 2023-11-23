@@ -27,6 +27,8 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
 import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.http.content.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -226,6 +228,9 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
         bankIntegrationApi(db, ctx)
         wireGatewayApi(db, ctx)
         revenueApi(db)
+        ctx.spaPath?.let { 
+            staticFiles("/", File(it))
+        }
     }
 }
 
