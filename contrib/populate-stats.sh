@@ -27,11 +27,29 @@ insert_stat () {
   echo "
     SET search_path TO libeufin_bank;
     CALL libeufin_bank.stats_register_payment (
+      'taler_in'::text
+      ,TO_TIMESTAMP($1)::timestamp
+      ,($(rnd 0 99999999), $(rnd 0 99999999))::taler_amount
+      ,null
+    );
+    CALL libeufin_bank.stats_register_payment (
       'taler_out'::text
       ,TO_TIMESTAMP($1)::timestamp
       ,($(rnd 0 99999999), $(rnd 0 99999999))::taler_amount
+      ,null
+    );
+    CALL libeufin_bank.stats_register_payment (
+      'cashin'::text
+      ,TO_TIMESTAMP($1)::timestamp
       ,($(rnd 0 99999999), $(rnd 0 99999999))::taler_amount
-      );"
+      ,($(rnd 0 99999999), $(rnd 0 99999999))::taler_amount
+    );
+    CALL libeufin_bank.stats_register_payment (
+      'cashout'::text
+      ,TO_TIMESTAMP($1)::timestamp
+      ,($(rnd 0 99999999), $(rnd 0 99999999))::taler_amount
+      ,($(rnd 0 99999999), $(rnd 0 99999999))::taler_amount
+    );"
 }
 
 # $1 == timestamp
@@ -66,8 +84,7 @@ insert_cmd () {
     );"
 }
  
-for n_hour_ago in `seq 1 5`; do
-# for n_hour_ago in `seq 1 100`; do
+for n_hour_ago in `seq 1 100`; do
   echo -n .
   TIMESTAMP=$(date --date="${n_hour_ago} hour ago" +%s)
   # psql $DB_NAME -c "$(insert_cmd ${TIMESTAMP})" > /dev/null
