@@ -231,7 +231,7 @@ data class ConversionConfig(
     val regional_currency_specification: CurrencySpecification,
     val fiat_currency: String,
     val fiat_currency_specification: CurrencySpecification,
-    val conversion_info: ConversionInfo
+    val conversion_rate: ConversionRate
 ) {
     val name: String = "taler-conversion-info"
     val version: String = "0:0:0"

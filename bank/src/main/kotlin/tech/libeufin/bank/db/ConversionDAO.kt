@@ -25,7 +25,7 @@ import tech.libeufin.bank.*
 /** Data access logic for conversion */
 class ConversionDAO(private val db: Database) {
     /** Update in-db conversion config */
-    suspend fun updateConfig(cfg: ConversionInfo) = db.serializable {
+    suspend fun updateConfig(cfg: ConversionRate) = db.serializable {
         it.transaction { conn -> 
             var stmt = conn.prepareStatement("CALL config_set_amount(?, (?, ?)::taler_amount)")
             for ((name, amount) in listOf(
@@ -63,7 +63,7 @@ class ConversionDAO(private val db: Database) {
     }
 
     /** Get in-db conversion config */
-    suspend fun getConfig(regional: String, fiat: String): ConversionInfo? = db.conn {
+    suspend fun getConfig(regional: String, fiat: String): ConversionRate? = db.conn {
         it.transaction { conn -> 
             val amount = conn.prepareStatement("SELECT (amount).val as amount_val, (amount).frac as amount_frac FROM config_get_amount(?) as amount");
             val roundingMode = conn.prepareStatement("SELECT config_get_rounding_mode(?)");
@@ -76,7 +76,7 @@ class ConversionDAO(private val db: Database) {
                 roundingMode.setString(1, name)
                 return roundingMode.oneOrNull { RoundingMode.valueOf(it.getString(1)) }
             }
-            ConversionInfo(
+            ConversionRate(
                 cashin_ratio = getRatio("cashin_ratio") ?: return@transaction null,
                 cashin_fee = getAmount("cashin_fee", regional) ?: return@transaction null, 
                 cashin_tiny_amount = getAmount("cashin_tiny_amount", regional) ?: return@transaction null,

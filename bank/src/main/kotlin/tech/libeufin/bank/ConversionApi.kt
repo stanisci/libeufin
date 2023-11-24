@@ -44,7 +44,7 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
                 regional_currency_specification = ctx.regionalCurrencySpec,
                 fiat_currency = ctx.fiatCurrency!!,
                 fiat_currency_specification = ctx.fiatCurrencySpec!!,
-                conversion_info = config
+                conversion_rate = config
             )
         )
     }
@@ -100,7 +100,7 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
     }
     authAdmin(db, TokenScope.readwrite) {
         post("/conversion-info/conversion-rate") {
-            val req = call.receive<ConversionInfo>()
+            val req = call.receive<ConversionRate>()
             db.conversion.updateConfig(req);
             call.respond(HttpStatusCode.NoContent)
         }

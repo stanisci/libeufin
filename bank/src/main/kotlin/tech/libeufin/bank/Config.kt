@@ -85,7 +85,7 @@ data class BankConfig(
 )
 
 @Serializable
-data class ConversionInfo (
+data class ConversionRate (
     val cashin_ratio: DecimalNumber,
     val cashin_fee: TalerAmount,
     val cashin_tiny_amount: TalerAmount,
