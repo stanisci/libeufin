@@ -33,14 +33,7 @@ import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.*
 
 class DatabaseTest {
-    // Testing the helper that update conversion config
-    @Test
-    fun conversionConfig() = setup { db, ctx ->
-        // Check idempotent
-        db.conversion.updateConfig(ctx.conversionInfo!!)
-        db.conversion.updateConfig(ctx.conversionInfo!!)
-    }
-
+    
     // Testing the helper that creates the admin account.
     @Test
     fun createAdmin() = setup { db, ctx ->

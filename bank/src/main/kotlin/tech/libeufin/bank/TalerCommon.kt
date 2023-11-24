@@ -300,6 +300,10 @@ class DecimalNumber {
     val value: Long
     val frac: Int
 
+    constructor(value: Long, frac: Int) {
+        this.value = value
+        this.frac = frac
+    }
     constructor(encoded: String) {
         val match = PATTERN.matchEntire(encoded) ?: throw badRequest("Invalid decimal number format");
         val (value, frac) = match.destructured

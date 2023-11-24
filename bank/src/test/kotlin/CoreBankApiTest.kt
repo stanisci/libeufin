@@ -1020,7 +1020,7 @@ class CoreBankCashoutApiTest {
 
     // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm
     @Test
-    fun confirm() = bankSetup { db -> 
+    fun confirm() = bankSetup { _ -> 
         authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts/42/confirm")
 
         client.patchA("/accounts/customer") {
@@ -1086,19 +1086,21 @@ class CoreBankCashoutApiTest {
             json(req) { "request_uid" to randShortHashCode() }
         }.assertOkJson<CashoutPending> {
             val id = it.cashout_id
-
-            db.conversion.updateConfig(ConversionInfo(
-                cashin_ratio = DecimalNumber("1"),
-                cashin_fee = TalerAmount("KUDOS:0.1"),
-                cashin_tiny_amount = TalerAmount("KUDOS:0.0001"),
-                cashin_rounding_mode = RoundingMode.nearest,
-                cashin_min_amount = TalerAmount("EUR:0.0001"),
-                cashout_ratio = DecimalNumber("1"),
-                cashout_fee = TalerAmount("EUR:0.1"),
-                cashout_tiny_amount = TalerAmount("EUR:0.0001"),
-                cashout_rounding_mode = RoundingMode.nearest,
-                cashout_min_amount = TalerAmount("KUDOS:0.0001"),
-            ))
+            client.post("/conversion-info/conversion-rate") {
+                pwAuth("admin")
+                json {
+                    "cashin_ratio" to "1"
+                    "cashin_fee" to "KUDOS:0.1"
+                    "cashin_tiny_amount" to "KUDOS:0.0001"
+                    "cashin_rounding_mode" to "nearest"
+                    "cashin_min_amount" to "EUR:0.0001"
+                    "cashout_ratio" to "1"
+                    "cashout_fee" to "EUR:0.1"
+                    "cashout_tiny_amount" to "EUR:0.0001"
+                    "cashout_rounding_mode" to "nearest"
+                    "cashout_min_amount" to "KUDOS:0.0001"
+                }
+            }.assertNoContent()
 
             client.postA("/accounts/customer/cashouts/$id/confirm"){
                 json { "tan" to smsCode("+99") } 

@@ -69,6 +69,7 @@ class IntegrationTest {
         nexusCmd.run("dbinit -c ../bank/conf/test.conf -r")
         val bankCmd = LibeufinBankCommand();
         bankCmd.run("dbinit -c ../bank/conf/test.conf -r")
+        bankCmd.run("passwd admin password -c ../bank/conf/test.conf")
         kotlin.concurrent.thread(isDaemon = true)  {
             bankCmd.run("serve -c ../bank/conf/test.conf")
         }
@@ -97,6 +98,23 @@ class IntegrationTest {
                     }
                 }
             }.assertCreated()
+
+            // Set conversion rates
+            client.post("http://0.0.0.0:8080/conversion-info/conversion-rate") {
+                basicAuth("admin", "password")
+                json {
+                    "cashin_ratio" to "0.8"
+                    "cashin_fee" to "KUDOS:0.02"
+                    "cashin_tiny_amount" to "KUDOS:0.01"
+                    "cashin_rounding_mode" to "nearest"
+                    "cashin_min_amount" to "EUR:0"
+                    "cashout_ratio" to "1.25"
+                    "cashout_fee" to "EUR:0.003"
+                    "cashout_tiny_amount" to "EUR:0.00000001"
+                    "cashout_rounding_mode" to "zero"
+                    "cashout_min_amount" to "KUDOS:0.1"
+                }
+            }.assertNoContent()
 
             // Cashin
             repeat(3) { i ->

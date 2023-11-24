@@ -30,13 +30,21 @@ import net.taler.common.errorcodes.TalerErrorCode
 
 fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
     get("/conversion-info/config") {
+        val config = db.conversion.getConfig(ctx.regionalCurrency, ctx.fiatCurrency!!)
+        if (config == null) {
+            throw libeufinError(
+                HttpStatusCode.NotImplemented, 
+                "conversion rate not configured yet", 
+                TalerErrorCode.END
+            )
+        }
         call.respond(
             ConversionConfig(
                 regional_currency = ctx.regionalCurrency,
                 regional_currency_specification = ctx.regionalCurrencySpec,
                 fiat_currency = ctx.fiatCurrency!!,
                 fiat_currency_specification = ctx.fiatCurrencySpec!!,
-                conversion_info = ctx.conversionInfo!!
+                conversion_info = config
             )
         )
     }
@@ -88,6 +96,13 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
             call.convert(params.credit!!, ConversionDAO::fromCashin) {
                 ConversionResponse(it, params.credit)
             }
+        }
+    }
+    authAdmin(db, TokenScope.readwrite) {
+        post("/conversion-info/conversion-rate") {
+            val req = call.receive<ConversionInfo>()
+            db.conversion.updateConfig(req);
+            call.respond(HttpStatusCode.NoContent)
         }
     }
 }

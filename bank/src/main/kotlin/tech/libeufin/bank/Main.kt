@@ -316,12 +316,6 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
                     logger.info("Admin's account created")
                 }
             }
-                
-            // Load conversion config
-            ctx.conversionInfo?.run { 
-            logger.info("load conversion config in DB")
-                db.conversion.updateConfig(this)
-            }
         }
     }
 }
@@ -360,12 +354,6 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
                 }
                 pgDataSource(dbCfg.dbConnStr).pgConnection().execSQLUpdate(sqlProcedures.readText())
                 // Remove conversion info from the database ?
-            }
-                
-            // Load conversion config
-            ctx.conversionInfo?.run { 
-            logger.info("loading conversion config in DB")
-                db.conversion.updateConfig(this)
             }
         }
         embeddedServer(Netty, port = serverCfg.port) {

@@ -79,7 +79,6 @@ data class BankConfig(
     val allowConversion: Boolean,
     val fiatCurrency: String?,
     val fiatCurrencySpec: CurrencySpecification?,
-    val conversionInfo: ConversionInfo?,
     val tanSms: String?,
     val tanEmail: String?,
     val spaPath: String?
@@ -128,12 +127,10 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
     val regionalCurrency = requireString("libeufin-bank", "currency")
     var fiatCurrency: String? = null;
     var fiatCurrencySpec: CurrencySpecification? = null
-    var conversionInfo: ConversionInfo? = null;
     val allowConversion = lookupBoolean("libeufin-bank", "allow_conversion") ?: false;
     if (allowConversion) {
         fiatCurrency = requireString("nexus-ebics", "currency");
         fiatCurrencySpec = currencySpecificationFor(fiatCurrency) 
-        conversionInfo = loadConversionInfo(regionalCurrency, fiatCurrency)
     }
     BankConfig(
         regionalCurrency = regionalCurrency,
@@ -150,7 +147,6 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
         allowConversion = allowConversion,
         fiatCurrency = fiatCurrency,
         fiatCurrencySpec = fiatCurrencySpec,
-        conversionInfo = conversionInfo,
         tanSms = lookupPath("libeufin-bank", "tan_sms"),
         tanEmail = lookupPath("libeufin-bank", "tan_email"),
     )
@@ -160,21 +156,6 @@ fun TalerConfig.currencySpecificationFor(currency: String): CurrencySpecificatio
     sections.find {
         it.startsWith("CURRENCY-") && requireBoolean(it, "enabled") && requireString(it, "code") == currency
     }?.let { loadCurrencySpecification(it) } ?: throw TalerConfigError("missing currency specification for $currency")
-}
-
-private fun TalerConfig.loadConversionInfo(currency: String, fiatCurrency: String): ConversionInfo = catchError {
-    ConversionInfo(
-        cashin_ratio = requireDecimalNumber("libeufin-bank-conversion", "cashin_ratio"),
-        cashin_fee = requireAmount("libeufin-bank-conversion", "cashin_fee", currency),
-        cashin_tiny_amount = amount("libeufin-bank-conversion", "cashin_tiny_amount", currency) ?: TalerAmount(0, 1, currency),
-        cashin_rounding_mode = RoundingMode("libeufin-bank-conversion", "cashin_rounding_mode") ?: RoundingMode.zero,
-        cashin_min_amount = amount("libeufin-bank-conversion", "cashin_min_amount", fiatCurrency) ?: TalerAmount(0, 0, fiatCurrency),
-        cashout_ratio = requireDecimalNumber("libeufin-bank-conversion", "cashout_ratio"),
-        cashout_fee = requireAmount("libeufin-bank-conversion", "cashout_fee", fiatCurrency),
-        cashout_tiny_amount = amount("libeufin-bank-conversion", "cashout_tiny_amount", fiatCurrency) ?: TalerAmount(0, 1, fiatCurrency),
-        cashout_rounding_mode = RoundingMode("libeufin-bank-conversion", "cashout_rounding_mode") ?: RoundingMode.zero,
-        cashout_min_amount = amount("libeufin-bank-conversion", "cashout_min_amount", currency) ?: TalerAmount(0, 0, currency),
-    )
 }
 
 private fun TalerConfig.loadCurrencySpecification(section: String): CurrencySpecification = catchError {

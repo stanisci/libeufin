@@ -1438,6 +1438,20 @@ LANGUAGE sql AS $$
     ON CONFLICT (key) DO UPDATE SET value = excluded.value
 $$;
 
+CREATE OR REPLACE FUNCTION config_get_amount(
+  IN name TEXT,
+  OUT amount taler_amount
+)
+LANGUAGE sql AS $$
+  SELECT (value['val']::int8, value['frac']::int4)::taler_amount FROM config WHERE key=name
+$$;
+
+CREATE OR REPLACE FUNCTION config_get_rounding_mode(
+  IN name TEXT,
+  OUT mode rounding_mode
+)
+LANGUAGE sql AS $$ SELECT (value->>'mode')::rounding_mode FROM config WHERE key=name $$;
+
 CREATE OR REPLACE FUNCTION conversion_apply_ratio(
    IN amount taler_amount
   ,IN ratio taler_amount

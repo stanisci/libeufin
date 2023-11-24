@@ -20,6 +20,7 @@
 package tech.libeufin.bank
 
 import tech.libeufin.util.*
+import tech.libeufin.bank.*
 
 /** Data access logic for conversion */
 class ConversionDAO(private val db: Database) {
@@ -58,6 +59,35 @@ class ConversionDAO(private val db: Database) {
                 stmt.setString(2, value.name)
                 stmt.executeUpdate()
             }
+        }
+    }
+
+    /** Get in-db conversion config */
+    suspend fun getConfig(regional: String, fiat: String): ConversionInfo? = db.conn {
+        it.transaction { conn -> 
+            val amount = conn.prepareStatement("SELECT (amount).val as amount_val, (amount).frac as amount_frac FROM config_get_amount(?) as amount");
+            val roundingMode = conn.prepareStatement("SELECT config_get_rounding_mode(?)");
+            fun getAmount(name: String, currency: String): TalerAmount? {
+                amount.setString(1, name)
+                return amount.oneOrNull { it.getAmount("amount", currency) }
+            }
+            fun getRatio(name: String): DecimalNumber? = getAmount(name, "")?.run { DecimalNumber(value, frac) }
+            fun getMode(name: String): RoundingMode? {
+                roundingMode.setString(1, name)
+                return roundingMode.oneOrNull { RoundingMode.valueOf(it.getString(1)) }
+            }
+            ConversionInfo(
+                cashin_ratio = getRatio("cashin_ratio") ?: return@transaction null,
+                cashin_fee = getAmount("cashin_fee", regional) ?: return@transaction null, 
+                cashin_tiny_amount = getAmount("cashin_tiny_amount", regional) ?: return@transaction null,
+                cashin_rounding_mode = getMode("cashin_rounding_mode") ?: return@transaction null,
+                cashin_min_amount = getAmount("cashin_min_amount", fiat) ?: return@transaction null,
+                cashout_ratio = getRatio("cashout_ratio") ?: return@transaction null,
+                cashout_fee = getAmount("cashout_fee", fiat) ?: return@transaction null, 
+                cashout_tiny_amount = getAmount("cashout_tiny_amount", fiat) ?: return@transaction null,
+                cashout_rounding_mode = getMode("cashout_rounding_mode") ?: return@transaction null,
+                cashout_min_amount = getAmount("cashout_min_amount", regional) ?: return@transaction null,
+            )
         }
     }
 
