@@ -45,7 +45,7 @@ class AccountDAO(private val db: Database) {
         isPublic: Boolean,
         isTalerExchange: Boolean,
         maxDebt: TalerAmount,
-        bonus: TalerAmount?
+        bonus: TalerAmount
     ): AccountCreationResult = db.serializable { it ->
         val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank();
         it.transaction { conn ->
@@ -136,8 +136,8 @@ class AccountDAO(private val db: Database) {
                         return@transaction AccountCreationResult.PayToReuse
                     }
                 }
-               
-                if (bonus != null) {
+                println("$bonus")
+                if (bonus.value != 0L || bonus.frac != 0) {
                     conn.prepareStatement("""
                         SELECT out_balance_insufficient
                         FROM bank_transaction(?,'admin','bonus',(?,?)::taler_amount,?)

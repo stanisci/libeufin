@@ -159,8 +159,8 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                 isPublic = req.is_public,
                 isTalerExchange = req.is_taler_exchange,
                 maxDebt = ctx.defaultCustomerDebtLimit,
-                bonus = if (ctx.registrationBonusEnabled && !req.is_taler_exchange) ctx.registrationBonus
-                        else null
+                bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
+                        else TalerAmount(0, 0, ctx.regionalCurrency)
             )
 
             when (result) {

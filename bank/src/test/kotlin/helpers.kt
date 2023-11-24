@@ -68,35 +68,36 @@ fun bankSetup(
 ) {
     setup(conf) { db, ctx -> 
         // Creating the exchange and merchant accounts first.
+        val bonus = TalerAmount("KUDOS:0")
         assertEquals(AccountCreationResult.Success, db.account.create(
             login = "merchant",
             password = "merchant-password",
             name = "Merchant",
             internalPaytoUri = merchantPayto,
-            maxDebt = TalerAmount(10, 0, "KUDOS"),
+            maxDebt = TalerAmount("KUDOS:10"),
             isTalerExchange = false,
             isPublic = false,
-            bonus = null
+            bonus = bonus
         ))
         assertEquals(AccountCreationResult.Success, db.account.create(
             login = "exchange",
             password = "exchange-password",
             name = "Exchange",
             internalPaytoUri = exchangePayto,
-            maxDebt = TalerAmount(10, 0, "KUDOS"),
+            maxDebt = TalerAmount("KUDOS:10"),
             isTalerExchange = true,
             isPublic = false,
-            bonus = null
+            bonus = bonus
         ))
         assertEquals(AccountCreationResult.Success, db.account.create(
             login = "customer",
             password = "customer-password",
             name = "Customer",
             internalPaytoUri = customerPayto,
-            maxDebt = TalerAmount(10, 0, "KUDOS"),
+            maxDebt = TalerAmount("KUDOS:10"),
             isTalerExchange = false,
             isPublic = false,
-            bonus = null
+            bonus = bonus
         ))
         // Create admin account
         assertEquals(AccountCreationResult.Success, maybeCreateAdminAccount(db, ctx, "admin-password"))

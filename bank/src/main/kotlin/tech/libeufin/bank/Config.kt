@@ -34,40 +34,13 @@ private val BANK_CONFIG_SOURCE = ConfigSource("libeufin-bank", "libeufin-bank")
  * Application the parsed configuration.
  */
 data class BankConfig(
-    /**
-     * Main, regional currency of the bank.
-     */
     val regionalCurrency: String,
     val regionalCurrencySpec: CurrencySpecification,
-    /**
-     * Restrict account registration to the administrator.
-     */
     val restrictRegistration: Boolean,
-    /**
-     * Restrict account deletion to the administrator.
-     */
     val restrictAccountDeletion: Boolean,
-    /**
-     * Default limit for the debt that a customer can have.
-     * Can be adjusted per account after account creation.
-     */
     val defaultCustomerDebtLimit: TalerAmount,
-    /**
-     * Debt limit of the admin account.
-     */
     val defaultAdminDebtLimit: TalerAmount,
-    /**
-     * If true, transfer a registration bonus from the admin
-     * account to the newly created account.
-     */
-    val registrationBonusEnabled: Boolean,
-    /**
-     * Only set if registration bonus is enabled.
-     */
-    val registrationBonus: TalerAmount?,
-    /**
-     * Exchange that the bank suggests to wallets for withdrawal.
-     */
+    val registrationBonus: TalerAmount,
     val suggestedWithdrawalExchange: String?,
     /**
      * URL where the user should be redirected to complete the captcha.
@@ -137,8 +110,7 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
         regionalCurrencySpec =  currencySpecificationFor(regionalCurrency),
         restrictRegistration = lookupBoolean("libeufin-bank", "restrict_registration") ?: false,
         defaultCustomerDebtLimit = requireAmount("libeufin-bank", "default_customer_debt_limit", regionalCurrency),
-        registrationBonusEnabled = lookupBoolean("libeufin-bank", "registration_bonus_enabled") ?: false,
-        registrationBonus = requireAmount("libeufin-bank", "registration_bonus", regionalCurrency),
+        registrationBonus = amount("libeufin-bank", "registration_bonus", regionalCurrency) ?: TalerAmount(0, 0, regionalCurrency),
         suggestedWithdrawalExchange = lookupString("libeufin-bank", "suggested_withdrawal_exchange"),
         defaultAdminDebtLimit = requireAmount("libeufin-bank", "default_admin_debt_limit", regionalCurrency),
         spaCaptchaURL = lookupString("libeufin-bank", "spa_captcha_url"),
