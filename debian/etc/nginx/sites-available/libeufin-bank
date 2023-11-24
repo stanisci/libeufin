@@ -17,30 +17,19 @@ server {
   access_log /var/log/nginx/libeufin-bank.log;
   error_log /var/log/nginx/libeufin-bank.err;
 
-  # Doesn't take requests away from the backend,
-  # because that expects always a "/demobanks/default"
-  # prefix.
-  # rewrite ^/$ /webui/index.html;
-
-  # BACKEND
-  location /demobanks/default {
+  location / {
     # NOTE: urgently change to 'https' once TLS has been configured.
     proxy_set_header X-Forwarded-Proto "$scheme";
     proxy_set_header X-Forwarded-Host "localhost";
     proxy_set_header X-Forwarded-Prefix /;
+    # FIXME: should use UNIX domain socket once
+    # supported by libeufin-bank!
     proxy_pass http://localhost:5016;
   }
-  # rewrite ^/$ /index.html;
-  # FRONTEND
-  location / {
-    # This location has both the SPA HTML and the
-    # JavaScript configuration demobank-ui-settings.js
-    index index.html;
-    alias /usr/share/libeufin/demobank-ui/;
-  }
 
-  location = /demobank-ui-settings.js {
-    alias /etc/libeufin/demobank-ui-settings.js;
+  # Optional.
+  location = /settings.js {
+    alias /etc/libeufin/settings.js;
   }
 
 }
