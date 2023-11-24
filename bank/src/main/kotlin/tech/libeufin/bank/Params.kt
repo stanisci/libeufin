@@ -62,9 +62,9 @@ data class MonitorParams(
                 when {
                     timeframe == Timeframe.hour && (0 > which || which > 23) -> 
                         throw badRequest("For hour timestamp param 'which' must be between 00 to 23")
-                    timeframe == Timeframe.day && (1 > which || which > 23) -> 
+                    timeframe == Timeframe.day && (1 > which || which > lastDayOfMonth) -> 
                         throw badRequest("For day timestamp param 'which' must be between 1 to $lastDayOfMonth")
-                    timeframe == Timeframe.month && (1 > which || which > lastDayOfMonth) -> 
+                    timeframe == Timeframe.month && (1 > which || which > 12) -> 
                         throw badRequest("For month timestamp param 'which' must be between 1 to 12")
                     timeframe == Timeframe.year && (1 > which|| which > 9999) -> 
                         throw badRequest("For year timestamp param 'which' must be between 0001 to 9999")
