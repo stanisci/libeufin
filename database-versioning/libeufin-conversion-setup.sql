@@ -8,6 +8,7 @@ LANGUAGE plpgsql AS $$
     now_date BIGINT;
     payto_uri TEXT;
   BEGIN
+    -- TODO should send to an exchange
     IF NEW.local_transaction IS NOT NULL THEN
       SELECT transaction_date INTO now_date
         FROM libeufin_bank.bank_account_transactions

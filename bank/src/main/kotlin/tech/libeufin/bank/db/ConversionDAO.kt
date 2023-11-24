@@ -65,28 +65,30 @@ class ConversionDAO(private val db: Database) {
     /** Get in-db conversion config */
     suspend fun getConfig(regional: String, fiat: String): ConversionRate? = db.conn {
         it.transaction { conn -> 
+            val check = conn.prepareStatement("select exists(select 1 from config where key='cashin_ratio')").oneOrNull { it.getBoolean(1) }!!
+            if (!check) return@transaction null
             val amount = conn.prepareStatement("SELECT (amount).val as amount_val, (amount).frac as amount_frac FROM config_get_amount(?) as amount");
             val roundingMode = conn.prepareStatement("SELECT config_get_rounding_mode(?)");
-            fun getAmount(name: String, currency: String): TalerAmount? {
+            fun getAmount(name: String, currency: String): TalerAmount {
                 amount.setString(1, name)
-                return amount.oneOrNull { it.getAmount("amount", currency) }
+                return amount.oneOrNull { it.getAmount("amount", currency) }!!
             }
-            fun getRatio(name: String): DecimalNumber? = getAmount(name, "")?.run { DecimalNumber(value, frac) }
-            fun getMode(name: String): RoundingMode? {
+            fun getRatio(name: String): DecimalNumber = getAmount(name, "").run { DecimalNumber(value, frac) }
+            fun getMode(name: String): RoundingMode {
                 roundingMode.setString(1, name)
-                return roundingMode.oneOrNull { RoundingMode.valueOf(it.getString(1)) }
+                return roundingMode.oneOrNull { RoundingMode.valueOf(it.getString(1)) }!!
             }
             ConversionRate(
-                cashin_ratio = getRatio("cashin_ratio") ?: return@transaction null,
-                cashin_fee = getAmount("cashin_fee", regional) ?: return@transaction null, 
-                cashin_tiny_amount = getAmount("cashin_tiny_amount", regional) ?: return@transaction null,
-                cashin_rounding_mode = getMode("cashin_rounding_mode") ?: return@transaction null,
-                cashin_min_amount = getAmount("cashin_min_amount", fiat) ?: return@transaction null,
-                cashout_ratio = getRatio("cashout_ratio") ?: return@transaction null,
-                cashout_fee = getAmount("cashout_fee", fiat) ?: return@transaction null, 
-                cashout_tiny_amount = getAmount("cashout_tiny_amount", fiat) ?: return@transaction null,
-                cashout_rounding_mode = getMode("cashout_rounding_mode") ?: return@transaction null,
-                cashout_min_amount = getAmount("cashout_min_amount", regional) ?: return@transaction null,
+                cashin_ratio = getRatio("cashin_ratio"),
+                cashin_fee = getAmount("cashin_fee", regional), 
+                cashin_tiny_amount = getAmount("cashin_tiny_amount", regional),
+                cashin_rounding_mode = getMode("cashin_rounding_mode"),
+                cashin_min_amount = getAmount("cashin_min_amount", fiat),
+                cashout_ratio = getRatio("cashout_ratio"),
+                cashout_fee = getAmount("cashout_fee", fiat), 
+                cashout_tiny_amount = getAmount("cashout_tiny_amount", fiat),
+                cashout_rounding_mode = getMode("cashout_rounding_mode"),
+                cashout_min_amount = getAmount("cashout_min_amount", regional),
             )
         }
     }

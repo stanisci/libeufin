@@ -111,6 +111,8 @@ class ConversionApiTest {
     @Test
     fun noRate() = bankSetup { db ->
         db.conversion.clearConfig()
+        client.get("/conversion-info/config")
+            .assertNotImplemented()
         client.get("/conversion-info/cashin-rate")
             .assertBadRequest()
         client.get("/conversion-info/cashout-rate")
