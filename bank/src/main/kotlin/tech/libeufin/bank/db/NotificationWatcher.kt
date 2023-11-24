@@ -28,16 +28,16 @@ import tech.libeufin.util.*
 
 /** Postgres notification collector and distributor */
 internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
-    // Transaction id ShareFlow that are manually counted for manual garbage collection
-    private class CountedSharedFlow(val flow: MutableSharedFlow<Long>, var count: Int)
+    // ShareFlow that are manually counted for manual garbage collection
+    private class CountedSharedFlow<T>(val flow: MutableSharedFlow<T>, var count: Int)
 
     // Transaction flows, the keys are the bank account id
-    private val bankTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
-    private val outgoingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
-    private val incomingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
-    private val revenueTxFlows = ConcurrentHashMap<Long, CountedSharedFlow>()
+    private val bankTxFlows = ConcurrentHashMap<Long, CountedSharedFlow<Long>>()
+    private val outgoingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow<Long>>()
+    private val incomingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow<Long>>()
+    private val revenueTxFlows = ConcurrentHashMap<Long, CountedSharedFlow<Long>>()
     // Withdrawal confirmation flow, the key is the public withdrawal UUID
-    private val withdrawalFlow = MutableSharedFlow<UUID>()
+    private val withdrawalFlow = ConcurrentHashMap<UUID, CountedSharedFlow<WithdrawalStatus>>()
 
     init {
         // Run notification logic in a separated thread
@@ -51,7 +51,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                         conn.execSQLUpdate("LISTEN bank_tx")
                         conn.execSQLUpdate("LISTEN outgoing_tx")
                         conn.execSQLUpdate("LISTEN incoming_tx")
-                        conn.execSQLUpdate("LISTEN withdrawal_confirm")
+                        conn.execSQLUpdate("LISTEN withdrawal_status")
 
                         while (true) {
                             conn.getNotifications(0) // Block until we receive at least one notification
@@ -82,9 +82,13 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                                             flow.emit(row)
                                         }
                                     }
-                                    "withdrawal_confirm" -> {
-                                        val uuid = UUID.fromString(it.parameter)
-                                        withdrawalFlow.emit(uuid)
+                                    "withdrawal_status" -> {
+                                        val raw = it.parameter.split(' ', limit = 2)
+                                        val uuid = UUID.fromString(raw[0])
+                                        val status = WithdrawalStatus.valueOf(raw[1])
+                                        withdrawalFlow[uuid]?.run {
+                                            flow.emit(status)
+                                        }
                                     }
                                 }
                             }
@@ -97,10 +101,10 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
         }
     }
 
-    /** Listen to transaction ids flow from [map] for [account] using [lambda]*/
-    private suspend fun <R> listen(map: ConcurrentHashMap<Long, CountedSharedFlow>, account: Long, lambda: suspend (Flow<Long>) -> R): R {
+    /** Listen to flow from [map] for [key] using [lambda]*/
+    private suspend fun <R, K, V> listen(map: ConcurrentHashMap<K, CountedSharedFlow<V>>, key: K, lambda: suspend (Flow<V>) -> R): R {
         // Register listener, create a new flow if missing
-        val flow = map.compute(account) { _, v ->
+        val flow = map.compute(key) { _, v ->
             val tmp = v ?: CountedSharedFlow(MutableSharedFlow(), 0);
             tmp.count++;
             tmp
@@ -110,7 +114,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
             return lambda(flow)
         } finally {
             // Unregister listener, removing unused flow
-            map.compute(account) { _, v ->
+            map.compute(key) { _, v ->
                 v!!;
                 v.count--;
                 if (v.count > 0) v else null
@@ -131,6 +135,6 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
     suspend fun <R> listenRevenue(merchant: Long, lambda: suspend (Flow<Long>) -> R): R
         = listen(revenueTxFlows, merchant, lambda)
     /** Listen for new withdrawal confirmations */
-    suspend fun <R> listenWithdrawals(lambda: suspend (Flow<UUID>) -> R): R
-        = lambda(withdrawalFlow)
+    suspend fun <R> listenWithdrawals(withdrawal: UUID, lambda: suspend (Flow<WithdrawalStatus>) -> R): R
+        = listen(withdrawalFlow, withdrawal, lambda)
 }

@@ -52,6 +52,13 @@ enum class CashoutStatus {
     confirmed
 }
 
+enum class WithdrawalStatus {
+    pending,
+    aborted,
+    selected,
+    confirmed
+}
+
 enum class RoundingMode {
     zero,
     up,
@@ -243,7 +250,7 @@ data class TalerIntegrationConfigResponse(
     val currency_specification: CurrencySpecification
 ) {
     val name: String = "taler-bank-integration";
-    val version: String = "0:0:0";
+    val version: String = "1:0:1";
 }
 
 enum class CreditDebitInfo {
@@ -331,7 +338,12 @@ data class BankAccountCreateWithdrawalResponse(
     val taler_withdraw_uri: String
 )
 
-// Taler withdrawal details response
+@Serializable
+data class WithdrawalPublicInfo (
+    val username: String
+)
+
+// Taler withdrawal details response // TODO remove
 @Serializable
 data class BankAccountGetWithdrawalResponse(
     val amount: TalerAmount,
@@ -339,7 +351,8 @@ data class BankAccountGetWithdrawalResponse(
     val confirmation_done: Boolean,
     val selection_done: Boolean,
     val selected_reserve_pub: EddsaPublicKey? = null,
-    val selected_exchange_account: String? = null
+    val selected_exchange_account: String? = null,
+    val username: String
 )
 
 @Serializable
@@ -351,42 +364,21 @@ data class CurrencySpecification(
     val alt_unit_names: Map<String, String>
 )
 
-/**
- * Withdrawal status as specified in the Taler Integration API.
- */
+
 @Serializable
 data class BankWithdrawalOperationStatus(
-    // Indicates whether the withdrawal was aborted.
-    val aborted: Boolean,
-
-    /* Has the wallet selected parameters for the withdrawal operation
-      (exchange and reserve public key) and successfully sent it
-      to the bank? */
-    val selection_done: Boolean,
-
-    /* The transfer has been confirmed and registered by the bank.
-       Does not guarantee that the funds have arrived at the exchange
-       already. */
-    val transfer_done: Boolean,
-
-    /* Amount that will be withdrawn with this operation
-       (raw amount without fee considerations). */
+    val status: WithdrawalStatus,
     val amount: TalerAmount,
-
-    /* Bank account of the customer that is withdrawing, as a
-      ``payto`` URI. */
     val sender_wire: String? = null,
-
-    // Suggestion for an exchange given by the bank.
     val suggested_exchange: String? = null,
-
-    /* URL that the user needs to navigate to in order to
-       complete some final confirmation (e.g. 2FA).
-       It may contain withdrawal operation id */
     val confirm_transfer_url: String? = null,
-
-    // Wire transfer types supported by the bank.
-    val wire_types: MutableList<String> = mutableListOf("iban")
+    val selected_reserve_pub: EddsaPublicKey? = null,
+    val selected_exchange_account: String? = null,
+    val wire_types: MutableList<String> = mutableListOf("iban"),
+    // TODO remove
+    val aborted: Boolean,
+    val selection_done: Boolean,
+    val transfer_done: Boolean,
 )
 
 /**
@@ -404,8 +396,10 @@ data class BankWithdrawalOperationPostRequest(
  */
 @Serializable
 data class BankWithdrawalOperationPostResponse(
+    val status: WithdrawalStatus,
+    val confirm_transfer_url: String? = null,
+    // TODO remove
     val transfer_done: Boolean,
-    val confirm_transfer_url: String? = null
 )
 
 @Serializable

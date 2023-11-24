@@ -139,3 +139,23 @@ data class RateParams(
         }
     }
 }
+
+data class StatusParams(
+    val polling: PollingParams,
+    val old_state: WithdrawalStatus
+) {
+    companion object {
+        val names = WithdrawalStatus.values().map { it.name }
+        val names_fmt = names.joinToString()
+        fun extract(params: Parameters): StatusParams {
+            val old_state = params.get("old_state") ?: "pending";
+            if (!names.contains(old_state)) {
+                throw badRequest("Param 'old_state' must be one of $names_fmt", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+            }
+            return StatusParams(
+                polling = PollingParams.extract(params),
+                old_state = WithdrawalStatus.valueOf(old_state)
+            )
+        }
+    }
+}

@@ -584,7 +584,7 @@ CREATE OR REPLACE FUNCTION select_taler_withdrawal(
   OUT out_account_not_found BOOLEAN,
   OUT out_account_is_not_exchange BOOLEAN,
   -- Success return
-  OUT out_confirmation_done BOOLEAN
+  OUT out_status TEXT
 )
 LANGUAGE plpgsql AS $$ 
 DECLARE
@@ -592,10 +592,15 @@ not_selected BOOLEAN;
 BEGIN
 -- Check for conflict and idempotence
 SELECT
-  NOT selection_done, confirmation_done,
+  NOT selection_done, 
+  CASE 
+    WHEN confirmation_done THEN 'confirmed'
+    WHEN aborted THEN 'aborted'
+    ELSE 'selected'
+  END,
   selection_done 
     AND (selected_exchange_payto != in_selected_exchange_payto OR reserve_pub != in_reserve_pub)
-  INTO not_selected, out_confirmation_done, out_already_selected
+  INTO not_selected, out_status, out_already_selected
   FROM taler_withdrawal_operations
   WHERE withdrawal_uuid=in_withdrawal_uuid;
 IF NOT FOUND THEN
@@ -605,7 +610,7 @@ ELSIF out_already_selected THEN
   RETURN;
 END IF;
 
-IF NOT out_confirmation_done AND not_selected THEN
+IF not_selected THEN
   -- Check reserve_pub reuse
   SELECT true FROM taler_exchange_incoming WHERE reserve_pub = in_reserve_pub
   UNION ALL
@@ -630,9 +635,36 @@ IF NOT out_confirmation_done AND not_selected THEN
   UPDATE taler_withdrawal_operations
     SET selected_exchange_payto=in_selected_exchange_payto, reserve_pub=in_reserve_pub, subject=in_subject, selection_done=true
     WHERE withdrawal_uuid=in_withdrawal_uuid;
+
+  -- Notify status change
+  PERFORM pg_notify('withdrawal_status', in_withdrawal_uuid::text || ' selected');
 END IF;
 END $$;
 COMMENT ON FUNCTION select_taler_withdrawal IS 'Set details of a withdrawal operation';
+
+CREATE OR REPLACE FUNCTION abort_taler_withdrawal(
+  IN in_withdrawal_uuid uuid,
+  OUT out_no_op BOOLEAN,
+  OUT out_already_confirmed BOOLEAN
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+UPDATE taler_withdrawal_operations
+  SET aborted = NOT confirmation_done
+  WHERE withdrawal_uuid=in_withdrawal_uuid
+  RETURNING confirmation_done
+  INTO out_already_confirmed;
+IF NOT FOUND THEN
+  out_no_op=TRUE;
+  RETURN;
+ELSIF out_already_confirmed THEN
+  RETURN;
+END IF;
+
+-- Notify status change
+PERFORM pg_notify('withdrawal_status', in_withdrawal_uuid::text || ' aborted');
+END $$;
+COMMENT ON FUNCTION abort_taler_withdrawal IS 'Abort a withdrawal operation.';
 
 CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
@@ -715,8 +747,8 @@ UPDATE taler_withdrawal_operations
 -- Register incoming transaction
 CALL register_incoming(reserve_pub_local, tx_row_id);
 
--- Notify new transaction
-PERFORM pg_notify('withdrawal_confirm', in_withdrawal_uuid::text);
+-- Notify status change
+PERFORM pg_notify('withdrawal_status', in_withdrawal_uuid::text || ' confirmed');
 END $$;
 COMMENT ON FUNCTION confirm_taler_withdrawal
   IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';

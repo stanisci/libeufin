@@ -387,6 +387,46 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
                 }
             }
         }
+        post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/abort") {
+            val opId = call.uuidUriComponent("withdrawal_id")
+            when (db.withdrawal.abort(opId)) {
+                AbortResult.UnknownOperation -> throw notFound(
+                    "Withdrawal operation $opId not found",
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+                )
+                AbortResult.AlreadyConfirmed -> throw conflict(
+                    "Cannot abort confirmed withdrawal", 
+                    TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
+                )
+                AbortResult.Success -> call.respond(HttpStatusCode.NoContent)
+            }
+        }
+        post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
+            val opId = call.uuidUriComponent("withdrawal_id")
+            when (db.withdrawal.confirm(opId, Instant.now())) {
+                WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
+                    "Withdrawal operation $opId not found",
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+                )
+                WithdrawalConfirmationResult.AlreadyAborted -> throw conflict(
+                    "Cannot confirm an aborted withdrawal",
+                    TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
+                )
+                WithdrawalConfirmationResult.NotSelected -> throw conflict(
+                    "Cannot confirm an unselected withdrawal",
+                    TalerErrorCode.BANK_CONFIRM_INCOMPLETE
+                )
+                WithdrawalConfirmationResult.BalanceInsufficient -> throw conflict(
+                    "Insufficient funds",
+                    TalerErrorCode.BANK_UNALLOWED_DEBIT
+                )
+                WithdrawalConfirmationResult.UnknownExchange -> throw conflict(
+                    "Exchange to withdraw from not found",
+                    TalerErrorCode.BANK_UNKNOWN_CREDITOR
+                )
+                WithdrawalConfirmationResult.Success -> call.respond(HttpStatusCode.NoContent)
+            }
+        }
     }
     get("/withdrawals/{withdrawal_id}") {
         val uuid = call.uuidUriComponent("withdrawal_id")

@@ -737,9 +737,10 @@ class CoreBankWithdrawalApiTest {
             .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
-    // POST /withdrawals/withdrawal_id/abort
+    // POST /accounts/USERNAME/withdrawals/withdrawal_id/abort
     @Test
     fun abort() = bankSetup { _ ->
+        // TODO auth routine
         // Check abort created
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 
@@ -747,9 +748,9 @@ class CoreBankWithdrawalApiTest {
             val uuid = it.taler_withdraw_uri.split("/").last()
 
             // Check OK
-            client.post("/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
             // Check idempotence
-            client.post("/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
         }
 
         // Check abort selected
@@ -760,9 +761,9 @@ class CoreBankWithdrawalApiTest {
             withdrawalSelect(uuid)
 
             // Check OK
-            client.post("/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
             // Check idempotence
-            client.post("/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
         }
 
         // Check abort confirmed
@@ -771,24 +772,25 @@ class CoreBankWithdrawalApiTest {
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
             withdrawalSelect(uuid)
-            client.post("/withdrawals/$uuid/confirm").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm").assertNoContent()
 
             // Check error
-            client.post("/withdrawals/$uuid/abort")
+            client.postA("/accounts/merchant/withdrawals/$uuid/abort")
                 .assertConflict(TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT)
         }
 
         // Check bad UUID
-        client.post("/withdrawals/chocolate/abort").assertBadRequest()
+        client.postA("/accounts/merchant/withdrawals/chocolate/abort").assertBadRequest()
 
         // Check unknown
-        client.post("/withdrawals/${UUID.randomUUID()}/abort")
+        client.postA("/accounts/merchant/withdrawals/${UUID.randomUUID()}/abort")
             .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
-    // POST /withdrawals/withdrawal_id/confirm
+    // POST /accounts/USERNAME/withdrawals/withdrawal_id/confirm
     @Test
     fun confirm() = bankSetup { _ -> 
+        // TODO auth routine
         // Check confirm created
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 
@@ -796,7 +798,7 @@ class CoreBankWithdrawalApiTest {
             val uuid = it.taler_withdraw_uri.split("/").last()
 
             // Check err
-            client.post("/withdrawals/$uuid/confirm")
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
                 .assertConflict(TalerErrorCode.BANK_CONFIRM_INCOMPLETE)
         }
 
@@ -808,9 +810,9 @@ class CoreBankWithdrawalApiTest {
             withdrawalSelect(uuid)
 
             // Check OK
-            client.post("/withdrawals/$uuid/confirm").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm").assertNoContent()
             // Check idempotence
-            client.post("/withdrawals/$uuid/confirm").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm").assertNoContent()
         }
 
         // Check confirm aborted
@@ -819,10 +821,10 @@ class CoreBankWithdrawalApiTest {
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
             withdrawalSelect(uuid)
-            client.post("/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
 
             // Check error
-            client.post("/withdrawals/$uuid/confirm")
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
                 .assertConflict(TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT)
         }
 
@@ -835,18 +837,18 @@ class CoreBankWithdrawalApiTest {
 
             // Send too much money
             tx("merchant", "KUDOS:5", "customer")
-            client.post("/withdrawals/$uuid/confirm")
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
                 .assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
             // Check can abort because not confirmed
-            client.post("/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
         }
 
         // Check bad UUID
-        client.post("/withdrawals/chocolate/confirm").assertBadRequest()
+        client.postA("/accounts/merchant/withdrawals/chocolate/confirm").assertBadRequest()
 
         // Check unknown
-        client.post("/withdrawals/${UUID.randomUUID()}/confirm")
+        client.postA("/accounts/merchant/withdrawals/${UUID.randomUUID()}/confirm")
             .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 }

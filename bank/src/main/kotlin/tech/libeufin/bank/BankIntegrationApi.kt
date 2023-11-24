@@ -40,7 +40,7 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     // Note: wopid acts as an authentication token.
     get("/taler-integration/withdrawal-operation/{wopid}") {
         val uuid = call.uuidUriComponent("wopid")
-        val params = PollingParams.extract(call.request.queryParameters)
+        val params = StatusParams.extract(call.request.queryParameters)
         val op = db.withdrawal.pollStatus(uuid, params) ?: throw notFound(
             "Withdrawal operation '$uuid' not found", 
             TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
@@ -84,14 +84,16 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
                 TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
             )
             is WithdrawalSelectionResult.Success -> {
-                val confirmUrl: String? = if (ctx.spaCaptchaURL !== null && !res.confirmed) {
+                val confirmUrl: String? = if (ctx.spaCaptchaURL !== null && res.status == WithdrawalStatus.selected) {
                     getWithdrawalConfirmUrl(
                         baseUrl = ctx.spaCaptchaURL,
                         wopId = opId
                     )
                 } else null
                 call.respond(BankWithdrawalOperationPostResponse(
-                    transfer_done = res.confirmed, confirm_transfer_url = confirmUrl
+                    transfer_done = res.status == WithdrawalStatus.confirmed, 
+                    status = res.status,
+                    confirm_transfer_url = confirmUrl
                 ))
             }
         }

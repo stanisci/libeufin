@@ -68,24 +68,28 @@ class WithdrawalDAO(private val db: Database) {
 
     /** Abort withdrawal operation [uuid] */
     suspend fun abort(uuid: UUID): AbortResult = db.serializable { conn ->
+        // TODO login check
         val stmt = conn.prepareStatement("""
-            UPDATE taler_withdrawal_operations
-            SET aborted = NOT confirmation_done
-            WHERE withdrawal_uuid=?
-            RETURNING confirmation_done
-        """
-        )
+            SELECT
+                out_no_op,
+                out_already_confirmed
+            FROM abort_taler_withdrawal(?)
+        """)
         stmt.setObject(1, uuid)
-        when (stmt.oneOrNull { it.getBoolean(1) }) {
-            null -> AbortResult.UnknownOperation
-            true -> AbortResult.AlreadyConfirmed
-            false -> AbortResult.Success
+        stmt.executeQuery().use {
+            when {
+                !it.next() ->
+                    throw internalServerError("No result from DB procedure abort_taler_withdrawal")
+                it.getBoolean("out_no_op") -> AbortResult.UnknownOperation
+                it.getBoolean("out_already_confirmed") -> AbortResult.AlreadyConfirmed
+                else -> AbortResult.Success
+            }
         }
     }
 
     /** Result withdrawal operation selection */
     sealed class WithdrawalSelectionResult {
-        data class Success(val confirmed: Boolean): WithdrawalSelectionResult()
+        data class Success(val status: WithdrawalStatus): WithdrawalSelectionResult()
         object UnknownOperation: WithdrawalSelectionResult()
         object AlreadySelected: WithdrawalSelectionResult()
         object RequestPubReuse: WithdrawalSelectionResult()
@@ -107,7 +111,7 @@ class WithdrawalDAO(private val db: Database) {
                 out_reserve_pub_reuse,
                 out_account_not_found,
                 out_account_is_not_exchange,
-                out_confirmation_done
+                out_status
             FROM select_taler_withdrawal(?, ?, ?, ?);
         """
         )
@@ -124,7 +128,7 @@ class WithdrawalDAO(private val db: Database) {
                 it.getBoolean("out_reserve_pub_reuse") -> WithdrawalSelectionResult.RequestPubReuse
                 it.getBoolean("out_account_not_found") -> WithdrawalSelectionResult.UnknownAccount
                 it.getBoolean("out_account_is_not_exchange") -> WithdrawalSelectionResult.AccountIsNotExchange
-                else -> WithdrawalSelectionResult.Success(it.getBoolean("out_confirmation_done"))
+                else -> WithdrawalSelectionResult.Success(WithdrawalStatus.valueOf(it.getString("out_status")))
             }
         }
     }
@@ -144,6 +148,7 @@ class WithdrawalDAO(private val db: Database) {
         uuid: UUID,
         now: Instant
     ): WithdrawalConfirmationResult = db.serializable { conn ->
+         // TODO login check
         val stmt = conn.prepareStatement("""
             SELECT
               out_no_op,
@@ -170,6 +175,19 @@ class WithdrawalDAO(private val db: Database) {
         }
     }
 
+    /** Get withdrawal operation [uuid] linked account username */
+    suspend fun getUsername(uuid: UUID): String? = db.conn { conn -> 
+        val stmt = conn.prepareStatement("""
+            SELECT username
+            FROM taler_withdrawal_operations
+                JOIN bank_accounts ON wallet_bank_account=bank_account_id
+                JOIN customers ON customer_id=owning_customer_id
+            WHERE withdrawal_uuid=?
+        """)
+        stmt.setObject(1, uuid)
+        stmt.oneOrNull { it.getString(1) }
+    }
+
     /** Get withdrawal operation [uuid] */
     suspend fun get(uuid: UUID): BankAccountGetWithdrawalResponse? = db.conn { conn -> 
         val stmt = conn.prepareStatement("""
@@ -180,8 +198,11 @@ class WithdrawalDAO(private val db: Database) {
               ,aborted     
               ,confirmation_done     
               ,reserve_pub
-              ,selected_exchange_payto 
+              ,selected_exchange_payto
+              ,username
             FROM taler_withdrawal_operations
+                JOIN bank_accounts ON wallet_bank_account=bank_account_id
+                JOIN customers ON customer_id=owning_customer_id
             WHERE withdrawal_uuid=?
         """)
         stmt.setObject(1, uuid)
@@ -193,21 +214,30 @@ class WithdrawalDAO(private val db: Database) {
                 aborted = it.getBoolean("aborted"),
                 selected_exchange_account = it.getString("selected_exchange_payto"),
                 selected_reserve_pub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey),
+                username = it.getString("username")
             )
         }
     }
 
     /** Pool public status of operation [uuid] */
-    suspend fun pollStatus(uuid: UUID, params: PollingParams): BankWithdrawalOperationStatus? {
+    suspend fun pollStatus(uuid: UUID, params: StatusParams): BankWithdrawalOperationStatus? {
         suspend fun load(): BankWithdrawalOperationStatus? = db.conn { conn ->
             val stmt = conn.prepareStatement("""
                 SELECT
-                  (amount).val as amount_val
+                  CASE 
+                    WHEN confirmation_done THEN 'confirmed'
+                    WHEN aborted THEN 'aborted'
+                    WHEN selection_done THEN 'selected'
+                    ELSE 'pending'
+                  END as status
+                  ,(amount).val as amount_val
                   ,(amount).frac as amount_frac
                   ,selection_done     
                   ,aborted     
                   ,confirmation_done      
                   ,internal_payto_uri
+                  ,reserve_pub
+                  ,selected_exchange_payto 
                 FROM taler_withdrawal_operations
                     JOIN bank_accounts ON (wallet_bank_account=bank_account_id)
                 WHERE withdrawal_uuid=?
@@ -215,31 +245,34 @@ class WithdrawalDAO(private val db: Database) {
             stmt.setObject(1, uuid)
             stmt.oneOrNull {
                 BankWithdrawalOperationStatus(
+                    status = WithdrawalStatus.valueOf(it.getString("status")),
                     amount = it.getAmount("amount", db.bankCurrency),
                     selection_done = it.getBoolean("selection_done"),
                     transfer_done = it.getBoolean("confirmation_done"),
                     aborted = it.getBoolean("aborted"),
                     sender_wire = it.getString("internal_payto_uri"),
                     confirm_transfer_url = null,
-                    suggested_exchange = null
+                    suggested_exchange = null,
+                    selected_exchange_account = it.getString("selected_exchange_payto"),
+                    selected_reserve_pub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey),
                 )
             }
         }
             
 
-        return if (params.poll_ms > 0) {
-            db.notifWatcher.listenWithdrawals { flow ->
+        return if (params.polling.poll_ms > 0) {
+            db.notifWatcher.listenWithdrawals(uuid) { flow ->
                 coroutineScope {
                     // Start buffering notification before loading transactions to not miss any
                     val polling = launch {
-                        withTimeoutOrNull(params.poll_ms) {
-                            flow.first { it == uuid }
+                        withTimeoutOrNull(params.polling.poll_ms) {
+                            flow.first { it != params.old_state }
                         }
                     }    
                     // Initial loading
                     val init = load()
                     // Long polling if there is no operation or its not confirmed
-                    if (init?.run { transfer_done == false } ?: true) {
+                    if (init?.run { status == params.old_state } ?: true) {
                         polling.join()
                         load()
                     } else {
