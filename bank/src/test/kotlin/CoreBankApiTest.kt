@@ -1166,6 +1166,8 @@ class CoreBankCashoutApiTest {
                 assertEquals(CashoutStatus.pending, it.status)
                 assertEquals(amountDebit, it.amount_debit)
                 assertEquals(amountCredit, it.amount_credit)
+                assertEquals(TanChannel.sms, it.tan_channel)
+                assertEquals("+99", it.tan_info)
             }
 
             client.postA("/accounts/customer/cashouts/$id/confirm") {

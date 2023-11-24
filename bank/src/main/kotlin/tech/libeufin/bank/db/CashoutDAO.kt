@@ -99,17 +99,32 @@ class CashoutDAO(private val db: Database) {
     suspend fun markSent(
         id: Long,
         now: Instant,
-        retransmissionPeriod: Duration
-    ) = db.serializable { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT challenge_mark_sent(challenge, ?, ?)
-            FROM cashout_operations
-            WHERE cashout_id=?
-        """)
-        stmt.setLong(1, now.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setLong(2, TimeUnit.MICROSECONDS.convert(retransmissionPeriod))
-        stmt.setLong(3, id)
-        stmt.executeQueryCheck()
+        retransmissionPeriod: Duration,
+        tanChannel: TanChannel,
+        tanInfo: String
+    ) = db.serializable {
+        it.transaction { conn ->
+            conn.prepareStatement("""
+                SELECT challenge_mark_sent(challenge, ?, ?)
+                FROM cashout_operations
+                WHERE cashout_id=?
+            """).run {
+                setLong(1, now.toDbMicros() ?: throw faultyTimestampByBank())
+                setLong(2, TimeUnit.MICROSECONDS.convert(retransmissionPeriod))
+                setLong(3, id)
+                executeQueryCheck()
+            }
+            conn.prepareStatement("""
+                UPDATE cashout_operations
+                SET tan_channel = ?, tan_info = ?
+                WHERE cashout_id=?
+            """).run {
+                setString(1, tanChannel.name)
+                setString(2, tanInfo)
+                setLong(3, id)
+                executeUpdateCheck()
+            }
+        }
     }
 
     /** Abort cashout operation [id] owned by [login] */
@@ -196,6 +211,8 @@ class CashoutDAO(private val db: Database) {
                 ,cashout_operations.subject
                 ,creation_time
                 ,transaction_date as confirmation_date
+                ,tan_channel
+                ,tan_info
             FROM cashout_operations
                 JOIN bank_accounts ON bank_account=bank_account_id
                 JOIN customers ON owning_customer_id=customer_id
@@ -214,7 +231,9 @@ class CashoutDAO(private val db: Database) {
                 confirmation_time = when (val timestamp = it.getLong("confirmation_date")) {
                     0L -> null
                     else -> TalerProtocolTimestamp(timestamp.microsToJavaInstant() ?: throw faultyTimestampByBank())
-                }
+                },
+                tan_channel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) },
+                tan_info = it.getString("tan_info"),
             )
         }
     }

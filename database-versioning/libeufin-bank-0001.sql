@@ -198,6 +198,8 @@ CREATE TABLE IF NOT EXISTS cashout_operations
     REFERENCES challenges(challenge_id)
     ON DELETE CASCADE
     ON UPDATE RESTRICT
+  ,tan_channel TEXT NULL DEFAULT NULL
+  ,tan_info TEXT NULL DEFAULT NULL
   ,aborted BOOLEAN NOT NULL DEFAULT FALSE
   ,local_transaction BIGINT UNIQUE DEFAULT NULL-- FIXME: Comment that the transaction only gets created after the TAN confirmation
     REFERENCES bank_account_transactions(bank_transaction_id)
@@ -207,6 +209,8 @@ CREATE TABLE IF NOT EXISTS cashout_operations
 COMMENT ON COLUMN cashout_operations.bank_account IS 'Bank amount to debit during confirmation';
 COMMENT ON COLUMN cashout_operations.challenge IS 'TAN challenge used to confirm the operation';
 COMMENT ON COLUMN cashout_operations.local_transaction IS 'Transaction generated during confirmation';
+COMMENT ON COLUMN cashout_operations.tan_channel IS 'Channel of the last successful transmission of the TAN challenge';
+COMMENT ON COLUMN cashout_operations.tan_info IS 'Info of the last successful transmission of the TAN challenge';
 
 -- end of: cashout management
 

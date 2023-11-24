@@ -556,7 +556,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
                                 TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED
                             )
                         }
-                        db.cashout.markSent(res.id, Instant.now(), TAN_RETRANSMISSION_PERIOD)
+                        db.cashout.markSent(res.id, Instant.now(), TAN_RETRANSMISSION_PERIOD, tanChannel, res.tanInfo)
                     }
                     call.respond(CashoutPending(res.id))
                 }

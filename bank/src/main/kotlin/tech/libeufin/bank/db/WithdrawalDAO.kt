@@ -178,7 +178,7 @@ class WithdrawalDAO(private val db: Database) {
     /** Get withdrawal operation [uuid] linked account username */
     suspend fun getUsername(uuid: UUID): String? = db.conn { conn -> 
         val stmt = conn.prepareStatement("""
-            SELECT username
+            SELECT login
             FROM taler_withdrawal_operations
                 JOIN bank_accounts ON wallet_bank_account=bank_account_id
                 JOIN customers ON customer_id=owning_customer_id
@@ -199,7 +199,7 @@ class WithdrawalDAO(private val db: Database) {
               ,confirmation_done     
               ,reserve_pub
               ,selected_exchange_payto
-              ,username
+              ,login
             FROM taler_withdrawal_operations
                 JOIN bank_accounts ON wallet_bank_account=bank_account_id
                 JOIN customers ON customer_id=owning_customer_id
@@ -214,7 +214,7 @@ class WithdrawalDAO(private val db: Database) {
                 aborted = it.getBoolean("aborted"),
                 selected_exchange_account = it.getString("selected_exchange_payto"),
                 selected_reserve_pub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey),
-                username = it.getString("username")
+                username = it.getString("login")
             )
         }
     }

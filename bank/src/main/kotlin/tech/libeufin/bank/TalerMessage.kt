@@ -448,6 +448,8 @@ data class CashoutStatusResponse(
     val subject: String,
     val creation_time: TalerProtocolTimestamp,
     val confirmation_time: TalerProtocolTimestamp? = null,
+    val tan_channel: TanChannel? = null,
+    val tan_info: String? = null
 )
 
 @Serializable
