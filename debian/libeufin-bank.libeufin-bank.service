@@ -3,7 +3,7 @@ Description=LibEuFin Bank service.
 
 [Service]
 User=libeufin-bank
-ExecStart=/usr/bin/libeufin-bank serve -c /etc/libeufin-bank/libeufin-bank.conf
+ExecStart=/usr/bin/libeufin-bank serve -c /etc/libeufin/libeufin-bank.conf
 Restart=on-failure
 RestartSec=1s
 
