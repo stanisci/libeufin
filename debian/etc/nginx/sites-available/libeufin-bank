@@ -27,9 +27,4 @@ server {
     proxy_pass http://localhost:5016;
   }
 
-  # Optional.
-  location = /settings.js {
-    alias /etc/libeufin/settings.js;
-  }
-
 }
