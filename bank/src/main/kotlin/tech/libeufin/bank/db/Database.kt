@@ -172,13 +172,13 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         map: (ResultSet) -> T
     ): List<T> = conn { conn ->
         val backward = params.delta < 0
-        val query = """
+        val pageQuery = """
             $query
             $idName ${if (backward) '<' else '>'} ?
             ORDER BY $idName ${if (backward) "DESC" else "ASC"}
             LIMIT ?
         """
-        conn.prepareStatement(query).run {
+        conn.prepareStatement(pageQuery).run {
             val pad = bind()
             setLong(pad + 1, params.start)
             setInt(pad + 2, abs(params.delta))

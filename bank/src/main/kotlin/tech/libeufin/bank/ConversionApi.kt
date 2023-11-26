@@ -42,7 +42,7 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
             ConversionConfig(
                 regional_currency = ctx.regionalCurrency,
                 regional_currency_specification = ctx.regionalCurrencySpec,
-                fiat_currency = ctx.fiatCurrency!!,
+                fiat_currency = ctx.fiatCurrency,
                 fiat_currency_specification = ctx.fiatCurrencySpec!!,
                 conversion_rate = config
             )
