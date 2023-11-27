@@ -48,7 +48,7 @@ class CoreBankConfigTest {
     fun monitor() = bankSetup { _ -> 
         authRoutine(HttpMethod.Get, "/monitor", requireAdmin = true)
         // Check OK
-        client.get("/monitor?timeframe=hour") {
+        client.get("/monitor?timeframe=day&wich=25") {
             pwAuth("admin")
         }.assertOk()
     }
@@ -949,6 +949,8 @@ class CoreBankCashoutApiTest {
             "amount_debit" to "KUDOS:1"
             "amount_credit" to convert("KUDOS:1")
         }
+
+        fillCashoutInfo("customer")
 
         // Check unsupported TAN channel
         client.postA("/accounts/customer/cashouts") {

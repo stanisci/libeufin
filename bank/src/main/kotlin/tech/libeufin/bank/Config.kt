@@ -119,10 +119,12 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
         allowConversion = allowConversion,
         fiatCurrency = fiatCurrency,
         fiatCurrencySpec = fiatCurrencySpec,
-        tanSms = lookupPath("libeufin-bank", "tan_sms"),
-        tanEmail = lookupPath("libeufin-bank", "tan_email"),
+        tanSms = lookupPath("libeufin-bank", "tan_sms")?.notEmptyOrNull(),
+        tanEmail = lookupPath("libeufin-bank", "tan_email")?.notEmptyOrNull(),
     )
 }
+
+fun String.notEmptyOrNull(): String? = if (isEmpty()) null else this
 
 fun TalerConfig.currencySpecificationFor(currency: String): CurrencySpecification = catchError {
     sections.find {

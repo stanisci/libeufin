@@ -40,7 +40,7 @@ import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers")
-val reservedAccounts = setOf("admin", "bank")
+val reservedAccounts = setOf("admin", "bank") // exchange ?
 
 fun ApplicationCall.expectUriComponent(componentName: String) =
     maybeUriComponent(componentName) ?: throw badRequest(
