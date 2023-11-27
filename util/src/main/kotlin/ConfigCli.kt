@@ -48,7 +48,7 @@ private fun talerConfig(configSource: ConfigSource, configPath: String?): TalerC
     config
 }
 
-class CliConfigCmd(configSource: ConfigSource) : CliktCommand("Dump the configuration", name = "config") {
+class CliConfigCmd(configSource: ConfigSource) : CliktCommand("Inspect or change the configuration", name = "config") {
     init {
         subcommands(CliConfigDump(configSource), CliConfigPathsub(configSource), CliConfigGet(configSource))
     }
