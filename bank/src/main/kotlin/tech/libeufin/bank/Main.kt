@@ -226,7 +226,10 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
         wireGatewayApi(db, ctx)
         revenueApi(db)
         ctx.spaPath?.let {
-            staticFiles("/", File(it))
+            get("/") {
+                call.respondRedirect("/webui/")
+            }
+            staticFiles("/webui/", File(it))
         }
     }
 }
