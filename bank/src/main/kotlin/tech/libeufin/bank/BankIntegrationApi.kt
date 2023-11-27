@@ -25,9 +25,9 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import java.util.*
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.bank.WithdrawalDAO.*
+import java.lang.AssertionError
 
 fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     get("/taler-integration/config") {
@@ -96,6 +96,8 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
                     confirm_transfer_url = confirmUrl
                 ))
             }
+            // Make IntelliJ happy.
+            else -> throw AssertionError("not reached")
         }
     }
 }

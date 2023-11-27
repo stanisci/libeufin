@@ -50,7 +50,7 @@ import tech.libeufin.util.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
 
-val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin-nexus", "libeufin-nexus")
+val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 val myJson = Json {
     this.serializersModule = SerializersModule {

@@ -90,11 +90,11 @@ class WithdrawalDAO(private val db: Database) {
     /** Result withdrawal operation selection */
     sealed class WithdrawalSelectionResult {
         data class Success(val status: WithdrawalStatus): WithdrawalSelectionResult()
-        object UnknownOperation: WithdrawalSelectionResult()
-        object AlreadySelected: WithdrawalSelectionResult()
-        object RequestPubReuse: WithdrawalSelectionResult()
-        object UnknownAccount: WithdrawalSelectionResult()
-        object AccountIsNotExchange: WithdrawalSelectionResult()
+        data object UnknownOperation: WithdrawalSelectionResult()
+        data object AlreadySelected: WithdrawalSelectionResult()
+        data object RequestPubReuse: WithdrawalSelectionResult()
+        data object UnknownAccount: WithdrawalSelectionResult()
+        data object AccountIsNotExchange: WithdrawalSelectionResult()
     }
 
     /** Set details ([exchangePayto] & [reservePub]) for withdrawal operation [uuid] */

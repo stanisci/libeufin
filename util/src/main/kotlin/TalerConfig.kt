@@ -36,8 +36,26 @@ private val reDirective = Regex("^\\s*@([a-zA-Z-_]+)@\\s*(.*?)\\s*$")
 
 class TalerConfigError(m: String) : Exception(m)
 
+/**
+ * Information about how the configuration is loaded.
+ *
+ * The entry point for the configuration will be the first file from this list:
+ * - /etc/$projectName/$componentName.conf
+ * - /etc/$componentName.conf
+ */
 data class ConfigSource(
+    /**
+     * Name of the high-level project.
+     */
+    val projectName: String = "taler",
+    /**
+     * Name of the component within the package.
+     */
     val componentName: String = "taler",
+    /**
+     * Name of the binary that will be located on $PATH to
+     * find the installation path of the package.
+     */
     val installPathBinary: String = "taler-config",
 )
 
@@ -55,6 +73,7 @@ class TalerConfig(
     private val sectionMap: MutableMap<String, Section> = mutableMapOf()
 
     private val componentName = configSource.componentName
+    private val projectName = configSource.projectName
     private val installPathBinary = configSource.installPathBinary
     val sections: Set<String> get() = sectionMap.keys
 
@@ -239,15 +258,15 @@ class TalerConfig(
      */
     fun loadDefaults() {
         val installDir = getInstallPath()
-        val baseConfigDir = Paths.get(installDir, "share/$componentName/config.d").toString()
+        val baseConfigDir = Paths.get(installDir, "share/$projectName/config.d").toString()
         setSystemDefault("PATHS", "PREFIX", "${installDir}/")
         setSystemDefault("PATHS", "BINDIR", "${installDir}/bin/")
-        setSystemDefault("PATHS", "LIBEXECDIR", "${installDir}/$componentName/libexec/")
-        setSystemDefault("PATHS", "DOCDIR", "${installDir}/share/doc/$componentName/")
+        setSystemDefault("PATHS", "LIBEXECDIR", "${installDir}/$projectName/libexec/")
+        setSystemDefault("PATHS", "DOCDIR", "${installDir}/share/doc/$projectName/")
         setSystemDefault("PATHS", "ICONDIR", "${installDir}/share/icons/")
         setSystemDefault("PATHS", "LOCALEDIR", "${installDir}/share/locale/")
-        setSystemDefault("PATHS", "LIBDIR", "${installDir}/lib/$componentName/")
-        setSystemDefault("PATHS", "DATADIR", "${installDir}/share/$componentName/")
+        setSystemDefault("PATHS", "LIBDIR", "${installDir}/lib/$projectName/")
+        setSystemDefault("PATHS", "DATADIR", "${installDir}/share/$projectName/")
         loadDefaultsFromDir(baseConfigDir)
     }
 
@@ -390,7 +409,7 @@ class TalerConfig(
         if (File(etc1).exists()) {
             return etc1
         }
-        val etc2 = "/etc/$componentName/$componentName.conf"
+        val etc2 = "/etc/$projectName/$componentName.conf"
         if (File(etc2).exists()) {
             return etc2
         }
