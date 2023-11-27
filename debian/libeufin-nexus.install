@@ -6,5 +6,8 @@ usr/share/libeufin/sql/libeufin-nexus-*.sql
 
 usr/share/libeufin/config.d/nexus.conf
 
+usr/share/man/man1/libeufin-nexus.1
+usr/share/man/man5/libeufin-nexus.conf.5
+
 # FIXME: This name should be prefixed!
 usr/lib/nexus-*.jar
