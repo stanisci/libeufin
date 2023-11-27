@@ -1,0 +1,11 @@
+[Unit]
+Description=LibEuFin Nexus EBICS fetch service.
+
+[Service]
+User=libeufin-nexus
+ExecStart=/usr/bin/libeufin-nexus ebics-fetch -c /etc/libeufin/libeufin-nexus.conf
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+debian/etc/libeufin/libeufin-nexus.conf etc/libeufin/libeufin-nexus.conf
+
+usr/bin/libeufin-nexus
+
+usr/share/libeufin/sql/libeufin-nexus-*.sql
+
+usr/share/libeufin/config.d/nexus.conf
+
+# FIXME: This name should be prefixed!
+usr/lib/nexus-*.jar

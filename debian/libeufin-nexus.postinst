@@ -1,0 +1,37 @@
+#!/bin/bash
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+case "${1}" in
+configure)
+
+  if ! getent group libeufin-nexus >/dev/null; then
+    addgroup --quiet --system libeufin-nexus
+  fi
+
+  # Create users if needed
+  if ! getent passwd libeufin-nexus >/dev/null; then
+    adduser --quiet \
+      --system \
+      --disabled-password \
+      --no-create-home \
+      --shell /bin/bash \
+      --ingroup libeufin-nexus \
+      --home /var/lib/libeufin-nexus \
+      libeufin-nexus
+  fi
+  ;;
+
+abort-upgrade | abort-remove | abort-deconfigure) ;;
+
+*)
+  echo "postinst called with unknown argument \`${1}'" >&2
+  exit 1
+  ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -15,13 +15,9 @@ endef
 # Absolute DESTDIR or empty string if DESTDIR unset/empty
 abs_destdir=$(abspath $(DESTDIR))
 
-bank_sql_dir=$(abs_destdir)$(prefix)/share/libeufin-bank/sql
-bank_config_dir=$(abs_destdir)$(prefix)/share/libeufin-bank/config.d
-spa_dir=$(abs_destdir)$(prefix)/share/libeufin-bank/spa
-
-# NOT installyed yet along "make install"
-nexus_sql_dir=$(abs_destdir)$(prefix)/share/libeufin-nexus/sql
-nexus_config_dir=$(abs_destdir)$(prefix)/share/libeufin-nexus/config.d
+spa_dir=$(abs_destdir)$(prefix)/share/libeufin/spa
+sql_dir=$(abs_destdir)$(prefix)/share/libeufin/sql
+config_dir=$(abs_destdir)$(prefix)/share/libeufin/config.d
 
 .PHONY: dist
 dist:
@@ -34,31 +30,38 @@ deb:
 	dpkg-buildpackage -rfakeroot -b -uc -us
 
 .PHONY: install
-install: install-bank
+install: install-bank install-nexus
 
+
+.PHONY: install-common
+install-common:
+	install -D -t $(config_dir) contrib/currencies.conf 
+	install -D -t $(sql_dir) database-versioning/versioning.sql 
+
+.PHONY: install-bank-files
 install-bank-files:
-	install -d $(bank_config_dir)
-	install contrib/libeufin-bank.conf $(bank_config_dir)/
-	install contrib/currencies.conf $(bank_config_dir)/
-	install -D database-versioning/libeufin-bank*.sql -t $(bank_sql_dir)
-	install -D database-versioning/libeufin-conversion*.sql -t $(bank_sql_dir)
-	install -D database-versioning/versioning.sql -t $(bank_sql_dir)
+	install -D -t $(config_dir) contrib/bank.conf
+	install -D -t $(sql_dir) database-versioning/libeufin-bank*.sql
+	install -D -t $(sql_dir) database-versioning/libeufin-conversion*.sql
 
 .PHONY: install-bank
-install-bank: install-bank-files
+install-bank: install-common install-bank-files
 	install -d $(spa_dir)
 	cp contrib/wallet-core/demobank/* $(spa_dir)/
 	./gradlew bank:installShadowDist
 	install -d $(abs_destdir)$(prefix)
+	rm -f bank/build/install/bank-shadow/bin/*.bat
 	cp -r bank/build/install/bank-shadow/* -d $(abs_destdir)$(prefix)
 	cp -r contrib/libeufin-tan-*.sh -d $(abs_destdir)$(prefix)/bin
+	cp contrib/libeufin-bank-dbinit -d $(abs_destdir)$(prefix)/bin
+	cp contrib/libeufin-bank-dbconfig -d $(abs_destdir)$(prefix)/bin
 
-install-nexus:
-	install -d $(nexus_config_dir)
-	install contrib/libeufin-nexus.conf $(nexus_config_dir)/
-	install -D database-versioning/libeufin-nexus*.sql -t $(nexus_sql_dir)
-	install -D database-versioning/versioning.sql -t $(nexus_sql_dir)
+.PHONY: install-nexus
+install-nexus: install-common
+	install -D -t $(config_dir) contrib/nexus.conf
+	install -D -t $(sql_dir) database-versioning/libeufin-nexus*.sql
 	./gradlew nexus:installShadowDist
+	rm -f nexus/build/install/nexus-shadow/bin/*.bat
 	cp -r nexus/build/install/nexus-shadow/* -d $(abs_destdir)$(prefix)
 
 .PHONY: assemble

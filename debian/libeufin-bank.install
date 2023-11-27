@@ -1,3 +1,17 @@
-debian/etc/* etc/
-debian/usr/* usr/
+debian/etc/libeufin/libeufin-bank.conf etc/libeufin/libeufin-bank.conf
+debian/etc/libeufin/settings.json etc/libeufin/settings.json
 
+usr/bin/libeufin-bank
+usr/bin/libeufin-bank-dbinit
+usr/bin/libeufin-bank-dbconfig
+usr/bin/libeufin-tan-*.sh
+
+usr/share/libeufin/sql/libeufin-bank-*.sql
+usr/share/libeufin/sql/libeufin-conversion-*.sql
+
+usr/share/libeufin/spa
+
+usr/share/libeufin/config.d/bank.conf
+
+# FIXME: This name should be prefixed!
+usr/lib/bank-*.jar

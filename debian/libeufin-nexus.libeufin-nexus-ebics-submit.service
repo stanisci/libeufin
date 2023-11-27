@@ -1,0 +1,11 @@
+[Unit]
+Description=LibEuFin Nexus EBICS submit service.
+
+[Service]
+User=libeufin-nexus
+ExecStart=/usr/bin/libeufin-nexus ebics-submit -c /etc/libeufin/libeufin-nexus.conf
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=multi-user.target
