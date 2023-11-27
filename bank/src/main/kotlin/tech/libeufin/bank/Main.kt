@@ -386,6 +386,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     }
 }
 
+// TODO remove ?
 class BankConfigDump : CliktCommand("Dump the configuration", name = "dump") {
     private val configFile by option(
         "--config", "-c",
