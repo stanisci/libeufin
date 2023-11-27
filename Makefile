@@ -15,6 +15,7 @@ endef
 # Absolute DESTDIR or empty string if DESTDIR unset/empty
 abs_destdir=$(abspath $(DESTDIR))
 
+man_dir=$(abs_destdir)$(prefix)/share/man
 spa_dir=$(abs_destdir)$(prefix)/share/libeufin/spa
 sql_dir=$(abs_destdir)$(prefix)/share/libeufin/sql
 config_dir=$(abs_destdir)$(prefix)/share/libeufin/config.d
@@ -60,6 +61,8 @@ install-bank: install-common install-bank-files
 install-nexus: install-common
 	install -D -t $(config_dir) contrib/nexus.conf
 	install -D -t $(sql_dir) database-versioning/libeufin-nexus*.sql
+	install -D -t $(man_dir)/man1 doc/prebuilt/man/libeufin-nexus.1
+	install -D -t $(man_dir)/man5 doc/prebuilt/man/libeufin-nexus.conf.5
 	./gradlew nexus:installShadowDist
 	rm -f nexus/build/install/nexus-shadow/bin/*.bat
 	cp -r nexus/build/install/nexus-shadow/* -d $(abs_destdir)$(prefix)

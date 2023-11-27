@@ -7,3 +7,8 @@
 [submodule "contrib/wallet-core"]
 	path = contrib/wallet-core
 	url = git://git.taler.net/wallet-core
+	branch = prebuilt
+[submodule "doc/prebuilt"]
+	path = doc/prebuilt
+	url = https://git.taler.net/docs.git
+	branch = prebuilt
