@@ -54,20 +54,26 @@ data class MonitorParams(
     val which: Int?
 ) {
     companion object {
+        val names = Timeframe.values().map { it.name }
+        val names_fmt = names.joinToString()
         fun extract(params: Parameters): MonitorParams {
-            val timeframe = Timeframe.valueOf(params["timeframe"] ?: "hour")
+            val raw = params.get("timeframe") ?: "hour";
+            if (!names.contains(raw)) {
+                throw badRequest("Param 'timeframe' must be one of $names_fmt", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+            }
+            val timeframe = Timeframe.valueOf(raw)
             val which = params.int("which")
             if (which != null) {
                 val lastDayOfMonth = OffsetDateTime.now(ZoneOffset.UTC).with(TemporalAdjusters.lastDayOfMonth()).dayOfMonth
                 when {
                     timeframe == Timeframe.hour && (0 > which || which > 23) -> 
-                        throw badRequest("For hour timestamp param 'which' must be between 00 to 23")
+                        throw badRequest("For hour timestamp param 'which' must be between 00 to 23", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
                     timeframe == Timeframe.day && (1 > which || which > lastDayOfMonth) -> 
-                        throw badRequest("For day timestamp param 'which' must be between 1 to $lastDayOfMonth")
+                        throw badRequest("For day timestamp param 'which' must be between 1 to $lastDayOfMonth", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
                     timeframe == Timeframe.month && (1 > which || which > 12) -> 
-                        throw badRequest("For month timestamp param 'which' must be between 1 to 12")
+                        throw badRequest("For month timestamp param 'which' must be between 1 to 12", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
                     timeframe == Timeframe.year && (1 > which|| which > 9999) -> 
-                        throw badRequest("For year timestamp param 'which' must be between 0001 to 9999")
+                        throw badRequest("For year timestamp param 'which' must be between 0001 to 9999", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
                     else -> {}
                 }
             }

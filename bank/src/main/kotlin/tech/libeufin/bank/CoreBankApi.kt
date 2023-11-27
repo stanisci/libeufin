@@ -51,8 +51,8 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
                 currency = ctx.regionalCurrency,
                 currency_specification = ctx.regionalCurrencySpec,
                 allow_conversion = ctx.allowConversion,
-                allow_registrations = !ctx.restrictRegistration,
-                allow_deletions = !ctx.restrictAccountDeletion
+                allow_registrations = ctx.allowRegistration,
+                allow_deletions = ctx.allowAccountDeletion
             )
         )
     }
@@ -137,7 +137,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
 }
 
 private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
-    authAdmin(db, TokenScope.readwrite, ctx.restrictRegistration) {
+    authAdmin(db, TokenScope.readwrite, !ctx.allowRegistration) {
         post("/accounts") {
             val req = call.receive<RegisterAccountRequest>()
             // Prohibit reserved usernames:
@@ -184,7 +184,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         db,
         TokenScope.readwrite,
         allowAdmin = true,
-        requireAdmin = ctx.restrictAccountDeletion
+        requireAdmin = !ctx.allowAccountDeletion
     ) {
         delete("/accounts/{USERNAME}") {
             // Not deleting reserved names.

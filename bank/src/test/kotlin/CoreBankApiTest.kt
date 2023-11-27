@@ -51,6 +51,9 @@ class CoreBankConfigTest {
         client.get("/monitor?timeframe=day&wich=25") {
             pwAuth("admin")
         }.assertOk()
+        client.get("/monitor?timeframe=day=wich=25") {
+            pwAuth("admin")
+        }.assertBadRequest()
     }
 }
 
