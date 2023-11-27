@@ -1001,7 +1001,7 @@ END $$;
 
 CREATE OR REPLACE FUNCTION cashin(
   IN in_now_date BIGINT,
-  IN in_payto_uri TEXT,
+  IN in_reserve_pub BYTEA,
   IN in_amount taler_amount,
   IN in_subject TEXT,
   -- Error status
@@ -1014,13 +1014,18 @@ LANGUAGE plpgsql AS $$
 DECLARE
   converted_amount taler_amount;
   admin_account_id BIGINT;
-  wallet_account_id BIGINT;
+  exchange_account_id BIGINT;
+  tx_row_id BIGINT;
 BEGIN
--- Recover account info
+-- TODO check reserve_pub reuse ?
+
+-- Recover exchange account info
 SELECT bank_account_id
-  INTO wallet_account_id
+  INTO exchange_account_id
   FROM bank_accounts
-  WHERE internal_payto_uri = in_payto_uri;
+    JOIN customers 
+      ON customer_id=owning_customer_id
+  WHERE login = 'exchange';
 IF NOT FOUND THEN
   out_no_account = true;
   RETURN;
@@ -1043,24 +1048,32 @@ IF out_too_small OR out_no_config THEN
 END IF;
 
 -- Perform bank wire transfer
-SELECT transfer.out_balance_insufficient
-INTO out_balance_insufficient
-FROM bank_wire_transfer(
-  wallet_account_id,
-  admin_account_id,
-  in_subject,
-  converted_amount,
-  in_now_date,
-  'not-used',
-  'not-used',
-  'not-used'
-) as transfer;
+SELECT 
+  transfer.out_balance_insufficient,
+  transfer.out_credit_row_id
+  INTO 
+    out_balance_insufficient,
+    tx_row_id
+  FROM bank_wire_transfer(
+    exchange_account_id,
+    admin_account_id,
+    in_subject,
+    converted_amount,
+    in_now_date,
+    NULL,
+    NULL,
+    NULL
+  ) as transfer;
 IF out_balance_insufficient THEN
   RETURN;
 END IF;
 
+-- Register incoming transaction
+CALL register_incoming(in_reserve_pub, tx_row_id);
+
 -- update stats
 CALL stats_register_payment('cashin', now()::TIMESTAMP, converted_amount, in_amount);
+
 END $$;
 COMMENT ON FUNCTION cashin IS 'Perform a cashin operation';
 
@@ -1246,9 +1259,9 @@ FROM bank_wire_transfer(
   subject_local,
   amount_debit_local,
   in_now_date,
-  'not-used',
-  'not-used',
-  'not-used'
+  NULL,
+  NULL,
+  NULL
 ) as transfer;
 IF out_balance_insufficient THEN
   RETURN;

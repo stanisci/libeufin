@@ -28,6 +28,7 @@ import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.*
 import java.io.File
 import java.time.Instant
+import java.util.Arrays
 import kotlinx.coroutines.runBlocking
 import com.github.ajalt.clikt.testing.test
 import com.github.ajalt.clikt.core.CliktCommand
@@ -99,6 +100,16 @@ class IntegrationTest {
                 }
             }.assertCreated()
 
+            // Create exchange
+            client.post("http://0.0.0.0:8080/accounts") {
+                json {
+                    "username" to "exchange"
+                    "password" to "password"
+                    "name" to "Mr Money"
+                    "is_taler_exchange" to true
+                }
+            }.assertCreated()
+
             // Set conversion rates
             client.post("http://0.0.0.0:8080/conversion-info/conversion-rate") {
                 basicAuth("admin", "password")
@@ -129,13 +140,19 @@ class IntegrationTest {
                 reservePub)
                 val converted = client.get("http://0.0.0.0:8080/conversion-info/cashin-rate?amount_debit=EUR:${20 + i}")
                     .assertOkJson<ConversionResponse>().amount_credit
-                client.get("http://0.0.0.0:8080/accounts/customer/transactions") {
-                    basicAuth("customer", "password")
+                client.get("http://0.0.0.0:8080/accounts/exchange/transactions") {
+                    basicAuth("exchange", "password")
                 }.assertOkJson<BankAccountTransactionsResponse> {
                     val tx = it.transactions.first()
-                    assertEquals(userPayTo.canonical, tx.creditor_payto_uri)
                     assertEquals("cashin test $i", tx.subject)
                     assertEquals(converted, tx.amount)
+                }
+                client.get("http://0.0.0.0:8080/accounts/exchange/taler-wire-gateway/history/incoming") {
+                    basicAuth("exchange", "password")
+                }.assertOkJson<IncomingHistory> {
+                    val tx = it.incoming_transactions.first()
+                    assertEquals(converted, tx.amount)
+                    assert(Arrays.equals(reservePub, tx.reserve_pub.raw))
                 }
             }
 

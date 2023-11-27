@@ -41,7 +41,7 @@ class StatsTest {
             db.conn { conn ->
                 val stmt = conn.prepareStatement("SELECT 0 FROM cashin(?, ?, (?, ?)::taler_amount, ?)")
                 stmt.setLong(1, Instant.now().toDbMicros()!!)
-                stmt.setString(2, customerPayto.canonical)
+                stmt.setBytes(2, randShortHashCode().raw)
                 val amount = TalerAmount(amount)
                 stmt.setLong(3, amount.value)
                 stmt.setInt(4, amount.frac)
@@ -98,10 +98,13 @@ class StatsTest {
 
         cashin("EUR:10")
         monitorCashin(1, "KUDOS:7.98", "EUR:10")
+        monitorTalerIn(4, "KUDOS:30.88")
         cashin("EUR:20")
         monitorCashin(2, "KUDOS:23.96", "EUR:30")
+        monitorTalerIn(5, "KUDOS:46.86")
         cashin("EUR:40")
         monitorCashin(3, "KUDOS:55.94", "EUR:70")
+        monitorTalerIn(6, "KUDOS:78.84")
 
         cashout("KUDOS:3")
         monitorCashout(1, "KUDOS:3", "EUR:3.747")
@@ -110,7 +113,7 @@ class StatsTest {
         cashout("KUDOS:12.3")
         monitorCashout(3, "KUDOS:22.9", "EUR:28.616")
 
-        monitorTalerIn(3, "KUDOS:22.9")
+        monitorTalerIn(6, "KUDOS:78.84")
         monitorTalerOut(3, "KUDOS:82.5")
         monitorCashin(3, "KUDOS:55.94", "EUR:70")
         monitorCashout(3, "KUDOS:22.9", "EUR:28.616")

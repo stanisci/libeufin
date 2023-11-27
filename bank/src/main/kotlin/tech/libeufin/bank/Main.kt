@@ -338,6 +338,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
             if (ctx.allowConversion) {
+                // TODO check exchange account 
                 logger.info("ensure conversion is enabled")
                 val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
                 if (!sqlProcedures.exists()) {

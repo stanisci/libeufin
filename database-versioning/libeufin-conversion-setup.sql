@@ -43,7 +43,6 @@ RETURNS trigger
 LANGUAGE plpgsql AS $$
   DECLARE
     now_date BIGINT;
-    payto_uri TEXT;
     local_amount libeufin_bank.taler_amount;
     subject TEXT;
     too_small BOOLEAN;
@@ -51,28 +50,29 @@ LANGUAGE plpgsql AS $$
     no_account BOOLEAN;
     no_config BOOLEAN;
   BEGIN
-    SELECT (amount).val, (amount).frac, wire_transfer_subject, execution_time, debit_payto_uri
-      INTO local_amount.val, local_amount.frac, subject, now_date, payto_uri
+    SELECT (amount).val, (amount).frac, wire_transfer_subject, execution_time
+      INTO local_amount.val, local_amount.frac, subject, now_date
       FROM libeufin_nexus.incoming_transactions
       WHERE incoming_transaction_id = NEW.incoming_transaction_id;
     SET search_path TO libeufin_bank;
     SELECT out_too_small, out_balance_insufficient, out_no_account, out_no_config
       INTO too_small, balance_insufficient, no_account, no_config
-      FROM libeufin_bank.cashin(now_date, payto_uri, local_amount, subject);
+      FROM libeufin_bank.cashin(now_date, NEW.reserve_public_key, local_amount, subject);
     SET search_path TO libeufin_nexus;
 
-    IF no_account THEN
-      RAISE EXCEPTION 'TODO soft error bounce: unknown account';
-    END IF;
     IF too_small THEN
-      RAISE EXCEPTION 'TODO soft error bounce: too small amount';
-    END IF;
-    IF balance_insufficient THEN
-      RAISE EXCEPTION 'TODO hard error bounce: admin balance insufficient';
+      RAISE EXCEPTION 'cashin currency conversion failed: too small amount';
     END IF;
     IF no_config THEN
-      RAISE EXCEPTION 'TODO hard error bounce: missing conversion rate config';
+      RAISE EXCEPTION 'cashin currency conversion failed: missing conversion rates';
     END IF;
+    IF no_account THEN
+      RAISE EXCEPTION 'cashin failed: missing exchange account';
+    END IF;
+    IF balance_insufficient THEN
+      RAISE EXCEPTION 'cashin failed: admin balance insufficient';
+    END IF;
+
     RETURN NEW;
   END;
 $$;
