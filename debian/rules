@@ -16,15 +16,11 @@ clean:
 	rm -rf libeufin-bank-$(FULLVER)
 	rm -rf libeufin-nexus-$(FULLVER)
 
-# Override the build step, because we current need to do it manually
-# outside the regular Debian package build.
-override_dh_auto_build:
-	true
 override_dh_auto_test:
 	true
+
 override_dh_auto_configure:
 	./configure --prefix=/usr
-
 
 # Override this step because it's very slow and likely
 # unnecessary for us.
