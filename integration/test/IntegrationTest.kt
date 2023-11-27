@@ -47,15 +47,9 @@ fun CliktCommand.run(cmd: String) {
     println(result.output)
 }
 
-suspend fun HttpResponse.assertStatus(status: HttpStatusCode): HttpResponse {
-    assertEquals(status, this.status);
-    return this
+fun HttpResponse.assertNoContent() {
+    assertEquals(HttpStatusCode.NoContent, this.status)
 }
-
-suspend fun HttpResponse.assertCreated(): HttpResponse 
-    = assertStatus(HttpStatusCode.Created)
-suspend fun HttpResponse.assertNoContent(): HttpResponse 
-    = assertStatus(HttpStatusCode.NoContent)
 
 fun randBytes(lenght: Int): ByteArray {
     val bytes = ByteArray(lenght)
@@ -71,9 +65,7 @@ class IntegrationTest {
         val bankCmd = LibeufinBankCommand();
         bankCmd.run("dbinit -c ../bank/conf/test.conf -r")
         bankCmd.run("passwd admin password -c ../bank/conf/test.conf")
-        kotlin.concurrent.thread(isDaemon = true)  {
-            bankCmd.run("serve -c ../bank/conf/test.conf")
-        }
+        
         
         runBlocking {
             val client = HttpClient(CIO) {
@@ -82,9 +74,27 @@ class IntegrationTest {
                     constantDelay(200, 100)
                 }
             }
+
             val nexusDb = NexusDb("postgresql:///libeufincheck")
+            val bankDb = BankDb("postgresql:///libeufincheck", "KUDOS", "EUR")
+
+            bankDb.account.create(
+                login = "exchange", 
+                password = "password", 
+                name = "Mr Money", 
+                internalPaytoUri = IbanPayTo(genIbanPaytoUri()), 
+                isPublic = false, 
+                isTalerExchange = true, 
+                maxDebt = BankAmount("KUDOS:0"),
+                bonus = BankAmount("KUDOS:0")
+            )
+
             val userPayTo = IbanPayTo(genIbanPaytoUri())
             val fiatPayTo = IbanPayTo(genIbanPaytoUri())
+
+            kotlin.concurrent.thread(isDaemon = true)  {
+                bankCmd.run("serve -c ../bank/conf/test.conf")
+            }
 
             // Create user
             client.post("http://0.0.0.0:8080/accounts") {
@@ -97,16 +107,6 @@ class IntegrationTest {
                     "challenge_contact_data" to obj {
                         "phone" to "+99"
                     }
-                }
-            }.assertOkJson<RegisterAccountResponse>()
-
-            // Create exchange
-            client.post("http://0.0.0.0:8080/accounts") {
-                json {
-                    "username" to "exchange"
-                    "password" to "password"
-                    "name" to "Mr Money"
-                    "is_taler_exchange" to true
                 }
             }.assertOkJson<RegisterAccountResponse>()
 

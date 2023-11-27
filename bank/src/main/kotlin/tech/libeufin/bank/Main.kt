@@ -228,7 +228,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
         bankIntegrationApi(db, ctx)
         wireGatewayApi(db, ctx)
         revenueApi(db)
-        ctx.spaPath?.let { 
+        ctx.spaPath?.let {
             staticFiles("/", File(it))
         }
     }
@@ -332,31 +332,39 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val dbCfg = cfg.loadDbConfig()
         val serverCfg = cfg.loadServerConfig()
         if (serverCfg.method.lowercase() != "tcp") {
-            logger.info("Can only serve libeufin-bank via TCP")
+            logger.error("Can only serve libeufin-bank via TCP")
             exitProcess(1)
         }
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
             if (ctx.allowConversion) {
-                // TODO check exchange account 
-                logger.info("ensure conversion is enabled")
+                logger.info("Ensure exchange account exists")
+                val info = db.account.bankInfo("exchange")
+                if (info == null) {
+                    logger.error("Exchange account missing: an exchange account named 'exchange' is required for conversion to be enabled")
+                    exitProcess(1)
+                } else if (!info.isTalerExchange) {
+                    logger.error("Account is not an exchange: an exchange account named 'exchange' is required for conversion to be enabled")
+                    exitProcess(1)
+                }
+                logger.info("Ensure conversion is enabled")
                 val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
                 if (!sqlProcedures.exists()) {
-                    logger.info("Missing libeufin-conversion-setup.sql file")
+                    logger.error("Missing libeufin-conversion-setup.sql file")
                     exitProcess(1)
                 }
-                pgDataSource(dbCfg.dbConnStr).pgConnection().execSQLUpdate(sqlProcedures.readText())
+                db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
             } else {
-                logger.info("ensure conversion is disabled")
+                logger.info("Ensure conversion is disabled")
                 val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-drop.sql")
                 if (!sqlProcedures.exists()) {
-                    logger.info("Missing libeufin-conversion-drop.sql file")
+                    logger.error("Missing libeufin-conversion-drop.sql file")
                     exitProcess(1)
                 }
-                pgDataSource(dbCfg.dbConnStr).pgConnection().execSQLUpdate(sqlProcedures.readText())
+                db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
                 // Remove conversion info from the database ?
             }
-        }
+        } 
         embeddedServer(Netty, port = serverCfg.port) {
             corebankWebApp(db, ctx)
         }.start(wait = true)
@@ -433,14 +441,14 @@ class BankConfigGet : CliktCommand("Lookup config value", name = "get") {
         if (isPath) {
             val res = config.lookupPath(sectionName, optionName)
             if (res == null) {
-                logger.info("value not found in config")
+                logger.error("value not found in config")
                 exitProcess(2)
             }
             println(res)
         } else {
             val res = config.lookupString(sectionName, optionName)
             if (res == null) {
-                logger.info("value not found in config")
+                logger.error("value not found in config")
                 exitProcess(2)
             }
             println(res)

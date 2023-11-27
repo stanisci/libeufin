@@ -234,19 +234,15 @@ fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
 fun resetDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
     logger.info("reset DB, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
     pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
-        val count = conn.prepareStatement("SELECT count(*) FROM information_schema.schemata WHERE schema_name='_v'").oneOrNull {
-            it.getInt(1)
-        } ?: 0
-        if (count == 0) {
+        val isInitialized = conn.prepareStatement("SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='_v')").oneOrNull {
+            it.getBoolean(1)
+        }!!
+        if (!isInitialized) {
             logger.info("versioning schema not present, not running drop sql")
             return
         }
 
         val sqlDrop = File("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
-        try {
         conn.execSQLUpdate(sqlDrop) // TODO can fail ?
-        } catch (e: Exception) {
-            
-        }
     }
 }
