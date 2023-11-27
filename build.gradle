@@ -37,7 +37,14 @@ idea {
 }
 
 task versionFile() {
-    new File("${projectDir}/util/src/main/resources", "version.txt").text = getRootProject().version
+    def stdout = new ByteArrayOutputStream()
+    exec {
+        commandLine 'git', 'rev-parse', '--short', 'HEAD'
+        standardOutput = stdout
+    }
+    def gitHash = stdout.toString().trim()
+    def version = getRootProject().version
+    new File("${projectDir}/util/src/main/resources", "version.txt").text = "v$version-git-$gitHash"
 }
 
 // See: https://stackoverflow.com/questions/24936781/gradle-plugin-project-version-number
