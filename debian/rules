@@ -22,6 +22,14 @@ override_dh_auto_test:
 override_dh_auto_configure:
 	./configure --prefix=/usr
 
+# Since this step is run under fakeroot and gradle
+# doesn't work under fakeroot, we must make sure
+# that everything is built by gradle before.
+# The install-nobuild target installs under the assumption
+# that everything is already built.
+override_dh_auto_install:
+	make -j1 install-nobuild DESTDIR=$(CURDIR)/debian/tmp
+
 # Override this step because it's very slow and likely
 # unnecessary for us.
 override_dh_strip_nondeterminism:

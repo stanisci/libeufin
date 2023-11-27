@@ -41,6 +41,9 @@ dist:
 deb:
 	dpkg-buildpackage -rfakeroot -b -uc -us
 
+# The install-nobuild-* targets install under the assumption
+# that the compile step has already been run.
+
 # Install without attempting to build first
 .PHONY: install-nobuild
 install-nobuild: install-nobuild-bank install-nobuild-nexus
