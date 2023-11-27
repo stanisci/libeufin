@@ -244,6 +244,10 @@ fun resetDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
         }
 
         val sqlDrop = File("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
-        conn.execSQLUpdate(sqlDrop) // TODO can fail ?
+        try {
+            conn.execSQLUpdate(sqlDrop)
+        } catch (e: Exception) {
+            // TODO Fix fail because precense of _v does not mean patch is applied
+        }
     }
 }
