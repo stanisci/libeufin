@@ -212,7 +212,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
             val req = call.receive<AccountReconfiguration>()
             req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
 
-            if (req.is_taler_exchange != null && username == "admin")
+            if ((req.is_taler_exchange ?: false) == true && username == "admin")
                 throw conflict(
                     "admin account cannot be an exchange",
                     TalerErrorCode.BANK_PATCH_ADMIN_EXCHANGE
