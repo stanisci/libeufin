@@ -14,8 +14,3 @@ git submodule sync
 git submodule update --init
 rm -f ./configure
 cp build-system/taler-build-scripts/configure ./configure
-
-echo "Importing single-page app (from external Git repository)"
-cd contrib/wallet-core
-git checkout -f origin/prebuilt
-
