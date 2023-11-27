@@ -1,0 +1,34 @@
+// This file is an example of configuration of Bank SPA
+// Remove all the comments to make the file a valid
+// JSON file, otherwise no value here will make any 
+// effect.
+// All the settings are optionals.
+{
+  // Where libeufin backend is localted
+  // default: window.origin without "webui/"
+  "backendBaseURL": "http://bank.taler.test:1180/",
+  // Shows a button "create random account" in the registration form
+  // Useful for testing
+  // default: false
+  "allowRandomAccountCreation": false,
+  // Create all random accounts with password "123"
+  // Useful for testing
+  // default: false
+  "simplePasswordForRandomAccounts": false,
+  // Bank name shown in the header
+  // default: "Taler Bank"
+  "bankName": "Taler TESTING Bank",
+  // URL where the user is going to be redirected after 
+  // clicking in Taler Logo
+  // default: home page
+  "iconLinkURL": "#",
+  // Mapping for every link shown in the top navitation bar
+  //  - key: link label, what the user will read
+  //  - value: link target, where the user is going to be redirected
+  // default: empty list
+  "topNavSites": {
+    "Exchange": "http://Exchnage.taler.test:1180/",
+    "Bank": "http://bank-ui.taler.test:1180/",
+    "Merchant": "http://merchant.taler.test:1180/"
+  }
+}
