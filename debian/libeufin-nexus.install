@@ -1,4 +1,4 @@
-debian/etc/libeufin/libeufin-nexus.conf etc/libeufin/libeufin-nexus.conf
+debian/etc/libeufin/libeufin-nexus.conf etc/libeufin/
 
 usr/bin/libeufin-nexus
 

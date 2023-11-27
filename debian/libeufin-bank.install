@@ -1,5 +1,5 @@
-debian/etc/libeufin/libeufin-bank.conf etc/libeufin/libeufin-bank.conf
-debian/etc/libeufin/settings.json etc/libeufin/settings.json
+debian/etc/libeufin/libeufin-bank.conf etc/libeufin/
+debian/etc/libeufin/settings.json etc/libeufin/
 
 usr/bin/libeufin-bank
 usr/bin/libeufin-bank-dbinit
