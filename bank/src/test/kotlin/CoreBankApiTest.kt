@@ -174,11 +174,11 @@ class CoreBankAccountsApiTest {
         // Check Ok
         client.post("/accounts") {
             json(req)
-        }.assertCreated()
+        }.assertOk()
         // Testing idempotency
         client.post("/accounts") {
             json(req)
-        }.assertCreated()
+        }.assertOk()
 
         // Test generate payto_uri
         client.post("/accounts") {
@@ -187,7 +187,7 @@ class CoreBankAccountsApiTest {
                 "password" to "password"
                 "name" to "Joe"
             }
-        }.assertCreated()
+        }.assertOk()
 
         // Reserved account
         reservedAccounts.forEach {
@@ -233,7 +233,7 @@ class CoreBankAccountsApiTest {
                 json(req) {
                     "username" to "foo$it"
                 }
-            }.assertCreated()
+            }.assertOk()
             assertBalance("foo$it", "+KUDOS:100")
         }
         assertBalance("admin", "-KUDOS:10000")
@@ -261,7 +261,7 @@ class CoreBankAccountsApiTest {
                 "password" to "xyz"
                 "name" to "Mallory"
             }
-        }.assertCreated()
+        }.assertOk()
     }
 
     // DELETE /accounts/USERNAME
@@ -286,7 +286,7 @@ class CoreBankAccountsApiTest {
                 "password" to "password"
                 "name" to "John Smith"
             }
-        }.assertCreated()
+        }.assertOk()
         client.delete("/accounts/john") {
             pwAuth("admin")
         }.assertNoContent()
@@ -456,7 +456,7 @@ class CoreBankAccountsApiTest {
                     "name" to "Mr $it"
                     "is_public" to (it%2 == 0)
                 }
-            }.assertCreated()
+            }.assertOk()
         }
         // All public
         client.get("/public-accounts").run {

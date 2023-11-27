@@ -120,6 +120,11 @@ data class RegisterAccountRequest(
     val internal_payto_uri: IbanPayTo? = null
 )
 
+@Serializable
+data class RegisterAccountResponse(
+    val internal_payto_uri: String
+)
+
 /**
  * Request of PATCH /accounts/{USERNAME}
  */

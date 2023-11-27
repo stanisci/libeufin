@@ -176,7 +176,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     "Bank internalPayToUri reuse '${internalPayto.canonical}'",
                     TalerErrorCode.BANK_REGISTER_PAYTO_URI_REUSE
                 )
-                AccountCreationResult.Success -> call.respond(HttpStatusCode.Created)
+                AccountCreationResult.Success -> call.respond(RegisterAccountResponse(internalPayto.canonical))
             }
         }
     }

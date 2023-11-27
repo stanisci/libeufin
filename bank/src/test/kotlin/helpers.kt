@@ -275,8 +275,6 @@ suspend fun HttpResponse.assertStatus(status: HttpStatusCode, err: TalerErrorCod
 }
 suspend fun HttpResponse.assertOk(): HttpResponse
     = assertStatus(HttpStatusCode.OK, null)
-suspend fun HttpResponse.assertCreated(): HttpResponse 
-    = assertStatus(HttpStatusCode.Created, null)
 suspend fun HttpResponse.assertNoContent(): HttpResponse 
     = assertStatus(HttpStatusCode.NoContent, null)
 suspend fun HttpResponse.assertNotFound(err: TalerErrorCode?): HttpResponse 

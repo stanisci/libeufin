@@ -98,7 +98,7 @@ class IntegrationTest {
                         "phone" to "+99"
                     }
                 }
-            }.assertCreated()
+            }.assertOkJson<RegisterAccountResponse>()
 
             // Create exchange
             client.post("http://0.0.0.0:8080/accounts") {
@@ -108,7 +108,7 @@ class IntegrationTest {
                     "name" to "Mr Money"
                     "is_taler_exchange" to true
                 }
-            }.assertCreated()
+            }.assertOkJson<RegisterAccountResponse>()
 
             // Set conversion rates
             client.post("http://0.0.0.0:8080/conversion-info/conversion-rate") {
