@@ -25,6 +25,8 @@ package tech.libeufin.nexus.ebics
 
 import io.ktor.client.*
 import org.bouncycastle.util.encoders.UTF8
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig
@@ -36,6 +38,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.*
 import javax.xml.datatype.DatatypeFactory
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus.Ebics2")
 
 /**
  * Convenience function to download via EBICS with a

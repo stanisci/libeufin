@@ -17,12 +17,15 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import tech.libeufin.util.logger
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.Paths
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.listDirectoryEntries
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.TalerConfig")
 
 private data class Section(
     val entries: MutableMap<String, String>,

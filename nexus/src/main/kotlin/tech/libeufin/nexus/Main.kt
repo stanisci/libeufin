@@ -378,7 +378,7 @@ fun TalerConfig.extractDbConfigOrFail(): DatabaseConfig =
 class LibeufinNexusCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(EbicsSetup(), DbInit(), EbicsSubmit(), EbicsFetch())
+        subcommands(EbicsSetup(), DbInit(), EbicsSubmit(), EbicsFetch(), CliConfigCmd(NEXUS_CONFIG_SOURCE))
     }
     override fun run() = Unit
 }

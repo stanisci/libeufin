@@ -24,7 +24,11 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.postgresql.ds.PGSimpleDataSource
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.NotificationWatcher")
 
 /** Postgres notification collector and distributor */
 internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {

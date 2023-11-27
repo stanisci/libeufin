@@ -1,10 +1,7 @@
 package tech.libeufin.util
 
 import ch.qos.logback.core.util.Loader
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 
-val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util")
 /**
  * Putting those values into the 'attributes' container because they
  * are needed by the util routines that do NOT have Sandbox and Nexus

@@ -19,9 +19,13 @@
 
 package tech.libeufin.bank
 
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import java.time.*
 import java.sql.Types
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.TransactionDAO")
 
 /** Data access logic for transactions */
 class TransactionDAO(private val db: Database) {

@@ -44,17 +44,19 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import org.apache.commons.compress.archivers.zip.ZipFile
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.*
 import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h005.Ebics3Request
-import tech.libeufin.util.logger
 import java.io.ByteArrayOutputStream
 import java.security.interfaces.RSAPrivateCrtKey
-import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.zip.DeflaterInputStream
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus.EbicsCommon")
 
 /**
  * Available EBICS versions.

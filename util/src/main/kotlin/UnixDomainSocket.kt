@@ -2,12 +2,9 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.server.application.*
 import io.ktor.client.statement.*
-import io.ktor.http.*
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
-import io.ktor.server.engine.*
 import io.ktor.server.testing.*
-import io.ktor.utils.io.pool.*
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.buffer.ByteBufInputStream
 import io.netty.buffer.Unpooled
@@ -20,8 +17,11 @@ import io.netty.handler.codec.http.DefaultHttpResponse
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.stream.ChunkedStream
 import io.netty.handler.stream.ChunkedWriteHandler
-import tech.libeufin.util.logger
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.UnixDomainSocket")
 
 fun startServer(
     unixSocketPath: String,

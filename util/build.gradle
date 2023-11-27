@@ -35,5 +35,6 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
 
     implementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
-    
+
+    implementation("com.github.ajalt.clikt:clikt:4.2.1")
 }

@@ -27,8 +27,12 @@ import io.ktor.util.pipeline.PipelineContext
 import java.time.Instant
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.*
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Authentication")
 
 private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin");
 

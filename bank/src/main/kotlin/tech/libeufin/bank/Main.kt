@@ -30,7 +30,6 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.http.content.*
 import io.ktor.serialization.kotlinx.json.*
-import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.*
@@ -42,7 +41,6 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.*
-import io.ktor.utils.io.jvm.javaio.*
 import java.time.Duration
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
@@ -51,7 +49,6 @@ import java.io.File
 import kotlin.system.exitProcess
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.json.*
 import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
@@ -395,79 +392,10 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     }
 }
 
-// TODO remove ?
-class BankConfigDump : CliktCommand("Dump the configuration", name = "dump") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
-
-    override fun run() {
-        val config = talerConfig(configFile)
-        println("# install path: ${config.getInstallPath()}")
-        config.load(this.configFile)
-        println(config.stringify())
-    }
-}
-
-class BankConfigPathsub : CliktCommand("Substitute variables in a path", name = "pathsub") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
-    private val pathExpr by argument()
-
-    override fun run() {
-        val config = talerConfig(configFile)
-        println(config.pathsub(pathExpr))
-    }
-}
-
-class BankConfigGet : CliktCommand("Lookup config value", name = "get") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
-    private val isPath by option(
-        "--filename", "-f",
-        help = "interpret value as path with dollar-expansion"
-    ).flag()
-    private val sectionName by argument()
-    private val optionName by argument()
-
-
-    override fun run() {
-        val config = talerConfig(configFile)
-        if (isPath) {
-            val res = config.lookupPath(sectionName, optionName)
-            if (res == null) {
-                logger.error("value not found in config")
-                exitProcess(2)
-            }
-            println(res)
-        } else {
-            val res = config.lookupString(sectionName, optionName)
-            if (res == null) {
-                logger.error("value not found in config")
-                exitProcess(2)
-            }
-            println(res)
-        }
-    }
-}
-
-class BankConfigCmd : CliktCommand("Dump the configuration", name = "config") {
-    init {
-        subcommands(BankConfigDump(), BankConfigPathsub(), BankConfigGet())
-    }
-
-    override fun run() = Unit
-}
-
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), ChangePw(), BankConfigCmd())
+        subcommands(ServeBank(), BankDbInit(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
     }
 
     override fun run() = Unit

@@ -4,7 +4,11 @@ import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.netty.channel.unix.Errors
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import kotlin.system.exitProcess
+
+private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.startServer")
 
 const val EAFNOSUPPORT = -97 // Netty defines errors negatively.
 class StartServerOptions(
