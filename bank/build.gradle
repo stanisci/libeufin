@@ -54,8 +54,12 @@ application {
 
 shadowJar {
   minimize {
+    // Kotlin serialization
     exclude(dependency("io.ktor:ktor-serialization-kotlinx-json:.*"))
+    // Postgres driver
+    exclude(dependency("org.postgresql:postgresql:.*"))
     exclude(dependency("com.kohlschutter.junixsocket:junixsocket-core:.*"))
+    // Logging
     exclude(dependency("ch.qos.logback:logback-classic:.*"))
   }
 }
