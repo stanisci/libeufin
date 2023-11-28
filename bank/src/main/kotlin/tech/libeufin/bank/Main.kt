@@ -226,55 +226,6 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     }
 }
 
-fun durationFromPretty(s: String): Long {
-    var durationUs: Long = 0;
-    var currentNum = "";
-    var parsingNum = true
-    for (c in s) {
-        if (c >= '0' && c <= '9') {
-            if (!parsingNum) {
-                throw Error("invalid duration, unexpected number")
-            }
-            currentNum += c
-            continue
-        }
-        if (c == ' ') {
-            if (currentNum != "") {
-                parsingNum = false
-            }
-            continue
-        }
-        if (currentNum == "") {
-            throw Error("invalid duration, missing number")
-        }
-        val n = currentNum.toInt(10)
-        durationUs += when (c) {
-            's' -> {
-                n * 1000000
-            }
-
-            'm' -> {
-                n * 1000000 * 60
-            }
-
-            'h' -> {
-                n * 1000000 * 60 * 60
-            }
-
-            'd' -> {
-                n * 1000000 * 60 * 60 * 24
-            }
-
-            else -> {
-                throw Error("invalid duration, unsupported unit '$c'")
-            }
-        }
-        parsingNum = true
-        currentNum = ""
-    }
-    return durationUs
-}
-
 class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = "dbinit") {
     private val configFile by option(
         "--config", "-c",
@@ -388,11 +339,16 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
-            if (db.account.reconfigPassword(account, password, null) != AccountPatchAuthResult.Success) {
-                println("password change failed")
-                exitProcess(1)
-            } else {
-                println("password change succeeded")
+            val res = db.account.reconfigPassword(account, password, null)
+            when (res) {
+                AccountPatchAuthResult.UnknownAccount -> {
+                    logger.error("password change for '$account' account failed: unknown account")
+                    exitProcess(1)
+                }
+                AccountPatchAuthResult.OldPasswordMismatch -> { /* Can never happen */ }
+                AccountPatchAuthResult.Success -> {
+                    logger.info("password change for '$account' account succeeded")
+                }
             }
         }
     }

@@ -119,10 +119,6 @@ inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
     val nbIgnored = ignored.size
     val nbTotal = nbRegistered + nbIgnored
 
-    println(nbRegistered)
-
-    println("simple")
-
     // Check ignored
     history("delta=$nbTotal").assertHistory(nbRegistered)
     // Check skip ignored
@@ -140,8 +136,6 @@ inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
                 .assertHistory(nbRegistered)
         }
 
-        println("polling")
-
         // Check polling
         coroutineScope {
             val id = latestId()
@@ -158,11 +152,8 @@ inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
                 }
             }
             delay(100)
-            println(registered.size)
             registered[0]()
         }
-
-        println("triggers")
 
         // Test triggers
         for (register in registered) {
@@ -194,8 +185,6 @@ inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
             }
         }
     }
-
-    println("range")
 
     // Testing ranges.
     repeat(20) {

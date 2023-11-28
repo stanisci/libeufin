@@ -136,7 +136,7 @@ class AccountDAO(private val db: Database) {
                         return@transaction AccountCreationResult.PayToReuse
                     }
                 }
-                println("$bonus")
+                
                 if (bonus.value != 0L || bonus.frac != 0) {
                     conn.prepareStatement("""
                         SELECT out_balance_insufficient
