@@ -5,6 +5,7 @@ include /usr/share/dpkg/default.mk
 SHELL := sh -e
 
 export JAVA_HOME = /usr/lib/jvm/default-java
+export GRADLE_USER_HOME = /tmp
 LIBEUFIN_HOME = /usr/share/libeufin
 DEV =
 FULLVER = $(DEB_VERSION_UPSTREAM)$(DEV)
