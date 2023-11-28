@@ -19,14 +19,14 @@ sourceSets.main.java.srcDirs = ["src/main/kotlin"]
 
 dependencies {
     // Core language libraries
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version")
 
     // LibEuFin util library
     implementation(project(":util"))
 
-    implementation("org.postgresql:postgresql:42.6.0")
+    implementation("org.postgresql:postgresql:$postgres_version")
     implementation("com.zaxxer:HikariCP:5.0.1")
-    implementation("com.github.ajalt.clikt:clikt:4.2.1")
+    implementation("com.github.ajalt.clikt:clikt:$clikt_version")
 
     implementation("io.ktor:ktor-server-core:$ktor_version")
     implementation("io.ktor:ktor-server-call-logging:$ktor_version")
@@ -34,7 +34,7 @@ dependencies {
     implementation("io.ktor:ktor-server-content-negotiation:$ktor_version")
     implementation("io.ktor:ktor-server-status-pages:$ktor_version")
     implementation("io.ktor:ktor-server-netty:$ktor_version")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$json_version")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
 
     // UNIX domain sockets support (used to connect to PostgreSQL)
