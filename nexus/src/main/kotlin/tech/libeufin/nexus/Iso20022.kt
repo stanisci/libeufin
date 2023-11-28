@@ -231,6 +231,9 @@ fun parseIncomingTxNotif(
         }
         val amount: TalerAmount = requireUniqueChildNamed("Amt") {
             val currency = focusElement.getAttribute("Ccy")
+            /**
+             * FIXME: test by sending non-CHF to PoFi and see which currency gets here.
+             */
             if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
             getTalerAmount(focusElement.textContent, currency)
         }
