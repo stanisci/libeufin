@@ -22,11 +22,10 @@ allprojects {
     ext {
         set("kotlin_version", "1.9.20")
         set("ktor_version", "2.3.6")
-        set("netty_version", "4.1.100.Final")
         set("clikt_version", "4.2.1")
-        set("json_version", "1.6.1")
         set("coroutines_version", "1.7.3")
         set("postgres_version", "42.7.0")
+        set("junixsocket_version", "2.8.3")
     }
 
     repositories {

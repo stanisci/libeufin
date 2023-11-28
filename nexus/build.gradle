@@ -46,11 +46,10 @@ dependencies {
     implementation("com.itextpdf:itext7-core:7.1.16")
 
     // UNIX domain sockets support (used to connect to PostgreSQL)
-    implementation("com.kohlschutter.junixsocket:junixsocket-core:2.8.1")
+    implementation("com.kohlschutter.junixsocket:junixsocket-core:$junixsocket_version")
 
     // Serialization
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$json_version")
 
     // Unit testing
     testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
