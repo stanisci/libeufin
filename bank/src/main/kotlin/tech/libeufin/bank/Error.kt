@@ -19,6 +19,9 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
+import io.ktor.server.response.*
+import io.ktor.server.application.ApplicationCall
+import io.ktor.util.AttributeKey
 import kotlinx.serialization.Serializable
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.util.*
@@ -42,19 +45,49 @@ class LibeufinBankException(
  */
 @Serializable
 data class TalerError(
+    @kotlinx.serialization.Transient val err: TalerErrorCode = TalerErrorCode.END,
     val code: Int,
     val hint: String? = null,
     val detail: String? = null
 )
 
+private val LOG_MSG = AttributeKey<String>("log_msg");
+
+fun ApplicationCall.logMsg(): String? = attributes.getOrNull(LOG_MSG)
+
+suspend fun ApplicationCall.err(
+    status: HttpStatusCode,
+    hint: String?,
+    error: TalerErrorCode
+) {
+    err(
+        LibeufinBankException(
+            httpStatus = status, talerError = TalerError(
+                code = error.code, err = error, hint = hint
+            )
+        )
+    )
+}
+
+suspend fun ApplicationCall.err(
+    err: LibeufinBankException
+) {
+    attributes.put(LOG_MSG, "${err.talerError.err.name} ${err.talerError.hint}")
+    respond(
+        status = err.httpStatus,
+        message = err.talerError
+    )
+}
+
 
 fun libeufinError(
     status: HttpStatusCode,
     hint: String?,
-    error: TalerErrorCode
+    error: TalerErrorCode,
+    detail: String? = null
 ): LibeufinBankException = LibeufinBankException(
     httpStatus = status, talerError = TalerError(
-        code = error.code, hint = hint
+        code = error.code, err = error, hint = hint, detail = detail
     )
 )
 
@@ -81,8 +114,10 @@ fun conflict(
 ): LibeufinBankException = libeufinError(HttpStatusCode.Conflict, hint, error)
 
 fun badRequest(
-    hint: String? = null, error: TalerErrorCode = TalerErrorCode.GENERIC_JSON_INVALID
-): LibeufinBankException = libeufinError(HttpStatusCode.BadRequest, hint, error)
+    hint: String? = null, 
+    error: TalerErrorCode = TalerErrorCode.GENERIC_JSON_INVALID,
+    detail: String? = null
+): LibeufinBankException = libeufinError(HttpStatusCode.BadRequest, hint, error, detail)
 
 
 fun BankConfig.checkRegionalCurrency(amount: TalerAmount) {

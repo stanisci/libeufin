@@ -90,9 +90,9 @@ assemble:
 	./gradlew assemble
 
 .PHONY: check
-check: install-bank-files
+check: install-nobuild-bank-files
 	./gradlew check
 
 .PHONY: test
-test: install-bank-files
+test: install-nobuild-bank-files
 	./gradlew test --tests $(test) -i

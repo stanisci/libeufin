@@ -112,7 +112,15 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
         this.level = Level.DEBUG
         this.logger = tech.libeufin.bank.logger
         this.format { call ->
-            "${call.response.status()}, ${call.request.httpMethod.value} ${call.request.path()}"
+            val status = call.response.status()
+            val httpMethod = call.request.httpMethod.value
+            val path = call.request.path()
+            val msg = call.logMsg()
+            if (msg != null) {
+                "$status, $httpMethod $path, $msg"
+            } else {
+                "$status, $httpMethod $path"
+            }
         }
     }
     install(CORS) {
@@ -169,53 +177,37 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
 
                 else -> TalerErrorCode.GENERIC_JSON_INVALID
             }
-            call.respond(
-                status = HttpStatusCode.BadRequest,
-                message = TalerError(
-                    code = talerErrorCode.code,
-                    hint = cause.message,
-                    detail = rootCause?.message
+            call.err(
+                badRequest(
+                    cause.message,
+                    talerErrorCode,
+                    rootCause?.message
                 )
             )
         }
         exception<LibeufinBankException> { call, cause ->
-            logger.error(cause.talerError.hint)
-            call.respond(
-                status = cause.httpStatus,
-                message = cause.talerError
-            )
+            call.err(cause)
         }
         exception<SQLException> { call, cause ->
-            cause.printStackTrace()
-            val err = when (cause.sqlState) {
-                PSQLState.SERIALIZATION_FAILURE.state -> libeufinError(
+            when (cause.sqlState) {
+                PSQLState.SERIALIZATION_FAILURE.state -> call.err(
                     HttpStatusCode.InternalServerError,
                     "Transaction serialization failure",
                     TalerErrorCode.BANK_SOFT_EXCEPTION
                 )
-                else -> libeufinError(
+                else -> call.err(
                     HttpStatusCode.InternalServerError,
                     "Unexpected sql error with state ${cause.sqlState}",
                     TalerErrorCode.BANK_UNMANAGED_EXCEPTION
                 )
             }
-            logger.error(err.talerError.hint)
-            call.respond(
-                status = err.httpStatus,
-                message = err.talerError
-            )
         }
         // Catch-all branch to mean that the bank wasn't able to manage one error.
         exception<Exception> { call, cause ->
-            val err = libeufinError(
+            call.err(
                 HttpStatusCode.InternalServerError,
                 cause.message,
                 TalerErrorCode.BANK_UNMANAGED_EXCEPTION
-            )
-            logger.error(err.talerError.hint)
-            call.respond(
-                status = err.httpStatus,
-                message = err.talerError
             )
         }
     }
@@ -331,10 +323,6 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val ctx = cfg.loadBankConfig()
         val dbCfg = cfg.loadDbConfig()
         val serverCfg = cfg.loadServerConfig()
-        if (serverCfg.method.lowercase() != "tcp") {
-            logger.error("Can only serve libeufin-bank via TCP")
-            exitProcess(1)
-        }
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
             if (ctx.allowConversion) {
@@ -364,12 +352,27 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
                 db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
                 // Remove conversion info from the database ?
             }
-        } 
-        embeddedServer(Netty, port = serverCfg.port) {
-            corebankWebApp(db, ctx)
-        }.start(wait = true)
+        }
+        
+        val env = applicationEngineEnvironment {
+            connector {
+                when (serverCfg) {
+                    is ServerConfig.Tcp -> {
+                        port = serverCfg.port
+                    }
+                    is ServerConfig.Unix -> {
+                        logger.error("Can only serve libeufin-bank via TCP")
+                        exitProcess(1)
+                    }
+                }
+            }
+            module { corebankWebApp(db, ctx) }
+        }
+        embeddedServer(Netty, env).start(wait = true)
     }
 }
+
+
 
 class ChangePw : CliktCommand("Change account password", name = "passwd") {
     private val configFile by option(

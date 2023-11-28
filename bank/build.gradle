@@ -34,20 +34,28 @@ dependencies {
     implementation("io.ktor:ktor-server-content-negotiation:$ktor_version")
     implementation("io.ktor:ktor-server-status-pages:$ktor_version")
     implementation("io.ktor:ktor-server-netty:$ktor_version")
-    implementation("io.ktor:ktor-server-test-host:$ktor_version")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
 
-    testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
-
-    testImplementation(project(":util"))
-
     // UNIX domain sockets support (used to connect to PostgreSQL)
     implementation("com.kohlschutter.junixsocket:junixsocket-core:2.8.1")
+
+    testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
+    testImplementation("io.ktor:ktor-server-test-host:$ktor_version")
+
+    testImplementation(project(":util"))
 }
 
 application {
     mainClass = "tech.libeufin.bank.MainKt"
     applicationName = "libeufin-bank"
     applicationDefaultJvmArgs = ['-Djava.net.preferIPv6Addresses=true']
+}
+
+shadowJar {
+  minimize {
+    exclude(dependency("io.ktor:ktor-serialization-kotlinx-json:.*"))
+    exclude(dependency("com.kohlschutter.junixsocket:junixsocket-core:.*"))
+    exclude(dependency("ch.qos.logback:logback-classic:.*"))
+  }
 }

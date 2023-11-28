@@ -19,21 +19,17 @@ sourceSets.main.java.srcDirs = ["src/main/kotlin"]
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.4.5")
-    implementation("io.ktor:ktor-server-netty:$ktor_version")
     // XML Stuff
     implementation("javax.xml.bind:jaxb-api:2.3.1")
     implementation("org.glassfish.jaxb:jaxb-runtime:2.3.1")
     implementation("org.apache.santuario:xmlsec:2.2.2")
     // Crypto
     implementation("org.bouncycastle:bcprov-jdk15on:1.69")
-    // Unix domain socket to serve HTTP
-    implementation("io.netty:netty-all:$netty_version")
-    implementation("io.netty:netty-transport-native-epoll:$netty_version")
-    implementation("io.ktor:ktor-server-test-host:$ktor_version")
     // Database helper
     implementation("org.postgresql:postgresql:42.6.0")
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
 
+    implementation("io.ktor:ktor-server-test-host:$ktor_version")
     implementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
 
     implementation("com.github.ajalt.clikt:clikt:4.2.1")

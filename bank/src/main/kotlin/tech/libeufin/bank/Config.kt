@@ -71,10 +71,10 @@ data class ConversionRate (
     val cashout_min_amount: TalerAmount,
 )
 
-data class ServerConfig(
-    val method: String,
-    val port: Int
-)
+sealed class ServerConfig {
+    data class Unix(val path: String, val mode: Int): ServerConfig()
+    data class Tcp(val port: Int): ServerConfig()
+}
 
 fun talerConfig(configPath: String?): TalerConfig = catchError {
     val config = TalerConfig(BANK_CONFIG_SOURCE)
@@ -90,10 +90,12 @@ fun TalerConfig.loadDbConfig(): DatabaseConfig = catchError  {
 }
 
 fun TalerConfig.loadServerConfig(): ServerConfig = catchError  {
-    ServerConfig(
-        method = requireString("libeufin-bank", "serve"),
-        port = requireNumber("libeufin-bank", "port")
-    )
+    val method = requireString("libeufin-bank", "serve")
+    when (method) {
+        "tcp" -> ServerConfig.Tcp(requireNumber("libeufin-bank", "port"))
+        "unix" -> ServerConfig.Unix(requireString("libeufin-bank", "unixpath"), requireNumber("libeufin-bank", "unixpath_mode"))
+        else -> throw Exception("Unknown server method '$method' expected 'tcp' or 'unix'")
+    }
 }
 
 fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
