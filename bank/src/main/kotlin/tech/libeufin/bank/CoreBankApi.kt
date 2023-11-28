@@ -169,7 +169,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
                 AccountCreationResult.LoginReuse -> throw conflict(
-                    "Customer username reuse '${req.username}'",
+                    "Account username reuse '${req.username}'",
                     TalerErrorCode.BANK_REGISTER_USERNAME_REUSE
                 )
                 AccountCreationResult.PayToReuse -> throw conflict(

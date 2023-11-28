@@ -22,10 +22,8 @@ package tech.libeufin.bank
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.versionOption
+import com.github.ajalt.clikt.parameters.arguments.*
+import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.http.content.*
@@ -323,14 +321,12 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
     }
 }
 
-
-
 class ChangePw : CliktCommand("Change account password", name = "passwd") {
     private val configFile by option(
         "--config", "-c",
         help = "set the configuration file"
     )
-    private val account by argument("account")
+    private val username by argument("username")
     private val password by argument("password")
 
     override fun run() {
@@ -339,15 +335,70 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
-            val res = db.account.reconfigPassword(account, password, null)
+            val res = db.account.reconfigPassword(username, password, null)
             when (res) {
                 AccountPatchAuthResult.UnknownAccount -> {
-                    logger.error("password change for '$account' account failed: unknown account")
+                    logger.error("Password change for '$username' account failed: unknown account")
                     exitProcess(1)
                 }
                 AccountPatchAuthResult.OldPasswordMismatch -> { /* Can never happen */ }
                 AccountPatchAuthResult.Success -> {
-                    logger.info("password change for '$account' account succeeded")
+                    logger.info("Password change for '$username' account succeeded")
+                }
+            }
+        }
+    }
+}
+
+class CreateAccount : CliktCommand("Create an account", name = "create-account") {
+    private val configFile by option(
+        "--config", "-c",
+        help = "set the configuration file"
+    )
+    private val json: RegisterAccountRequest by argument().convert { Json.decodeFromString<RegisterAccountRequest>(it) }
+
+    override fun run() {
+        val cfg = talerConfig(configFile)
+        val ctx = cfg.loadBankConfig() 
+        val dbCfg = cfg.loadDbConfig()
+        val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
+        runBlocking {
+            if (reservedAccounts.contains(json.username)) {
+                logger.error("Username '${json.username}' is reserved")
+                exitProcess(1)
+            }
+
+            val internalPayto = json.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
+            val result = db.account.create(
+                login = json.username,
+                name = json.name,
+                email = json.challenge_contact_data?.email,
+                phone = json.challenge_contact_data?.phone,
+                cashoutPayto = json.cashout_payto_uri,
+                password = json.password,
+                internalPaytoUri = internalPayto,
+                isPublic = json.is_public,
+                isTalerExchange = json.is_taler_exchange,
+                maxDebt = ctx.defaultCustomerDebtLimit,
+                bonus = if (!json.is_taler_exchange) ctx.registrationBonus 
+                        else TalerAmount(0, 0, ctx.regionalCurrency)
+            )
+
+            when (result) {
+                AccountCreationResult.BonusBalanceInsufficient -> {
+                    logger.error("Insufficient admin funds to grant bonus")
+                    exitProcess(1)
+                }
+                AccountCreationResult.LoginReuse -> {
+                    logger.error("Account username reuse '${json.username}'")
+                    exitProcess(1)
+                }
+                AccountCreationResult.PayToReuse -> {
+                    logger.error("Bank internalPayToUri reuse '${internalPayto.canonical}'")
+                    exitProcess(1)
+                }
+                AccountCreationResult.Success -> {
+                    logger.info("Account '${json.username}' created")
                 }
             }
         }
@@ -357,7 +408,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
+        subcommands(ServeBank(), BankDbInit(), CreateAccount(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
     }
 
     override fun run() = Unit
