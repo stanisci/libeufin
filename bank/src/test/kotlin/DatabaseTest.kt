@@ -168,7 +168,7 @@ class DatabaseTest {
 
     // Testing iban payto uri normalization
     @Test
-    fun ibanPayto() = setup { db, ctx ->
+    fun ibanPayto() = setup { _, _ ->
         val expected = "payto://iban/CH9300762011623852957"
         val inputs = listOf(
             "payto://iban/BIC/CH9300762011623852957?receiver-name=NotGiven",
