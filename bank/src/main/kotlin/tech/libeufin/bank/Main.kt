@@ -44,7 +44,6 @@ import java.util.zip.DataFormatException
 import java.util.zip.Inflater
 import java.sql.SQLException
 import java.io.File
-import kotlin.system.exitProcess
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.*
@@ -228,7 +227,7 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
         help = "reset database (DANGEROUS: All existing data is lost)"
     ).flag()
 
-    override fun run() {
+    override fun run() = cliCmd(logger){
         val config = talerConfig(configFile)
         val cfg = config.loadDbConfig()
         if (requestReset) {
@@ -243,13 +242,10 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
             when (res) {
                 AccountCreationResult.BonusBalanceInsufficient -> {}
                 AccountCreationResult.LoginReuse -> {}
-                AccountCreationResult.PayToReuse -> {
-                    logger.error("Failed to create admin's account")
-                    exitProcess(1)
-                }
-                AccountCreationResult.Success -> {
+                AccountCreationResult.PayToReuse -> 
+                    throw Exception("Failed to create admin's account")
+                AccountCreationResult.Success ->
                     logger.info("Admin's account created")
-                }
             }
         }
     }
@@ -261,7 +257,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         help = "set the configuration file"
     )
 
-    override fun run() {
+    override fun run() = cliCmd(logger) {
         val cfg = talerConfig(configFile)
         val ctx = cfg.loadBankConfig()
         val dbCfg = cfg.loadDbConfig()
@@ -272,25 +268,21 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
                 logger.info("Ensure exchange account exists")
                 val info = db.account.bankInfo("exchange")
                 if (info == null) {
-                    logger.error("Exchange account missing: an exchange account named 'exchange' is required for conversion to be enabled")
-                    exitProcess(1)
+                    throw Exception("Exchange account missing: an exchange account named 'exchange' is required for conversion to be enabled")
                 } else if (!info.isTalerExchange) {
-                    logger.error("Account is not an exchange: an exchange account named 'exchange' is required for conversion to be enabled")
-                    exitProcess(1)
+                    throw Exception("Account is not an exchange: an exchange account named 'exchange' is required for conversion to be enabled")
                 }
                 logger.info("Ensure conversion is enabled")
                 val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
                 if (!sqlProcedures.exists()) {
-                    logger.error("Missing libeufin-conversion-setup.sql file")
-                    exitProcess(1)
+                    throw Exception("Missing libeufin-conversion-setup.sql file")
                 }
                 db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
             } else {
                 logger.info("Ensure conversion is disabled")
                 val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-drop.sql")
                 if (!sqlProcedures.exists()) {
-                    logger.error("Missing libeufin-conversion-drop.sql file")
-                    exitProcess(1)
+                    throw Exception("Missing libeufin-conversion-drop.sql file")
                 }
                 db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
                 // Remove conversion info from the database ?
@@ -303,10 +295,8 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
                     is ServerConfig.Tcp -> {
                         port = serverCfg.port
                     }
-                    is ServerConfig.Unix -> {
-                        logger.error("Can only serve libeufin-bank via TCP")
-                        exitProcess(1)
-                    }
+                    is ServerConfig.Unix ->
+                        throw Exception("Can only serve libeufin-bank via TCP")
                 }
             }
             module { corebankWebApp(db, ctx) }
@@ -323,7 +313,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     private val username by argument("username")
     private val password by argument("password")
 
-    override fun run() {
+    override fun run() = cliCmd(logger) {
         val cfg = talerConfig(configFile)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
@@ -331,14 +321,11 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         runBlocking {
             val res = db.account.reconfigPassword(username, password, null)
             when (res) {
-                AccountPatchAuthResult.UnknownAccount -> {
-                    logger.error("Password change for '$username' account failed: unknown account")
-                    exitProcess(1)
-                }
+                AccountPatchAuthResult.UnknownAccount ->
+                    throw Exception("Password change for '$username' account failed: unknown account")
                 AccountPatchAuthResult.OldPasswordMismatch -> { /* Can never happen */ }
-                AccountPatchAuthResult.Success -> {
+                AccountPatchAuthResult.Success ->
                     logger.info("Password change for '$username' account succeeded")
-                }
             }
         }
     }
@@ -351,15 +338,14 @@ class CreateAccount : CliktCommand("Create an account", name = "create-account")
     )
     private val json: RegisterAccountRequest by argument().convert { Json.decodeFromString<RegisterAccountRequest>(it) }
 
-    override fun run() {
+    override fun run() = cliCmd(logger) {
         val cfg = talerConfig(configFile)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
             if (reservedAccounts.contains(json.username)) {
-                logger.error("Username '${json.username}' is reserved")
-                exitProcess(1)
+                throw Exception("Username '${json.username}' is reserved")
             }
 
             val internalPayto = json.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
@@ -379,21 +365,14 @@ class CreateAccount : CliktCommand("Create an account", name = "create-account")
             )
 
             when (result) {
-                AccountCreationResult.BonusBalanceInsufficient -> {
-                    logger.error("Insufficient admin funds to grant bonus")
-                    exitProcess(1)
-                }
-                AccountCreationResult.LoginReuse -> {
-                    logger.error("Account username reuse '${json.username}'")
-                    exitProcess(1)
-                }
-                AccountCreationResult.PayToReuse -> {
-                    logger.error("Bank internalPayToUri reuse '${internalPayto.canonical}'")
-                    exitProcess(1)
-                }
-                AccountCreationResult.Success -> {
+                AccountCreationResult.BonusBalanceInsufficient ->
+                    throw Exception("Insufficient admin funds to grant bonus")
+                AccountCreationResult.LoginReuse ->
+                    throw Exception("Account username reuse '${json.username}'")
+                AccountCreationResult.PayToReuse ->
+                    throw Exception("Bank internalPayToUri reuse '${internalPayto.canonical}'")
+                AccountCreationResult.Success ->
                     logger.info("Account '${json.username}' created")
-                }
             }
         }
     }

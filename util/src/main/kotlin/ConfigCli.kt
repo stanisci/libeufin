@@ -33,19 +33,19 @@ import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.ConfigCli")
 
-private fun <R> catchError(lambda: () -> R): R {
+fun cliCmd(logger: Logger, lambda: () -> Unit) {
     try {
-        return lambda()
-    } catch (e: TalerConfigError) {
+        lambda()
+    } catch (e: Exception) {
         logger.error(e.message)
         exitProcess(1)
     }
 }
 
-private fun talerConfig(configSource: ConfigSource, configPath: String?): TalerConfig = catchError {
+private fun talerConfig(configSource: ConfigSource, configPath: String?): TalerConfig {
     val config = TalerConfig(configSource)
     config.load(configPath)
-    config
+    return config
 }
 
 class CliConfigCmd(configSource: ConfigSource) : CliktCommand("Inspect or change the configuration", name = "config") {
@@ -69,7 +69,7 @@ private class CliConfigGet(private val configSource: ConfigSource) : CliktComman
     private val optionName by argument()
 
 
-    override fun run() {
+    override fun run() = cliCmd(logger) {
         val config = talerConfig(configSource, configFile)
         if (isPath) {
             val res = config.lookupPath(sectionName, optionName)
@@ -98,7 +98,7 @@ private class CliConfigPathsub(private val configSource: ConfigSource) : CliktCo
     )
     private val pathExpr by argument()
 
-    override fun run() {
+    override fun run() = cliCmd(logger) {
         val config = talerConfig(configSource, configFile)
         println(config.pathsub(pathExpr))
     }
@@ -110,7 +110,7 @@ private class CliConfigDump(private val configSource: ConfigSource) : CliktComma
         help = "set the configuration file"
     )
 
-    override fun run() {
+    override fun run() = cliCmd(logger) {
         val config = talerConfig(configSource, configFile)
         println("# install path: ${config.getInstallPath()}")
         config.load(this.configFile)

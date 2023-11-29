@@ -76,29 +76,28 @@ sealed class ServerConfig {
     data class Tcp(val port: Int): ServerConfig()
 }
 
-fun talerConfig(configPath: String?): TalerConfig = catchError {
+fun talerConfig(configPath: String?): TalerConfig {
     val config = TalerConfig(BANK_CONFIG_SOURCE)
     config.load(configPath)
-    config
+    return config
 }
 
-fun TalerConfig.loadDbConfig(): DatabaseConfig = catchError  {
-    DatabaseConfig(
+fun TalerConfig.loadDbConfig(): DatabaseConfig  {
+    return DatabaseConfig(
         dbConnStr = requireString("libeufin-bankdb-postgres", "config"),
         sqlDir = requirePath("libeufin-bankdb-postgres", "sql_dir")
     )
 }
 
-fun TalerConfig.loadServerConfig(): ServerConfig = catchError  {
-    val method = requireString("libeufin-bank", "serve")
-    when (method) {
+fun TalerConfig.loadServerConfig(): ServerConfig {
+    return when (val method = requireString("libeufin-bank", "serve")) {
         "tcp" -> ServerConfig.Tcp(requireNumber("libeufin-bank", "port"))
         "unix" -> ServerConfig.Unix(requireString("libeufin-bank", "unixpath"), requireNumber("libeufin-bank", "unixpath_mode"))
         else -> throw Exception("Unknown server method '$method' expected 'tcp' or 'unix'")
     }
 }
 
-fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
+fun TalerConfig.loadBankConfig(): BankConfig  {
     val regionalCurrency = requireString("libeufin-bank", "currency")
     var fiatCurrency: String? = null;
     var fiatCurrencySpec: CurrencySpecification? = null
@@ -107,7 +106,7 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
         fiatCurrency = requireString("libeufin-bank", "fiat_currency");
         fiatCurrencySpec = currencySpecificationFor(fiatCurrency) 
     }
-    BankConfig(
+    return BankConfig(
         regionalCurrency = regionalCurrency,
         regionalCurrencySpec =  currencySpecificationFor(regionalCurrency),
         allowRegistration = lookupBoolean("libeufin-bank", "allow_registration") ?: false,
@@ -128,14 +127,13 @@ fun TalerConfig.loadBankConfig(): BankConfig = catchError  {
 
 fun String.notEmptyOrNull(): String? = if (isEmpty()) null else this
 
-fun TalerConfig.currencySpecificationFor(currency: String): CurrencySpecification = catchError {
-    sections.find {
+fun TalerConfig.currencySpecificationFor(currency: String): CurrencySpecification
+    = sections.find {
         it.startsWith("CURRENCY-") && requireBoolean(it, "enabled") && requireString(it, "code") == currency
     }?.let { loadCurrencySpecification(it) } ?: throw TalerConfigError("missing currency specification for $currency")
-}
 
-private fun TalerConfig.loadCurrencySpecification(section: String): CurrencySpecification = catchError {
-    CurrencySpecification(
+private fun TalerConfig.loadCurrencySpecification(section: String): CurrencySpecification {
+    return CurrencySpecification(
         name = requireString(section, "name"),
         num_fractional_input_digits = requireNumber(section, "fractional_input_digits"),
         num_fractional_normal_digits = requireNumber(section, "fractional_normal_digits"),
@@ -144,8 +142,8 @@ private fun TalerConfig.loadCurrencySpecification(section: String): CurrencySpec
     )
 }
 
-private fun TalerConfig.amount(section: String, option: String, currency: String): TalerAmount? = catchError {
-    val amountStr = lookupString(section, option) ?: return@catchError null
+private fun TalerConfig.amount(section: String, option: String, currency: String): TalerAmount? {
+    val amountStr = lookupString(section, option) ?: return null
     val amount = try {
         TalerAmount(amountStr)
     } catch (e: Exception) {
@@ -157,42 +155,31 @@ private fun TalerConfig.amount(section: String, option: String, currency: String
             "expected amount for section $section, option $option, but currency is wrong (got ${amount.currency} expected $currency"
         )
     }
-    amount
+    return amount
 }
 
-private fun TalerConfig.requireAmount(section: String, option: String, currency: String): TalerAmount = catchError {
+private fun TalerConfig.requireAmount(section: String, option: String, currency: String): TalerAmount =
     amount(section, option, currency) ?:
         throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
-}
 
-private fun TalerConfig.decimalNumber(section: String, option: String): DecimalNumber? = catchError {
-    val numberStr = lookupString(section, option) ?: return@catchError null
+private fun TalerConfig.decimalNumber(section: String, option: String): DecimalNumber? {
+    val numberStr = lookupString(section, option) ?: return null
     try {
-        DecimalNumber(numberStr)
+        return DecimalNumber(numberStr)
     } catch (e: Exception) {
         throw TalerConfigError("expected decimal number for section $section, option $option, but number is malformed")
     }
 }
 
-private fun TalerConfig.requireDecimalNumber(section: String, option: String): DecimalNumber = catchError {
-    decimalNumber(section, option) ?:
+private fun TalerConfig.requireDecimalNumber(section: String, option: String): DecimalNumber
+    = decimalNumber(section, option) ?:
         throw TalerConfigError("expected decimal number for section $section, option $option, but config value is empty")
-}
 
-private fun TalerConfig.RoundingMode(section: String, option: String): RoundingMode? = catchError {
-    val str = lookupString(section, option) ?: return@catchError null;
+private fun TalerConfig.RoundingMode(section: String, option: String): RoundingMode? {
+    val str = lookupString(section, option) ?: return null;
     try {
-        RoundingMode.valueOf(str)
+        return RoundingMode.valueOf(str)
     } catch (e: Exception) {
         throw TalerConfigError("expected rouding mode for section $section, option $option, but $str is unknown")
-    }
-}
-
-private fun <R> catchError(lambda: () -> R): R {
-    try {
-        return lambda()
-    } catch (e: TalerConfigError) {
-        logger.error(e.message)
-        kotlin.system.exitProcess(1)
     }
 }
