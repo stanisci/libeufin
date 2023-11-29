@@ -1,0 +1,132 @@
+#!/bin/bash
+# This file is part of GNU TALER.
+# Copyright (C) 2023 Taler Systems SA
+#
+# TALER is free software; you can redistribute it and/or modify it under the
+# terms of the GNU Lesser General Public License as published by the Free Software
+# Foundation; either version 2.1, or (at your option) any later version.
+#
+# TALER is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License along with
+# TALER; see the file COPYING.  If not, see <http://www.gnu.org/licenses/>
+#
+# @author Christian Grothoff
+#
+#
+# Error checking on
+set -eu
+
+RESET_DB=0
+SKIP_DBINIT=0
+DBUSER="libeufin-nexus"
+DBNAME="libeufinbank"
+CFGFILE="/etc/libeufin/libeufin-nexus.conf"
+
+# Parse command-line options
+while getopts ':hn:rsu:' OPTION; do
+    case "$OPTION" in
+        h)
+            echo 'Supported options:'
+            echo "  -c FILENAME  -- write configuration to FILENAME (default: $CFGFILE)"
+            echo "  -n NAME      -- user NAME for database name (default: $DBNAME)"
+            echo "  -r           -- reset database (dangerous)"
+            echo "  -s           -- skip database initialization"
+            echo "  -u USER      -- taler-merchant to be run by USER (default: $DBUSER)"
+            exit 0
+            ;;
+        n)
+            DBNAME="$OPTARG"
+            ;;
+        r)
+            RESET_DB="1"
+            ;;
+        s)
+            SKIP_DBINIT="1"
+            ;;
+        u)
+            DBUSER="$OPTARG"
+            ;;
+        ?)
+        exit_fail "Unrecognized command line option"
+        ;;
+    esac
+done
+
+if ! id postgres > /dev/null
+then
+    echo "Could not find 'postgres' user. Please install Postgresql first"
+    exit 1
+fi
+
+if [ "$(id -u)" -ne 0 ]
+then
+    echo "This script must be run as root"
+    exit 1
+fi
+
+if [ 0 = "$SKIP_DBINIT" ]
+then
+    if ! libeufin-nexus-dbinit --help 2> /dev/null # -v not provided
+    then
+        echo "Required 'libeufin-nexus-dbinit' not found. Please fix your installation."
+    fi
+fi
+
+if ! id "$DBUSER" > /dev/null
+then
+    echo "Could not find '$DBUSER' user. Please set it up first"
+    exit 1
+fi
+
+if sudo -i -u postgres psql "$DBNAME" < /dev/null 2> /dev/null
+then
+    if [ 1 = "$RESET_DB" ]
+    then
+        echo "Deleting existing database $DBNAME." 1>&2
+        sudo -i -u postgres dropdb "$DBNAME"
+    else
+        echo "Database '$DBNAME' already exists, refusing to setup again."
+        echo "Use -r to delete the existing database first (dangerous!)."
+        exit 77
+    fi
+fi
+
+echo "Setting up database user $DBUSER." 1>&2
+
+if ! sudo -i -u postgres createuser "$DBUSER" 2> /dev/null
+then
+    echo "Database user '$DBUSER' already existed. Continuing anyway." 1>&2
+fi
+
+echo "Creating database $DBNAME." 1>&2
+
+if ! sudo -i -u postgres createdb -O "$DBUSER" "$DBNAME"
+then
+    echo "Failed to create database '$DBNAME'"
+    exit 1
+fi
+
+if [ -f "$CFGFILE" ]
+then
+    echo "Adding database configuration to $CFGFILE." 1>&2
+    echo -e "[nexus-postgres]\nCONFIG=postgres:///$DBNAME\n" >> "$CFGFILE"
+else
+    echo "Configuration $CFGFILE does not yet exist, creating it." 1>&2
+    mkdir -p "$(dirname "$CFGFILE")"
+    echo -e "[nexus-postgres]\nCONFIG=postgres:///$DBNAME\n" >> "$CFGFILE"
+    chown "$DBUSER":root "$CFGFILE"
+    chmod 460 "$CFGFILE"
+fi
+
+if [ 0 = "$SKIP_DBINIT" ]
+then
+    echo "Initializing database $DBNAME." 1>&2
+    sudo -u "$DBUSER" libeufin-nexus-dbinit
+fi
+
+echo "Database configuration finished." 1>&2
+
+exit 0
