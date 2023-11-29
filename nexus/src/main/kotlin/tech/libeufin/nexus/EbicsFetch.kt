@@ -12,7 +12,6 @@ import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h005.Ebics3Request
 import java.io.File
 import java.io.IOException
-import java.net.URLEncoder
 import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDate
@@ -20,9 +19,7 @@ import java.time.ZoneId
 import java.util.UUID
 import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
-import kotlin.math.min
 import kotlin.system.exitProcess
-import kotlin.text.StringBuilder
 
 /**
  * Necessary data to perform a download.
@@ -552,9 +549,13 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 " latest document is always until the current time."
     )
 
-    private val debug by option(
+    private val parse by option(
         help = "Reads one ISO20022 document from STDIN and prints " +
                 "the parsing results.  It does not affect the database."
+    ).flag(default = false)
+
+    private val import by option(
+        help = "Read one ISO20022 document from STDIN and imports its content into the database"
     ).flag(default = false)
 
     private val ebicsExtraLog by option(
@@ -577,7 +578,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         val dbCfg = cfg.config.extractDbConfigOrFail()
         val db = Database(dbCfg.dbConnStr)
         val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
-        if (!bankKeys.accepted) {
+        if (!bankKeys.accepted && !import && !parse) {
             logger.error("Bank keys are not accepted, yet.  Won't fetch any records.")
             exitProcess(1)
         }
@@ -593,30 +594,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (onlyReports) whichDoc = SupportedDocument.CAMT_052
         if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
         if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
-
-        if (debug) {
-            logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
-            val maybeStdin = generateSequence(::readLine).joinToString("\n")
-            when(whichDoc) {
-                SupportedDocument.CAMT_054 -> {
-                    try {
-                        println(parseIncomingTxNotif(maybeStdin, cfg.currency))
-                    } catch (e: WrongPaymentDirection) {
-                        logger.info("Input doesn't contain incoming payments")
-                    }
-                    try {
-                        println(parseOutgoingTxNotif(maybeStdin, cfg.currency))
-                    } catch (e: WrongPaymentDirection) {
-                        logger.debug("Input doesn't contain outgoing payments")
-                    }
-                }
-                else -> {
-                    logger.error("Parsing $whichDoc not supported")
-                    exitProcess(1)
-                }
-            }
-            return
-        }
         val minAmountCfg: String? = cfg.config.lookupString(
             "nexus-fetch",
             "minimum_amount"
@@ -641,6 +618,51 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             ebicsExtraLog,
             minAmount
         )
+        if (parse || import) {
+            logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
+            val maybeStdin = generateSequence(::readLine).joinToString("\n")
+            when(whichDoc) {
+                SupportedDocument.CAMT_054 -> {
+                    try {
+                        val incomingTxs = parseIncomingTxNotif(maybeStdin, cfg.currency)
+                        println(incomingTxs)
+                        if (import) {
+                            runBlocking {
+                                incomingTxs.forEach {
+                                    ingestIncomingPayment(db, ctx, it)
+                                }
+                            }
+                        }
+                    } catch (e: WrongPaymentDirection) {
+                        logger.info("Input doesn't contain incoming payments")
+                    } catch (e: Exception) {
+                        logger.error(e.message)
+                        exitProcess(1)
+                    }
+                    try {
+                        val outgoingTxs = parseOutgoingTxNotif(maybeStdin, cfg.currency)
+                        println(outgoingTxs)
+                        if (import) {
+                            runBlocking {
+                                outgoingTxs.forEach {
+                                    ingestOutgoingPayment(db, it)
+                                }
+                            }
+                        }
+                    } catch (e: WrongPaymentDirection) {
+                        logger.debug("Input doesn't contain outgoing payments")
+                    } catch (e: Exception) {
+                        logger.error(e.message)
+                        exitProcess(1)
+                    }
+                }
+                else -> {
+                    logger.error("Parsing $whichDoc not supported")
+                    exitProcess(1)
+                }
+            }
+            return
+        }
         if (transient) {
             logger.info("Transient mode: fetching once and returning.")
             val pinnedStartVal = pinnedStart
