@@ -142,71 +142,65 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
         })
     }
     install(StatusPages) {
-        /**
-         * This branch triggers when the Ktor layers detect one
-         * invalid request.  It _might_ be thrown by the bank's
-         * actual logic, but that should be avoided because this
-         * (Ktor native) type doesn't easily map to the Taler error
-         * format.
-         */
-        exception<BadRequestException> { call, cause ->
-            /**
-             * NOTE: extracting the root cause helps with JSON error messages,
-             * because they mention the particular way they are invalid, but OTOH
-             * it loses (by getting null) other error messages, like for example
-             * the one from MissingRequestParameterException.  Therefore, in order
-             * to get the most detailed message, we must consider BOTH sides:
-             * the 'cause' AND its root cause!
-             */
-            logger.error(cause.message)
-            var rootCause: Throwable? = cause.cause
-            while (rootCause?.cause != null)
-                rootCause = rootCause.cause
-            /* Here getting _some_ error message, by giving precedence
-             * to the root cause, as otherwise JSON details would be lost. */
-            logger.error(rootCause?.message)
-            // Telling apart invalid JSON vs missing parameter vs invalid parameter.
-            val talerErrorCode = when (cause) {
-                is MissingRequestParameterException ->
-                    TalerErrorCode.GENERIC_PARAMETER_MISSING
-
-                is ParameterConversionException ->
-                    TalerErrorCode.GENERIC_PARAMETER_MALFORMED
-
-                else -> TalerErrorCode.GENERIC_JSON_INVALID
-            }
-            call.err(
-                badRequest(
-                    cause.message,
-                    talerErrorCode,
-                    rootCause?.message
-                )
-            )
-        }
-        exception<LibeufinBankException> { call, cause ->
-            call.err(cause)
-        }
-        exception<SQLException> { call, cause ->
-            when (cause.sqlState) {
-                PSQLState.SERIALIZATION_FAILURE.state -> call.err(
-                    HttpStatusCode.InternalServerError,
-                    "Transaction serialization failure",
-                    TalerErrorCode.BANK_SOFT_EXCEPTION
-                )
-                else -> call.err(
-                    HttpStatusCode.InternalServerError,
-                    "Unexpected sql error with state ${cause.sqlState}",
-                    TalerErrorCode.BANK_UNMANAGED_EXCEPTION
-                )
-            }
-        }
-        // Catch-all branch to mean that the bank wasn't able to manage one error.
         exception<Exception> { call, cause ->
-            call.err(
-                HttpStatusCode.InternalServerError,
-                cause.message,
-                TalerErrorCode.BANK_UNMANAGED_EXCEPTION
-            )
+            when (cause) {
+                is LibeufinBankException -> call.err(cause)
+                is SQLException -> {
+                    when (cause.sqlState) {
+                        PSQLState.SERIALIZATION_FAILURE.state -> call.err(
+                            HttpStatusCode.InternalServerError,
+                            "Transaction serialization failure",
+                            TalerErrorCode.BANK_SOFT_EXCEPTION
+                        )
+                        else -> call.err(
+                            HttpStatusCode.InternalServerError,
+                            "Unexpected sql error with state ${cause.sqlState}",
+                            TalerErrorCode.BANK_UNMANAGED_EXCEPTION
+                        )
+                    }
+                }
+                is BadRequestException -> {
+                    /**
+                     * NOTE: extracting the root cause helps with JSON error messages,
+                     * because they mention the particular way they are invalid, but OTOH
+                     * it loses (by getting null) other error messages, like for example
+                     * the one from MissingRequestParameterException.  Therefore, in order
+                     * to get the most detailed message, we must consider BOTH sides:
+                     * the 'cause' AND its root cause!
+                     */
+                    logger.error(cause.message)
+                    var rootCause: Throwable? = cause.cause
+                    while (rootCause?.cause != null)
+                        rootCause = rootCause.cause
+                    /* Here getting _some_ error message, by giving precedence
+                    * to the root cause, as otherwise JSON details would be lost. */
+                    logger.error(rootCause?.message)
+                    // Telling apart invalid JSON vs missing parameter vs invalid parameter.
+                    val talerErrorCode = when (cause) {
+                        is MissingRequestParameterException ->
+                            TalerErrorCode.GENERIC_PARAMETER_MISSING
+
+                        is ParameterConversionException ->
+                            TalerErrorCode.GENERIC_PARAMETER_MALFORMED
+
+                        else -> TalerErrorCode.GENERIC_JSON_INVALID
+                    }
+                    call.err(
+                        badRequest(
+                            cause.message,
+                            talerErrorCode,
+                            rootCause?.message
+                        )
+                    )
+                }
+                else -> {
+                    call.err(
+                        HttpStatusCode.InternalServerError,
+                        cause.message,
+                        TalerErrorCode.BANK_UNMANAGED_EXCEPTION
+                    )
+                }
+            }
         }
     }
     routing {
