@@ -1,3 +1,9 @@
+libeufin (0.9.3-2) unstable; urgency=medium
+
+  * Improved currency conversion implementation
+
+ -- Florian Dold <dold@taler.net>  Wed, 29 Nov 2023 20:57:55 +0100
+
 libeufin (0.9.3-1) unstable; urgency=medium
 
   * Also package libeufin-nexus
