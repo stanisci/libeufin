@@ -22,7 +22,7 @@ set -eu
 RESET_DB=0
 SKIP_DBINIT=0
 DBUSER="libeufin-nexus"
-DBNAME="libeufinbank"
+DBNAME="libeufin"
 CFGFILE="/etc/libeufin/libeufin-nexus.conf"
 
 # Parse command-line options
