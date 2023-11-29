@@ -57,11 +57,32 @@ fun randBytes(lenght: Int): ByteArray {
 }
 
 class IntegrationTest {
+    val nexusCmd = LibeufinNexusCommand()
+    val bankCmd = LibeufinBankCommand();
+    val client = HttpClient(CIO) {
+        install(HttpRequestRetry) {
+            maxRetries = 10
+            constantDelay(200, 100)
+        }
+    }
+
     @Test
-    fun db() {
-        val nexusCmd = LibeufinNexusCommand()
+    fun mini() {
+        bankCmd.run("dbinit -c conf/mini.conf -r")
+        bankCmd.run("passwd admin password -c conf/mini.conf")
+        kotlin.concurrent.thread(isDaemon = true)  {
+            bankCmd.run("serve -c conf/mini.conf")
+        }
+        
+        runBlocking {
+            // Check bank is running
+            client.get("http://0.0.0.0:8090/public-accounts").assertNoContent()
+        }
+    }
+
+    @Test
+    fun conversion() {
         nexusCmd.run("dbinit -c conf/integration.conf -r")
-        val bankCmd = LibeufinBankCommand();
         bankCmd.run("dbinit -c conf/integration.conf -r")
         bankCmd.run("passwd admin password -c conf/integration.conf")
         val json = obj {
@@ -76,13 +97,6 @@ class IntegrationTest {
         }
         
         runBlocking {
-            val client = HttpClient(CIO) {
-                install(HttpRequestRetry) {
-                    maxRetries = 10
-                    constantDelay(200, 100)
-                }
-            }
-
             val nexusDb = NexusDb("postgresql:///libeufincheck")
             val userPayTo = IbanPayTo(genIbanPaytoUri())
             val fiatPayTo = IbanPayTo(genIbanPaytoUri())
