@@ -69,7 +69,7 @@ fi
 
 if [ 0 = "$SKIP_DBINIT" ]
 then
-    if ! libeufin-bank-dbinit -v 2> /dev/null
+    if ! libeufin-bank-dbinit --help 1> /dev/null # -v not provided
     then
         echo "Required 'libeufin-bank-dbinit' not found. Please fix your installation."
     fi
