@@ -69,7 +69,7 @@ fi
 
 if [ 0 = "$SKIP_DBINIT" ]
 then
-    if ! libeufin-nexus-dbinit --help 2> /dev/null # -v not provided
+    if ! libeufin-nexus-dbinit --help 1> /dev/null # -v not provided
     then
         echo "Required 'libeufin-nexus-dbinit' not found. Please fix your installation."
     fi
