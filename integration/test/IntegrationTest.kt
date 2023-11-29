@@ -60,19 +60,19 @@ class IntegrationTest {
     @Test
     fun db() {
         val nexusCmd = LibeufinNexusCommand()
-        nexusCmd.run("dbinit -c ../bank/conf/test.conf -r")
+        nexusCmd.run("dbinit -c conf/integration.conf -r")
         val bankCmd = LibeufinBankCommand();
-        bankCmd.run("dbinit -c ../bank/conf/test.conf -r")
-        bankCmd.run("passwd admin password -c ../bank/conf/test.conf")
+        bankCmd.run("dbinit -c conf/integration.conf -r")
+        bankCmd.run("passwd admin password -c conf/integration.conf")
         val json = obj {
             "username" to "exchange"
             "password" to "password"
             "name" to "Mr Money"
             "is_taler_exchange" to true
         }
-        bankCmd.run("create-account '$json' -c ../bank/conf/test.conf")
+        bankCmd.run("create-account '$json' -c conf/integration.conf")
         kotlin.concurrent.thread(isDaemon = true)  {
-            bankCmd.run("serve -c ../bank/conf/test.conf")
+            bankCmd.run("serve -c conf/integration.conf")
         }
         
         runBlocking {

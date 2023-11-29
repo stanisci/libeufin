@@ -101,6 +101,12 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
     authAdmin(db, TokenScope.readwrite) {
         post("/conversion-info/conversion-rate") {
             val req = call.receive<ConversionRate>()
+            for (regionalAmount in sequenceOf(req.cashin_fee, req.cashin_tiny_amount, req.cashout_min_amount)) {
+                ctx.checkRegionalCurrency(regionalAmount)
+            }
+            for (fiatAmount in sequenceOf(req.cashout_fee, req.cashout_tiny_amount, req.cashin_min_amount)) {
+                ctx.checkFiatCurrency(fiatAmount)
+            }
             db.conversion.updateConfig(req);
             call.respond(HttpStatusCode.NoContent)
         }
