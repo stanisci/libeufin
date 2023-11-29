@@ -77,6 +77,8 @@ install-nobuild-nexus: install-nobuild-common
 	install -D -t $(sql_dir) database-versioning/libeufin-nexus*.sql
 	install -D -t $(man_dir)/man1 doc/prebuilt/man/libeufin-nexus.1
 	install -D -t $(man_dir)/man5 doc/prebuilt/man/libeufin-nexus.conf.5
+	cp contrib/libeufin-nexus-dbinit -d $(abs_destdir)$(prefix)/bin
+	cp contrib/libeufin-nexus-dbconfig -d $(abs_destdir)$(prefix)/bin
 	rm -f nexus/build/install/nexus-shadow/bin/*.bat
 	cp -r nexus/build/install/nexus-shadow/* -d $(abs_destdir)$(prefix)
 
