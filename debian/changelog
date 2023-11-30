@@ -1,3 +1,10 @@
+libeufin (0.9.3-3) unstable; urgency=medium
+
+  * Proper setup for database sharing needed for currency conversion
+  * Coherent nginx configuration with default libeufin-bank configuration
+
+ -- Christian Grothoff <grothoff@gnu.org>  Wed, 30 Nov 2023 15:47:55 -0600
+
 libeufin (0.9.3-2) unstable; urgency=medium
 
   * Improved currency conversion implementation
