@@ -72,26 +72,15 @@ then
     if ! libeufin-nexus-dbinit --help 1> /dev/null # -v not provided
     then
         echo "Required 'libeufin-nexus-dbinit' not found. Please fix your installation."
+	exit 1
     fi
+    NEXUS_DBINIT=$(which libeufin-nexus-dbinit)
 fi
 
 if ! id "$DBUSER" > /dev/null
 then
     echo "Could not find '$DBUSER' user. Please set it up first"
     exit 1
-fi
-
-if sudo -i -u postgres psql "$DBNAME" < /dev/null 2> /dev/null
-then
-    if [ 1 = "$RESET_DB" ]
-    then
-        echo "Deleting existing database $DBNAME." 1>&2
-        sudo -i -u postgres dropdb "$DBNAME"
-    else
-        echo "Database '$DBNAME' already exists, refusing to setup again."
-        echo "Use -r to delete the existing database first (dangerous!)."
-        exit 77
-    fi
 fi
 
 echo "Setting up database user $DBUSER." 1>&2
@@ -101,13 +90,31 @@ then
     echo "Database user '$DBUSER' already existed. Continuing anyway." 1>&2
 fi
 
-echo "Creating database $DBNAME." 1>&2
-
-if ! sudo -i -u postgres createdb -O "$DBUSER" "$DBNAME"
+if sudo -i -u postgres psql "$DBNAME" < /dev/null 2> /dev/null
 then
-    echo "Failed to create database '$DBNAME'"
-    exit 1
+    if [ 1 = "$RESET_DB" ]
+    then
+        echo "Deleting existing database $DBNAME." 1>&2
+        sudo -i -u postgres dropdb "$DBNAME"
+    else
+        echo "Database '$DBNAME' already exists."
+	if ! echo "GRANT ALL PRIVILEGES ON DATABASE $DBNAME TO \"$DBUSER\"" \
+		| sudo -i -u postgres psql "$DBNAME"
+	then
+	    echo "Failed to grant access to database '$DBNAME' to '$DBUSER'." 1>&2
+	    exit 1
+	fi
+    fi
+else
+    echo "Creating database $DBNAME." 1>&2
+
+    if ! sudo -i -u postgres createdb -O "$DBUSER" "$DBNAME"
+    then
+	echo "Failed to create database '$DBNAME'." 1>&2
+	exit 1
+    fi
 fi
+
 
 if [ -f "$CFGFILE" ]
 then
@@ -124,7 +131,7 @@ fi
 if [ 0 = "$SKIP_DBINIT" ]
 then
     echo "Initializing database $DBNAME." 1>&2
-    sudo -u "$DBUSER" libeufin-nexus-dbinit
+    sudo -u "$DBUSER" "$NEXUS_DBINIT" -c "$CFGFILE"
 fi
 
 echo "Database configuration finished." 1>&2

@@ -1,3 +1,4 @@
 #!/bin/sh
-exec libeufin-bank dbinit "$@"
+DIR=$(dirname $0)
+exec ${DIR}/libeufin-bank dbinit "$@"
 
