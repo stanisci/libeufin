@@ -201,6 +201,8 @@ fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
 	    try {
 	        conn.execSQLUpdate(sqlVersioning)
             } catch (e: SQLException) {}
+	}
+        conn.transaction {
             val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
 
             for (n in 1..9999) {

@@ -104,7 +104,7 @@ then
 	    echo "Failed to grant access to database '$DBNAME' to '$DBUSER'." 1>&2
 	    exit 1
 	fi
-	if ! echo "GRANT ALL PRIVILEGES ON SCHEMA _v TO \"$DBUSER\"" \
+	if ! echo "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA _v TO \"$DBUSER\"" \
 		| sudo -i -u postgres psql "$DBNAME"
 	then
 	    echo "Failed to grant access to schema '_v' to '$DBUSER'. Maybe OK if it does not exist. Will continue." 1>&2
