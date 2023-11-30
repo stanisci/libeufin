@@ -196,9 +196,11 @@ fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
     logger.info("doing DB initialization, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
     pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
         conn.transaction {
+	    // FIXME: evil hack, we should instead simply first check if _v exists!
             val sqlVersioning = File("${cfg.sqlDir}/versioning.sql").readText()
-            conn.execSQLUpdate(sqlVersioning)
-
+	    try {
+	        conn.execSQLUpdate(sqlVersioning)
+            } catch (e: SQLException) {}
             val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
 
             for (n in 1..9999) {
