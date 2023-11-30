@@ -1,4 +1,6 @@
 debian/etc/libeufin/libeufin-bank.conf etc/libeufin/
+debian/etc/nginx/sites-available/libeufin-bank etc/nginx/sites-available/
+debian/etc/apache2/sites-available/libeufin-bank.conf etc/apache2/sites-available/
 debian/etc/libeufin/settings.json etc/libeufin/
 
 usr/bin/libeufin-bank
