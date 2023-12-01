@@ -45,7 +45,9 @@ class AccountDAO(private val db: Database) {
         isPublic: Boolean,
         isTalerExchange: Boolean,
         maxDebt: TalerAmount,
-        bonus: TalerAmount
+        bonus: TalerAmount,
+        // Whether to check [internalPaytoUri] for idempotency
+        checkPaytoIdempotent: Boolean
     ): AccountCreationResult = db.serializable { it ->
         val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank();
         it.transaction { conn ->
@@ -54,7 +56,7 @@ class AccountDAO(private val db: Database) {
                     AND email IS NOT DISTINCT FROM ?
                     AND phone IS NOT DISTINCT FROM ?
                     AND cashout_payto IS NOT DISTINCT FROM ?
-                    AND internal_payto_uri=?
+                    AND (NOT ? OR internal_payto_uri=?)
                     AND is_public=?
                     AND is_taler_exchange=?
                 FROM customers 
@@ -66,10 +68,11 @@ class AccountDAO(private val db: Database) {
                 setString(2, email)
                 setString(3, phone)
                 setString(4, cashoutPayto?.canonical)
-                setString(5, internalPaytoUri.canonical)
-                setBoolean(6, isPublic)
-                setBoolean(7, isTalerExchange)
-                setString(8, login)
+                setBoolean(5, checkPaytoIdempotent)
+                setString(6, internalPaytoUri.canonical)
+                setBoolean(7, isPublic)
+                setBoolean(8, isTalerExchange)
+                setString(9, login)
                 oneOrNull { 
                     CryptoUtil.checkpw(password, it.getString(1)) && it.getBoolean(2)
                 } 

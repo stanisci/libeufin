@@ -165,6 +165,35 @@ class CoreBankAccountsApiTest {
     // Testing the account creation and its idempotency
     @Test
     fun create() = bankSetup { _ -> 
+        // Check generated payto
+        obj {
+            "username" to "john"
+            "password" to "password"
+            "name" to "John"
+        }.let { req ->
+            // Check Ok
+            val payto = client.post("/accounts") {
+                json(req)
+            }.assertOkJson<RegisterAccountResponse>().internal_payto_uri
+            // Check idempotency
+            client.post("/accounts") {
+                json(req)
+            }.assertOk()
+            // Check idempotency with payto
+            client.post("/accounts") {
+                json(req) {
+                    "internal_payto_uri" to payto
+                }
+            }.assertOk()
+            // Check payto conflict
+            client.post("/accounts") {
+                json(req) {
+                    "internal_payto_uri" to genIbanPaytoUri()
+                }
+            }.assertConflict(TalerErrorCode.BANK_REGISTER_USERNAME_REUSE)
+        }
+
+        // Check given payto
         val ibanPayto = genIbanPaytoUri()
         val req = obj {
             "username" to "foo"
@@ -177,19 +206,12 @@ class CoreBankAccountsApiTest {
         // Check Ok
         client.post("/accounts") {
             json(req)
-        }.assertOk()
+        }.assertOkJson<RegisterAccountResponse> {
+            assertEquals(ibanPayto, it.internal_payto_uri)
+        }
         // Testing idempotency
         client.post("/accounts") {
             json(req)
-        }.assertOk()
-
-        // Test generate payto_uri
-        client.post("/accounts") {
-            json {
-                "username" to "jor"
-                "password" to "password"
-                "name" to "Joe"
-            }
         }.assertOk()
 
         // Reserved account

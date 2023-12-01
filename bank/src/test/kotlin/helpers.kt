@@ -77,7 +77,8 @@ fun bankSetup(
             maxDebt = TalerAmount("KUDOS:10"),
             isTalerExchange = false,
             isPublic = false,
-            bonus = bonus
+            bonus = bonus,
+            checkPaytoIdempotent = false
         ))
         assertEquals(AccountCreationResult.Success, db.account.create(
             login = "exchange",
@@ -87,7 +88,8 @@ fun bankSetup(
             maxDebt = TalerAmount("KUDOS:10"),
             isTalerExchange = true,
             isPublic = false,
-            bonus = bonus
+            bonus = bonus,
+            checkPaytoIdempotent = false
         ))
         assertEquals(AccountCreationResult.Success, db.account.create(
             login = "customer",
@@ -97,7 +99,8 @@ fun bankSetup(
             maxDebt = TalerAmount("KUDOS:10"),
             isTalerExchange = false,
             isPublic = false,
-            bonus = bonus
+            bonus = bonus,
+            checkPaytoIdempotent = false
         ))
         // Create admin account
         assertEquals(AccountCreationResult.Success, maybeCreateAdminAccount(db, ctx, "admin-password"))

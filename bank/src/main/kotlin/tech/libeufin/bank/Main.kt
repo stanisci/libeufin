@@ -356,7 +356,8 @@ class CreateAccount : CliktCommand("Create an account", name = "create-account")
                 isTalerExchange = json.is_taler_exchange,
                 maxDebt = ctx.defaultCustomerDebtLimit,
                 bonus = if (!json.is_taler_exchange) ctx.registrationBonus 
-                        else TalerAmount(0, 0, ctx.regionalCurrency)
+                        else TalerAmount(0, 0, ctx.regionalCurrency),
+                checkPaytoIdempotent = json.internal_payto_uri != null
             )
 
             when (result) {

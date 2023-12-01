@@ -159,7 +159,8 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                 isTalerExchange = req.is_taler_exchange,
                 maxDebt = ctx.defaultCustomerDebtLimit,
                 bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
-                        else TalerAmount(0, 0, ctx.regionalCurrency)
+                        else TalerAmount(0, 0, ctx.regionalCurrency),
+                checkPaytoIdempotent = req.internal_payto_uri != null
             )
 
             when (result) {
