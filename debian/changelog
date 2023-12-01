@@ -1,3 +1,9 @@
+libeufin (0.9.3-4) unstable; urgency=medium
+
+  * Avoid conflicting double-initialization of DB versioning by bank and nexus.
+
+ -- Christian Grothoff <grothoff@gnu.org>  Fri, 1 Dec 2023 19:47:55 -0600
+
 libeufin (0.9.3-3) unstable; urgency=medium
 
   * Proper setup for database sharing needed for currency conversion
