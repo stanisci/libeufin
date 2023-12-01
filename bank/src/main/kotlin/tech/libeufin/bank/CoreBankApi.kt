@@ -105,7 +105,6 @@ private fun Routing.coreBankTokenApi(db: Database) {
                             logger.debug("Creating token with days duration: ${tokenDuration.toDays()}")
                             creationTime.plus(tokenDuration)
                         } catch (e: Exception) {
-                            logger.error("Could not add token duration to current time: ${e.message}")
                             throw badRequest("Bad token duration: ${e.message}")
                         }
                     }
@@ -187,11 +186,15 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         requireAdmin = !ctx.allowAccountDeletion
     ) {
         delete("/accounts/{USERNAME}") {
-            // TODO prevent delection if exchange account if conversion is enabled
             // Not deleting reserved names.
             if (RESERVED_ACCOUNTS.contains(username))
                 throw conflict(
                     "Cannot delete reserved accounts",
+                    TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
+                )
+            if (username == "exchange" && ctx.allowConversion)
+                throw conflict(
+                    "Cannot delete 'exchange' accounts when conversion is enabled",
                     TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
                 )
 

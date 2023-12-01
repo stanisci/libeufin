@@ -164,7 +164,7 @@ class CoreBankTokenApiTest {
 class CoreBankAccountsApiTest {
     // Testing the account creation and its idempotency
     @Test
-    fun createAccountTest() = bankSetup { _ -> 
+    fun create() = bankSetup { _ -> 
         val ibanPayto = genIbanPaytoUri()
         val req = obj {
             "username" to "foo"
@@ -222,7 +222,7 @@ class CoreBankAccountsApiTest {
 
     // Test account created with bonus
     @Test
-    fun createAccountBonusTest() = bankSetup(conf = "test_bonus.conf") { _ -> 
+    fun createBonus() = bankSetup(conf = "test_bonus.conf") { _ -> 
         val req = obj {
             "username" to "foo"
             "password" to "xyz"
@@ -255,7 +255,7 @@ class CoreBankAccountsApiTest {
 
     // Test admin-only account creation
     @Test
-    fun createAccountRestrictedTest() = bankSetup(conf = "test_restrict.conf") { _ -> 
+    fun createRestricted() = bankSetup(conf = "test_restrict.conf") { _ -> 
         authRoutine(HttpMethod.Post, "/accounts", requireAdmin = true)
         client.post("/accounts") {
             pwAuth("admin")
@@ -269,7 +269,7 @@ class CoreBankAccountsApiTest {
 
     // DELETE /accounts/USERNAME
     @Test
-    fun deleteAccount() = bankSetup { _ -> 
+    fun delete() = bankSetup { _ -> 
         // Unknown account
         client.delete("/accounts/unknown") {
             pwAuth("admin")
@@ -281,6 +281,8 @@ class CoreBankAccountsApiTest {
                 pwAuth("admin")
             }.assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
         }
+        client.deleteA("/accounts/exchange")
+            .assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
        
         // successful deletion
         client.post("/accounts") {
@@ -301,18 +303,33 @@ class CoreBankAccountsApiTest {
         
         // fail to delete, due to a non-zero balance.
         tx("customer", "KUDOS:1", "merchant")
-        client.delete("/accounts/merchant") {
-            pwAuth("admin")
-        }.assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
+        client.deleteA("/accounts/merchant")
+            .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
         tx("merchant", "KUDOS:1", "customer")
-        client.delete("/accounts/merchant") {
+        client.deleteA("/accounts/merchant")
+            .assertNoContent()
+    }
+
+    // Test admin-only account deletion
+    @Test
+    fun deleteRestricted() = bankSetup(conf = "test_restrict.conf") { _ -> 
+        authRoutine(HttpMethod.Post, "/accounts", requireAdmin = true)
+        // Exchange is still restricted
+        client.delete("/accounts/exchange") {
             pwAuth("admin")
-        }.assertNoContent()
+        }.assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
+    }
+
+    // Test delete exchange account
+    @Test
+    fun deleteNoConversion() = bankSetup(conf = "test_no_conversion.conf") { _ -> 
+        // Exchange is no longer restricted
+        client.deleteA("/accounts/exchange").assertNoContent()
     }
 
     // PATCH /accounts/USERNAME
     @Test
-    fun accountReconfig() = bankSetup { _ -> 
+    fun reconfig() = bankSetup { _ -> 
         authRoutine(HttpMethod.Patch, "/accounts/merchant", withAdmin = true)
 
         // Successful attempt now.
@@ -383,7 +400,7 @@ class CoreBankAccountsApiTest {
 
     // PATCH /accounts/USERNAME/auth
     @Test
-    fun passwordChangeTest() = bankSetup { _ -> 
+    fun passwordChange() = bankSetup { _ -> 
         authRoutine(HttpMethod.Patch, "/accounts/merchant/auth", withAdmin = true)
 
         // Changing the password.
@@ -436,7 +453,7 @@ class CoreBankAccountsApiTest {
 
     // GET /public-accounts and GET /accounts
     @Test
-    fun accountsListTest() = bankSetup { _ -> 
+    fun list() = bankSetup(conf = "test_no_conversion.conf") { _ -> 
         authRoutine(HttpMethod.Get, "/accounts", requireAdmin = true)
         // Remove default accounts
         listOf("merchant", "exchange", "customer").forEach {
@@ -498,7 +515,7 @@ class CoreBankAccountsApiTest {
 
     // GET /accounts/USERNAME
     @Test
-    fun getAccountTest() = bankSetup { _ -> 
+    fun get() = bankSetup { _ -> 
         authRoutine(HttpMethod.Get, "/accounts/merchant", withAdmin = true)
         // Check ok
         client.getA("/accounts/merchant").assertOkJson<AccountData> {
@@ -510,7 +527,7 @@ class CoreBankAccountsApiTest {
 class CoreBankTransactionsApiTest {
     // GET /transactions
     @Test
-    fun testHistory() = bankSetup { _ -> 
+    fun history() = bankSetup { _ -> 
         authRoutine(HttpMethod.Get, "/accounts/merchant/transactions")
         historyRoutine<BankAccountTransactionsResponse>(
             url = "/accounts/customer/transactions",
@@ -1248,7 +1265,7 @@ class CoreBankCashoutApiTest {
     }
 
     @Test
-    fun notImplemented() = bankSetup("test_restrict.conf") { _ ->
+    fun notImplemented() = bankSetup("test_no_conversion.conf") { _ ->
         client.get("/accounts/customer/cashouts")
             .assertNotImplemented()
     }

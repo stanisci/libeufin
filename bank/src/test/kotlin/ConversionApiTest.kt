@@ -124,7 +124,7 @@ class ConversionApiTest {
     }
 
     @Test
-    fun notImplemented() = bankSetup("test_restrict.conf") { _ ->
+    fun notImplemented() = bankSetup("test_no_conversion.conf") { _ ->
         client.get("/conversion-info/cashin-rate")
             .assertNotImplemented()
         client.get("/conversion-info/cashout-rate")

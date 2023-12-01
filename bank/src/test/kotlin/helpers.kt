@@ -375,6 +375,14 @@ inline suspend fun HttpClient.patchA(url: String, builder: HttpRequestBuilder.()
     }
 }
 
+/** Auto auth delete request */
+inline suspend fun HttpClient.deleteA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return delete(url) {
+        pwAuth()
+        builder(this)
+    }
+}
+
 fun HttpRequestBuilder.pwAuth(username: String? = null) {
     if (username != null) {
         basicAuth("$username", "$username-password")
