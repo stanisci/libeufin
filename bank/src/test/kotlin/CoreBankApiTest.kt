@@ -193,7 +193,7 @@ class CoreBankAccountsApiTest {
         }.assertOk()
 
         // Reserved account
-        reservedAccounts.forEach {
+        RESERVED_ACCOUNTS.forEach {
             client.post("/accounts") {
                 json {
                     "username" to it
@@ -276,7 +276,7 @@ class CoreBankAccountsApiTest {
         }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
 
         // Reserved account
-        reservedAccounts.forEach {
+        RESERVED_ACCOUNTS.forEach {
             client.delete("/accounts/$it") {
                 pwAuth("admin")
             }.assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)

@@ -40,7 +40,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.TalerCommon")
-const val MAX_SAFE_INTEGER = 9007199254740991L; // 2^53 - 1
 
 /** 32-byte Crockford's Base32 encoded data */
 @Serializable(with = Base32Crockford32B.Serializer::class)
@@ -389,6 +388,10 @@ data class RelativeTime(
         }
 
         override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+    }
+
+    companion object {
+        private const val MAX_SAFE_INTEGER = 9007199254740991L; // 2^53 - 1
     }
 }
 

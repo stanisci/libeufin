@@ -141,7 +141,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         post("/accounts") {
             val req = call.receive<RegisterAccountRequest>()
             // Prohibit reserved usernames:
-            if (reservedAccounts.contains(req.username))
+            if (RESERVED_ACCOUNTS.contains(req.username))
                 throw conflict(
                     "Username '${req.username}' is reserved.",
                     TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
@@ -187,8 +187,9 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         requireAdmin = !ctx.allowAccountDeletion
     ) {
         delete("/accounts/{USERNAME}") {
+            // TODO prevent delection if exchange account if conversion is enabled
             // Not deleting reserved names.
-            if (reservedAccounts.contains(username))
+            if (RESERVED_ACCOUNTS.contains(username))
                 throw conflict(
                     "Cannot delete reserved accounts",
                     TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
@@ -479,10 +480,6 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
 }
 
 private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
-    val TAN_RETRY_COUNTER: Int = 3;
-    val TAN_VALIDITY_PERIOD: Duration = Duration.ofHours(1)
-    val TAN_RETRANSMISSION_PERIOD: Duration = Duration.ofMinutes(1)
-
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/cashouts") {
             val req = call.receive<CashoutRequest>()

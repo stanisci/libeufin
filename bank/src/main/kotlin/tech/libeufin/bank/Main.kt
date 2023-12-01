@@ -55,10 +55,7 @@ import org.postgresql.util.PSQLState
 import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.*
 
-// GLOBALS
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
-val TOKEN_DEFAULT_DURATION: java.time.Duration = Duration.ofDays(1L)
-private val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB
 
 /**
  * This plugin check for body lenght limit and inflates the requests that have "Content-Encoding: deflate"
@@ -167,13 +164,9 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                      * to get the most detailed message, we must consider BOTH sides:
                      * the 'cause' AND its root cause!
                      */
-                    logger.error(cause.message)
                     var rootCause: Throwable? = cause.cause
                     while (rootCause?.cause != null)
                         rootCause = rootCause.cause
-                    /* Here getting _some_ error message, by giving precedence
-                    * to the root cause, as otherwise JSON details would be lost. */
-                    logger.error(rootCause?.message)
                     // Telling apart invalid JSON vs missing parameter vs invalid parameter.
                     val talerErrorCode = when (cause) {
                         is MissingRequestParameterException ->
@@ -188,6 +181,8 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                         badRequest(
                             cause.message,
                             talerErrorCode,
+                            /* Here getting _some_ error message, by giving precedence
+                            * to the root cause, as otherwise JSON details would be lost. */
                             rootCause?.message
                         )
                     )
@@ -344,7 +339,7 @@ class CreateAccount : CliktCommand("Create an account", name = "create-account")
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
-            if (reservedAccounts.contains(json.username)) {
+            if (RESERVED_ACCOUNTS.contains(json.username)) {
                 throw Exception("Username '${json.username}' is reserved")
             }
 

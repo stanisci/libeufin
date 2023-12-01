@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory
 import tech.libeufin.util.DatabaseConfig
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Config")
-val BANK_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-bank", "libeufin-bank")
 
 /**
  * Application the parsed configuration.
