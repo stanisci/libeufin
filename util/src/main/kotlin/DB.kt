@@ -19,10 +19,6 @@
 
 package tech.libeufin.util
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import net.taler.wallet.crypto.Base32Crockford
 import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.jdbc.PgConnection
 import org.postgresql.util.PSQLState
@@ -191,17 +187,30 @@ fun PreparedStatement.executeProcedureViolation(): Boolean {
     }
 }
 
+/**
+ * Only runs versioning.sql if the _v schema is not found.
+ *
+ * @param conn database connection
+ * @param cfg database configuration
+ */
+fun maybeApplyV(conn: PgConnection, cfg: DatabaseConfig) {
+    conn.transaction {
+        val checkVSchema = conn.prepareStatement(
+            "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '_v'"
+        )
+        if (!checkVSchema.executeQueryCheck()) {
+            logger.debug("_v schema not found, applying versioning.sql")
+            val sqlVersioning = File("${cfg.sqlDir}/versioning.sql").readText()
+            conn.execSQLUpdate(sqlVersioning)
+        }
+    }
+}
+
 // sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
 fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
     logger.info("doing DB initialization, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
     pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
-        conn.transaction {
-	    // FIXME: evil hack, we should instead simply first check if _v exists!
-            val sqlVersioning = File("${cfg.sqlDir}/versioning.sql").readText()
-	    try {
-	        conn.execSQLUpdate(sqlVersioning)
-            } catch (e: SQLException) {}
-	}
+        maybeApplyV(conn, cfg)
         conn.transaction {
             val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
 
