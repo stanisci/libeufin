@@ -339,27 +339,7 @@ class CreateAccount : CliktCommand("Create an account", name = "create-account")
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
-            if (RESERVED_ACCOUNTS.contains(json.username)) {
-                throw Exception("Username '${json.username}' is reserved")
-            }
-
-            val internalPayto = json.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
-            val result = db.account.create(
-                login = json.username,
-                name = json.name,
-                email = json.challenge_contact_data?.email,
-                phone = json.challenge_contact_data?.phone,
-                cashoutPayto = json.cashout_payto_uri,
-                password = json.password,
-                internalPaytoUri = internalPayto,
-                isPublic = json.is_public,
-                isTalerExchange = json.is_taler_exchange,
-                maxDebt = ctx.defaultCustomerDebtLimit,
-                bonus = if (!json.is_taler_exchange) ctx.registrationBonus 
-                        else TalerAmount(0, 0, ctx.regionalCurrency),
-                checkPaytoIdempotent = json.internal_payto_uri != null
-            )
-
+            val (result, internalPayto) = createAccount(db, ctx, json, true);
             when (result) {
                 AccountCreationResult.BonusBalanceInsufficient ->
                     throw Exception("Insufficient admin funds to grant bonus")

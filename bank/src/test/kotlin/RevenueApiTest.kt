@@ -32,7 +32,7 @@ class RevenueApiTest {
     // GET /accounts/{USERNAME}/taler-revenue/history
     @Test
     fun history() = bankSetup {
-        setMaxDebt("exchange", TalerAmount("KUDOS:1000000"))
+        setMaxDebt("exchange", "KUDOS:1000000")
         authRoutine(HttpMethod.Get, "/accounts/merchant/taler-revenue/history")
         historyRoutine<MerchantIncomingHistory>(
             url = "/accounts/merchant/taler-revenue/history",

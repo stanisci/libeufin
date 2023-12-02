@@ -131,7 +131,7 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? =
         internalPaytoUri = IbanPayTo(genIbanPaytoUri()),
         isPublic = false,
         isTalerExchange = false,
-        maxDebt = ctx.defaultAdminDebtLimit,
+        maxDebt = ctx.defaultDebtLimit,
         bonus = TalerAmount(0, 0, ctx.regionalCurrency),
         checkPaytoIdempotent = false
     )

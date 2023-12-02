@@ -103,12 +103,14 @@ class IntegrationTest {
 
             // Create user
             client.post("http://0.0.0.0:8080/accounts") {
+                basicAuth("admin", "password")
                 json {
                     "username" to "customer"
                     "password" to "password"
                     "name" to "JohnSmith"
                     "internal_payto_uri" to userPayTo
                     "cashout_payto_uri" to fiatPayTo
+                    "debit_threshold" to "KUDOS:100"
                     "challenge_contact_data" to obj {
                         "phone" to "+99"
                     }
@@ -129,6 +131,14 @@ class IntegrationTest {
                     "cashout_tiny_amount" to "EUR:0.00000001"
                     "cashout_rounding_mode" to "zero"
                     "cashout_min_amount" to "KUDOS:0.1"
+                }
+            }.assertNoContent()
+
+            // Set admin debit threshold
+            client.patch("http://0.0.0.0:8080/accounts/admin") {
+                basicAuth("admin", "password")
+                json {
+                    "debit_threshold" to "KUDOS:1000"
                 }
             }.assertNoContent()
 

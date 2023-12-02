@@ -135,41 +135,45 @@ private fun Routing.coreBankTokenApi(db: Database) {
     }
 }
 
+suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountRequest, isAdmin: Boolean): Pair<AccountCreationResult, IbanPayTo>  {
+    // Prohibit reserved usernames:
+    if (RESERVED_ACCOUNTS.contains(req.username))
+        throw conflict(
+            "Username '${req.username}' is reserved.",
+            TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
+        )
+
+    if (req.debit_threshold != null && !isAdmin)
+        throw conflict(
+            "only admin account can choose the debit limit",
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+        )
+
+
+    val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
+    val res = db.account.create(
+        login = req.username,
+        name = req.name,
+        email = req.challenge_contact_data?.email,
+        phone = req.challenge_contact_data?.phone,
+        cashoutPayto = req.cashout_payto_uri,
+        password = req.password,
+        internalPaytoUri = internalPayto,
+        isPublic = req.is_public,
+        isTalerExchange = req.is_taler_exchange,
+        maxDebt = req.debit_threshold ?: ctx.defaultDebtLimit,
+        bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
+                else TalerAmount(0, 0, ctx.regionalCurrency),
+        checkPaytoIdempotent = req.internal_payto_uri != null
+    )
+    return Pair(res, internalPayto)
+}
+
 private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     authAdmin(db, TokenScope.readwrite, !ctx.allowRegistration) {
         post("/accounts") {
             val req = call.receive<RegisterAccountRequest>()
-            // Prohibit reserved usernames:
-            if (RESERVED_ACCOUNTS.contains(req.username))
-                throw conflict(
-                    "Username '${req.username}' is reserved.",
-                    TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
-                )
-            
-            if (req.debit_threshold != null && !isAdmin)
-                throw conflict(
-                    "only admin account can choose the debit limit",
-                    TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
-                )
-
-
-            val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
-            val result = db.account.create(
-                login = req.username,
-                name = req.name,
-                email = req.challenge_contact_data?.email,
-                phone = req.challenge_contact_data?.phone,
-                cashoutPayto = req.cashout_payto_uri,
-                password = req.password,
-                internalPaytoUri = internalPayto,
-                isPublic = req.is_public,
-                isTalerExchange = req.is_taler_exchange,
-                maxDebt = req.debit_threshold ?: ctx.defaultCustomerDebtLimit,
-                bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
-                        else TalerAmount(0, 0, ctx.regionalCurrency),
-                checkPaytoIdempotent = req.internal_payto_uri != null
-            )
-
+            val (result, internalPayto) = createAccount(db, ctx, req, isAdmin);
             when (result) {
                 AccountCreationResult.BonusBalanceInsufficient -> throw conflict(
                     "Insufficient admin funds to grant bonus",

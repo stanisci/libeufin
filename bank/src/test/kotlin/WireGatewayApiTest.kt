@@ -50,7 +50,7 @@ class WireGatewayApiTest {
         }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
         // Giving debt allowance and checking the OK case.
-        setMaxDebt("exchange", TalerAmount("KUDOS:1000"))
+        setMaxDebt("exchange", "KUDOS:1000")
         client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
             json(valid_req)
         }.assertOk()
@@ -128,7 +128,7 @@ class WireGatewayApiTest {
     @Test
     fun historyIncoming() = bankSetup { 
         // Give Foo reasonable debt allowance:
-        setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
+        setMaxDebt("merchant", "KUDOS:1000")
         authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/history/incoming")
         historyRoutine<IncomingHistory>(
             url = "/accounts/exchange/taler-wire-gateway/history/incoming",
@@ -166,7 +166,7 @@ class WireGatewayApiTest {
      */
     @Test
     fun historyOutgoing() = bankSetup {
-        setMaxDebt("exchange", TalerAmount("KUDOS:1000000"))
+        setMaxDebt("exchange", "KUDOS:1000000")
         authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/history/outgoing")
         historyRoutine<OutgoingHistory>(
             url = "/accounts/exchange/taler-wire-gateway/history/outgoing",
@@ -211,7 +211,7 @@ class WireGatewayApiTest {
         }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
         // Giving debt allowance and checking the OK case.
-        setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
+        setMaxDebt("merchant", "KUDOS:1000")
         client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             json(valid_req, deflate = true)
         }.assertOk()

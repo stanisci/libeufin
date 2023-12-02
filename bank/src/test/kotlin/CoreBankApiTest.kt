@@ -261,12 +261,14 @@ class CoreBankAccountsApiTest {
 
     // Test account created with bonus
     @Test
-    fun createBonus() = bankSetup(conf = "test_bonus.conf") { _ -> 
+    fun createBonus() = bankSetup(conf = "test_bonus.conf") { _ ->
         val req = obj {
             "username" to "foo"
             "password" to "xyz"
             "name" to "Mallory"
         }
+
+        setMaxDebt("admin", "KUDOS:10000")
 
         // Check ok
         repeat(100) {

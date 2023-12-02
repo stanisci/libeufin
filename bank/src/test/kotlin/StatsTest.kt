@@ -33,9 +33,9 @@ import tech.libeufin.util.*
 class StatsTest {
     @Test
     fun register() = bankSetup { db ->
-        setMaxDebt("merchant", TalerAmount("KUDOS:1000"))
-        setMaxDebt("exchange", TalerAmount("KUDOS:1000"))
-        setMaxDebt("customer", TalerAmount("KUDOS:1000"))
+        setMaxDebt("merchant", "KUDOS:1000")
+        setMaxDebt("exchange", "KUDOS:1000")
+        setMaxDebt("customer", "KUDOS:1000")
 
         suspend fun cashin(amount: String) {
             db.conn { conn ->

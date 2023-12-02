@@ -138,7 +138,7 @@ fun dbSetup(lambda: suspend (Database) -> Unit) {
 /* ----- Common actions ----- */
 
 /** Set [account] debit threshold to [maxDebt] amount */
-suspend fun ApplicationTestBuilder.setMaxDebt(account: String, maxDebt: TalerAmount) {
+suspend fun ApplicationTestBuilder.setMaxDebt(account: String, maxDebt: String) {
     client.patch("/accounts/$account") { 
         pwAuth("admin")
         json { "debit_threshold" to maxDebt }
