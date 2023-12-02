@@ -117,7 +117,8 @@ data class RegisterAccountRequest(
     // Fiat bank account where to send cashout amounts.
     val cashout_payto_uri: IbanPayTo? = null,
     // Bank account internal to Libeufin-Bank.
-    val internal_payto_uri: IbanPayTo? = null
+    val internal_payto_uri: IbanPayTo? = null,
+    val debit_threshold: TalerAmount? = null
 )
 
 @Serializable

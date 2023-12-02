@@ -214,6 +214,23 @@ class CoreBankAccountsApiTest {
             json(req)
         }.assertOk()
 
+        // Check debit_threshold
+        obj {
+            "username" to "bat"
+            "password" to "password"
+            "name" to "Bat"
+            "debit_threshold" to "KUDOS:42"
+        }.let { req ->
+            client.post("/accounts") {
+                json(req)
+            }.assertErr(TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT)
+            client.post("/accounts") {
+                json(req)
+                pwAuth("admin")
+            }.assertOk()
+        }
+        
+
         // Reserved account
         RESERVED_ACCOUNTS.forEach {
             client.post("/accounts") {

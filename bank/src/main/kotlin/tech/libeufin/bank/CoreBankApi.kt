@@ -145,6 +145,13 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     "Username '${req.username}' is reserved.",
                     TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
                 )
+            
+            if (req.debit_threshold != null && !isAdmin)
+                throw conflict(
+                    "only admin account can choose the debit limit",
+                    TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+                )
+
 
             val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
             val result = db.account.create(
@@ -157,7 +164,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                 internalPaytoUri = internalPayto,
                 isPublic = req.is_public,
                 isTalerExchange = req.is_taler_exchange,
-                maxDebt = ctx.defaultCustomerDebtLimit,
+                maxDebt = req.debit_threshold ?: ctx.defaultCustomerDebtLimit,
                 bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
                         else TalerAmount(0, 0, ctx.regionalCurrency),
                 checkPaytoIdempotent = req.internal_payto_uri != null
