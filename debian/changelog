@@ -1,3 +1,9 @@
+libeufin (0.9.3-5) unstable; urgency=medium
+
+  * Add fix for idempotency of account creation.
+
+ -- Christian Grothoff <grothoff@gnu.org>  Sat, 2 Dec 2023 16:13:55 -0600
+
 libeufin (0.9.3-4) unstable; urgency=medium
 
   * Avoid conflicting double-initialization of DB versioning by bank and nexus.
