@@ -435,7 +435,8 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     }
     get("/withdrawals/{withdrawal_id}") {
         val uuid = call.uuidUriComponent("withdrawal_id")
-        val op = db.withdrawal.get(uuid) ?: throw notFound(
+        val params = StatusParams.extract(call.request.queryParameters)
+        val op = db.withdrawal.pollInfo(uuid, params) ?: throw notFound(
             "Withdrawal operation '$uuid' not found", 
             TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
         )

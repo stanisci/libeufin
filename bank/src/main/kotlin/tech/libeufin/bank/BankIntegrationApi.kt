@@ -96,8 +96,6 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
                     confirm_transfer_url = confirmUrl
                 ))
             }
-            // Make IntelliJ happy.
-            else -> throw AssertionError("not reached")
         }
     }
 }

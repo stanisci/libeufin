@@ -762,7 +762,7 @@ class CoreBankWithdrawalApiTest {
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             client.get("/withdrawals/${it.withdrawal_id}") {
                 pwAuth("merchant")
-            }.assertOkJson<BankAccountGetWithdrawalResponse> {
+            }.assertOkJson<WithdrawalPublicInfo> {
                 assert(!it.selection_done)
                 assert(!it.aborted)
                 assert(!it.confirmation_done)
@@ -770,6 +770,9 @@ class CoreBankWithdrawalApiTest {
                 // TODO check all status
             }
         }
+
+        // Check polling
+        statusRoutine<WithdrawalPublicInfo>("/withdrawals") { it.status }
 
         // Check bad UUID
         client.get("/withdrawals/chocolate").assertBadRequest()

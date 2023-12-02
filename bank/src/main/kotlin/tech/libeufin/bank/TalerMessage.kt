@@ -343,19 +343,15 @@ data class BankAccountCreateWithdrawalResponse(
 
 @Serializable
 data class WithdrawalPublicInfo (
-    val username: String
-)
-
-// Taler withdrawal details response // TODO remove
-@Serializable
-data class BankAccountGetWithdrawalResponse(
+    val status: WithdrawalStatus,
     val amount: TalerAmount,
+    val username: String,
+    val selected_reserve_pub: EddsaPublicKey? = null,
+    val selected_exchange_account: String? = null,
+    // TODO remove
     val aborted: Boolean,
     val confirmation_done: Boolean,
     val selection_done: Boolean,
-    val selected_reserve_pub: EddsaPublicKey? = null,
-    val selected_exchange_account: String? = null,
-    val username: String
 )
 
 @Serializable

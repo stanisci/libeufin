@@ -23,6 +23,7 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.client.request.*
 import io.ktor.http.*
+import kotlin.test.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import net.taler.common.errorcodes.TalerErrorCode
@@ -199,4 +200,81 @@ inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
     // backward range:
     history("delta=-10").assertHistory(10)
     history("delta=-10&start=${id-4}").assertHistory(10)
+}
+
+inline suspend fun <reified B> ApplicationTestBuilder.statusRoutine(
+    url: String,
+    crossinline status: (B) -> WithdrawalStatus
+) {
+    val amount = TalerAmount("KUDOS:9.0")
+    client.postA("/accounts/customer/withdrawals") {
+        json { "amount" to amount } 
+    }.assertOkJson<BankAccountCreateWithdrawalResponse> { resp ->
+        val aborted_uuid = resp.taler_withdraw_uri.split("/").last()
+        val confirmed_uuid = client.postA("/accounts/customer/withdrawals") {
+            json { "amount" to amount } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse>()
+            .taler_withdraw_uri.split("/").last()
+
+        // Check no useless polling
+        assertTime(0, 100) {
+            client.get("$url/$confirmed_uuid?long_poll_ms=1000&old_state=selected")
+                .assertOkJson<B> { assertEquals(WithdrawalStatus.pending, status(it)) }
+        }
+
+        // Polling selected
+        coroutineScope {
+            launch {  // Check polling succeed
+                assertTime(100, 200) {
+                    client.get("$url/$confirmed_uuid?long_poll_ms=1000")
+                        .assertOkJson<B> { assertEquals(WithdrawalStatus.selected, status(it)) }
+                }
+            }
+            launch {  // Check polling succeed
+                assertTime(100, 200) {
+                    client.get("$url/$aborted_uuid?long_poll_ms=1000")
+                        .assertOkJson<B> { assertEquals(WithdrawalStatus.selected, status(it)) }
+                }
+            }
+            delay(100)
+            withdrawalSelect(confirmed_uuid)
+            withdrawalSelect(aborted_uuid)
+        }
+       
+        // Polling confirmed
+        coroutineScope {
+            launch {  // Check polling succeed
+                assertTime(100, 200) {
+                    client.get("$url/$confirmed_uuid?long_poll_ms=1000&old_state=selected")
+                        .assertOkJson<B> {  assertEquals(WithdrawalStatus.confirmed, status(it))}
+                }
+            }
+            launch {  // Check polling timeout
+                assertTime(200, 300) {
+                    client.get("$url/$aborted_uuid?long_poll_ms=200&old_state=selected")
+                        .assertOkJson<B> {  assertEquals(WithdrawalStatus.selected, status(it)) }
+                }
+            }
+            delay(100)
+            client.post("/withdrawals/$confirmed_uuid/confirm").assertNoContent()
+        }
+
+        // Polling abort
+        coroutineScope {
+            launch {
+                assertTime(200, 300) {
+                    client.get("$url/$confirmed_uuid?long_poll_ms=200&old_state=confirmed")
+                        .assertOkJson<B> { assertEquals(WithdrawalStatus.confirmed, status(it))}
+                }
+            }
+            launch {
+                assertTime(100, 200) {
+                    client.get("$url/$aborted_uuid?long_poll_ms=1000&old_state=selected")
+                        .assertOkJson<B> { assertEquals(WithdrawalStatus.aborted, status(it)) }
+                }
+            }
+            delay(100)
+            client.post("/withdrawals/$aborted_uuid/abort").assertNoContent()
+        }
+    }
 }
