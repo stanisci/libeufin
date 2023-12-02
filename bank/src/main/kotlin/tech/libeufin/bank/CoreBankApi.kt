@@ -52,7 +52,8 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
                 currency_specification = ctx.regionalCurrencySpec,
                 allow_conversion = ctx.allowConversion,
                 allow_registrations = ctx.allowRegistration,
-                allow_deletions = ctx.allowAccountDeletion
+                allow_deletions = ctx.allowAccountDeletion,
+                default_debit_threshold = ctx.defaultDebtLimit
             )
         )
     }

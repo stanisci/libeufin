@@ -230,7 +230,8 @@ data class Config(
     val currency_specification: CurrencySpecification,
     val allow_conversion: Boolean,
     val allow_registrations: Boolean,
-    val allow_deletions: Boolean
+    val allow_deletions: Boolean,
+    val default_debit_threshold: TalerAmount
 ) {
     val name: String = "libeufin-bank"
     val version: String = "0:0:0"
