@@ -582,8 +582,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         val cfg: EbicsSetupConfig = doOrFail {
             extractEbicsConfig(configFile)
         }
-        // Fail now if keying is incomplete.
-        if (!isKeyingComplete(cfg)) exitProcess(1)
+
         val dbCfg = cfg.config.extractDbConfigOrFail()
         val db = Database(dbCfg.dbConnStr)
 
@@ -657,6 +656,8 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             return
         }
 
+        // Fail now if keying is incomplete.
+        if (!isKeyingComplete(cfg)) exitProcess(1)
         val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
         if (!bankKeys.accepted && !import && !parse) {
             logger.error("Bank keys are not accepted, yet.  Won't fetch any records.")
