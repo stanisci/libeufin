@@ -326,7 +326,10 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     }
 }
 
-class CreateAccount : CliktCommand("Create an account", name = "create-account") {
+class CreateAccount : CliktCommand(
+    "Create an account, returning the payto://-URI associated with it",
+    name = "create-account"
+) {
     private val configFile by option(
         "--config", "-c",
         help = "set the configuration file"
@@ -350,6 +353,7 @@ class CreateAccount : CliktCommand("Create an account", name = "create-account")
                 AccountCreationResult.Success ->
                     logger.info("Account '${json.username}' created")
             }
+            println(internalPayto)
         }
     }
 }
