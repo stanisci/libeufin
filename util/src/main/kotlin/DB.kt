@@ -196,7 +196,7 @@ fun PreparedStatement.executeProcedureViolation(): Boolean {
 fun maybeApplyV(conn: PgConnection, cfg: DatabaseConfig) {
     conn.transaction {
         val checkVSchema = conn.prepareStatement(
-            "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '_v'"
+            "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = '_v' AND tablename  = 'patches')"
         )
         if (!checkVSchema.executeQueryCheck()) {
             logger.debug("_v schema not found, applying versioning.sql")
