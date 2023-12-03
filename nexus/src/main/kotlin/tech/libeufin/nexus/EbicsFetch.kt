@@ -323,11 +323,15 @@ private suspend fun ingestOutgoingPayment(
  * to the subject.
  *
  * @param db database handle.
+ * @param minimumAmount under this amount, payment get stored as
+ *        bounced transactions, but actually never reimbursed.
+ * @param currency fiat currency of the watched bank account.
  * @param incomingPayment payment to (maybe) ingest.
  */
 private suspend fun ingestIncomingPayment(
     db: Database,
-    ctx: FetchContext,
+    minimumAmount: TalerAmount? = null,
+    currency: String,
     incomingPayment: IncomingPayment
 ) {
     logger.debug("Ingesting incoming payment UID: ${incomingPayment.bankTransferId}, subject: ${incomingPayment.wireTransferSubject}")
@@ -336,10 +340,10 @@ private suspend fun ingestIncomingPayment(
         return
     }
     if (
-        ctx.minimumAmount != null &&
+        minimumAmount != null &&
         firstLessThanSecond(
             incomingPayment.amount,
-            ctx.minimumAmount
+            minimumAmount
         )) {
         logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}'" +
                 " is too low: ${incomingPayment.amount}."
@@ -354,7 +358,7 @@ private suspend fun ingestIncomingPayment(
         db.incomingPaymentCreateBounced(
             incomingPayment,
             UUID.randomUUID().toString().take(35),
-            TalerAmount(0, 0, ctx.cfg.currency)
+            TalerAmount(0, 0, currency)
         )
         return
     }
@@ -443,7 +447,12 @@ private fun ingestNotification(
     try {
         runBlocking {
             incomingPayments.forEach {
-                ingestIncomingPayment(db, ctx, it)
+                ingestIncomingPayment(
+                    db,
+                    ctx.minimumAmount,
+                    ctx.cfg.currency,
+                    it
+                )
             }
             outgoingPayments.forEach {
                 ingestOutgoingPayment(db, it)
@@ -577,16 +586,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (!isKeyingComplete(cfg)) exitProcess(1)
         val dbCfg = cfg.config.extractDbConfigOrFail()
         val db = Database(dbCfg.dbConnStr)
-        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
-        if (!bankKeys.accepted && !import && !parse) {
-            logger.error("Bank keys are not accepted, yet.  Won't fetch any records.")
-            exitProcess(1)
-        }
-        val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-        if (clientKeys == null) {
-            logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
-            exitProcess(1)
-        }
 
         // Deciding what to download.
         var whichDoc = SupportedDocument.CAMT_054
@@ -608,16 +607,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 )
             }
         }
-        val ctx = FetchContext(
-            cfg,
-            HttpClient(),
-            clientKeys,
-            bankKeys,
-            whichDoc,
-            EbicsVersion.three,
-            ebicsExtraLog,
-            minAmount
-        )
         if (parse || import) {
             logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
             val maybeStdin = generateSequence(::readLine).joinToString("\n")
@@ -629,7 +618,11 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                         if (import) {
                             runBlocking {
                                 incomingTxs.forEach {
-                                    ingestIncomingPayment(db, ctx, it)
+                                    ingestIncomingPayment(db,
+                                        minAmount,
+                                        cfg.currency,
+                                        it
+                                    )
                                 }
                             }
                         }
@@ -663,6 +656,28 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             }
             return
         }
+
+        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
+        if (!bankKeys.accepted && !import && !parse) {
+            logger.error("Bank keys are not accepted, yet.  Won't fetch any records.")
+            exitProcess(1)
+        }
+        val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
+        if (clientKeys == null) {
+            logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
+            exitProcess(1)
+        }
+
+        val ctx = FetchContext(
+            cfg,
+            HttpClient(),
+            clientKeys,
+            bankKeys,
+            whichDoc,
+            EbicsVersion.three,
+            ebicsExtraLog,
+            minAmount
+        )
         if (transient) {
             logger.info("Transient mode: fetching once and returning.")
             val pinnedStartVal = pinnedStart
