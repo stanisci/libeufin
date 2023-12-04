@@ -213,18 +213,22 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     }
 }
 
-class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = "dbinit") {
-    private val configFile by option(
+class CommonOption: OptionGroup() {
+    val config by option(
         "--config", "-c",
-        help = "set the configuration file"
+        help = "Specifies the configuration file"
     )
+}
+
+class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = "dbinit") {
+    private val common by CommonOption()
     private val requestReset by option(
         "--reset", "-r",
-        help = "reset database (DANGEROUS: All existing data is lost)"
+        help = "Reset database (DANGEROUS: All existing data is lost)"
     ).flag()
 
     override fun run() = cliCmd(logger){
-        val config = talerConfig(configFile)
+        val config = talerConfig(common.config)
         val cfg = config.loadDbConfig()
         if (requestReset) {
             resetDatabaseTables(cfg, sqlFilePrefix = "libeufin-bank")
@@ -248,13 +252,10 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
 }
 
 class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
+    private val common by CommonOption()
 
     override fun run() = cliCmd(logger) {
-        val cfg = talerConfig(configFile)
+        val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig()
         val dbCfg = cfg.loadDbConfig()
         val serverCfg = cfg.loadServerConfig()
@@ -302,15 +303,12 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
 }
 
 class ChangePw : CliktCommand("Change account password", name = "passwd") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
+    private val common by CommonOption()
     private val username by argument("username")
     private val password by argument("password")
 
     override fun run() = cliCmd(logger) {
-        val cfg = talerConfig(configFile)
+        val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
@@ -328,32 +326,41 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
 }
 
 class CreateAccountOption: OptionGroup() {
-    val username: String by option("--username", "-u").required()
-    val password: String by option("--password", "-p").prompt(requireConfirmation = true, hideInput = true)
-    val name: String by option("--name").required()
-    val is_public: Boolean by option("--is_public", "--public").flag()
-    val is_taler_exchange: Boolean by option("--is_taler_exchange", "--exchange").flag()
-    val email: String? by option()
-    val phone: String? by option()
-    val cashout_payto_uri: IbanPayTo? by option().convert { IbanPayTo(it) }
-    val internal_payto_uri: IbanPayTo? by option().convert { IbanPayTo(it) }
-    val debit_threshold: TalerAmount? by option().convert { TalerAmount(it) }
+    val username: String by option(
+        "--username", "-u",
+        help = "Account unique username"
+    ).required()
+    val password: String by option(
+        "--password", "-p",
+        help = "Account password used for authentication"
+    ).prompt(requireConfirmation = true, hideInput = true)
+    val name: String by option(
+        help = "Legal name of the account owner"
+    ).required()
+    val is_public: Boolean by option(
+        "--public",
+        help = "Make this account visible to anyone"
+    ).flag()
+    val exchange: Boolean by option(
+        help = "Make this account a taler exchange"
+    ).flag()
+    val email: String? by option(help = "E-Mail address used for TAN transmission")
+    val phone: String? by option(help = "Phone number used for TAN transmission")
+    val cashout_payto_uri: IbanPayTo? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { IbanPayTo(it) }
+    val internal_payto_uri: IbanPayTo? by option(help = "Payto URI of this account").convert { IbanPayTo(it) }
+    val debit_threshold: TalerAmount? by option(help = "Max debit allowed for this account").convert { TalerAmount(it) }
 }
 
 class CreateAccount : CliktCommand(
     "Create an account, returning the payto://-URI associated with it",
     name = "create-account"
 ) {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
-    
+    private val common by CommonOption()
     private val json by argument().convert { Json.decodeFromString<RegisterAccountRequest>(it) }.optional()
     private val options by CreateAccountOption().cooccurring()
  
     override fun run() = cliCmd(logger) {
-        val cfg = talerConfig(configFile)
+        val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
@@ -364,7 +371,7 @@ class CreateAccount : CliktCommand(
                     password = password,
                     name = name,
                     is_public = is_public,
-                    is_taler_exchange = is_taler_exchange,
+                    is_taler_exchange = exchange,
                     challenge_contact_data = ChallengeContactData(
                         email = email,
                         phone = phone, 
