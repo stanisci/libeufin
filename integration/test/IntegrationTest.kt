@@ -85,13 +85,7 @@ class IntegrationTest {
         nexusCmd.run("dbinit -c conf/integration.conf -r")
         bankCmd.run("dbinit -c conf/integration.conf -r")
         bankCmd.run("passwd admin password -c conf/integration.conf")
-        val json = obj {
-            "username" to "exchange"
-            "password" to "password"
-            "name" to "Mr Money"
-            "is_taler_exchange" to true
-        }
-        bankCmd.run("create-account '$json' -c conf/integration.conf")
+        bankCmd.run("create -c conf/integration.conf -u exchange -p password --name 'Mr Money' --exchange")
         kotlin.concurrent.thread(isDaemon = true)  {
             bankCmd.run("serve -c conf/integration.conf")
         }

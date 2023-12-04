@@ -24,6 +24,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.*
 import com.github.ajalt.clikt.parameters.options.*
+import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.http.content.*
@@ -328,14 +329,71 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
 
 class CreateAccount : CliktCommand(
     "Create an account, returning the payto://-URI associated with it",
-    name = "create-account"
+    name = "create"
 ) {
     private val configFile by option(
         "--config", "-c",
         help = "set the configuration file"
     )
-    private val json: RegisterAccountRequest by argument().convert { Json.decodeFromString<RegisterAccountRequest>(it) }
+    private val username: String by option("--username", "-u").required()
+    private val password: String by option("--password", "-p").prompt(requireConfirmation = true, hideInput = true)
+    private val name: String by option("--name").required()
+    private val is_public: Boolean by option("--is_public", "--public").flag()
+    private val is_taler_exchange: Boolean by option("--is_taler_exchange", "--exchange").flag()
+    private val email: String? by option()
+    private val phone: String? by option()
+    private val cashout_payto_uri: IbanPayTo? by option().convert { IbanPayTo(it) }
+    private val internal_payto_uri: IbanPayTo? by option().convert { IbanPayTo(it) }
+    private val debit_threshold: TalerAmount? by option().convert { TalerAmount(it) }
+ 
+    override fun run() = cliCmd(logger) {
+        val cfg = talerConfig(configFile)
+        val ctx = cfg.loadBankConfig() 
+        val dbCfg = cfg.loadDbConfig()
+        val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
+        runBlocking {
+            val (result, internalPayto) = createAccount(db, ctx, RegisterAccountRequest(
+                username = username,
+                password = password,
+                name = name,
+                is_public = is_public,
+                is_taler_exchange = is_taler_exchange,
+                challenge_contact_data = ChallengeContactData(
+                    email = email,
+                    phone = phone, 
+                ),
+                cashout_payto_uri = cashout_payto_uri,
+                internal_payto_uri = internal_payto_uri,
+                debit_threshold = debit_threshold
+            ), true);
+            when (result) {
+                AccountCreationResult.BonusBalanceInsufficient ->
+                    throw Exception("Insufficient admin funds to grant bonus")
+                AccountCreationResult.LoginReuse ->
+                    throw Exception("Account username reuse '$username'")
+                AccountCreationResult.PayToReuse ->
+                    throw Exception("Bank internalPayToUri reuse '${internalPayto.canonical}'")
+                AccountCreationResult.Success ->
+                    logger.info("Account '$username' created")
+            }
+            println(internalPayto)
+        }
+    }
+}
 
+// TODO remove
+class CreateAccountJson : CliktCommand(
+    "Create an account, returning the payto://-URI associated with it",
+    name = "create-account",
+    hidden = true
+) {
+    private val configFile by option(
+        "--config", "-c",
+        help = "set the configuration file"
+    )
+    
+    private val json: RegisterAccountRequest by argument().convert { Json.decodeFromString<RegisterAccountRequest>(it) }
+ 
     override fun run() = cliCmd(logger) {
         val cfg = talerConfig(configFile)
         val ctx = cfg.loadBankConfig() 
@@ -361,7 +419,7 @@ class CreateAccount : CliktCommand(
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), CreateAccount(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
+        subcommands(ServeBank(), BankDbInit(), CreateAccountJson(), CreateAccount(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
     }
 
     override fun run() = Unit
