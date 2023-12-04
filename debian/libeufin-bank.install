@@ -5,7 +5,6 @@ debian/etc/libeufin/settings.json etc/libeufin/
 
 usr/bin/libeufin-bank
 usr/bin/libeufin-bank-dbinit
-usr/bin/libeufin-bank-dbconfig
 usr/bin/libeufin-tan-*.sh
 
 usr/share/libeufin/sql/libeufin-bank-*.sql

@@ -53,6 +53,7 @@ install-nobuild: install-nobuild-bank install-nobuild-nexus
 install-nobuild-common:
 	install -D -t $(config_dir) contrib/currencies.conf 
 	install -D -t $(sql_dir) database-versioning/versioning.sql 
+	cp contrib/libeufin-dbconfig -d $(abs_destdir)$(prefix)/bin
 
 .PHONY: install-nobuild-bank-files
 install-nobuild-bank-files:
@@ -69,7 +70,6 @@ install-nobuild-bank: install-nobuild-common install-nobuild-bank-files
 	cp -r bank/build/install/bank-shadow/* -d $(abs_destdir)$(prefix)
 	cp -r contrib/libeufin-tan-*.sh -d $(abs_destdir)$(prefix)/bin
 	cp contrib/libeufin-bank-dbinit -d $(abs_destdir)$(prefix)/bin
-	cp contrib/libeufin-bank-dbconfig -d $(abs_destdir)$(prefix)/bin
 
 .PHONY: install-nobuild-nexus
 install-nobuild-nexus: install-nobuild-common
@@ -78,7 +78,6 @@ install-nobuild-nexus: install-nobuild-common
 	install -D -t $(man_dir)/man1 doc/prebuilt/man/libeufin-nexus.1
 	install -D -t $(man_dir)/man5 doc/prebuilt/man/libeufin-nexus.conf.5
 	cp contrib/libeufin-nexus-dbinit -d $(abs_destdir)$(prefix)/bin
-	cp contrib/libeufin-nexus-dbconfig -d $(abs_destdir)$(prefix)/bin
 	rm -f nexus/build/install/nexus-shadow/bin/*.bat
 	cp -r nexus/build/install/nexus-shadow/* -d $(abs_destdir)$(prefix)
 
