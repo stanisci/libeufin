@@ -22,8 +22,6 @@ set -eu
 # 1 is true, 0 is false
 RESET_DB=0
 SKIP_DBINIT=0
-HAS_NEXUS=0
-HAS_BANK=0
 NEXUS_DBUSER="libeufin-nexus"
 BANK_DBUSER="libeufin-bank"
 DBNAME="libeufin"
@@ -35,11 +33,11 @@ while getopts ':hn:b:d:rsu:v:' OPTION; do
     case "$OPTION" in
         h)
             echo 'Supported options:'
-            echo "  -n FILENAME         -- write Nexus configuration to FILENAME (default: $NEXUS_CFGFILE)"
-            echo "  -b FILENAME         -- write Bank configuration to FILENAME (default: $BANK_CFGFILE)"
-            echo "  -d NAME             -- user NAME for database name (default: $DBNAME)"
-            echo "  -r                  -- reset database (dangerous)"
-            echo "  -s                  -- skip database initialization"
+            echo "  -n FILENAME        -- write Nexus configuration to FILENAME (default: $NEXUS_CFGFILE)"
+            echo "  -b FILENAME        -- write Bank configuration to FILENAME (default: $BANK_CFGFILE)"
+            echo "  -d NAME            -- user NAME for database name (default: $DBNAME)"
+            echo "  -r                 -- reset database (dangerous)"
+            echo "  -s                 -- skip database initialization"
             echo "  -u NEXUS_USER      -- libeufin-nexus to be run by USER (default: $NEXUS_DBUSER)"
             echo "  -v BANK_USER       -- libeufin-bank to be run by USER (default: $BANK_DBUSER)"
             exit 0
@@ -67,7 +65,8 @@ while getopts ':hn:b:d:rsu:v:' OPTION; do
             ;;
 
         ?)
-        exit_fail "Unrecognized command line option"
+        echo "Unrecognized command line option"
+        exit 1
         ;;
     esac
 done
@@ -104,11 +103,11 @@ fi
 # Before running the tools, check if the OS users exist.
 if ! id "$NEXUS_DBUSER" > /dev/null
 then
-    echo "Could not find '$NEXUS_DBUSER' user.  Assuming the bank user exists"
+    echo "Could not find '$NEXUS_DBUSER' user.  Cannot continue"
 fi
-if ! id "$BANK_DBUSER" > /dev/null && test "$HAS_NEXUS" = 0
+if ! id "$BANK_DBUSER" > /dev/null
 then
-    echo "Could not find '$BANK_DBUSER' user and $NEXUS_USER neither. Cannot continue"
+    echo "Could not find '$BANK_DBUSER' user. Cannot continue"
     exit 1
 fi
 
@@ -162,7 +161,7 @@ fi
 if [ -f "$BANK_CFGFILE" ]
 then
     echo "Adding database configuration to $BANK_CFGFILE." 1>&2
-    echo -e "[nexus-postgres]\nCONFIG=postgres:///$DBNAME\n" >> "$BANK_CFGFILE"
+    echo -e "[libeufin-bankdb-postgres]\nCONFIG=postgres:///$DBNAME\n" >> "$BANK_CFGFILE"
 else
     echo "Configuration $BANK_CFGFILE does not yet exist, creating it." 1>&2
     mkdir -p "$(dirname "$BANK_CFGFILE")"
@@ -171,53 +170,39 @@ else
     chmod 460 "$BANK_CFGFILE"
 fi
 
-
-# Init Nexus first, because the bank needs its schema to provide
-# the conversion service.
-
 if [ 1 = "$SKIP_DBINIT" ]
 then
     echo "Database configuration finished skipping dbinit." 1>&2
     exit 0
 fi
 
-if [ 0 = "$HAS_NEXUS" ]
+echo "Initializing database $DBNAME." 1>&2
+
+sudo -u "$NEXUS_DBUSER" "$NEXUS_DBINIT" -c "$NEXUS_CFGFILE"
+if ! echo "GRANT ALL PRIVILEGES ON DATABASE $DBNAME TO \"$BANK_DBUSER\"" \
+	| sudo -i -u postgres psql "$DBNAME"
 then
-    echo "Initializing database $DBNAME." 1>&2
-    sudo -u "$NEXUS_DBUSER" "$NEXUS_DBINIT" -c "$NEXUS_CFGFILE"
-    # Bank needs USAGE right on schema _v and libeufin_nexus
-    if [ 0 = "$HAS_BANK" ]
-    then
-        if ! echo "GRANT ALL PRIVILEGES ON DATABASE $DBNAME TO \"$BANK_DBUSER\"" \
-        	| sudo -i -u postgres psql "$DBNAME"
-        then
-            echo "Failed to grant access to database '$DBNAME' to '$BANK_DBUSER'." 1>&2
-            exit 1
-        fi
-        if ! echo "GRANT USAGE ON SCHEMA _v TO \"$BANK_DBUSER\"" \
-        	| sudo -i -u postgres psql "$DBNAME"
-        then
-    	    echo "Failed to grant usage privilege on schema '_v' to '$BANK_DBUSER'." 1>&2
-            exit 1 
-        fi
-        if ! echo "GRANT USAGE ON SCHEMA libeufin_nexus TO \"$BANK_DBUSER\"" \
-                | sudo -i -u postgres psql "$DBNAME"
-        then
-    	    echo "Failed to grant usage privilege on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
-            exit 1 
-	fi
-        if ! echo "GRANT SELECT, INSERT, TRIGGER ON ALL TABLES IN SCHEMA libeufin_nexus TO \"$BANK_DBUSER\""
-                | sudo -i -u postgres psql "$DBNAME"
-        then
-    	    echo "Failed to grant SELECT, INSERT, TRIGGER privileges on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
-            exit 1 
-	fi
-    fi
+    echo "Failed to grant access to database '$DBNAME' to '$BANK_DBUSER'." 1>&2
+    exit 1
+fi
+if ! echo "GRANT USAGE ON SCHEMA _v TO \"$BANK_DBUSER\"" \
+	| sudo -i -u postgres psql "$DBNAME"
+then
+        echo "Failed to grant usage privilege on schema '_v' to '$BANK_DBUSER'." 1>&2
+    exit 1 
+fi
+if ! echo "GRANT USAGE ON SCHEMA libeufin_nexus TO \"$BANK_DBUSER\"" \
+        | sudo -i -u postgres psql "$DBNAME"
+then
+        echo "Failed to grant usage privilege on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
+    exit 1 
+fi
+if ! echo "GRANT SELECT, INSERT, TRIGGER ON ALL TABLES IN SCHEMA libeufin_nexus TO \"$BANK_DBUSER\""
+        | sudo -i -u postgres psql "$DBNAME"
+then
+        echo "Failed to grant SELECT, INSERT, TRIGGER privileges on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
+    exit 1 
 fi
 
-if [ 0 = "$HAS_BANK" ]
-then
-    sudo -u "$BANK_DBUSER" "$BANK_DBINIT" -c "$BANK_CFGFILE"
-fi
+sudo -u "$BANK_DBUSER" "$BANK_DBINIT" -c "$BANK_CFGFILE"
 echo "Database configuration finished." 1>&2
-exit 0
