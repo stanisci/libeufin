@@ -55,7 +55,7 @@ install-nobuild: install-nobuild-bank install-nobuild-nexus
 install-nobuild-common:
 	install -D -t $(config_dir) contrib/currencies.conf 
 	install -D -t $(sql_dir) database-versioning/versioning.sql 
-	cp contrib/libeufin-dbconfig -d $(abs_destdir)$(prefix)/bin
+	install -D -t $(bin_dir) contrib/libeufin-dbconfig
 
 .PHONY: install-nobuild-bank-files
 install-nobuild-bank-files:
@@ -68,6 +68,8 @@ install-nobuild-bank: install-nobuild-common install-nobuild-bank-files
 	install -d $(spa_dir)
 	cp contrib/wallet-core/demobank/* $(spa_dir)/
 	install -d $(abs_destdir)$(prefix)
+	install -d $(bin_dir)
+	install -d $(lib_dir)
 	install -D -t $(bin_dir) contrib/libeufin-tan-*.sh
 	install -D -t $(bin_dir) contrib/libeufin-bank-dbinit
 	install -D -t $(bin_dir) bank/build/install/bank-shadow/bin/libeufin-bank
