@@ -327,72 +327,30 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
     }
 }
 
-class CreateAccount : CliktCommand(
-    "Create an account, returning the payto://-URI associated with it",
-    name = "create"
-) {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
-    private val username: String by option("--username", "-u").required()
-    private val password: String by option("--password", "-p").prompt(requireConfirmation = true, hideInput = true)
-    private val name: String by option("--name").required()
-    private val is_public: Boolean by option("--is_public", "--public").flag()
-    private val is_taler_exchange: Boolean by option("--is_taler_exchange", "--exchange").flag()
-    private val email: String? by option()
-    private val phone: String? by option()
-    private val cashout_payto_uri: IbanPayTo? by option().convert { IbanPayTo(it) }
-    private val internal_payto_uri: IbanPayTo? by option().convert { IbanPayTo(it) }
-    private val debit_threshold: TalerAmount? by option().convert { TalerAmount(it) }
- 
-    override fun run() = cliCmd(logger) {
-        val cfg = talerConfig(configFile)
-        val ctx = cfg.loadBankConfig() 
-        val dbCfg = cfg.loadDbConfig()
-        val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
-        runBlocking {
-            val (result, internalPayto) = createAccount(db, ctx, RegisterAccountRequest(
-                username = username,
-                password = password,
-                name = name,
-                is_public = is_public,
-                is_taler_exchange = is_taler_exchange,
-                challenge_contact_data = ChallengeContactData(
-                    email = email,
-                    phone = phone, 
-                ),
-                cashout_payto_uri = cashout_payto_uri,
-                internal_payto_uri = internal_payto_uri,
-                debit_threshold = debit_threshold
-            ), true);
-            when (result) {
-                AccountCreationResult.BonusBalanceInsufficient ->
-                    throw Exception("Insufficient admin funds to grant bonus")
-                AccountCreationResult.LoginReuse ->
-                    throw Exception("Account username reuse '$username'")
-                AccountCreationResult.PayToReuse ->
-                    throw Exception("Bank internalPayToUri reuse '${internalPayto.canonical}'")
-                AccountCreationResult.Success ->
-                    logger.info("Account '$username' created")
-            }
-            println(internalPayto)
-        }
-    }
+class CreateAccountOption: OptionGroup() {
+    val username: String by option("--username", "-u").required()
+    val password: String by option("--password", "-p").prompt(requireConfirmation = true, hideInput = true)
+    val name: String by option("--name").required()
+    val is_public: Boolean by option("--is_public", "--public").flag()
+    val is_taler_exchange: Boolean by option("--is_taler_exchange", "--exchange").flag()
+    val email: String? by option()
+    val phone: String? by option()
+    val cashout_payto_uri: IbanPayTo? by option().convert { IbanPayTo(it) }
+    val internal_payto_uri: IbanPayTo? by option().convert { IbanPayTo(it) }
+    val debit_threshold: TalerAmount? by option().convert { TalerAmount(it) }
 }
 
-// TODO remove
-class CreateAccountJson : CliktCommand(
+class CreateAccount : CliktCommand(
     "Create an account, returning the payto://-URI associated with it",
-    name = "create-account",
-    hidden = true
+    name = "create-account"
 ) {
     private val configFile by option(
         "--config", "-c",
         help = "set the configuration file"
     )
     
-    private val json: RegisterAccountRequest by argument().convert { Json.decodeFromString<RegisterAccountRequest>(it) }
+    private val json by argument().convert { Json.decodeFromString<RegisterAccountRequest>(it) }.optional()
+    private val options by CreateAccountOption().cooccurring()
  
     override fun run() = cliCmd(logger) {
         val cfg = talerConfig(configFile)
@@ -400,18 +358,36 @@ class CreateAccountJson : CliktCommand(
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
-            val (result, internalPayto) = createAccount(db, ctx, json, true);
-            when (result) {
-                AccountCreationResult.BonusBalanceInsufficient ->
-                    throw Exception("Insufficient admin funds to grant bonus")
-                AccountCreationResult.LoginReuse ->
-                    throw Exception("Account username reuse '${json.username}'")
-                AccountCreationResult.PayToReuse ->
-                    throw Exception("Bank internalPayToUri reuse '${internalPayto.canonical}'")
-                AccountCreationResult.Success ->
-                    logger.info("Account '${json.username}' created")
+            val req = json ?: options?.run {
+                RegisterAccountRequest(
+                    username = username,
+                    password = password,
+                    name = name,
+                    is_public = is_public,
+                    is_taler_exchange = is_taler_exchange,
+                    challenge_contact_data = ChallengeContactData(
+                        email = email,
+                        phone = phone, 
+                    ),
+                    cashout_payto_uri = cashout_payto_uri,
+                    internal_payto_uri = internal_payto_uri,
+                    debit_threshold = debit_threshold
+                ) 
             }
-            println(internalPayto)
+            req?.let {
+                val (result, internalPayto) = createAccount(db, ctx, req, true);
+                when (result) {
+                    AccountCreationResult.BonusBalanceInsufficient ->
+                        throw Exception("Insufficient admin funds to grant bonus")
+                    AccountCreationResult.LoginReuse ->
+                        throw Exception("Account username reuse '${req.username}'")
+                    AccountCreationResult.PayToReuse ->
+                        throw Exception("Bank internalPayToUri reuse '${internalPayto.canonical}'")
+                    AccountCreationResult.Success ->
+                        logger.info("Account '${req.username}' created")
+                }
+                println(internalPayto)
+            }
         }
     }
 }
@@ -419,7 +395,7 @@ class CreateAccountJson : CliktCommand(
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), CreateAccountJson(), CreateAccount(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
+        subcommands(ServeBank(), BankDbInit(), CreateAccount(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
     }
 
     override fun run() = Unit
