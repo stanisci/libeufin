@@ -76,7 +76,7 @@ class IntegrationTest {
         
         runBlocking {
             // Check bank is running
-            client.get("http://0.0.0.0:8090/public-accounts").assertNoContent()
+            client.get("http://0.0.0.0:8080/public-accounts").assertNoContent()
         }
     }
 
@@ -96,7 +96,7 @@ class IntegrationTest {
             val fiatPayTo = IbanPayTo(genIbanPaytoUri())
 
             // Create user
-            client.post("http://0.0.0.0:8080/accounts") {
+            client.post("http://0.0.0.0:8090/accounts") {
                 basicAuth("admin", "password")
                 json {
                     "username" to "customer"
@@ -112,7 +112,7 @@ class IntegrationTest {
             }.assertOkJson<RegisterAccountResponse>()
 
             // Set conversion rates
-            client.post("http://0.0.0.0:8080/conversion-info/conversion-rate") {
+            client.post("http://0.0.0.0:8090/conversion-info/conversion-rate") {
                 basicAuth("admin", "password")
                 json {
                     "cashin_ratio" to "0.8"
@@ -129,7 +129,7 @@ class IntegrationTest {
             }.assertNoContent()
 
             // Set admin debit threshold
-            client.patch("http://0.0.0.0:8080/accounts/admin") {
+            client.patch("http://0.0.0.0:8090/accounts/admin") {
                 basicAuth("admin", "password")
                 json {
                     "debit_threshold" to "KUDOS:1000"
@@ -147,16 +147,16 @@ class IntegrationTest {
                     executionTime = Instant.now(),
                     bankTransferId = "entropic"), 
                 reservePub)
-                val converted = client.get("http://0.0.0.0:8080/conversion-info/cashin-rate?amount_debit=EUR:${20 + i}")
+                val converted = client.get("http://0.0.0.0:8090/conversion-info/cashin-rate?amount_debit=EUR:${20 + i}")
                     .assertOkJson<ConversionResponse>().amount_credit
-                client.get("http://0.0.0.0:8080/accounts/exchange/transactions") {
+                client.get("http://0.0.0.0:8090/accounts/exchange/transactions") {
                     basicAuth("exchange", "password")
                 }.assertOkJson<BankAccountTransactionsResponse> {
                     val tx = it.transactions.first()
                     assertEquals("cashin test $i", tx.subject)
                     assertEquals(converted, tx.amount)
                 }
-                client.get("http://0.0.0.0:8080/accounts/exchange/taler-wire-gateway/history/incoming") {
+                client.get("http://0.0.0.0:8090/accounts/exchange/taler-wire-gateway/history/incoming") {
                     basicAuth("exchange", "password")
                 }.assertOkJson<IncomingHistory> {
                     val tx = it.incoming_transactions.first()
@@ -169,9 +169,9 @@ class IntegrationTest {
             repeat(3) { i ->  
                 val requestUid = randBytes(32);
                 val amount = BankAmount("KUDOS:${10+i}")
-                val convert = client.get("http://0.0.0.0:8080/conversion-info/cashout-rate?amount_debit=$amount")
+                val convert = client.get("http://0.0.0.0:8090/conversion-info/cashout-rate?amount_debit=$amount")
                     .assertOkJson<ConversionResponse>().amount_credit;
-                client.post("http://0.0.0.0:8080/accounts/customer/cashouts") {
+                client.post("http://0.0.0.0:8090/accounts/customer/cashouts") {
                     basicAuth("customer", "password")
                     json {
                         "request_uid" to ShortHashCode(requestUid)
@@ -180,7 +180,7 @@ class IntegrationTest {
                     }
                 }.assertOkJson<CashoutPending> {
                     val code = File("/tmp/tan-+99.txt").readText()
-                    client.post("http://0.0.0.0:8080/accounts/customer/cashouts/${it.cashout_id}/confirm") {
+                    client.post("http://0.0.0.0:8090/accounts/customer/cashouts/${it.cashout_id}/confirm") {
                         basicAuth("customer", "password")
                         json { "tan" to code }
                     }.assertNoContent()
