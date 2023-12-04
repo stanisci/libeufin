@@ -43,6 +43,8 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
     // Withdrawal confirmation flow, the key is the public withdrawal UUID
     private val withdrawalFlow = ConcurrentHashMap<UUID, CountedSharedFlow<WithdrawalStatus>>()
 
+    private val backoff = ExpoBackoffDecorr()
+
     init {
         // Run notification logic in a separated thread
         kotlin.concurrent.thread(isDaemon = true) { 
@@ -56,6 +58,8 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                         conn.execSQLUpdate("LISTEN outgoing_tx")
                         conn.execSQLUpdate("LISTEN incoming_tx")
                         conn.execSQLUpdate("LISTEN withdrawal_status")
+
+                        backoff.reset()
 
                         while (true) {
                             conn.getNotifications(0) // Block until we receive at least one notification
@@ -99,6 +103,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                         }
                     } catch (e: Exception) {
                         logger.warn("notification_watcher failed: $e")
+                        delay(backoff.next())
                     }
                 }
             }
