@@ -13,10 +13,6 @@ FULLVER = $(DEB_VERSION_UPSTREAM)$(DEV)
 %:
 	dh ${@} --no-parallel
 
-clean:
-	rm -rf libeufin-bank-$(FULLVER)
-	rm -rf libeufin-nexus-$(FULLVER)
-
 override_dh_auto_test:
 	true
 
