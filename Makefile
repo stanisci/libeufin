@@ -22,6 +22,8 @@ man_dir=$(abs_destdir)$(prefix)/share/man
 spa_dir=$(abs_destdir)$(prefix)/share/libeufin/spa
 sql_dir=$(abs_destdir)$(prefix)/share/libeufin/sql
 config_dir=$(abs_destdir)$(prefix)/share/libeufin/config.d
+bin_dir=$(abs_destdir)$(prefix)/bin
+lib_dir=$(abs_destdir)$(prefix)/lib
 
 
 # While the gradle command sounds like it's installing something,
@@ -66,10 +68,10 @@ install-nobuild-bank: install-nobuild-common install-nobuild-bank-files
 	install -d $(spa_dir)
 	cp contrib/wallet-core/demobank/* $(spa_dir)/
 	install -d $(abs_destdir)$(prefix)
-	rm -f bank/build/install/bank-shadow/bin/*.bat
-	cp -r bank/build/install/bank-shadow/* -d $(abs_destdir)$(prefix)
-	cp -r contrib/libeufin-tan-*.sh -d $(abs_destdir)$(prefix)/bin
-	cp contrib/libeufin-bank-dbinit -d $(abs_destdir)$(prefix)/bin
+	install -D -t $(bin_dir) contrib/libeufin-tan-*.sh
+	install -D -t $(bin_dir) contrib/libeufin-bank-dbinit
+	install -D -t $(bin_dir) bank/build/install/bank-shadow/bin/libeufin-bank
+	install -D -t $(lib_dir) bank/build/install/bank-shadow/lib/bank-*.jar
 
 .PHONY: install-nobuild-nexus
 install-nobuild-nexus: install-nobuild-common
@@ -77,9 +79,9 @@ install-nobuild-nexus: install-nobuild-common
 	install -D -t $(sql_dir) database-versioning/libeufin-nexus*.sql
 	install -D -t $(man_dir)/man1 doc/prebuilt/man/libeufin-nexus.1
 	install -D -t $(man_dir)/man5 doc/prebuilt/man/libeufin-nexus.conf.5
-	cp contrib/libeufin-nexus-dbinit -d $(abs_destdir)$(prefix)/bin
-	rm -f nexus/build/install/nexus-shadow/bin/*.bat
-	cp -r nexus/build/install/nexus-shadow/* -d $(abs_destdir)$(prefix)
+	install -D -t $(bin_dir) contrib/libeufin-nexus-dbinit
+	install -D -t $(bin_dir) nexus/build/install/nexus-shadow/bin/libeufin-nexus
+	install -D -t $(lib_dir) nexus/build/install/nexus-shadow/lib/nexus-*.jar
 
 .PHONY: install
 install:
