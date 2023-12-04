@@ -197,7 +197,7 @@ then
         echo "Failed to grant usage privilege on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
     exit 1 
 fi
-if ! echo "GRANT SELECT, INSERT, TRIGGER ON ALL TABLES IN SCHEMA libeufin_nexus TO \"$BANK_DBUSER\""
+if ! echo "GRANT SELECT, INSERT, TRIGGER ON ALL TABLES IN SCHEMA libeufin_nexus TO \"$BANK_DBUSER\"" \
         | sudo -i -u postgres psql "$DBNAME"
 then
         echo "Failed to grant SELECT, INSERT, TRIGGER privileges on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
