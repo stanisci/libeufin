@@ -1,0 +1,223 @@
+#!/bin/bash
+# This file is part of GNU TALER.
+# Copyright (C) 2023 Taler Systems SA
+#
+# TALER is free software; you can redistribute it and/or modify it under the
+# terms of the GNU Lesser General Public License as published by the Free Software
+# Foundation; either version 2.1, or (at your option) any later version.
+#
+# TALER is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License along with
+# TALER; see the file COPYING.  If not, see <http://www.gnu.org/licenses/>
+#
+# @author Christian Grothoff
+#
+#
+# Error checking on
+set -eu
+
+# 1 is true, 0 is false
+RESET_DB=0
+SKIP_DBINIT=0
+HAS_NEXUS=0
+HAS_BANK=0
+NEXUS_DBUSER="libeufin-nexus"
+BANK_DBUSER="libeufin-bank"
+DBNAME="libeufin"
+NEXUS_CFGFILE="/etc/libeufin/libeufin-nexus.conf"
+BANK_CFGFILE="/etc/libeufin/libeufin-bank.conf"
+
+# Parse command-line options
+while getopts ':hn:b:d:rsu:v:' OPTION; do
+    case "$OPTION" in
+        h)
+            echo 'Supported options:'
+            echo "  -n FILENAME         -- write Nexus configuration to FILENAME (default: $NEXUS_CFGFILE)"
+            echo "  -b FILENAME         -- write Bank configuration to FILENAME (default: $BANK_CFGFILE)"
+            echo "  -d NAME             -- user NAME for database name (default: $DBNAME)"
+            echo "  -r                  -- reset database (dangerous)"
+            echo "  -s                  -- skip database initialization"
+            echo "  -u NEXUS_USER      -- libeufin-nexus to be run by USER (default: $NEXUS_DBUSER)"
+            echo "  -v BANK_USER       -- libeufin-bank to be run by USER (default: $BANK_DBUSER)"
+            exit 0
+            ;;
+        n)
+            NEXUS_CFGFILE="$OPTARG"
+            ;;
+        b)
+            BANK_CFGFILE="$OPTARG"
+            ;;
+        d)
+            DBNAME="$OPTARG"
+            ;;
+        r)
+            RESET_DB="1"
+            ;;
+        s)
+            SKIP_DBINIT="1"
+            ;;
+        u)
+            NEXUS_DBUSER="$OPTARG"
+            ;;
+        v)
+            BANK_DBUSER="$OPTARG"
+            ;;
+
+        ?)
+        exit_fail "Unrecognized command line option"
+        ;;
+    esac
+done
+
+if ! id postgres > /dev/null
+then
+    echo "Could not find 'postgres' user. Please install Postgresql first"
+    exit 1
+fi
+
+if [ "$(id -u)" -ne 0 ]
+then
+    echo "This script must be run as root"
+    exit 1
+fi
+
+# If dbinit, then check if the tools are available.
+if [ 0 = "$SKIP_DBINIT" ]
+then
+    if ! libeufin-nexus-dbinit --help 1> /dev/null # -v not provided
+    then
+        echo "Required 'libeufin-nexus-dbinit' not found. Please fix your installation."
+	exit 1
+    fi
+    NEXUS_DBINIT=$(which libeufin-nexus-dbinit)
+    if ! libeufin-bank-dbinit --help 1> /dev/null # -v not provided
+    then
+        echo "Required 'libeufin-bank-dbinit' not found. Please fix your installation."
+	exit 1
+    fi
+    BANK_DBINIT=$(which libeufin-bank-dbinit)
+fi
+
+# Before running the tools, check if the OS users exist.
+if ! id "$NEXUS_DBUSER" > /dev/null
+then
+    echo "Could not find '$NEXUS_DBUSER' user.  Assuming the bank user exists"
+fi
+if ! id "$BANK_DBUSER" > /dev/null && test "$HAS_NEXUS" = 0
+then
+    echo "Could not find '$BANK_DBUSER' user and $NEXUS_USER neither. Cannot continue"
+    exit 1
+fi
+
+# Now provide the DB users, whose names match the OS users.
+echo "Setting up database user $NEXUS_DBUSER." 1>&2
+
+if ! sudo -i -u postgres createuser "$NEXUS_DBUSER" 2> /dev/null
+then
+    echo "Database user '$NEXUS_DBUSER' already existed. Continuing anyway." 1>&2
+fi
+echo "Setting up database user $BANK_DBUSER." 1>&2
+
+if ! sudo -i -u postgres createuser "$BANK_DBUSER" 2> /dev/null
+then
+    echo "Database user '$BANK_DBUSER' already existed. Continuing anyway." 1>&2
+fi
+
+if sudo -i -u postgres psql "$DBNAME" < /dev/null 2> /dev/null
+then
+    if [ 0 = "$RESET_DB" ]
+    then
+        echo "$DBNAME exists and no reset, returning." 1>&2
+	exit 0
+    else
+        echo "Deleting existing database $DBNAME." 1>&2
+        sudo -i -u postgres dropdb "$DBNAME"
+    fi
+fi
+
+# either DB didn't exist, or it got reset => making a new one.
+echo "Creating database $DBNAME." 1>&2
+if ! sudo -i -u postgres createdb -O "$NEXUS_DBUSER" "$DBNAME"
+then
+    echo "Failed to create database '$DBNAME'." 1>&2
+    exit 1
+fi
+
+if [ -f "$NEXUS_CFGFILE" ]
+then
+    echo "Adding database configuration to $NEXUS_CFGFILE." 1>&2
+    echo -e "[nexus-postgres]\nCONFIG=postgres:///$DBNAME\n" >> "$NEXUS_CFGFILE"
+else
+    echo "Configuration $NEXUS_CFGFILE does not yet exist, creating it." 1>&2
+    mkdir -p "$(dirname "$NEXUS_CFGFILE")"
+    echo -e "[nexus-postgres]\nCONFIG=postgres:///$DBNAME\n" >> "$NEXUS_CFGFILE"
+    chown "$NEXUS_DBUSER":root "$NEXUS_CFGFILE"
+    chmod 460 "$NEXUS_CFGFILE"
+fi
+
+# Set configuration accordingly.
+if [ -f "$BANK_CFGFILE" ]
+then
+    echo "Adding database configuration to $BANK_CFGFILE." 1>&2
+    echo -e "[nexus-postgres]\nCONFIG=postgres:///$DBNAME\n" >> "$BANK_CFGFILE"
+else
+    echo "Configuration $BANK_CFGFILE does not yet exist, creating it." 1>&2
+    mkdir -p "$(dirname "$BANK_CFGFILE")"
+    echo -e "[libeufin-bankdb-postgres]\nCONFIG=postgres:///$DBNAME\n" >> "$BANK_CFGFILE"
+    chown "$BANK_DBUSER":root "$BANK_CFGFILE"
+    chmod 460 "$BANK_CFGFILE"
+fi
+
+
+# Init Nexus first, because the bank needs its schema to provide
+# the conversion service.
+
+if [ 1 = "$SKIP_DBINIT" ]
+then
+    echo "Database configuration finished skipping dbinit." 1>&2
+    exit 0
+fi
+
+if [ 0 = "$HAS_NEXUS" ]
+then
+    echo "Initializing database $DBNAME." 1>&2
+    sudo -u "$NEXUS_DBUSER" "$NEXUS_DBINIT" -c "$NEXUS_CFGFILE"
+    # Bank needs USAGE right on schema _v and libeufin_nexus
+    if [ 0 = "$HAS_BANK" ]
+    then
+        if ! echo "GRANT ALL PRIVILEGES ON DATABASE $DBNAME TO \"$BANK_DBUSER\"" \
+        	| sudo -i -u postgres psql "$DBNAME"
+        then
+            echo "Failed to grant access to database '$DBNAME' to '$BANK_DBUSER'." 1>&2
+            exit 1
+        fi
+        if ! echo "GRANT USAGE ON SCHEMA _v TO \"$BANK_DBUSER\"" \
+        	| sudo -i -u postgres psql "$DBNAME"
+        then
+    	    echo "Failed to grant usage privilege on schema '_v' to '$BANK_DBUSER'." 1>&2
+            exit 1 
+        fi
+        if ! echo "GRANT USAGE ON SCHEMA libeufin_nexus TO \"$BANK_DBUSER\"" \
+                | sudo -i -u postgres psql "$DBNAME"
+        then
+    	    echo "Failed to grant usage privilege on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
+            exit 1 
+	fi
+        if ! echo "GRANT SELECT, INSERT, TRIGGER ON ALL TABLES IN SCHEMA libeufin_nexus TO \"$BANK_DBUSER\""
+                | sudo -i -u postgres psql "$DBNAME"
+        then
+    	    echo "Failed to grant SELECT, INSERT, TRIGGER privileges on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
+            exit 1 
+	fi
+    fi
+fi
+
+if [ 0 = "$HAS_BANK" ]
+then
+    sudo -u "$BANK_DBUSER" "$BANK_DBINIT" -c "$BANK_CFGFILE"
+fi
+echo "Database configuration finished." 1>&2
+exit 0
