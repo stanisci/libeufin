@@ -96,11 +96,15 @@ class BankIntegrationApiTest {
             // Check OK
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 json(req)
-            }.assertOk()
+            }.assertOkJson<BankWithdrawalOperationPostResponse> {
+                assertEquals(WithdrawalStatus.selected, it.status)
+            }
             // Check idempotence
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 json(req)
-            }.assertOk()
+            }.assertOkJson<BankWithdrawalOperationPostResponse> {
+                assertEquals(WithdrawalStatus.selected, it.status)
+            }
             // Check already selected
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 json(req) {
