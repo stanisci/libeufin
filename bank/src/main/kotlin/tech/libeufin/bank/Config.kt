@@ -50,9 +50,8 @@ data class BankConfig(
     val allowConversion: Boolean,
     val fiatCurrency: String?,
     val fiatCurrencySpec: CurrencySpecification?,
-    val tanSms: String?,
-    val tanEmail: String?,
-    val spaPath: String?
+    val spaPath: String?,
+    val tanChannels: Map<TanChannel, String> 
 )
 
 @Serializable
@@ -104,6 +103,13 @@ fun TalerConfig.loadBankConfig(): BankConfig  {
         fiatCurrency = requireString("libeufin-bank", "fiat_currency");
         fiatCurrencySpec = currencySpecificationFor(fiatCurrency) 
     }
+    val tanChannels = buildMap {
+        for (channel in TanChannel.entries) {
+            lookupPath("libeufin-bank", "tan_$channel")?.notEmptyOrNull()?.let {
+                put(channel, it)
+            }
+        }
+    }
     return BankConfig(
         regionalCurrency = regionalCurrency,
         regionalCurrencySpec =  currencySpecificationFor(regionalCurrency),
@@ -117,8 +123,7 @@ fun TalerConfig.loadBankConfig(): BankConfig  {
         allowConversion = allowConversion,
         fiatCurrency = fiatCurrency,
         fiatCurrencySpec = fiatCurrencySpec,
-        tanSms = lookupPath("libeufin-bank", "tan_sms")?.notEmptyOrNull(),
-        tanEmail = lookupPath("libeufin-bank", "tan_email")?.notEmptyOrNull(),
+        tanChannels = tanChannels
     )
 }
 

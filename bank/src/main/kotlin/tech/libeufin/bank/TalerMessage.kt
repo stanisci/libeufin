@@ -231,10 +231,11 @@ data class Config(
     val allow_conversion: Boolean,
     val allow_registrations: Boolean,
     val allow_deletions: Boolean,
-    val default_debit_threshold: TalerAmount
+    val default_debit_threshold: TalerAmount,
+    val supported_tan_channels: Set<TanChannel>
 ) {
     val name: String = "libeufin-bank"
-    val version: String = "0:0:0"
+    val version: String = COREBANK_API_VERSION
 }
 
 @Serializable
@@ -246,7 +247,7 @@ data class ConversionConfig(
     val conversion_rate: ConversionRate
 ) {
     val name: String = "taler-conversion-info"
-    val version: String = "0:0:0"
+    val version: String = CONVERSION_API_VERSION
 }
 
 @Serializable
@@ -255,7 +256,7 @@ data class TalerIntegrationConfigResponse(
     val currency_specification: CurrencySpecification
 ) {
     val name: String = "taler-bank-integration";
-    val version: String = "1:0:1";
+    val version: String = INTEGRATION_API_VERSION;
 }
 
 enum class CreditDebitInfo {
@@ -487,7 +488,7 @@ data class AddIncomingResponse(
 @Serializable
 data class TWGConfigResponse(
     val name: String = "taler-wire-gateway",
-    val version: String = "0:0:0",
+    val version: String = WIRE_GATEWAY_API_VERSION,
     val currency: String
 )
 

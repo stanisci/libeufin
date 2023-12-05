@@ -53,7 +53,8 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
                 allow_conversion = ctx.allowConversion,
                 allow_registrations = ctx.allowRegistration,
                 allow_deletions = ctx.allowAccountDeletion,
-                default_debit_threshold = ctx.defaultDebtLimit
+                default_debit_threshold = ctx.defaultDebtLimit,
+                supported_tan_channels = ctx.tanChannels.keys
             )
         )
     }
@@ -508,10 +509,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
             ctx.checkFiatCurrency(req.amount_credit)
 
             val tanChannel = req.tan_channel ?: TanChannel.sms
-            val tanScript = when (tanChannel) {
-                TanChannel.sms -> ctx.tanSms
-                TanChannel.email -> ctx.tanEmail
-            } ?: throw libeufinError( 
+            val tanScript = ctx.tanChannels.get(tanChannel) ?: throw libeufinError( 
                 HttpStatusCode.NotImplemented,
                 "Unsupported tan channel $tanChannel",
                 TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED
