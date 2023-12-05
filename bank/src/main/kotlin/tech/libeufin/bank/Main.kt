@@ -347,7 +347,7 @@ class EditAccount : CliktCommand(
         help = "Legal name of the account owner"
     )
     private val exchange: Boolean? by option(
-        help = "Make this account a taler exchange"
+        help = "Is this account a taler exchange"
     ).boolean()
     private val email: String? by option(help = "E-Mail address used for TAN transmission")
     private val phone: String? by option(help = "Phone number used for TAN transmission")
