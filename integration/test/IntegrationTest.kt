@@ -85,6 +85,7 @@ class IntegrationTest {
         nexusCmd.run("dbinit -c conf/integration.conf -r")
         bankCmd.run("dbinit -c conf/integration.conf -r")
         bankCmd.run("passwd admin password -c conf/integration.conf")
+        bankCmd.run("edit-account admin --debit_threshold KUDOS:1000 -c conf/integration.conf")
         bankCmd.run("create-account -c conf/integration.conf -u exchange -p password --name 'Mr Money' --exchange")
         kotlin.concurrent.thread(isDaemon = true)  {
             bankCmd.run("serve -c conf/integration.conf")
@@ -125,14 +126,6 @@ class IntegrationTest {
                     "cashout_tiny_amount" to "EUR:0.00000001"
                     "cashout_rounding_mode" to "zero"
                     "cashout_min_amount" to "KUDOS:0.1"
-                }
-            }.assertNoContent()
-
-            // Set admin debit threshold
-            client.patch("http://0.0.0.0:8090/accounts/admin") {
-                basicAuth("admin", "password")
-                json {
-                    "debit_threshold" to "KUDOS:1000"
                 }
             }.assertNoContent()
 

@@ -170,6 +170,27 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
     return Pair(res, internalPayto)
 }
 
+suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfiguration, username: String, isAdmin: Boolean): AccountPatchResult {
+    req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
+
+    if ((req.is_taler_exchange ?: false) == true && username == "admin")
+        throw conflict(
+            "admin account cannot be an exchange",
+            TalerErrorCode.BANK_PATCH_ADMIN_EXCHANGE
+        )
+
+    return db.account.reconfig(
+        login = username,
+        name = req.name,
+        cashoutPayto = req.cashout_payto_uri,
+        emailAddress = req.challenge_contact_data?.email,
+        isTalerExchange = req.is_taler_exchange,
+        phoneNumber = req.challenge_contact_data?.phone,
+        debtLimit = req.debit_threshold,
+        isAdmin = isAdmin
+    )
+}
+
 private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     authAdmin(db, TokenScope.readwrite, !ctx.allowRegistration) {
         post("/accounts") {
@@ -227,25 +248,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readwrite, allowAdmin = true) {
         patch("/accounts/{USERNAME}") {
             val req = call.receive<AccountReconfiguration>()
-            req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
-
-            if ((req.is_taler_exchange ?: false) == true && username == "admin")
-                throw conflict(
-                    "admin account cannot be an exchange",
-                    TalerErrorCode.BANK_PATCH_ADMIN_EXCHANGE
-                )
-
-            val res = db.account.reconfig(
-                login = username,
-                name = req.name,
-                cashoutPayto = req.cashout_payto_uri,
-                emailAddress = req.challenge_contact_data?.email,
-                isTalerExchange = req.is_taler_exchange,
-                phoneNumber = req.challenge_contact_data?.phone,
-                debtLimit = req.debit_threshold,
-                isAdmin = isAdmin
-            )
-            when (res) {
+            when (patchAccount(db, ctx, req, username, isAdmin)) {
                 AccountPatchResult.Success -> call.respond(HttpStatusCode.NoContent)
                 AccountPatchResult.UnknownAccount -> throw notFound(
                     "Account '$username' not found",

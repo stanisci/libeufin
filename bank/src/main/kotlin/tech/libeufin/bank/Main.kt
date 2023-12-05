@@ -22,6 +22,7 @@ package tech.libeufin.bank
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.parameters.types.*
 import com.github.ajalt.clikt.parameters.arguments.*
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
@@ -217,7 +218,11 @@ class CommonOption: OptionGroup() {
     val config by option(
         "--config", "-c",
         help = "Specifies the configuration file"
-    )
+    ).path(
+        mustExist = true, 
+        canBeDir = false, 
+        mustBeReadable = true,
+    ).convert { it.toString() } // TODO take path to load config
 }
 
 class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = "dbinit") {
@@ -304,8 +309,11 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
 
 class ChangePw : CliktCommand("Change account password", name = "passwd") {
     private val common by CommonOption()
-    private val username by argument("username")
-    private val password by argument("password")
+    private val username by argument("username", help = "Account username")
+    private val password by argument(
+        "password", 
+        help = "Account password used for authentication"
+    )
 
     override fun run() = cliCmd(logger) {
         val cfg = talerConfig(common.config)
@@ -320,6 +328,57 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
                 AccountPatchAuthResult.OldPasswordMismatch -> { /* Can never happen */ }
                 AccountPatchAuthResult.Success ->
                     logger.info("Password change for '$username' account succeeded")
+            }
+        }
+    }
+}
+
+
+class EditAccount : CliktCommand(
+    "Edit an existing account",
+    name = "edit-account"
+) {
+    private val common by CommonOption()
+    private val username: String by argument(
+        "username",
+        help = "Account username"
+    )
+    private val name: String? by option(
+        help = "Legal name of the account owner"
+    )
+    private val exchange: Boolean? by option(
+        help = "Make this account a taler exchange"
+    ).boolean()
+    private val email: String? by option(help = "E-Mail address used for TAN transmission")
+    private val phone: String? by option(help = "Phone number used for TAN transmission")
+    private val cashout_payto_uri: IbanPayTo? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { IbanPayTo(it) }
+    private val debit_threshold: TalerAmount? by option(help = "Max debit allowed for this account").convert { TalerAmount(it) }
+ 
+    override fun run() = cliCmd(logger) {
+        val cfg = talerConfig(common.config)
+        val ctx = cfg.loadBankConfig() 
+        val dbCfg = cfg.loadDbConfig()
+        val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
+        runBlocking {
+            val req = AccountReconfiguration(
+                name = name,
+                is_taler_exchange = exchange,
+                challenge_contact_data = ChallengeContactData(
+                    email = email,
+                    phone = phone, 
+                ),
+                cashout_payto_uri = cashout_payto_uri,
+                debit_threshold = debit_threshold
+            )
+            when (patchAccount(db, ctx, req, username, true)) {
+                AccountPatchResult.Success -> 
+                    logger.info("Account '$username' edited")
+                AccountPatchResult.UnknownAccount -> 
+                    throw Exception("Account '$username' not found")
+                AccountPatchResult.NonAdminLegalName -> 
+                    throw Exception("non-admin user cannot change their legal name")
+                AccountPatchResult.NonAdminDebtLimit -> 
+                    throw Exception("non-admin user cannot change their debt limit")
             }
         }
     }
@@ -402,7 +461,7 @@ class CreateAccount : CliktCommand(
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), CreateAccount(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
+        subcommands(ServeBank(), BankDbInit(), CreateAccount(), EditAccount(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
     }
 
     override fun run() = Unit
