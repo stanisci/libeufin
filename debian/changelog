@@ -1,3 +1,10 @@
+libeufin (0.9.3-7) unstable; urgency=low
+
+  * Improvements to account creation.
+  * Return more configuration data in /config.
+
+ -- Christian Grothoff <grothoff@gnu.org>  Thu, 7 Dec 2023 00:50:12 -0800
+
 libeufin (0.9.3-6) unstable; urgency=medium
 
   * Add CLI for account creation, minor bugfixes.
