@@ -14,6 +14,7 @@ This files contains all the API changes for the current release:
 - GET /accounts: add payto_uri, is_public and is_taler_exchange
 - GET /accounts/USERNAME: add is_public and is_taler_exchange
 - GET /public-accounts: add is_taler_exchange and rename account_name to username
+- PATCH /accounts: fix PATCH semantic
 
 ## bank cli
 

@@ -187,6 +187,23 @@ fun PreparedStatement.executeProcedureViolation(): Boolean {
     }
 }
 
+// TODO comment
+fun PgConnection.dynamicUpdate(
+    table: String, 
+    fields: Sequence<String>, 
+    filter: String,
+    bind: Sequence<Any?>, 
+) {
+    val sql = fields.joinToString()
+    if (sql.isEmpty()) return
+    prepareStatement("UPDATE $table SET $sql $filter").run {
+        for ((idx, value) in bind.withIndex()) {
+            setObject(idx+1, value)
+        }
+        executeUpdate()
+    }
+}
+
 /**
  * Only runs versioning.sql if the _v schema is not found.
  *

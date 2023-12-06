@@ -206,53 +206,90 @@ class AccountDAO(private val db: Database) {
     suspend fun reconfig(
         login: String,
         name: String?,
-        cashoutPayto: IbanPayTo?,
-        phoneNumber: String?,
-        emailAddress: String?,
+        cashoutPayto: Option<IbanPayTo?>,
+        phone: Option<String?>,
+        email: Option<String?>,
         isPublic: Boolean?,
         debtLimit: TalerAmount?,
         isAdmin: Boolean,
         allowEditName: Boolean,
         allowEditCashout: Boolean,
-    ): AccountPatchResult = db.serializable { conn ->
-        println("$name $cashoutPayto $allowEditName $allowEditCashout")
-        val stmt = conn.prepareStatement("""
+    ): AccountPatchResult = db.serializable { it.transaction { conn ->
+        val checkName = !isAdmin && !allowEditName && name != null
+        val checkCashout = !isAdmin && !allowEditCashout && cashoutPayto.isSome()
+        val checkDebtLimit = !isAdmin && debtLimit != null
+
+        // Get user ID and check reconfig rights
+        val customer_id = conn.prepareStatement("""
             SELECT
-                out_not_found,
-                out_name_change,
-                out_cashout_change,
-                out_debt_limit_change
-            FROM account_reconfig(?, ?, ?, ?, ?, ?, (?, ?)::taler_amount, ?, ?, ?)
-        """)
-        stmt.setString(1, login)
-        stmt.setString(2, name)
-        stmt.setString(3, phoneNumber)
-        stmt.setString(4, emailAddress)
-        stmt.setString(5, cashoutPayto?.canonical)
-        if (isPublic == null)
-            stmt.setNull(6, Types.NULL)
-        else stmt.setBoolean(6, isPublic)
-        if (debtLimit == null) {
-            stmt.setNull(7, Types.NULL)
-            stmt.setNull(8, Types.NULL)
-        } else {
-            stmt.setLong(7, debtLimit.value)
-            stmt.setInt(8, debtLimit.frac)
-        }
-        stmt.setBoolean(9, isAdmin)
-        stmt.setBoolean(10, allowEditName)
-        stmt.setBoolean(11, allowEditCashout)
-        stmt.executeQuery().use {
-            when {
-                !it.next() -> throw internalServerError("accountReconfig() returned nothing")
-                it.getBoolean("out_not_found") -> AccountPatchResult.UnknownAccount
-                it.getBoolean("out_name_change") -> AccountPatchResult.NonAdminName
-                it.getBoolean("out_cashout_change") -> AccountPatchResult.NonAdminCashout
-                it.getBoolean("out_debt_limit_change") -> AccountPatchResult.NonAdminDebtLimit
-                else -> AccountPatchResult.Success
+                customer_id
+                ,(${ if (checkName) "name != ? " else "false" }) as name_change
+                ,(${ if (checkCashout) "cashout_payto IS DISTINCT FROM ?" else "false" }) as cashout_change
+                ,(${ if (checkDebtLimit) "max_debt != (?, ?)::taler_amount" else "false" }) as debt_limit_change
+            FROM customers
+                JOIN bank_accounts 
+                ON customer_id=owning_customer_id
+            WHERE login=?
+        """).run {
+            var idx = 1;
+            if (checkName) {
+                setString(idx, name); idx++
+            }
+            if (checkCashout) {
+                setString(idx, cashoutPayto.get()?.canonical); idx++
+            }
+            if (checkDebtLimit) {
+                setLong(idx, debtLimit!!.value); idx++
+                setInt(idx, debtLimit.frac); idx++
+            }
+            setString(idx, login)
+            executeQuery().use {
+                when {
+                    !it.next() -> return@transaction AccountPatchResult.UnknownAccount
+                    it.getBoolean("name_change") -> return@transaction AccountPatchResult.NonAdminName
+                    it.getBoolean("cashout_change") -> return@transaction AccountPatchResult.NonAdminCashout
+                    it.getBoolean("debt_limit_change") -> return@transaction AccountPatchResult.NonAdminDebtLimit
+                    else -> it.getLong("customer_id")
+                }
             }
         }
-    }
+
+        // Update bank info
+        conn.dynamicUpdate(
+            "bank_accounts",
+            sequence {
+                if (isPublic != null) yield("is_public=?")
+                if (debtLimit != null) yield("max_debt=(?, ?)::taler_amount")
+            },
+            "WHERE owning_customer_id = ?",
+            sequence {
+                isPublic?.let { yield(it) }
+                debtLimit?.let { yield(it.value); yield(it.frac) }
+                yield(customer_id)
+            }
+        )
+
+        // Update customer info
+        conn.dynamicUpdate(
+            "customers",
+            sequence {
+                cashoutPayto.some { yield("cashout_payto=?") }
+                phone.some { yield("phone=?") }
+                email.some { yield("email=?") }
+                name?.let { yield("name=?") }
+            },
+            "WHERE customer_id = ?",
+            sequence {
+                cashoutPayto.some { yield(it?.canonical) }
+                phone.some { yield(it) }
+                email.some { yield(it) }
+                name?.let { yield(it) }
+                yield(customer_id)
+            }
+        )
+
+        AccountPatchResult.Success
+    }}
 
 
     /** Result status of customer account auth patch */
@@ -357,8 +394,8 @@ class AccountDAO(private val db: Database) {
             AccountData(
                 name = it.getString("name"),
                 contact_data = ChallengeContactData(
-                    email = it.getString("email"),
-                    phone = it.getString("phone")
+                    email = Option.Some(it.getString("email")),
+                    phone = Option.Some(it.getString("phone"))
                 ),
                 cashout_payto_uri = it.getString("cashout_payto"),
                 payto_uri = it.getString("internal_payto_uri"),

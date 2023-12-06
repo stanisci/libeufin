@@ -117,63 +117,6 @@ END IF;
 END $$;
 COMMENT ON FUNCTION account_balance_is_sufficient IS 'Check if an account have enough fund to transfer an amount.';
 
-CREATE OR REPLACE FUNCTION account_reconfig(
-  IN in_login TEXT,
-  IN in_name TEXT,
-  IN in_phone TEXT,
-  IN in_email TEXT,
-  IN in_cashout_payto TEXT,
-  IN in_is_public BOOLEAN,
-  IN in_max_debt taler_amount,
-  IN in_is_admin BOOLEAN,
-  IN in_allow_name BOOLEAN,
-  IN in_allow_cashout BOOLEAN,
-  OUT out_not_found BOOLEAN,
-  OUT out_name_change BOOLEAN,
-  OUT out_cashout_change BOOLEAN,
-  OUT out_debt_limit_change BOOLEAN
-)
-LANGUAGE plpgsql AS $$
-DECLARE
-my_customer_id INT8;
-BEGIN
-IF (in_max_debt.val IS NULL) THEN
-  in_max_debt = NULL;
-END IF;
--- Get user ID and check reconfig rights
-SELECT
-  customer_id,
-  in_name IS NOT NULL AND name != in_name AND NOT in_is_admin AND NOT in_allow_name,
-  cashout_payto IS DISTINCT FROM in_cashout_payto AND NOT in_is_admin AND NOT in_allow_cashout,
-  in_max_debt IS NOT NULL AND max_debt != in_max_debt AND NOT in_is_admin
-  INTO my_customer_id, out_name_change, out_cashout_change, out_debt_limit_change
-  FROM customers
-    JOIN bank_accounts 
-    ON customer_id=owning_customer_id
-  WHERE login=in_login;
-IF NOT FOUND THEN
-  out_not_found=TRUE;
-  RETURN;
-ELSIF out_name_change OR out_cashout_change OR out_debt_limit_change THEN
-  RETURN;
-END IF;
-
--- Update bank info
-UPDATE bank_accounts SET 
-  is_public = COALESCE(in_is_public, is_public),
-  max_debt = COALESCE(in_max_debt, max_debt)
-WHERE owning_customer_id = my_customer_id;
--- Update customer info
-UPDATE customers SET
-  cashout_payto=in_cashout_payto,
-  phone=in_phone,
-  email=in_email,
-  name = COALESCE(in_name, name)
-WHERE customer_id = my_customer_id;
-END $$;
-COMMENT ON FUNCTION account_reconfig
-  IS 'Updates values on customer and bank account rows based on the input data.';
-
 CREATE OR REPLACE FUNCTION customer_delete(
   IN in_login TEXT,
   OUT out_nx_customer BOOLEAN,

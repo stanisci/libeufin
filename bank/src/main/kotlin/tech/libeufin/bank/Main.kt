@@ -135,7 +135,6 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
             @OptIn(ExperimentalSerializationApi::class)
             explicitNulls = false
             encodeDefaults = true
-            prettyPrint = true
             ignoreUnknownKeys = true
         })
     }
@@ -369,10 +368,11 @@ class EditAccount : CliktCommand(
                 is_taler_exchange = exchange,
                 is_public = is_public,
                 contact_data = ChallengeContactData(
-                    email = email,
-                    phone = phone, 
+                    // PATCH semantic, if not given do not change, if empty remove
+                    email = if (email == null) Option.None else Option.Some(if (email != "") email else null),
+                    phone = if (phone == null) Option.None else Option.Some(if (phone != "") phone else null), 
                 ),
-                cashout_payto_uri = cashout_payto_uri,
+                cashout_payto_uri = Option.Some(cashout_payto_uri),
                 debit_threshold = debit_threshold
             )
             when (patchAccount(db, ctx, req, username, true)) {
@@ -445,8 +445,8 @@ class CreateAccount : CliktCommand(
                     is_public = is_public,
                     is_taler_exchange = exchange,
                     contact_data = ChallengeContactData(
-                        email = email,
-                        phone = phone, 
+                        email = Option.Some(email),
+                        phone = Option.Some(phone), 
                     ),
                     cashout_payto_uri = cashout_payto_uri,
                     internal_payto_uri = internal_payto_uri,

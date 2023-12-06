@@ -21,7 +21,7 @@ package tech.libeufin.bank
 
 import io.ktor.http.*
 import io.ktor.server.application.*
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.*
 import net.taler.wallet.crypto.Base32Crockford
 import net.taler.wallet.crypto.EncodingException
 import java.time.Duration
@@ -72,6 +72,45 @@ enum class Timeframe {
     year
 }
 
+@Serializable(with = Option.Serializer::class)
+sealed class Option<out T> {
+    object None : Option<Nothing>()
+    data class Some<T>(val value: T) : Option<T>()
+
+    fun get(): T? {
+        return when (this) {
+            Option.None -> null
+            is Option.Some -> this.value
+        }
+    }
+
+    inline fun some(lambda: (T) -> Unit) {
+        if (this is Option.Some) {
+            lambda(value)
+        }
+    }
+
+    fun isSome(): Boolean = this is Option.Some
+
+    @OptIn(ExperimentalSerializationApi::class)
+    internal class Serializer<T> (
+        private val valueSerializer: KSerializer<T>
+    ) : KSerializer<Option<T>> {
+        override val descriptor: SerialDescriptor = valueSerializer.descriptor
+
+        override fun serialize(encoder: Encoder, value: Option<T>) {
+            when (value) {
+                Option.None -> encoder.encodeNull()
+                is Option.Some -> valueSerializer.serialize(encoder, value.value)
+            }
+        }
+
+        override fun deserialize(decoder: Decoder): Option<T> {
+            return Option.Some(valueSerializer.deserialize(decoder))
+        }
+    }
+}
+
 /**
  * HTTP response type of successful token refresh.
  * access_token is the Crockford encoding of the 32 byte
@@ -89,14 +128,14 @@ data class TokenSuccessResponse(
 * users, to let them complete cashout operations. */
 @Serializable
 data class ChallengeContactData(
-    val email: String? = null,
-    val phone: String? = null
+    val email: Option<String?> = Option.None,
+    val phone: Option<String?> = Option.None
 ) {
     init {
-        if (email != null && !EMAIL_PATTERN.matches(email))
+        if (email.get()?.let { !EMAIL_PATTERN.matches(it) } ?: false)
             throw badRequest("email contact data '$email' is malformed")
 
-        if (phone != null && !PHONE_PATTERN.matches(phone))
+        if (phone.get()?.let { !PHONE_PATTERN.matches(it) } ?: false)
             throw badRequest("phone contact data '$phone' is malformed")
     }
     companion object {
@@ -133,7 +172,7 @@ data class RegisterAccountResponse(
 @Serializable
 data class AccountReconfiguration(
     val contact_data: ChallengeContactData? = null,
-    val cashout_payto_uri: IbanPayTo? = null,
+    val cashout_payto_uri: Option<IbanPayTo?> = Option.None,
     val name: String? = null,
     val is_public: Boolean? = null,
     val debit_threshold: TalerAmount? = null,

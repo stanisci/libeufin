@@ -419,8 +419,22 @@ class CoreBankAccountsApiTest {
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
             assertEquals("Roger", obj.name)
             assertEquals(cashout.canonical, obj.cashout_payto_uri)
-            assertEquals("+99", obj.contact_data?.phone)
-            assertEquals("foo@example.com", obj.contact_data?.email)
+            assertEquals("+99", obj.contact_data?.phone?.get())
+            assertEquals("foo@example.com", obj.contact_data?.email?.get())
+            assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
+            assert(obj.is_public)
+            assert(!obj.is_taler_exchange)
+        }
+
+        // Check keep values when there is no changes
+        client.patchA("/accounts/merchant") {
+            json { }
+        }.assertNoContent()
+        client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
+            assertEquals("Roger", obj.name)
+            assertEquals(cashout.canonical, obj.cashout_payto_uri)
+            assertEquals("+99", obj.contact_data?.phone?.get())
+            assertEquals("foo@example.com", obj.contact_data?.email?.get())
             assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
             assert(obj.is_public)
             assert(!obj.is_taler_exchange)
@@ -430,6 +444,7 @@ class CoreBankAccountsApiTest {
     // Test admin-only account patch
     @Test
     fun patchRestricted() = bankSetup(conf = "test_restrict.conf") { _ -> 
+        // Check restricted
         checkAdminOnly(
             obj { "name" to "Another Foo" },
             TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
@@ -438,6 +453,16 @@ class CoreBankAccountsApiTest {
             obj { "cashout_payto_uri" to genIbanPaytoUri() },
             TalerErrorCode.BANK_NON_ADMIN_PATCH_CASHOUT
         )
+        // Check idempotent
+        client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
+            client.patchA("/accounts/merchant") {
+                json {
+                    "name" to obj.name
+                    "cashout_payto_uri" to obj.cashout_payto_uri
+                    "debit_threshold" to obj.debit_threshold
+                }
+            }.assertNoContent()
+        }
     }
 
     // PATCH /accounts/USERNAME/auth
