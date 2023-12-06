@@ -368,6 +368,18 @@ class CoreBankAccountsApiTest {
         client.deleteA("/accounts/exchange").assertNoContent()
     }
 
+    suspend fun ApplicationTestBuilder.checkAdminOnly(req: JsonElement, error: TalerErrorCode) {
+        // Checking ordinary user doesn't get to patch
+        client.patchA("/accounts/merchant") {
+            json(req)
+        }.assertConflict(error)
+        // Finally checking that admin does get to patch
+        client.patch("/accounts/merchant") {
+            pwAuth("admin")
+            json(req)
+        }.assertNoContent()
+    }
+
     // PATCH /accounts/USERNAME
     @Test
     fun reconfig() = bankSetup { _ -> 
@@ -377,11 +389,12 @@ class CoreBankAccountsApiTest {
         val cashout = IbanPayTo(genIbanPaytoUri())
         val req = obj {
             "cashout_payto_uri" to cashout.canonical
-            "challenge_contact_data" to obj {
+            "contact_data" to obj {
                 "phone" to "+99"
                 "email" to "foo@example.com"
             }
-            "is_taler_exchange" to true 
+            "name" to "Roger"
+            "is_public" to true 
         }
         client.patchA("/accounts/merchant") {
             json(req)
@@ -390,36 +403,11 @@ class CoreBankAccountsApiTest {
         client.patchA("/accounts/merchant") {
             json(req)
         }.assertNoContent()
-
-        suspend fun checkAdminOnly(req: JsonElement, error: TalerErrorCode) {
-            // Checking ordinary user doesn't get to patch
-            client.patchA("/accounts/merchant") {
-                json(req)
-            }.assertConflict(error)
-            // Finally checking that admin does get to patch
-            client.patch("/accounts/merchant") {
-                pwAuth("admin")
-                json(req)
-            }.assertNoContent()
-        }
-
-        checkAdminOnly(
-            obj(req) { "name" to "Another Foo" },
-            TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
-        )
+        
         checkAdminOnly(
             obj(req) { "debit_threshold" to "KUDOS:100" },
             TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
         )
-
-        // Check admin account cannot be exchange
-        client.patchA("/accounts/admin") {
-            json { "is_taler_exchange" to true }
-        }.assertConflict(TalerErrorCode.BANK_PATCH_ADMIN_EXCHANGE)
-        // But we can change its debt limit
-        client.patchA("/accounts/admin") {
-            json { "debit_threshold" to "KUDOS:100" }
-        }.assertNoContent()
         
         // Check currency
         client.patch("/accounts/merchant") {
@@ -428,15 +416,28 @@ class CoreBankAccountsApiTest {
         }.assertBadRequest()
 
         // Check patch
-        client.get("/accounts/merchant") {
-            pwAuth("admin")
-        }.assertOkJson<AccountData> { obj ->
-            assertEquals("Another Foo", obj.name)
+        client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
+            assertEquals("Roger", obj.name)
             assertEquals(cashout.canonical, obj.cashout_payto_uri)
             assertEquals("+99", obj.contact_data?.phone)
             assertEquals("foo@example.com", obj.contact_data?.email)
             assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
+            assert(obj.is_public)
+            assert(!obj.is_taler_exchange)
         }
+    }
+
+    // Test admin-only account patch
+    @Test
+    fun patchRestricted() = bankSetup(conf = "test_restrict.conf") { _ -> 
+        checkAdminOnly(
+            obj { "name" to "Another Foo" },
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
+        )
+        checkAdminOnly(
+            obj { "cashout_payto_uri" to genIbanPaytoUri() },
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_CASHOUT
+        )
     }
 
     // PATCH /accounts/USERNAME/auth
@@ -936,7 +937,7 @@ class CoreBankCashoutApiTest {
         }.assertConflict(TalerErrorCode.BANK_MISSING_TAN_INFO)
         client.patchA("/accounts/customer") {
             json {
-                "challenge_contact_data" to obj {
+                "contact_data" to obj {
                     "phone" to "+99"
                     "email" to "foo@example.com"
                 }
@@ -1007,7 +1008,7 @@ class CoreBankCashoutApiTest {
 
     // POST /accounts/{USERNAME}/cashouts
     @Test
-    fun create_no_tan() = bankSetup("test_no_tan.conf") { _ ->
+    fun createNoTan() = bankSetup("test_no_tan.conf") { _ ->
         val req = obj {
             "request_uid" to randShortHashCode()
             "amount_debit" to "KUDOS:1"
@@ -1093,7 +1094,7 @@ class CoreBankCashoutApiTest {
 
         client.patchA("/accounts/customer") {
             json {
-                "challenge_contact_data" to obj {
+                "contact_data" to obj {
                     "phone" to "+99"
                 }
             }

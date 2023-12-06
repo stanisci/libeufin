@@ -196,7 +196,8 @@ class AccountDAO(private val db: Database) {
     /** Result status of customer account patch */
     enum class AccountPatchResult {
         UnknownAccount,
-        NonAdminLegalName,
+        NonAdminName,
+        NonAdminCashout,
         NonAdminDebtLimit,
         Success
     }
@@ -208,25 +209,29 @@ class AccountDAO(private val db: Database) {
         cashoutPayto: IbanPayTo?,
         phoneNumber: String?,
         emailAddress: String?,
-        isTalerExchange: Boolean?,
+        isPublic: Boolean?,
         debtLimit: TalerAmount?,
-        isAdmin: Boolean
+        isAdmin: Boolean,
+        allowEditName: Boolean,
+        allowEditCashout: Boolean,
     ): AccountPatchResult = db.serializable { conn ->
+        println("$name $cashoutPayto $allowEditName $allowEditCashout")
         val stmt = conn.prepareStatement("""
             SELECT
                 out_not_found,
-                out_legal_name_change,
+                out_name_change,
+                out_cashout_change,
                 out_debt_limit_change
-            FROM account_reconfig(?, ?, ?, ?, ?, ?, (?, ?)::taler_amount, ?)
+            FROM account_reconfig(?, ?, ?, ?, ?, ?, (?, ?)::taler_amount, ?, ?, ?)
         """)
         stmt.setString(1, login)
         stmt.setString(2, name)
         stmt.setString(3, phoneNumber)
         stmt.setString(4, emailAddress)
         stmt.setString(5, cashoutPayto?.canonical)
-        if (isTalerExchange == null)
+        if (isPublic == null)
             stmt.setNull(6, Types.NULL)
-        else stmt.setBoolean(6, isTalerExchange)
+        else stmt.setBoolean(6, isPublic)
         if (debtLimit == null) {
             stmt.setNull(7, Types.NULL)
             stmt.setNull(8, Types.NULL)
@@ -235,11 +240,14 @@ class AccountDAO(private val db: Database) {
             stmt.setInt(8, debtLimit.frac)
         }
         stmt.setBoolean(9, isAdmin)
+        stmt.setBoolean(10, allowEditName)
+        stmt.setBoolean(11, allowEditCashout)
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw internalServerError("accountReconfig() returned nothing")
                 it.getBoolean("out_not_found") -> AccountPatchResult.UnknownAccount
-                it.getBoolean("out_legal_name_change") -> AccountPatchResult.NonAdminLegalName
+                it.getBoolean("out_name_change") -> AccountPatchResult.NonAdminName
+                it.getBoolean("out_cashout_change") -> AccountPatchResult.NonAdminCashout
                 it.getBoolean("out_debt_limit_change") -> AccountPatchResult.NonAdminDebtLimit
                 else -> AccountPatchResult.Success
             }
@@ -337,6 +345,8 @@ class AccountDAO(private val db: Database) {
                 ,has_debt
                 ,(max_debt).val AS max_debt_val
                 ,(max_debt).frac AS max_debt_frac
+                ,is_public
+                ,is_taler_exchange
             FROM customers 
                 JOIN  bank_accounts
                     ON customer_id=owning_customer_id
@@ -362,6 +372,8 @@ class AccountDAO(private val db: Database) {
                         }
                 ),
                 debit_threshold = it.getAmount("max_debt", db.bankCurrency),
+                is_public = it.getBoolean("is_public"),
+                is_taler_exchange = it.getBoolean("is_taler_exchange")
             )
         }
     }
@@ -377,7 +389,8 @@ class AccountDAO(private val db: Database) {
               (balance).frac AS balance_frac,
               has_debt,
               internal_payto_uri,
-              c.login      
+              c.login
+              ,is_taler_exchange
               FROM bank_accounts JOIN customers AS c
                 ON owning_customer_id = c.customer_id
                 WHERE is_public=true AND c.login LIKE ? AND
@@ -388,6 +401,7 @@ class AccountDAO(private val db: Database) {
             }
         ) {
             PublicAccount(
+                username = it.getString("login"),
                 account_name = it.getString("login"),
                 payto_uri = it.getString("internal_payto_uri"),
                 balance = Balance(
@@ -397,7 +411,8 @@ class AccountDAO(private val db: Database) {
                     } else {
                         CreditDebitInfo.credit
                     }
-                )
+                ),
+                is_taler_exchange = it.getBoolean("is_taler_exchange")
             )
         }
 
@@ -415,6 +430,9 @@ class AccountDAO(private val db: Database) {
             (b).has_debt AS balance_has_debt,
             (max_debt).val as max_debt_val,
             (max_debt).frac as max_debt_frac
+            ,is_public
+            ,is_taler_exchange
+            ,internal_payto_uri
             FROM customers JOIN bank_accounts AS b
               ON customer_id = b.owning_customer_id
             WHERE name LIKE ? AND
@@ -436,6 +454,9 @@ class AccountDAO(private val db: Database) {
                     }
                 ),
                 debit_threshold = it.getAmount("max_debt", db.bankCurrency),
+                is_public = it.getBoolean("is_public"),
+                is_taler_exchange = it.getBoolean("is_taler_exchange"),
+                payto_uri = it.getString("internal_payto_uri"),
             )
         }
 }

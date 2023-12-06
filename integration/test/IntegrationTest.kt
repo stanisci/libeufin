@@ -106,7 +106,7 @@ class IntegrationTest {
                     "internal_payto_uri" to userPayTo
                     "cashout_payto_uri" to fiatPayTo
                     "debit_threshold" to "KUDOS:100"
-                    "challenge_contact_data" to obj {
+                    "contact_data" to obj {
                         "phone" to "+99"
                     }
                 }

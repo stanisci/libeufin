@@ -236,7 +236,7 @@ suspend fun ApplicationTestBuilder.fillCashoutInfo(account: String) {
     client.patchA("/accounts/$account") {
         json {
             "cashout_payto_uri" to unknownPayto
-            "challenge_contact_data" to obj {
+            "contact_data" to obj {
                 "phone" to "+99"
             }
         }

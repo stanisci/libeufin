@@ -113,12 +113,13 @@ data class RegisterAccountRequest(
     val name: String,
     val is_public: Boolean = false,
     val is_taler_exchange: Boolean = false,
-    val challenge_contact_data: ChallengeContactData? = null,
-    // Fiat bank account where to send cashout amounts.
+    val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: IbanPayTo? = null,
-    // Bank account internal to Libeufin-Bank.
+    val payto_uri: IbanPayTo? = null,
+    val debit_threshold: TalerAmount? = null,
+    // TODO remove
     val internal_payto_uri: IbanPayTo? = null,
-    val debit_threshold: TalerAmount? = null
+    val challenge_contact_data: ChallengeContactData? = null,
 )
 
 @Serializable
@@ -131,11 +132,14 @@ data class RegisterAccountResponse(
  */
 @Serializable
 data class AccountReconfiguration(
-    val challenge_contact_data: ChallengeContactData?,
-    val cashout_payto_uri: IbanPayTo?,
-    val name: String?,
-    val is_taler_exchange: Boolean?,
-    val debit_threshold: TalerAmount?
+    val contact_data: ChallengeContactData? = null,
+    val cashout_payto_uri: IbanPayTo? = null,
+    val name: String? = null,
+    val is_public: Boolean? = null,
+    val debit_threshold: TalerAmount? = null,
+    // TODO remove
+    val challenge_contact_data: ChallengeContactData? = null,
+    val is_taler_exchange: Boolean? = null,
 )
 
 /**
@@ -231,6 +235,8 @@ data class Config(
     val allow_conversion: Boolean,
     val allow_registrations: Boolean,
     val allow_deletions: Boolean,
+    val allow_edit_name: Boolean,
+    val allow_edit_cashout_payto_uri: Boolean,
     val default_debit_threshold: TalerAmount,
     val supported_tan_channels: Set<TanChannel>
 ) {
@@ -276,8 +282,11 @@ data class Balance(
 data class AccountMinimalData(
     val username: String,
     val name: String,
+    val payto_uri: String,
     val balance: Balance,
-    val debit_threshold: TalerAmount
+    val debit_threshold: TalerAmount,
+    val is_public: Boolean,
+    val is_taler_exchange: Boolean
 )
 
 /**
@@ -299,6 +308,8 @@ data class AccountData(
     val debit_threshold: TalerAmount,
     val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: String? = null,
+    val is_public: Boolean,
+    val is_taler_exchange: Boolean
 )
 
 @Serializable
@@ -586,8 +597,11 @@ data class PublicAccountsResponse(
  */
 @Serializable
 data class PublicAccount(
+    val username: String,
     val payto_uri: String,
     val balance: Balance,
+    val is_taler_exchange: Boolean,
+    // TODO remove
     val account_name: String
 )
 

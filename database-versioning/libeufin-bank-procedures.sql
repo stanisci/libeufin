@@ -123,11 +123,14 @@ CREATE OR REPLACE FUNCTION account_reconfig(
   IN in_phone TEXT,
   IN in_email TEXT,
   IN in_cashout_payto TEXT,
-  IN in_is_taler_exchange BOOLEAN,
+  IN in_is_public BOOLEAN,
   IN in_max_debt taler_amount,
   IN in_is_admin BOOLEAN,
+  IN in_allow_name BOOLEAN,
+  IN in_allow_cashout BOOLEAN,
   OUT out_not_found BOOLEAN,
-  OUT out_legal_name_change BOOLEAN,
+  OUT out_name_change BOOLEAN,
+  OUT out_cashout_change BOOLEAN,
   OUT out_debt_limit_change BOOLEAN
 )
 LANGUAGE plpgsql AS $$
@@ -140,9 +143,10 @@ END IF;
 -- Get user ID and check reconfig rights
 SELECT
   customer_id,
-  in_name IS NOT NULL AND name != in_name AND NOT in_is_admin,
+  in_name IS NOT NULL AND name != in_name AND NOT in_is_admin AND NOT in_allow_name,
+  cashout_payto IS DISTINCT FROM in_cashout_payto AND NOT in_is_admin AND NOT in_allow_cashout,
   in_max_debt IS NOT NULL AND max_debt != in_max_debt AND NOT in_is_admin
-  INTO my_customer_id, out_legal_name_change, out_debt_limit_change
+  INTO my_customer_id, out_name_change, out_cashout_change, out_debt_limit_change
   FROM customers
     JOIN bank_accounts 
     ON customer_id=owning_customer_id
@@ -150,13 +154,13 @@ SELECT
 IF NOT FOUND THEN
   out_not_found=TRUE;
   RETURN;
-ELSIF out_legal_name_change OR out_debt_limit_change THEN
+ELSIF out_name_change OR out_cashout_change OR out_debt_limit_change THEN
   RETURN;
 END IF;
 
 -- Update bank info
 UPDATE bank_accounts SET 
-  is_taler_exchange = COALESCE(in_is_taler_exchange, is_taler_exchange),
+  is_public = COALESCE(in_is_public, is_public),
   max_debt = COALESCE(in_max_debt, max_debt)
 WHERE owning_customer_id = my_customer_id;
 -- Update customer info

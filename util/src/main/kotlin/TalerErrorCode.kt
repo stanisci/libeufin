@@ -3474,6 +3474,14 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
+   * A non-admin user has tried to change their cashout account.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_NON_ADMIN_PATCH_CASHOUT(5140),
+
+
+  /**
    * The sync service failed find the account in its database.
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).

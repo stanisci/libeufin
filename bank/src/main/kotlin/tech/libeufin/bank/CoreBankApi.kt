@@ -54,7 +54,9 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
                 allow_registrations = ctx.allowRegistration,
                 allow_deletions = ctx.allowAccountDeletion,
                 default_debit_threshold = ctx.defaultDebtLimit,
-                supported_tan_channels = ctx.tanChannels.keys
+                supported_tan_channels = ctx.tanChannels.keys,
+                allow_edit_name = ctx.allowEditName,
+                allow_edit_cashout_payto_uri = ctx.allowEditCashout
             )
         )
     }
@@ -152,12 +154,13 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
         )
 
 
-    val internalPayto = req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
+    val internalPayto = req.payto_uri ?: req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
+    val contactData = req.contact_data ?: req.challenge_contact_data
     val res = db.account.create(
         login = req.username,
         name = req.name,
-        email = req.challenge_contact_data?.email,
-        phone = req.challenge_contact_data?.phone,
+        email = contactData?.email,
+        phone = contactData?.phone,
         cashoutPayto = req.cashout_payto_uri,
         password = req.password,
         internalPaytoUri = internalPayto,
@@ -173,22 +176,19 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
 
 suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfiguration, username: String, isAdmin: Boolean): AccountPatchResult {
     req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
+    val contactData = req.contact_data ?: req.challenge_contact_data
 
-    if ((req.is_taler_exchange ?: false) == true && username == "admin")
-        throw conflict(
-            "admin account cannot be an exchange",
-            TalerErrorCode.BANK_PATCH_ADMIN_EXCHANGE
-        )
-
-    return db.account.reconfig(
+    return db.account.reconfig( 
         login = username,
         name = req.name,
         cashoutPayto = req.cashout_payto_uri,
-        emailAddress = req.challenge_contact_data?.email,
-        isTalerExchange = req.is_taler_exchange,
-        phoneNumber = req.challenge_contact_data?.phone,
+        emailAddress = contactData?.email,
+        isPublic = req.is_public,
+        phoneNumber = contactData?.phone,
         debtLimit = req.debit_threshold,
-        isAdmin = isAdmin
+        isAdmin = isAdmin,
+        allowEditName = ctx.allowEditName,
+        allowEditCashout = ctx.allowEditCashout
     )
 }
 
@@ -255,9 +255,13 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     "Account '$username' not found",
                     TalerErrorCode.BANK_UNKNOWN_ACCOUNT
                 )
-                AccountPatchResult.NonAdminLegalName -> throw conflict(
+                AccountPatchResult.NonAdminName -> throw conflict(
                     "non-admin user cannot change their legal name",
                     TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
+                )
+                AccountPatchResult.NonAdminCashout -> throw conflict(
+                    "non-admin user cannot change their cashout account",
+                    TalerErrorCode.BANK_NON_ADMIN_PATCH_CASHOUT
                 )
                 AccountPatchResult.NonAdminDebtLimit -> throw conflict(
                     "non-admin user cannot change their debt limit",

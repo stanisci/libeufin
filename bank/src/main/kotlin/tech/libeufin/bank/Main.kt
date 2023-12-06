@@ -347,7 +347,11 @@ class EditAccount : CliktCommand(
         help = "Legal name of the account owner"
     )
     private val exchange: Boolean? by option(
-        help = "Is this account a taler exchange"
+        hidden = true
+    ).boolean()
+    private val is_public: Boolean? by option(
+        "--public",
+        help = "Make this account visible to anyone"
     ).boolean()
     private val email: String? by option(help = "E-Mail address used for TAN transmission")
     private val phone: String? by option(help = "Phone number used for TAN transmission")
@@ -363,7 +367,8 @@ class EditAccount : CliktCommand(
             val req = AccountReconfiguration(
                 name = name,
                 is_taler_exchange = exchange,
-                challenge_contact_data = ChallengeContactData(
+                is_public = is_public,
+                contact_data = ChallengeContactData(
                     email = email,
                     phone = phone, 
                 ),
@@ -375,10 +380,11 @@ class EditAccount : CliktCommand(
                     logger.info("Account '$username' edited")
                 AccountPatchResult.UnknownAccount -> 
                     throw Exception("Account '$username' not found")
-                AccountPatchResult.NonAdminLegalName -> 
-                    throw Exception("non-admin user cannot change their legal name")
-                AccountPatchResult.NonAdminDebtLimit -> 
-                    throw Exception("non-admin user cannot change their debt limit")
+                AccountPatchResult.NonAdminName,
+                    AccountPatchResult.NonAdminCashout,
+                    AccountPatchResult.NonAdminDebtLimit -> {
+                        // Unreachable as we edit account as admin
+                    }
             }
         }
     }
@@ -405,9 +411,16 @@ class CreateAccountOption: OptionGroup() {
     ).flag()
     val email: String? by option(help = "E-Mail address used for TAN transmission")
     val phone: String? by option(help = "Phone number used for TAN transmission")
-    val cashout_payto_uri: IbanPayTo? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { IbanPayTo(it) }
-    val internal_payto_uri: IbanPayTo? by option(help = "Payto URI of this account").convert { IbanPayTo(it) }
-    val debit_threshold: TalerAmount? by option(help = "Max debit allowed for this account").convert { TalerAmount(it) }
+    val cashout_payto_uri: IbanPayTo? by option(
+        help = "Payto URI of a fiant account who receive cashout amount"
+    ).convert { IbanPayTo(it) }
+    val internal_payto_uri: IbanPayTo? by option(hidden = true).convert { IbanPayTo(it) }
+    val payto_uri: IbanPayTo? by option(
+        help = "Payto URI of this account"
+    ).convert { IbanPayTo(it) }
+    val debit_threshold: TalerAmount? by option(
+        help = "Max debit allowed for this account")
+    .convert { TalerAmount(it) }
 }
 
 class CreateAccount : CliktCommand(
@@ -431,12 +444,13 @@ class CreateAccount : CliktCommand(
                     name = name,
                     is_public = is_public,
                     is_taler_exchange = exchange,
-                    challenge_contact_data = ChallengeContactData(
+                    contact_data = ChallengeContactData(
                         email = email,
                         phone = phone, 
                     ),
                     cashout_payto_uri = cashout_payto_uri,
                     internal_payto_uri = internal_payto_uri,
+                    payto_uri = payto_uri,
                     debit_threshold = debit_threshold
                 ) 
             }
