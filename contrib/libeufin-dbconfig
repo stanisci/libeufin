@@ -197,10 +197,10 @@ if ! echo "GRANT USAGE ON SCHEMA libeufin_nexus TO \"$BANK_DBUSER\"" \
 then
         exit_fail "Failed to grant usage privilege on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
 fi
-if ! echo "GRANT SELECT, INSERT, TRIGGER ON ALL TABLES IN SCHEMA libeufin_nexus TO \"$BANK_DBUSER\"" \
+if ! echo "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA libeufin_nexus TO \"$BANK_DBUSER\"" \
         | sudo -i -u postgres psql "$DBNAME"
 then
-        exit_fail "Failed to grant SELECT, INSERT, TRIGGER privileges on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
+        exit_fail "Failed to grant all privileges on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
 fi
 
 sudo -u "$BANK_DBUSER" "$BANK_DBINIT" -c "$BANK_CFGFILE"
@@ -209,10 +209,10 @@ if ! echo "GRANT USAGE ON SCHEMA libeufin_bank TO \"$NEXUS_DBUSER\"" \
 then
         exit_fail "Failed to grant usage privilege on schema 'libeufin_bank' to '$NEXUS_DBUSER'." 1>&2
 fi
-if ! echo "GRANT SELECT, INSERT, TRIGGER ON ALL TABLES IN SCHEMA libeufin_bank TO \"$NEXUS_DBUSER\"" \
+if ! echo "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA libeufin_bank TO \"$NEXUS_DBUSER\"" \
         | sudo -i -u postgres psql "$DBNAME"
 then
-        exit_fail "Failed to grant SELECT, INSERT, TRIGGER privileges on schema 'libeufin_nexus' to '$BANK_DBUSER'." 1>&2
+        exit_fail "Failed to grant all privileges on schema 'libeufin_bank' to '$NEXUS_DBUSER'." 1>&2
 fi
 
 echo "Database configuration finished." 1>&2
