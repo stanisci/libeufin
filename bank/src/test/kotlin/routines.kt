@@ -148,7 +148,7 @@ inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
             }
             launch {  // Check polling timeout
                 assertTime(200, 300) {
-                    history("delta=1&start=${id+10}&long_poll_ms=200")
+                    history("delta=1&start=${id+nbTotal*3}&long_poll_ms=200")
                         .assertNoContent()
                 }
             }

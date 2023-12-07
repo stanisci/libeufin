@@ -755,9 +755,9 @@ class CoreBankTransactionsApiTest {
         assertBalance("exchange", "+KUDOS:0")
         tx("merchant", "KUDOS:1", "exchange", "") // Bounce common to transaction
         tx("merchant", "KUDOS:1", "exchange", "Malformed") // Bounce malformed transaction
-        val reserve_pub = randShortHashCode();
-        tx("merchant", "KUDOS:1", "exchange", IncomingTxMetadata(reserve_pub).encode()) // Accept incoming
-        tx("merchant", "KUDOS:1", "exchange", IncomingTxMetadata(reserve_pub).encode()) // Bounce reserve_pub reuse
+        val reserve_pub = randEddsaPublicKey();
+        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reserve_pub)) // Accept incoming
+        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reserve_pub)) // Bounce reserve_pub reuse
         assertBalance("merchant", "-KUDOS:1")
         assertBalance("exchange", "+KUDOS:1")
         
@@ -768,8 +768,8 @@ class CoreBankTransactionsApiTest {
         tx("exchange", "KUDOS:1", "merchant", "Malformed") // Warn malformed transaction
         val wtid = randShortHashCode()
         val exchange = ExchangeUrl("http://exchange.example.com/")
-        tx("exchange", "KUDOS:1", "merchant", OutgoingTxMetadata(wtid, exchange).encode()) // Accept outgoing
-        tx("exchange", "KUDOS:1", "merchant", OutgoingTxMetadata(wtid, exchange).encode()) // Warn wtid reuse
+        tx("exchange", "KUDOS:1", "merchant", randOutgoingSubject(wtid, exchange)) // Accept outgoing
+        tx("exchange", "KUDOS:1", "merchant", randOutgoingSubject(wtid, exchange)) // Warn wtid reuse
         assertBalance("merchant", "+KUDOS:3")
         assertBalance("exchange", "-KUDOS:3")
     }

@@ -39,15 +39,15 @@ class RevenueApiTest {
             ids = { it.incoming_transactions.map { it.row_id } },
             registered = listOf(
                 { 
-                    // Transactions using clean add incoming logic
+                    // Transactions using clean transfer logic
                     transfer("KUDOS:10")
-                },
-                { 
-                    // Transactions using raw bank transaction logic
-                    tx("exchange", "KUDOS:10", "merchant", OutgoingTxMetadata(randShortHashCode(), ExchangeUrl("http://exchange.example.com/")).encode())
                 }
             ),
             ignored = listOf(
+                {
+                    // Ignore manual incoming transaction
+                    tx("exchange", "KUDOS:10", "merchant", "${randShortHashCode()} http://exchange.example.com/")
+                },
                 {
                     // Ignore malformed incoming transaction
                     tx("merchant", "KUDOS:10", "exchange", "ignored")

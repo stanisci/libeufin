@@ -82,33 +82,29 @@ class TransactionDAO(private val db: Database) {
                         val creditRowId = it.getLong("out_credit_row_id")
                         val debitAccountId = it.getLong("out_debit_bank_account_id")
                         val debitRowId = it.getLong("out_debit_row_id")
-                        val metadata = TxMetadata.parse(subject)
                         val exchangeCreditor = it.getBoolean("out_creditor_is_exchange")
                         val exchangeDebtor = it.getBoolean("out_debtor_is_exchange")
                         if (exchangeCreditor && exchangeDebtor) {
-                            val kind = when (metadata) {
-                                is IncomingTxMetadata -> "an incoming taler "
-                                is OutgoingTxMetadata -> "an outgoing taler"
-                                null -> "a common"
-                            };
-                            logger.warn("exchange account $exchangeDebtor sent $kind transaction to exchange account $exchangeCreditor, this should never happens and is not bounced to prevent bouncing loop")
+                            logger.warn("exchange account $exchangeDebtor sent a manual transaction to exchange account $exchangeCreditor, this should never happens and is not bounced to prevent bouncing loop, may fail in the future")
                         } else if (exchangeCreditor) {
-                            val bounce = if (metadata is IncomingTxMetadata) {
+                            val reservePub = parseIncomingTxMetadata(subject)
+                            val bounceCause = if (reservePub != null) {
                                 val registered = conn.prepareStatement("CALL register_incoming(?, ?)").run {
-                                    setBytes(1, metadata.reservePub.raw)
+                                    setBytes(1, reservePub.raw)
                                     setLong(2, creditRowId)
                                     executeProcedureViolation()
                                 }
                                 if (!registered) {
                                     logger.warn("exchange account $creditAccountId received an incoming taler transaction $creditRowId with an already used reserve public key")
-                                
+                                    "reserve public key reuse"
+                                } else {
+                                    null
                                 }
-                                !registered
                             } else {
-                                logger.warn("exchange account $creditAccountId received a transaction $creditRowId with malformed metadata")
-                                true
+                                logger.warn("exchange account $creditAccountId received a manual transaction $creditRowId with malformed metadata")
+                                "malformed metadata"
                             }
-                            if (bounce) {
+                            if (bounceCause != null) {
                                 // No error can happens because an opposite transaction already took place in the same transaction
                                 conn.prepareStatement("""
                                     SELECT bank_wire_transfer(
@@ -119,7 +115,7 @@ class TransactionDAO(private val db: Database) {
                                 ).run {
                                     setLong(1, debitAccountId)
                                     setLong(2, creditAccountId)
-                                    setString(3, "Bounce $creditRowId") // TODO better subject
+                                    setString(3, "Bounce $creditRowId: $bounceCause")
                                     setLong(4, amount.value)
                                     setInt(5, amount.frac)
                                     setLong(6, now)
@@ -127,22 +123,7 @@ class TransactionDAO(private val db: Database) {
                                 }
                             }
                         } else if (exchangeDebtor) {
-                            if (metadata is OutgoingTxMetadata) {
-                                val registered = conn.prepareStatement("CALL register_outgoing(NULL, ?, ?, ?, ?, ?, ?)").run {
-                                    setBytes(1, metadata.wtid.raw)
-                                    setString(2, metadata.exchangeBaseUrl.url)
-                                    setLong(3, debitAccountId)
-                                    setLong(4, creditAccountId)
-                                    setLong(5, debitRowId)
-                                    setLong(6, creditRowId)
-                                    executeProcedureViolation()
-                                }
-                                if (!registered) {
-                                    logger.warn("exchange account $debitAccountId sent an outgoing taler transaction $debitRowId with an already used withdraw ID, use the API to catch this error")
-                                }
-                            } else {
-                                logger.warn("exchange account $debitAccountId sent a transaction $debitRowId with malformed metadata, use the API instead")
-                            }
+                            logger.warn("exchange account $debitAccountId sent a manual transaction $debitRowId which will not be recorderd as a taler outgoing transaction, use the API instead")
                         }
                         BankTransactionResult.Success(debitRowId)
                     }

@@ -412,3 +412,11 @@ fun randBase32Crockford(lenght: Int) = Base32Crockford.encode(randBytes(lenght))
 fun randHashCode(): HashCode = HashCode(randBase32Crockford(64))
 fun randShortHashCode(): ShortHashCode = ShortHashCode(randBase32Crockford(32))
 fun randEddsaPublicKey(): EddsaPublicKey = EddsaPublicKey(randBase32Crockford(32))
+
+fun randIncomingSubject(reservePub: EddsaPublicKey): String {
+    return "$reservePub"
+}
+
+fun randOutgoingSubject(wtid: ShortHashCode, url: ExchangeUrl): String {
+    return "$wtid $url"
+}

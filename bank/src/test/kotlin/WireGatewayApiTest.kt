@@ -140,7 +140,7 @@ class WireGatewayApiTest {
                 },
                 { 
                     // Transactions using raw bank transaction logic
-                    tx("merchant", "KUDOS:10", "exchange", IncomingTxMetadata(randShortHashCode()).encode())
+                    tx("merchant", "KUDOS:10", "exchange", "history test with ${randShortHashCode()} reserve pub")
                 },
                 {
                     // Transaction using withdraw logic
@@ -175,13 +175,13 @@ class WireGatewayApiTest {
                 { 
                     // Transactions using clean add incoming logic
                     transfer("KUDOS:10")
-                },
-                { 
-                    // Transactions using raw bank transaction logic
-                    tx("exchange", "KUDOS:10", "merchant", OutgoingTxMetadata(randShortHashCode(), ExchangeUrl("http://exchange.example.com/")).encode())
                 }
             ),
             ignored = listOf(
+                { 
+                    // gnore manual incoming transaction
+                    tx("exchange", "KUDOS:10", "merchant", "${randShortHashCode()} http://exchange.example.com/")
+                },
                 {
                     // Ignore malformed incoming transaction
                     tx("merchant", "KUDOS:10", "exchange", "ignored")

@@ -9,7 +9,7 @@ be available before trying the installation:
 
 - make
 - python3-venv
-- openjdk-17-jre
+- openjdk-17-jre-headless
 
 Run the following steps to install LibEuFin:
 

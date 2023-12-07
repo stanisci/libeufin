@@ -103,7 +103,6 @@ class WithdrawalDAO(private val db: Database) {
         exchangePayto: IbanPayTo,
         reservePub: EddsaPublicKey
     ): WithdrawalSelectionResult = db.serializable { conn ->
-        val subject = IncomingTxMetadata(reservePub).encode()
         val stmt = conn.prepareStatement("""
             SELECT
                 out_no_op,
@@ -117,7 +116,7 @@ class WithdrawalDAO(private val db: Database) {
         )
         stmt.setObject(1, uuid)
         stmt.setBytes(2, reservePub.raw)
-        stmt.setString(3, subject)
+        stmt.setString(3, "Taler withdrawal $reservePub")
         stmt.setString(4, exchangePayto.canonical)
         stmt.executeQuery().use {
             when {

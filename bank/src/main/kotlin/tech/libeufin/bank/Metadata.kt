@@ -18,35 +18,13 @@
  */
 package tech.libeufin.bank
 
-sealed interface TxMetadata {
-    // TODO versioning ?
-    companion object {
-        fun parse(subject: String): TxMetadata? {
-            // IncomingTxMetadata
-            try {
-                return IncomingTxMetadata(EddsaPublicKey(subject))
-            } catch (e: Exception) { }
+private val PATTERN = Regex("[a-z0-9A-Z]{52}")
 
-            // OutgoingTxMetadata
-            try {
-                val (wtid, exchangeBaseUrl) = subject.split(" ", limit=2)
-                return OutgoingTxMetadata(ShortHashCode(wtid), ExchangeUrl(exchangeBaseUrl))
-            } catch (e: Exception) { }
-
-            // No well formed metadata
-            return null
-        }
-
-        fun encode(metadata: TxMetadata): String {
-            return when (metadata) {
-                is IncomingTxMetadata -> "${metadata.reservePub}"
-                is OutgoingTxMetadata -> "${metadata.wtid} ${metadata.exchangeBaseUrl.url}"
-            }
-        }
+fun parseIncomingTxMetadata(subject: String): EddsaPublicKey? {
+    val match = PATTERN.find(subject)?.value ?: return null;
+    try {
+        return EddsaPublicKey(match)
+    } catch (e: Exception) { 
+        return null
     }
-    
-    fun encode(): String = TxMetadata.encode(this)
 }
-
-data class IncomingTxMetadata(val reservePub: EddsaPublicKey): TxMetadata
-data class OutgoingTxMetadata(val wtid: ShortHashCode, val exchangeBaseUrl: ExchangeUrl): TxMetadata

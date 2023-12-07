@@ -127,7 +127,7 @@ class ExchangeDAO(private val db: Database) {
         login: String,
         now: Instant
     ): TransferResult = db.serializable { conn ->
-        val subject = OutgoingTxMetadata(req.wtid, req.exchange_base_url).encode()
+        val subject = "${req.wtid} ${req.exchange_base_url.url}"
         val stmt = conn.prepareStatement("""
             SELECT
                 out_debtor_not_found
@@ -192,7 +192,6 @@ class ExchangeDAO(private val db: Database) {
         login: String,
         now: Instant
     ): AddIncomingResult = db.serializable { conn ->
-        val subject = IncomingTxMetadata(req.reserve_pub).encode()
         val stmt = conn.prepareStatement("""
             SELECT
                 out_creditor_not_found
@@ -211,7 +210,7 @@ class ExchangeDAO(private val db: Database) {
         """)
 
         stmt.setBytes(1, req.reserve_pub.raw)
-        stmt.setString(2, subject)
+        stmt.setString(2, "Manual incoming ${req.reserve_pub}")
         stmt.setLong(3, req.amount.value)
         stmt.setInt(4, req.amount.frac)
         stmt.setString(5, req.debit_account.canonical)
