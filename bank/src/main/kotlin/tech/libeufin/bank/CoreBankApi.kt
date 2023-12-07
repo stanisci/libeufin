@@ -143,7 +143,7 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
     // Prohibit reserved usernames:
     if (RESERVED_ACCOUNTS.contains(req.username))
         throw conflict(
-            "Username '${req.username}' is reserved.",
+            "Username '${req.username}' is reserved",
             TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
         )
 
@@ -153,6 +153,11 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
         )
 
+    if (req.username == "exchange" && !req.is_taler_exchange)
+        throw conflict(
+            "'exchange' account must be a taler exchange account",
+            TalerErrorCode.END
+        )
 
     val internalPayto = req.payto_uri ?: req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
     val contactData = req.contact_data ?: req.challenge_contact_data
@@ -177,6 +182,12 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
 suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfiguration, username: String, isAdmin: Boolean): AccountPatchResult {
     req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
     val contactData = req.contact_data ?: req.challenge_contact_data
+
+    if (username == "admin" && req.is_public == true)
+        throw conflict(
+            "'admin' account cannot be public",
+            TalerErrorCode.END
+        )
 
     return db.account.reconfig( 
         login = username,

@@ -229,7 +229,6 @@ class CoreBankAccountsApiTest {
                 pwAuth("admin")
             }.assertOk()
         }
-        
 
         // Reserved account
         RESERVED_ACCOUNTS.forEach {
@@ -241,6 +240,15 @@ class CoreBankAccountsApiTest {
                 }
             }.assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
         }
+
+        // Non exchange account
+        client.post("/accounts") {
+            json {
+                "username" to "exchange"
+                "password" to "password"
+                "name" to "Exchange"
+            }
+        }.assertConflict(TalerErrorCode.END)
 
         // Testing login conflict
         client.post("/accounts") {
@@ -439,6 +447,13 @@ class CoreBankAccountsApiTest {
             assert(obj.is_public)
             assert(!obj.is_taler_exchange)
         }
+
+        // Admin cannot be public
+        client.patchA("/accounts/admin") {
+            json {
+                "is_public" to true
+            }
+        }.assertConflict(TalerErrorCode.END)
     }
 
     // Test admin-only account patch
