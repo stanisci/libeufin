@@ -70,6 +70,7 @@ class IntegrationTest {
     fun mini() {
         bankCmd.run("dbinit -c conf/mini.conf -r")
         bankCmd.run("passwd admin password -c conf/mini.conf")
+        bankCmd.run("dbinit -c conf/mini.conf") // Indempotent
         kotlin.concurrent.thread(isDaemon = true)  {
             bankCmd.run("serve -c conf/mini.conf")
         }
@@ -87,6 +88,8 @@ class IntegrationTest {
         bankCmd.run("passwd admin password -c conf/integration.conf")
         bankCmd.run("edit-account admin --debit_threshold KUDOS:1000 -c conf/integration.conf")
         bankCmd.run("create-account -c conf/integration.conf -u exchange -p password --name 'Mr Money' --exchange")
+        nexusCmd.run("dbinit -c conf/integration.conf") // Idempotent
+        bankCmd.run("dbinit -c conf/integration.conf") // Idempotent
         kotlin.concurrent.thread(isDaemon = true)  {
             bankCmd.run("serve -c conf/integration.conf")
         }

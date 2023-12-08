@@ -1,7 +1,30 @@
 BEGIN;
 SET search_path TO libeufin_bank;
 
-CREATE OR REPLACE FUNCTION amount_normalize(
+-- Remove all existing functions
+DO
+$do$
+DECLARE
+  _sql text;
+BEGIN
+  SELECT INTO _sql
+        string_agg(format('DROP %s %s CASCADE;'
+                        , CASE prokind
+                            WHEN 'f' THEN 'FUNCTION'
+                            WHEN 'p' THEN 'PROCEDURE'
+                          END
+                        , oid::regprocedure)
+                  , E'\n')
+  FROM   pg_proc
+  WHERE  pronamespace = 'libeufin_bank'::regnamespace;
+
+  IF _sql IS NOT NULL THEN
+    EXECUTE _sql;
+  END IF;
+END
+$do$;
+
+CREATE FUNCTION amount_normalize(
     IN amount taler_amount
   ,OUT normalized taler_amount
 )
@@ -18,7 +41,7 @@ COMMENT ON FUNCTION amount_normalize
   IS 'Returns the normalized amount by adding to the .val the value of (.frac / 100000000) and removing the modulus 100000000 from .frac.'
       'It raises an exception when the resulting .val is larger than 2^52';
 
-CREATE OR REPLACE FUNCTION amount_add(
+CREATE FUNCTION amount_add(
    IN a taler_amount
   ,IN b taler_amount
   ,OUT sum taler_amount
@@ -31,7 +54,7 @@ END $$;
 COMMENT ON FUNCTION amount_add
   IS 'Returns the normalized sum of two amounts. It raises an exception when the resulting .val is larger than 2^52';
 
-CREATE OR REPLACE FUNCTION amount_left_minus_right(
+CREATE FUNCTION amount_left_minus_right(
   IN l taler_amount
  ,IN r taler_amount
  ,OUT diff taler_amount
@@ -61,7 +84,7 @@ END $$;
 COMMENT ON FUNCTION amount_left_minus_right
   IS 'Subtracts the right amount from the left and returns the difference and TRUE, if the left amount is larger than the right, or an invalid amount and FALSE otherwise.';
 
-CREATE OR REPLACE FUNCTION account_balance_is_sufficient(
+CREATE FUNCTION account_balance_is_sufficient(
   IN in_account_id BIGINT,
   IN in_amount taler_amount,
   OUT out_balance_insufficient BOOLEAN
@@ -117,7 +140,7 @@ END IF;
 END $$;
 COMMENT ON FUNCTION account_balance_is_sufficient IS 'Check if an account have enough fund to transfer an amount.';
 
-CREATE OR REPLACE FUNCTION customer_delete(
+CREATE FUNCTION customer_delete(
   IN in_login TEXT,
   OUT out_nx_customer BOOLEAN,
   OUT out_balance_not_zero BOOLEAN
@@ -164,7 +187,7 @@ END $$;
 COMMENT ON FUNCTION customer_delete(TEXT)
   IS 'Deletes a customer (and its bank account via cascade) if the balance is zero';
 
-CREATE OR REPLACE PROCEDURE register_outgoing(
+CREATE PROCEDURE register_outgoing(
   IN in_request_uid BYTEA,
   IN in_wtid BYTEA,
   IN in_exchange_base_url TEXT,
@@ -205,7 +228,7 @@ END $$;
 COMMENT ON PROCEDURE register_outgoing
   IS 'Register a bank transaction as a taler outgoing transaction and announce it';
 
-CREATE OR REPLACE PROCEDURE register_incoming(
+CREATE PROCEDURE register_incoming(
   IN in_reserve_pub BYTEA,
   IN in_tx_row_id BIGINT
 )
@@ -235,7 +258,7 @@ COMMENT ON PROCEDURE register_incoming
   IS 'Register a bank transaction as a taler incoming transaction and announce it';
 
 
-CREATE OR REPLACE FUNCTION taler_transfer(
+CREATE FUNCTION taler_transfer(
   IN in_request_uid BYTEA,
   IN in_wtid BYTEA,
   IN in_subject TEXT,
@@ -327,7 +350,7 @@ CALL register_outgoing(in_request_uid, in_wtid, in_exchange_base_url, exchange_b
 END $$;
 COMMENT ON FUNCTION taler_transfer IS 'Create an outgoing taler transaction and register it';
 
-CREATE OR REPLACE FUNCTION taler_add_incoming(
+CREATE FUNCTION taler_add_incoming(
   IN in_reserve_pub BYTEA,
   IN in_subject TEXT,
   IN in_amount taler_amount,
@@ -408,7 +431,7 @@ CALL register_incoming(in_reserve_pub, out_tx_row_id);
 END $$;
 COMMENT ON FUNCTION taler_add_incoming IS 'Create an incoming taler transaction and register it';
 
-CREATE OR REPLACE FUNCTION bank_transaction(
+CREATE FUNCTION bank_transaction(
   IN in_credit_account_payto TEXT,
   IN in_debit_account_username TEXT,
   IN in_subject TEXT,
@@ -480,7 +503,7 @@ END IF;
 END $$;
 COMMENT ON FUNCTION bank_transaction IS 'Create a bank transaction';
 
-CREATE OR REPLACE FUNCTION create_taler_withdrawal(
+CREATE FUNCTION create_taler_withdrawal(
   IN in_account_username TEXT,
   IN in_withdrawal_uuid UUID,
   IN in_amount taler_amount,
@@ -519,7 +542,7 @@ INSERT INTO taler_withdrawal_operations
 END $$;
 COMMENT ON FUNCTION create_taler_withdrawal IS 'Create a new withdrawal operation';
 
-CREATE OR REPLACE FUNCTION select_taler_withdrawal(
+CREATE FUNCTION select_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
   IN in_reserve_pub BYTEA,
   IN in_subject TEXT,
@@ -589,7 +612,7 @@ END IF;
 END $$;
 COMMENT ON FUNCTION select_taler_withdrawal IS 'Set details of a withdrawal operation';
 
-CREATE OR REPLACE FUNCTION abort_taler_withdrawal(
+CREATE FUNCTION abort_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
   OUT out_no_op BOOLEAN,
   OUT out_already_confirmed BOOLEAN
@@ -613,7 +636,7 @@ PERFORM pg_notify('withdrawal_status', in_withdrawal_uuid::text || ' aborted');
 END $$;
 COMMENT ON FUNCTION abort_taler_withdrawal IS 'Abort a withdrawal operation.';
 
-CREATE OR REPLACE FUNCTION confirm_taler_withdrawal(
+CREATE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
   IN in_confirmation_date BIGINT,
   OUT out_no_op BOOLEAN,
@@ -700,7 +723,7 @@ END $$;
 COMMENT ON FUNCTION confirm_taler_withdrawal
   IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';
 
-CREATE OR REPLACE FUNCTION bank_wire_transfer(
+CREATE FUNCTION bank_wire_transfer(
   IN in_creditor_account_id BIGINT,
   IN in_debtor_account_id BIGINT,
   IN in_subject TEXT,
@@ -946,7 +969,7 @@ WHERE bank_account_id=in_creditor_account_id;
 PERFORM pg_notify('bank_tx', in_debtor_account_id || ' ' || in_creditor_account_id || ' ' || out_debit_row_id || ' ' || out_credit_row_id);
 END $$;
 
-CREATE OR REPLACE FUNCTION cashin(
+CREATE FUNCTION cashin(
   IN in_now_date BIGINT,
   IN in_reserve_pub BYTEA,
   IN in_amount taler_amount,
@@ -1025,7 +1048,7 @@ END $$;
 COMMENT ON FUNCTION cashin IS 'Perform a cashin operation';
 
 
-CREATE OR REPLACE FUNCTION cashout_create(
+CREATE FUNCTION cashout_create(
   IN in_account_username TEXT,
   IN in_request_uid BYTEA,
   IN in_amount_debit taler_amount,
@@ -1125,7 +1148,7 @@ ELSE -- Already exist, check challenge retransmission
 END IF;
 END $$;
 
-CREATE OR REPLACE FUNCTION cashout_confirm(
+CREATE FUNCTION cashout_confirm(
   IN in_cashout_id BIGINT,
   IN in_login TEXT,
   IN in_tan_code TEXT,
@@ -1223,7 +1246,7 @@ UPDATE cashout_operations
 CALL stats_register_payment('cashout', now()::TIMESTAMP, amount_debit_local, amount_credit_local);
 END $$;
 
-CREATE OR REPLACE FUNCTION challenge_create (
+CREATE FUNCTION challenge_create (
   IN in_code TEXT,
   IN in_now_date INT8,
   IN in_validity_period INT8,
@@ -1245,7 +1268,7 @@ LANGUAGE sql AS $$
 $$;
 COMMENT ON FUNCTION challenge_create IS 'Create a new challenge, return the generated id';
 
-CREATE OR REPLACE FUNCTION challenge_mark_sent (
+CREATE FUNCTION challenge_mark_sent (
   IN in_challenge_id BIGINT,
   IN in_now_date INT8,
   IN in_retransmission_period INT8
@@ -1257,7 +1280,7 @@ LANGUAGE sql AS $$
 $$;
 COMMENT ON FUNCTION challenge_create IS 'Register a challenge as successfully sent';
 
-CREATE OR REPLACE FUNCTION challenge_resend (
+CREATE FUNCTION challenge_resend (
   IN in_challenge_id BIGINT, 
   IN in_code TEXT,            -- New code to use if the old code expired
   IN in_now_date INT8,        
@@ -1291,7 +1314,7 @@ END IF;
 END $$;
 COMMENT ON FUNCTION challenge_resend IS 'Get the challenge code to send, return NULL if nothing should be sent';
 
-CREATE OR REPLACE FUNCTION challenge_try (
+CREATE FUNCTION challenge_try (
   IN in_challenge_id BIGINT, 
   IN in_code TEXT,    
   IN in_now_date INT8,        
@@ -1310,7 +1333,7 @@ LANGUAGE sql as $$
 $$;
 COMMENT ON FUNCTION challenge_try IS 'Try to confirm a challenge, return true if the challenge have been confirmed';
 
-CREATE OR REPLACE FUNCTION stats_get_frame(
+CREATE FUNCTION stats_get_frame(
   IN now TIMESTAMP,
   IN in_timeframe stat_timeframe_enum,
   IN which INTEGER,
@@ -1375,7 +1398,7 @@ BEGIN
     AND s.start_time = local_start_time;
 END $$;
 
-CREATE OR REPLACE PROCEDURE stats_register_payment(
+CREATE PROCEDURE stats_register_payment(
   IN name TEXT,
   IN now TIMESTAMP,
   IN regional_amount taler_amount,
@@ -1412,7 +1435,7 @@ BEGIN
   END IF;
 END $$;
 
-CREATE OR REPLACE PROCEDURE config_set_amount(
+CREATE PROCEDURE config_set_amount(
   IN name TEXT,
   IN amount taler_amount
 )
@@ -1421,7 +1444,7 @@ LANGUAGE sql AS $$
     ON CONFLICT (key) DO UPDATE SET value = excluded.value
 $$;
 
-CREATE OR REPLACE PROCEDURE config_set_rounding_mode(
+CREATE PROCEDURE config_set_rounding_mode(
   IN name TEXT,
   IN mode rounding_mode
 )
@@ -1430,7 +1453,7 @@ LANGUAGE sql AS $$
     ON CONFLICT (key) DO UPDATE SET value = excluded.value
 $$;
 
-CREATE OR REPLACE FUNCTION config_get_amount(
+CREATE FUNCTION config_get_amount(
   IN name TEXT,
   OUT amount taler_amount
 )
@@ -1438,13 +1461,13 @@ LANGUAGE sql AS $$
   SELECT (value['val']::int8, value['frac']::int4)::taler_amount FROM config WHERE key=name
 $$;
 
-CREATE OR REPLACE FUNCTION config_get_rounding_mode(
+CREATE FUNCTION config_get_rounding_mode(
   IN name TEXT,
   OUT mode rounding_mode
 )
 LANGUAGE sql AS $$ SELECT (value->>'mode')::rounding_mode FROM config WHERE key=name $$;
 
-CREATE OR REPLACE FUNCTION conversion_apply_ratio(
+CREATE FUNCTION conversion_apply_ratio(
    IN amount taler_amount
   ,IN ratio taler_amount
   ,IN tiny taler_amount       -- Result is rounded to this amount
@@ -1482,7 +1505,7 @@ END $$;
 COMMENT ON FUNCTION conversion_apply_ratio
   IS 'Apply a ratio to an amount rouding the result to a tiny amount following a rounding mode. It raises an exception when the resulting .val is larger than 2^52';
 
-CREATE OR REPLACE FUNCTION conversion_revert_ratio(
+CREATE FUNCTION conversion_revert_ratio(
    IN amount taler_amount
   ,IN ratio taler_amount
   ,IN tiny taler_amount       -- Result is rounded to this amount
@@ -1520,7 +1543,7 @@ COMMENT ON FUNCTION conversion_revert_ratio
   IS 'Revert the application of a ratio. This function does not always return the smallest possible amount. It raises an exception when the resulting .val is larger than 2^52';
 
 
-CREATE OR REPLACE FUNCTION conversion_to(
+CREATE FUNCTION conversion_to(
   IN amount taler_amount,
   IN direction TEXT,
   OUT converted taler_amount,
@@ -1561,7 +1584,7 @@ BEGIN
   END IF;
 END $$;
 
-CREATE OR REPLACE FUNCTION conversion_from(
+CREATE FUNCTION conversion_from(
   IN amount taler_amount,
   IN direction TEXT,
   OUT converted taler_amount,
