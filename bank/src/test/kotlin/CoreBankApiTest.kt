@@ -376,14 +376,21 @@ class CoreBankAccountsApiTest {
         client.deleteA("/accounts/exchange").assertNoContent()
     }
 
-    suspend fun ApplicationTestBuilder.checkAdminOnly(req: JsonElement, error: TalerErrorCode) {
-        // Checking ordinary user doesn't get to patch
+    suspend fun ApplicationTestBuilder.checkAdminOnly(
+        req: JsonElement,
+        error: TalerErrorCode
+    ) {
+        // Check restricted
         client.patchA("/accounts/merchant") {
             json(req)
         }.assertConflict(error)
-        // Finally checking that admin does get to patch
+        // Check admin always can
         client.patch("/accounts/merchant") {
             pwAuth("admin")
+            json(req)
+        }.assertNoContent()
+        // Check idempotent
+        client.patchA("/accounts/merchant") {
             json(req)
         }.assertNoContent()
     }
@@ -397,10 +404,6 @@ class CoreBankAccountsApiTest {
         val cashout = IbanPayTo(genIbanPaytoUri())
         val req = obj {
             "cashout_payto_uri" to cashout.canonical
-            "contact_data" to obj {
-                "phone" to "+99"
-                "email" to "foo@example.com"
-            }
             "name" to "Roger"
             "is_public" to true 
         }
@@ -415,6 +418,14 @@ class CoreBankAccountsApiTest {
         checkAdminOnly(
             obj(req) { "debit_threshold" to "KUDOS:100" },
             TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+        )
+        checkAdminOnly(
+            obj(req) { "contact_data" to obj { "phone" to "+99" } },
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
+        )
+        checkAdminOnly(
+            obj(req) { "contact_data" to obj { "email" to "foo@example.com" } },
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
         )
         
         // Check currency
@@ -975,7 +986,8 @@ class CoreBankCashoutApiTest {
         client.postA("/accounts/customer/cashouts") {
             json(req) 
         }.assertConflict(TalerErrorCode.BANK_MISSING_TAN_INFO)
-        client.patchA("/accounts/customer") {
+        client.patch("/accounts/customer") {
+            pwAuth("admin")
             json {
                 "contact_data" to obj {
                     "phone" to "+99"
@@ -1132,7 +1144,8 @@ class CoreBankCashoutApiTest {
     fun confirm() = bankSetup { _ -> 
         authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts/42/confirm")
 
-        client.patchA("/accounts/customer") {
+        client.patch("/accounts/customer") {
+            pwAuth("admin")
             json {
                 "contact_data" to obj {
                     "phone" to "+99"

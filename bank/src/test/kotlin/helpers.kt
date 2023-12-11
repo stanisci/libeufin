@@ -235,7 +235,8 @@ suspend fun ApplicationTestBuilder.withdrawal(amount: String) {
 }
 
 suspend fun ApplicationTestBuilder.fillCashoutInfo(account: String) {
-    client.patchA("/accounts/$account") {
+    client.patch("/accounts/$account") {
+        pwAuth("admin")
         json {
             "cashout_payto_uri" to unknownPayto
             "contact_data" to obj {

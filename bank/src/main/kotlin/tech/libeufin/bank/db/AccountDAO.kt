@@ -199,6 +199,7 @@ class AccountDAO(private val db: Database) {
         NonAdminName,
         NonAdminCashout,
         NonAdminDebtLimit,
+        NonAdminContact,
         Success
     }
 
@@ -218,6 +219,8 @@ class AccountDAO(private val db: Database) {
         val checkName = !isAdmin && !allowEditName && name != null
         val checkCashout = !isAdmin && !allowEditCashout && cashoutPayto.isSome()
         val checkDebtLimit = !isAdmin && debtLimit != null
+        val checkPhone = !isAdmin && phone.isSome()
+        val checkEmail = !isAdmin && email.isSome()
 
         // Get user ID and check reconfig rights
         val customer_id = conn.prepareStatement("""
@@ -226,6 +229,8 @@ class AccountDAO(private val db: Database) {
                 ,(${ if (checkName) "name != ? " else "false" }) as name_change
                 ,(${ if (checkCashout) "cashout_payto IS DISTINCT FROM ?" else "false" }) as cashout_change
                 ,(${ if (checkDebtLimit) "max_debt != (?, ?)::taler_amount" else "false" }) as debt_limit_change
+                ,(${ if (checkPhone) "phone IS DISTINCT FROM  ?" else "false" }) as phone_change
+                ,(${ if (checkEmail) "email IS DISTINCT FROM  ?" else "false" }) as email_change
             FROM customers
                 JOIN bank_accounts 
                 ON customer_id=owning_customer_id
@@ -242,6 +247,12 @@ class AccountDAO(private val db: Database) {
                 setLong(idx, debtLimit!!.value); idx++
                 setInt(idx, debtLimit.frac); idx++
             }
+            if (checkPhone) {
+                setString(idx, phone.get()); idx++
+            }
+            if (checkEmail) {
+                setString(idx, email.get()); idx++
+            }
             setString(idx, login)
             executeQuery().use {
                 when {
@@ -249,6 +260,8 @@ class AccountDAO(private val db: Database) {
                     it.getBoolean("name_change") -> return@transaction AccountPatchResult.NonAdminName
                     it.getBoolean("cashout_change") -> return@transaction AccountPatchResult.NonAdminCashout
                     it.getBoolean("debt_limit_change") -> return@transaction AccountPatchResult.NonAdminDebtLimit
+                    it.getBoolean("phone_change") -> return@transaction AccountPatchResult.NonAdminContact
+                    it.getBoolean("email_change") -> return@transaction AccountPatchResult.NonAdminContact
                     else -> it.getLong("customer_id")
                 }
             }

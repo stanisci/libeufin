@@ -392,7 +392,8 @@ class EditAccount : CliktCommand(
                     throw Exception("Account '$username' not found")
                 AccountPatchResult.NonAdminName,
                     AccountPatchResult.NonAdminCashout,
-                    AccountPatchResult.NonAdminDebtLimit -> {
+                    AccountPatchResult.NonAdminDebtLimit,
+                    AccountPatchResult.NonAdminContact -> {
                         // Unreachable as we edit account as admin
                     }
             }

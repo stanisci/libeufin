@@ -272,6 +272,10 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     "non-admin user cannot change their debt limit",
                     TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
                 )
+                AccountPatchResult.NonAdminContact -> throw conflict(
+                    "non-admin user cannot change their contact info",
+                    TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
+                )
             }
         }
         patch("/accounts/{USERNAME}/auth") {
