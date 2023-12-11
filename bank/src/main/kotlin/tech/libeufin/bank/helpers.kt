@@ -49,10 +49,7 @@ fun ApplicationCall.expectUriComponent(componentName: String) =
 
 /** Retrieve the bank account info for the selected username*/
 suspend fun ApplicationCall.bankInfo(db: Database): BankInfo
-    = db.account.bankInfo(username) ?: throw notFound(
-        "Bank account for customer $username not found",
-        TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-    )
+    = db.account.bankInfo(username) ?: throw unknownAccount(username)
 
 // Generates a new Payto-URI with IBAN scheme.
 fun genIbanPaytoUri(): String = "payto://iban/${getIban()}"

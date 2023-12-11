@@ -30,7 +30,7 @@ import tech.libeufin.util.*
  * and that is meant to be caught by Ktor and responded to the
  * client.
  */
-class LibeufinBankException(
+class LibeufinException(
     // Status code that Ktor will set for the response.
     val httpStatus: HttpStatusCode,
     // Error detail object, after Taler API.
@@ -61,7 +61,7 @@ suspend fun ApplicationCall.err(
     error: TalerErrorCode
 ) {
     err(
-        LibeufinBankException(
+        LibeufinException(
             httpStatus = status, talerError = TalerError(
                 code = error.code, err = error, hint = hint
             )
@@ -70,7 +70,7 @@ suspend fun ApplicationCall.err(
 }
 
 suspend fun ApplicationCall.err(
-    err: LibeufinBankException
+    err: LibeufinException
 ) {
     attributes.put(LOG_MSG, "${err.talerError.err.name} ${err.talerError.hint}")
     respond(
@@ -85,40 +85,44 @@ fun libeufinError(
     hint: String?,
     error: TalerErrorCode,
     detail: String? = null
-): LibeufinBankException = LibeufinBankException(
+): LibeufinException = LibeufinException(
     httpStatus = status, talerError = TalerError(
         code = error.code, err = error, hint = hint, detail = detail
     )
 )
 
+/* ----- HTTP error ----- */
+
 fun forbidden(
     hint: String = "No rights on the resource",
     error: TalerErrorCode = TalerErrorCode.END
-): LibeufinBankException = libeufinError(HttpStatusCode.Forbidden, hint, error)
+): LibeufinException = libeufinError(HttpStatusCode.Forbidden, hint, error)
 
 fun unauthorized(
     hint: String,
     error: TalerErrorCode = TalerErrorCode.GENERIC_UNAUTHORIZED
-): LibeufinBankException = libeufinError(HttpStatusCode.Unauthorized, hint, error)
+): LibeufinException = libeufinError(HttpStatusCode.Unauthorized, hint, error)
 
-fun internalServerError(hint: String?): LibeufinBankException 
+fun internalServerError(hint: String?): LibeufinException 
     = libeufinError(HttpStatusCode.InternalServerError, hint, TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE)
 
 fun notFound(
     hint: String,
     error: TalerErrorCode
-): LibeufinBankException = libeufinError(HttpStatusCode.NotFound, hint, error)
+): LibeufinException = libeufinError(HttpStatusCode.NotFound, hint, error)
 
 fun conflict(
     hint: String, error: TalerErrorCode
-): LibeufinBankException = libeufinError(HttpStatusCode.Conflict, hint, error)
+): LibeufinException = libeufinError(HttpStatusCode.Conflict, hint, error)
 
 fun badRequest(
     hint: String? = null, 
     error: TalerErrorCode = TalerErrorCode.GENERIC_JSON_INVALID,
     detail: String? = null
-): LibeufinBankException = libeufinError(HttpStatusCode.BadRequest, hint, error, detail)
+): LibeufinException = libeufinError(HttpStatusCode.BadRequest, hint, error, detail)
 
+
+/* ----- Currency checks ----- */
 
 fun BankConfig.checkRegionalCurrency(amount: TalerAmount) {
     if (amount.currency != regionalCurrency) throw badRequest(
@@ -131,5 +135,14 @@ fun BankConfig.checkFiatCurrency(amount: TalerAmount) {
     if (amount.currency != fiatCurrency) throw badRequest(
         "Wrong currency: expected fiat currency $fiatCurrency got ${amount.currency}",
         TalerErrorCode.GENERIC_CURRENCY_MISMATCH
+    )
+}
+
+/* ----- Common errors ----- */
+
+fun unknownAccount(id: String): LibeufinException {
+    return notFound(
+        "Account '$id' not found",
+        TalerErrorCode.BANK_UNKNOWN_ACCOUNT
     )
 }

@@ -52,10 +52,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
                 now = Instant.now()
             )
             when (res) {
-                is TransferResult.UnknownExchange -> throw notFound(
-                    "Account '$username' not found",
-                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-                )
+                is TransferResult.UnknownExchange -> throw unknownAccount(username)
                 is TransferResult.NotAnExchange -> throw conflict(
                     "$username is not an exchange account.",
                     TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
@@ -125,10 +122,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
                 now = timestamp
             )
             when (res) {
-                is AddIncomingResult.UnknownExchange -> throw notFound(
-                    "Account '$username' not found",
-                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-                )
+                is AddIncomingResult.UnknownExchange -> throw unknownAccount(username)
                 is AddIncomingResult.NotAnExchange -> throw conflict(
                     "$username is not an exchange account.",
                     TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE

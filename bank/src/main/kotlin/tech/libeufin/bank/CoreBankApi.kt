@@ -245,10 +245,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                 )
 
             when (db.account.delete(username)) {
-                AccountDeletionResult.UnknownAccount -> throw notFound(
-                    "Account '$username' not found",
-                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-                )
+                AccountDeletionResult.UnknownAccount -> throw unknownAccount(username)
                 AccountDeletionResult.BalanceNotZero -> throw conflict(
                     "Account balance is not zero.",
                     TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO
@@ -262,10 +259,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
             val req = call.receive<AccountReconfiguration>()
             when (patchAccount(db, ctx, req, username, isAdmin)) {
                 AccountPatchResult.Success -> call.respond(HttpStatusCode.NoContent)
-                AccountPatchResult.UnknownAccount -> throw notFound(
-                    "Account '$username' not found",
-                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-                )
+                AccountPatchResult.UnknownAccount -> throw unknownAccount(username)
                 AccountPatchResult.NonAdminName -> throw conflict(
                     "non-admin user cannot change their legal name",
                     TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
@@ -290,10 +284,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
             }
             when (db.account.reconfigPassword(username, req.new_password, req.old_password)) {
                 AccountPatchAuthResult.Success -> call.respond(HttpStatusCode.NoContent)
-                AccountPatchAuthResult.UnknownAccount -> throw notFound(
-                    "Account '$username' not found",
-                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-                )
+                AccountPatchAuthResult.UnknownAccount -> throw unknownAccount(username)
                 AccountPatchAuthResult.OldPasswordMismatch -> throw conflict(
                     "old password does not match",
                     TalerErrorCode.BANK_PATCH_BAD_OLD_PASSWORD
@@ -323,10 +314,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     }
     auth(db, TokenScope.readonly, allowAdmin = true) {
         get("/accounts/{USERNAME}") {
-            val account = db.account.get(username) ?: throw notFound(
-                "Account '$username' not found.",
-                TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-            )
+            val account = db.account.get(username) ?: throw unknownAccount(username)
             call.respond(account)
         }
     }
@@ -370,10 +358,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
                 timestamp = Instant.now(),
             )
             when (res) {
-                is BankTransactionResult.UnknownDebtor -> throw notFound(
-                    "Account '$username' not found",
-                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-                )
+                is BankTransactionResult.UnknownDebtor -> throw unknownAccount(username)
                 is BankTransactionResult.BothPartySame -> throw conflict(
                     "Wire transfer attempted with credit and debit party being the same bank account",
                     TalerErrorCode.BANK_SAME_ACCOUNT 
@@ -399,10 +384,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             ctx.checkRegionalCurrency(req.amount)
             val opId = UUID.randomUUID()
             when (db.withdrawal.create(username, opId, req.amount)) {
-                WithdrawalCreationResult.UnknownAccount -> throw notFound(
-                    "Account '$username' not found",
-                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-                )
+                WithdrawalCreationResult.UnknownAccount -> throw unknownAccount(username)
                 WithdrawalCreationResult.AccountIsExchange -> throw conflict(
                     "Exchange account cannot perform withdrawal operation",
                     TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
@@ -543,10 +525,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
                 validityPeriod = TAN_VALIDITY_PERIOD
             )
             when (res) {
-                is CashoutCreationResult.AccountNotFound -> throw notFound(
-                    "Account '$username' not found",
-                    TalerErrorCode.BANK_UNKNOWN_ACCOUNT
-                )
+                is CashoutCreationResult.AccountNotFound -> throw unknownAccount(username)
                 is CashoutCreationResult.BadConversion -> throw conflict(
                     "Wrong currency conversion",
                     TalerErrorCode.BANK_BAD_CONVERSION

@@ -141,7 +141,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     install(StatusPages) {
         exception<Exception> { call, cause ->
             when (cause) {
-                is LibeufinBankException -> call.err(cause)
+                is LibeufinException -> call.err(cause)
                 is SQLException -> {
                     when (cause.sqlState) {
                         PSQLState.SERIALIZATION_FAILURE.state -> call.err(
