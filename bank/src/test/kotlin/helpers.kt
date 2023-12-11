@@ -56,8 +56,12 @@ fun setup(
     Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use {
         runBlocking {
             it.conn { conn ->
+                resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
+                initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
                 resetDatabaseTables(conn, dbCfg, "libeufin-bank")
                 initializeDatabaseTables(conn, dbCfg, "libeufin-bank")
+                val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
+                conn.execSQLUpdate(sqlProcedures.readText())
             }
             lambda(it, ctx)
         }
