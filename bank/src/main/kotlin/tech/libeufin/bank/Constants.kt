@@ -42,7 +42,7 @@ const val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB
 const val MIN_VERSION: Int = 15
 
 // API version
-const val COREBANK_API_VERSION: String = "2:1:2"
+const val COREBANK_API_VERSION: String = "2:2:2"
 const val CONVERSION_API_VERSION: String = "0:0:0"
 const val INTEGRATION_API_VERSION: String = "1:0:1"
 const val WIRE_GATEWAY_API_VERSION: String = "0:1:0"
