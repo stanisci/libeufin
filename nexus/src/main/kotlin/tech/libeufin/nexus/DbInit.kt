@@ -3,8 +3,7 @@ package tech.libeufin.nexus
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
-import tech.libeufin.util.initializeDatabaseTables
-import tech.libeufin.util.resetDatabaseTables
+import tech.libeufin.util.*
 import kotlin.system.exitProcess
 
 /**
@@ -25,10 +24,12 @@ class DbInit : CliktCommand("Initialize the libeufin-nexus database", name = "db
     override fun run() {
         val cfg = loadConfigOrFail(configFile).extractDbConfigOrFail()
         doOrFail {
-            if (requestReset) {
-                resetDatabaseTables(cfg, sqlFilePrefix = "libeufin-nexus")
+            pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
+                if (requestReset) {
+                    resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
+                }
+                initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
             }
-            initializeDatabaseTables(cfg, sqlFilePrefix = "libeufin-nexus")
         }
     }
 }

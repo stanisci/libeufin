@@ -224,60 +224,57 @@ fun maybeApplyV(conn: PgConnection, cfg: DatabaseConfig) {
 }
 
 // sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
-fun initializeDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
-    logger.info("doing DB initialization, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
-    pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
-        maybeApplyV(conn, cfg)
-        conn.transaction {
-            val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
+fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
+    logger.info("doing DB initialization, sqldir ${cfg.sqlDir}")
+    maybeApplyV(conn, cfg)
+    conn.transaction {
+        val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
 
-            for (n in 1..9999) {
-                val numStr = n.toString().padStart(4, '0')
-                val patchName = "$sqlFilePrefix-$numStr"
+        for (n in 1..9999) {
+            val numStr = n.toString().padStart(4, '0')
+            val patchName = "$sqlFilePrefix-$numStr"
 
-                checkStmt.setString(1, patchName)
-                val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Error("unable to query patches");
-                if (patchCount >= 1) {
-                    logger.info("patch $patchName already applied")
-                    continue
-                }
-
-                val path = File("${cfg.sqlDir}/$sqlFilePrefix-$numStr.sql")
-                if (!path.exists()) {
-                    logger.info("path $path doesn't exist anymore, stopping")
-                    break
-                }
-                logger.info("applying patch $path")
-                val sqlPatchText = path.readText()
-                conn.execSQLUpdate(sqlPatchText)
+            checkStmt.setString(1, patchName)
+            val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Error("unable to query patches");
+            if (patchCount >= 1) {
+                logger.info("patch $patchName already applied")
+                continue
             }
-            val sqlProcedures = File("${cfg.sqlDir}/$sqlFilePrefix-procedures.sql")
-            if (!sqlProcedures.exists()) {
-                logger.info("No procedures.sql for the SQL collection: $sqlFilePrefix")
-                return@transaction
+
+            val path = File("${cfg.sqlDir}/$sqlFilePrefix-$numStr.sql")
+            if (!path.exists()) {
+                logger.info("path $path doesn't exist anymore, stopping")
+                break
             }
-            conn.execSQLUpdate(sqlProcedures.readText())
+            logger.info("applying patch $path")
+            val sqlPatchText = path.readText()
+            conn.execSQLUpdate(sqlPatchText)
         }
+        val sqlProcedures = File("${cfg.sqlDir}/$sqlFilePrefix-procedures.sql")
+        if (!sqlProcedures.exists()) {
+            logger.info("no procedures.sql for the SQL collection: $sqlFilePrefix")
+            return@transaction
+        }
+        logger.info("run procedure.sql")
+        conn.execSQLUpdate(sqlProcedures.readText())
     }
 }
 
 // sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
-fun resetDatabaseTables(cfg: DatabaseConfig, sqlFilePrefix: String) {
-    logger.info("reset DB, sqldir ${cfg.sqlDir}, dbConnStr ${cfg.dbConnStr}")
-    pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
-        val isInitialized = conn.prepareStatement("SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='_v')").oneOrNull {
-            it.getBoolean(1)
-        }!!
-        if (!isInitialized) {
-            logger.info("versioning schema not present, not running drop sql")
-            return
-        }
+fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
+    logger.info("reset DB, sqldir ${cfg.sqlDir}")
+    val isInitialized = conn.prepareStatement("SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='_v')").oneOrNull {
+        it.getBoolean(1)
+    }!!
+    if (!isInitialized) {
+        logger.info("versioning schema not present, not running drop sql")
+        return
+    }
 
-        val sqlDrop = File("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
-        try {
-            conn.execSQLUpdate(sqlDrop)
-        } catch (e: Exception) {
-            // TODO Fix fail because precense of _v does not mean patch is applied
-        }
+    val sqlDrop = File("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
+    try {
+        conn.execSQLUpdate(sqlDrop)
+    } catch (e: Exception) {
+        // TODO Fix fail because precense of _v does not mean patch is applied
     }
 }

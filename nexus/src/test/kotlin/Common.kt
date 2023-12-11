@@ -4,9 +4,7 @@ import io.ktor.client.request.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import tech.libeufin.nexus.*
-import tech.libeufin.util.DatabaseConfig
-import tech.libeufin.util.initializeDatabaseTables
-import tech.libeufin.util.resetDatabaseTables
+import tech.libeufin.util.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.Instant
 
@@ -28,14 +26,17 @@ fun prepDb(cfg: TalerConfig): Database {
         dbConnStr = "postgresql:///libeufincheck",
         sqlDir = cfg.requirePath("paths", "datadir") + "sql"
     )
-    println("SQL dir for testing: ${dbCfg.sqlDir}")
-    try {
-        resetDatabaseTables(dbCfg, "libeufin-nexus")
-    } catch (e: Exception) {
-        logger.warn("Resetting an empty database throws, tolerating this...")
-        logger.warn(e.message)
+    pgDataSource(dbCfg.dbConnStr).pgConnection().use { conn ->
+        println("SQL dir for testing: ${dbCfg.sqlDir}")
+        try {
+            resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
+        } catch (e: Exception) {
+            logger.warn("Resetting an empty database throws, tolerating this...")
+            logger.warn(e.message)
+        }
+        initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
     }
-    initializeDatabaseTables(dbCfg, "libeufin-nexus")
+   
     return Database(dbCfg.dbConnStr)
 }
 

@@ -70,6 +70,14 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         config.connectionInitSql = "SET search_path TO libeufin_bank;SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE;"
         config.validate()
         dbPool = HikariDataSource(config);
+        dbPool.getConnection().use { con -> 
+            val meta = con.getMetaData();
+            val majorVersion = meta.getDatabaseMajorVersion()
+            val minorVersion = meta.getDatabaseMinorVersion()
+            if (majorVersion < MIN_VERSION) {
+                throw Exception("postgres version must be at least $MIN_VERSION.0 got $majorVersion.$minorVersion")
+            }
+        }
         notifWatcher = NotificationWatcher(pgSource)
     }
 

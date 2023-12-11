@@ -234,13 +234,15 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
     override fun run() = cliCmd(logger){
         val config = talerConfig(common.config)
         val cfg = config.loadDbConfig()
-        if (requestReset) {
-            resetDatabaseTables(cfg, sqlFilePrefix = "libeufin-bank")
-        }
-        initializeDatabaseTables(cfg, sqlFilePrefix = "libeufin-bank")
         val ctx = config.loadBankConfig();
         val db = Database(cfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
+            db.conn { conn ->
+                if (requestReset) {
+                    resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
+                }
+                initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
+            }
             // Create admin account if missing
             val res = maybeCreateAdminAccount(db, ctx) // logs provided by the helper
             when (res) {
@@ -302,7 +304,15 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
             }
             module { corebankWebApp(db, ctx) }
         }
-        embeddedServer(Netty, env).start(wait = true)
+        val engine = embeddedServer(Netty, env)
+        when (serverCfg) {
+            is ServerConfig.Tcp -> {
+                logger.info("Server listening on http://localhost:${serverCfg.port}")
+            }
+            is ServerConfig.Unix ->
+                throw Exception("Can only serve libeufin-bank via TCP")
+        }
+        engine.start(wait = true)
     }
 }
 

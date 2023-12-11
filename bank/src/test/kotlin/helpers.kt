@@ -52,11 +52,13 @@ fun setup(
 ) {
     val config = talerConfig("conf/$conf")
     val dbCfg = config.loadDbConfig()
-    resetDatabaseTables(dbCfg, "libeufin-bank")
-    initializeDatabaseTables(dbCfg, "libeufin-bank")
     val ctx = config.loadBankConfig()
     Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use {
         runBlocking {
+            it.conn { conn ->
+                resetDatabaseTables(conn, dbCfg, "libeufin-bank")
+                initializeDatabaseTables(conn, dbCfg, "libeufin-bank")
+            }
             lambda(it, ctx)
         }
     }
