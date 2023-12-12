@@ -1,8 +1,8 @@
 package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.*
+import com.github.ajalt.clikt.parameters.groups.*
 import tech.libeufin.util.*
 import kotlin.system.exitProcess
 
@@ -12,17 +12,14 @@ import kotlin.system.exitProcess
  * the data first.
  */
 class DbInit : CliktCommand("Initialize the libeufin-nexus database", name = "dbinit") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
+    private val common by CommonOption()
     private val requestReset by option(
         "--reset", "-r",
-        help = "reset database (DANGEROUS: All existing data is lost)"
+        help = "Reset database (DANGEROUS: All existing data is lost)"
     ).flag()
 
     override fun run() {
-        val cfg = loadConfigOrFail(configFile).extractDbConfigOrFail()
+        val cfg = loadConfigOrFail(common.config).extractDbConfigOrFail()
         doOrFail {
             pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
                 if (requestReset) {

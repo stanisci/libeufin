@@ -24,9 +24,10 @@ import TalerConfig
 import TalerConfigError
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.*
+import com.github.ajalt.clikt.parameters.arguments.*
+import com.github.ajalt.clikt.parameters.options.*
+import com.github.ajalt.clikt.parameters.groups.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import kotlin.system.exitProcess
@@ -48,6 +49,17 @@ private fun talerConfig(configSource: ConfigSource, configPath: String?): TalerC
     return config
 }
 
+class CommonOption: OptionGroup() {
+    val config by option(
+        "--config", "-c",
+        help = "Specifies the configuration file"
+    ).path(
+        mustExist = true, 
+        canBeDir = false, 
+        mustBeReadable = true,
+    ).convert { it.toString() } // TODO take path to load config
+}
+
 class CliConfigCmd(configSource: ConfigSource) : CliktCommand("Inspect or change the configuration", name = "config") {
     init {
         subcommands(CliConfigDump(configSource), CliConfigPathsub(configSource), CliConfigGet(configSource))
@@ -57,20 +69,17 @@ class CliConfigCmd(configSource: ConfigSource) : CliktCommand("Inspect or change
 }
 
 private class CliConfigGet(private val configSource: ConfigSource) : CliktCommand("Lookup config value", name = "get") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
+    private val common by CommonOption()
     private val isPath by option(
         "--filename", "-f",
-        help = "interpret value as path with dollar-expansion"
+        help = "Interpret value as path with dollar-expansion"
     ).flag()
     private val sectionName by argument()
     private val optionName by argument()
 
 
     override fun run() = cliCmd(logger) {
-        val config = talerConfig(configSource, configFile)
+        val config = talerConfig(configSource, common.config)
         if (isPath) {
             val res = config.lookupPath(sectionName, optionName)
             if (res == null) {
@@ -92,28 +101,21 @@ private class CliConfigGet(private val configSource: ConfigSource) : CliktComman
 
 
 private class CliConfigPathsub(private val configSource: ConfigSource) : CliktCommand("Substitute variables in a path", name = "pathsub") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
+    private val common by CommonOption()
     private val pathExpr by argument()
 
     override fun run() = cliCmd(logger) {
-        val config = talerConfig(configSource, configFile)
+        val config = talerConfig(configSource, common.config)
         println(config.pathsub(pathExpr))
     }
 }
 
 private class CliConfigDump(private val configSource: ConfigSource) : CliktCommand("Dump the configuration", name = "dump") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
+    private val common by CommonOption()
 
     override fun run() = cliCmd(logger) {
-        val config = talerConfig(configSource, configFile)
+        val config = talerConfig(configSource, common.config)
         println("# install path: ${config.getInstallPath()}")
-        config.load(this.configFile)
         println(config.stringify())
     }
 }

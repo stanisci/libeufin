@@ -20,16 +20,15 @@
 package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.*
+import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
 import tech.libeufin.nexus.ebics.EbicsSideError
 import tech.libeufin.nexus.ebics.EbicsSideException
 import tech.libeufin.nexus.ebics.EbicsUploadException
 import tech.libeufin.nexus.ebics.submitPain001
-import tech.libeufin.util.parsePayto
-import tech.libeufin.util.toDbMicros
+import tech.libeufin.util.*
 import java.io.File
 import java.nio.file.Path
 import java.time.Instant
@@ -251,10 +250,7 @@ private fun submitBatch(
 }
 
 class EbicsSubmit : CliktCommand("Submits any initiated payment found in the database") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
+    private val common by CommonOption()
     private val transient by option(
         "--transient",
         help = "This flag submits what is found in the database and returns, " +
@@ -276,7 +272,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
      */
     override fun run() {
         val cfg: EbicsSetupConfig = doOrFail {
-            extractEbicsConfig(configFile)
+            extractEbicsConfig(common.config)
         }
         // Fail now if keying is incomplete.
         if (!isKeyingComplete(cfg)) exitProcess(1)

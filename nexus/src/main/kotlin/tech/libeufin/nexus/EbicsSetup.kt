@@ -20,8 +20,8 @@
 package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.*
+import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
 import tech.libeufin.util.ebics_h004.EbicsTypes
@@ -330,27 +330,24 @@ private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
  * CLI class implementing the "ebics-setup" subcommand.
  */
 class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
+    private val common by CommonOption()
     private val checkFullConfig by option(
-        help = "checks config values of ALL the subcommands"
+        help = "Checks config values of ALL the subcommands"
     ).flag(default = false)
     private val forceKeysResubmission by option(
-        help = "resubmits all the keys to the bank"
+        help = "Resubmits all the keys to the bank"
     ).flag(default = false)
     private val autoAcceptKeys by option(
-        help = "accepts the bank keys without the user confirmation"
+        help = "Accepts the bank keys without the user confirmation"
     ).flag(default = false)
     private val generateRegistrationPdf by option(
-        help = "generates the PDF with the client public keys to send to the bank"
+        help = "Generates the PDF with the client public keys to send to the bank"
     ).flag(default = false)
     /**
      * This function collects the main steps of setting up an EBICS access.
      */
     override fun run() {
-        val cfg = doOrFail { extractEbicsConfig(this.configFile) }
+        val cfg = doOrFail { extractEbicsConfig(common.config) }
         if (checkFullConfig) {
             doOrFail {
                 cfg.config.requireString("nexus-submit", "frequency").apply {

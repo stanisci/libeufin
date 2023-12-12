@@ -1,8 +1,8 @@
 package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.*
+import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
 import net.taler.wallet.crypto.Base32Crockford
@@ -524,10 +524,7 @@ private suspend fun fetchDocuments(
 }
 
 class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 notifications") {
-    private val configFile by option(
-        "--config", "-c",
-        help = "set the configuration file"
-    )
+    private val common by CommonOption()
     private val transient by option(
         "--transient",
         help = "This flag fetches only once from the bank and returns, " +
@@ -553,7 +550,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
     ).flag(default = false)
 
     private val pinnedStart by option(
-        help = "constant YYYY-MM-DD date for the earliest document" +
+        help = "Constant YYYY-MM-DD date for the earliest document" +
                 " to download (only consumed in --transient mode).  The" +
                 " latest document is always until the current time."
     )
@@ -580,7 +577,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
      */
     override fun run() {
         val cfg: EbicsSetupConfig = doOrFail {
-            extractEbicsConfig(configFile)
+            extractEbicsConfig(common.config)
         }
 
         val dbCfg = cfg.config.extractDbConfigOrFail()
