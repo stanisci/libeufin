@@ -263,7 +263,10 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
 // sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
 fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
     logger.info("reset DB, sqldir ${cfg.sqlDir}")
-    val isInitialized = conn.prepareStatement("SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='_v')").oneOrNull {
+    val isInitialized = conn.prepareStatement("""
+        SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='_v') AND
+            EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='${sqlFilePrefix.replace("-", "_")}')
+        """).oneOrNull {
         it.getBoolean(1)
     }!!
     if (!isInitialized) {
@@ -272,5 +275,5 @@ fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: 
     }
 
     val sqlDrop = File("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
-    conn.execSQLUpdate(sqlDrop) // TODO Fix fail because precense of _v does not mean patch is applied
+    conn.execSQLUpdate(sqlDrop)
 }
