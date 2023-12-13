@@ -1,3 +1,9 @@
+libeufin (0.9.3-8) unstable; urgency=low
+
+  * Misc. bugfixes.
+
+ -- Christian Grothoff <grothoff@gnu.org>  Tue, 13 Dec 2023 18:50:12 -0700
+
 libeufin (0.9.3-7) unstable; urgency=low
 
   * Improvements to account creation.
