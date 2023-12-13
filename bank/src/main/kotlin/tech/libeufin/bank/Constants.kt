@@ -39,7 +39,7 @@ val RESERVED_ACCOUNTS = setOf("admin", "bank")
 const val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB
 
 // DB
-const val MIN_VERSION: Int = 15
+const val MIN_VERSION: Int = 14
 
 // API version
 const val COREBANK_API_VERSION: String = "2:2:2"

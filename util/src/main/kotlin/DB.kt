@@ -272,9 +272,5 @@ fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: 
     }
 
     val sqlDrop = File("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
-    try {
-        conn.execSQLUpdate(sqlDrop)
-    } catch (e: Exception) {
-        // TODO Fix fail because precense of _v does not mean patch is applied
-    }
+    conn.execSQLUpdate(sqlDrop) // TODO Fix fail because precense of _v does not mean patch is applied
 }
