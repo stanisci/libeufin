@@ -442,6 +442,7 @@ CREATE FUNCTION bank_transaction(
   OUT out_debtor_not_found BOOLEAN,
   OUT out_same_account BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
+  OUT out_creditor_admin BOOLEAN,
   -- Success return
   OUT out_credit_bank_account_id BIGINT,
   OUT out_debit_bank_account_id BIGINT,
@@ -452,41 +453,39 @@ CREATE FUNCTION bank_transaction(
 )
 LANGUAGE plpgsql AS $$
 BEGIN
--- Find credit bank account id
-SELECT bank_account_id
-  INTO out_credit_bank_account_id
+-- Find credit bank account id and check it's not admin
+SELECT bank_account_id, is_taler_exchange, login='admin'
+  INTO out_credit_bank_account_id, out_creditor_is_exchange, out_creditor_admin
   FROM bank_accounts
+    JOIN customers ON customer_id=owning_customer_id
   WHERE internal_payto_uri = in_credit_account_payto;
 IF NOT FOUND THEN
   out_creditor_not_found=TRUE;
   RETURN;
+ELSIF out_creditor_admin THEN
+  RETURN;
 END IF;
--- Find debit bank account id
-SELECT bank_account_id
-  INTO out_debit_bank_account_id
+-- Find debit bank account id and check it's a different account
+SELECT bank_account_id, is_taler_exchange, out_credit_bank_account_id=bank_account_id
+  INTO out_debit_bank_account_id, out_debtor_is_exchange, out_same_account
   FROM bank_accounts 
-      JOIN customers 
-        ON customer_id=owning_customer_id
+    JOIN customers ON customer_id=owning_customer_id
   WHERE login = in_debit_account_username;
 IF NOT FOUND THEN
   out_debtor_not_found=TRUE;
+  RETURN;
+ELSIF out_same_account THEN
   RETURN;
 END IF;
 -- Perform bank transfer
 SELECT
   transfer.out_balance_insufficient,
   transfer.out_credit_row_id,
-  transfer.out_debit_row_id,
-  transfer.out_same_account,
-  transfer.out_creditor_is_exchange,
-  transfer.out_debtor_is_exchange
+  transfer.out_debit_row_id
   INTO
     out_balance_insufficient,
     out_credit_row_id,
-    out_debit_row_id,
-    out_same_account,
-    out_creditor_is_exchange,
-    out_debtor_is_exchange
+    out_debit_row_id
   FROM bank_wire_transfer(
     out_credit_bank_account_id,
     out_debit_bank_account_id,
@@ -497,9 +496,6 @@ SELECT
     NULL,
     NULL
   ) as transfer;
-IF out_balance_insufficient THEN
-  RETURN;
-END IF;
 END $$;
 COMMENT ON FUNCTION bank_transaction IS 'Create a bank transaction';
 
@@ -733,15 +729,10 @@ CREATE FUNCTION bank_wire_transfer(
   IN in_payment_information_id TEXT,
   IN in_end_to_end_id TEXT,
   -- Error status
-  OUT out_same_account BOOLEAN,
-  OUT out_debtor_not_found BOOLEAN,
-  OUT out_creditor_not_found BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
   -- Success return
   OUT out_credit_row_id BIGINT,
-  OUT out_debit_row_id BIGINT,
-  OUT out_creditor_is_exchange BOOLEAN,
-  OUT out_debtor_is_exchange BOOLEAN
+  OUT out_debit_row_id BIGINT
 )
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -760,57 +751,39 @@ new_debtor_balance_ok BOOLEAN;
 new_creditor_balance taler_amount;
 will_debtor_have_debt BOOLEAN;
 will_creditor_have_debt BOOLEAN;
-new_debit_row_id BIGINT;
-new_credit_row_id BIGINT;
 BEGIN
-
-IF in_creditor_account_id=in_debtor_account_id THEN
-  out_same_account=TRUE;
-  RETURN;
-END IF;
-out_same_account=FALSE;
-
--- check debtor exists.
+-- Retreive debtor info
 SELECT
   has_debt,
   (balance).val, (balance).frac,
   (max_debt).val, (max_debt).frac,
-  internal_payto_uri, customers.name,
-  is_taler_exchange
+  internal_payto_uri, customers.name
   INTO
     debtor_has_debt,
     debtor_balance.val, debtor_balance.frac,
     debtor_max_debt.val, debtor_max_debt.frac,
-    debtor_payto_uri, debtor_name,
-    out_debtor_is_exchange
+    debtor_payto_uri, debtor_name
   FROM bank_accounts
-  JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
+    JOIN customers ON customer_id=owning_customer_id
   WHERE bank_account_id=in_debtor_account_id;
 IF NOT FOUND THEN
-  out_debtor_not_found=TRUE;
-  RETURN;
+  RAISE EXCEPTION 'fuck debtor';
 END IF;
-out_debtor_not_found=FALSE;
--- check creditor exists.  Future versions may skip this
--- due to creditors being hosted at other banks.
+-- Retreive creditor info
 SELECT
   has_debt,
   (balance).val, (balance).frac,
-  internal_payto_uri, customers.name,
-  is_taler_exchange
+  internal_payto_uri, customers.name
   INTO
     creditor_has_debt,
     creditor_balance.val, creditor_balance.frac,
-    creditor_payto_uri, creditor_name,
-    out_creditor_is_exchange
+    creditor_payto_uri, creditor_name
   FROM bank_accounts
-  JOIN customers ON (bank_accounts.owning_customer_id = customers.customer_id)
+    JOIN customers ON customer_id=owning_customer_id
   WHERE bank_account_id=in_creditor_account_id;
 IF NOT FOUND THEN
-  out_creditor_not_found=TRUE;
-  RETURN;
+  RAISE EXCEPTION 'fuck creditor %', in_creditor_account_id;
 END IF;
-out_creditor_not_found=FALSE;
 
 -- DEBTOR SIDE
 -- check debtor has enough funds.
@@ -918,8 +891,7 @@ VALUES (
   in_end_to_end_id,
   'debit',
   in_debtor_account_id
-) RETURNING bank_transaction_id INTO new_debit_row_id;
-out_debit_row_id=new_debit_row_id;
+) RETURNING bank_transaction_id INTO out_debit_row_id;
 
 -- debtor side:
 INSERT INTO bank_account_transactions (
@@ -949,8 +921,7 @@ VALUES (
   in_end_to_end_id, -- does this interest the receiving party?
   'credit',
   in_creditor_account_id
-) RETURNING bank_transaction_id INTO new_credit_row_id;
-out_credit_row_id=new_credit_row_id;
+) RETURNING bank_transaction_id INTO out_credit_row_id;
 
 -- checks and balances set up, now update bank accounts.
 UPDATE bank_accounts

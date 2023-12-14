@@ -3490,6 +3490,14 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
+   * The client tried to create a transaction that credit the admin account.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_ADMIN_CREDITOR(5142),
+
+
+  /**
    * The sync service failed find the account in its database.
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).

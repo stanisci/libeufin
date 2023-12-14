@@ -33,10 +33,10 @@ class TransactionDAO(private val db: Database) {
     sealed class BankTransactionResult {
         data class Success(val id: Long): BankTransactionResult()
         object UnknownCreditor: BankTransactionResult()
+        object AdminCreditor: BankTransactionResult()
         object UnknownDebtor: BankTransactionResult()
         object BothPartySame: BankTransactionResult()
         object BalanceInsufficient: BankTransactionResult()
-        
     }
 
     /** Create a new transaction */
@@ -61,6 +61,7 @@ class TransactionDAO(private val db: Database) {
                     ,out_debit_row_id
                     ,out_creditor_is_exchange 
                     ,out_debtor_is_exchange
+                    ,out_creditor_admin
                 FROM bank_transaction(?,?,?,(?,?)::taler_amount,?)
             """
             )
@@ -77,6 +78,7 @@ class TransactionDAO(private val db: Database) {
                     it.getBoolean("out_debtor_not_found") -> BankTransactionResult.UnknownDebtor
                     it.getBoolean("out_same_account") -> BankTransactionResult.BothPartySame
                     it.getBoolean("out_balance_insufficient") -> BankTransactionResult.BalanceInsufficient
+                    it.getBoolean("out_creditor_admin") -> BankTransactionResult.AdminCreditor
                     else -> {
                         val creditAccountId = it.getLong("out_credit_bank_account_id")
                         val creditRowId = it.getLong("out_credit_row_id")

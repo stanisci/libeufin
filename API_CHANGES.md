@@ -16,6 +16,7 @@ This files contains all the API changes for the current release:
 - GET /public-accounts: add is_taler_exchange and rename account_name to username
 - PATCH /accounts: fix PATCH semantic
 - PATCH /accounts: restrict PATCH contact_data to admin
+- POST /accounts/USERNAME/transactions: prohibit transaction to admin account
 
 ## bank cli
 

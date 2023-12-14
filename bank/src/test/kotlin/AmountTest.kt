@@ -32,7 +32,7 @@ class AmountTest {
     @Test
     fun computationTest() = bankSetup { db ->  
         val conn = db.dbPool.getConnection().unwrap(PgConnection::class.java)
-        conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 100000 WHERE internal_payto_uri = '$exchangePayto'")
+        conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 100000 WHERE internal_payto_uri = '$customerPayto'")
         val stmt = conn.prepareStatement("""
             UPDATE libeufin_bank.bank_accounts 
                 SET balance = (?, ?)::taler_amount
@@ -50,7 +50,7 @@ class AmountTest {
             // Check bank transaction
             stmt.executeUpdate()
             val txRes = db.transaction.create(
-                creditAccountPayto = exchangePayto,
+                creditAccountPayto = customerPayto,
                 debitAccountUsername = "merchant",
                 subject = "test",
                 amount = due,

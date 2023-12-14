@@ -371,6 +371,10 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
                     "Creditor account was not found",
                     TalerErrorCode.BANK_UNKNOWN_CREDITOR
                 )
+                is BankTransactionResult.AdminCreditor -> throw conflict(
+                    "Cannot transfer money to admin account",
+                    TalerErrorCode.BANK_ADMIN_CREDITOR
+                )
                 is BankTransactionResult.BalanceInsufficient -> throw conflict(
                     "Insufficient funds",
                     TalerErrorCode.BANK_UNALLOWED_DEBIT

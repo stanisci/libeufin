@@ -679,7 +679,7 @@ class CoreBankTransactionsApiTest {
 
     // POST /transactions
     @Test
-    fun create() = bankSetup { _ -> 
+    fun create() = bankSetup { db -> 
         authRoutine(HttpMethod.Post, "/accounts/merchant/transactions")
 
         val valid_req = obj {
@@ -754,6 +754,13 @@ class CoreBankTransactionsApiTest {
                 "payto_uri" to "$merchantPayto?message=payout"
             }
         }.assertConflict(TalerErrorCode.BANK_SAME_ACCOUNT)
+        // Transaction to admin
+        val adminPayto = db.account.bankInfo("admin")!!.internalPaytoUri
+        client.postA("/accounts/merchant/transactions") {
+            json(valid_req) {
+                "payto_uri" to "$adminPayto?message=payout"
+            }
+        }.assertConflict(TalerErrorCode.BANK_ADMIN_CREDITOR)
 
         // Init state
         assertBalance("merchant", "+KUDOS:0")
