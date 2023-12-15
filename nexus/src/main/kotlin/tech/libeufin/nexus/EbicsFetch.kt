@@ -54,11 +54,6 @@ data class FetchContext(
      */
     val ebicsExtraLog: Boolean,
     /**
-     * Not triggering any Taler logic, if the incoming amount
-     * is below the following value.
-     */
-    val minimumAmount: TalerAmount?,
-    /**
      * Start date of the returned documents.  Only
      * used in --transient mode.
      */
@@ -323,43 +318,16 @@ private suspend fun ingestOutgoingPayment(
  * to the subject.
  *
  * @param db database handle.
- * @param minimumAmount under this amount, payment get stored as
- *        bounced transactions, but actually never reimbursed.
  * @param currency fiat currency of the watched bank account.
  * @param incomingPayment payment to (maybe) ingest.
  */
 private suspend fun ingestIncomingPayment(
     db: Database,
-    minimumAmount: TalerAmount? = null,
-    currency: String,
     incomingPayment: IncomingPayment
 ) {
     logger.debug("Ingesting incoming payment UID: ${incomingPayment.bankTransferId}, subject: ${incomingPayment.wireTransferSubject}")
     if (db.isIncomingPaymentSeen(incomingPayment.bankTransferId)) {
         logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}' already seen.")
-        return
-    }
-    if (
-        minimumAmount != null &&
-        firstLessThanSecond(
-            incomingPayment.amount,
-            minimumAmount
-        )) {
-        logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}'" +
-                " is too low: ${incomingPayment.amount}."
-        )
-
-        /**
-         * Setting the refund amount to zero makes the initiated
-         * payment _never_ paid back.  Inserting this row merely
-         * logs the incoming payment event, for which the policy
-         * has no reimbursement.
-         */
-        db.incomingPaymentCreateBounced(
-            incomingPayment,
-            UUID.randomUUID().toString().take(35),
-            TalerAmount(0, 0, currency)
-        )
         return
     }
     val reservePub = getTalerReservePub(db, incomingPayment)
@@ -449,8 +417,6 @@ private fun ingestNotification(
             incomingPayments.forEach {
                 ingestIncomingPayment(
                     db,
-                    ctx.minimumAmount,
-                    ctx.cfg.currency,
                     it
                 )
             }
@@ -589,20 +555,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (onlyReports) whichDoc = SupportedDocument.CAMT_052
         if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
         if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
-        val minAmountCfg: String? = cfg.config.lookupString(
-            "nexus-fetch",
-            "minimum_amount"
-        )
-        var minAmount: TalerAmount? = null
-        if (minAmountCfg != null) {
-            minAmount = doOrFail {
-                getTalerAmount(
-                    noCurrencyAmount = minAmountCfg,
-                    currency = cfg.currency,
-                    "[nexus-fetch]/minimum_amount '$minAmountCfg', "
-                )
-            }
-        }
         if (parse || import) {
             logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
             val maybeStdin = generateSequence(::readLine).joinToString("\n")
@@ -614,11 +566,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                         if (import) {
                             runBlocking {
                                 incomingTxs.forEach {
-                                    ingestIncomingPayment(db,
-                                        minAmount,
-                                        cfg.currency,
-                                        it
-                                    )
+                                    ingestIncomingPayment(db, it)
                                 }
                             }
                         }
@@ -673,8 +621,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             bankKeys,
             whichDoc,
             EbicsVersion.three,
-            ebicsExtraLog,
-            minAmount
+            ebicsExtraLog
         )
         if (transient) {
             logger.info("Transient mode: fetching once and returning.")
