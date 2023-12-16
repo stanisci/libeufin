@@ -25,6 +25,7 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.http.*
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.bank.WithdrawalDAO.*
 import java.lang.AssertionError
@@ -96,6 +97,20 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
                     confirm_transfer_url = confirmUrl
                 ))
             }
+        }
+    }
+    post("/taler-integration/withdrawal-operation/{wopid}/abort") {
+        val opId = call.uuidUriComponent("wopid")
+        when (db.withdrawal.abort(opId)) {
+            AbortResult.UnknownOperation -> throw notFound(
+                "Withdrawal operation $opId not found",
+                TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+            )
+            AbortResult.AlreadyConfirmed -> throw conflict(
+                "Cannot abort confirmed withdrawal", 
+                TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
+            )
+            AbortResult.Success -> call.respond(HttpStatusCode.NoContent)
         }
     }
 }

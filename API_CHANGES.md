@@ -17,6 +17,8 @@ This files contains all the API changes for the current release:
 - PATCH /accounts: fix PATCH semantic
 - PATCH /accounts: restrict PATCH contact_data to admin
 - POST /accounts/USERNAME/transactions: prohibit transaction to admin account
+- Deprecate POST /accounts/USERNAME/withdrawals/WITHDRAWAL_ID/abort
+- Add POST /taler-integration/withdrawal-operation/WITHDRAWAL_ID/abort
 
 ## bank cli
 
