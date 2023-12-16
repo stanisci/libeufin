@@ -38,7 +38,6 @@ import io.ktor.http.HttpStatusCode
 import net.taler.common.errorcodes.TalerErrorCode
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
-private val SERIALIZATION_RETRY: Int = 10;
 
 /**
  * This error occurs in case the timestamp took by the bank for some

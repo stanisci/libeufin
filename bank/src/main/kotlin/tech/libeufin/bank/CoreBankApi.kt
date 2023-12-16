@@ -159,24 +159,34 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             TalerErrorCode.END
         )
 
-    val internalPayto = req.payto_uri ?: req.internal_payto_uri ?: IbanPayTo(genIbanPaytoUri())
+    val reqPayto = req.payto_uri ?: req.internal_payto_uri
     val contactData = req.contact_data ?: req.challenge_contact_data
-    val res = db.account.create(
-        login = req.username,
-        name = req.name,
-        email = contactData?.email?.get(),
-        phone = contactData?.phone?.get(),
-        cashoutPayto = req.cashout_payto_uri,
-        password = req.password,
-        internalPaytoUri = internalPayto,
-        isPublic = req.is_public,
-        isTalerExchange = req.is_taler_exchange,
-        maxDebt = req.debit_threshold ?: ctx.defaultDebtLimit,
-        bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
-                else TalerAmount(0, 0, ctx.regionalCurrency),
-        checkPaytoIdempotent = req.internal_payto_uri != null
-    )
-    return Pair(res, internalPayto)
+    var retry = if (reqPayto == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
+
+    while (true) {
+        val internalPayto = reqPayto ?: IbanPayTo(genIbanPaytoUri())
+        val res = db.account.create(
+            login = req.username,
+            name = req.name,
+            email = contactData?.email?.get(),
+            phone = contactData?.phone?.get(),
+            cashoutPayto = req.cashout_payto_uri,
+            password = req.password,
+            internalPaytoUri = internalPayto,
+            isPublic = req.is_public,
+            isTalerExchange = req.is_taler_exchange,
+            maxDebt = req.debit_threshold ?: ctx.defaultDebtLimit,
+            bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
+                    else TalerAmount(0, 0, ctx.regionalCurrency),
+            checkPaytoIdempotent = req.internal_payto_uri != null
+        )
+        // Retry with new IBAN
+        if (res == AccountCreationResult.PayToReuse && retry > 0) {
+            retry--
+            continue
+        }
+        return Pair(res, internalPayto)
+    }
 }
 
 suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfiguration, username: String, isAdmin: Boolean): AccountPatchResult {

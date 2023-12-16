@@ -168,7 +168,7 @@ fun PreparedStatement.executeUpdateViolation(): Boolean {
     return try {
         executeUpdateCheck()
     } catch (e: SQLException) {
-        logger.error(e.message)
+        logger.debug(e.message)
         if (e.sqlState == PSQLState.UNIQUE_VIOLATION.state) return false
         throw e // rethrowing, not to hide other types of errors.
     }
