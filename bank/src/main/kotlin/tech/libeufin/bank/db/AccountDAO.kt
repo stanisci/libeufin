@@ -202,6 +202,7 @@ class AccountDAO(private val db: Database) {
         NonAdminDebtLimit,
         NonAdminContact,
         MissingTanInfo,
+        TanRequired,
         Success
     }
 
@@ -239,6 +240,7 @@ class AccountDAO(private val db: Database) {
                     TanChannel.sms -> if (phone.get() != null) "false" else "phone IS NULL"
                     TanChannel.email -> if (email.get() != null) "false" else "email IS NULL"
                 }}) as missing_tan_info
+                ,(tan_channel IS NOT NULL) as tan_required
             FROM customers
                 JOIN bank_accounts 
                 ON customer_id=owning_customer_id
@@ -271,6 +273,7 @@ class AccountDAO(private val db: Database) {
                     it.getBoolean("phone_change") -> return@transaction AccountPatchResult.NonAdminContact
                     it.getBoolean("email_change") -> return@transaction AccountPatchResult.NonAdminContact
                     it.getBoolean("missing_tan_info") -> return@transaction AccountPatchResult.MissingTanInfo
+                    it.getBoolean("tan_required") -> return@transaction AccountPatchResult.TanRequired
                     else -> it.getLong("customer_id")
                 }
             }

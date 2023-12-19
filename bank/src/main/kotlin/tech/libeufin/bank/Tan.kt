@@ -19,8 +19,31 @@
 package tech.libeufin.bank
 
 import java.security.SecureRandom
-import java.util.UUID
+import java.time.Instant
+import java.time.Duration
 import java.text.DecimalFormat
+import kotlinx.serialization.json.Json
+import io.ktor.http.*
+import io.ktor.server.response.*
+import io.ktor.server.application.*
+
+
+inline suspend fun <reified B> ApplicationCall.respondChallenge(db: Database, body: B) {
+    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), body); 
+    val code = Tan.genCode()
+    val id = db.tan.new(
+        login = username, 
+        body = json,
+        code = code,
+        now = Instant.now(), 
+        retryCounter = TAN_RETRY_COUNTER,
+        validityPeriod = TAN_VALIDITY_PERIOD
+    )
+    respond(
+        status = HttpStatusCode.Accepted,
+        message = TanChallenge(id)
+    )
+}
 
 object Tan {
     private val CODE_FORMAT = DecimalFormat("00000000");  

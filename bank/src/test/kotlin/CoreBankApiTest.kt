@@ -479,6 +479,18 @@ class CoreBankAccountsApiTest {
                 "is_public" to true
             }
         }.assertConflict(TalerErrorCode.END)
+
+        // Check 2FA
+        client.patchA("/accounts/merchant") {
+            json { "tan_channel" to "sms" }
+        }.assertNoContent()
+        client.patchA("/accounts/merchant") {
+            json { "is_public" to false }
+        }.assertAccepted()
+        client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
+            // Check request patch did not happen
+            assert(obj.is_public)
+        }
     }
 
     // Test admin-only account patch

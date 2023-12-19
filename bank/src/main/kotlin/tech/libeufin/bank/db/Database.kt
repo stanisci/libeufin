@@ -87,6 +87,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
     val account = AccountDAO(this)
     val transaction = TransactionDAO(this)
     val token = TokenDAO(this)
+    val tan = TanDAO(this)
 
     suspend fun monitor(
         params: MonitorParams

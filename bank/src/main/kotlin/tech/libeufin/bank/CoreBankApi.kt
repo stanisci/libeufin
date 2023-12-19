@@ -269,10 +269,9 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         patch("/accounts/{USERNAME}") {
             val req = call.receive<AccountReconfiguration>()
             val res = patchAccount(db, ctx, req, username, isAdmin)
-            println(req)
-            println(res)
             when (res) {
                 AccountPatchResult.Success -> call.respond(HttpStatusCode.NoContent)
+                AccountPatchResult.TanRequired -> call.respondChallenge(db, req)
                 AccountPatchResult.UnknownAccount -> throw unknownAccount(username)
                 AccountPatchResult.NonAdminName -> throw conflict(
                     "non-admin user cannot change their legal name",

@@ -111,6 +111,11 @@ sealed class Option<out T> {
     }
 }
 
+@Serializable
+data class TanChallenge(
+    val challenge_id: Long
+)
+
 /**
  * HTTP response type of successful token refresh.
  * access_token is the Crockford encoding of the 32 byte
