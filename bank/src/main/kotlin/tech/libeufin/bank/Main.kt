@@ -364,6 +364,7 @@ class EditAccount : CliktCommand(
     ).boolean()
     private val email: String? by option(help = "E-Mail address used for TAN transmission")
     private val phone: String? by option(help = "Phone number used for TAN transmission")
+    private val tan_channel: String? by option(help = "which channel TAN challenges should be sent to")
     private val cashout_payto_uri: IbanPayTo? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { IbanPayTo(it) }
     private val debit_threshold: TalerAmount? by option(help = "Max debit allowed for this account").convert { TalerAmount(it) }
  
@@ -390,6 +391,8 @@ class EditAccount : CliktCommand(
                     logger.info("Account '$username' edited")
                 AccountPatchResult.UnknownAccount -> 
                     throw Exception("Account '$username' not found")
+                AccountPatchResult.MissingTanInfo -> 
+                    throw Exception("missing info for tan channel ${req.tan_channel.get()}")
                 AccountPatchResult.NonAdminName,
                     AccountPatchResult.NonAdminCashout,
                     AccountPatchResult.NonAdminDebtLimit,

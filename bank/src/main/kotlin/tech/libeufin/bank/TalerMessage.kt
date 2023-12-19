@@ -176,6 +176,7 @@ data class AccountReconfiguration(
     val name: String? = null,
     val is_public: Boolean? = null,
     val debit_threshold: TalerAmount? = null,
+    val tan_channel: Option<TanChannel?> = Option.None,
     // TODO remove
     val challenge_contact_data: ChallengeContactData? = null,
     val is_taler_exchange: Boolean? = null,
@@ -347,6 +348,7 @@ data class AccountData(
     val debit_threshold: TalerAmount,
     val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: String? = null,
+    val tan_channel: TanChannel? = null,
     val is_public: Boolean,
     val is_taler_exchange: Boolean
 )

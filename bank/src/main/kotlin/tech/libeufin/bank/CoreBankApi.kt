@@ -205,6 +205,7 @@ suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfigurat
         cashoutPayto = req.cashout_payto_uri, 
         email = contactData?.email ?: Option.None,
         phone = contactData?.phone ?: Option.None,
+        tan_channel = req.tan_channel,
         isPublic = req.is_public,
         debtLimit = req.debit_threshold,
         isAdmin = isAdmin,
@@ -267,7 +268,10 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readwrite, allowAdmin = true) {
         patch("/accounts/{USERNAME}") {
             val req = call.receive<AccountReconfiguration>()
-            when (patchAccount(db, ctx, req, username, isAdmin)) {
+            val res = patchAccount(db, ctx, req, username, isAdmin)
+            println(req)
+            println(res)
+            when (res) {
                 AccountPatchResult.Success -> call.respond(HttpStatusCode.NoContent)
                 AccountPatchResult.UnknownAccount -> throw unknownAccount(username)
                 AccountPatchResult.NonAdminName -> throw conflict(
@@ -285,6 +289,10 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                 AccountPatchResult.NonAdminContact -> throw conflict(
                     "non-admin user cannot change their contact info",
                     TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
+                )
+                AccountPatchResult.MissingTanInfo -> throw conflict(
+                    "missing info for tan channel ${req.tan_channel.get()}",
+                    TalerErrorCode.BANK_MISSING_TAN_INFO
                 )
             }
         }

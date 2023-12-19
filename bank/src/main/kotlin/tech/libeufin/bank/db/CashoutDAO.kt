@@ -211,7 +211,7 @@ class CashoutDAO(private val db: Database) {
                 ,cashout_operations.subject
                 ,creation_time
                 ,transaction_date as confirmation_date
-                ,tan_channel
+                ,cashout_operations.tan_channel
                 ,tan_info
             FROM cashout_operations
                 JOIN bank_accounts ON bank_account=bank_account_id

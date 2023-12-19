@@ -400,7 +400,7 @@ class CoreBankAccountsApiTest {
     fun reconfig() = bankSetup { _ -> 
         authRoutine(HttpMethod.Patch, "/accounts/merchant", withAdmin = true)
 
-        // Successful attempt now.
+        // Successful attempt now
         val cashout = IbanPayTo(genIbanPaytoUri())
         val req = obj {
             "cashout_payto_uri" to cashout.canonical
@@ -410,10 +410,24 @@ class CoreBankAccountsApiTest {
         client.patchA("/accounts/merchant") {
             json(req)
         }.assertNoContent()
-        // Checking idempotence.
+        // Checking idempotence
         client.patchA("/accounts/merchant") {
             json(req)
         }.assertNoContent()
+
+        // Check tan info
+        client.patchA("/accounts/merchant") {
+            json {
+                "tan_channel" to "sms"
+                "email" to "mail@test.com"
+            }
+        }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
+        client.patchA("/accounts/merchant") {
+            json {
+                "tan_channel" to "email"
+                "phone" to "+99"
+            }
+        }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
         
         checkAdminOnly(
             obj(req) { "debit_threshold" to "KUDOS:100" },

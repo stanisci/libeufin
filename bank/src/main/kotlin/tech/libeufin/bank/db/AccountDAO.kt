@@ -92,7 +92,8 @@ class AccountDAO(private val db: Database) {
                         ,email
                         ,phone
                         ,cashout_payto
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                        ,tan_channel
+                    ) VALUES (?, ?, ?, ?, ?, ?, NULL)
                         RETURNING customer_id
                 """
                 ).run {
@@ -200,6 +201,7 @@ class AccountDAO(private val db: Database) {
         NonAdminCashout,
         NonAdminDebtLimit,
         NonAdminContact,
+        MissingTanInfo,
         Success
     }
 
@@ -210,6 +212,7 @@ class AccountDAO(private val db: Database) {
         cashoutPayto: Option<IbanPayTo?>,
         phone: Option<String?>,
         email: Option<String?>,
+        tan_channel: Option<TanChannel?>,
         isPublic: Boolean?,
         debtLimit: TalerAmount?,
         isAdmin: Boolean,
@@ -226,11 +229,16 @@ class AccountDAO(private val db: Database) {
         val customer_id = conn.prepareStatement("""
             SELECT
                 customer_id
-                ,(${ if (checkName) "name != ? " else "false" }) as name_change
+                ,(${ if (checkName) "name != ?" else "false" }) as name_change
                 ,(${ if (checkCashout) "cashout_payto IS DISTINCT FROM ?" else "false" }) as cashout_change
                 ,(${ if (checkDebtLimit) "max_debt != (?, ?)::taler_amount" else "false" }) as debt_limit_change
-                ,(${ if (checkPhone) "phone IS DISTINCT FROM  ?" else "false" }) as phone_change
-                ,(${ if (checkEmail) "email IS DISTINCT FROM  ?" else "false" }) as email_change
+                ,(${ if (checkPhone) "phone IS DISTINCT FROM ?" else "false" }) as phone_change
+                ,(${ if (checkEmail) "email IS DISTINCT FROM ?" else "false" }) as email_change
+                ,(${ when (tan_channel.get()) {
+                    null -> "false"
+                    TanChannel.sms -> if (phone.get() != null) "false" else "phone IS NULL"
+                    TanChannel.email -> if (email.get() != null) "false" else "email IS NULL"
+                }}) as missing_tan_info
             FROM customers
                 JOIN bank_accounts 
                 ON customer_id=owning_customer_id
@@ -262,6 +270,7 @@ class AccountDAO(private val db: Database) {
                     it.getBoolean("debt_limit_change") -> return@transaction AccountPatchResult.NonAdminDebtLimit
                     it.getBoolean("phone_change") -> return@transaction AccountPatchResult.NonAdminContact
                     it.getBoolean("email_change") -> return@transaction AccountPatchResult.NonAdminContact
+                    it.getBoolean("missing_tan_info") -> return@transaction AccountPatchResult.MissingTanInfo
                     else -> it.getLong("customer_id")
                 }
             }
@@ -289,6 +298,7 @@ class AccountDAO(private val db: Database) {
                 cashoutPayto.some { yield("cashout_payto=?") }
                 phone.some { yield("phone=?") }
                 email.some { yield("email=?") }
+                tan_channel.some { yield("tan_channel=?::tan_enum") }
                 name?.let { yield("name=?") }
             },
             "WHERE customer_id = ?",
@@ -296,6 +306,7 @@ class AccountDAO(private val db: Database) {
                 cashoutPayto.some { yield(it?.canonical) }
                 phone.some { yield(it) }
                 email.some { yield(it) }
+                tan_channel.some { yield(it?.name) }
                 name?.let { yield(it) }
                 yield(customer_id)
             }
@@ -388,6 +399,7 @@ class AccountDAO(private val db: Database) {
                 name
                 ,email
                 ,phone
+                ,tan_channel
                 ,cashout_payto
                 ,internal_payto_uri
                 ,(balance).val AS balance_val
@@ -398,7 +410,7 @@ class AccountDAO(private val db: Database) {
                 ,is_public
                 ,is_taler_exchange
             FROM customers 
-                JOIN  bank_accounts
+                JOIN bank_accounts
                     ON customer_id=owning_customer_id
             WHERE login=?
         """)
@@ -410,6 +422,7 @@ class AccountDAO(private val db: Database) {
                     email = Option.Some(it.getString("email")),
                     phone = Option.Some(it.getString("phone"))
                 ),
+                tan_channel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) },
                 cashout_payto_uri = it.getString("cashout_payto"),
                 payto_uri = it.getString("internal_payto_uri"),
                 balance = Balance(
