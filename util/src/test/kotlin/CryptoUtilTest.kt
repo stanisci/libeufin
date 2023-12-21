@@ -18,17 +18,13 @@
  */
 
 import net.taler.wallet.crypto.Base32Crockford
-import net.taler.wallet.crypto.EncodingException
-import org.bouncycastle.asn1.edec.EdECObjectIdentifiers
-import org.bouncycastle.asn1.x509.AlgorithmIdentifier
-import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
+import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.util.*
-import java.security.KeyFactory
+import java.io.File
 import java.security.KeyPairGenerator
 import java.security.interfaces.RSAPrivateCrtKey
-import java.security.spec.KeySpec
-import java.security.spec.X509EncodedKeySpec
+import java.util.*
 import javax.crypto.EncryptedPrivateKeyInfo
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -150,19 +146,67 @@ class CryptoUtilTest {
     fun checkEddsaPublicKey() {
         val givenEnc = "XZH3P6NF9DSG3BH0C082X38N2RVK1RV2H24KF76028QBKDM24BCG"
         val non32bytes = "N2RVK1RV2H24KF76028QBKDM24BCG"
-
         assertTrue(CryptoUtil.checkValidEddsaPublicKey(givenEnc))
         assertFalse(CryptoUtil.checkValidEddsaPublicKey(non32bytes))
     }
 
-    @Test(expected = EncodingException::class)
-    fun base32ToBytesTest() {
-        val expectedEncoding = "C9P6YRG" // decodes to 'blob'
-        assert(Base32Crockford.decode(expectedEncoding).toString(Charsets.UTF_8) == "blob")
+    @Test
+    fun base32Test() {
         val validKey = "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"
-        val obj = Base32Crockford.decode(validKey)
+        val enc = validKey
+        val obj = Base32Crockford.decode(enc)
+        assertTrue(obj.size == 32)
         val roundTrip = Base32Crockford.encode(obj)
-        assertEquals(validKey, roundTrip)
+        assertEquals(enc, roundTrip)
+        val invalidShorterKey = "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCE"
+        val shorterBlob = Base32Crockford.decode(invalidShorterKey)
+        assertTrue(shorterBlob.size < 32) // See #7980
+    }
+
+    @Test
+    fun blobRoundTrip() {
+        val blob = ByteArray(30)
+        Random().nextBytes(blob)
+        val enc = Base32Crockford.encode(blob)
+        val blobAgain = Base32Crockford.decode(enc)
+        assertTrue(blob.contentEquals(blobAgain))
+    }
+
+    /**
+     * Manual test: tests that gnunet-base32 and
+     * libeufin encode to the same string.
+     */
+    @Ignore
+    fun gnunetEncodeCheck() {
+        val blob = ByteArray(30)
+        Random().nextBytes(blob)
+        val b = File("/tmp/libeufin-blob.bin")
+        b.writeBytes(blob)
+        val enc = Base32Crockford.encode(blob)
+        // The following output needs to match the one from
+        // "gnunet-base32 /tmp/libeufin-blob.bin"
+        println(enc)
+    }
+
+    /**
+     * Manual test: tests that gnunet-base32 and
+     * libeufin decode to the same value
+     */
+    @Ignore
+    fun gnunetDecodeCheck() {
+        // condition: "gnunet-base32 -d /tmp/blob.enc" needs to decode to /tmp/blob.bin
+        val blob = File("/tmp/blob.bin").readBytes()
+        val blobEnc = File("/tmp/blob.enc").readText(Charsets.UTF_8)
+        val dec = Base32Crockford.decode(blobEnc)
+        assertTrue(blob.contentEquals(dec))
+    }
+
+    @Test
+    fun emptyBase32Test() {
+        val enc = Base32Crockford.encode(ByteArray(0))
+        assert(enc.isEmpty())
+        val blob = Base32Crockford.decode("")
+        assert(blob.isEmpty())
     }
 
     @Test
@@ -171,4 +215,3 @@ class CryptoUtilTest {
         assertTrue(CryptoUtil.checkpw("myinsecurepw", x))
     }
 }
-

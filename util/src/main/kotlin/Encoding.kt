@@ -31,61 +31,73 @@ object Base32Crockford {
 
     fun encode(data: ByteArray): String {
         val sb = StringBuilder()
-        val size = data.size
-        var bitBuf = 0
-        var numBits = 0
-        var pos = 0
-        while (pos < size || numBits > 0) {
-            if (pos < size && numBits < 5) {
-                val d = data.getIntAt(pos++)
-                bitBuf = (bitBuf shl 8) or d
-                numBits += 8
+        var inputChunkBuffer = 0
+        var pendingBitsCount = 0
+        var inputCursor = 0
+        var inputChunkNumber = 0
+
+        while (inputCursor < data.size) {
+            // Read input
+            inputChunkNumber = data.getIntAt(inputCursor++)
+            inputChunkBuffer = (inputChunkBuffer shl 8) or inputChunkNumber
+            pendingBitsCount += 8
+            // Write symbols
+            while (pendingBitsCount >= 5) {
+                val symbolIndex = inputChunkBuffer.ushr(pendingBitsCount - 5) and 31
+                sb.append(encTable[symbolIndex])
+                pendingBitsCount -= 5
             }
-            if (numBits < 5) {
-                // zero-padding
-                bitBuf = bitBuf shl (5 - numBits)
-                numBits = 5
-            }
-            val v = bitBuf.ushr(numBits - 5) and 31
-            sb.append(encTable[v])
-            numBits -= 5
         }
-        return sb.toString()
+        if (pendingBitsCount >= 5)
+            throw Exception("base32 encoder did not write all the symbols")
+
+        if (pendingBitsCount > 0) {
+            val symbolIndex = (inputChunkNumber shl (5 - pendingBitsCount)) and 31
+            sb.append(encTable[symbolIndex])
+        }
+        val enc = sb.toString()
+        val oneMore = ((data.size * 8) % 5) > 0
+        val expectedLength = if (oneMore) {
+            ((data.size * 8) / 5) + 1
+        } else {
+            (data.size * 8) / 5
+        }
+        if (enc.length != expectedLength)
+            throw Exception("base32 encoding has wrong length")
+        return enc
     }
 
     /**
      * Decodes the input to its binary representation, throws
      * net.taler.wallet.crypto.EncodingException on invalid encodings.
      */
-    fun decode(encoded: String, out: ByteArrayOutputStream) {
-        val size = encoded.length
-        var bitpos = 0
-        var bitbuf = 0
-        var readPosition = 0
+    fun decode(
+        encoded: String,
+        out: ByteArrayOutputStream
+    ) {
+        var outBitsCount = 0
+        var bitsBuffer = 0
+        var inputCursor = 0
 
-        while (readPosition < size || bitpos > 0) {
-            //println("at position $readPosition with bitpos $bitpos")
-            if (readPosition < size) {
-                val v = getValue(encoded[readPosition++])
-                bitbuf = (bitbuf shl 5) or v
-                bitpos += 5
-            }
-            while (bitpos >= 8) {
-                val d = (bitbuf ushr (bitpos - 8)) and 0xFF
-                out.write(d)
-                bitpos -= 8
-            }
-            if (readPosition == size && bitpos > 0) {
-                bitbuf = (bitbuf shl (8 - bitpos)) and 0xFF
-                bitpos = if (bitbuf == 0) 0 else 8
+        while (inputCursor < encoded.length) {
+            val decodedNumber = getValue(encoded[inputCursor++])
+            bitsBuffer = (bitsBuffer shl 5) or decodedNumber
+            outBitsCount += 5
+            while (outBitsCount >= 8) {
+                val outputChunk = (bitsBuffer ushr (outBitsCount - 8)) and 0xFF
+                out.write(outputChunk)
+                outBitsCount -= 8 // decrease of written bits.
             }
         }
+        if ((encoded.length * 5) / 8 != out.size())
+            throw Exception("base32 decoder: wrong output size")
     }
 
     fun decode(encoded: String): ByteArray {
         val out = ByteArrayOutputStream()
         decode(encoded, out)
-        return out.toByteArray()
+        val blob = out.toByteArray()
+        return blob
     }
 
     private fun getValue(chr: Char): Int {
