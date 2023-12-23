@@ -1310,40 +1310,50 @@ CREATE FUNCTION tan_challenge_create (
   IN in_now_date INT8,
   IN in_validity_period INT8,
   IN in_retry_counter INT4,
-  IN in_customer_id INT8,
+  IN in_login TEXT,
   IN in_tan_channel tan_enum,
   IN in_tan_info TEXT,
   OUT out_challenge_id INT8
 )
-LANGUAGE sql AS $$
-  INSERT INTO tan_challenges (
-    body,
-    code,
-    creation_date,
-    expiration_date,
-    retry_counter,
-    customer,
-    tan_channel,
-    tan_info
-  ) VALUES (
-    in_body,
-    in_code,
-    in_now_date,
-    in_now_date + in_validity_period,
-    in_retry_counter,
-    in_customer_id,
-    in_tan_channel,
-    in_tan_info
-  ) RETURNING challenge_id
-$$;
+LANGUAGE plpgsql as $$
+DECLARE
+account_id INT8;
+BEGIN
+-- Retreive account id
+SELECT customer_id INTO account_id FROM customers WHERE login = in_login;
+-- Create challenge
+INSERT INTO tan_challenges (
+  body,
+  code,
+  creation_date,
+  expiration_date,
+  retry_counter,
+  customer,
+  tan_channel,
+  tan_info
+) VALUES (
+  in_body,
+  in_code,
+  in_now_date,
+  in_now_date + in_validity_period,
+  in_retry_counter,
+  account_id,
+  in_tan_channel,
+  in_tan_info
+) RETURNING challenge_id INTO out_challenge_id;
+END $$;
 COMMENT ON FUNCTION tan_challenge_create IS 'Create a new challenge, return the generated id';
 
 CREATE FUNCTION tan_challenge_send (
-  IN in_challenge_id BIGINT, 
+  IN in_challenge_id BIGINT,
+  IN in_login TEXT,
   IN in_code TEXT,              -- New code to use if the old code expired
   IN in_now_date INT8,        
   IN in_validity_period INT8,
   IN in_retry_counter INT4,
+  -- Error status
+  OUT out_no_op BOOLEAN,
+  -- Success return
   OUT out_tan_code TEXT,        -- TAN code to send, NULL if nothing should be sent
   OUT out_tan_channel tan_enum, -- TAN channel to use, NULL if nothing should be sent
   OUT out_tan_info TEXT         -- TAN info to use, NULL if nothing should be sent
@@ -1354,13 +1364,25 @@ account_id INT8;
 expired BOOLEAN;
 retransmit BOOLEAN;
 BEGIN
+-- Retreive account id
+SELECT customer_id, tan_channel, CASE 
+      WHEN tan_channel = 'sms'   THEN phone
+      WHEN tan_channel = 'email' THEN email
+    END
+  INTO account_id, out_tan_channel, out_tan_info
+  FROM customers WHERE login = in_login;
+
 -- Recover expiration date
 SELECT 
   (in_now_date >= expiration_date OR retry_counter <= 0) AND confirmation_date IS NULL
   ,in_now_date >= retransmission_date AND confirmation_date IS NULL
-  ,code, tan_channel, tan_info, customer
-INTO expired, retransmit, out_tan_code, out_tan_channel, out_tan_info, account_id
-FROM tan_challenges WHERE challenge_id = in_challenge_id;
+  ,code, COALESCE(tan_channel, out_tan_channel), COALESCE(tan_info, out_tan_info)
+INTO expired, retransmit, out_tan_code, out_tan_channel, out_tan_info
+FROM tan_challenges WHERE challenge_id = in_challenge_id AND customer = account_id;
+IF NOT FOUND THEN
+  out_no_op = true;
+  RETURN;
+END IF;
 
 IF expired THEN
   UPDATE tan_challenges SET
@@ -1372,17 +1394,6 @@ IF expired THEN
 ELSIF NOT retransmit THEN
   out_tan_code = NULL;
 END IF;
-
---IF out_tan_code IS NOT NULL AND out_tan_channel IS NULL THEN
---  SELECT
---    tan_channel,
---    CASE 
---      WHEN tan_channel = 'sms'   THEN phone
---      WHEN tan_channel = 'email' THEN email
---    END
---  INTO out_tan_channel, out_tan_info
---  FROM customers WHERE customer_id=account_id;
---END IF;
 END $$;
 COMMENT ON FUNCTION tan_challenge_send IS 'Get the challenge to send, return NULL if nothing should be sent';
 
@@ -1400,21 +1411,38 @@ COMMENT ON FUNCTION tan_challenge_mark_sent IS 'Register a challenge as successf
 
 CREATE FUNCTION tan_challenge_try (
   IN in_challenge_id BIGINT, 
+  IN in_login TEXT,
   IN in_code TEXT,    
   IN in_now_date INT8,        
-  OUT ok BOOLEAN,
-  OUT no_retry BOOLEAN
+  OUT out_ok BOOLEAN,
+  OUT out_no_op BOOLEAN,
+  OUT out_no_retry BOOLEAN,
+  OUT out_expired BOOLEAN
 )
-LANGUAGE sql as $$
-  UPDATE tan_challenges SET 
-    confirmation_date = CASE 
-      WHEN (retry_counter > 0 AND in_now_date < expiration_date AND code = in_code) THEN in_now_date
-      ELSE confirmation_date
-    END,
-    retry_counter = retry_counter - 1
-  WHERE challenge_id = in_challenge_id
-  RETURNING confirmation_date IS NOT NULL, retry_counter < 0 AND confirmation_date IS NULL;
-$$;
+LANGUAGE plpgsql as $$
+DECLARE
+account_id INT8;
+BEGIN
+-- Retreive account id
+SELECT customer_id INTO account_id FROM customers WHERE login = in_login;
+-- Check challenge
+UPDATE tan_challenges SET 
+  confirmation_date = CASE 
+    WHEN (retry_counter > 0 AND in_now_date < expiration_date AND code = in_code) THEN in_now_date
+    ELSE confirmation_date
+  END,
+  retry_counter = retry_counter - 1
+WHERE challenge_id = in_challenge_id
+RETURNING 
+  confirmation_date IS NOT NULL, 
+  retry_counter <= 0 AND confirmation_date IS NULL,
+  in_now_date >= expiration_date AND confirmation_date IS NULL
+INTO out_ok, out_no_retry, out_expired;
+IF NOT FOUND THEN
+  out_no_op = true;
+  RETURN;
+END IF;
+END $$;
 COMMENT ON FUNCTION tan_challenge_try IS 'Try to confirm a challenge, return true if the challenge have been confirmed';
 
 CREATE FUNCTION stats_get_frame(

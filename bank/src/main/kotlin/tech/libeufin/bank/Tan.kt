@@ -24,6 +24,7 @@ import java.time.Duration
 import java.text.DecimalFormat
 import kotlinx.serialization.json.Json
 import io.ktor.http.*
+import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.application.*
 
@@ -43,6 +44,16 @@ inline suspend fun <reified B> ApplicationCall.respondChallenge(db: Database, bo
         status = HttpStatusCode.Accepted,
         message = TanChallenge(id)
     )
+}
+
+inline suspend fun <reified B> ApplicationCall.receiveChallenge(db: Database): Pair<B, Boolean> {
+    val challengeId: Long? = request.headers.get("TODO")?.run { toLongOrNull() } // TODO Handle not long
+    return if (challengeId != null) {
+        val body = db.tan.body(challengeId, username) ?: throw Exception("TODO")
+        Pair(Json.decodeFromString<B>(body), true)
+    } else {
+        Pair(receive(), false)
+    }
 }
 
 object Tan {

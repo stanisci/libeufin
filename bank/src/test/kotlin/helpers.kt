@@ -361,6 +361,13 @@ inline suspend fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {
     return body
 }
 
+inline suspend fun <reified B> HttpResponse.assertAcceptedJson(lambda: (B) -> Unit = {}): B {
+    assertAccepted()
+    val body = json<B>()
+    lambda(body)
+    return body
+}
+
 /* ----- Auth ----- */
 
 /** Auto auth get request */

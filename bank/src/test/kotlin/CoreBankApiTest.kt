@@ -484,12 +484,22 @@ class CoreBankAccountsApiTest {
         client.patchA("/accounts/merchant") {
             json { "tan_channel" to "sms" }
         }.assertNoContent()
-        client.patchA("/accounts/merchant") {
+        val challengeId = client.patchA("/accounts/merchant") {
             json { "is_public" to false }
-        }.assertAccepted()
+        }.assertAcceptedJson<TanChallenge>().challenge_id;
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
             // Check request patch did not happen
             assert(obj.is_public)
+        }
+        client.postA("/accounts/merchant/challenge/$challengeId").assertOk()
+        client.postA("/accounts/customer/challenge/$challengeId/confirm") {
+            json { "tan" to smsCode("+99") }
+        }.assertNoContent()
+        client.patchA("/accounts/merchant") {
+            header("TODO", "$challengeId")
+        }.assertNoContent()
+        client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
+            assert(!obj.is_public)
         }
     }
 

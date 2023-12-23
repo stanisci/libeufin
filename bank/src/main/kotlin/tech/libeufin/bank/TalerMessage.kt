@@ -116,6 +116,12 @@ data class TanChallenge(
     val challenge_id: Long
 )
 
+@Serializable
+data class TanTransmission(
+    val tan_info: String,
+    val tan_channel: TanChannel
+)
+
 /**
  * HTTP response type of successful token refresh.
  * access_token is the Crockford encoding of the 32 byte

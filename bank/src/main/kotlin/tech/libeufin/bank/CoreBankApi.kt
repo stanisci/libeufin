@@ -40,6 +40,7 @@ import tech.libeufin.bank.CashoutDAO.*
 import tech.libeufin.bank.ExchangeDAO.*
 import tech.libeufin.bank.TransactionDAO.*
 import tech.libeufin.bank.WithdrawalDAO.*
+import tech.libeufin.bank.TanDAO.*
 import tech.libeufin.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
@@ -71,6 +72,7 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
     coreBankTransactionsApi(db, ctx)
     coreBankWithdrawalApi(db, ctx)
     coreBankCashoutApi(db, ctx)
+    coreBankTanApi(db, ctx)
 }
 
 private fun Routing.coreBankTokenApi(db: Database) {
@@ -189,7 +191,7 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
     }
 }
 
-suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfiguration, username: String, isAdmin: Boolean): AccountPatchResult {
+suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfiguration, username: String, isAdmin: Boolean, is2fa: Boolean): AccountPatchResult {
     req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
     val contactData = req.contact_data ?: req.challenge_contact_data
 
@@ -209,6 +211,7 @@ suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfigurat
         isPublic = req.is_public,
         debtLimit = req.debit_threshold,
         isAdmin = isAdmin,
+        is2fa = is2fa,
         allowEditName = ctx.allowEditName,
         allowEditCashout = ctx.allowEditCashout
     )
@@ -267,8 +270,8 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     }
     auth(db, TokenScope.readwrite, allowAdmin = true) {
         patch("/accounts/{USERNAME}") {
-            val req = call.receive<AccountReconfiguration>()
-            val res = patchAccount(db, ctx, req, username, isAdmin)
+            val (req, is2fa) = call.receiveChallenge<AccountReconfiguration>(db)
+            val res = patchAccount(db, ctx, req, username, isAdmin, is2fa)
             when (res) {
                 AccountPatchResult.Success -> call.respond(HttpStatusCode.NoContent)
                 AccountPatchResult.TanRequired -> call.respondChallenge(db, req)
@@ -679,6 +682,90 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
                 call.respond(HttpStatusCode.NoContent)
             } else {
                 call.respond(GlobalCashouts(cashouts))
+            }
+        }
+    }
+}
+
+
+private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
+    auth(db, TokenScope.readwrite) {
+        post("/accounts/{USERNAME}/challenge/{CHALLENGE_ID}") {
+            val id = call.longUriComponent("CHALLENGE_ID")
+            val res = db.tan.send(
+                id = id,
+                login = username,
+                code = Tan.genCode(),
+                now = Instant.now(), 
+                retryCounter = TAN_RETRY_COUNTER,
+                validityPeriod = TAN_VALIDITY_PERIOD
+            )
+            when (res) {
+                TanSendResult.NotFound -> throw notFound(
+                    "Challenge $id not found",
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+                )
+                is TanSendResult.Success -> {
+                    res.tanCode?.run {
+                        val tanScript = ctx.tanChannels.get(res.tanChannel) ?: throw libeufinError( 
+                            HttpStatusCode.NotImplemented,
+                            "Unsupported tan channel ${res.tanChannel}",
+                            TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED
+                        )
+                        val exitValue = withContext(Dispatchers.IO) {
+                            val process = ProcessBuilder(tanScript, res.tanInfo).start()
+                            try {
+                                process.outputWriter().use { it.write(res.tanCode) }
+                                process.onExit().await()
+                            } catch (e: Exception) {
+                                process.destroy()
+                            }
+                            process.exitValue()
+                        }
+                        if (exitValue != 0) {
+                            throw libeufinError(
+                                HttpStatusCode.BadGateway,
+                                "Tan channel script failure with exit value $exitValue",
+                                TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED
+                            )
+                        }
+                        db.tan.markSent(id, Instant.now(), TAN_RETRANSMISSION_PERIOD)
+                    }
+                    call.respond(TanTransmission(
+                        tan_info = res.tanInfo,
+                        tan_channel = res.tanChannel
+                    ))
+                }
+            }
+        }
+        post("/accounts/{USERNAME}/challenge/{CHALLENGE_ID}/confirm") {
+            val id = call.longUriComponent("CHALLENGE_ID")
+            val req = call.receive<CashoutConfirm>()
+            val res = db.tan.solve(
+                id = id,
+                login = username,
+                code = req.tan,
+                now = Instant.now()
+            )
+            when (res) {
+                TanSolveResult.NotFound -> throw notFound(
+                    "Challenge $id not found",
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+                )
+                TanSolveResult.BadCode -> throw conflict(
+                    "Incorrect TAN code",
+                    TalerErrorCode.BANK_TAN_CHALLENGE_FAILED
+                )
+                TanSolveResult.NoRetry -> throw libeufinError(
+                    HttpStatusCode.TooManyRequests,
+                    "Too many failed confirmation attempt",
+                    TalerErrorCode.BANK_TAN_RATE_LIMITED
+                )
+                TanSolveResult.Expired -> throw conflict( // TODO
+                    "Challenge expired",
+                    TalerErrorCode.BANK_TAN_CHALLENGE_FAILED
+                )
+                TanSolveResult.Success -> call.respond(HttpStatusCode.NoContent)
             }
         }
     }

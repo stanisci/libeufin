@@ -27,7 +27,7 @@ import java.time.Instant
 
 /** Data access logic for tan challenged */
 class TanDAO(private val db: Database) {
-    /** Update in-db conversion config */
+    /** Create new TAN challenge */
     suspend fun new(
         login: String, 
         body: String, 
@@ -35,27 +35,114 @@ class TanDAO(private val db: Database) {
         now: Instant,
         retryCounter: Int,
         validityPeriod: Duration
-    ): Long = db.serializable {
-        it.transaction { conn -> 
-            // Get user ID 
-            val customer_id = conn.prepareStatement("""
-                SELECT customer_id FROM customers WHERE login = ?
-            """).run {
-                setString(1, login); 
-                oneOrNull {
-                    it.getLong(1)
-                }!! // TODO handle case where account is deleted ? - HTTP status asking to retry
+    ): Long = db.serializable { conn ->
+        val stmt = conn.prepareStatement("SELECT tan_challenge_create(?, ?, ?, ?, ?, ?, NULL, NULL)")
+        stmt.setString(1, body)
+        stmt.setString(2, code)
+        stmt.setLong(3, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(4, TimeUnit.MICROSECONDS.convert(validityPeriod))
+        stmt.setInt(5, retryCounter)
+        stmt.setString(6, login)
+        stmt.oneOrNull {
+            it.getLong(1)
+        }!! // TODO handle database weirdness
+    }
+
+    /** Result of TAN challenge transmission */
+    sealed class TanSendResult {
+        data class Success(val tanInfo: String, val tanChannel: TanChannel, val tanCode: String?): TanSendResult()
+        object NotFound: TanSendResult()
+    }
+
+    /** Request TAN challenge transmission */
+    suspend fun send(
+        id: Long, 
+        login: String, 
+        code: String,
+        now: Instant,
+        retryCounter: Int,
+        validityPeriod: Duration
+    ) = db.serializable { conn ->
+        val stmt = conn.prepareStatement("SELECT out_no_op, out_tan_code, out_tan_channel, out_tan_info FROM tan_challenge_send(?,?,?,?,?,?)")
+        stmt.setLong(1, id)
+        stmt.setString(2, login)
+        stmt.setString(3, code)
+        stmt.setLong(4, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(5, TimeUnit.MICROSECONDS.convert(validityPeriod))
+        stmt.setInt(6, retryCounter)
+        stmt.executeQuery().use {
+            when {
+                !it.next() -> throw internalServerError("TAN send returned nothing.")
+                it.getBoolean("out_no_op") -> TanSendResult.NotFound
+                else -> TanSendResult.Success(
+                    tanInfo = it.getString("out_tan_info"),
+                    tanChannel = it.getString("out_tan_channel").run { TanChannel.valueOf(this) },
+                    tanCode = it.getString("out_tan_code")
+                )
             }
-            var stmt = conn.prepareStatement("SELECT tan_challenge_create(?, ?, ?, ?, ?, ?, NULL, NULL)")
-            stmt.setString(1, body)
-            stmt.setString(2, code)
-            stmt.setLong(3, now.toDbMicros() ?: throw faultyTimestampByBank())
-            stmt.setLong(4, TimeUnit.MICROSECONDS.convert(validityPeriod))
-            stmt.setInt(5, retryCounter)
-            stmt.setLong(6, customer_id)
-            stmt.oneOrNull {
-                it.getLong(1)
-            }!! // TODO handle database weirdness
+        }
+    }
+
+    /** Mark TAN challenge transmission */
+    suspend fun markSent(
+        id: Long,
+        now: Instant,
+        retransmissionPeriod: Duration
+    ) = db.serializable { conn ->
+        val stmt = conn.prepareStatement("SELECT tan_challenge_mark_sent(?,?,?)")
+        stmt.setLong(1, id)
+        stmt.setLong(2, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(3, TimeUnit.MICROSECONDS.convert(retransmissionPeriod))
+        stmt.executeQuery()
+    }
+
+    /** Result of TAN challenge solution */
+    enum class TanSolveResult {
+        Success,
+        NotFound,
+        NoRetry,
+        Expired,
+        BadCode
+    }
+
+    /** Solve TAN challenge */
+    suspend fun solve(
+        id: Long,
+        login: String,
+        code: String,
+        now: Instant
+    ) = db.serializable { conn ->
+        val stmt = conn.prepareStatement("SELECT out_ok, out_no_op, out_no_retry, out_expired FROM tan_challenge_try(?,?,?,?)")
+        stmt.setLong(1, id)
+        stmt.setString(2, login)
+        stmt.setString(3, code)
+        stmt.setLong(4, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.executeQuery().use {
+            when {
+                !it.next() -> throw internalServerError("TAN try returned nothing")
+                it.getBoolean("out_ok") -> TanSolveResult.Success
+                it.getBoolean("out_no_op") -> TanSolveResult.NotFound
+                it.getBoolean("out_no_retry") -> TanSolveResult.NoRetry
+                it.getBoolean("out_expired") -> TanSolveResult.Expired
+                else -> TanSolveResult.BadCode
+            }
+        }
+    }
+
+    /** Get body of a solved TAN challenge */
+    suspend fun body(
+        id: Long,
+        login: String
+    ) = db.conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT body 
+            FROM tan_challenges JOIN customers ON customer=customer_id
+            WHERE challenge_id=? AND login=? AND confirmation_date IS NOT NULL
+        """)
+        stmt.setLong(1, id)
+        stmt.setString(2, login)
+        stmt.oneOrNull {
+            it.getString(1)
         }
     }
 }
