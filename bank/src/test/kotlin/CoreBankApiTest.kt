@@ -416,18 +416,11 @@ class CoreBankAccountsApiTest {
         }.assertNoContent()
 
         // Check tan info
-        client.patchA("/accounts/merchant") {
-            json {
-                "tan_channel" to "sms"
-                "email" to "mail@test.com"
-            }
-        }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
-        client.patchA("/accounts/merchant") {
-            json {
-                "tan_channel" to "email"
-                "phone" to "+99"
-            }
-        }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
+        for (channel in listOf("sms", "email")) {
+            client.patchA("/accounts/merchant") {
+                json { "tan_channel" to channel }
+            }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
+        }
         
         checkAdminOnly(
             obj(req) { "debit_threshold" to "KUDOS:100" },
@@ -525,6 +518,17 @@ class CoreBankAccountsApiTest {
                 }
             }.assertNoContent()
         }
+    }
+
+    // Test TAN check account patch
+    @Test
+    fun patchNoTan() = bankSetup(conf = "test_no_tan.conf") { _ -> 
+        // Check unsupported TAN channel
+        client.patchA("/accounts/customer") {
+            json {
+                "tan_channel" to "sms"
+            }
+        }.assertConflict(TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED)
     }
 
     // PATCH /accounts/USERNAME/auth
@@ -1359,5 +1363,104 @@ class CoreBankCashoutApiTest {
     fun notImplemented() = bankSetup("test_no_conversion.conf") { _ ->
         client.get("/accounts/customer/cashouts")
             .assertNotImplemented()
+    }
+}
+
+class CoreBankTanApiTest {
+    // POST /accounts/{USERNAME}/challenge/{challenge_id}
+    @Test
+    fun create() = bankSetup { _ ->
+        authRoutine(HttpMethod.Post, "/accounts/merchant/challenge/42")
+
+        client.patch("/accounts/merchant") {
+            pwAuth("admin")
+            json { 
+                "contact_data" to obj {
+                    "phone" to "+99"
+                }
+                "tan_channel" to "sms"
+            }
+        }.assertNoContent()
+        client.patchA("/accounts/merchant") {
+            json { "is_public" to false }
+        }.assertAcceptedJson<TanChallenge> { 
+            // Check ok
+            client.postA("/accounts/merchant/challenge/${it.challenge_id}")
+                .assertOkJson<TanTransmission> {
+                    assertEquals(it.tan_info, "+99")
+                    assertEquals(it.tan_channel.name, "sms")
+                }
+            // Check retry
+            client.postA("/accounts/merchant/challenge/${it.challenge_id}")
+                .assertOkJson<TanTransmission> {
+                    assertEquals(it.tan_info, "+99")
+                    assertEquals(it.tan_channel.name, "sms")
+                }
+        }
+
+        // Check fail
+        client.patch("/accounts/merchant") {
+            pwAuth("admin")
+            json { 
+                "contact_data" to obj {
+                    "email" to "test@test.com"
+                }
+                "tan_channel" to "email"
+            }
+        }.assertNoContent()
+        client.patchA("/accounts/merchant") {
+            json { "is_public" to false }
+        }.assertAcceptedJson<TanChallenge> { 
+            client.postA("/accounts/merchant/challenge/${it.challenge_id}")
+                .assertStatus(HttpStatusCode.BadGateway, TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED)
+        }
+
+        // TODO check what happens when tan info or tan channel change
+
+        // Unknown challenge
+        client.postA("/accounts/merchant/challenge/42")
+            .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+    }
+
+    // POST /accounts/{USERNAME}/challenge/{challenge_id}/confirm
+    @Test
+    fun confirm() = bankSetup { _ ->
+        authRoutine(HttpMethod.Post, "/accounts/merchant/challenge/42/confirm")
+
+        client.patch("/accounts/merchant") {
+            pwAuth("admin")
+            json { 
+                "contact_data" to obj {
+                    "phone" to "+99"
+                }
+                "tan_channel" to "sms"
+            }
+        }.assertNoContent()
+        val id = client.patchA("/accounts/merchant") {
+            json { "is_public" to false }
+        }.assertAcceptedJson<TanChallenge>().challenge_id
+        client.postA("/accounts/merchant/challenge/$id").assertOk()
+        val code = smsCode("+99")
+
+        // Check bad TAN code
+        client.postA("/accounts/merchant/challenge/$id/confirm") {
+            json { "tan" to "nice-try" } 
+        }.assertConflict(TalerErrorCode.BANK_TAN_CHALLENGE_FAILED)
+       
+        // Check OK
+        client.postA("/accounts/merchant/challenge/$id/confirm") {
+            json { "tan" to code }
+        }.assertNoContent()
+        // Check idempotence
+        client.postA("/accounts/merchant/challenge/$id/confirm") {
+            json { "tan" to code }
+        }.assertNoContent()
+        
+        // TODO check what happens when tan info or tan channel change
+
+        // Unknown challenge
+        client.postA("/accounts/merchant/challenge/42/confirm") {
+            json { "tan" to code }
+        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 }

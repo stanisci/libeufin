@@ -274,7 +274,7 @@ class AccountDAO(private val db: Database) {
                     it.getBoolean("phone_change") -> return@transaction AccountPatchResult.NonAdminContact
                     it.getBoolean("email_change") -> return@transaction AccountPatchResult.NonAdminContact
                     it.getBoolean("missing_tan_info") -> return@transaction AccountPatchResult.MissingTanInfo
-                    it.getBoolean("tan_required") && !is2fa -> return@transaction AccountPatchResult.TanRequired
+                    it.getBoolean("tan_required") && !is2fa && !isAdmin -> return@transaction AccountPatchResult.TanRequired
                     else -> it.getLong("customer_id")
                 }
             }

@@ -200,6 +200,10 @@ suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfigurat
             "'admin' account cannot be public",
             TalerErrorCode.END
         )
+    
+    if (req.tan_channel is Option.Some && req.tan_channel.value != null && ctx.tanChannels.get(req.tan_channel.value ) == null) {
+        throw unsupportedTanChannel(req.tan_channel.value)
+    }
 
     return db.account.reconfig( 
         login = username,
@@ -707,11 +711,8 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                 )
                 is TanSendResult.Success -> {
                     res.tanCode?.run {
-                        val tanScript = ctx.tanChannels.get(res.tanChannel) ?: throw libeufinError( 
-                            HttpStatusCode.NotImplemented,
-                            "Unsupported tan channel ${res.tanChannel}",
-                            TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED
-                        )
+                        val tanScript = ctx.tanChannels.get(res.tanChannel) 
+                            ?: throw unsupportedTanChannel(res.tanChannel)
                         val exitValue = withContext(Dispatchers.IO) {
                             val process = ProcessBuilder(tanScript, res.tanInfo).start()
                             try {

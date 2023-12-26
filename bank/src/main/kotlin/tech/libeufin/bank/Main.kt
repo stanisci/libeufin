@@ -386,7 +386,7 @@ class EditAccount : CliktCommand(
                 cashout_payto_uri = Option.Some(cashout_payto_uri),
                 debit_threshold = debit_threshold
             )
-            when (patchAccount(db, ctx, req, username, true)) {
+            when (patchAccount(db, ctx, req, username, true, false)) {
                 AccountPatchResult.Success -> 
                     logger.info("Account '$username' edited")
                 AccountPatchResult.UnknownAccount -> 
