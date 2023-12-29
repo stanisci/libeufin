@@ -319,10 +319,7 @@ class CoreBankAccountsApiTest {
     // DELETE /accounts/USERNAME
     @Test
     fun delete() = bankSetup { _ -> 
-        // Unknown account
-        client.delete("/accounts/unknown") {
-            pwAuth("admin")
-        }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+        authRoutine(HttpMethod.Delete, "/accounts/merchant", allowAdmin = true)
 
         // Reserved account
         RESERVED_ACCOUNTS.forEach {
@@ -332,31 +329,31 @@ class CoreBankAccountsApiTest {
         }
         client.deleteA("/accounts/exchange")
             .assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
-       
-        // successful deletion
-        client.post("/accounts") {
-            json {
-                "username" to "john"
-                "password" to "password"
-                "name" to "John Smith"
-            }
-        }.assertOk()
-        client.delete("/accounts/john") {
-            pwAuth("admin")
-        }.assertNoContent()
-        // Trying again must yield 404
-        client.delete("/accounts/john") {
-            pwAuth("admin")
-        }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
 
-        
-        // fail to delete, due to a non-zero balance.
-        tx("customer", "KUDOS:1", "merchant")
-        client.deleteA("/accounts/merchant")
-            .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
-        tx("merchant", "KUDOS:1", "customer")
-        client.deleteA("/accounts/merchant")
-            .assertNoContent()
+        tanRoutine("john", prepare = {
+            client.post("/accounts") {
+                json {
+                    "username" to "john"
+                    "password" to "john-password"
+                    "name" to "John"
+                    "internal_payto_uri" to genTmpPayTo()
+                }
+            }.assertOk()
+        }) { challenge ->
+            // Fail to delete, due to a non-zero balance.
+            tx("customer", "KUDOS:1", "john")
+            client.deleteA("/accounts/john")
+                .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
+            // Sucessful deletion
+            tx("john", "KUDOS:1", "customer")
+            client.deleteA("/accounts/john")
+                .challenge()
+                .assertNoContent()
+            // Account no longer exists
+            client.delete("/accounts/john") {
+                pwAuth("admin")
+            }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+        }
     }
 
     // Test admin-only account deletion
@@ -398,7 +395,7 @@ class CoreBankAccountsApiTest {
     // PATCH /accounts/USERNAME
     @Test
     fun reconfig() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Patch, "/accounts/merchant", withAdmin = true)
+        authRoutine(HttpMethod.Patch, "/accounts/merchant", allowAdmin = true)
 
         // Successful attempt now
         val cashout = IbanPayTo(genIbanPaytoUri())
@@ -474,25 +471,18 @@ class CoreBankAccountsApiTest {
         }.assertConflict(TalerErrorCode.END)
 
         // Check 2FA
-        client.patchA("/accounts/merchant") {
-            json { "tan_channel" to "sms" }
-        }.assertNoContent()
-        val challengeId = client.patchA("/accounts/merchant") {
-            json { "is_public" to false }
-        }.assertAcceptedJson<TanChallenge>().challenge_id;
-        client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
-            // Check request patch did not happen
-            assert(obj.is_public)
-        }
-        client.postA("/accounts/merchant/challenge/$challengeId").assertOk()
-        client.postA("/accounts/customer/challenge/$challengeId/confirm") {
-            json { "tan" to smsCode("+99") }
-        }.assertNoContent()
-        client.patchA("/accounts/merchant") {
-            header("TODO", "$challengeId")
-        }.assertNoContent()
-        client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
-            assert(!obj.is_public)
+        tanRoutine("merchant", prepare = {
+            client.patch("/accounts/merchant") {
+                pwAuth("admin")
+                json { "is_public" to true }
+            }
+        }) { challenge ->
+            val challengeId = client.patchA("/accounts/merchant") {
+                json { "is_public" to false }
+            }.challenge()
+            client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
+                assert(!obj.is_public)
+            }
         }
     }
 
@@ -534,7 +524,7 @@ class CoreBankAccountsApiTest {
     // PATCH /accounts/USERNAME/auth
     @Test
     fun passwordChange() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Patch, "/accounts/merchant/auth", withAdmin = true)
+        authRoutine(HttpMethod.Patch, "/accounts/merchant/auth", allowAdmin = true)
 
         // Changing the password.
         client.patch("/accounts/customer/auth") {
@@ -649,7 +639,7 @@ class CoreBankAccountsApiTest {
     // GET /accounts/USERNAME
     @Test
     fun get() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Get, "/accounts/merchant", withAdmin = true)
+        authRoutine(HttpMethod.Get, "/accounts/merchant", allowAdmin = true)
         // Check ok
         client.getA("/accounts/merchant").assertOkJson<AccountData> {
             assertEquals("Merchant", it.name)
@@ -1446,6 +1436,11 @@ class CoreBankTanApiTest {
         client.postA("/accounts/merchant/challenge/$id/confirm") {
             json { "tan" to "nice-try" } 
         }.assertConflict(TalerErrorCode.BANK_TAN_CHALLENGE_FAILED)
+
+        // Check wrong account
+        client.postA("/accounts/customer/challenge/$id/confirm") {
+            json { "tan" to "nice-try" } 
+        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
        
         // Check OK
         client.postA("/accounts/merchant/challenge/$id/confirm") {

@@ -35,7 +35,7 @@ suspend fun ApplicationTestBuilder.authRoutine(
     body: JsonObject? = null, 
     requireExchange: Boolean = false, 
     requireAdmin: Boolean = false,
-    withAdmin: Boolean = false
+    allowAdmin: Boolean = false
 ) {
     // No body when authentication must happen before parsing the body
     
@@ -63,7 +63,7 @@ suspend fun ApplicationTestBuilder.authRoutine(
             this.method = method
             pwAuth("merchant")
         }.assertUnauthorized()
-    } else if (!withAdmin) {
+    } else if (!allowAdmin) {
         // Check no admin
         client.request(path) {
             this.method = method
@@ -79,6 +79,42 @@ suspend fun ApplicationTestBuilder.authRoutine(
             pwAuth(if (requireAdmin) "admin" else "merchant")
         }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)
     }
+}
+
+// Test endpoint is correctly protected using 2fa 
+suspend fun ApplicationTestBuilder.tanRoutine(
+    username: String,
+    prepare: suspend () -> Unit = {},
+    routine: suspend (suspend HttpResponse.() -> HttpResponse) -> Unit,
+) {
+    // Check without 2FA
+    prepare()
+    client.patch("/accounts/$username") {
+        pwAuth("admin")
+        json {
+            "tan_channel" to null as Int?
+        }
+    }.assertNoContent()
+    routine({ this })
+
+    // Check with 2FA
+    prepare()
+    client.patch("/accounts/$username") {
+        pwAuth("admin")
+        json { 
+            "contact_data" to obj {
+                "phone" to "+42"
+            }
+            "tan_channel" to "sms"
+        }
+    }.assertNoContent()
+    routine({
+        val id = this.assertAcceptedJson<TanChallenge>().challenge_id
+        client.postA("/accounts/$username/challenge/$id").assertOk()
+        client.postA("/accounts/$username/challenge/$id/confirm") {
+            json { "tan" to smsCode("+42") }
+        }
+    })
 }
 
 inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(

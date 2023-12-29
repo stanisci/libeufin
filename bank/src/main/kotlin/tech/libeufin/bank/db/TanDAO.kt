@@ -47,7 +47,7 @@ class TanDAO(private val db: Database) {
         stmt.setString(7, login)
         stmt.oneOrNull {
             it.getLong(1)
-        }!! // TODO handle database weirdness
+        } ?: throw internalServerError("TAN challenge returned nothing.")
     }
 
     /** Result of TAN challenge transmission */
@@ -99,12 +99,12 @@ class TanDAO(private val db: Database) {
     }
 
     /** Result of TAN challenge solution */
-    enum class TanSolveResult {
-        Success,
-        NotFound,
-        NoRetry,
-        Expired,
-        BadCode
+    sealed class TanSolveResult {
+        data class Success(val body: String, val op: Operation): TanSolveResult()
+        data object NotFound: TanSolveResult()
+        data object NoRetry: TanSolveResult()
+        data object Expired: TanSolveResult()
+        data object BadCode: TanSolveResult()
     }
 
     /** Solve TAN challenge */
@@ -114,7 +114,11 @@ class TanDAO(private val db: Database) {
         code: String,
         now: Instant
     ) = db.serializable { conn ->
-        val stmt = conn.prepareStatement("SELECT out_ok, out_no_op, out_no_retry, out_expired FROM tan_challenge_try(?,?,?,?)")
+        val stmt = conn.prepareStatement("""
+            SELECT 
+                out_ok, out_no_op, out_no_retry, out_expired,
+                out_body, out_op
+            FROM tan_challenge_try(?,?,?,?)""")
         stmt.setLong(1, id)
         stmt.setString(2, login)
         stmt.setString(3, code)
@@ -122,29 +126,15 @@ class TanDAO(private val db: Database) {
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw internalServerError("TAN try returned nothing")
-                it.getBoolean("out_ok") -> TanSolveResult.Success
+                it.getBoolean("out_ok") -> TanSolveResult.Success(
+                    body = it.getString("out_body"),
+                    op = Operation.valueOf(it.getString("out_op"))
+                )
                 it.getBoolean("out_no_op") -> TanSolveResult.NotFound
                 it.getBoolean("out_no_retry") -> TanSolveResult.NoRetry
                 it.getBoolean("out_expired") -> TanSolveResult.Expired
                 else -> TanSolveResult.BadCode
             }
-        }
-    }
-
-    /** Get body of a solved TAN challenge */
-    suspend fun body(
-        id: Long,
-        login: String
-    ) = db.conn { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT body 
-            FROM tan_challenges JOIN customers ON customer=customer_id
-            WHERE challenge_id=? AND login=? AND confirmation_date IS NOT NULL
-        """)
-        stmt.setLong(1, id)
-        stmt.setString(2, login)
-        stmt.oneOrNull {
-            it.getString(1)
         }
     }
 }

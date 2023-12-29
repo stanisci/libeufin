@@ -39,12 +39,18 @@ import tech.libeufin.util.*
 val merchantPayto = IbanPayTo(genIbanPaytoUri())
 val exchangePayto = IbanPayTo(genIbanPaytoUri())
 val customerPayto = IbanPayTo(genIbanPaytoUri())
-val unknownPayto = IbanPayTo(genIbanPaytoUri())
+val unknownPayto  = IbanPayTo(genIbanPaytoUri())
+var tmpPayTo      = IbanPayTo(genIbanPaytoUri())
 val paytos = mapOf(
     "merchant" to merchantPayto, 
     "exchange" to exchangePayto, 
     "customer" to customerPayto
 )
+
+fun genTmpPayTo(): IbanPayTo {
+    tmpPayTo = IbanPayTo(genIbanPaytoUri())
+    return tmpPayTo
+}
 
 fun setup(
     conf: String = "test.conf",
@@ -164,18 +170,16 @@ suspend fun ApplicationTestBuilder.assertBalance(account: String, amount: String
 
 /** Perform a bank transaction of [amount] [from] account [to] account with [subject} */
 suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String, subject: String = "payout"): Long {
-    return client.post("/accounts/$from/transactions") {
-        basicAuth("$from", "$from-password")
+    return client.postA("/accounts/$from/transactions") {
         json {
-            "payto_uri" to "${paytos[to]}?message=${subject.encodeURLQueryComponent()}&amount=$amount"
+            "payto_uri" to "${paytos[to] ?: tmpPayTo}?message=${subject.encodeURLQueryComponent()}&amount=$amount"
         }
     }.assertOkJson<TransactionCreateResponse>().row_id
 }
 
 /** Perform a taler outgoing transaction of [amount] from exchange to merchant */
 suspend fun ApplicationTestBuilder.transfer(amount: String) {
-    client.post("/accounts/exchange/taler-wire-gateway/transfer") {
-        pwAuth("exchange")
+    client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
         json {
             "request_uid" to randHashCode()
             "amount" to TalerAmount(amount)

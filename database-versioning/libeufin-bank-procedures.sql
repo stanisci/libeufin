@@ -140,10 +140,12 @@ END IF;
 END $$;
 COMMENT ON FUNCTION account_balance_is_sufficient IS 'Check if an account have enough fund to transfer an amount.';
 
-CREATE FUNCTION customer_delete(
+CREATE FUNCTION account_delete(
   IN in_login TEXT,
-  OUT out_nx_customer BOOLEAN,
-  OUT out_balance_not_zero BOOLEAN
+  IN in_is_tan BOOLEAN,
+  OUT out_not_found BOOLEAN,
+  OUT out_balance_not_zero BOOLEAN,
+  OUT out_tan_required BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -152,15 +154,14 @@ my_balance_val INT8;
 my_balance_frac INT4;
 BEGIN
 -- check if login exists
-SELECT customer_id
-  INTO my_customer_id
+SELECT customer_id, (NOT in_is_tan AND tan_channel IS NOT NULL) 
+  INTO my_customer_id, out_tan_required
   FROM customers
   WHERE login = in_login;
 IF NOT FOUND THEN
-  out_nx_customer=TRUE;
+  out_not_found=TRUE;
   RETURN;
 END IF;
-out_nx_customer=FALSE;
 
 -- get the balance
 SELECT
@@ -174,18 +175,22 @@ SELECT
 IF NOT FOUND THEN
   RAISE EXCEPTION 'Invariant failed: customer lacks bank account';
 END IF;
+
 -- check that balance is zero.
 IF my_balance_val != 0 OR my_balance_frac != 0 THEN
   out_balance_not_zero=TRUE;
   RETURN;
 END IF;
-out_balance_not_zero=FALSE;
+
+-- check tan required
+IF out_tan_required THEN
+  RETURN;
+END IF;
 
 -- actual deletion
 DELETE FROM customers WHERE login = in_login;
 END $$;
-COMMENT ON FUNCTION customer_delete(TEXT)
-  IS 'Deletes a customer (and its bank account via cascade) if the balance is zero';
+COMMENT ON FUNCTION account_delete IS 'Deletes an account if the balance is zero';
 
 CREATE PROCEDURE register_outgoing(
   IN in_request_uid BYTEA,
@@ -1416,11 +1421,15 @@ CREATE FUNCTION tan_challenge_try (
   IN in_challenge_id BIGINT, 
   IN in_login TEXT,
   IN in_code TEXT,    
-  IN in_now_date INT8,        
+  IN in_now_date INT8,
+  -- Error status       
   OUT out_ok BOOLEAN,
   OUT out_no_op BOOLEAN,
   OUT out_no_retry BOOLEAN,
-  OUT out_expired BOOLEAN
+  OUT out_expired BOOLEAN,
+  -- Success return
+  OUT out_op op_enum,
+  OUT out_body TEXT
 )
 LANGUAGE plpgsql as $$
 DECLARE
@@ -1435,7 +1444,7 @@ UPDATE tan_challenges SET
     ELSE confirmation_date
   END,
   retry_counter = retry_counter - 1
-WHERE challenge_id = in_challenge_id
+WHERE challenge_id = in_challenge_id AND customer = account_id
 RETURNING 
   confirmation_date IS NOT NULL, 
   retry_counter <= 0 AND confirmation_date IS NULL,
@@ -1444,7 +1453,13 @@ INTO out_ok, out_no_retry, out_expired;
 IF NOT FOUND THEN
   out_no_op = true;
   RETURN;
+ELSIF NOT out_ok OR out_no_retry OR out_expired THEN
+  RETURN;
 END IF;
+
+-- Recover body and op from challenge
+SELECT body, op INTO out_body, out_op
+  FROM tan_challenges WHERE challenge_id = in_challenge_id;
 END $$;
 COMMENT ON FUNCTION tan_challenge_try IS 'Try to confirm a challenge, return true if the challenge have been confirmed';
 

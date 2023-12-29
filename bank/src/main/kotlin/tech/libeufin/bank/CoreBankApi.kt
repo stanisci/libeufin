@@ -28,6 +28,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
 import kotlin.random.Random
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
@@ -221,6 +222,59 @@ suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfigurat
     )
 }
 
+suspend fun ApplicationCall.patchAccountHttp(db: Database, ctx: BankConfig, req: AccountReconfiguration, is2fa: Boolean) {
+    val res = patchAccount(db, ctx, req, username, isAdmin, is2fa)
+    when (res) {
+        AccountPatchResult.Success -> respond(HttpStatusCode.NoContent)
+        AccountPatchResult.TanRequired -> respondChallenge(db, Operation.account_reconfig, req)
+        AccountPatchResult.UnknownAccount -> throw unknownAccount(username)
+        AccountPatchResult.NonAdminName -> throw conflict(
+            "non-admin user cannot change their legal name",
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
+        )
+        AccountPatchResult.NonAdminCashout -> throw conflict(
+            "non-admin user cannot change their cashout account",
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_CASHOUT
+        )
+        AccountPatchResult.NonAdminDebtLimit -> throw conflict(
+            "non-admin user cannot change their debt limit",
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+        )
+        AccountPatchResult.NonAdminContact -> throw conflict(
+            "non-admin user cannot change their contact info",
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
+        )
+        AccountPatchResult.MissingTanInfo -> throw conflict(
+            "missing info for tan channel ${req.tan_channel.get()}",
+            TalerErrorCode.BANK_MISSING_TAN_INFO
+        )
+    }
+}
+
+suspend fun ApplicationCall.deleteAccountHttp(db: Database, ctx: BankConfig, is2fa: Boolean) {
+    // Not deleting reserved names.
+    if (RESERVED_ACCOUNTS.contains(username))
+        throw conflict(
+            "Cannot delete reserved accounts",
+            TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
+        )
+    if (username == "exchange" && ctx.allowConversion)
+        throw conflict(
+            "Cannot delete 'exchange' accounts when conversion is enabled",
+            TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
+        )
+
+    when (db.account.delete(username, isAdmin || is2fa)) {
+        AccountDeletionResult.UnknownAccount -> throw unknownAccount(username)
+        AccountDeletionResult.BalanceNotZero -> throw conflict(
+            "Account balance is not zero.",
+            TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO
+        )
+        AccountDeletionResult.TanRequired -> respondChallenge(db, Operation.account_delete, Unit)
+        AccountDeletionResult.Success -> respond(HttpStatusCode.NoContent)
+    }
+}
+
 private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     authAdmin(db, TokenScope.readwrite, !ctx.allowRegistration) {
         post("/accounts") {
@@ -250,57 +304,13 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         requireAdmin = !ctx.allowAccountDeletion
     ) {
         delete("/accounts/{USERNAME}") {
-            // Not deleting reserved names.
-            if (RESERVED_ACCOUNTS.contains(username))
-                throw conflict(
-                    "Cannot delete reserved accounts",
-                    TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
-                )
-            if (username == "exchange" && ctx.allowConversion)
-                throw conflict(
-                    "Cannot delete 'exchange' accounts when conversion is enabled",
-                    TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
-                )
-
-            when (db.account.delete(username)) {
-                AccountDeletionResult.UnknownAccount -> throw unknownAccount(username)
-                AccountDeletionResult.BalanceNotZero -> throw conflict(
-                    "Account balance is not zero.",
-                    TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO
-                )
-                AccountDeletionResult.Success -> call.respond(HttpStatusCode.NoContent)
-            }
+            call.deleteAccountHttp(db, ctx, false)
         }
     }
     auth(db, TokenScope.readwrite, allowAdmin = true) {
         patch("/accounts/{USERNAME}") {
-            val (req, is2fa) = call.receiveChallenge<AccountReconfiguration>(db)
-            val res = patchAccount(db, ctx, req, username, isAdmin, is2fa)
-            when (res) {
-                AccountPatchResult.Success -> call.respond(HttpStatusCode.NoContent)
-                AccountPatchResult.TanRequired -> call.respondChallenge(db, Operation.account_reconfig, req)
-                AccountPatchResult.UnknownAccount -> throw unknownAccount(username)
-                AccountPatchResult.NonAdminName -> throw conflict(
-                    "non-admin user cannot change their legal name",
-                    TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
-                )
-                AccountPatchResult.NonAdminCashout -> throw conflict(
-                    "non-admin user cannot change their cashout account",
-                    TalerErrorCode.BANK_NON_ADMIN_PATCH_CASHOUT
-                )
-                AccountPatchResult.NonAdminDebtLimit -> throw conflict(
-                    "non-admin user cannot change their debt limit",
-                    TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
-                )
-                AccountPatchResult.NonAdminContact -> throw conflict(
-                    "non-admin user cannot change their contact info",
-                    TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
-                )
-                AccountPatchResult.MissingTanInfo -> throw conflict(
-                    "missing info for tan channel ${req.tan_channel.get()}",
-                    TalerErrorCode.BANK_MISSING_TAN_INFO
-                )
-            }
+            val req = call.receive<AccountReconfiguration>()
+            call.patchAccountHttp(db, ctx, req, false)
         }
         patch("/accounts/{USERNAME}/auth") {
             val req = call.receive<AccountPasswordChange>()
@@ -751,7 +761,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
             when (res) {
                 TanSolveResult.NotFound -> throw notFound(
                     "Challenge $id not found",
-                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND // TODO specific EC
                 )
                 TanSolveResult.BadCode -> throw conflict(
                     "Incorrect TAN code",
@@ -762,11 +772,19 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                     "Too many failed confirmation attempt",
                     TalerErrorCode.BANK_TAN_RATE_LIMITED
                 )
-                TanSolveResult.Expired -> throw conflict( // TODO
+                TanSolveResult.Expired -> throw conflict(
                     "Challenge expired",
-                    TalerErrorCode.BANK_TAN_CHALLENGE_FAILED
+                    TalerErrorCode.BANK_TAN_CHALLENGE_FAILED  // TODO specific EC
                 )
-                TanSolveResult.Success -> call.respond(HttpStatusCode.NoContent)
+                is TanSolveResult.Success -> when (res.op) {
+                    Operation.account_reconfig -> {
+                        val req = Json.decodeFromString<AccountReconfiguration>(res.body);
+                        call.patchAccountHttp(db, ctx, req, true)
+                    }
+                    Operation.account_delete -> {
+                        call.deleteAccountHttp(db, ctx, true)
+                    }
+                }
             }
         }
     }

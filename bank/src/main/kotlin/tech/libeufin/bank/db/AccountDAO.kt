@@ -172,23 +172,30 @@ class AccountDAO(private val db: Database) {
     enum class AccountDeletionResult {
         Success,
         UnknownAccount,
-        BalanceNotZero
+        BalanceNotZero,
+        TanRequired
     }
 
     /** Delete account [login] */
-    suspend fun delete(login: String): AccountDeletionResult = db.serializable { conn ->
+    suspend fun delete(
+        login: String, 
+        is2fa: Boolean
+    ): AccountDeletionResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
-              out_nx_customer,
-              out_balance_not_zero
-              FROM customer_delete(?);
+              out_not_found,
+              out_balance_not_zero,
+              out_tan_required
+              FROM account_delete(?,?);
         """)
         stmt.setString(1, login)
+        stmt.setBoolean(2, is2fa)
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw internalServerError("Deletion returned nothing.")
-                it.getBoolean("out_nx_customer") -> AccountDeletionResult.UnknownAccount
+                it.getBoolean("out_not_found") -> AccountDeletionResult.UnknownAccount
                 it.getBoolean("out_balance_not_zero") -> AccountDeletionResult.BalanceNotZero
+                it.getBoolean("out_tan_required") -> AccountDeletionResult.TanRequired
                 else -> AccountDeletionResult.Success
             }
         }

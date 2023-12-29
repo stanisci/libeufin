@@ -47,16 +47,6 @@ inline suspend fun <reified B> ApplicationCall.respondChallenge(db: Database, op
     )
 }
 
-inline suspend fun <reified B> ApplicationCall.receiveChallenge(db: Database): Pair<B, Boolean> {
-    val challengeId: Long? = request.headers.get("TODO")?.run { toLongOrNull() } // TODO Handle not long
-    return if (challengeId != null) {
-        val body = db.tan.body(challengeId, username) ?: throw Exception("TODO")
-        Pair(Json.decodeFromString<B>(body), true)
-    } else {
-        Pair(receive(), false)
-    }
-}
-
 object Tan {
     private val CODE_FORMAT = DecimalFormat("00000000");  
     private val SECURE_RNG = SecureRandom()

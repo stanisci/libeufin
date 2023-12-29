@@ -140,10 +140,10 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     }
     install(StatusPages) {
         exception<Exception> { call, cause ->
-            logger.debug("request failed", cause)
             when (cause) {
                 is LibeufinException -> call.err(cause)
                 is SQLException -> {
+                    logger.debug("request failed", cause)
                     when (cause.sqlState) {
                         PSQLState.SERIALIZATION_FAILURE.state -> call.err(
                             HttpStatusCode.InternalServerError,
@@ -190,6 +190,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                     )
                 }
                 else -> {
+                    logger.debug("request failed", cause)
                     call.err(
                         HttpStatusCode.InternalServerError,
                         cause.message,

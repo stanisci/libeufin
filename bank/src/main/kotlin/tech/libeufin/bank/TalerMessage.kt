@@ -73,7 +73,8 @@ enum class Timeframe {
 }
 
 enum class Operation {
-    account_reconfig
+    account_reconfig,
+    account_delete
 }
 
 @Serializable(with = Option.Serializer::class)
