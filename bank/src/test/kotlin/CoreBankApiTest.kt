@@ -330,30 +330,28 @@ class CoreBankAccountsApiTest {
         client.deleteA("/accounts/exchange")
             .assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
 
-        tanRoutine("john", prepare = {
-            client.post("/accounts") {
-                json {
-                    "username" to "john"
-                    "password" to "john-password"
-                    "name" to "John"
-                    "internal_payto_uri" to genTmpPayTo()
-                }
-            }.assertOk()
-        }) { challenge ->
-            // Fail to delete, due to a non-zero balance.
-            tx("customer", "KUDOS:1", "john")
-            client.deleteA("/accounts/john")
-                .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
-            // Sucessful deletion
-            tx("john", "KUDOS:1", "customer")
-            client.deleteA("/accounts/john")
-                .challenge()
-                .assertNoContent()
-            // Account no longer exists
-            client.delete("/accounts/john") {
-                pwAuth("admin")
-            }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
-        }
+        client.post("/accounts") {
+            json {
+                "username" to "john"
+                "password" to "john-password"
+                "name" to "John"
+                "internal_payto_uri" to genTmpPayTo()
+            }
+        }.assertOk()
+        fillTanInfo("john")
+        // Fail to delete, due to a non-zero balance.
+        tx("customer", "KUDOS:1", "john")
+        client.deleteA("/accounts/john")
+            .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
+        // Sucessful deletion
+        tx("john", "KUDOS:1", "customer")
+        client.deleteA("/accounts/john")
+            .assertChallenge()
+            .assertNoContent()
+        // Account no longer exists
+        client.delete("/accounts/john") {
+            pwAuth("admin")
+        }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
     }
 
     // Test admin-only account deletion
@@ -471,18 +469,16 @@ class CoreBankAccountsApiTest {
         }.assertConflict(TalerErrorCode.END)
 
         // Check 2FA
-        tanRoutine("merchant", prepare = {
-            client.patch("/accounts/merchant") {
-                pwAuth("admin")
-                json { "is_public" to true }
-            }
-        }) { challenge ->
-            val challengeId = client.patchA("/accounts/merchant") {
-                json { "is_public" to false }
-            }.challenge()
+        fillTanInfo("merchant")
+        client.patchA("/accounts/merchant") {
+            json { "is_public" to false }
+        }.assertChallenge {
             client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
-                assert(!obj.is_public)
+                assert(obj.is_public)
             }
+        }.assertNoContent();
+        client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
+            assert(!obj.is_public)
         }
     }
 

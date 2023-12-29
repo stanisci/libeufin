@@ -254,6 +254,18 @@ suspend fun ApplicationTestBuilder.fillCashoutInfo(account: String) {
     }.assertNoContent()
 }
 
+suspend fun ApplicationTestBuilder.fillTanInfo(account: String) {
+    client.patch("/accounts/$account") {
+        pwAuth("admin")
+        json {
+            "contact_data" to obj {
+                "phone" to "+42"
+            }
+            "tan_channel" to "sms"
+        }
+    }.assertNoContent()
+}
+
 suspend fun ApplicationTestBuilder.withdrawalSelect(uuid: String) {
     client.post("/taler-integration/withdrawal-operation/$uuid") {
         json {
@@ -311,6 +323,16 @@ suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
     val err = json<TalerError>()
     assertEquals(code.code, err.code)
     return this
+}
+
+suspend fun HttpResponse.assertChallenge(check: suspend () -> Unit = {}): HttpResponse {
+    val id = this.assertAcceptedJson<TanChallenge>().challenge_id
+    val username = this.call.request.url.pathSegments[2]
+    this.call.client.postA("/accounts/$username/challenge/$id").assertOk()
+    check()
+    return this.call.client.postA("/accounts/$username/challenge/$id/confirm") {
+        json { "tan" to smsCode("+42") }
+    }
 }
 
 suspend fun assertTime(min: Int, max: Int, lambda: suspend () -> Unit) {

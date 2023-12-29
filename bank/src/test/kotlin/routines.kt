@@ -81,42 +81,6 @@ suspend fun ApplicationTestBuilder.authRoutine(
     }
 }
 
-// Test endpoint is correctly protected using 2fa 
-suspend fun ApplicationTestBuilder.tanRoutine(
-    username: String,
-    prepare: suspend () -> Unit = {},
-    routine: suspend (suspend HttpResponse.() -> HttpResponse) -> Unit,
-) {
-    // Check without 2FA
-    prepare()
-    client.patch("/accounts/$username") {
-        pwAuth("admin")
-        json {
-            "tan_channel" to null as Int?
-        }
-    }.assertNoContent()
-    routine({ this })
-
-    // Check with 2FA
-    prepare()
-    client.patch("/accounts/$username") {
-        pwAuth("admin")
-        json { 
-            "contact_data" to obj {
-                "phone" to "+42"
-            }
-            "tan_channel" to "sms"
-        }
-    }.assertNoContent()
-    routine({
-        val id = this.assertAcceptedJson<TanChallenge>().challenge_id
-        client.postA("/accounts/$username/challenge/$id").assertOk()
-        client.postA("/accounts/$username/challenge/$id/confirm") {
-            json { "tan" to smsCode("+42") }
-        }
-    })
-}
-
 inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
     url: String,
     crossinline ids: (B) -> List<Long>,
