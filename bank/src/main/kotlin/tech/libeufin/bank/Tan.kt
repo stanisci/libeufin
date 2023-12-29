@@ -29,11 +29,12 @@ import io.ktor.server.response.*
 import io.ktor.server.application.*
 
 
-inline suspend fun <reified B> ApplicationCall.respondChallenge(db: Database, body: B) {
+inline suspend fun <reified B> ApplicationCall.respondChallenge(db: Database, op: Operation, body: B) {
     val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), body); 
     val code = Tan.genCode()
     val id = db.tan.new(
         login = username, 
+        op = op,
         body = json,
         code = code,
         now = Instant.now(), 

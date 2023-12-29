@@ -30,19 +30,21 @@ class TanDAO(private val db: Database) {
     /** Create new TAN challenge */
     suspend fun new(
         login: String, 
+        op: Operation,
         body: String, 
         code: String,
         now: Instant,
         retryCounter: Int,
         validityPeriod: Duration
     ): Long = db.serializable { conn ->
-        val stmt = conn.prepareStatement("SELECT tan_challenge_create(?, ?, ?, ?, ?, ?, NULL, NULL)")
+        val stmt = conn.prepareStatement("SELECT tan_challenge_create(?, ?::op_enum, ?, ?, ?, ?, ?, NULL, NULL)")
         stmt.setString(1, body)
-        stmt.setString(2, code)
-        stmt.setLong(3, now.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setLong(4, TimeUnit.MICROSECONDS.convert(validityPeriod))
-        stmt.setInt(5, retryCounter)
-        stmt.setString(6, login)
+        stmt.setString(2, op.name)
+        stmt.setString(3, code)
+        stmt.setLong(4, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(5, TimeUnit.MICROSECONDS.convert(validityPeriod))
+        stmt.setInt(6, retryCounter)
+        stmt.setString(7, login)
         stmt.oneOrNull {
             it.getLong(1)
         }!! // TODO handle database weirdness

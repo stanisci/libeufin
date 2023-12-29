@@ -1306,6 +1306,7 @@ COMMENT ON FUNCTION challenge_try IS 'Try to confirm a challenge, return true if
 
 CREATE FUNCTION tan_challenge_create (
   IN in_body TEXT,
+  IN in_op op_enum,
   IN in_code TEXT,
   IN in_now_date INT8,
   IN in_validity_period INT8,
@@ -1324,6 +1325,7 @@ SELECT customer_id INTO account_id FROM customers WHERE login = in_login;
 -- Create challenge
 INSERT INTO tan_challenges (
   body,
+  op,
   code,
   creation_date,
   expiration_date,
@@ -1333,6 +1335,7 @@ INSERT INTO tan_challenges (
   tan_info
 ) VALUES (
   in_body,
+  in_op,
   in_code,
   in_now_date,
   in_now_date + in_validity_period,

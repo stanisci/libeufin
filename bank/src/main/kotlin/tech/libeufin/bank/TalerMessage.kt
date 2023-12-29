@@ -72,6 +72,10 @@ enum class Timeframe {
     year
 }
 
+enum class Operation {
+    account_reconfig
+}
+
 @Serializable(with = Option.Serializer::class)
 sealed class Option<out T> {
     object None : Option<Nothing>()

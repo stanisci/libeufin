@@ -168,7 +168,7 @@ class DatabaseTest {
 
     @Test
     fun tanChallenge() = bankSetup { db -> db.conn { conn ->
-        val createStmt = conn.prepareStatement("SELECT tan_challenge_create('',?,?,?,?,'customer',NULL,NULL)")
+        val createStmt = conn.prepareStatement("SELECT tan_challenge_create('','account_reconfig'::op_enum,?,?,?,?,'customer',NULL,NULL)")
         val markSentStmt = conn.prepareStatement("SELECT tan_challenge_mark_sent(?,?,?)")
         val tryStmt = conn.prepareStatement("SELECT out_ok, out_no_retry, out_expired FROM tan_challenge_try(?,'customer',?,?)")
         val sendStmt = conn.prepareStatement("SELECT out_tan_code FROM tan_challenge_send(?,'customer',?,?,?,?)")

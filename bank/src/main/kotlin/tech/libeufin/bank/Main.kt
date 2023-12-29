@@ -140,6 +140,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     }
     install(StatusPages) {
         exception<Exception> { call, cause ->
+            logger.debug("request failed", cause)
             when (cause) {
                 is LibeufinException -> call.err(cause)
                 is SQLException -> {
