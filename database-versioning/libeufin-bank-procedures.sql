@@ -1061,9 +1061,9 @@ END IF;
 -- check account exists and has appropriate tan info
 SELECT 
     bank_account_id, is_taler_exchange,
-    CASE 
-      WHEN in_tan_channel = 'sms'   THEN phone
-      WHEN in_tan_channel = 'email' THEN email
+    CASE in_tan_channel
+      WHEN 'sms'   THEN phone
+      WHEN 'email' THEN email
     END
   INTO account_id, out_account_is_exchange, out_tan_info
   FROM bank_accounts
@@ -1373,9 +1373,9 @@ expired BOOLEAN;
 retransmit BOOLEAN;
 BEGIN
 -- Retreive account id
-SELECT customer_id, tan_channel, CASE 
-    WHEN tan_channel = 'sms'   THEN phone
-    WHEN tan_channel = 'email' THEN email
+SELECT customer_id, tan_channel, CASE tan_channel
+    WHEN 'sms'   THEN phone
+    WHEN 'email' THEN email
   END
 INTO account_id, out_tan_channel, out_tan_info
 FROM customers WHERE login = in_login;
