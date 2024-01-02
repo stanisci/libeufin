@@ -192,7 +192,16 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
     }
 }
 
-suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfiguration, username: String, isAdmin: Boolean, is2fa: Boolean): AccountPatchResult {
+suspend fun patchAccount(
+    db: Database, 
+    ctx: BankConfig, 
+    req: AccountReconfiguration, 
+    username: String, 
+    isAdmin: Boolean, 
+    is2fa: Boolean, 
+    channel: TanChannel? = null, 
+    info: String? = null
+): AccountPatchResult {
     req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
     val contactData = req.contact_data ?: req.challenge_contact_data
 
@@ -217,16 +226,27 @@ suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfigurat
         debtLimit = req.debit_threshold,
         isAdmin = isAdmin,
         is2fa = is2fa,
+        faChannel = channel,
+        faInfo = info,
         allowEditName = ctx.allowEditName,
         allowEditCashout = ctx.allowEditCashout
     )
 }
 
-suspend fun ApplicationCall.patchAccountHttp(db: Database, ctx: BankConfig, req: AccountReconfiguration, is2fa: Boolean) {
-    val res = patchAccount(db, ctx, req, username, isAdmin, is2fa)
+suspend fun ApplicationCall.patchAccountHttp(
+    db: Database, 
+    ctx: BankConfig, 
+    req: AccountReconfiguration, 
+    is2fa: Boolean,
+    channel: TanChannel? = null, 
+    info: String? = null
+) {
+    val res = patchAccount(db, ctx, req, username, isAdmin, is2fa, channel, info)
     when (res) {
         AccountPatchResult.Success -> respond(HttpStatusCode.NoContent)
-        AccountPatchResult.TanRequired -> respondChallenge(db, Operation.account_reconfig, req)
+        is AccountPatchResult.TanRequired -> {
+            respondChallenge(db, Operation.account_reconfig, req, res.channel, res.info)
+        }
         AccountPatchResult.UnknownAccount -> throw unknownAccount(username)
         AccountPatchResult.NonAdminName -> throw conflict(
             "non-admin user cannot change their legal name",
@@ -239,10 +259,6 @@ suspend fun ApplicationCall.patchAccountHttp(db: Database, ctx: BankConfig, req:
         AccountPatchResult.NonAdminDebtLimit -> throw conflict(
             "non-admin user cannot change their debt limit",
             TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
-        )
-        AccountPatchResult.NonAdminContact -> throw conflict(
-            "non-admin user cannot change their contact info",
-            TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
         )
         AccountPatchResult.MissingTanInfo -> throw conflict(
             "missing info for tan channel ${req.tan_channel.get()}",
@@ -779,7 +795,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                 is TanSolveResult.Success -> when (res.op) {
                     Operation.account_reconfig -> {
                         val req = Json.decodeFromString<AccountReconfiguration>(res.body);
-                        call.patchAccountHttp(db, ctx, req, true)
+                        call.patchAccountHttp(db, ctx, req, true, res.channel, res.info)
                     }
                     Operation.account_delete -> {
                         call.deleteAccountHttp(db, ctx, true)

@@ -398,8 +398,7 @@ class EditAccount : CliktCommand(
                 AccountPatchResult.NonAdminName,
                     AccountPatchResult.NonAdminCashout,
                     AccountPatchResult.NonAdminDebtLimit,
-                    AccountPatchResult.NonAdminContact,
-                    AccountPatchResult.TanRequired  -> {
+                    is AccountPatchResult.TanRequired  -> {
                         // Unreachable as we edit account as admin
                     }
             }

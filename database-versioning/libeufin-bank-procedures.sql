@@ -1374,11 +1374,11 @@ retransmit BOOLEAN;
 BEGIN
 -- Retreive account id
 SELECT customer_id, tan_channel, CASE 
-      WHEN tan_channel = 'sms'   THEN phone
-      WHEN tan_channel = 'email' THEN email
-    END
-  INTO account_id, out_tan_channel, out_tan_info
-  FROM customers WHERE login = in_login;
+    WHEN tan_channel = 'sms'   THEN phone
+    WHEN tan_channel = 'email' THEN email
+  END
+INTO account_id, out_tan_channel, out_tan_info
+FROM customers WHERE login = in_login;
 
 -- Recover expiration date
 SELECT 
@@ -1429,7 +1429,9 @@ CREATE FUNCTION tan_challenge_try (
   OUT out_expired BOOLEAN,
   -- Success return
   OUT out_op op_enum,
-  OUT out_body TEXT
+  OUT out_body TEXT,
+  OUT out_channel tan_enum,
+  OUT out_info TEXT
 )
 LANGUAGE plpgsql as $$
 DECLARE
@@ -1458,7 +1460,8 @@ ELSIF NOT out_ok OR out_no_retry OR out_expired THEN
 END IF;
 
 -- Recover body and op from challenge
-SELECT body, op INTO out_body, out_op
+SELECT body, op, tan_channel, tan_info
+  INTO out_body, out_op, out_channel, out_info
   FROM tan_challenges WHERE challenge_id = in_challenge_id;
 END $$;
 COMMENT ON FUNCTION tan_challenge_try IS 'Try to confirm a challenge, return true if the challenge have been confirmed';

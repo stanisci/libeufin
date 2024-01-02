@@ -26,6 +26,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.DeflaterOutputStream
 import kotlin.test.*
+import kotlin.random.Random
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import net.taler.common.errorcodes.TalerErrorCode
@@ -168,6 +169,18 @@ suspend fun ApplicationTestBuilder.assertBalance(account: String, amount: String
     }
 }
 
+/** Check [account] tan channel and info */
+suspend fun ApplicationTestBuilder.tanInfo(account: String): Pair<TanChannel?, String?> {
+    val res = client.getA("/accounts/$account").assertOkJson<AccountData>()
+    val channel: TanChannel? = res.tan_channel
+    return Pair(channel, when (channel) {
+        TanChannel.sms -> res.contact_data!!.phone.get()
+        TanChannel.email -> res.contact_data!!.email.get()
+        null -> null
+        else -> null
+    })
+}
+
 /** Perform a bank transaction of [amount] [from] account [to] account with [subject} */
 suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String, subject: String = "payout"): Long {
     return client.postA("/accounts/$from/transactions") {
@@ -225,7 +238,7 @@ suspend fun ApplicationTestBuilder.cashout(amount: String) {
         res
     }.assertOkJson<CashoutPending> {
         client.postA("/accounts/customer/cashouts/${it.cashout_id}/confirm") {
-            json { "tan" to smsCode("+99") }
+            json { "tan" to tanCode("+99") }
         }.assertNoContent()
     }
 }
@@ -259,7 +272,7 @@ suspend fun ApplicationTestBuilder.fillTanInfo(account: String) {
         pwAuth("admin")
         json {
             "contact_data" to obj {
-                "phone" to "+42"
+                "phone" to "+${Random.nextInt(0, 10000)}"
             }
             "tan_channel" to "sms"
         }
@@ -280,7 +293,7 @@ suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
         .assertOkJson<ConversionResponse>().amount_credit
 }
 
-suspend fun smsCode(info: String): String? {
+suspend fun tanCode(info: String): String? {
     val file = File("/tmp/tan-$info.txt");
     if (file.exists()) {
         val code = file.readText()
@@ -325,13 +338,25 @@ suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
     return this
 }
 
-suspend fun HttpResponse.assertChallenge(check: suspend () -> Unit = {}): HttpResponse {
+suspend fun HttpResponse.challenge(): HttpResponse {
+    return if (this.status == HttpStatusCode.Accepted) {
+        this.assertChallenge()
+    } else {
+        this
+    }
+}
+
+suspend fun HttpResponse.assertChallenge(
+    check: suspend (TanChannel, String) -> Unit = { _, _ -> }
+): HttpResponse {
     val id = this.assertAcceptedJson<TanChallenge>().challenge_id
     val username = this.call.request.url.pathSegments[2]
-    this.call.client.postA("/accounts/$username/challenge/$id").assertOk()
-    check()
+    val res = this.call.client.postA("/accounts/$username/challenge/$id").assertOkJson<TanTransmission>()
+    check(res.tan_channel, res.tan_info)
+    val code = tanCode(res.tan_info)
+    assertNotNull(code)
     return this.call.client.postA("/accounts/$username/challenge/$id/confirm") {
-        json { "tan" to smsCode("+42") }
+        json { "tan" to code }
     }
 }
 

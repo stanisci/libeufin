@@ -29,7 +29,13 @@ import io.ktor.server.response.*
 import io.ktor.server.application.*
 
 
-inline suspend fun <reified B> ApplicationCall.respondChallenge(db: Database, op: Operation, body: B) {
+inline suspend fun <reified B> ApplicationCall.respondChallenge(
+    db: Database, 
+    op: Operation, 
+    body: B, 
+    channel: TanChannel? = null,
+    info: String? = null
+) {
     val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), body); 
     val code = Tan.genCode()
     val id = db.tan.new(
@@ -39,7 +45,9 @@ inline suspend fun <reified B> ApplicationCall.respondChallenge(db: Database, op
         code = code,
         now = Instant.now(), 
         retryCounter = TAN_RETRY_COUNTER,
-        validityPeriod = TAN_VALIDITY_PERIOD
+        validityPeriod = TAN_VALIDITY_PERIOD,
+        channel = channel,
+        info = info
     )
     respond(
         status = HttpStatusCode.Accepted,

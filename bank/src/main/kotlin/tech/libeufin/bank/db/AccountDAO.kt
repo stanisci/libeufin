@@ -202,15 +202,14 @@ class AccountDAO(private val db: Database) {
     }
 
     /** Result status of customer account patch */
-    enum class AccountPatchResult {
-        UnknownAccount,
-        NonAdminName,
-        NonAdminCashout,
-        NonAdminDebtLimit,
-        NonAdminContact,
-        MissingTanInfo,
-        TanRequired,
-        Success
+    sealed class AccountPatchResult {
+        data object UnknownAccount: AccountPatchResult()
+        data object NonAdminName: AccountPatchResult()
+        data object NonAdminCashout: AccountPatchResult()
+        data object NonAdminDebtLimit: AccountPatchResult()
+        data object MissingTanInfo: AccountPatchResult()
+        data class TanRequired(val channel: TanChannel?, val info: String?): AccountPatchResult()
+        data object Success: AccountPatchResult()
     }
 
     /** Change account [login] informations */
@@ -225,30 +224,28 @@ class AccountDAO(private val db: Database) {
         debtLimit: TalerAmount?,
         isAdmin: Boolean,
         is2fa: Boolean,
+        faChannel: TanChannel?,
+        faInfo: String?,
         allowEditName: Boolean,
         allowEditCashout: Boolean,
     ): AccountPatchResult = db.serializable { it.transaction { conn ->
         val checkName = !isAdmin && !allowEditName && name != null
         val checkCashout = !isAdmin && !allowEditCashout && cashoutPayto.isSome()
         val checkDebtLimit = !isAdmin && debtLimit != null
-        val checkPhone = !isAdmin && phone.isSome()
-        val checkEmail = !isAdmin && email.isSome()
 
         // Get user ID and check reconfig rights
-        val customer_id = conn.prepareStatement("""
+        val (customerId, currChannel, currInfo) = conn.prepareStatement("""
             SELECT
                 customer_id
                 ,(${ if (checkName) "name != ?" else "false" }) as name_change
                 ,(${ if (checkCashout) "cashout_payto IS DISTINCT FROM ?" else "false" }) as cashout_change
                 ,(${ if (checkDebtLimit) "max_debt != (?, ?)::taler_amount" else "false" }) as debt_limit_change
-                ,(${ if (checkPhone) "phone IS DISTINCT FROM ?" else "false" }) as phone_change
-                ,(${ if (checkEmail) "email IS DISTINCT FROM ?" else "false" }) as email_change
                 ,(${ when (tan_channel.get()) {
                     null -> "false"
                     TanChannel.sms -> if (phone.get() != null) "false" else "phone IS NULL"
                     TanChannel.email -> if (email.get() != null) "false" else "email IS NULL"
                 }}) as missing_tan_info
-                ,(tan_channel IS NOT NULL) as tan_required
+                ,tan_channel, phone, email
             FROM customers
                 JOIN bank_accounts 
                 ON customer_id=owning_customer_id
@@ -265,12 +262,6 @@ class AccountDAO(private val db: Database) {
                 setLong(idx, debtLimit!!.value); idx++
                 setInt(idx, debtLimit.frac); idx++
             }
-            if (checkPhone) {
-                setString(idx, phone.get()); idx++
-            }
-            if (checkEmail) {
-                setString(idx, email.get()); idx++
-            }
             setString(idx, login)
             executeQuery().use {
                 when {
@@ -278,13 +269,48 @@ class AccountDAO(private val db: Database) {
                     it.getBoolean("name_change") -> return@transaction AccountPatchResult.NonAdminName
                     it.getBoolean("cashout_change") -> return@transaction AccountPatchResult.NonAdminCashout
                     it.getBoolean("debt_limit_change") -> return@transaction AccountPatchResult.NonAdminDebtLimit
-                    it.getBoolean("phone_change") -> return@transaction AccountPatchResult.NonAdminContact
-                    it.getBoolean("email_change") -> return@transaction AccountPatchResult.NonAdminContact
                     it.getBoolean("missing_tan_info") -> return@transaction AccountPatchResult.MissingTanInfo
-                    it.getBoolean("tan_required") && !is2fa && !isAdmin -> return@transaction AccountPatchResult.TanRequired
-                    else -> it.getLong("customer_id")
+                    else -> {
+                        val currChannel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) }
+                        Triple(
+                            it.getLong("customer_id"),
+                            currChannel,
+                            when (tan_channel.get() ?: currChannel) {
+                                TanChannel.sms -> it.getString("phone")
+                                TanChannel.email -> it.getString("email")
+                                null -> null
+                            }
+                        )
+                    }
                 }
             }
+        }
+ 
+        val newChannel = tan_channel.get();
+        val newInfo = when (newChannel ?: currChannel) {
+            TanChannel.sms -> phone.get()
+            TanChannel.email -> email.get()
+            null -> null
+        }
+
+        // Tan channel verification
+        if (!isAdmin) {
+            // Check performed 2fa check
+            if (currChannel != null && !is2fa) {
+                // Perform challenge with current settings
+                return@transaction AccountPatchResult.TanRequired(channel = null, info = null)
+            }
+            // If channel or info changed and the 2fa challenge is performed with old settings perform a new challenge with new settings
+            if ((newChannel != null && newChannel != faChannel) || (newInfo != null && newInfo != faInfo)) {
+                return@transaction AccountPatchResult.TanRequired(channel = newChannel ?: currChannel, info = newInfo ?: currInfo)
+            }
+        }
+
+        // Invalidate current challenges
+        if (newChannel != null || newInfo != null) {
+            val stmt = conn.prepareStatement("UPDATE tan_challenges SET expiration_date=0 WHERE customer=?")
+            stmt.setLong(1, customerId)
+            stmt.execute()
         }
 
         // Update bank info
@@ -298,7 +324,7 @@ class AccountDAO(private val db: Database) {
             sequence {
                 isPublic?.let { yield(it) }
                 debtLimit?.let { yield(it.value); yield(it.frac) }
-                yield(customer_id)
+                yield(customerId)
             }
         )
 
@@ -319,7 +345,7 @@ class AccountDAO(private val db: Database) {
                 email.some { yield(it) }
                 tan_channel.some { yield(it?.name) }
                 name?.let { yield(it) }
-                yield(customer_id)
+                yield(customerId)
             }
         )
 

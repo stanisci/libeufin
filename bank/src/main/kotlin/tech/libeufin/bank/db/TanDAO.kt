@@ -35,9 +35,11 @@ class TanDAO(private val db: Database) {
         code: String,
         now: Instant,
         retryCounter: Int,
-        validityPeriod: Duration
+        validityPeriod: Duration,
+        channel: TanChannel? = null,
+        info: String? = null
     ): Long = db.serializable { conn ->
-        val stmt = conn.prepareStatement("SELECT tan_challenge_create(?, ?::op_enum, ?, ?, ?, ?, ?, NULL, NULL)")
+        val stmt = conn.prepareStatement("SELECT tan_challenge_create(?,?::op_enum,?,?,?,?,?,?::tan_enum,?)")
         stmt.setString(1, body)
         stmt.setString(2, op.name)
         stmt.setString(3, code)
@@ -45,6 +47,8 @@ class TanDAO(private val db: Database) {
         stmt.setLong(5, TimeUnit.MICROSECONDS.convert(validityPeriod))
         stmt.setInt(6, retryCounter)
         stmt.setString(7, login)
+        stmt.setString(8, channel?.name)
+        stmt.setString(9, info)
         stmt.oneOrNull {
             it.getLong(1)
         } ?: throw internalServerError("TAN challenge returned nothing.")
@@ -76,7 +80,7 @@ class TanDAO(private val db: Database) {
             when {
                 !it.next() -> throw internalServerError("TAN send returned nothing.")
                 it.getBoolean("out_no_op") -> TanSendResult.NotFound
-                else -> TanSendResult.Success(
+                else ->  TanSendResult.Success(
                     tanInfo = it.getString("out_tan_info"),
                     tanChannel = it.getString("out_tan_channel").run { TanChannel.valueOf(this) },
                     tanCode = it.getString("out_tan_code")
@@ -100,7 +104,7 @@ class TanDAO(private val db: Database) {
 
     /** Result of TAN challenge solution */
     sealed class TanSolveResult {
-        data class Success(val body: String, val op: Operation): TanSolveResult()
+        data class Success(val body: String, val op: Operation, val channel: TanChannel?, val info: String?): TanSolveResult()
         data object NotFound: TanSolveResult()
         data object NoRetry: TanSolveResult()
         data object Expired: TanSolveResult()
@@ -117,7 +121,7 @@ class TanDAO(private val db: Database) {
         val stmt = conn.prepareStatement("""
             SELECT 
                 out_ok, out_no_op, out_no_retry, out_expired,
-                out_body, out_op
+                out_body, out_op, out_channel, out_info
             FROM tan_challenge_try(?,?,?,?)""")
         stmt.setLong(1, id)
         stmt.setString(2, login)
@@ -128,7 +132,9 @@ class TanDAO(private val db: Database) {
                 !it.next() -> throw internalServerError("TAN try returned nothing")
                 it.getBoolean("out_ok") -> TanSolveResult.Success(
                     body = it.getString("out_body"),
-                    op = Operation.valueOf(it.getString("out_op"))
+                    op = Operation.valueOf(it.getString("out_op")),
+                    channel = it.getString("out_channel")?.run { TanChannel.valueOf(this) },
+                    info = it.getString("out_info")
                 )
                 it.getBoolean("out_no_op") -> TanSolveResult.NotFound
                 it.getBoolean("out_no_retry") -> TanSolveResult.NoRetry
