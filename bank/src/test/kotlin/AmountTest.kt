@@ -55,6 +55,7 @@ class AmountTest {
                 subject = "test",
                 amount = due,
                 timestamp = Instant.now(),
+                is2fa = false
             )
             val txBool = when (txRes) {
                 BankTransactionResult.BalanceInsufficient -> false

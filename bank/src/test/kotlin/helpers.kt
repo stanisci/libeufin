@@ -187,7 +187,7 @@ suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String, 
         json {
             "payto_uri" to "${paytos[to] ?: tmpPayTo}?message=${subject.encodeURLQueryComponent()}&amount=$amount"
         }
-    }.assertOkJson<TransactionCreateResponse>().row_id
+    }.maybeChallenge().assertOkJson<TransactionCreateResponse>().row_id
 }
 
 /** Perform a taler outgoing transaction of [amount] from exchange to merchant */
@@ -338,7 +338,7 @@ suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
     return this
 }
 
-suspend fun HttpResponse.challenge(): HttpResponse {
+suspend fun HttpResponse.maybeChallenge(): HttpResponse {
     return if (this.status == HttpStatusCode.Accepted) {
         this.assertChallenge()
     } else {

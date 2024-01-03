@@ -74,7 +74,8 @@ enum class Timeframe {
 
 enum class Operation {
     account_reconfig,
-    account_delete
+    account_delete,
+    bank_transaction
 }
 
 @Serializable(with = Option.Serializer::class)

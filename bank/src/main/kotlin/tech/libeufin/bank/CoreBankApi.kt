@@ -374,6 +374,43 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     }
 }
 
+suspend fun ApplicationCall.bankTransactionHttp(db: Database, ctx: BankConfig, req: TransactionCreateRequest, is2fa: Boolean) {
+    val subject = req.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
+    val amount = req.payto_uri.amount ?: req.amount ?: throw badRequest("Wire transfer lacks amount")
+    ctx.checkRegionalCurrency(amount)
+    val res = db.transaction.create(
+        creditAccountPayto = req.payto_uri,
+        debitAccountUsername = username,
+        subject = subject,
+        amount = amount,
+        timestamp = Instant.now(),
+        is2fa = is2fa
+    )
+    when (res) {
+        BankTransactionResult.UnknownDebtor -> throw unknownAccount(username)
+        BankTransactionResult.TanRequired -> {
+            respondChallenge(db, Operation.bank_transaction, req)
+        }
+        BankTransactionResult.BothPartySame -> throw conflict(
+            "Wire transfer attempted with credit and debit party being the same bank account",
+            TalerErrorCode.BANK_SAME_ACCOUNT 
+        )
+        BankTransactionResult.UnknownCreditor -> throw conflict(
+            "Creditor account was not found",
+            TalerErrorCode.BANK_UNKNOWN_CREDITOR
+        )
+        BankTransactionResult.AdminCreditor -> throw conflict(
+            "Cannot transfer money to admin account",
+            TalerErrorCode.BANK_ADMIN_CREDITOR
+        )
+        BankTransactionResult.BalanceInsufficient -> throw conflict(
+            "Insufficient funds",
+            TalerErrorCode.BANK_UNALLOWED_DEBIT
+        )
+        is BankTransactionResult.Success -> respond(TransactionCreateResponse(res.id))
+    }
+}
+
 private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readonly) {
         get("/accounts/{USERNAME}/transactions") {
@@ -399,38 +436,8 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
     }
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/transactions") {
-            val tx = call.receive<TransactionCreateRequest>()
-            val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
-            val amount =
-                    tx.payto_uri.amount ?: tx.amount ?: throw badRequest("Wire transfer lacks amount")
-            ctx.checkRegionalCurrency(amount)
-            val res = db.transaction.create(
-                creditAccountPayto = tx.payto_uri,
-                debitAccountUsername = username,
-                subject = subject,
-                amount = amount,
-                timestamp = Instant.now(),
-            )
-            when (res) {
-                is BankTransactionResult.UnknownDebtor -> throw unknownAccount(username)
-                is BankTransactionResult.BothPartySame -> throw conflict(
-                    "Wire transfer attempted with credit and debit party being the same bank account",
-                    TalerErrorCode.BANK_SAME_ACCOUNT 
-                )
-                is BankTransactionResult.UnknownCreditor -> throw conflict(
-                    "Creditor account was not found",
-                    TalerErrorCode.BANK_UNKNOWN_CREDITOR
-                )
-                is BankTransactionResult.AdminCreditor -> throw conflict(
-                    "Cannot transfer money to admin account",
-                    TalerErrorCode.BANK_ADMIN_CREDITOR
-                )
-                is BankTransactionResult.BalanceInsufficient -> throw conflict(
-                    "Insufficient funds",
-                    TalerErrorCode.BANK_UNALLOWED_DEBIT
-                )
-                is BankTransactionResult.Success -> call.respond(TransactionCreateResponse(res.id))
-            }
+            val req = call.receive<TransactionCreateRequest>()
+            call.bankTransactionHttp(db, ctx, req, false)
         }
     }
 }
@@ -799,6 +806,10 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                     }
                     Operation.account_delete -> {
                         call.deleteAccountHttp(db, ctx, true)
+                    }
+                    Operation.bank_transaction -> {
+                        val req = Json.decodeFromString<TransactionCreateRequest>(res.body)
+                        call.bankTransactionHttp(db, ctx, req, true)
                     }
                 }
             }

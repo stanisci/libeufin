@@ -144,7 +144,7 @@ class AccountDAO(private val db: Database) {
                 if (bonus.value != 0L || bonus.frac != 0) {
                     conn.prepareStatement("""
                         SELECT out_balance_insufficient
-                        FROM bank_transaction(?,'admin','bonus',(?,?)::taler_amount,?)
+                        FROM bank_transaction(?,'admin','bonus',(?,?)::taler_amount,?,true)
                     """).run {
                         setString(1, internalPaytoUri.canonical)
                         setLong(2, bonus.value)

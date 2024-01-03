@@ -792,8 +792,7 @@ class CoreBankTransactionsApiTest {
         repeat(2) {
             tx("merchant", "KUDOS:3", "customer")
         }
-        client.post("/accounts/merchant/transactions") {
-            pwAuth("merchant")
+        client.postA("/accounts/merchant/transactions") {
             json {
                 "payto_uri" to "$customerPayto?message=payout2&amount=KUDOS:5"
             }
@@ -811,9 +810,9 @@ class CoreBankTransactionsApiTest {
         assertBalance("exchange", "+KUDOS:0")
         tx("merchant", "KUDOS:1", "exchange", "") // Bounce common to transaction
         tx("merchant", "KUDOS:1", "exchange", "Malformed") // Bounce malformed transaction
-        val reserve_pub = randEddsaPublicKey();
-        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reserve_pub)) // Accept incoming
-        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reserve_pub)) // Bounce reserve_pub reuse
+        val reservePub = randEddsaPublicKey();
+        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reservePub)) // Accept incoming
+        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reservePub)) // Bounce reserve_pub reuse
         assertBalance("merchant", "-KUDOS:1")
         assertBalance("exchange", "+KUDOS:1")
         
@@ -828,6 +827,22 @@ class CoreBankTransactionsApiTest {
         tx("exchange", "KUDOS:1", "merchant", randOutgoingSubject(wtid, exchange)) // Warn wtid reuse
         assertBalance("merchant", "+KUDOS:3")
         assertBalance("exchange", "-KUDOS:3")
+
+        // Check 2fa
+        fillTanInfo("merchant")
+        assertBalance("merchant", "+KUDOS:3")
+        assertBalance("customer", "+KUDOS:0")
+        client.postA("/accounts/merchant/transactions") {
+            json {
+                "payto_uri" to "$customerPayto?message=tan+check&amount=KUDOS:1"
+            }
+        }.assertChallenge { _,_->
+            assertBalance("merchant", "+KUDOS:3")
+            assertBalance("customer", "+KUDOS:0")
+        }.assertOkJson <TransactionCreateResponse> { 
+            assertBalance("merchant", "+KUDOS:2")
+            assertBalance("customer", "+KUDOS:1")
+        }
     }
 }
 

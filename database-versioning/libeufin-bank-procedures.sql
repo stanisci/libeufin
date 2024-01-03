@@ -442,12 +442,14 @@ CREATE FUNCTION bank_transaction(
   IN in_subject TEXT,
   IN in_amount taler_amount,
   IN in_timestamp BIGINT,
+  IN in_is_tan BOOLEAN,
   -- Error status
   OUT out_creditor_not_found BOOLEAN,
   OUT out_debtor_not_found BOOLEAN,
   OUT out_same_account BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
   OUT out_creditor_admin BOOLEAN,
+  OUT out_tan_required BOOLEAN,
   -- Success return
   OUT out_credit_bank_account_id BIGINT,
   OUT out_debit_bank_account_id BIGINT,
@@ -471,17 +473,18 @@ ELSIF out_creditor_admin THEN
   RETURN;
 END IF;
 -- Find debit bank account id and check it's a different account
-SELECT bank_account_id, is_taler_exchange, out_credit_bank_account_id=bank_account_id
-  INTO out_debit_bank_account_id, out_debtor_is_exchange, out_same_account
+SELECT bank_account_id, is_taler_exchange, out_credit_bank_account_id=bank_account_id, NOT in_is_tan AND tan_channel IS NOT NULL
+  INTO out_debit_bank_account_id, out_debtor_is_exchange, out_same_account, out_tan_required
   FROM bank_accounts 
     JOIN customers ON customer_id=owning_customer_id
   WHERE login = in_debit_account_username;
 IF NOT FOUND THEN
   out_debtor_not_found=TRUE;
   RETURN;
-ELSIF out_same_account THEN
+ELSIF out_same_account OR out_tan_required THEN
   RETURN;
 END IF;
+-- TODO check balance insufficient ?
 -- Perform bank transfer
 SELECT
   transfer.out_balance_insufficient,
