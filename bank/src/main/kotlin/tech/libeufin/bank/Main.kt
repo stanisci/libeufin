@@ -332,11 +332,12 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
-            val res = db.account.reconfigPassword(username, password, null)
+            val res = db.account.reconfigPassword(username, password, null, true)
             when (res) {
                 AccountPatchAuthResult.UnknownAccount ->
                     throw Exception("Password change for '$username' account failed: unknown account")
-                AccountPatchAuthResult.OldPasswordMismatch -> { /* Can never happen */ }
+                AccountPatchAuthResult.OldPasswordMismatch,
+                    AccountPatchAuthResult.TanRequired -> { /* Can never happen */ }
                 AccountPatchAuthResult.Success ->
                     logger.info("Password change for '$username' account succeeded")
             }

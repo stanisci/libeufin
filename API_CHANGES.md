@@ -28,6 +28,8 @@ This files contains all the API changes for the current release:
 - POST /accounts/USERNAME/cashouts/CASHOUT_ID: remove confirmation_time, tan_channel, tan_info and status fields
 - POST /accounts/$USERNAME/cashouts: remove status field
 - POST /cashouts: remove status field
+- PATCH /accounts/USERNAME: add tan_channel
+- GET /accounts/USERNAME: add tan_channel
 
 ## bank cli
 

@@ -75,6 +75,7 @@ enum class Timeframe {
 enum class Operation {
     account_reconfig,
     account_delete,
+    account_auth_reconfig,
     bank_transaction,
     cashout,
     withdrawal

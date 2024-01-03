@@ -267,6 +267,24 @@ suspend fun ApplicationCall.patchAccountHttp(
     }
 }
 
+suspend fun ApplicationCall.reconfigAuthHttp(db: Database, ctx: BankConfig, req:AccountPasswordChange, is2fa: Boolean) {
+    if (!isAdmin && req.old_password == null) {
+        throw conflict(
+            "non-admin user cannot change password without providing old password",
+            TalerErrorCode.BANK_NON_ADMIN_PATCH_MISSING_OLD_PASSWORD
+        )
+    }
+    when (db.account.reconfigPassword(username, req.new_password, req.old_password, is2fa || isAdmin)) {
+        AccountPatchAuthResult.Success -> respond(HttpStatusCode.NoContent)
+        AccountPatchAuthResult.TanRequired -> respondChallenge(db, Operation.account_auth_reconfig, req)
+        AccountPatchAuthResult.UnknownAccount -> throw unknownAccount(username)
+        AccountPatchAuthResult.OldPasswordMismatch -> throw conflict(
+            "old password does not match",
+            TalerErrorCode.BANK_PATCH_BAD_OLD_PASSWORD
+        )
+    }
+}
+
 suspend fun ApplicationCall.deleteAccountHttp(db: Database, ctx: BankConfig, is2fa: Boolean) {
     // Not deleting reserved names.
     if (RESERVED_ACCOUNTS.contains(username))
@@ -330,20 +348,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         }
         patch("/accounts/{USERNAME}/auth") {
             val req = call.receive<AccountPasswordChange>()
-            if (!isAdmin && req.old_password == null) {
-                throw conflict(
-                    "non-admin user cannot change password without providing old password",
-                    TalerErrorCode.BANK_NON_ADMIN_PATCH_MISSING_OLD_PASSWORD
-                )
-            }
-            when (db.account.reconfigPassword(username, req.new_password, req.old_password)) {
-                AccountPatchAuthResult.Success -> call.respond(HttpStatusCode.NoContent)
-                AccountPatchAuthResult.UnknownAccount -> throw unknownAccount(username)
-                AccountPatchAuthResult.OldPasswordMismatch -> throw conflict(
-                    "old password does not match",
-                    TalerErrorCode.BANK_PATCH_BAD_OLD_PASSWORD
-                )
-            }
+            call.reconfigAuthHttp(db, ctx, req, false)
         }
     }
     get("/public-accounts") {
@@ -705,23 +710,27 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                 )
                 is TanSolveResult.Success -> when (res.op) {
                     Operation.account_reconfig -> {
-                        val req = Json.decodeFromString<AccountReconfiguration>(res.body);
-                        call.patchAccountHttp(db, ctx, req, true, res.channel, res.info)
+                        val tmp = Json.decodeFromString<AccountReconfiguration>(res.body);
+                        call.patchAccountHttp(db, ctx, tmp, true, res.channel, res.info)
+                    }
+                    Operation.account_auth_reconfig -> {
+                        val tmp = Json.decodeFromString<AccountPasswordChange>(res.body)
+                        call.reconfigAuthHttp(db, ctx, tmp, true)
                     }
                     Operation.account_delete -> {
                         call.deleteAccountHttp(db, ctx, true)
                     }
                     Operation.bank_transaction -> {
-                        val req = Json.decodeFromString<TransactionCreateRequest>(res.body)
-                        call.bankTransactionHttp(db, ctx, req, true)
+                        val tmp = Json.decodeFromString<TransactionCreateRequest>(res.body)
+                        call.bankTransactionHttp(db, ctx, tmp, true)
                     }
                     Operation.cashout -> {
-                        val req = Json.decodeFromString<CashoutRequest>(res.body)
-                        call.cashoutHttp(db, ctx, req, true)
+                        val tmp = Json.decodeFromString<CashoutRequest>(res.body)
+                        call.cashoutHttp(db, ctx, tmp, true)
                     }
                     Operation.withdrawal -> {
-                        val req = Json.decodeFromString<StoredUUID>(res.body)
-                        call.confirmWithdrawalHttp(db, ctx, req.value, true)
+                        val tmp = Json.decodeFromString<StoredUUID>(res.body)
+                        call.confirmWithdrawalHttp(db, ctx, tmp.value, true)
                     }
                 }
             }

@@ -357,20 +357,29 @@ class AccountDAO(private val db: Database) {
     enum class AccountPatchAuthResult {
         UnknownAccount,
         OldPasswordMismatch,
+        TanRequired,
         Success
     }
 
     /** Change account [login] password to [newPw] if current match [oldPw] */
-    suspend fun reconfigPassword(login: String, newPw: String, oldPw: String?): AccountPatchAuthResult = db.serializable {
+    suspend fun reconfigPassword(
+        login: String, 
+        newPw: String, 
+        oldPw: String?,
+        is2fa: Boolean
+    ): AccountPatchAuthResult = db.serializable {
         it.transaction { conn ->
-            val currentPwh = conn.prepareStatement("""
-                SELECT password_hash FROM customers WHERE login=?
+            val (currentPwh, tanRequired) = conn.prepareStatement("""
+                SELECT password_hash, (NOT ? AND tan_channel IS NOT NULL) FROM customers WHERE login=?
             """).run {
-                setString(1, login)
-                oneOrNull { it.getString(1) }
+                setBoolean(1, is2fa)
+                setString(2, login)
+                oneOrNull { 
+                    Pair(it.getString(1), it.getBoolean(2))
+                } ?: return@transaction AccountPatchAuthResult.UnknownAccount
             }
-            if (currentPwh == null) {
-                AccountPatchAuthResult.UnknownAccount
+            if (tanRequired) {
+                AccountPatchAuthResult.TanRequired
             } else if (oldPw != null && !CryptoUtil.checkpw(oldPw, currentPwh)) {
                 AccountPatchAuthResult.OldPasswordMismatch
             } else {

@@ -562,6 +562,21 @@ class CoreBankAccountsApiTest {
         client.patch("/accounts/customer/auth") {
             pwAuth("admin")
             json {
+                "new_password" to "customer-password"
+            }
+        }.assertNoContent()
+
+        // Check 2FA
+        fillTanInfo("customer")
+        client.patchA("/accounts/customer/auth") {
+            json {
+                "old_password" to "customer-password"
+                "new_password" to "it-password"
+            }
+        }.assertChallenge().assertNoContent()
+        client.patch("/accounts/customer/auth") {
+            pwAuth("admin")
+            json {
                 "new_password" to "new-password"
             }
         }.assertNoContent()
