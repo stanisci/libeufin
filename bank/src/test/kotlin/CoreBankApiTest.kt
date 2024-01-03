@@ -977,40 +977,17 @@ class CoreBankCashoutApiTest {
             "amount_credit" to convert("KUDOS:1")
         }
 
-        // Check missing TAN info
+        // Missing info
         client.postA("/accounts/customer/cashouts") {
             json(req) 
-        }.assertConflict(TalerErrorCode.BANK_MISSING_TAN_INFO)
-        client.patch("/accounts/customer") {
-            pwAuth("admin")
-            json {
-                "contact_data" to obj {
-                    "phone" to "+99"
-                    "email" to "foo@example.com"
-                }
-            }
-        }.assertNoContent()
+        }.assertConflict(TalerErrorCode.BANK_CONFIRM_INCOMPLETE)
 
-        // Check email TAN error TODO use 2FA
-        /*client.postA("/accounts/customer/cashouts") {
-            json(req) {
-                "tan_channel" to "email"
-            }
-        }.assertStatus(HttpStatusCode.BadGateway, TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED)*/
+        fillCashoutInfo("customer")
 
         // Check OK
         client.postA("/accounts/customer/cashouts") {
             json(req) 
-        }.assertOkJson<CashoutPending> { first ->
-            tanCode("+99")
-            // Check idempotency
-            client.postA("/accounts/customer/cashouts") {
-                json(req) 
-            }.assertOkJson<CashoutPending> { second ->
-                assertEquals(first.cashout_id, second.cashout_id)
-                assertNull(tanCode("+99"))     
-            }
-        }
+        }.assertOkJson<CashoutResponse>()
 
         // Trigger conflict due to reused request_uid
         client.postA("/accounts/customer/cashouts") {
@@ -1028,6 +1005,7 @@ class CoreBankCashoutApiTest {
         // Check insufficient fund
         client.postA("/accounts/customer/cashouts") {
             json(req) {
+                "request_uid" to randShortHashCode()
                 "amount_debit" to "KUDOS:75"
                 "amount_credit" to convert("KUDOS:75")
             }
@@ -1051,194 +1029,19 @@ class CoreBankCashoutApiTest {
                 "amount_credit" to "KUDOS:1"
             } 
         }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
-    }
 
-    // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort
-    @Test
-    fun abort() = bankSetup { _ ->
-        authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts/42/abort")
-
-        fillCashoutInfo("customer")
-        
-        val req = obj {
-            "request_uid" to randShortHashCode()
-            "amount_debit" to "KUDOS:1"
-            "amount_credit" to convert("KUDOS:1")
-        }
-
-        // Check abort created
+        // Check 2fa
+        fillTanInfo("customer")
+        assertBalance("customer", "-KUDOS:1")
         client.postA("/accounts/customer/cashouts") {
-            json(req) 
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            // Check OK
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-            // Check idempotence
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-        }
-
-        // Check abort confirmed
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to tanCode("+99") } 
-            }.assertNoContent()
-
-            // Check error
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertConflict(TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT)
-        }
-
-        // Check bad id
-        client.postA("/accounts/customer/cashouts/chocolate/abort") {
-            json { "tan" to "code" } 
-        }.assertBadRequest()
-
-        // Check unknown
-        client.postA("/accounts/customer/cashouts/42/abort") {
-            json { "tan" to "code" } 
-        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
-
-        // Check abort another user's operation
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            // Check error
-            client.postA("/accounts/merchant/cashouts/$id/abort")
-                .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
-        }
-    }
-
-    // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm
-    @Test
-    fun confirm() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts/42/confirm")
-
-        client.patch("/accounts/customer") {
-            pwAuth("admin")
-            json {
-                "contact_data" to obj {
-                    "phone" to "+99"
-                }
-            }
-        }.assertNoContent()
-
-        val req = obj {
-            "request_uid" to randShortHashCode()
-            "amount_debit" to "KUDOS:1"
-            "amount_credit" to convert("KUDOS:1")
-        }
-
-        // Check confirm
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            // Check missing cashout address
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to "code" }
-            }.assertConflict(TalerErrorCode.BANK_CONFIRM_INCOMPLETE)
-            fillCashoutInfo("customer")
-
-            // Check bad TAN code
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to "nice-try" } 
-            }.assertConflict(TalerErrorCode.BANK_TAN_CHALLENGE_FAILED)
-
-            val code = tanCode("+99")
-           
-            // Check OK
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to code }
-            }.assertNoContent()
-            // Check idempotence
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to code }
-            }.assertNoContent()
-        }
-
-        // Check confirm another user's operation
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { 
+            json(req) {
                 "request_uid" to randShortHashCode()
-                "amount_credit" to convert("KUDOS:1")
             }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            // Check error
-            client.postA("/accounts/merchant/cashouts/$id/confirm") {
-                json { "tan" to "unused" }
-            }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        }.assertChallenge { _,_->
+            assertBalance("customer", "-KUDOS:1")
+        }.assertOkJson<CashoutResponse> {
+            assertBalance("customer", "-KUDOS:2")
         }
-
-        // Check bad conversion
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-            client.post("/conversion-info/conversion-rate") {
-                pwAuth("admin")
-                json {
-                    "cashin_ratio" to "1"
-                    "cashin_fee" to "KUDOS:0.1"
-                    "cashin_tiny_amount" to "KUDOS:0.0001"
-                    "cashin_rounding_mode" to "nearest"
-                    "cashin_min_amount" to "EUR:0.0001"
-                    "cashout_ratio" to "1"
-                    "cashout_fee" to "EUR:0.1"
-                    "cashout_tiny_amount" to "EUR:0.0001"
-                    "cashout_rounding_mode" to "nearest"
-                    "cashout_min_amount" to "KUDOS:0.0001"
-                }
-            }.assertNoContent()
-
-            client.postA("/accounts/customer/cashouts/$id/confirm"){
-                json { "tan" to tanCode("+99") } 
-            }.assertConflict(TalerErrorCode.BANK_BAD_CONVERSION)
-
-            // Check can abort because not confirmed
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-        }
-
-        // Check balance insufficient
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { 
-                "request_uid" to randShortHashCode()
-                "amount_credit" to convert("KUDOS:1")
-            }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-            // Send too much money
-            tx("customer", "KUDOS:9", "merchant")
-            client.postA("/accounts/customer/cashouts/$id/confirm"){
-                json { "tan" to tanCode("+99") } 
-            }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
-
-            // Check can abort because not confirmed
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-        }
-
-        // Check bad UUID
-        client.postA("/accounts/customer/cashouts/chocolate/confirm") {
-            json { "tan" to "code" }
-        }.assertBadRequest()
-
-        // Check unknown
-        client.postA("/accounts/customer/cashouts/42/confirm") {
-            json { "tan" to "code" }
-        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
     // GET /accounts/{USERNAME}/cashouts/{CASHOUT_ID}
@@ -1257,41 +1060,15 @@ class CoreBankCashoutApiTest {
         // Check confirm
         client.postA("/accounts/customer/cashouts") {
             json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
+        }.assertOkJson<CashoutResponse> {
             val id = it.cashout_id
-            client.getA("/accounts/customer/cashouts/$id")
-                .assertOkJson<CashoutStatusResponse> {
-                assertEquals(CashoutStatus.pending, it.status)
-                assertEquals(amountDebit, it.amount_debit)
-                assertEquals(amountCredit, it.amount_credit)
-                assertEquals(TanChannel.sms, it.tan_channel)
-                assertEquals("+99", it.tan_info)
-            }
-
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to tanCode("+99") }
-            }.assertNoContent()
             client.getA("/accounts/customer/cashouts/$id")
                 .assertOkJson<CashoutStatusResponse> {
                 assertEquals(CashoutStatus.confirmed, it.status)
-            }
-        }
-
-        // Check abort
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-            client.getA("/accounts/customer/cashouts/$id")
-                .assertOkJson<CashoutStatusResponse> {
-                assertEquals(CashoutStatus.pending, it.status)
-            }
-
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-            client.getA("/accounts/customer/cashouts/$id")
-                .assertOkJson<CashoutStatusResponse> {
-                assertEquals(CashoutStatus.aborted, it.status)
+                assertEquals(amountDebit, it.amount_debit)
+                assertEquals(amountCredit, it.amount_credit)
+                assertNull(it.tan_channel)
+                assertNull(it.tan_info)
             }
         }
 
@@ -1306,7 +1083,7 @@ class CoreBankCashoutApiTest {
         // Check get another user's operation
         client.postA("/accounts/customer/cashouts") {
             json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
+        }.assertOkJson<CashoutResponse> {
             val id = it.cashout_id
 
             // Check error

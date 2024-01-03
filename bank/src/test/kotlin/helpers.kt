@@ -236,11 +236,7 @@ suspend fun ApplicationTestBuilder.cashout(amount: String) {
         } 
     } else { 
         res
-    }.assertOkJson<CashoutPending> {
-        client.postA("/accounts/customer/cashouts/${it.cashout_id}/confirm") {
-            json { "tan" to tanCode("+99") }
-        }.assertNoContent()
-    }
+    }.assertOk()
 }
 
 /** Perform a whithrawal operation of [amount] from customer */
@@ -308,7 +304,7 @@ suspend fun tanCode(info: String): String? {
 /* ----- Assert ----- */
 
 suspend fun HttpResponse.assertStatus(status: HttpStatusCode, err: TalerErrorCode?): HttpResponse {
-    assertEquals(status, this.status);
+    assertEquals(status, this.status, "$err")
     if (err != null) assertErr(err)
     return this
 }

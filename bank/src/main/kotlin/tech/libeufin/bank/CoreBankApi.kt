@@ -562,134 +562,53 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     }
 }
 
+suspend fun ApplicationCall.cashoutHttp(db: Database, ctx: BankConfig, req: CashoutRequest, is2fa: Boolean) {
+    ctx.checkRegionalCurrency(req.amount_debit)
+    ctx.checkFiatCurrency(req.amount_credit)
+
+    val res = db.cashout.create(
+        login = username, 
+        requestUid = req.request_uid,
+        amountDebit = req.amount_debit, 
+        amountCredit = req.amount_credit, 
+        subject = req.subject ?: "", // TODO default subject
+        now = Instant.now(),
+        is2fa = is2fa
+    )
+    when (res) {
+        CashoutCreationResult.AccountNotFound -> throw unknownAccount(username)
+        CashoutCreationResult.BadConversion -> throw conflict(
+            "Wrong currency conversion",
+            TalerErrorCode.BANK_BAD_CONVERSION
+        )
+        CashoutCreationResult.AccountIsExchange -> throw conflict(
+            "Exchange account cannot perform cashout operation",
+            TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
+        )
+        CashoutCreationResult.BalanceInsufficient -> throw conflict(
+            "Insufficient funds to withdraw with Taler",
+            TalerErrorCode.BANK_UNALLOWED_DEBIT
+        )
+        CashoutCreationResult.RequestUidReuse -> throw conflict(
+            "request_uid used already",
+            TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED
+        )
+        CashoutCreationResult.NoCashoutPayto -> throw conflict(
+            "Missing cashout payto uri",
+            TalerErrorCode.BANK_CONFIRM_INCOMPLETE
+        )
+        CashoutCreationResult.TanRequired -> {
+            respondChallenge(db, Operation.cashout, req)
+        }
+        is CashoutCreationResult.Success -> respond(CashoutResponse(res.id))
+    }
+}
+
 private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/cashouts") {
             val req = call.receive<CashoutRequest>()
-
-            ctx.checkRegionalCurrency(req.amount_debit)
-            ctx.checkFiatCurrency(req.amount_credit)
-
-            val tanChannel = req.tan_channel ?: TanChannel.sms
-            val tanScript = ctx.tanChannels.get(tanChannel) ?: throw libeufinError( 
-                HttpStatusCode.NotImplemented,
-                "Unsupported tan channel $tanChannel",
-                TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED
-            )
-
-            val res = db.cashout.create(
-                login = username, 
-                requestUid = req.request_uid,
-                amountDebit = req.amount_debit, 
-                amountCredit = req.amount_credit, 
-                subject = req.subject ?: "", // TODO default subject
-                tanChannel = tanChannel, 
-                tanCode = Tan.genCode(),
-                now = Instant.now(), 
-                retryCounter = TAN_RETRY_COUNTER,
-                validityPeriod = TAN_VALIDITY_PERIOD
-            )
-            when (res) {
-                is CashoutCreationResult.AccountNotFound -> throw unknownAccount(username)
-                is CashoutCreationResult.BadConversion -> throw conflict(
-                    "Wrong currency conversion",
-                    TalerErrorCode.BANK_BAD_CONVERSION
-                )
-                is CashoutCreationResult.AccountIsExchange -> throw conflict(
-                    "Exchange account cannot perform cashout operation",
-                    TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
-                )
-                is CashoutCreationResult.BalanceInsufficient -> throw conflict(
-                    "Insufficient funds to withdraw with Taler",
-                    TalerErrorCode.BANK_UNALLOWED_DEBIT
-                )
-                is CashoutCreationResult.MissingTanInfo -> throw conflict(
-                    "Account '$username' missing info for tan channel ${req.tan_channel}",
-                    TalerErrorCode.BANK_MISSING_TAN_INFO
-                )
-                is CashoutCreationResult.RequestUidReuse -> throw conflict(
-                    "request_uid used already",
-                    TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED
-                )
-                is CashoutCreationResult.Success -> {
-                    res.tanCode?.run {
-                        val exitValue = withContext(Dispatchers.IO) {
-                            val process = ProcessBuilder(tanScript, res.tanInfo).start()
-                            try {
-                                process.outputWriter().use { it.write(res.tanCode) }
-                                process.onExit().await()
-                            } catch (e: Exception) {
-                                process.destroy()
-                            }
-                            process.exitValue()
-                        }
-                        if (exitValue != 0) {
-                            throw libeufinError(
-                                HttpStatusCode.BadGateway,
-                                "Tan channel script failure with exit value $exitValue",
-                                TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED
-                            )
-                        }
-                        db.cashout.markSent(res.id, Instant.now(), TAN_RETRANSMISSION_PERIOD, tanChannel, res.tanInfo)
-                    }
-                    call.respond(CashoutPending(res.id))
-                }
-            }
-        }
-        post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort") {
-            val id = call.longUriComponent("CASHOUT_ID")
-            when (db.cashout.abort(id, username)) {
-                AbortResult.UnknownOperation -> throw notFound(
-                    "Cashout operation $id not found",
-                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-                )
-                AbortResult.AlreadyConfirmed -> throw conflict(
-                    "Cannot abort confirmed cashout",
-                    TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
-                )
-                AbortResult.Success -> call.respond(HttpStatusCode.NoContent)
-            }
-        }
-        post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm") {
-            val req = call.receive<CashoutConfirm>()
-            val id = call.longUriComponent("CASHOUT_ID")
-            when (db.cashout.confirm(
-                id = id,
-                login = username,
-                tanCode = req.tan,
-                timestamp = Instant.now()
-            )) {
-                CashoutConfirmationResult.OP_NOT_FOUND -> throw notFound(
-                    "Cashout operation $id not found",
-                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-                )
-                CashoutConfirmationResult.ABORTED -> throw conflict(
-                    "Cannot confirm an aborted cashout",
-                    TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
-                )
-                CashoutConfirmationResult.BAD_TAN_CODE -> throw conflict(
-                    "Incorrect TAN code",
-                    TalerErrorCode.BANK_TAN_CHALLENGE_FAILED
-                )
-                CashoutConfirmationResult.NO_RETRY -> throw libeufinError(
-                    HttpStatusCode.TooManyRequests,
-                    "Too many failed confirmation attempt",
-                    TalerErrorCode.BANK_TAN_RATE_LIMITED
-                )
-                CashoutConfirmationResult.NO_CASHOUT_PAYTO -> throw conflict(
-                    "Missing cashout payto uri",
-                    TalerErrorCode.BANK_CONFIRM_INCOMPLETE
-                )
-                CashoutConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
-                    "Insufficient funds",
-                    TalerErrorCode.BANK_UNALLOWED_DEBIT
-                )
-                CashoutConfirmationResult.BAD_CONVERSION -> throw conflict(
-                    "Wrong currency conversion",
-                    TalerErrorCode.BANK_BAD_CONVERSION
-                )
-                CashoutConfirmationResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
-            }
+            call.cashoutHttp(db, ctx, req, false)
         }
     }
     auth(db, TokenScope.readonly) {
@@ -723,7 +642,6 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
         }
     }
 }
-
 
 private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readwrite) {
@@ -774,7 +692,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
         }
         post("/accounts/{USERNAME}/challenge/{CHALLENGE_ID}/confirm") {
             val id = call.longUriComponent("CHALLENGE_ID")
-            val req = call.receive<CashoutConfirm>()
+            val req = call.receive<ChallengeSolve>()
             val res = db.tan.solve(
                 id = id,
                 login = username,
@@ -810,6 +728,10 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                     Operation.bank_transaction -> {
                         val req = Json.decodeFromString<TransactionCreateRequest>(res.body)
                         call.bankTransactionHttp(db, ctx, req, true)
+                    }
+                    Operation.cashout -> {
+                        val req = Json.decodeFromString<CashoutRequest>(res.body)
+                        call.cashoutHttp(db, ctx, req, true)
                     }
                 }
             }

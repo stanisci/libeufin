@@ -75,7 +75,8 @@ enum class Timeframe {
 enum class Operation {
     account_reconfig,
     account_delete,
-    bank_transaction
+    bank_transaction,
+    cashout
 }
 
 @Serializable(with = Option.Serializer::class)
@@ -478,12 +479,11 @@ data class CashoutRequest(
     val request_uid: ShortHashCode,
     val subject: String?,
     val amount_debit: TalerAmount,
-    val amount_credit: TalerAmount,
-    val tan_channel: TanChannel?
+    val amount_credit: TalerAmount
 )
 
 @Serializable
-data class CashoutPending(
+data class CashoutResponse(
     val cashout_id: Long,
 )
 
@@ -524,7 +524,7 @@ data class CashoutStatusResponse(
 )
 
 @Serializable
-data class CashoutConfirm(
+data class ChallengeSolve(
     val tan: String
 )
 

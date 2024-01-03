@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS cashout_operations
     REFERENCES challenges(challenge_id)
     ON DELETE CASCADE
     ON UPDATE RESTRICT
-  ,tan_channel TEXT NULL DEFAULT NULL -- TODO should be tan_enum but might be removed in the future
+  ,tan_channel TEXT NULL DEFAULT NULL
   ,tan_info TEXT NULL DEFAULT NULL
   ,aborted BOOLEAN NOT NULL DEFAULT FALSE
   ,local_transaction BIGINT UNIQUE DEFAULT NULL-- FIXME: Comment that the transaction only gets created after the TAN confirmation

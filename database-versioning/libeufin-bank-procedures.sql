@@ -153,7 +153,7 @@ my_customer_id BIGINT;
 my_balance_val INT8;
 my_balance_frac INT4;
 BEGIN
--- check if login exists
+-- check if login exists and if 2FA is required
 SELECT customer_id, (NOT in_is_tan AND tan_channel IS NOT NULL) 
   INTO my_customer_id, out_tan_required
   FROM customers
@@ -1034,26 +1034,23 @@ CREATE FUNCTION cashout_create(
   IN in_amount_credit taler_amount,
   IN in_subject TEXT,
   IN in_now_date INT8,
-  IN in_tan_channel tan_enum,
-  IN in_tan_code TEXT,
-  IN in_retry_counter INT4,
-  IN in_validity_period INT8,
+  IN in_is_tan BOOLEAN,
   -- Error status
   OUT out_bad_conversion BOOLEAN,
   OUT out_account_not_found BOOLEAN,
   OUT out_account_is_exchange BOOLEAN,
-  OUT out_missing_tan_info BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
   OUT out_request_uid_reuse BOOLEAN,
+  OUT out_no_cashout_payto BOOLEAN,
+  OUT out_tan_required BOOLEAN,
   -- Success return
-  OUT out_cashout_id BIGINT,
-  OUT out_tan_info TEXT,
-  OUT out_tan_code TEXT
+  OUT out_cashout_id BIGINT
 )
 LANGUAGE plpgsql AS $$ 
 DECLARE
 account_id BIGINT;
-challenge_id BIGINT;
+admin_account_id BIGINT;
+tx_id BIGINT;
 BEGIN
 -- check conversion
 SELECT too_small OR no_config OR in_amount_credit!=converted INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'cashout'::text);
@@ -1061,133 +1058,17 @@ IF out_bad_conversion THEN
   RETURN;
 END IF;
 
--- check account exists and has appropriate tan info
+-- check account exists, if has all info and if 2FA is required
 SELECT 
-    bank_account_id, is_taler_exchange,
-    CASE in_tan_channel
-      WHEN 'sms'   THEN phone
-      WHEN 'email' THEN email
-    END
-  INTO account_id, out_account_is_exchange, out_tan_info
+    bank_account_id, is_taler_exchange, cashout_payto IS NULL, (NOT in_is_tan AND tan_channel IS NOT NULL) 
+  INTO account_id, out_account_is_exchange, out_no_cashout_payto, out_tan_required
   FROM bank_accounts
   JOIN customers ON bank_accounts.owning_customer_id = customers.customer_id
   WHERE login=in_account_username;
 IF NOT FOUND THEN
   out_account_not_found=TRUE;
   RETURN;
-ELSIF out_account_is_exchange THEN
-  RETURN;
-ELSIF out_tan_info IS NULL THEN
-  out_missing_tan_info=TRUE;
-  RETURN;
-END IF;
-
--- check enough funds
-SELECT account_balance_is_sufficient(account_id, in_amount_debit) INTO out_balance_insufficient;
-IF out_balance_insufficient THEN
-  RETURN;
-END IF;
-
--- Check for idempotence and conflict
-SELECT (amount_debit != in_amount_debit
-          OR subject != in_subject 
-          OR bank_account != account_id)
-        , challenge, cashout_id
-  INTO out_request_uid_reuse, challenge_id, out_cashout_id
-  FROM cashout_operations
-  WHERE request_uid = in_request_uid;
-
-IF NOT found THEN
-  -- New cashout
-  out_tan_code = in_tan_code;
-
-  -- Create challenge
-  SELECT challenge_create(in_tan_code, in_now_date, in_validity_period, in_retry_counter) INTO challenge_id;
-
-  -- Create cashout operation
-  INSERT INTO cashout_operations (
-    request_uid
-    ,amount_debit
-    ,amount_credit
-    ,subject
-    ,creation_time
-    ,bank_account
-    ,challenge
-  ) VALUES (
-    in_request_uid
-    ,in_amount_debit
-    ,in_amount_credit
-    ,in_subject
-    ,in_now_date
-    ,account_id
-    ,challenge_id
-  ) RETURNING cashout_id INTO out_cashout_id;
-ELSE -- Already exist, check challenge retransmission
-  SELECT challenge_resend(challenge_id, in_tan_code, in_now_date, in_validity_period, in_retry_counter) INTO out_tan_code;
-END IF;
-END $$;
-
-CREATE FUNCTION cashout_confirm(
-  IN in_cashout_id BIGINT,
-  IN in_login TEXT,
-  IN in_tan_code TEXT,
-  IN in_now_date BIGINT,
-  OUT out_no_op BOOLEAN,
-  OUT out_bad_conversion BOOLEAN,
-  OUT out_bad_code BOOLEAN,
-  OUT out_balance_insufficient BOOLEAN,
-  OUT out_aborted BOOLEAN,
-  OUT out_no_retry BOOLEAN,
-  OUT out_no_cashout_payto BOOLEAN
-)
-LANGUAGE plpgsql as $$
-DECLARE
-  wallet_account_id BIGINT;
-  admin_account_id BIGINT;
-  already_confirmed BOOLEAN;
-  subject_local TEXT;
-  amount_debit_local taler_amount;
-  amount_credit_local taler_amount;
-  challenge_id BIGINT;
-  tx_id BIGINT;
-BEGIN
--- Retrieve cashout operation info
-SELECT
-  local_transaction IS NOT NULL,
-  aborted, subject,
-  bank_account, challenge,
-  (amount_debit).val, (amount_debit).frac,
-  (amount_credit).val, (amount_credit).frac,
-  cashout_payto IS NULL
-  INTO
-    already_confirmed,
-    out_aborted, subject_local,
-    wallet_account_id, challenge_id,
-    amount_debit_local.val, amount_debit_local.frac,
-    amount_credit_local.val, amount_credit_local.frac,
-    out_no_cashout_payto
-  FROM cashout_operations
-    JOIN bank_accounts ON bank_account_id=bank_account
-    JOIN customers ON customer_id=owning_customer_id
-  WHERE cashout_id=in_cashout_id AND login=in_login;
-IF NOT FOUND THEN
-  out_no_op=TRUE;
-  RETURN;
-ELSIF already_confirmed OR out_aborted OR out_no_cashout_payto THEN
-  RETURN;
-END IF;
-
--- check conversion
-SELECT too_small OR no_config OR amount_credit_local!=converted INTO out_bad_conversion FROM conversion_to(amount_debit_local, 'cashout'::text);
-IF out_bad_conversion THEN
-  RETURN;
-END IF;
-
--- check challenge
-SELECT NOT ok, no_retry
-  INTO out_bad_code, out_no_retry
-  FROM challenge_try(challenge_id, in_tan_code, in_now_date);
-IF out_bad_code OR out_no_retry THEN
+ELSIF out_account_is_exchange OR out_no_cashout_payto THEN
   RETURN;
 END IF;
 
@@ -1199,14 +1080,26 @@ SELECT bank_account_id
       ON customer_id=owning_customer_id
   WHERE login = 'admin';
 
+-- Check for idempotence and conflict
+SELECT (amount_debit != in_amount_debit
+          OR subject != in_subject 
+          OR bank_account != account_id)
+        , cashout_id
+  INTO out_request_uid_reuse, out_cashout_id
+  FROM cashout_operations
+  WHERE request_uid = in_request_uid;
+IF found OR out_request_uid_reuse OR out_tan_required THEN
+  RETURN;
+END IF;
+
 -- Perform bank wire transfer
 SELECT transfer.out_balance_insufficient, out_debit_row_id
 INTO out_balance_insufficient, tx_id
 FROM bank_wire_transfer(
   admin_account_id,
-  wallet_account_id,
-  subject_local,
-  amount_debit_local,
+  account_id,
+  in_subject,
+  in_amount_debit,
   in_now_date,
   NULL,
   NULL,
@@ -1216,101 +1109,28 @@ IF out_balance_insufficient THEN
   RETURN;
 END IF;
 
--- Confirm operation
-UPDATE cashout_operations
-  SET local_transaction = tx_id
-  WHERE cashout_id=in_cashout_id;
+-- Create cashout operation
+INSERT INTO cashout_operations (
+  request_uid
+  ,amount_debit
+  ,amount_credit
+  ,creation_time
+  ,bank_account
+  ,subject
+  ,local_transaction
+) VALUES (
+  in_request_uid
+  ,in_amount_debit
+  ,in_amount_credit
+  ,in_now_date
+  ,account_id
+  ,in_subject
+  ,tx_id
+) RETURNING cashout_id INTO out_cashout_id;
 
 -- update stats
-CALL stats_register_payment('cashout', now()::TIMESTAMP, amount_debit_local, amount_credit_local);
+CALL stats_register_payment('cashout', now()::TIMESTAMP, in_amount_debit, in_amount_credit);
 END $$;
-
-CREATE FUNCTION challenge_create (
-  IN in_code TEXT,
-  IN in_now_date INT8,
-  IN in_validity_period INT8,
-  IN in_retry_counter INT4,
-  OUT out_challenge_id BIGINT
-)
-LANGUAGE sql AS $$
-  INSERT INTO challenges (
-    code,
-    creation_date,
-    expiration_date,
-    retry_counter
-  ) VALUES (
-    in_code,
-    in_now_date,
-    in_now_date + in_validity_period,
-    in_retry_counter
-  ) RETURNING challenge_id
-$$;
-COMMENT ON FUNCTION challenge_create IS 'Create a new challenge, return the generated id';
-
-CREATE FUNCTION challenge_mark_sent (
-  IN in_challenge_id BIGINT,
-  IN in_now_date INT8,
-  IN in_retransmission_period INT8
-) RETURNS void
-LANGUAGE sql AS $$
-  UPDATE challenges SET 
-    retransmission_date = in_now_date + in_retransmission_period
-  WHERE challenge_id = in_challenge_id;
-$$;
-COMMENT ON FUNCTION challenge_create IS 'Register a challenge as successfully sent';
-
-CREATE FUNCTION challenge_resend (
-  IN in_challenge_id BIGINT, 
-  IN in_code TEXT,            -- New code to use if the old code expired
-  IN in_now_date INT8,        
-  IN in_validity_period INT8,
-  IN in_retry_counter INT4,
-  OUT out_tan_code TEXT       -- Code to send, NULL if nothing should be sent
-)
-LANGUAGE plpgsql as $$
-DECLARE
-expired BOOLEAN;
-retransmit BOOLEAN;
-BEGIN
--- Recover expiration date
-SELECT 
-  (in_now_date >= expiration_date OR retry_counter <= 0) AND confirmation_date IS NULL
-  ,in_now_date >= retransmission_date AND confirmation_date IS NULL
-  ,code
-INTO expired, retransmit, out_tan_code
-FROM challenges WHERE challenge_id = in_challenge_id;
-
-IF expired THEN
-  UPDATE challenges SET
-     code = in_code
-    ,expiration_date = in_now_date + in_validity_period
-    ,retry_counter = in_retry_counter
-  WHERE challenge_id = in_challenge_id;
-  out_tan_code = in_code;
-ELSIF NOT retransmit THEN
-  out_tan_code = NULL;
-END IF;
-END $$;
-COMMENT ON FUNCTION challenge_resend IS 'Get the challenge code to send, return NULL if nothing should be sent';
-
-CREATE FUNCTION challenge_try (
-  IN in_challenge_id BIGINT, 
-  IN in_code TEXT,    
-  IN in_now_date INT8,        
-  OUT ok BOOLEAN,
-  OUT no_retry BOOLEAN
-)
-LANGUAGE sql as $$
-  UPDATE challenges SET 
-    confirmation_date = CASE 
-      WHEN (retry_counter > 0 AND in_now_date < expiration_date AND code = in_code) THEN in_now_date
-      ELSE confirmation_date
-    END,
-    retry_counter = retry_counter - 1
-  WHERE challenge_id = in_challenge_id
-  RETURNING confirmation_date IS NOT NULL, retry_counter < 0 AND confirmation_date IS NULL;
-$$;
-COMMENT ON FUNCTION challenge_try IS 'Try to confirm a challenge, return true if the challenge have been confirmed';
 
 CREATE FUNCTION tan_challenge_create (
   IN in_body TEXT,
