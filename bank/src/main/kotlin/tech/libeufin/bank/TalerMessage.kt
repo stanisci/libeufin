@@ -76,7 +76,8 @@ enum class Operation {
     account_reconfig,
     account_delete,
     bank_transaction,
-    cashout
+    cashout,
+    withdrawal
 }
 
 @Serializable(with = Option.Serializer::class)

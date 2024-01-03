@@ -29,6 +29,9 @@ import io.ktor.server.routing.RouteSelectorEvaluation
 import io.ktor.server.routing.RoutingResolveContext
 import io.ktor.server.util.*
 import io.ktor.util.pipeline.PipelineContext
+import kotlinx.serialization.*
+import kotlinx.serialization.descriptors.*
+import kotlinx.serialization.encoding.*
 import java.net.*
 import java.time.*
 import java.time.temporal.*
@@ -154,3 +157,20 @@ fun Route.conditional(implemented: Boolean, callback: Route.() -> Unit): Route =
             throw libeufinError(HttpStatusCode.NotImplemented, "API not implemented", TalerErrorCode.END)
         }
     }
+
+@Serializable(with = StoredUUID.Serializer::class)
+data class StoredUUID(val value: UUID) {
+    internal object Serializer : KSerializer<StoredUUID> {
+        override val descriptor: SerialDescriptor =
+                PrimitiveSerialDescriptor("StoredUUID", PrimitiveKind.STRING)
+
+        override fun serialize(encoder: Encoder, value: StoredUUID) {
+            encoder.encodeString(value.value.toString())
+        }
+
+        override fun deserialize(decoder: Decoder): StoredUUID {
+            val string = decoder.decodeString()
+            return StoredUUID(UUID.fromString(string))
+        }
+    }
+}

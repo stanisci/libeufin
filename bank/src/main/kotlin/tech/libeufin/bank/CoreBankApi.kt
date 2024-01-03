@@ -442,6 +442,36 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
     }
 }
 
+suspend fun ApplicationCall.confirmWithdrawalHttp(db: Database, ctx: BankConfig, id: UUID, is2fa: Boolean) {
+    when (db.withdrawal.confirm(id, Instant.now(), is2fa)) {
+        WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
+            "Withdrawal operation $id not found",
+            TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+        )
+        WithdrawalConfirmationResult.AlreadyAborted -> throw conflict(
+            "Cannot confirm an aborted withdrawal",
+            TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
+        )
+        WithdrawalConfirmationResult.NotSelected -> throw conflict(
+            "Cannot confirm an unselected withdrawal",
+            TalerErrorCode.BANK_CONFIRM_INCOMPLETE
+        )
+        WithdrawalConfirmationResult.BalanceInsufficient -> throw conflict(
+            "Insufficient funds",
+            TalerErrorCode.BANK_UNALLOWED_DEBIT
+        )
+        WithdrawalConfirmationResult.UnknownExchange -> throw conflict(
+            "Exchange to withdraw from not found",
+            TalerErrorCode.BANK_UNKNOWN_CREDITOR
+        )
+        WithdrawalConfirmationResult.TanRequired -> {
+            respondChallenge(db, Operation.withdrawal, StoredUUID(id))
+        }
+        WithdrawalConfirmationResult.Success -> respond(HttpStatusCode.NoContent)
+    }
+}
+
+
 private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/withdrawals") {
@@ -486,29 +516,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         }
         post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
             val opId = call.uuidUriComponent("withdrawal_id")
-            when (db.withdrawal.confirm(opId, Instant.now())) {
-                WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
-                    "Withdrawal operation $opId not found",
-                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-                )
-                WithdrawalConfirmationResult.AlreadyAborted -> throw conflict(
-                    "Cannot confirm an aborted withdrawal",
-                    TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
-                )
-                WithdrawalConfirmationResult.NotSelected -> throw conflict(
-                    "Cannot confirm an unselected withdrawal",
-                    TalerErrorCode.BANK_CONFIRM_INCOMPLETE
-                )
-                WithdrawalConfirmationResult.BalanceInsufficient -> throw conflict(
-                    "Insufficient funds",
-                    TalerErrorCode.BANK_UNALLOWED_DEBIT
-                )
-                WithdrawalConfirmationResult.UnknownExchange -> throw conflict(
-                    "Exchange to withdraw from not found",
-                    TalerErrorCode.BANK_UNKNOWN_CREDITOR
-                )
-                WithdrawalConfirmationResult.Success -> call.respond(HttpStatusCode.NoContent)
-            }
+            call.confirmWithdrawalHttp(db, ctx, opId, false)
         }
     }
     get("/withdrawals/{withdrawal_id}") {
@@ -536,29 +544,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
     }
     post("/withdrawals/{withdrawal_id}/confirm") {
         val opId = call.uuidUriComponent("withdrawal_id")
-        when (db.withdrawal.confirm(opId, Instant.now())) {
-            WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
-                "Withdrawal operation $opId not found",
-                TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-            )
-            WithdrawalConfirmationResult.AlreadyAborted -> throw conflict(
-                "Cannot confirm an aborted withdrawal",
-                TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
-            )
-            WithdrawalConfirmationResult.NotSelected -> throw conflict(
-                "Cannot confirm an unselected withdrawal",
-                TalerErrorCode.BANK_CONFIRM_INCOMPLETE
-            )
-            WithdrawalConfirmationResult.BalanceInsufficient -> throw conflict(
-                "Insufficient funds",
-                TalerErrorCode.BANK_UNALLOWED_DEBIT
-            )
-            WithdrawalConfirmationResult.UnknownExchange -> throw conflict(
-                "Exchange to withdraw from not found",
-                TalerErrorCode.BANK_UNKNOWN_CREDITOR
-            )
-            WithdrawalConfirmationResult.Success -> call.respond(HttpStatusCode.NoContent)
-        }
+        call.confirmWithdrawalHttp(db, ctx, opId, false)
     }
 }
 
@@ -732,6 +718,10 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                     Operation.cashout -> {
                         val req = Json.decodeFromString<CashoutRequest>(res.body)
                         call.cashoutHttp(db, ctx, req, true)
+                    }
+                    Operation.withdrawal -> {
+                        val req = Json.decodeFromString<StoredUUID>(res.body)
+                        call.confirmWithdrawalHttp(db, ctx, req.value, true)
                     }
                 }
             }

@@ -139,13 +139,15 @@ class WithdrawalDAO(private val db: Database) {
         UnknownExchange,
         BalanceInsufficient,
         NotSelected,
-        AlreadyAborted
+        AlreadyAborted,
+        TanRequired
     }
 
     /** Confirm withdrawal operation [uuid] */
     suspend fun confirm(
         uuid: UUID,
-        now: Instant
+        now: Instant,
+        is2fa: Boolean
     ): WithdrawalConfirmationResult = db.serializable { conn ->
          // TODO login check
         val stmt = conn.prepareStatement("""
@@ -154,12 +156,14 @@ class WithdrawalDAO(private val db: Database) {
               out_exchange_not_found,
               out_balance_insufficient,
               out_not_selected,
-              out_aborted
-            FROM confirm_taler_withdrawal(?, ?);
+              out_aborted,
+              out_tan_required
+            FROM confirm_taler_withdrawal(?,?,?);
         """
         )
         stmt.setObject(1, uuid)
         stmt.setLong(2, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setBoolean(3, is2fa)
         stmt.executeQuery().use {
             when {
                 !it.next() ->
@@ -169,6 +173,7 @@ class WithdrawalDAO(private val db: Database) {
                 it.getBoolean("out_balance_insufficient") -> WithdrawalConfirmationResult.BalanceInsufficient
                 it.getBoolean("out_not_selected") -> WithdrawalConfirmationResult.NotSelected
                 it.getBoolean("out_aborted") -> WithdrawalConfirmationResult.AlreadyAborted
+                it.getBoolean("out_tan_required") -> WithdrawalConfirmationResult.TanRequired
                 else -> WithdrawalConfirmationResult.Success
             }
         }

@@ -520,7 +520,7 @@ LANGUAGE plpgsql AS $$
 DECLARE
 account_id BIGINT;
 BEGIN
--- check account exists
+-- Check account exists
 SELECT bank_account_id, is_taler_exchange
   INTO account_id, out_account_is_exchange
   FROM bank_accounts
@@ -533,7 +533,7 @@ ELSIF out_account_is_exchange THEN
   RETURN;
 END IF;
 
--- check enough funds
+-- Check enough funds
 SELECT account_balance_is_sufficient(account_id, in_amount) INTO out_balance_insufficient;
 IF out_balance_insufficient THEN
   RETURN;
@@ -643,12 +643,14 @@ COMMENT ON FUNCTION abort_taler_withdrawal IS 'Abort a withdrawal operation.';
 CREATE FUNCTION confirm_taler_withdrawal(
   IN in_withdrawal_uuid uuid,
   IN in_confirmation_date BIGINT,
+  IN in_is_tan BOOLEAN,
   OUT out_no_op BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
   OUT out_creditor_not_found BOOLEAN,
   OUT out_exchange_not_found BOOLEAN,
   OUT out_not_selected BOOLEAN,
-  OUT out_aborted BOOLEAN
+  OUT out_aborted BOOLEAN,
+  OUT out_tan_required BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -661,21 +663,25 @@ DECLARE
   exchange_bank_account_id BIGINT;
   tx_row_id BIGINT;
 BEGIN
-SELECT -- Really no-star policy and instead DECLARE almost one var per column?
+SELECT
   confirmation_done,
   aborted, NOT selection_done,
   reserve_pub, subject,
   selected_exchange_payto,
   wallet_bank_account,
-  (amount).val, (amount).frac
+  (amount).val, (amount).frac,
+  (NOT in_is_tan AND tan_channel IS NOT NULL)
   INTO
     already_confirmed,
     out_aborted, out_not_selected,
     reserve_pub_local, subject_local,
     selected_exchange_payto_local,
     wallet_bank_account_local,
-    amount_local.val, amount_local.frac
+    amount_local.val, amount_local.frac,
+    out_tan_required
   FROM taler_withdrawal_operations
+    JOIN bank_accounts ON wallet_bank_account=bank_account_id
+    JOIN customers ON owning_customer_id=customer_id
   WHERE withdrawal_uuid=in_withdrawal_uuid;
 IF NOT FOUND THEN
   out_no_op=TRUE;
@@ -692,6 +698,11 @@ SELECT
   WHERE internal_payto_uri = selected_exchange_payto_local;
 IF NOT FOUND THEN
   out_exchange_not_found=TRUE;
+  RETURN;
+END IF;
+
+-- Check 2FA
+IF out_tan_required THEN
   RETURN;
 END IF;
 

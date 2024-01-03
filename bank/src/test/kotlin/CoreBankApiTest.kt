@@ -961,6 +961,22 @@ class CoreBankWithdrawalApiTest {
         // Check unknown
         client.postA("/accounts/merchant/withdrawals/${UUID.randomUUID()}/confirm")
             .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+
+        // Check 2fa
+        fillTanInfo("merchant")
+        assertBalance("merchant", "-KUDOS:6")
+        client.postA("/accounts/merchant/withdrawals") {
+            json { "amount" to "KUDOS:1" } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse> {
+            val uuid = it.taler_withdraw_uri.split("/").last()
+            withdrawalSelect(uuid)
+
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
+            .assertChallenge { _,_->
+                assertBalance("merchant", "-KUDOS:6")
+            }.assertNoContent()
+        }
+        
     }
 }
 
