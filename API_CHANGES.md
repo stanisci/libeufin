@@ -19,6 +19,15 @@ This files contains all the API changes for the current release:
 - POST /accounts/USERNAME/transactions: prohibit transaction to admin account
 - Deprecate POST /accounts/USERNAME/withdrawals/WITHDRAWAL_ID/abort
 - Add POST /taler-integration/withdrawal-operation/WITHDRAWAL_ID/abort
+- Add 2FA logic
+- Remove POST /accounts/USERNAME/cashouts/CASHOUT_ID/abort
+- Remove POST /accounts/USERNAME/cashouts/CASHOUT_ID/confirm
+- Add POST /accounts/USERNAME/challenge/CHALLENGE_ID
+- Add POST /accounts/USERNAME/challenge/CHALLENGE_ID/confirm
+- POST /accounts/USERNAME/cashouts: remove tan_channel field
+- POST /accounts/USERNAME/cashouts/CASHOUT_ID: remove confirmation_time, tan_channel, tan_info and status fields
+- POST /accounts/$USERNAME/cashouts: remove status field
+- POST /cashouts: remove status field
 
 ## bank cli
 
