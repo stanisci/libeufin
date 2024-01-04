@@ -142,7 +142,6 @@ class BankIntegrationApiTest {
     // POST /taler-integration/withdrawal-operation/UUID/abort
     @Test
     fun abort() = bankSetup { _ ->
-        // TODO auth routine
         // Check abort created
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 

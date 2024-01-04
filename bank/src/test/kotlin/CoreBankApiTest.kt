@@ -1324,7 +1324,7 @@ class CoreBankTanApiTest {
             // Check wrong account
             client.postA("/accounts/customer/challenge/$id/confirm") {
                 json { "tan" to "nice-try" } 
-            }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+            }.assertNotFound(TalerErrorCode.BANK_CHALLENGE_NOT_FOUND)
         
             // Check OK
             client.postA("/accounts/merchant/challenge/$id/confirm") {
@@ -1338,7 +1338,7 @@ class CoreBankTanApiTest {
             // Unknown challenge
             client.postA("/accounts/merchant/challenge/42/confirm") {
                 json { "tan" to code }
-            }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+            }.assertNotFound(TalerErrorCode.BANK_CHALLENGE_NOT_FOUND)
         }
         
         // Check invalidation
@@ -1353,7 +1353,7 @@ class CoreBankTanApiTest {
             fillTanInfo("merchant")
             client.postA("/accounts/merchant/challenge/$id/confirm") {
                 json { "tan" to tanCode(info) }
-            }.assertConflict(TalerErrorCode.BANK_TAN_CHALLENGE_FAILED)
+            }.assertConflict(TalerErrorCode.BANK_TAN_CHALLENGE_EXPIRED)
 
             val new = client.postA("/accounts/merchant/challenge/$id")
                 .assertOkJson<TanTransmission>().tan_info

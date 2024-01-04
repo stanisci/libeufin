@@ -693,7 +693,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
             when (res) {
                 TanSolveResult.NotFound -> throw notFound(
                     "Challenge $id not found",
-                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND // TODO specific EC
+                    TalerErrorCode.BANK_CHALLENGE_NOT_FOUND
                 )
                 TanSolveResult.BadCode -> throw conflict(
                     "Incorrect TAN code",
@@ -706,7 +706,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                 )
                 TanSolveResult.Expired -> throw conflict(
                     "Challenge expired",
-                    TalerErrorCode.BANK_TAN_CHALLENGE_FAILED  // TODO specific EC
+                    TalerErrorCode.BANK_TAN_CHALLENGE_EXPIRED
                 )
                 is TanSolveResult.Success -> when (res.op) {
                     Operation.account_reconfig -> {

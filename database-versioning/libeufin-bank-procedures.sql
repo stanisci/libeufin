@@ -484,7 +484,6 @@ IF NOT FOUND THEN
 ELSIF out_same_account OR out_tan_required THEN
   RETURN;
 END IF;
--- TODO check balance insufficient ?
 -- Perform bank transfer
 SELECT
   transfer.out_balance_insufficient,

@@ -68,7 +68,6 @@ class WithdrawalDAO(private val db: Database) {
 
     /** Abort withdrawal operation [uuid] */
     suspend fun abort(uuid: UUID): AbortResult = db.serializable { conn ->
-        // TODO login check
         val stmt = conn.prepareStatement("""
             SELECT
                 out_no_op,
