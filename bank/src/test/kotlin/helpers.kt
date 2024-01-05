@@ -31,7 +31,8 @@ import kotlinx.serialization.json.*
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.bank.*
-import tech.libeufin.bank.AccountDAO.*
+import tech.libeufin.bank.db.*
+import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.util.*
 
 /* ----- Setup ----- */

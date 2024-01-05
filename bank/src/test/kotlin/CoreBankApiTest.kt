@@ -34,6 +34,7 @@ import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import tech.libeufin.bank.*
+import tech.libeufin.bank.db.*
 import tech.libeufin.util.*
 
 class CoreBankConfigTest {

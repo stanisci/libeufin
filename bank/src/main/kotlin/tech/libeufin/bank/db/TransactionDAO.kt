@@ -17,13 +17,14 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.bank
+package tech.libeufin.bank.db
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import java.time.*
 import java.sql.Types
+import tech.libeufin.bank.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.TransactionDAO")
 

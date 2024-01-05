@@ -35,11 +35,13 @@ import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.bank.AccountDAO.*
-import tech.libeufin.bank.CashoutDAO.*
-import tech.libeufin.bank.ExchangeDAO.*
-import tech.libeufin.bank.TransactionDAO.*
-import tech.libeufin.bank.WithdrawalDAO.*
+import tech.libeufin.bank.auth.*
+import tech.libeufin.bank.db.*
+import tech.libeufin.bank.db.AccountDAO.*
+import tech.libeufin.bank.db.CashoutDAO.*
+import tech.libeufin.bank.db.ExchangeDAO.*
+import tech.libeufin.bank.db.TransactionDAO.*
+import tech.libeufin.bank.db.WithdrawalDAO.*
 import tech.libeufin.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")

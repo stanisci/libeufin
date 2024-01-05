@@ -16,7 +16,7 @@
  * License along with LibEuFin; see the file COPYING.  If not, see
  * <http://www.gnu.org/licenses/>
  */
-package tech.libeufin.bank
+package tech.libeufin.bank.auth
 
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -29,7 +29,9 @@ import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.bank.AccountDAO.*
+import tech.libeufin.bank.db.AccountDAO.*
+import tech.libeufin.bank.db.*
+import tech.libeufin.bank.*
 import tech.libeufin.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Authentication")

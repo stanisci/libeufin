@@ -17,7 +17,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.bank
+package tech.libeufin.bank.db
 
 import java.util.UUID
 import java.time.Instant
@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit
 import tech.libeufin.util.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.*
+import tech.libeufin.bank.*
 
 /** Data access logic for withdrawal operations */
 class WithdrawalDAO(private val db: Database) {

@@ -29,7 +29,7 @@ import kotlin.test.*
 import kotlinx.coroutines.*
 import org.junit.Test
 import tech.libeufin.bank.*
-import tech.libeufin.bank.AccountDAO.*
+import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.util.*
 
 class DatabaseTest {

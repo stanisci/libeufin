@@ -36,8 +36,10 @@ import java.util.*
 import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.bank.AccountDAO.*
 import tech.libeufin.util.*
+import tech.libeufin.bank.db.*
+import tech.libeufin.bank.db.AccountDAO.*
+import tech.libeufin.bank.auth.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers")
 

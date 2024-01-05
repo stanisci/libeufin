@@ -23,7 +23,7 @@ import tech.libeufin.bank.TalerAmount as BankAmount
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.Database as NexusDb
 import tech.libeufin.nexus.TalerAmount as NexusAmount
-import tech.libeufin.bank.AccountDAO.*
+import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.util.*
 import java.io.File
 import java.time.Instant

@@ -31,7 +31,9 @@ import java.time.Instant
 import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.bank.ExchangeDAO.*
+import tech.libeufin.bank.db.*
+import tech.libeufin.bank.db.ExchangeDAO.*
+import tech.libeufin.bank.auth.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 

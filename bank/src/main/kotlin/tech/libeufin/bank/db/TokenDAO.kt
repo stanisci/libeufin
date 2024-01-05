@@ -17,10 +17,11 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.bank
+package tech.libeufin.bank.db
 
 import tech.libeufin.util.*
 import java.time.Instant
+import tech.libeufin.bank.*
 
 /** Data access logic for auth tokens */
 class TokenDAO(private val db: Database) {

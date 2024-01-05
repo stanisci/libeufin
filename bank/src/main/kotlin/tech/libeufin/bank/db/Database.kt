@@ -17,7 +17,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.bank
+package tech.libeufin.bank.db
 
 import org.postgresql.jdbc.PgConnection
 import org.postgresql.ds.PGSimpleDataSource
@@ -36,6 +36,7 @@ import com.zaxxer.hikari.*
 import tech.libeufin.util.*
 import io.ktor.http.HttpStatusCode
 import net.taler.common.errorcodes.TalerErrorCode
+import tech.libeufin.bank.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
 

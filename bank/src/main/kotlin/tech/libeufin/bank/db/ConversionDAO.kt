@@ -17,9 +17,10 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.bank
+package tech.libeufin.bank.db
 
 import tech.libeufin.util.*
+import tech.libeufin.bank.*
 import tech.libeufin.bank.*
 
 /** Data access logic for conversion */

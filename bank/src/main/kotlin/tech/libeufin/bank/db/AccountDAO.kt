@@ -17,11 +17,12 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.bank
+package tech.libeufin.bank.db
 
 import tech.libeufin.util.*
 import java.time.*
 import java.sql.Types
+import tech.libeufin.bank.*
 
 /** Data access logic for accounts */
 class AccountDAO(private val db: Database) {

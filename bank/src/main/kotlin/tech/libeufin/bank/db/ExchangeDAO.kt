@@ -17,13 +17,14 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.bank
+package tech.libeufin.bank.db
 
 import java.util.UUID
 import java.time.Instant
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 import tech.libeufin.util.*
+import tech.libeufin.bank.*
 
 /** Data access logic for exchange specific logic */
 class ExchangeDAO(private val db: Database) {

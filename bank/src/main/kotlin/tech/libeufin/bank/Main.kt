@@ -54,7 +54,8 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import org.postgresql.util.PSQLState
-import tech.libeufin.bank.AccountDAO.*
+import tech.libeufin.bank.db.AccountDAO.*
+import tech.libeufin.bank.db.*
 import tech.libeufin.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")

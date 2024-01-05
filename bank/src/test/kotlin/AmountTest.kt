@@ -23,8 +23,9 @@ import kotlin.test.*
 import org.junit.Test
 import org.postgresql.jdbc.PgConnection
 import tech.libeufin.bank.*
-import tech.libeufin.bank.TransactionDAO.*
-import tech.libeufin.bank.WithdrawalDAO.*
+import tech.libeufin.bank.db.*
+import tech.libeufin.bank.db.TransactionDAO.*
+import tech.libeufin.bank.db.WithdrawalDAO.*
 import tech.libeufin.util.*
 
 class AmountTest {

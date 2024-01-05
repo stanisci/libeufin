@@ -25,6 +25,8 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import java.util.*
 import tech.libeufin.util.*
+import tech.libeufin.bank.auth.*
+import tech.libeufin.bank.db.*
 
 fun Routing.revenueApi(db: Database) { 
     auth(db, TokenScope.readonly) {
