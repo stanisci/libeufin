@@ -348,17 +348,6 @@ class AccountDAO(private val db: Database) {
         }
     }
 
-    /** Get login of account [id] */
-    suspend fun login(id: Long): String? = db.conn { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT login FROM customers WHERE customer_id=?
-        """)
-        stmt.setLong(1, id)
-        stmt.oneOrNull { 
-            it.getString(1)
-        }
-    }
-
     /** Get bank info of account [login] */
     suspend fun bankInfo(login: String): BankInfo? = db.conn { conn ->
         val stmt = conn.prepareStatement("""

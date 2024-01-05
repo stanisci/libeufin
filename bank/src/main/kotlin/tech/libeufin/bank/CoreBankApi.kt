@@ -77,41 +77,36 @@ private fun Routing.coreBankTokenApi(db: Database) {
     val TOKEN_DEFAULT_DURATION: Duration = Duration.ofDays(1L)
     auth(db, TokenScope.refreshable) {
         post("/accounts/{USERNAME}/token") {
-            val maybeAuthToken = call.getAuthToken()
+            val existingToken = call.authToken
             val req = call.receive<TokenRequest>()
-            /**
-             * This block checks permissions ONLY IF the call was authenticated with a token. Basic auth
-             * gets always granted.
-             */
-            if (maybeAuthToken != null) {
-                val tokenBytes = Base32Crockford.decode(maybeAuthToken)
-                val refreshingToken =
-                        db.token.get(tokenBytes)
-                                ?: throw internalServerError(
-                                        "Token used to auth not found in the database!"
-                                )
+            
+            if (existingToken != null) {
+                // This block checks permissions ONLY IF the call was authenticated with a token
+                val refreshingToken = db.token.get(existingToken) ?: throw internalServerError(
+                    "Token used to auth not found in the database!"
+                )
                 if (refreshingToken.scope == TokenScope.readonly && req.scope == TokenScope.readwrite)
-                        throw forbidden(
-                                "Cannot generate RW token from RO",
-                                TalerErrorCode.GENERIC_TOKEN_PERMISSION_INSUFFICIENT
-                        )
+                    throw forbidden(
+                        "Cannot generate RW token from RO",
+                        TalerErrorCode.GENERIC_TOKEN_PERMISSION_INSUFFICIENT
+                    )
             }
             val tokenBytes = ByteArray(32).apply { Random.nextBytes(this) }
             val tokenDuration: Duration = req.duration?.d_us ?: TOKEN_DEFAULT_DURATION
 
             val creationTime = Instant.now()
-            val expirationTimestamp =
-                    if (tokenDuration == ChronoUnit.FOREVER.duration) {
-                        logger.debug("Creating 'forever' token.")
-                        Instant.MAX
-                    } else {
-                        try {
-                            logger.debug("Creating token with days duration: ${tokenDuration.toDays()}")
-                            creationTime.plus(tokenDuration)
-                        } catch (e: Exception) {
-                            throw badRequest("Bad token duration: ${e.message}")
-                        }
+            val expirationTimestamp = 
+                if (tokenDuration == ChronoUnit.FOREVER.duration) {
+                    logger.debug("Creating 'forever' token.")
+                    Instant.MAX
+                } else {
+                    try {
+                        logger.debug("Creating token with days duration: ${tokenDuration.toDays()}")
+                        creationTime.plus(tokenDuration)
+                    } catch (e: Exception) {
+                        throw badRequest("Bad token duration: ${e.message}")
                     }
+                }
             if (!db.token.create(
                 login = username,
                 content = tokenBytes,
@@ -132,8 +127,8 @@ private fun Routing.coreBankTokenApi(db: Database) {
     }
     auth(db, TokenScope.readonly) {
         delete("/accounts/{USERNAME}/token") {
-            val token = call.getAuthToken() ?: throw badRequest("Basic auth not supported here.")
-            db.token.delete(Base32Crockford.decode(token))
+            val token = call.authToken ?: throw badRequest("Basic auth not supported here.")
+            db.token.delete(token)
             call.respond(HttpStatusCode.NoContent)
         }
     }
@@ -349,7 +344,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
             }
         }
         get("/accounts/{USERNAME}/transactions/{T_ID}") {
-            val tId = call.longUriComponent("T_ID")
+            val tId = call.longParameter("T_ID")
             val tx = db.transaction.get(tId, username) ?: throw notFound(
                     "Bank transaction '$tId' not found",
                     TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
@@ -424,7 +419,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             }
         }
         post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/abort") {
-            val opId = call.uuidUriComponent("withdrawal_id")
+            val opId = call.uuidParameter("withdrawal_id")
             when (db.withdrawal.abort(opId)) {
                 AbortResult.UnknownOperation -> throw notFound(
                     "Withdrawal operation $opId not found",
@@ -438,7 +433,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             }
         }
         post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
-            val opId = call.uuidUriComponent("withdrawal_id")
+            val opId = call.uuidParameter("withdrawal_id")
             when (db.withdrawal.confirm(opId, Instant.now())) {
                 WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
                     "Withdrawal operation $opId not found",
@@ -465,7 +460,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         }
     }
     get("/withdrawals/{withdrawal_id}") {
-        val uuid = call.uuidUriComponent("withdrawal_id")
+        val uuid = call.uuidParameter("withdrawal_id")
         val params = StatusParams.extract(call.request.queryParameters)
         val op = db.withdrawal.pollInfo(uuid, params) ?: throw notFound(
             "Withdrawal operation '$uuid' not found", 
@@ -474,7 +469,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         call.respond(op)
     }
     post("/withdrawals/{withdrawal_id}/abort") {
-        val opId = call.uuidUriComponent("withdrawal_id")
+        val opId = call.uuidParameter("withdrawal_id")
         when (db.withdrawal.abort(opId)) {
             AbortResult.UnknownOperation -> throw notFound(
                 "Withdrawal operation $opId not found",
@@ -488,7 +483,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         }
     }
     post("/withdrawals/{withdrawal_id}/confirm") {
-        val opId = call.uuidUriComponent("withdrawal_id")
+        val opId = call.uuidParameter("withdrawal_id")
         when (db.withdrawal.confirm(opId, Instant.now())) {
             WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
                 "Withdrawal operation $opId not found",
@@ -590,7 +585,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
             }
         }
         post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort") {
-            val id = call.longUriComponent("CASHOUT_ID")
+            val id = call.longParameter("CASHOUT_ID")
             when (db.cashout.abort(id, username)) {
                 AbortResult.UnknownOperation -> throw notFound(
                     "Cashout operation $id not found",
@@ -605,7 +600,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
         }
         post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm") {
             val req = call.receive<CashoutConfirm>()
-            val id = call.longUriComponent("CASHOUT_ID")
+            val id = call.longParameter("CASHOUT_ID")
             when (db.cashout.confirm(
                 id = id,
                 login = username,
@@ -647,7 +642,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
     }
     auth(db, TokenScope.readonly) {
         get("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}") {
-            val id = call.longUriComponent("CASHOUT_ID")
+            val id = call.longParameter("CASHOUT_ID")
             val cashout = db.cashout.get(id, username) ?: throw notFound(
                 "Cashout operation $id not found", 
                 TalerErrorCode.BANK_TRANSACTION_NOT_FOUND

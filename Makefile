@@ -101,3 +101,8 @@ check: install-nobuild-bank-files
 .PHONY: test
 test: install-nobuild-bank-files
 	./gradlew test --tests $(test) -i
+
+.PHONY: doc
+doc:
+	./gradlew dokkaHtmlMultiModule
+	open build/dokka/htmlMultiModule/index.html

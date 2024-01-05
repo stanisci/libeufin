@@ -247,24 +247,12 @@ enum class TokenScope {
     refreshable // Not spec'd as a scope!
 }
 
-/**
- * Convenience type to set/get authentication tokens to/from
- * the database.
- */
 data class BearerToken(
-    val content: ByteArray,
     val scope: TokenScope,
-    val isRefreshable: Boolean = false,
+    val isRefreshable: Boolean,
     val creationTime: Instant,
     val expirationTime: Instant,
-    /**
-     * Serial ID of the database row that hosts the bank customer
-     * that is associated with this token.  NOTE: if the token is
-     * refreshed by a client that doesn't have a user+password login
-     * in the system, the creator remains always the original bank
-     * customer that created the very first token.
-     */
-    val bankCustomer: Long
+    val login: String
 )
 
 @Serializable

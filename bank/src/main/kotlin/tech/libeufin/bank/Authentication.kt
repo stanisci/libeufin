@@ -34,13 +34,35 @@ import tech.libeufin.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Authentication")
 
+/** Used to store if the currenly authenticated user is admin */
 private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin");
+/** Used to store used auth token */
+private val AUTH_TOKEN = AttributeKey<ByteArray>("auth_token");
 
-/** Restrict route access to admin */
+/** Get username of the request account */
+val ApplicationCall.username: String get() = expectParameter("USERNAME")
+/** Get username of the request account */
+val PipelineContext<Unit, ApplicationCall>.username: String get() = call.username
+
+/** Check if current auth account is admin */
+val ApplicationCall.isAdmin: Boolean get() = attributes.getOrNull(AUTH_IS_ADMIN) ?: false
+/** Check if current auth account is admin */
+val PipelineContext<Unit, ApplicationCall>.isAdmin: Boolean get() = call.isAdmin
+
+/** Check auth token used for authentification */
+val ApplicationCall.authToken: ByteArray? get() = attributes.getOrNull(AUTH_TOKEN)
+
+/** 
+ * Create an admin authenticated route for [scope].
+ * 
+ * If [enforce], only admin can access this route.
+ * 
+ * You can check is the currently authenticated user is admin using [isAdmin].
+ **/
 fun Route.authAdmin(db: Database, scope: TokenScope, enforce: Boolean = true, callback: Route.() -> Unit): Route =
     intercept(callback) {
         if (enforce) {
-            val login = context.authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
+            val login = context.authenticateBankRequest(db, scope)
             if (login != "admin") {
                 throw unauthorized("Only administrator allowed")
             }
@@ -56,10 +78,17 @@ fun Route.authAdmin(db: Database, scope: TokenScope, enforce: Boolean = true, ca
     }
 
 
-/** Authenticate and check access rights */
+/** 
+ * Create an authenticated route for [scope].
+ * 
+ * If [allowAdmin], admin is allowed to auth for any user.
+ * If [requireAdmin], only admin can access this route.
+ * 
+ * You can check is the currently authenticated user is admin using [isAdmin].
+ **/
 fun Route.auth(db: Database, scope: TokenScope, allowAdmin: Boolean = false, requireAdmin: Boolean = false, callback: Route.() -> Unit): Route  =
     intercept(callback) {
-        val authLogin = context.authenticateBankRequest(db, scope) ?: throw unauthorized("Bad login")
+        val authLogin = context.authenticateBankRequest(db, scope)
         if (requireAdmin && authLogin != "admin") {
             if (authLogin != "admin") {
                 throw unauthorized("Only administrator allowed")
@@ -73,134 +102,87 @@ fun Route.auth(db: Database, scope: TokenScope, allowAdmin: Boolean = false, req
         context.attributes.put(AUTH_IS_ADMIN, authLogin == "admin")
     }
 
-val PipelineContext<Unit, ApplicationCall>.username: String get() = call.username
-val PipelineContext<Unit, ApplicationCall>.isAdmin: Boolean get() = call.isAdmin
-val ApplicationCall.username: String get() = expectUriComponent("USERNAME")
-val ApplicationCall.isAdmin: Boolean get() = attributes.getOrNull(AUTH_IS_ADMIN) ?: false
-
 /**
- * This function tries to authenticate the call according
- * to the scheme that is mentioned in the Authorization header.
- * The allowed schemes are either 'HTTP basic auth' or 'bearer token'.
+ * Authenticate an HTTP request for [requiredScope] according to the scheme that is mentioned 
+ * in the Authorization header.
+ * The allowed schemes are either 'Basic' or 'Bearer'.
  *
- * requiredScope can be either "readonly" or "readwrite".
- *
- * Returns the authenticated customer login, or null if they failed.
+ * Returns the authenticated customer login.
  */
-private suspend fun ApplicationCall.authenticateBankRequest(db: Database, requiredScope: TokenScope): String? {
-    // Extracting the Authorization header.
-    val header = getAuthorizationRawHeader(this.request)
+private suspend fun ApplicationCall.authenticateBankRequest(db: Database, requiredScope: TokenScope): String {
+    val header = request.headers["Authorization"]
+    
+    // Basic auth challenge
     if (header == null) {
-        // Basic auth challenge
         response.header(HttpHeaders.WWWAuthenticate, "Basic")
         throw unauthorized(
-            "Authorization header not found.",
+            "Authorization header not found",
             TalerErrorCode.GENERIC_PARAMETER_MISSING
         )
     }
-    
-    val authDetails = getAuthorizationDetails(header) ?: throw badRequest(
-        "Authorization is invalid.",
+
+    // Parse header
+    val (scheme, content) = header.splitOnce(" ") ?: throw badRequest(
+        "Authorization is invalid",
         TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
-    return when (authDetails.scheme) {
-        "Basic" -> doBasicAuth(db, authDetails.content)
-        "Bearer" -> doTokenAuth(db, authDetails.content, requiredScope)
-        else -> throw unauthorized("Authorization method wrong or not supported.")
+    return when (scheme) {
+        "Basic" -> doBasicAuth(db, content)
+        "Bearer" -> doTokenAuth(db, content, requiredScope)
+        else -> throw unauthorized("Authorization method wrong or not supported")
     }
 }
 
-// Get the auth token (stripped of the bearer-token:-prefix)
-// IF the call was authenticated with it.
-fun ApplicationCall.getAuthToken(): String? {
-    val h = getAuthorizationRawHeader(this.request) ?: return null
-    val authDetails = getAuthorizationDetails(h) ?: throw badRequest(
-        "Authorization header is malformed.", TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
-    )
-    if (authDetails.scheme == "Bearer") return splitBearerToken(authDetails.content) ?: throw throw badRequest(
-        "Authorization header is malformed (could not strip the prefix from Bearer token).",
-        TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
-    )
-    return null // Not a Bearer token case.
-}
-
-
 /**
- * Performs the HTTP basic authentication.  Returns the
- * authenticated customer login on success, or null otherwise.
+ * Performs the HTTP Basic Authentication.
+ * 
+ * Returns the authenticated customer login
  */
-private suspend fun doBasicAuth(db: Database, encodedCredentials: String): String? {
-    val plainUserAndPass = String(base64ToBytes(encodedCredentials), Charsets.UTF_8) // :-separated
-    val userAndPassSplit = plainUserAndPass.split(
-        ":",
-        /**
-         * this parameter allows colons to occur in passwords.
-         * Without this, passwords that have colons would be split
-         * and become meaningless.
-         */
-        limit = 2
-    )
-    if (userAndPassSplit.size != 2) throw badRequest(
-        "Malformed Basic auth credentials found in the Authorization header.",
+private suspend fun doBasicAuth(db: Database, encoded: String): String {
+    val decoded = String(base64ToBytes(encoded), Charsets.UTF_8)
+    val (login, plainPassword) = decoded.splitOnce(":") ?: throw badRequest(
+        "Malformed Basic auth credentials found in the Authorization header",
         TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
-    val (login, plainPassword) = userAndPassSplit
-    val passwordHash = db.account.passwordHash(login) ?: throw unauthorized("Bad password")
-    if (!CryptoUtil.checkpw(plainPassword, passwordHash)) return null
+    val hash = db.account.passwordHash(login) ?: throw unauthorized("Unknown account")
+    if (!CryptoUtil.checkpw(plainPassword, hash)) throw unauthorized("Bad password")
     return login
 }
 
 /**
- * This function takes a prefixed Bearer token, removes the
- * secret-token:-prefix and returns it.  Returns null, if the
- * input is invalid.
+ * Performs the secret-token HTTP Bearer Authentication.
+ * 
+ * Returns the authenticated customer login
  */
-private fun splitBearerToken(tok: String): String? {
-    val tokenSplit = tok.split(":", limit = 2)
-    if (tokenSplit.size != 2) return null
-    if (tokenSplit[0] != "secret-token") return null
-    return tokenSplit[1]
-}
-
-/* Performs the secret-token authentication.  Returns the
- * authenticated customer login on success, null otherwise. */
-private suspend fun doTokenAuth(
+private suspend fun ApplicationCall.doTokenAuth(
     db: Database,
-    token: String,
+    bearer: String,
     requiredScope: TokenScope,
-): String? {
-    val bareToken = splitBearerToken(token) ?: throw badRequest(
+): String {
+    if (!bearer.startsWith("secret-token:")) throw badRequest(
         "Bearer token malformed",
         TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
-    val tokenBytes = try {
-        Base32Crockford.decode(bareToken)
+    val decoded = try {
+        Base32Crockford.decode(bearer.slice(13..bearer.length-1))
     } catch (e: Exception) {
         throw badRequest(
             e.message, TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
         )
     }
-    val maybeToken: BearerToken? = db.token.get(tokenBytes)
-    if (maybeToken == null) {
-        logger.error("Auth token not found")
-        return null
+    val token: BearerToken = db.token.get(decoded) ?: throw unauthorized("Unknown token")
+    when {
+        token.expirationTime.isBefore(Instant.now()) 
+            -> throw unauthorized("Expired auth token")
+
+        token.scope == TokenScope.readonly && requiredScope == TokenScope.readwrite 
+            -> throw unauthorized("Auth token has insufficient scope")
+
+        !token.isRefreshable && requiredScope == TokenScope.refreshable 
+            -> throw unauthorized("Unrefreshable token")
     }
-    if (maybeToken.expirationTime.isBefore(Instant.now())) {
-        logger.error("Auth token is expired")
-        return null
-    }
-    if (maybeToken.scope == TokenScope.readonly && requiredScope == TokenScope.readwrite) {
-        logger.error("Auth token has insufficient scope")
-        return null
-    }
-    if (!maybeToken.isRefreshable && requiredScope == TokenScope.refreshable) {
-        logger.error("Could not refresh unrefreshable token")
-        return null
-    }
-    // Getting the related username.
-    return db.account.login(maybeToken.bankCustomer) ?: throw libeufinError(
-        HttpStatusCode.InternalServerError,
-        "Customer not found, despite token mentions it.",
-        TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE
-    )
+
+    attributes.put(AUTH_TOKEN, decoded)
+
+    return token.login
 }

@@ -41,9 +41,9 @@ import tech.libeufin.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.helpers")
 
-fun ApplicationCall.expectUriComponent(componentName: String) =
-    maybeUriComponent(componentName) ?: throw badRequest(
-        "No username found in the URI", 
+fun ApplicationCall.expectParameter(name: String) =
+    parameters[name] ?: throw badRequest(
+        "Missing '$name' param", 
         TalerErrorCode.GENERIC_PARAMETER_MISSING
     )
 
@@ -90,17 +90,17 @@ fun getWithdrawalConfirmUrl(
     return baseUrl.replace("{woid}", wopId.toString())
 }
 
-fun ApplicationCall.uuidUriComponent(name: String): UUID {
+fun ApplicationCall.uuidParameter(name: String): UUID {
     try {
-        return UUID.fromString(expectUriComponent(name))
+        return UUID.fromString(expectParameter(name))
     } catch (e: Exception) {
         throw badRequest("UUID uri component malformed: ${e.message}")
     }
 }
 
-fun ApplicationCall.longUriComponent(name: String): Long {
+fun ApplicationCall.longParameter(name: String): Long {
     try {
-        return expectUriComponent(name).toLong()
+        return expectParameter(name).toLong()
     } catch (e: Exception) {
         throw badRequest("Long uri component malformed: ${e.message}")
     }
@@ -154,3 +154,5 @@ fun Route.conditional(implemented: Boolean, callback: Route.() -> Unit): Route =
             throw libeufinError(HttpStatusCode.NotImplemented, "API not implemented", TalerErrorCode.END)
         }
     }
+
+    

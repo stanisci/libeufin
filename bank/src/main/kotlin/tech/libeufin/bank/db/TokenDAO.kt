@@ -63,21 +63,21 @@ class TokenDAO(private val db: Database) {
     suspend fun get(token: ByteArray): BearerToken? = db.conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
-              expiration_time,
               creation_time,
-              bank_customer,
+              expiration_time,
+              login,
               scope,
               is_refreshable
             FROM bearer_tokens
+                JOIN customers ON bank_customer=customer_id
             WHERE content=?;            
         """)
         stmt.setBytes(1, token)
         stmt.oneOrNull { 
             BearerToken(
-                content = token,
-                creationTime = it.getLong("creation_time").microsToJavaInstant() ?: throw faultyTimestampByBank(),
+                creationTime = it.getLong("creation_time").microsToJavaInstant() ?: throw faultyDurationByClient(),
                 expirationTime = it.getLong("expiration_time").microsToJavaInstant() ?: throw faultyDurationByClient(),
-                bankCustomer = it.getLong("bank_customer"),
+                login = it.getString("login"),
                 scope = TokenScope.valueOf(it.getString("scope")),
                 isRefreshable = it.getBoolean("is_refreshable")
             )
