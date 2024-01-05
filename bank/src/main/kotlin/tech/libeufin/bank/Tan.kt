@@ -27,6 +27,8 @@ import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.application.*
+import tech.libeufin.bank.TanDAO.Challenge
+import io.ktor.util.pipeline.PipelineContext
 
 
 inline suspend fun <reified B> ApplicationCall.respondChallenge(
@@ -53,6 +55,31 @@ inline suspend fun <reified B> ApplicationCall.respondChallenge(
         status = HttpStatusCode.Accepted,
         message = TanChallenge(id)
     )
+}
+
+inline suspend fun <reified B> ApplicationCall.receiveChallenge(
+    db: Database,
+    op: Operation
+): Pair<B, Challenge?> {
+    val id = request.headers["X-Challenge-Id"]?.toLongOrNull()
+    return if (id != null) {
+        val challenge = db.tan.challenge(id, username, op)!!
+        Pair(Json.decodeFromString(challenge.body), challenge)
+    } else {
+        Pair(this.receive(), null)
+    }
+}
+
+suspend fun ApplicationCall.challenge(
+    db: Database,
+    op: Operation
+): Challenge? {
+    val id = request.headers["X-Challenge-Id"]?.toLongOrNull()
+    return if (id != null) {
+        db.tan.challenge(id, username, op)!!
+    } else {
+        null
+    }
 }
 
 object Tan {

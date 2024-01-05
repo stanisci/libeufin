@@ -143,4 +143,34 @@ class TanDAO(private val db: Database) {
             }
         }
     }
+
+    data class Challenge (
+        val body: String,
+        val channel: TanChannel?,
+        val info: String?
+    )
+
+    /** Get a solved TAN challenge [id] for account [login] and [op] */
+    suspend fun challenge(
+        id: Long,
+        login: String,
+        op: Operation
+    ) = db.serializable { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT body, tan_challenges.tan_channel, tan_info
+            FROM tan_challenges
+                JOIN customers ON customer=customer_id
+            WHERE challenge_id=? AND op=?::op_enum AND login=?
+        """)
+        stmt.setLong(1, id)
+        stmt.setString(2, op.name)
+        stmt.setString(3, login)
+        stmt.oneOrNull { 
+            Challenge(
+                body = it.getString("body"),
+                channel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) },
+                info = it.getString("tan_info")
+            )
+        }
+    }
 }

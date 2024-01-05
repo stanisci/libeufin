@@ -345,14 +345,19 @@ suspend fun HttpResponse.maybeChallenge(): HttpResponse {
 suspend fun HttpResponse.assertChallenge(
     check: suspend (TanChannel, String) -> Unit = { _, _ -> }
 ): HttpResponse {
-    val id = this.assertAcceptedJson<TanChallenge>().challenge_id
-    val username = this.call.request.url.pathSegments[2]
-    val res = this.call.client.postA("/accounts/$username/challenge/$id").assertOkJson<TanTransmission>()
+    val id = assertAcceptedJson<TanChallenge>().challenge_id
+    val username = call.request.url.pathSegments[2]
+    val res = call.client.postA("/accounts/$username/challenge/$id").assertOkJson<TanTransmission>()
     check(res.tan_channel, res.tan_info)
     val code = tanCode(res.tan_info)
     assertNotNull(code)
-    return this.call.client.postA("/accounts/$username/challenge/$id/confirm") {
+    call.client.postA("/accounts/$username/challenge/$id/confirm") {
         json { "tan" to code }
+    }.assertNoContent()
+    return call.client.request(this.call.request.url) {
+        pwAuth(username)
+        method = call.request.method
+        headers["X-Challenge-Id"] = "$id"
     }
 }
 

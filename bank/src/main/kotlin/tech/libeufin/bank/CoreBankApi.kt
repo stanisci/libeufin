@@ -338,17 +338,18 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         requireAdmin = !ctx.allowAccountDeletion
     ) {
         delete("/accounts/{USERNAME}") {
-            call.deleteAccountHttp(db, ctx, false)
+            val challenge = call.challenge(db, Operation.account_delete)
+            call.deleteAccountHttp(db, ctx, challenge != null)
         }
     }
     auth(db, TokenScope.readwrite, allowAdmin = true) {
         patch("/accounts/{USERNAME}") {
-            val req = call.receive<AccountReconfiguration>()
-            call.patchAccountHttp(db, ctx, req, false)
+            val (req, challenge) = call.receiveChallenge<AccountReconfiguration>(db, Operation.account_reconfig)
+            call.patchAccountHttp(db, ctx, req, challenge != null, challenge?.channel, challenge?.info)
         }
         patch("/accounts/{USERNAME}/auth") {
-            val req = call.receive<AccountPasswordChange>()
-            call.reconfigAuthHttp(db, ctx, req, false)
+            val (req, challenge) = call.receiveChallenge<AccountPasswordChange>(db, Operation.account_auth_reconfig)
+            call.reconfigAuthHttp(db, ctx, req, challenge != null)
         }
     }
     get("/public-accounts") {
@@ -441,8 +442,8 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
     }
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/transactions") {
-            val req = call.receive<TransactionCreateRequest>()
-            call.bankTransactionHttp(db, ctx, req, false)
+            val (req, challenge) = call.receiveChallenge<TransactionCreateRequest>(db, Operation.bank_transaction)
+            call.bankTransactionHttp(db, ctx, req, challenge != null)
         }
     }
 }
@@ -521,7 +522,8 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         }
         post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
             val opId = call.uuidUriComponent("withdrawal_id")
-            call.confirmWithdrawalHttp(db, ctx, opId, false)
+            val challenge = call.challenge(db, Operation.withdrawal)
+            call.confirmWithdrawalHttp(db, ctx, opId, challenge != null)
         }
     }
     get("/withdrawals/{withdrawal_id}") {
@@ -598,8 +600,8 @@ suspend fun ApplicationCall.cashoutHttp(db: Database, ctx: BankConfig, req: Cash
 private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/cashouts") {
-            val req = call.receive<CashoutRequest>()
-            call.cashoutHttp(db, ctx, req, false)
+            val (req, challenge) = call.receiveChallenge<CashoutRequest>(db, Operation.cashout)
+            call.cashoutHttp(db, ctx, req, challenge != null)
         }
     }
     auth(db, TokenScope.readonly) {
@@ -708,31 +710,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                     "Challenge expired",
                     TalerErrorCode.BANK_TAN_CHALLENGE_EXPIRED
                 )
-                is TanSolveResult.Success -> when (res.op) {
-                    Operation.account_reconfig -> {
-                        val tmp = Json.decodeFromString<AccountReconfiguration>(res.body);
-                        call.patchAccountHttp(db, ctx, tmp, true, res.channel, res.info)
-                    }
-                    Operation.account_auth_reconfig -> {
-                        val tmp = Json.decodeFromString<AccountPasswordChange>(res.body)
-                        call.reconfigAuthHttp(db, ctx, tmp, true)
-                    }
-                    Operation.account_delete -> {
-                        call.deleteAccountHttp(db, ctx, true)
-                    }
-                    Operation.bank_transaction -> {
-                        val tmp = Json.decodeFromString<TransactionCreateRequest>(res.body)
-                        call.bankTransactionHttp(db, ctx, tmp, true)
-                    }
-                    Operation.cashout -> {
-                        val tmp = Json.decodeFromString<CashoutRequest>(res.body)
-                        call.cashoutHttp(db, ctx, tmp, true)
-                    }
-                    Operation.withdrawal -> {
-                        val tmp = Json.decodeFromString<StoredUUID>(res.body)
-                        call.confirmWithdrawalHttp(db, ctx, tmp.value, true)
-                    }
-                }
+                is TanSolveResult.Success -> call.respond(HttpStatusCode.NoContent)
             }
         }
     }
