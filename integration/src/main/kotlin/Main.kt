@@ -19,17 +19,22 @@
 
 package tech.libeufin.integration
 
+import tech.libeufin.nexus.Database as NexusDb
+import tech.libeufin.nexus.TalerAmount as NexusAmount
 import tech.libeufin.nexus.*
-import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.testing.test
+import tech.libeufin.bank.*
+import tech.libeufin.util.*
+import com.github.ajalt.clikt.core.*
+import com.github.ajalt.clikt.testing.*
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import kotlin.test.*
 import java.io.File
 import java.nio.file.*
+import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import io.ktor.client.request.*
+import net.taler.wallet.crypto.Base32Crockford
 
 fun CliktCommand.run(cmd: String) {
     val result = test(cmd)
@@ -38,13 +43,32 @@ fun CliktCommand.run(cmd: String) {
     println(result.output)
 }
 
+fun randBytes(lenght: Int): ByteArray {
+    val bytes = ByteArray(lenght)
+    kotlin.random.Random.nextBytes(bytes)
+    return bytes
+}
+
 val nexusCmd = LibeufinNexusCommand()
 val client = HttpClient(CIO)
+
+fun step(name: String) {
+    println("\u001b[35m$name\u001b[0m")
+}
+
+fun CliktCommandTestResult.assertOk(msg: String? = null) {
+    assertEquals(0, statusCode, "msg\n$output")
+}
+
+fun CliktCommandTestResult.assertErr(msg: String? = null) {
+    assertEquals(1, statusCode, "msg\n$output")
+}
 
 class PostFinanceCli : CliktCommand("Run tests on postfinance", name="postfinance") {
     override fun run() {
         runBlocking {
             Files.createDirectories(Paths.get("test/postfinance"))
+            val conf = "conf/postfinance.conf"
             val clientKeysPath = Paths.get("test/postfinance/client-keys.json")
             val bankKeysPath = Paths.get("test/postfinance/bank-keys.json")
 
@@ -62,22 +86,47 @@ class PostFinanceCli : CliktCommand("Run tests on postfinance", name="postfinanc
             }
           
             if (!hasClientKeys) {
-                // Test INI order
+                step("Test INI order")
                 println("Got to https://testplattform.postfinance.ch/corporates/user/settings/ebics and click on 'Reset EBICS user'.\nPress Enter when done>")
                 readlnOrNull()
-                nexusCmd.test("ebics-setup -c conf/postfinance.conf").run {
-                    assertEquals(1, statusCode, "ebics-setup should failed the first time")
-                }
+                nexusCmd.test("ebics-setup -c $conf")
+                    .assertErr("ebics-setup should failed the first time")
             }
 
             if (!hasBankKeys) {
-                // Test HIA order
+                step("Test HIA order")
                 println("Got to https://testplattform.postfinance.ch/corporates/user/settings/ebics and click on 'Activate EBICS user'.\nPress Enter when done>")
                 readlnOrNull()
-                val out = nexusCmd.test("ebics-setup -c conf/postfinance.conf --auto-accept-keys").run {
-                    assertEquals(0, statusCode, "ebics-setup should succeed the second time")
-                }
+                nexusCmd.test("ebics-setup --auto-accept-keys -c $conf")
+                    .assertOk("ebics-setup should succeed the second time")
             }
+            val payto = "payto://iban/CH2989144971918294289?receiver-name=Test"
+
+            step("Test submit one transaction")
+            val nexusDb = NexusDb("postgresql:///libeufincheck")
+            nexusCmd.test("dbinit -r -c $conf").assertOk()
+            nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                amount = NexusAmount(42L, 0, "CFH"),
+                creditPaytoUri = payto,
+                wireTransferSubject = "single transaction test",
+                initiationTime = Instant.now(),
+                requestUid = Base32Crockford.encode(randBytes(16))
+            ))
+            nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+
+            step("Test submit many transaction")
+                repeat(4) {
+                    nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                    amount = NexusAmount(100L + it, 0, "CFH"),
+                    creditPaytoUri = payto,
+                    wireTransferSubject = "multi transaction test $it",
+                    initiationTime = Instant.now(),
+                    requestUid = Base32Crockford.encode(randBytes(16))
+                ))
+            }
+            nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+
+            step("Test succeed")
         }
     }
 }
