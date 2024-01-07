@@ -26,7 +26,6 @@ import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import java.io.File
-import kotlin.system.exitProcess
 import TalerConfigError
 import kotlinx.serialization.encodeToString
 import tech.libeufin.nexus.ebics.*
@@ -132,8 +131,7 @@ fun maybeCreatePrivateKeysFile(filename: String): Boolean {
  */
 private fun preparePrivateKeys(location: String): ClientPrivateKeysFile? {
     if (!maybeCreatePrivateKeysFile(location)) {
-        logger.error("Could not create client keys at $location")
-        exitProcess(1)
+        throw Error("Could not create client keys at $location")
     }
     return loadPrivateKeysFromDisk(location) // loads what found at location.
 }
@@ -297,8 +295,7 @@ fun extractEbicsConfig(configFile: String?): EbicsSetupConfig {
     val cfg = try {
         EbicsSetupConfig(config)
     } catch (e: TalerConfigError) {
-        logger.error(e.message)
-        exitProcess(1)
+        throw Error(e.message)
     }
     return cfg
 }
@@ -314,14 +311,12 @@ private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
     val pdf = generateKeysPdf(privs, cfg)
     val pdfFile = File("/tmp/libeufin-nexus-keys-${Instant.now().epochSecond}.pdf")
     if (pdfFile.exists()) {
-        logger.error("PDF file exists already at: ${pdfFile.path}, not overriding it")
-        exitProcess(1)
+        throw Error("PDF file exists already at: ${pdfFile.path}, not overriding it")
     }
     try {
         pdfFile.writeBytes(pdf)
     } catch (e: Exception) {
-        logger.error("Could not write PDF to ${pdfFile}, detail: ${e.message}")
-        exitProcess(1)
+        throw Error("Could not write PDF to ${pdfFile}, detail: ${e.message}")
     }
     println("PDF file with keys hex encoding created at: $pdfFile")
 }
@@ -346,45 +341,42 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
     /**
      * This function collects the main steps of setting up an EBICS access.
      */
-    override fun run() {
-        val cfg = doOrFail { extractEbicsConfig(common.config) }
+    override fun run() = cliCmd(logger) {
+        val cfg = extractEbicsConfig(common.config)
         if (checkFullConfig) {
-            doOrFail {
-                cfg.config.requireString("nexus-submit", "frequency").apply {
-                    if (getFrequencyInSeconds(this) == null)
-                        throw Exception("frequency value of nexus-submit section is not valid: $this")
-                }
-                cfg.config.requireString("nexus-fetch", "frequency").apply {
-                    if (getFrequencyInSeconds(this) == null)
-                        throw Exception("frequency value of nexus-fetch section is not valid: $this")
-                }
-                cfg.config.requirePath("nexus-fetch", "statement_log_directory")
-                cfg.config.requireNumber("nexus-httpd", "port")
-                cfg.config.requirePath("nexus-httpd", "unixpath")
-                cfg.config.requireString("nexus-httpd", "serve")
-                cfg.config.requireString("nexus-httpd-wire-gateway-facade", "enabled")
-                cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_method")
-                cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_token")
-                cfg.config.requireString("nexus-httpd-revenue-facade", "enabled")
-                cfg.config.requireString("nexus-httpd-revenue-facade", "auth_method")
-                cfg.config.requireString("nexus-httpd-revenue-facade", "auth_token")
+            cfg.config.requireString("nexus-submit", "frequency").apply {
+                if (getFrequencyInSeconds(this) == null)
+                    throw Exception("frequency value of nexus-submit section is not valid: $this")
             }
-            return
+            cfg.config.requireString("nexus-fetch", "frequency").apply {
+                if (getFrequencyInSeconds(this) == null)
+                    throw Exception("frequency value of nexus-fetch section is not valid: $this")
+            }
+            cfg.config.requirePath("nexus-fetch", "statement_log_directory")
+            cfg.config.requireNumber("nexus-httpd", "port")
+            cfg.config.requirePath("nexus-httpd", "unixpath")
+            cfg.config.requireString("nexus-httpd", "serve")
+            cfg.config.requireString("nexus-httpd-wire-gateway-facade", "enabled")
+            cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_method")
+            cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_token")
+            cfg.config.requireString("nexus-httpd-revenue-facade", "enabled")
+            cfg.config.requireString("nexus-httpd-revenue-facade", "auth_method")
+            cfg.config.requireString("nexus-httpd-revenue-facade", "auth_token")
+            return@cliCmd
         }
         // Config is sane.  Go (maybe) making the private keys.
         val privsMaybe = preparePrivateKeys(cfg.clientPrivateKeysFilename)
         if (privsMaybe == null) {
-            logger.error("Private keys preparation failed.")
-            exitProcess(1)
+            throw Error("Private keys preparation failed.")
         }
         val httpClient = HttpClient()
         // Privs exist.  Upload their pubs
         val keysNotSub = !privsMaybe.submitted_ini || !privsMaybe.submitted_hia
         runBlocking {
             if ((!privsMaybe.submitted_ini) || forceKeysResubmission)
-                doKeysRequestAndUpdateState(cfg, privsMaybe, httpClient, KeysOrderType.INI).apply { if (!this) exitProcess(1) }
+                doKeysRequestAndUpdateState(cfg, privsMaybe, httpClient, KeysOrderType.INI).apply { if (!this) throw Error() }
             if ((!privsMaybe.submitted_hia) || forceKeysResubmission)
-                doKeysRequestAndUpdateState(cfg, privsMaybe, httpClient, KeysOrderType.HIA).apply { if (!this) exitProcess(1) }
+                doKeysRequestAndUpdateState(cfg, privsMaybe, httpClient, KeysOrderType.HIA).apply { if (!this) throw Error() }
         }
         // Reloading new state from disk if any upload (and therefore a disk write) actually took place
         val haveSubmitted = forceKeysResubmission || keysNotSub
@@ -393,13 +385,11 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
             loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
         } else privsMaybe
         if (privs == null) {
-            logger.error("Could not reload private keys from disk after submission")
-            exitProcess(1)
+            throw Error("Could not reload private keys from disk after submission")
         }
         // Really both must be submitted here.
         if ((!privs.submitted_hia) || (!privs.submitted_ini)) {
-            logger.error("Cannot continue with non-submitted client keys.")
-            exitProcess(1)
+            throw Error("Cannot continue with non-submitted client keys.")
         }
         // Eject PDF if the keys were submitted for the first time, or the user asked.
         if (keysNotSub || generateRegistrationPdf) makePdf(privs, cfg)
@@ -415,35 +405,29 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
                 )
             }
             if (!areKeysOnDisk) {
-                logger.error("Could not download bank keys.  Send client keys (and/or related PDF document with --generate-registration-pdf) to the bank.")
-                exitProcess(1)
+                throw Error("Could not download bank keys.  Send client keys (and/or related PDF document with --generate-registration-pdf) to the bank.")
             }
             logger.info("Bank keys stored at ${cfg.bankPublicKeysFilename}")
         }
         // bank keys made it to the disk, check if they're accepted.
         val bankKeysMaybe = loadBankKeys(cfg.bankPublicKeysFilename)
         if (bankKeysMaybe == null) {
-            logger.error("Although previous checks, could not load the bank keys file from: ${cfg.bankPublicKeysFilename}")
-            exitProcess(1)
+            throw Error("Although previous checks, could not load the bank keys file from: ${cfg.bankPublicKeysFilename}")
         }
-        val printOk = { println("setup ready") }
-
-        if (bankKeysMaybe.accepted) {
-            printOk()
-            return
-        }
-        // Finishing the setup by accepting the bank keys.
-        if (autoAcceptKeys) bankKeysMaybe.accepted = true
-        else bankKeysMaybe.accepted = askUserToAcceptKeys(bankKeysMaybe)
 
         if (!bankKeysMaybe.accepted) {
-            logger.error("Cannot successfully finish the setup without accepting the bank keys.")
-            exitProcess(1)
+            // Finishing the setup by accepting the bank keys.
+            if (autoAcceptKeys) bankKeysMaybe.accepted = true
+            else bankKeysMaybe.accepted = askUserToAcceptKeys(bankKeysMaybe)
+
+            if (!bankKeysMaybe.accepted) {
+                throw Error("Cannot successfully finish the setup without accepting the bank keys.")
+            }
+            if (!syncJsonToDisk(bankKeysMaybe, cfg.bankPublicKeysFilename)) {
+                throw Error("Could not set bank keys as accepted on disk.")
+            }
         }
-        if (!syncJsonToDisk(bankKeysMaybe, cfg.bankPublicKeysFilename)) {
-            logger.error("Could not set bank keys as accepted on disk.")
-            exitProcess(1)
-        }
-        printOk()
+        
+        println("setup ready")
     }
 }

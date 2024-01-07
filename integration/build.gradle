@@ -1,5 +1,6 @@
 plugins {
     id("kotlin")
+    id("application")
 }
 
 java {
@@ -10,18 +11,27 @@ java {
 compileKotlin.kotlinOptions.jvmTarget = "17"
 compileTestKotlin.kotlinOptions.jvmTarget = "17"
 
-sourceSets.test.java.srcDirs = ["test"]
+sourceSets.main.java.srcDirs = ["src/main/kotlin"]
 
 dependencies {
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version")
 
-    testImplementation(project(":util"))
-    testImplementation(project(":bank"))
-    testImplementation(project(":nexus"))
+    implementation(project(":util"))
+    implementation(project(":bank"))
+    implementation(project(":nexus"))
 
-    testImplementation("com.github.ajalt.clikt:clikt:$clikt_version")
+    implementation("com.github.ajalt.clikt:clikt:$clikt_version")
 
-    testImplementation("io.ktor:ktor-server-test-host:$ktor_version")
-    testImplementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
-    testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
+    implementation("io.ktor:ktor-server-test-host:$ktor_version")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
+    implementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
+}
+
+application {
+    mainClass = "tech.libeufin.integration.MainKt"
+    applicationName = "libeufin-integration-test"
+}
+
+run {
+    standardInput = System.in
 }

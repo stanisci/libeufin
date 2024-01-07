@@ -22,8 +22,7 @@ package tech.libeufin.util
 import ConfigSource
 import TalerConfig
 import TalerConfigError
-import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.types.*
 import com.github.ajalt.clikt.parameters.arguments.*
 import com.github.ajalt.clikt.parameters.options.*
@@ -37,9 +36,9 @@ private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.ConfigC
 fun cliCmd(logger: Logger, lambda: () -> Unit) {
     try {
         lambda()
-    } catch (e: Exception) {
+    } catch (e: Throwable) {
         logger.error(e.message)
-        exitProcess(1)
+        throw ProgramResult(1)
     }
 }
 
@@ -83,15 +82,13 @@ private class CliConfigGet(private val configSource: ConfigSource) : CliktComman
         if (isPath) {
             val res = config.lookupPath(sectionName, optionName)
             if (res == null) {
-                logger.error("value not found in config")
-                exitProcess(2)
+                throw Error("value not found in config")
             }
             println(res)
         } else {
             val res = config.lookupString(sectionName, optionName)
             if (res == null) {
-                logger.error("value not found in config")
-                exitProcess(2)
+                throw Error("value not found in config")
             }
             println(res)
         }
