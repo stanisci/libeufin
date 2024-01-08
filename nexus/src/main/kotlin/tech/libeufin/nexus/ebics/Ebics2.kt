@@ -60,7 +60,7 @@ suspend fun doEbicsCustomDownload(
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     client: HttpClient
-): ByteArray? {
+): ByteArray {
     val xmlReq = createEbics25DownloadInit(cfg, clientKeys, bankKeys, messageType)
     return doEbicsDownload(client, cfg, clientKeys, bankKeys, xmlReq, false)
 }
@@ -85,10 +85,6 @@ suspend fun fetchBankAccounts(
 ): HTDResponseOrderData? {
     val xmlReq = createEbics25DownloadInit(cfg, clientKeys, bankKeys, "HTD")
     val bytesResp = doEbicsDownload(client, cfg, clientKeys, bankKeys, xmlReq, false)
-    if (bytesResp == null) {
-        logger.error("EBICS HTD transaction failed.")
-        return null
-    }
     val xmlResp = bytesResp.toString(Charsets.UTF_8)
     return try {
         logger.debug("Fetched accounts: $bytesResp")

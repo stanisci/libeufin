@@ -30,7 +30,7 @@ class Iso20022 {
     @Test // asks a pain.002, links with pain.001's MsgId
     fun getAck() {
         download(prepAckRequest3(startDate = yesterday)
-        )?.unzipForEach { name, content ->
+        ).unzipForEach { name, content ->
             println(name)
             println(content)
         }
@@ -43,7 +43,7 @@ class Iso20022 {
     @Test
     fun getStatement() {
         val inflatedBytes = download(prepStatementRequest3())
-        inflatedBytes?.unzipForEach { name, content ->
+        inflatedBytes.unzipForEach { name, content ->
             println(name)
             println(content)
         }
@@ -57,7 +57,7 @@ class Iso20022 {
                 isAppendix = true
             )
         )
-        inflatedBytes?.unzipForEach { name, content ->
+        inflatedBytes.unzipForEach { name, content ->
             println(name)
             println(content)
         }
@@ -68,7 +68,7 @@ class Iso20022 {
      */
     @Test
     fun getReport() {
-        download(prepReportRequest3(yesterday))?.unzipForEach { name, content ->
+        download(prepReportRequest3(yesterday)).unzipForEach { name, content ->
             println(name)
             println(content)
         }
@@ -108,7 +108,7 @@ class Iso20022 {
         }
     }
 
-    fun download(req: Ebics3Request.OrderDetails.BTOrderParams): ByteArray? {
+    fun download(req: Ebics3Request.OrderDetails.BTOrderParams): ByteArray {
         val cfg = prep()
         val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)!!
         val myKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)!!

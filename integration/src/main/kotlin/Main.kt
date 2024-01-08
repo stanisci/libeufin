@@ -36,13 +36,6 @@ import kotlinx.coroutines.runBlocking
 import io.ktor.client.request.*
 import net.taler.wallet.crypto.Base32Crockford
 
-fun CliktCommand.run(cmd: String) {
-    val result = test(cmd)
-    if (result.statusCode != 0)
-        throw Exception(result.output)
-    println(result.output)
-}
-
 fun randBytes(lenght: Int): ByteArray {
     val bytes = ByteArray(lenght)
     kotlin.random.Random.nextBytes(bytes)
@@ -56,12 +49,19 @@ fun step(name: String) {
     println("\u001b[35m$name\u001b[0m")
 }
 
+fun ask(question: String): String? {
+    println("\u001b[;1m$question\u001b[0m")
+    return readlnOrNull()
+}
+
 fun CliktCommandTestResult.assertOk(msg: String? = null) {
     assertEquals(0, statusCode, "msg\n$output")
+    println(output)
 }
 
 fun CliktCommandTestResult.assertErr(msg: String? = null) {
     assertEquals(1, statusCode, "msg\n$output")
+    println(output)
 }
 
 class PostFinanceCli : CliktCommand("Run tests on postfinance", name="postfinance") {
@@ -76,8 +76,7 @@ class PostFinanceCli : CliktCommand("Run tests on postfinance", name="postfinanc
             var hasBankKeys = Files.exists(bankKeysPath)
 
             if (hasClientKeys || hasBankKeys) {
-                println("Reset keys ? y/n>")
-                if (readlnOrNull() == "y") {
+                if (ask("Reset keys ? y/n>") == "y") {
                     if (hasClientKeys) Files.deleteIfExists(clientKeysPath)
                     if (hasBankKeys) Files.deleteIfExists(bankKeysPath)
                     hasClientKeys = false
@@ -100,31 +99,37 @@ class PostFinanceCli : CliktCommand("Run tests on postfinance", name="postfinanc
                 nexusCmd.test("ebics-setup --auto-accept-keys -c $conf")
                     .assertOk("ebics-setup should succeed the second time")
             }
-            val payto = "payto://iban/CH2989144971918294289?receiver-name=Test"
+           
+            if (ask("Submit transactions ? y/n>") == "y") {
+                val payto = "payto://iban/CH2989144971918294289?receiver-name=Test"
 
-            step("Test submit one transaction")
-            val nexusDb = NexusDb("postgresql:///libeufincheck")
-            nexusCmd.test("dbinit -r -c $conf").assertOk()
-            nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                amount = NexusAmount(42L, 0, "CFH"),
-                creditPaytoUri = payto,
-                wireTransferSubject = "single transaction test",
-                initiationTime = Instant.now(),
-                requestUid = Base32Crockford.encode(randBytes(16))
-            ))
-            nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
-
-            step("Test submit many transaction")
-                repeat(4) {
-                    nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                    amount = NexusAmount(100L + it, 0, "CFH"),
+                step("Test submit one transaction")
+                val nexusDb = NexusDb("postgresql:///libeufincheck")
+                nexusCmd.test("dbinit -r -c $conf").assertOk()
+                nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                    amount = NexusAmount(42L, 0, "CFH"),
                     creditPaytoUri = payto,
-                    wireTransferSubject = "multi transaction test $it",
+                    wireTransferSubject = "single transaction test",
                     initiationTime = Instant.now(),
                     requestUid = Base32Crockford.encode(randBytes(16))
                 ))
+                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+
+                step("Test submit many transaction")
+                    repeat(4) {
+                        nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                        amount = NexusAmount(100L + it, 0, "CFH"),
+                        creditPaytoUri = payto,
+                        wireTransferSubject = "multi transaction test $it",
+                        initiationTime = Instant.now(),
+                        requestUid = Base32Crockford.encode(randBytes(16))
+                    ))
+                }
+                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
             }
-            nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+
+            step("Test fetch transactions")
+            nexusCmd.test("ebics-fetch --transient -c $conf --pinned-start 2022-01-01").assertOk()
 
             step("Test succeed")
         }

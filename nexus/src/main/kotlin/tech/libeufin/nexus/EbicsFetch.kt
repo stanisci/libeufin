@@ -19,7 +19,6 @@ import java.time.ZoneId
 import java.util.UUID
 import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
-import kotlin.system.exitProcess
 
 /**
  * Necessary data to perform a download.
@@ -75,7 +74,7 @@ data class FetchContext(
 private suspend inline fun downloadHelper(
     ctx: FetchContext,
     lastExecutionTime: Instant? = null
-): ByteArray? {
+): ByteArray {
     val initXml = if (ctx.ebicsVersion == EbicsVersion.three) {
         createEbics3DownloadInitialization(
             ctx.cfg,
@@ -112,7 +111,7 @@ private suspend inline fun downloadHelper(
          * bank side.  A client with an unreliable bank is not useful, hence
          * failing here.
          */
-        exitProcess(1)
+        throw e
     }
 }
 
@@ -142,13 +141,12 @@ fun maybeLogFile(
     val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
     // Creating the combined dir.
     val dirs = Path.of(maybeLogDir, subDir)
-    doOrFail { dirs.createDirectories() }
+    dirs.createDirectories()
     fun maybeWrite(f: File, xml: String) {
         if (f.exists()) {
-            logger.error("Log file exists already at: ${f.path}")
-            exitProcess(1)
+            throw Exception("Log file exists already at: ${f.path}")
         }
-        doOrFail { f.writeText(xml) }
+        f.writeText(xml)
     }
     if (nonZip) {
         val f  = File(dirs.toString(), "${now.toDbMicros()}_HAC_response.pain.002.xml")
@@ -390,19 +388,8 @@ private fun ingestNotification(
         content.unzipForEach { fileName, xmlContent ->
             if (!fileName.contains("camt.054", ignoreCase = true))
                 throw Exception("Asked for notification but did NOT get a camt.054")
-            /**
-             * We ignore any camt.054 that does not bring Taler-relevant information,
-             * like camt.054-Credit, for example.
-             */
-            if (!fileName.startsWith(filenamePrefixForIncoming) &&
-                    !fileName.startsWith(filenamePrefixForOutgoing)) {
-                logger.debug("Ignoring camt.054: $fileName")
-                return@unzipForEach
-            }
 
-            if (fileName.startsWith(filenamePrefixForIncoming))
-                incomingPayments += parseIncomingTxNotif(xmlContent, ctx.cfg.currency)
-            else outgoingPayments += parseOutgoingTxNotif(xmlContent, ctx.cfg.currency)
+            parseTxNotif(xmlContent, ctx.cfg.currency, incomingPayments, outgoingPayments)
         }
     } catch (e: IOException) {
         logger.error("Could not open any ZIP archive")
@@ -415,12 +402,14 @@ private fun ingestNotification(
     try {
         runBlocking {
             incomingPayments.forEach {
+                println(it)
                 ingestIncomingPayment(
                     db,
                     it
                 )
             }
             outgoingPayments.forEach {
+                println(it)
                 ingestOutgoingPayment(db, it)
             }
         }
@@ -470,7 +459,7 @@ private suspend fun fetchDocuments(
     val lastExecutionTime: Instant? = ctx.pinnedStart ?: requestFrom
     logger.debug("Fetching ${ctx.whichDocument} from timestamp: $lastExecutionTime")
     // downloading the content
-    val maybeContent = downloadHelper(ctx, lastExecutionTime) ?: exitProcess(1) // client is wrong, failing.
+    val maybeContent = downloadHelper(ctx, lastExecutionTime)
     if (maybeContent.isEmpty()) return
     // logging, if the configuration wants.
     maybeLogFile(
@@ -484,8 +473,7 @@ private suspend fun fetchDocuments(
         return
     }
     if (!ingestNotification(db, ctx, maybeContent)) {
-        logger.error("Ingesting notifications failed")
-        exitProcess(1)
+        throw Exception("Ingesting notifications failed")
     }
 }
 
@@ -541,10 +529,8 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
      * mode when no flags are passed to the invocation.
      * FIXME: reduce code duplication with the submit subcommand.
      */
-    override fun run() {
-        val cfg: EbicsSetupConfig = doOrFail {
-            extractEbicsConfig(common.config)
-        }
+    override fun run() = cliCmd(logger) {
+        val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
 
         val dbCfg = cfg.config.extractDbConfigOrFail()
         val db = Database(dbCfg.dbConnStr)
@@ -560,58 +546,37 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             val maybeStdin = generateSequence(::readLine).joinToString("\n")
             when(whichDoc) {
                 SupportedDocument.CAMT_054 -> {
-                    try {
-                        val incomingTxs = parseIncomingTxNotif(maybeStdin, cfg.currency)
-                        println(incomingTxs)
-                        if (import) {
-                            runBlocking {
-                                incomingTxs.forEach {
-                                    ingestIncomingPayment(db, it)
-                                }
+                    val incomingTxs = mutableListOf<IncomingPayment>()
+                    val outgoingTxs = mutableListOf<OutgoingPayment>()
+
+                    parseTxNotif(maybeStdin, cfg.currency, incomingTxs, outgoingTxs)
+                    println(incomingTxs)
+                    println(outgoingTxs)
+                    if (import) {
+                        runBlocking {
+                            incomingTxs.forEach {
+                                ingestIncomingPayment(db, it)
+                            }
+                            outgoingTxs.forEach {
+                                ingestOutgoingPayment(db, it)
                             }
                         }
-                    } catch (e: WrongPaymentDirection) {
-                        logger.info("Input doesn't contain incoming payments")
-                    } catch (e: Exception) {
-                        logger.error(e.message)
-                        exitProcess(1)
-                    }
-                    try {
-                        val outgoingTxs = parseOutgoingTxNotif(maybeStdin, cfg.currency)
-                        println(outgoingTxs)
-                        if (import) {
-                            runBlocking {
-                                outgoingTxs.forEach {
-                                    ingestOutgoingPayment(db, it)
-                                }
-                            }
-                        }
-                    } catch (e: WrongPaymentDirection) {
-                        logger.debug("Input doesn't contain outgoing payments")
-                    } catch (e: Exception) {
-                        logger.error(e.message)
-                        exitProcess(1)
                     }
                 }
-                else -> {
-                    logger.error("Parsing $whichDoc not supported")
-                    exitProcess(1)
-                }
+                else -> throw Error("Parsing $whichDoc not supported")
             }
-            return
+            return@cliCmd
         }
 
         // Fail now if keying is incomplete.
-        if (!isKeyingComplete(cfg)) exitProcess(1)
-        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
+        if (!isKeyingComplete(cfg)) throw Error()
+        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: throw Error()
         if (!bankKeys.accepted && !import && !parse) {
-            logger.error("Bank keys are not accepted, yet.  Won't fetch any records.")
-            exitProcess(1)
+            throw Error("Bank keys are not accepted, yet.  Won't fetch any records.")
         }
         val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
         if (clientKeys == null) {
-            logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
-            exitProcess(1)
+            throw Error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
         }
 
         val ctx = FetchContext(
@@ -639,12 +604,12 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             runBlocking {
                 fetchDocuments(db, ctx)
             }
-            return
+            return@cliCmd
         }
         val frequency: NexusFrequency = doOrFail {
             val configValue = cfg.config.requireString("nexus-fetch", "frequency")
             val frequencySeconds = checkFrequency(configValue)
-            return@doOrFail NexusFrequency(frequencySeconds, configValue)
+            NexusFrequency(frequencySeconds, configValue)
         }
         logger.debug("Running with a frequency of ${frequency.fromConfig}")
         if (frequency.inSeconds == 0) {
@@ -652,7 +617,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             runBlocking {
                 fetchDocuments(db, ctx)
             }
-            return
+            return@cliCmd
         }
         fixedRateTimer(
             name = "ebics submit period",

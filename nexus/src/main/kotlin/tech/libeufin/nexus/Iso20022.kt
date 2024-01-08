@@ -156,78 +156,22 @@ fun createPain001(
 }
 
 /**
- * Thrown if the parser expects DBIT but the transaction
- * is CRDT, and vice-versa.
- */
-class WrongPaymentDirection(val msg: String) : Exception(msg)
-
-/**
- * Parses a camt.054 document looking for outgoing payments.
- *
- * @param notifXml input document.
- * @param acceptedCurrency currency accepted by Nexus
- * @return the list of outgoing payments.
- */
-fun parseOutgoingTxNotif(
-    notifXml: String,
-    acceptedCurrency: String,
-): List<OutgoingPayment> {
-    val ret = mutableListOf<OutgoingPayment>()
-    notificationForEachTx(notifXml) { bookDate ->
-        requireUniqueChildNamed("CdtDbtInd") {
-            if (focusElement.textContent != "DBIT")
-                throw WrongPaymentDirection("The payment is not outgoing, won't parse it")
-        }
-        // Obtaining the amount.
-        val amount: TalerAmount = requireUniqueChildNamed("Amt") {
-            val currency = focusElement.getAttribute("Ccy")
-            if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
-            getTalerAmount(focusElement.textContent, currency)
-        }
-
-        /**
-         * The MsgId extracted in the block below matches the one that
-         * was specified as the MsgId element in the pain.001 that originated
-         * this outgoing payment.  MsgId is considered unique because the
-         * bank enforces its uniqueness.  Associating MsgId to this outgoing
-         * payment is also convenient to match its initiated outgoing payment
-         * in the database for reconciliation.
-         */
-        val uidFromBank = StringBuilder()
-        requireUniqueChildNamed("Refs") {
-            requireUniqueChildNamed("MsgId") {
-                uidFromBank.append(focusElement.textContent)
-            }
-        }
-
-        ret.add(
-            OutgoingPayment(
-            amount = amount,
-            bankTransferId = uidFromBank.toString(),
-            executionTime = bookDate
-        )
-        )
-    }
-    return ret
-}
-
-/**
- * Searches incoming payments in a camt.054 (Detailavisierung) document.
+ * Searches payments in a camt.054 (Detailavisierung) document.
  *
  * @param notifXml camt.054 input document
- * @param acceptedCurrency currency accepted by Nexus.
- * @return the list of incoming payments to ingest in the database.
+ * @param acceptedCurrency currency accepted by Nexus
+ * @param incoming list of incoming payments
+ * @param outgoing list of outgoing payments
  */
-fun parseIncomingTxNotif(
+fun parseTxNotif(
     notifXml: String,
-    acceptedCurrency: String
-): List<IncomingPayment> {
-    val ret = mutableListOf<IncomingPayment>()
+    acceptedCurrency: String,
+    incoming: MutableList<IncomingPayment>,
+    outgoing: MutableList<OutgoingPayment>
+) {
     notificationForEachTx(notifXml) { bookDate ->
-        // Check the direction first.
-        requireUniqueChildNamed("CdtDbtInd") {
-            if (focusElement.textContent != "CRDT")
-                throw WrongPaymentDirection("The payment is not incoming, won't parse it")
+        val kind = requireUniqueChildNamed("CdtDbtInd") {
+            focusElement.textContent
         }
         val amount: TalerAmount = requireUniqueChildNamed("Amt") {
             val currency = focusElement.getAttribute("Ccy")
@@ -237,52 +181,80 @@ fun parseIncomingTxNotif(
             if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
             getTalerAmount(focusElement.textContent, currency)
         }
-        // Obtaining payment UID.
-        val uidFromBank: String = requireUniqueChildNamed("Refs") {
-            requireUniqueChildNamed("AcctSvcrRef") {
-                focusElement.textContent
-            }
-        }
-        // Obtaining payment subject.
-        val subject = StringBuilder()
-        requireUniqueChildNamed("RmtInf") {
-            this.mapEachChildNamed("Ustrd") {
-                val piece = this.focusElement.textContent
-                subject.append(piece)
-            }
-        }
+        when (kind) {
+            "CRDT" -> {
+                // Obtaining payment UID.
+                val uidFromBank: String = requireUniqueChildNamed("Refs") {
+                    requireUniqueChildNamed("AcctSvcrRef") {
+                        focusElement.textContent
+                    }
+                }
+                // Obtaining payment subject.
+                val subject = StringBuilder()
+                requireUniqueChildNamed("RmtInf") {
+                    this.mapEachChildNamed("Ustrd") {
+                        val piece = this.focusElement.textContent
+                        subject.append(piece)
+                    }
+                }
 
-        // Obtaining the payer's details
-        val debtorPayto = StringBuilder("payto://iban/")
-        requireUniqueChildNamed("RltdPties") {
-            requireUniqueChildNamed("DbtrAcct") {
-                requireUniqueChildNamed("Id") {
-                    requireUniqueChildNamed("IBAN") {
-                        debtorPayto.append(focusElement.textContent)
+                // Obtaining the payer's details
+                val debtorPayto = StringBuilder("payto://iban/")
+                requireUniqueChildNamed("RltdPties") {
+                    requireUniqueChildNamed("DbtrAcct") {
+                        requireUniqueChildNamed("Id") {
+                            requireUniqueChildNamed("IBAN") {
+                                debtorPayto.append(focusElement.textContent)
+                            }
+                        }
+                    }
+                    // warn: it might need the postal address too..
+                    requireUniqueChildNamed("Dbtr") {
+                        requireUniqueChildNamed("Pty") {
+                            requireUniqueChildNamed("Nm") {
+                                val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
+                                debtorPayto.append("?receiver-name=$urlEncName")
+                            }
+                        }
                     }
                 }
+                incoming.add(
+                    IncomingPayment(
+                        amount = amount,
+                        bankTransferId = uidFromBank,
+                        debitPaytoUri = debtorPayto.toString(),
+                        executionTime = bookDate,
+                        wireTransferSubject = subject.toString()
+                    )
+                )
             }
-            // warn: it might need the postal address too..
-            requireUniqueChildNamed("Dbtr") {
-                requireUniqueChildNamed("Pty") {
-                    requireUniqueChildNamed("Nm") {
-                        val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
-                        debtorPayto.append("?receiver-name=$urlEncName")
+            "DBIT" -> {
+                /**
+                 * The MsgId extracted in the block below matches the one that
+                 * was specified as the MsgId element in the pain.001 that originated
+                 * this outgoing payment.  MsgId is considered unique because the
+                 * bank enforces its uniqueness.  Associating MsgId to this outgoing
+                 * payment is also convenient to match its initiated outgoing payment
+                 * in the database for reconciliation.
+                 */
+                val uidFromBank = StringBuilder()
+                requireUniqueChildNamed("Refs") {
+                    requireUniqueChildNamed("MsgId") {
+                        uidFromBank.append(focusElement.textContent)
                     }
                 }
+
+                outgoing.add(
+                    OutgoingPayment(
+                        amount = amount,
+                        bankTransferId = uidFromBank.toString(),
+                        executionTime = bookDate
+                    )
+                )
             }
-        }
-        ret.add(
-            IncomingPayment(
-                amount = amount,
-                bankTransferId = uidFromBank,
-                debitPaytoUri = debtorPayto.toString(),
-                executionTime = bookDate,
-                wireTransferSubject = subject.toString()
-            )
-        )
+            else -> throw Exception("Unknown transaction notification kind '$kind'")
+        }        
     }
-    return ret
 }
 
 /**

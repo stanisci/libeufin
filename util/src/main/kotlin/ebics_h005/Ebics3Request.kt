@@ -198,17 +198,10 @@ class Ebics3Request {
         }
 
         @XmlAccessorType(XmlAccessType.NONE)
+        @XmlType(propOrder = ["service", "dateRange"])
         class BTOrderParams {
             @get:XmlElement(name = "Service", required = true)
             lateinit var service: Service
-
-            /**
-             * This element activates the ES signature scheme (disabling
-             * hence the EDS).  It *would* admit a @requestEDS attribute,
-             * but its omission means false.
-             */
-            @get:XmlElement(name = "SignatureFlag", required = true)
-            var signatureFlag: Boolean = true
 
             @get:XmlElement(name = "DateRange", required = true)
             var dateRange: DateRange? = null

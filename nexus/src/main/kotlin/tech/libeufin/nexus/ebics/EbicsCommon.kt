@@ -332,20 +332,18 @@ suspend fun doEbicsDownload(
     reqXml: String,
     isEbics3: Boolean,
     tolerateEmptyResult: Boolean = false
-): ByteArray? {
+): ByteArray {
     val initResp = postEbics(client, cfg, bankKeys, reqXml, isEbics3)
     logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${initResp.technicalReturnCode}, ${initResp.bankReturnCode}")
     if (initResp.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
-        logger.error("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
-        return null
+        throw Error("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
     }
     if (initResp.bankReturnCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE && tolerateEmptyResult) {
         logger.info("Download content is empty")
         return ByteArray(0)
     }
     if (initResp.bankReturnCode != EbicsReturnCode.EBICS_OK) {
-        logger.error("Download init phase has bank-technical error: ${initResp.bankReturnCode}")
-        return null
+        throw Error("Download init phase has bank-technical error: ${initResp.bankReturnCode}")
     }
     val tId = initResp.transactionID
         ?: throw EbicsSideException(
@@ -355,8 +353,7 @@ suspend fun doEbicsDownload(
     logger.debug("EBICS download transaction passed the init phase, got ID: $tId")
     val howManySegments = initResp.numSegments
     if (howManySegments == null) {
-        tech.libeufin.nexus.logger.error("Init response lacks the quantity of segments, failing.")
-        return null
+        throw Error("Init response lacks the quantity of segments, failing.")
     }
     val ebicsChunks = mutableListOf<String>()
     // Getting the chunk(s)
@@ -388,8 +385,7 @@ suspend fun doEbicsDownload(
         }
         val chunk = transResp.orderDataEncChunk
         if (chunk == null) {
-            tech.libeufin.nexus.logger.error("EBICS transfer phase lacks chunk #$x, failing.")
-            return null
+            throw Error("EBICS transfer phase lacks chunk #$x, failing.")
         }
         ebicsChunks.add(chunk)
     }
