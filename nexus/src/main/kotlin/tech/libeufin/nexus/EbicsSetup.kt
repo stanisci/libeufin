@@ -35,32 +35,6 @@ import java.time.Instant
 import kotlin.reflect.typeOf
 
 /**
- * Checks the configuration to secure that the key exchange between
- * the bank and the subscriber took place.  Helps to fail before starting
- * to talk EBICS to the bank.
- *
- * @param cfg configuration handle.
- * @return true if the keying was made before, false otherwise.
- */
-fun isKeyingComplete(cfg: EbicsSetupConfig): Boolean {
-    val maybeClientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-    if (maybeClientKeys == null ||
-        (!maybeClientKeys.submitted_ini) ||
-        (!maybeClientKeys.submitted_hia)) {
-        logger.error("Cannot operate without or with unsubmitted subscriber keys." +
-                "  Run 'libeufin-nexus ebics-setup' first.")
-        return false
-    }
-    val maybeBankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
-    if (maybeBankKeys == null || (!maybeBankKeys.accepted)) {
-        logger.error("Cannot operate without or with unaccepted bank keys." +
-                "  Run 'libeufin-nexus ebics-setup' until accepting the bank keys.")
-        return false
-    }
-    return true
-}
-
-/**
  * Writes the JSON content to disk.  Used when we create or update
  * keys and other metadata JSON content to disk.  WARNING: this overrides
  * silently what's found under the given location!
@@ -290,14 +264,8 @@ suspend fun doKeysRequestAndUpdateState(
  * @return internal representation of the configuration.
  */
 fun extractEbicsConfig(configFile: String?): EbicsSetupConfig {
-    val config = loadConfigOrFail(configFile)
-    // Checking the config.
-    val cfg = try {
-        EbicsSetupConfig(config)
-    } catch (e: TalerConfigError) {
-        throw Error(e.message)
-    }
-    return cfg
+    val config = loadConfig(configFile)
+    return EbicsSetupConfig(config)
 }
 
 /**

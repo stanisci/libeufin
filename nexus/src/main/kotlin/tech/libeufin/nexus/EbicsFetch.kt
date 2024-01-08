@@ -402,14 +402,11 @@ private fun ingestNotification(
     try {
         runBlocking {
             incomingPayments.forEach {
-                println(it)
-                ingestIncomingPayment(
-                    db,
-                    it
-                )
+                logger.debug("incoming tx: $it")
+                ingestIncomingPayment(db, it)
             }
             outgoingPayments.forEach {
-                println(it)
+                logger.debug("outgoing tx: $it")
                 ingestOutgoingPayment(db, it)
             }
         }
@@ -532,7 +529,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
     override fun run() = cliCmd(logger) {
         val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
 
-        val dbCfg = cfg.config.extractDbConfigOrFail()
+        val dbCfg = cfg.config.dbConfig()
         val db = Database(dbCfg.dbConnStr)
 
         // Deciding what to download.
@@ -568,17 +565,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             return@cliCmd
         }
 
-        // Fail now if keying is incomplete.
-        if (!isKeyingComplete(cfg)) throw Error()
-        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: throw Error()
-        if (!bankKeys.accepted && !import && !parse) {
-            throw Error("Bank keys are not accepted, yet.  Won't fetch any records.")
-        }
-        val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-        if (clientKeys == null) {
-            throw Error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
-        }
-
+        val (clientKeys, bankKeys) = expectFullKeys(cfg)
         val ctx = FetchContext(
             cfg,
             HttpClient(),
@@ -593,10 +580,8 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             val pinnedStartVal = pinnedStart
             val pinnedStartArg = if (pinnedStartVal != null) {
                 logger.debug("Pinning start date to: $pinnedStartVal")
-                doOrFail {
-                    // Converting YYYY-MM-DD to Instant.
-                    LocalDate.parse(pinnedStartVal).atStartOfDay(ZoneId.of("UTC")).toInstant()
-                }
+                // Converting YYYY-MM-DD to Instant.
+                LocalDate.parse(pinnedStartVal).atStartOfDay(ZoneId.of("UTC")).toInstant()
             } else null
             ctx.pinnedStart = pinnedStartArg
             if (whichDoc == SupportedDocument.PAIN_002_LOGS)
@@ -606,11 +591,9 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             }
             return@cliCmd
         }
-        val frequency: NexusFrequency = doOrFail {
-            val configValue = cfg.config.requireString("nexus-fetch", "frequency")
-            val frequencySeconds = checkFrequency(configValue)
-            NexusFrequency(frequencySeconds, configValue)
-        }
+        val configValue = cfg.config.requireString("nexus-fetch", "frequency")
+        val frequencySeconds = checkFrequency(configValue)
+        val frequency: NexusFrequency = NexusFrequency(frequencySeconds, configValue)
         logger.debug("Running with a frequency of ${frequency.fromConfig}")
         if (frequency.inSeconds == 0) {
             logger.warn("Long-polling not implemented, running therefore in transient mode")

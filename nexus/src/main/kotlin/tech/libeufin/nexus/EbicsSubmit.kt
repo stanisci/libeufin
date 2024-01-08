@@ -37,7 +37,6 @@ import java.time.ZoneId
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
-import kotlin.system.exitProcess
 
 /**
  * Possible stages when an error may occur.  These stages
@@ -117,17 +116,16 @@ private fun maybeLog(
     val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
     val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
     val dirs = Path.of(maybeLogDir, subDir)
-    doOrFail { dirs.createDirectories() }
+    dirs.createDirectories()
     val f = File(
         dirs.toString(),
         "${now.toDbMicros()}_requestUid_${requestUid}_pain.001.xml"
     )
     // Very rare: same pain.001 should not be submitted twice in the same microsecond.
     if (f.exists()) {
-        logger.error("pain.001 log file exists already at: $f")
-        exitProcess(1)
+        throw Error("pain.001 log file exists already at: $f")
     }
-    doOrFail { f.writeText(xml) }
+    f.writeText(xml)
 }
 
 /**
@@ -270,24 +268,11 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
      * or long-polls (currently not implemented) for new payments.
      * FIXME: reduce code duplication with the fetch subcommand.
      */
-    override fun run() {
-        val cfg: EbicsSetupConfig = doOrFail {
-            extractEbicsConfig(common.config)
-        }
-        // Fail now if keying is incomplete.
-        if (!isKeyingComplete(cfg)) exitProcess(1)
-        val dbCfg = cfg.config.extractDbConfigOrFail()
+    override fun run() = cliCmd(logger) {
+        val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
+        val dbCfg = cfg.config.dbConfig()
         val db = Database(dbCfg.dbConnStr)
-        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
-        if (!bankKeys.accepted) {
-            logger.error("Bank keys are not accepted, yet.  Won't submit any payment.")
-            exitProcess(1)
-        }
-        val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-        if (clientKeys == null) {
-            logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
-            exitProcess(1)
-        }
+        val (clientKeys, bankKeys) = expectFullKeys(cfg)
         val ctx = SubmissionContext(
             cfg = cfg,
             bankPublicKeysFile = bankKeys,
@@ -298,35 +283,31 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         if (debug) {
             logger.info("Running in debug mode, submitting STDIN to the bank")
             val maybeStdin = generateSequence(::readLine).joinToString("\n")
-            doOrFail {
-                runBlocking {
-                    submitPain001(
-                        maybeStdin,
-                        ctx.cfg,
-                        ctx.clientPrivateKeysFile,
-                        ctx.bankPublicKeysFile,
-                        ctx.httpClient,
-                        ctx.ebicsExtraLog
-                    )
-                }
+            runBlocking {
+                submitPain001(
+                    maybeStdin,
+                    ctx.cfg,
+                    ctx.clientPrivateKeysFile,
+                    ctx.bankPublicKeysFile,
+                    ctx.httpClient,
+                    ctx.ebicsExtraLog
+                )
             }
-            return
+            return@cliCmd
         }
         if (transient) {
             logger.info("Transient mode: submitting what found and returning.")
             submitBatch(ctx, db)
-            return
+            return@cliCmd
         }
-        val frequency: NexusFrequency = doOrFail {
-            val configValue = cfg.config.requireString("nexus-submit", "frequency")
-            val frequencySeconds = checkFrequency(configValue)
-            return@doOrFail NexusFrequency(frequencySeconds, configValue)
-        }
+        val configValue = cfg.config.requireString("nexus-submit", "frequency")
+        val frequencySeconds = checkFrequency(configValue)
+        val frequency: NexusFrequency =  NexusFrequency(frequencySeconds, configValue)
         logger.debug("Running with a frequency of ${frequency.fromConfig}")
         if (frequency.inSeconds == 0) {
             logger.warn("Long-polling not implemented, running therefore in transient mode")
             submitBatch(ctx, db)
-            return
+            return@cliCmd
         }
         fixedRateTimer(
             name = "ebics submit period",

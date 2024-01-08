@@ -35,7 +35,6 @@ import kotlinx.serialization.KSerializer
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
-import kotlin.system.exitProcess
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -269,19 +268,31 @@ data class BankPublicKeysFile(
 )
 
 /**
- * Runs the argument and fails the process, if that throws
- * an exception.
+ * Load client and bank keys from disk.
+ * Checks that the keying process has been fully completed.
+ * 
+ * Helps to fail before starting to talk EBICS to the bank.
  *
- * @param getLambda function that might return a value.
- * @return the value from getLambda.
+ * @param cfg configuration handle.
+ * @return both client and bank keys
  */
-fun <T>doOrFail(getLambda: () -> T): T =
-    try {
-        getLambda()
-    } catch (e: Exception) {
-        logger.error(e.message)
-        exitProcess(1)
+fun expectFullKeys(
+    cfg: EbicsSetupConfig
+): Pair<ClientPrivateKeysFile, BankPublicKeysFile> {
+    val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
+    if (clientKeys == null ||
+        !clientKeys.submitted_ini ||
+        !clientKeys.submitted_hia) {
+        throw Error("Cannot operate without or with unsubmitted subscriber keys." +
+                "  Run 'libeufin-nexus ebics-setup' first.")
     }
+    val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
+    if (bankKeys == null || !bankKeys.accepted) {
+        throw Error("Cannot operate without or with unaccepted bank keys." +
+                "  Run 'libeufin-nexus ebics-setup' until accepting the bank keys.")
+    }
+    return Pair(clientKeys, bankKeys)
+}
 
 /**
  * Load the bank keys file from disk.
@@ -342,35 +353,25 @@ fun loadPrivateKeysFromDisk(location: String): ClientPrivateKeysFile? {
 }
 
 /**
- * Abstracts the config loading and exception handling.
+ * Abstracts the config loading
  *
  * @param configFile potentially NULL configuration file location.
  * @return the configuration handle.
  */
-fun loadConfigOrFail(configFile: String?): TalerConfig {
+fun loadConfig(configFile: String?): TalerConfig {
     val config = TalerConfig(NEXUS_CONFIG_SOURCE)
-    try {
-        config.load(configFile)
-    } catch (e: Exception) {
-        logger.error("Could not load configuration from ${configFile}, detail: ${e.message}")
-        exitProcess(1)
-    }
+    config.load(configFile)
     return config
 }
 
 /**
  * Abstracts fetching the DB config values to set up Nexus.
  */
-fun TalerConfig.extractDbConfigOrFail(): DatabaseConfig =
-    try {
-        DatabaseConfig(
-            dbConnStr = requireString("nexus-postgres", "config"),
-            sqlDir = requirePath("libeufin-nexusdb-postgres", "sql_dir")
-        )
-    } catch (e: Exception) {
-        logger.error("Could not load config options for Nexus DB, detail: ${e.message}.")
-        exitProcess(1)
-    }
+fun TalerConfig.dbConfig(): DatabaseConfig =
+    DatabaseConfig(
+        dbConnStr = requireString("nexus-postgres", "config"),
+        sqlDir = requirePath("libeufin-nexusdb-postgres", "sql_dir")
+    )
 
 /**
  * Main CLI class that collects all the subcommands.

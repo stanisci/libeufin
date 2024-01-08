@@ -18,14 +18,12 @@ class DbInit : CliktCommand("Initialize the libeufin-nexus database", name = "db
     ).flag()
 
     override fun run() {
-        val cfg = loadConfigOrFail(common.config).extractDbConfigOrFail()
-        doOrFail {
-            pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
-                if (requestReset) {
-                    resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
-                }
-                initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
+        val cfg = loadConfig(common.config).dbConfig()
+        pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
+            if (requestReset) {
+                resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
             }
+            initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
         }
     }
 }

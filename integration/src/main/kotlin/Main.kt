@@ -50,7 +50,8 @@ fun step(name: String) {
 }
 
 fun ask(question: String): String? {
-    println("\u001b[;1m$question\u001b[0m")
+    print("\u001b[;1m$question\u001b[0m")
+    System.out.flush()
     return readlnOrNull()
 }
 
@@ -86,16 +87,14 @@ class PostFinanceCli : CliktCommand("Run tests on postfinance", name="postfinanc
           
             if (!hasClientKeys) {
                 step("Test INI order")
-                println("Got to https://testplattform.postfinance.ch/corporates/user/settings/ebics and click on 'Reset EBICS user'.\nPress Enter when done>")
-                readlnOrNull()
+                ask("Got to https://testplattform.postfinance.ch/corporates/user/settings/ebics and click on 'Reset EBICS user'.\nPress Enter when done>")
                 nexusCmd.test("ebics-setup -c $conf")
                     .assertErr("ebics-setup should failed the first time")
             }
 
             if (!hasBankKeys) {
                 step("Test HIA order")
-                println("Got to https://testplattform.postfinance.ch/corporates/user/settings/ebics and click on 'Activate EBICS user'.\nPress Enter when done>")
-                readlnOrNull()
+                ask("Got to https://testplattform.postfinance.ch/corporates/user/settings/ebics and click on 'Activate EBICS user'.\nPress Enter when done>")
                 nexusCmd.test("ebics-setup --auto-accept-keys -c $conf")
                     .assertOk("ebics-setup should succeed the second time")
             }
