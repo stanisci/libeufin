@@ -4,6 +4,7 @@
 /sandbox/bin/
 /util/bin/
 nexus/libeufin-nexus-dev
+nexus/test
 integration/test
 integration/config.json
 sandbox/libeufin-sandbox-dev

@@ -35,6 +35,7 @@ import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import io.ktor.client.request.*
 import net.taler.wallet.crypto.Base32Crockford
+import kotlin.io.path.*
 
 fun randBytes(lenght: Int): ByteArray {
     val bytes = ByteArray(lenght)
@@ -56,30 +57,29 @@ fun ask(question: String): String? {
 }
 
 fun CliktCommandTestResult.assertOk(msg: String? = null) {
-    assertEquals(0, statusCode, "msg\n$output")
-    println(output)
+    assertEquals(0, statusCode, msg)
 }
 
 fun CliktCommandTestResult.assertErr(msg: String? = null) {
-    assertEquals(1, statusCode, "msg\n$output")
-    println(output)
+    assertEquals(1, statusCode, msg)
 }
 
 class PostFinanceCli : CliktCommand("Run tests on postfinance", name="postfinance") {
     override fun run() {
         runBlocking {
-            Files.createDirectories(Paths.get("test/postfinance"))
+            Path("test/postfinance").createDirectories()
             val conf = "conf/postfinance.conf"
-            val clientKeysPath = Paths.get("test/postfinance/client-keys.json")
-            val bankKeysPath = Paths.get("test/postfinance/bank-keys.json")
-
-            var hasClientKeys = Files.exists(clientKeysPath)
-            var hasBankKeys = Files.exists(bankKeysPath)
+            val cfg = loadConfig(conf)
+            val clientKeysPath = Path(cfg.requireString("nexus-ebics", "client_private_keys_file"))
+            val bankKeysPath = Path(cfg.requireString("nexus-ebics", "bank_public_keys_file"))
+        
+            var hasClientKeys = clientKeysPath.exists()
+            var hasBankKeys = bankKeysPath.exists()
 
             if (hasClientKeys || hasBankKeys) {
                 if (ask("Reset keys ? y/n>") == "y") {
-                    if (hasClientKeys) Files.deleteIfExists(clientKeysPath)
-                    if (hasBankKeys) Files.deleteIfExists(bankKeysPath)
+                    if (hasClientKeys) clientKeysPath.deleteIfExists()
+                    if (hasBankKeys) bankKeysPath.deleteIfExists()
                     hasClientKeys = false
                     hasBankKeys = false
                 }

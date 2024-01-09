@@ -235,7 +235,7 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
             val patchName = "$sqlFilePrefix-$numStr"
 
             checkStmt.setString(1, patchName)
-            val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Error("unable to query patches");
+            val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Exception("unable to query patches");
             if (patchCount >= 1) {
                 logger.info("patch $patchName already applied")
                 continue

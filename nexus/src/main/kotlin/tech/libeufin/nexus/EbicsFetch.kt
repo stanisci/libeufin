@@ -528,9 +528,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
      */
     override fun run() = cliCmd(logger) {
         val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
-
         val dbCfg = cfg.config.dbConfig()
-        val db = Database(dbCfg.dbConnStr)
 
         // Deciding what to download.
         var whichDoc = SupportedDocument.CAMT_054
@@ -538,78 +536,81 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (onlyReports) whichDoc = SupportedDocument.CAMT_052
         if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
         if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
-        if (parse || import) {
-            logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
-            val maybeStdin = generateSequence(::readLine).joinToString("\n")
-            when(whichDoc) {
-                SupportedDocument.CAMT_054 -> {
-                    val incomingTxs = mutableListOf<IncomingPayment>()
-                    val outgoingTxs = mutableListOf<OutgoingPayment>()
 
-                    parseTxNotif(maybeStdin, cfg.currency, incomingTxs, outgoingTxs)
-                    println(incomingTxs)
-                    println(outgoingTxs)
-                    if (import) {
-                        runBlocking {
-                            incomingTxs.forEach {
-                                ingestIncomingPayment(db, it)
-                            }
-                            outgoingTxs.forEach {
-                                ingestOutgoingPayment(db, it)
+        Database(dbCfg.dbConnStr).use { db ->
+            if (parse || import) {
+                logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
+                val maybeStdin = generateSequence(::readLine).joinToString("\n")
+                when(whichDoc) {
+                    SupportedDocument.CAMT_054 -> {
+                        val incomingTxs = mutableListOf<IncomingPayment>()
+                        val outgoingTxs = mutableListOf<OutgoingPayment>()
+
+                        parseTxNotif(maybeStdin, cfg.currency, incomingTxs, outgoingTxs)
+                        println(incomingTxs)
+                        println(outgoingTxs)
+                        if (import) {
+                            runBlocking {
+                                incomingTxs.forEach {
+                                    ingestIncomingPayment(db, it)
+                                }
+                                outgoingTxs.forEach {
+                                    ingestOutgoingPayment(db, it)
+                                }
                             }
                         }
                     }
+                    else -> throw Exception("Parsing $whichDoc not supported")
                 }
-                else -> throw Error("Parsing $whichDoc not supported")
+                return@cliCmd
             }
-            return@cliCmd
-        }
 
-        val (clientKeys, bankKeys) = expectFullKeys(cfg)
-        val ctx = FetchContext(
-            cfg,
-            HttpClient(),
-            clientKeys,
-            bankKeys,
-            whichDoc,
-            EbicsVersion.three,
-            ebicsExtraLog
-        )
-        if (transient) {
-            logger.info("Transient mode: fetching once and returning.")
-            val pinnedStartVal = pinnedStart
-            val pinnedStartArg = if (pinnedStartVal != null) {
-                logger.debug("Pinning start date to: $pinnedStartVal")
-                // Converting YYYY-MM-DD to Instant.
-                LocalDate.parse(pinnedStartVal).atStartOfDay(ZoneId.of("UTC")).toInstant()
-            } else null
-            ctx.pinnedStart = pinnedStartArg
-            if (whichDoc == SupportedDocument.PAIN_002_LOGS)
-                ctx.ebicsVersion = EbicsVersion.two
-            runBlocking {
-                fetchDocuments(db, ctx)
-            }
-            return@cliCmd
-        }
-        val configValue = cfg.config.requireString("nexus-fetch", "frequency")
-        val frequencySeconds = checkFrequency(configValue)
-        val frequency: NexusFrequency = NexusFrequency(frequencySeconds, configValue)
-        logger.debug("Running with a frequency of ${frequency.fromConfig}")
-        if (frequency.inSeconds == 0) {
-            logger.warn("Long-polling not implemented, running therefore in transient mode")
-            runBlocking {
-                fetchDocuments(db, ctx)
-            }
-            return@cliCmd
-        }
-        fixedRateTimer(
-            name = "ebics submit period",
-            period = (frequency.inSeconds * 1000).toLong(),
-            action = {
+            val (clientKeys, bankKeys) = expectFullKeys(cfg)
+            val ctx = FetchContext(
+                cfg,
+                HttpClient(),
+                clientKeys,
+                bankKeys,
+                whichDoc,
+                EbicsVersion.three,
+                ebicsExtraLog
+            )
+            if (transient) {
+                logger.info("Transient mode: fetching once and returning.")
+                val pinnedStartVal = pinnedStart
+                val pinnedStartArg = if (pinnedStartVal != null) {
+                    logger.debug("Pinning start date to: $pinnedStartVal")
+                    // Converting YYYY-MM-DD to Instant.
+                    LocalDate.parse(pinnedStartVal).atStartOfDay(ZoneId.of("UTC")).toInstant()
+                } else null
+                ctx.pinnedStart = pinnedStartArg
+                if (whichDoc == SupportedDocument.PAIN_002_LOGS)
+                    ctx.ebicsVersion = EbicsVersion.two
                 runBlocking {
                     fetchDocuments(db, ctx)
                 }
+                return@cliCmd
             }
-        )
+            val configValue = cfg.config.requireString("nexus-fetch", "frequency")
+            val frequencySeconds = checkFrequency(configValue)
+            val frequency: NexusFrequency = NexusFrequency(frequencySeconds, configValue)
+            logger.debug("Running with a frequency of ${frequency.fromConfig}")
+            if (frequency.inSeconds == 0) {
+                logger.warn("Long-polling not implemented, running therefore in transient mode")
+                runBlocking {
+                    fetchDocuments(db, ctx)
+                }
+                return@cliCmd
+            }
+            fixedRateTimer(
+                name = "ebics submit period",
+                period = (frequency.inSeconds * 1000).toLong(),
+                action = {
+                    runBlocking {
+                        fetchDocuments(db, ctx)
+                    }
+                }
+            )
+        }
     }
 }

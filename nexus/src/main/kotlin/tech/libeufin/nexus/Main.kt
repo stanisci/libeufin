@@ -48,6 +48,7 @@ import tech.libeufin.nexus.ebics.*
 import tech.libeufin.util.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
+import java.io.FileNotFoundException
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
@@ -280,16 +281,16 @@ fun expectFullKeys(
     cfg: EbicsSetupConfig
 ): Pair<ClientPrivateKeysFile, BankPublicKeysFile> {
     val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-    if (clientKeys == null ||
-        !clientKeys.submitted_ini ||
-        !clientKeys.submitted_hia) {
-        throw Error("Cannot operate without or with unsubmitted subscriber keys." +
-                "  Run 'libeufin-nexus ebics-setup' first.")
+    if (clientKeys == null) {
+        throw Exception("Cannot operate without client keys. Missing '${cfg.clientPrivateKeysFilename}' file. Run 'libeufin-nexus ebics-setup' first")
+    } else if (!clientKeys.submitted_ini || !clientKeys.submitted_hia) {
+        throw Exception("Cannot operate with unsubmitted client keys, run 'libeufin-nexus ebics-setup' first")
     }
     val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
-    if (bankKeys == null || !bankKeys.accepted) {
-        throw Error("Cannot operate without or with unaccepted bank keys." +
-                "  Run 'libeufin-nexus ebics-setup' until accepting the bank keys.")
+    if (bankKeys == null) {
+        throw Exception("Cannot operate without bank keys. Missing '${cfg.bankPublicKeysFilename}' file. run 'libeufin-nexus ebics-setup' first")
+    } else if (!bankKeys.accepted) {
+        throw Exception("Cannot operate with unaccepted bank keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
     }
     return Pair(clientKeys, bankKeys)
 }
@@ -299,27 +300,20 @@ fun expectFullKeys(
  *
  * @param location the keys file location.
  * @return the internal JSON representation of the keys file,
- *         or null on failures.
+ *         or null if the file does not exist
  */
 fun loadBankKeys(location: String): BankPublicKeysFile? {
-    val f = File(location)
-    if (!f.exists()) {
-        logger.error("Could not find the bank keys file at: $location")
+    val content = try {
+        File(location).readText()
+    } catch (e: FileNotFoundException) {
         return null
-    }
-    val fileContent = try {
-        f.readText() // read from disk.
     } catch (e: Exception) {
-        logger.error("Could not read the bank keys file from disk, detail: ${e.message}")
-        return null
+        throw Exception("Could not read the bank keys file from disk", e)
     }
     return try {
-        myJson.decodeFromString(fileContent) // Parse into JSON.
+        myJson.decodeFromString(content)
     } catch (e: Exception) {
-        logger.error(e.message)
-        @OptIn(InternalAPI::class) // enables message below.
-        logger.error(e.rootCause?.message) // actual useful message mentioning failing fields
-        return null
+        throw Exception("Could not decode bank keys", e)
     }
 }
 
@@ -328,27 +322,20 @@ fun loadBankKeys(location: String): BankPublicKeysFile? {
  *
  * @param location the keys file location.
  * @return the internal JSON representation of the keys file,
- *         or null on failures.
+ *         or null if the file does not exist
  */
 fun loadPrivateKeysFromDisk(location: String): ClientPrivateKeysFile? {
-    val f = File(location)
-    if (!f.exists()) {
-        logger.error("Could not find the private keys file at: $location")
+    val content = try {
+        File(location).readText()
+    } catch (e: FileNotFoundException) {
         return null
-    }
-    val fileContent = try {
-        f.readText() // read from disk.
     } catch (e: Exception) {
-        logger.error("Could not read private keys from disk, detail: ${e.message}")
-        return null
+        throw Exception("Could not read private keys from disk", e)
     }
     return try {
-        myJson.decodeFromString(fileContent) // Parse into JSON.
+        myJson.decodeFromString(content)
     } catch (e: Exception) {
-        logger.error(e.message)
-        @OptIn(InternalAPI::class) // enables message below.
-        logger.error(e.rootCause?.message) // actual useful message mentioning failing fields
-        return null
+        throw Exception("Could not decode private keys", e)
     }
 }
 

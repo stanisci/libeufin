@@ -36,7 +36,14 @@ fun cliCmd(logger: Logger, lambda: () -> Unit) {
     try {
         lambda()
     } catch (e: Throwable) {
-        logger.error(e.message)
+        var msg = StringBuilder(e.message)
+        var cause = e.cause;
+        while (cause != null) {
+            msg.append(": ")
+            msg.append(cause.message)
+            cause = cause.cause
+        }
+        logger.error(msg.toString())
         throw ProgramResult(1)
     }
 }
@@ -81,13 +88,13 @@ private class CliConfigGet(private val configSource: ConfigSource) : CliktComman
         if (isPath) {
             val res = config.lookupPath(sectionName, optionName)
             if (res == null) {
-                throw Error("value not found in config")
+                throw Exception("value not found in config")
             }
             println(res)
         } else {
             val res = config.lookupString(sectionName, optionName)
             if (res == null) {
-                throw Error("value not found in config")
+                throw Exception("value not found in config")
             }
             println(res)
         }

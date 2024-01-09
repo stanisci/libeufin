@@ -123,7 +123,7 @@ private fun maybeLog(
     )
     // Very rare: same pain.001 should not be submitted twice in the same microsecond.
     if (f.exists()) {
-        throw Error("pain.001 log file exists already at: $f")
+        throw Exception("pain.001 log file exists already at: $f")
     }
     f.writeText(xml)
 }
@@ -271,7 +271,6 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
     override fun run() = cliCmd(logger) {
         val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
-        val db = Database(dbCfg.dbConnStr)
         val (clientKeys, bankKeys) = expectFullKeys(cfg)
         val ctx = SubmissionContext(
             cfg = cfg,
@@ -295,26 +294,28 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             }
             return@cliCmd
         }
-        if (transient) {
-            logger.info("Transient mode: submitting what found and returning.")
-            submitBatch(ctx, db)
-            return@cliCmd
-        }
-        val configValue = cfg.config.requireString("nexus-submit", "frequency")
-        val frequencySeconds = checkFrequency(configValue)
-        val frequency: NexusFrequency =  NexusFrequency(frequencySeconds, configValue)
-        logger.debug("Running with a frequency of ${frequency.fromConfig}")
-        if (frequency.inSeconds == 0) {
-            logger.warn("Long-polling not implemented, running therefore in transient mode")
-            submitBatch(ctx, db)
-            return@cliCmd
-        }
-        fixedRateTimer(
-            name = "ebics submit period",
-            period = (frequency.inSeconds * 1000).toLong(),
-            action = {
+        Database(dbCfg.dbConnStr).use { db -> 
+            if (transient) {
+                logger.info("Transient mode: submitting what found and returning.")
                 submitBatch(ctx, db)
+                return@cliCmd
             }
-        )
+            val configValue = cfg.config.requireString("nexus-submit", "frequency")
+            val frequencySeconds = checkFrequency(configValue)
+            val frequency: NexusFrequency =  NexusFrequency(frequencySeconds, configValue)
+            logger.debug("Running with a frequency of ${frequency.fromConfig}")
+            if (frequency.inSeconds == 0) {
+                logger.warn("Long-polling not implemented, running therefore in transient mode")
+                submitBatch(ctx, db)
+                return@cliCmd
+            }
+            fixedRateTimer(
+                name = "ebics submit period",
+                period = (frequency.inSeconds * 1000).toLong(),
+                action = {
+                    submitBatch(ctx, db)
+                }
+            )
+        }
     }
 }
