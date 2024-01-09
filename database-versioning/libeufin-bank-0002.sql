@@ -18,6 +18,9 @@ BEGIN;
 SELECT _v.register_patch('libeufin-bank-0002', NULL, NULL);
 SET search_path TO libeufin_bank;
 
+-- forget about all pending operations
+DELETE FROM cashout_operations WHERE local_transaction IS NULL;
+
 -- TODO drop pending cashout operations
 ALTER TABLE cashout_operations 
   DROP COLUMN challenge,
