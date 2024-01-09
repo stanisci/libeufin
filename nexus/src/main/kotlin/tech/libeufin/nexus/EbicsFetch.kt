@@ -18,7 +18,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 import kotlin.concurrent.fixedRateTimer
-import kotlin.io.path.createDirectories
+import kotlin.io.path.*
 
 /**
  * Necessary data to perform a download.
@@ -140,25 +140,20 @@ fun maybeLogFile(
     val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
     val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
     // Creating the combined dir.
-    val dirs = Path.of(maybeLogDir, subDir)
+    val dirs = Path(maybeLogDir, subDir)
     dirs.createDirectories()
-    fun maybeWrite(f: File, xml: String) {
-        if (f.exists()) {
-            throw Exception("Log file exists already at: ${f.path}")
-        }
-        f.writeText(xml)
-    }
     if (nonZip) {
-        val f  = File(dirs.toString(), "${now.toDbMicros()}_HAC_response.pain.002.xml")
-        maybeWrite(f, content.toString(Charsets.UTF_8))
-        return
+        val f = Path(dirs.toString(), "${now.toDbMicros()}_HAC_response.pain.002.xml")
+        f.writeBytes(content)
+    } else {
+        // Write each ZIP entry in the combined dir.
+        content.unzipForEach { fileName, xmlContent ->
+            val f = Path(dirs.toString(), "${now.toDbMicros()}_$fileName")
+            // Rare: cannot download the same file twice in the same microsecond.
+            f.writeText(xmlContent)
+        }
     }
-    // Write each ZIP entry in the combined dir.
-    content.unzipForEach { fileName, xmlContent ->
-        val f  = File(dirs.toString(), "${now.toDbMicros()}_$fileName")
-        // Rare: cannot download the same file twice in the same microsecond.
-        maybeWrite(f, xmlContent)
-    }
+   
 }
 
 /**
@@ -371,50 +366,36 @@ fun firstLessThanSecond(
  * @param db database connection.
  * @param content the ZIP file that contains the EBICS
  *        notification as camt.054 records.
- * @return true if the ingestion succeeded, false otherwise.
- *         False should fail the process, since it means that
- *         the notification could not be parsed.
  */
 private fun ingestNotification(
     db: Database,
     ctx: FetchContext,
     content: ByteArray
-): Boolean {
+) {
     val incomingPayments = mutableListOf<IncomingPayment>()
     val outgoingPayments = mutableListOf<OutgoingPayment>()
-    val filenamePrefixForIncoming = "camt.054_P_${ctx.cfg.myIbanAccount.iban}"
-    val filenamePrefixForOutgoing = "camt.054-Debit_P_${ctx.cfg.myIbanAccount.iban}"
+    
     try {
         content.unzipForEach { fileName, xmlContent ->
             if (!fileName.contains("camt.054", ignoreCase = true))
                 throw Exception("Asked for notification but did NOT get a camt.054")
-
+            logger.debug("parse $fileName")
             parseTxNotif(xmlContent, ctx.cfg.currency, incomingPayments, outgoingPayments)
         }
     } catch (e: IOException) {
-        logger.error("Could not open any ZIP archive")
-        return false
-    } catch (e: Exception) {
-        logger.error(e.message)
-        return false
+        throw Exception("Could not open any ZIP archive", e)
     }
 
-    try {
-        runBlocking {
-            incomingPayments.forEach {
-                logger.debug("incoming tx: $it")
-                ingestIncomingPayment(db, it)
-            }
-            outgoingPayments.forEach {
-                logger.debug("outgoing tx: $it")
-                ingestOutgoingPayment(db, it)
-            }
+    runBlocking {
+        incomingPayments.forEach {
+            logger.debug("$it")
+            ingestIncomingPayment(db, it)
         }
-    } catch (e: Exception) {
-        logger.error(e.message)
-        return false
+        outgoingPayments.forEach {
+            logger.debug("$it")
+            ingestOutgoingPayment(db, it)
+        }
     }
-    return true
 }
 
 /**
@@ -469,8 +450,10 @@ private suspend fun fetchDocuments(
         logger.warn("Not ingesting ${ctx.whichDocument}.  Only camt.054 notifications supported.")
         return
     }
-    if (!ingestNotification(db, ctx, maybeContent)) {
-        throw Exception("Ingesting notifications failed")
+    try {
+        ingestNotification(db, ctx, maybeContent)
+    } catch (e: Exception) {
+        throw Exception("Ingesting notifications failed", e)
     }
 }
 
@@ -545,7 +528,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                     SupportedDocument.CAMT_054 -> {
                         val incomingTxs = mutableListOf<IncomingPayment>()
                         val outgoingTxs = mutableListOf<OutgoingPayment>()
-
                         parseTxNotif(maybeStdin, cfg.currency, incomingTxs, outgoingTxs)
                         println(incomingTxs)
                         println(outgoingTxs)

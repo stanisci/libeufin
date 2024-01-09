@@ -12,6 +12,9 @@
     <logger name="tech.libeufin.util" level="ALL"  additivity="false">
         <appender-ref ref="STDERR" />
     </logger>
+    <logger name="tech.libeufin.nexus" level="ALL"  additivity="false">
+        <appender-ref ref="STDERR" />
+    </logger>
 
     <logger name="io.netty" level="INFO" />
     <logger name="ktor" level="TRACE" />

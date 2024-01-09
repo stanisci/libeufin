@@ -9,6 +9,14 @@ import tech.libeufin.util.*
 import java.sql.PreparedStatement
 import java.sql.SQLException
 import java.time.Instant
+import java.util.Date
+import java.text.SimpleDateFormat
+
+fun Instant.fmtDate(): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd")
+    return formatter.format(Date.from(this))
+}
+
 
 // Remove this once TalerAmount from the bank
 // module gets moved to the 'util' module (#7987).
@@ -16,7 +24,16 @@ data class TalerAmount(
     val value: Long,
     val fraction: Int, // has at most 8 digits.
     val currency: String
-)
+) {
+    override fun toString(): String {
+        if (fraction == 0) {
+            return "$currency:$value"
+        } else {
+            return "$currency:$value.${fraction.toString().padStart(8, '0')}"
+                .dropLastWhile { it == '0' } // Trim useless fractional trailing 0
+        }
+    }
+}
 
 // INCOMING PAYMENTS STRUCTS
 
@@ -29,7 +46,12 @@ data class IncomingPayment(
     val debitPaytoUri: String,
     val executionTime: Instant,
     val bankTransferId: String
-)
+)  {
+    override fun toString(): String {
+        return ">> ${executionTime.fmtDate()} $amount $bankTransferId debitor=$debitPaytoUri subject=$wireTransferSubject"
+    }
+}
+
 
 // INITIATED PAYMENTS STRUCTS
 
@@ -104,7 +126,11 @@ data class OutgoingPayment(
     val bankTransferId: String,
     val creditPaytoUri: String? = null, // not showing in camt.054
     val wireTransferSubject: String? = null // not showing in camt.054
-)
+) {
+    override fun toString(): String {
+        return "<< ${executionTime.fmtDate()} $amount $bankTransferId creditor=$creditPaytoUri subject=$wireTransferSubject"
+    }
+}
 
 /**
  * Witnesses the outcome of inserting an outgoing

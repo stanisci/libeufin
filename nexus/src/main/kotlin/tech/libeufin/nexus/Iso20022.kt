@@ -189,13 +189,18 @@ fun parseTxNotif(
                         focusElement.textContent
                     }
                 }
-                // Obtaining payment subject.
-                val subject = StringBuilder()
-                requireUniqueChildNamed("RmtInf") {
-                    this.mapEachChildNamed("Ustrd") {
-                        val piece = this.focusElement.textContent
+                // Obtaining payment subject. 
+                val subject = maybeUniqueChildNamed("RmtInf") {
+                    val subject = StringBuilder()
+                    mapEachChildNamed("Ustrd") {
+                        val piece = focusElement.textContent
                         subject.append(piece)
                     }
+                    subject
+                }
+                if (subject == null) {
+                    logger.debug("Skip notification $uidFromBank, missing subject")
+                    return@notificationForEachTx
                 }
 
                 // Obtaining the payer's details
@@ -210,7 +215,7 @@ fun parseTxNotif(
                     }
                     // warn: it might need the postal address too..
                     requireUniqueChildNamed("Dbtr") {
-                        requireUniqueChildNamed("Pty") {
+                        maybeUniqueChildNamed("Pty") {
                             requireUniqueChildNamed("Nm") {
                                 val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
                                 debtorPayto.append("?receiver-name=$urlEncName")
@@ -275,11 +280,13 @@ private fun notificationForEachTx(
                 mapEachChildNamed("Ntfctn") {
                     mapEachChildNamed("Ntry") {
                         requireUniqueChildNamed("Sts") {
-                            requireUniqueChildNamed("Cd") {
-                                if (focusElement.textContent != "BOOK")
-                                    throw Exception("Found non booked transaction, " +
-                                            "stop parsing.  Status was: ${focusElement.textContent}"
-                                    )
+                            if (focusElement.textContent != "BOOK") {
+                                requireUniqueChildNamed("Cd") {
+                                    if (focusElement.textContent != "BOOK")
+                                        throw Exception("Found non booked transaction, " +
+                                                "stop parsing.  Status was: ${focusElement.textContent}"
+                                        )
+                                }
                             }
                         }
                         val bookDate: Instant = requireUniqueChildNamed("BookgDt") {
