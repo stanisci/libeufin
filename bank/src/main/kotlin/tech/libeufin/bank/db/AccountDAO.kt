@@ -38,14 +38,15 @@ class AccountDAO(private val db: Database) {
         login: String,
         password: String,
         name: String,
-        email: String? = null,
-        phone: String? = null,
-        cashoutPayto: IbanPayTo? = null,
+        email: String?,
+        phone: String?,
+        cashoutPayto: IbanPayTo?,
         internalPaytoUri: IbanPayTo,
         isPublic: Boolean,
         isTalerExchange: Boolean,
         maxDebt: TalerAmount,
         bonus: TalerAmount,
+        tanChannel: TanChannel?,
         // Whether to check [internalPaytoUri] for idempotency
         checkPaytoIdempotent: Boolean
     ): AccountCreationResult = db.serializable { it ->
@@ -59,11 +60,13 @@ class AccountDAO(private val db: Database) {
                     AND (NOT ? OR internal_payto_uri=?)
                     AND is_public=?
                     AND is_taler_exchange=?
+                    AND tan_channel IS NOT DISTINCT FROM ?::tan_enum
                 FROM customers 
                     JOIN bank_accounts
                         ON customer_id=owning_customer_id
                 WHERE login=?
             """).run {
+                // TODO check max debt
                 setString(1, name)
                 setString(2, email)
                 setString(3, phone)
@@ -72,11 +75,13 @@ class AccountDAO(private val db: Database) {
                 setString(6, internalPaytoUri.canonical)
                 setBoolean(7, isPublic)
                 setBoolean(8, isTalerExchange)
-                setString(9, login)
+                setString(9, tanChannel?.name)
+                setString(10, login)
                 oneOrNull { 
                     CryptoUtil.checkpw(password, it.getString(1)) && it.getBoolean(2)
                 } 
             }
+            println(idempotent)
             if (idempotent != null) {
                 if (idempotent) {
                     AccountCreationResult.Success
@@ -84,28 +89,6 @@ class AccountDAO(private val db: Database) {
                     AccountCreationResult.LoginReuse
                 }
             } else {
-                val customerId = conn.prepareStatement("""
-                    INSERT INTO customers (
-                        login
-                        ,password_hash
-                        ,name
-                        ,email
-                        ,phone
-                        ,cashout_payto
-                        ,tan_channel
-                    ) VALUES (?, ?, ?, ?, ?, ?, NULL)
-                        RETURNING customer_id
-                """
-                ).run {
-                    setString(1, login)
-                    setString(2, CryptoUtil.hashpw(password))
-                    setString(3, name)
-                    setString(4, email)
-                    setString(5, phone)
-                    setString(6, cashoutPayto?.canonical)
-                    oneOrNull { it.getLong("customer_id") }!!
-                }
-
                 conn.prepareStatement("""
                     INSERT INTO iban_history(
                         iban
@@ -118,6 +101,29 @@ class AccountDAO(private val db: Database) {
                         conn.rollback()
                         return@transaction AccountCreationResult.PayToReuse
                     }
+                }
+
+                val customerId = conn.prepareStatement("""
+                    INSERT INTO customers (
+                        login
+                        ,password_hash
+                        ,name
+                        ,email
+                        ,phone
+                        ,cashout_payto
+                        ,tan_channel
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?::tan_enum)
+                        RETURNING customer_id
+                """
+                ).run {
+                    setString(1, login)
+                    setString(2, CryptoUtil.hashpw(password))
+                    setString(3, name)
+                    setString(4, email)
+                    setString(5, phone)
+                    setString(6, cashoutPayto?.canonical)
+                    setString(7, tanChannel?.name)
+                    oneOrNull { it.getLong("customer_id") }!!
                 }
             
                 conn.prepareStatement("""

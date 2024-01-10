@@ -150,12 +150,23 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
         )
 
-    if (req.debit_threshold != null && !isAdmin)
-        throw conflict(
-            "only admin account can choose the debit limit",
-            TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
-        )
-
+    if (!isAdmin) {
+        if (req.debit_threshold != null)
+            throw conflict(
+                "only admin account can choose the debit limit",
+                TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+            )
+        if (req.tan_channel != null)
+            throw conflict(
+                "only admin account can enable 2fa on creation",
+                TalerErrorCode.BANK_NON_ADMIN_SET_TAN_CHANNEL
+            )
+    } else {
+        if (req.tan_channel != null && ctx.tanChannels.get(req.tan_channel) == null) {
+            throw unsupportedTanChannel(req.tan_channel)
+        }
+    }
+   
     if (req.username == "exchange" && !req.is_taler_exchange)
         throw conflict(
             "'exchange' account must be a taler exchange account",
@@ -181,6 +192,7 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             maxDebt = req.debit_threshold ?: ctx.defaultDebtLimit,
             bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
                     else TalerAmount(0, 0, ctx.regionalCurrency),
+            tanChannel = req.tan_channel,
             checkPaytoIdempotent = req.internal_payto_uri != null
         )
         // Retry with new IBAN

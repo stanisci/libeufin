@@ -91,7 +91,11 @@ fun bankSetup(
             isTalerExchange = false,
             isPublic = false,
             bonus = bonus,
-            checkPaytoIdempotent = false
+            checkPaytoIdempotent = false,
+            email = null,
+            phone = null,
+            cashoutPayto = null,
+            tanChannel = null   
         ))
         assertEquals(AccountCreationResult.Success, db.account.create(
             login = "exchange",
@@ -102,7 +106,11 @@ fun bankSetup(
             isTalerExchange = true,
             isPublic = false,
             bonus = bonus,
-            checkPaytoIdempotent = false
+            checkPaytoIdempotent = false,
+            email = null,
+            phone = null,
+            cashoutPayto = null,
+            tanChannel = null   
         ))
         assertEquals(AccountCreationResult.Success, db.account.create(
             login = "customer",
@@ -113,7 +121,11 @@ fun bankSetup(
             isTalerExchange = false,
             isPublic = false,
             bonus = bonus,
-            checkPaytoIdempotent = false
+            checkPaytoIdempotent = false,
+            email = null,
+            phone = null,
+            cashoutPayto = null,
+            tanChannel = null   
         ))
         // Create admin account
         assertEquals(AccountCreationResult.Success, maybeCreateAdminAccount(db, ctx, "admin-password"))

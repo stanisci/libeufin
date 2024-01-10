@@ -133,7 +133,11 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? =
         isTalerExchange = false,
         maxDebt = ctx.defaultDebtLimit,
         bonus = TalerAmount(0, 0, ctx.regionalCurrency),
-        checkPaytoIdempotent = false
+        checkPaytoIdempotent = false,
+        email = null,
+        phone = null,
+        cashoutPayto = null,
+        tanChannel = null
     )
 }
 

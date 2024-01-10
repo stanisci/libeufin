@@ -176,6 +176,7 @@ data class RegisterAccountRequest(
     val cashout_payto_uri: IbanPayTo? = null,
     val payto_uri: IbanPayTo? = null,
     val debit_threshold: TalerAmount? = null,
+    val tan_channel: TanChannel? = null,
     // TODO remove
     val internal_payto_uri: IbanPayTo? = null,
     val challenge_contact_data: ChallengeContactData? = null,

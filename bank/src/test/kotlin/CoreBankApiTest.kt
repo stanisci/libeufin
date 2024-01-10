@@ -214,7 +214,7 @@ class CoreBankAccountsApiTest {
             json(req)
         }.assertOk()
 
-        // Check debit_threshold
+        // Check admin only debit_threshold
         obj {
             "username" to "bat"
             "password" to "password"
@@ -224,6 +224,22 @@ class CoreBankAccountsApiTest {
             client.post("/accounts") {
                 json(req)
             }.assertErr(TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT)
+            client.post("/accounts") {
+                json(req)
+                pwAuth("admin")
+            }.assertOk()
+        }
+
+        // Check admin only tan_channel
+        obj {
+            "username" to "bat2"
+            "password" to "password"
+            "name" to "Bat"
+            "tan_channel" to "sms"
+        }.let { req ->
+            client.post("/accounts") {
+                json(req)
+            }.assertErr(TalerErrorCode.BANK_NON_ADMIN_SET_TAN_CHANNEL)
             client.post("/accounts") {
                 json(req)
                 pwAuth("admin")
@@ -314,6 +330,20 @@ class CoreBankAccountsApiTest {
                 "name" to "Mallory"
             }
         }.assertOk()
+    }
+
+    // Test admin-only account creation
+    @Test
+    fun createTanErr() = bankSetup(conf = "test_tan_err.conf") { _ -> 
+        client.post("/accounts") {
+            pwAuth("admin")
+            json {
+                "username" to "baz"
+                "password" to "xyz"
+                "name" to "Mallory"
+                "tan_channel" to "email"
+            }
+        }.assertConflict(TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED)
     }
 
     // DELETE /accounts/USERNAME
