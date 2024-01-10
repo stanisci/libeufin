@@ -449,6 +449,7 @@ class CreateAccount : CliktCommand(
     private val options by CreateAccountOption().cooccurring()
  
     override fun run() = cliCmd(logger) {
+        // TODO support setting tan
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()

@@ -143,6 +143,9 @@ private fun Routing.coreBankTokenApi(db: Database) {
 }
 
 suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountRequest, isAdmin: Boolean): Pair<AccountCreationResult, IbanPayTo>  {
+    val reqPayto = req.payto_uri ?: req.internal_payto_uri
+    val contactData = req.contact_data ?: req.challenge_contact_data
+
     // Prohibit reserved usernames:
     if (RESERVED_ACCOUNTS.contains(req.username))
         throw conflict(
@@ -156,15 +159,26 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
                 "only admin account can choose the debit limit",
                 TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
             )
+
         if (req.tan_channel != null)
             throw conflict(
                 "only admin account can enable 2fa on creation",
                 TalerErrorCode.BANK_NON_ADMIN_SET_TAN_CHANNEL
             )
-    } else {
-        if (req.tan_channel != null && ctx.tanChannels.get(req.tan_channel) == null) {
+
+    } else if (req.tan_channel != null) {
+        if (ctx.tanChannels.get(req.tan_channel) == null) {
             throw unsupportedTanChannel(req.tan_channel)
+        } 
+        val missing = when (req.tan_channel) {
+            TanChannel.sms -> contactData?.phone?.get() == null
+            TanChannel.email -> contactData?.email?.get() == null
         }
+        if (missing)
+            throw conflict(
+                "missing info for tan channel ${req.tan_channel}",
+                TalerErrorCode.BANK_MISSING_TAN_INFO
+            )
     }
    
     if (req.username == "exchange" && !req.is_taler_exchange)
@@ -173,8 +187,6 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             TalerErrorCode.END
         )
 
-    val reqPayto = req.payto_uri ?: req.internal_payto_uri
-    val contactData = req.contact_data ?: req.challenge_contact_data
     var retry = if (reqPayto == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
 
     while (true) {

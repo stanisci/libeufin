@@ -235,6 +235,9 @@ class CoreBankAccountsApiTest {
             "username" to "bat2"
             "password" to "password"
             "name" to "Bat"
+            "contact_data" to obj {
+                "phone" to "+456"
+            }
             "tan_channel" to "sms"
         }.let { req ->
             client.post("/accounts") {
@@ -244,6 +247,19 @@ class CoreBankAccountsApiTest {
                 json(req)
                 pwAuth("admin")
             }.assertOk()
+        }
+
+        // Check tan info
+        for (channel in listOf("sms", "email")) {
+            client.post("/accounts") {
+                pwAuth("admin")
+                json { 
+                    "username" to "bat2"
+                    "password" to "password"
+                    "name" to "Bat"
+                    "tan_channel" to channel
+                }
+            }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
         }
 
         // Reserved account
