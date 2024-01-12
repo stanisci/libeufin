@@ -256,7 +256,7 @@ inline suspend fun <reified B> ApplicationTestBuilder.statusRoutine(
                 }
             }
             delay(100)
-            client.post("/withdrawals/$confirmed_uuid/confirm").assertNoContent()
+            client.postA("/accounts/customer/withdrawals/$confirmed_uuid/confirm").assertNoContent()
         }
 
         // Polling abort
@@ -274,7 +274,7 @@ inline suspend fun <reified B> ApplicationTestBuilder.statusRoutine(
                 }
             }
             delay(100)
-            client.post("/withdrawals/$aborted_uuid/abort").assertNoContent()
+            client.post("/taler-integration/withdrawal-operation/$aborted_uuid/abort").assertNoContent()
         }
     }
 }

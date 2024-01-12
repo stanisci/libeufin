@@ -258,7 +258,7 @@ suspend fun ApplicationTestBuilder.withdrawal(amount: String) {
     }.assertOkJson<BankAccountCreateWithdrawalResponse> {
         val uuid = it.taler_withdraw_uri.split("/").last()
         withdrawalSelect(uuid)
-        client.postA("/withdrawals/${uuid}/confirm")
+        client.postA("/accounts/merchant/withdrawals/${uuid}/confirm")
             .assertNoContent()
     }
 }

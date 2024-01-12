@@ -177,9 +177,6 @@ data class RegisterAccountRequest(
     val payto_uri: IbanPayTo? = null,
     val debit_threshold: TalerAmount? = null,
     val tan_channel: TanChannel? = null,
-    // TODO remove
-    val internal_payto_uri: IbanPayTo? = null,
-    val challenge_contact_data: ChallengeContactData? = null,
 )
 
 @Serializable
@@ -198,8 +195,6 @@ data class AccountReconfiguration(
     val is_public: Boolean? = null,
     val debit_threshold: TalerAmount? = null,
     val tan_channel: Option<TanChannel?> = Option.None,
-    // TODO remove
-    val challenge_contact_data: ChallengeContactData? = null,
     val is_taler_exchange: Boolean? = null,
 )
 
@@ -424,10 +419,6 @@ data class WithdrawalPublicInfo (
     val username: String,
     val selected_reserve_pub: EddsaPublicKey? = null,
     val selected_exchange_account: String? = null,
-    // TODO remove
-    val aborted: Boolean,
-    val confirmation_done: Boolean,
-    val selection_done: Boolean,
 )
 
 @Serializable
@@ -662,8 +653,6 @@ data class PublicAccount(
     val payto_uri: String,
     val balance: Balance,
     val is_taler_exchange: Boolean,
-    // TODO remove
-    val account_name: String
 )
 
 /**

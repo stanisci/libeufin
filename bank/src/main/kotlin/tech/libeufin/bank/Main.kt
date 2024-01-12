@@ -467,7 +467,6 @@ class CreateAccount : CliktCommand(
                         phone = Option.Some(phone), 
                     ),
                     cashout_payto_uri = cashout_payto_uri,
-                    internal_payto_uri = internal_payto_uri,
                     payto_uri = payto_uri,
                     debit_threshold = debit_threshold
                 ) 

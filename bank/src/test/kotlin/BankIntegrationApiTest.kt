@@ -181,7 +181,7 @@ class BankIntegrationApiTest {
         }
 
         // Check bad UUID
-        client.postA("/taler-integration/withdrawal-operation//chocolate/abort").assertBadRequest()
+        client.postA("/taler-integration/withdrawal-operation/chocolate/abort").assertBadRequest()
 
         // Check unknown
         client.postA("/taler-integration/withdrawal-operation/${UUID.randomUUID()}/abort")

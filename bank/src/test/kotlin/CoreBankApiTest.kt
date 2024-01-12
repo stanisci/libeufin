@@ -182,13 +182,13 @@ class CoreBankAccountsApiTest {
             // Check idempotency with payto
             client.post("/accounts") {
                 json(req) {
-                    "internal_payto_uri" to payto
+                    "payto_uri" to payto
                 }
             }.assertOk()
             // Check payto conflict
             client.post("/accounts") {
                 json(req) {
-                    "internal_payto_uri" to genIbanPaytoUri()
+                    "payto_uri" to genIbanPaytoUri()
                 }
             }.assertConflict(TalerErrorCode.BANK_REGISTER_USERNAME_REUSE)
         }
@@ -200,7 +200,7 @@ class CoreBankAccountsApiTest {
             "password" to "password"
             "name" to "Jane"
             "is_public" to true
-            "internal_payto_uri" to ibanPayto
+            "payto_uri" to ibanPayto
             "is_taler_exchange" to true
         }
         // Check Ok
@@ -381,7 +381,7 @@ class CoreBankAccountsApiTest {
                 "username" to "john"
                 "password" to "john-password"
                 "name" to "John"
-                "internal_payto_uri" to genTmpPayTo()
+                "payto_uri" to genTmpPayTo()
             }
         }.assertOk()
         fillTanInfo("john")
@@ -661,7 +661,7 @@ class CoreBankAccountsApiTest {
             val obj = json<PublicAccountsResponse>()
             assertEquals(3, obj.public_accounts.size)
             obj.public_accounts.forEach {
-                assertEquals(0, it.account_name.toInt() % 2)
+                assertEquals(0, it.username.toInt() % 2)
             }
         }
         // All accounts
@@ -940,11 +940,7 @@ class CoreBankWithdrawalApiTest {
             client.get("/withdrawals/${it.withdrawal_id}") {
                 pwAuth("merchant")
             }.assertOkJson<WithdrawalPublicInfo> {
-                assert(!it.selection_done)
-                assert(!it.aborted)
-                assert(!it.confirmation_done)
                 assertEquals(amount, it.amount)
-                // TODO check all status
             }
         }
 
@@ -993,7 +989,7 @@ class CoreBankWithdrawalApiTest {
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
             withdrawalSelect(uuid)
-            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/taler-integration/withdrawal-operation/$uuid/abort").assertNoContent()
 
             // Check error
             client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
@@ -1013,7 +1009,7 @@ class CoreBankWithdrawalApiTest {
                 .assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
             // Check can abort because not confirmed
-            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/taler-integration/withdrawal-operation/$uuid/abort").assertNoContent()
         }
 
         // Check bad UUID

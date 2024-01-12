@@ -517,7 +517,6 @@ class AccountDAO(private val db: Database) {
         ) {
             PublicAccount(
                 username = it.getString("login"),
-                account_name = it.getString("login"),
                 payto_uri = it.getString("internal_payto_uri"),
                 balance = Balance(
                     amount = it.getAmount("balance", db.bankCurrency),

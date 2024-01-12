@@ -101,3 +101,7 @@ check: install-nobuild-bank-files
 .PHONY: test
 test: install-nobuild-bank-files
 	./gradlew test --tests $(test) -i
+
+.PHONY: integration-test
+integration-test: install-nobuild-bank-files
+	./gradlew :integration:test --tests $(test) -i

@@ -143,9 +143,6 @@ private fun Routing.coreBankTokenApi(db: Database) {
 }
 
 suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountRequest, isAdmin: Boolean): Pair<AccountCreationResult, IbanPayTo>  {
-    val reqPayto = req.payto_uri ?: req.internal_payto_uri
-    val contactData = req.contact_data ?: req.challenge_contact_data
-
     // Prohibit reserved usernames:
     if (RESERVED_ACCOUNTS.contains(req.username))
         throw conflict(
@@ -171,8 +168,8 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             throw unsupportedTanChannel(req.tan_channel)
         } 
         val missing = when (req.tan_channel) {
-            TanChannel.sms -> contactData?.phone?.get() == null
-            TanChannel.email -> contactData?.email?.get() == null
+            TanChannel.sms ->  req.contact_data?.phone?.get() == null
+            TanChannel.email ->  req.contact_data?.email?.get() == null
         }
         if (missing)
             throw conflict(
@@ -187,15 +184,15 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             TalerErrorCode.END
         )
 
-    var retry = if (reqPayto == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
+    var retry = if (req.payto_uri == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
 
     while (true) {
-        val internalPayto = reqPayto ?: IbanPayTo(genIbanPaytoUri())
+        val internalPayto = req.payto_uri ?: IbanPayTo(genIbanPaytoUri())
         val res = db.account.create(
             login = req.username,
             name = req.name,
-            email = contactData?.email?.get(),
-            phone = contactData?.phone?.get(),
+            email = req.contact_data?.email?.get(),
+            phone = req.contact_data?.phone?.get(),
             cashoutPayto = req.cashout_payto_uri,
             password = req.password,
             internalPaytoUri = internalPayto,
@@ -205,7 +202,7 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
                     else TalerAmount(0, 0, ctx.regionalCurrency),
             tanChannel = req.tan_channel,
-            checkPaytoIdempotent = req.internal_payto_uri != null
+            checkPaytoIdempotent = req.payto_uri != null
         )
         // Retry with new IBAN
         if (res == AccountCreationResult.PayToReuse && retry > 0) {
@@ -227,7 +224,6 @@ suspend fun patchAccount(
     info: String? = null
 ): AccountPatchResult {
     req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
-    val contactData = req.contact_data ?: req.challenge_contact_data
 
     if (username == "admin" && req.is_public == true)
         throw conflict(
@@ -243,8 +239,8 @@ suspend fun patchAccount(
         login = username,
         name = req.name,
         cashoutPayto = req.cashout_payto_uri, 
-        email = contactData?.email ?: Option.None,
-        phone = contactData?.phone ?: Option.None,
+        email = req.contact_data?.email ?: Option.None,
+        phone = req.contact_data?.phone ?: Option.None,
         tan_channel = req.tan_channel,
         isPublic = req.is_public,
         debtLimit = req.debit_threshold,
@@ -530,20 +526,6 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
                 }
             }
         }
-        post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/abort") {
-            val opId = call.uuidUriComponent("withdrawal_id")
-            when (db.withdrawal.abort(opId)) {
-                AbortResult.UnknownOperation -> throw notFound(
-                    "Withdrawal operation $opId not found",
-                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-                )
-                AbortResult.AlreadyConfirmed -> throw conflict(
-                    "Cannot abort confirmed withdrawal", 
-                    TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
-                )
-                AbortResult.Success -> call.respond(HttpStatusCode.NoContent)
-            }
-        }
         post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
             val opId = call.uuidUriComponent("withdrawal_id")
             val challenge = call.challenge(db, Operation.withdrawal)
@@ -558,24 +540,6 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
         )
         call.respond(op)
-    }
-    post("/withdrawals/{withdrawal_id}/abort") {
-        val opId = call.uuidUriComponent("withdrawal_id")
-        when (db.withdrawal.abort(opId)) {
-            AbortResult.UnknownOperation -> throw notFound(
-                "Withdrawal operation $opId not found",
-                TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-            )
-            AbortResult.AlreadyConfirmed -> throw conflict(
-                "Cannot abort confirmed withdrawal", 
-                TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
-            )
-            AbortResult.Success -> call.respond(HttpStatusCode.NoContent)
-        }
-    }
-    post("/withdrawals/{withdrawal_id}/confirm") {
-        val opId = call.uuidUriComponent("withdrawal_id")
-        call.confirmWithdrawalHttp(db, ctx, opId, false)
     }
 }
 
