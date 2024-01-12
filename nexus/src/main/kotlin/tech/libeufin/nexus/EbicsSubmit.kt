@@ -37,6 +37,7 @@ import java.time.ZoneId
 import java.util.*
 import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
+import kotlin.io.path.*
 
 /**
  * Possible stages when an error may occur.  These stages
@@ -104,8 +105,7 @@ class NexusSubmitException(
  */
 private fun maybeLog(
     maybeLogDir: String?,
-    xml: String,
-    requestUid: String
+    xml: String
 ) {
     if (maybeLogDir == null) {
         logger.info("Logging pain.001 to files is disabled")
@@ -115,11 +115,11 @@ private fun maybeLog(
     val now = Instant.now()
     val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
     val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
-    val dirs = Path.of(maybeLogDir, subDir)
+    val dirs = Path(maybeLogDir, subDir)
     dirs.createDirectories()
-    val f = File(
+    val f = Path(
         dirs.toString(),
-        "${now.toDbMicros()}_requestUid_${requestUid}_pain.001.xml"
+        "${now.toDbMicros()}_pain.001.xml"
     )
     // Very rare: same pain.001 should not be submitted twice in the same microsecond.
     if (f.exists()) {

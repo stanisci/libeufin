@@ -111,7 +111,7 @@ nexus-test: install-nobuild-nexus-files
 	./gradlew :nexus:test --tests $(test) -i
 
 .PHONY: integration
-integration:
+integration: install-nobuild-bank-files install-nobuild-nexus-files
 	./gradlew :integration:run --console=plain --args="$(test)"
 
 .PHONY: doc

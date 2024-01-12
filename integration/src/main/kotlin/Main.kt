@@ -157,6 +157,20 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
     
                     step("Test fetch transactions")
                     nexusCmd.test("ebics-fetch --transient -c $conf --pinned-start 2022-01-01").assertOk()
+
+                    while (true) {
+                        when (ask("Run 'fetch', 'submit' or 'exit'>")) {
+                            "fetch" -> {
+                                step("Fetch new transactions")
+                                nexusCmd.test("ebics-fetch --transient -c $conf").assertOk()
+                            }
+                            "submit" -> {
+                                step("Submit pending transactions")
+                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                            }
+                            "exit" -> break
+                        }
+                    }
                 }
             }
         }

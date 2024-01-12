@@ -138,8 +138,9 @@ SELECT bank_transfer_id, debit_payto_uri
 -- Generate a bounce ID deterministically from the bank ID
 -- We hash the bank ID with SHA-256 then we encode the hash using base64
 -- As bank id can be at most 35 characters long we truncate the encoded hash
--- Most banks should be case sensitive but we might have to normalize the id to uppercase for some of them
-SELECT substr(encode(public.digest(bank_id, 'sha256'), 'base64'), 0, 35) INTO out_bounce_id;
+-- We are not sure whether this field is case-insensitive in all banks as the standard 
+-- does not clearly specify this, so we have chosen to capitalise it
+SELECT upper(substr(encode(public.digest(bank_id, 'sha256'), 'base64'), 0, 35)) INTO out_bounce_id;
 
 -- Initiate the bounce transaction
 INSERT INTO initiated_outgoing_transactions (
