@@ -26,6 +26,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.DeflaterOutputStream
 import kotlin.test.*
+import kotlin.random.Random
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import net.taler.common.errorcodes.TalerErrorCode
@@ -40,12 +41,18 @@ import tech.libeufin.util.*
 val merchantPayto = IbanPayTo(genIbanPaytoUri())
 val exchangePayto = IbanPayTo(genIbanPaytoUri())
 val customerPayto = IbanPayTo(genIbanPaytoUri())
-val unknownPayto = IbanPayTo(genIbanPaytoUri())
+val unknownPayto  = IbanPayTo(genIbanPaytoUri())
+var tmpPayTo      = IbanPayTo(genIbanPaytoUri())
 val paytos = mapOf(
     "merchant" to merchantPayto, 
     "exchange" to exchangePayto, 
     "customer" to customerPayto
 )
+
+fun genTmpPayTo(): IbanPayTo {
+    tmpPayTo = IbanPayTo(genIbanPaytoUri())
+    return tmpPayTo
+}
 
 fun setup(
     conf: String = "test.conf",
@@ -85,7 +92,11 @@ fun bankSetup(
             isTalerExchange = false,
             isPublic = false,
             bonus = bonus,
-            checkPaytoIdempotent = false
+            checkPaytoIdempotent = false,
+            email = null,
+            phone = null,
+            cashoutPayto = null,
+            tanChannel = null   
         ))
         assertEquals(AccountCreationResult.Success, db.account.create(
             login = "exchange",
@@ -96,7 +107,11 @@ fun bankSetup(
             isTalerExchange = true,
             isPublic = false,
             bonus = bonus,
-            checkPaytoIdempotent = false
+            checkPaytoIdempotent = false,
+            email = null,
+            phone = null,
+            cashoutPayto = null,
+            tanChannel = null   
         ))
         assertEquals(AccountCreationResult.Success, db.account.create(
             login = "customer",
@@ -107,7 +122,11 @@ fun bankSetup(
             isTalerExchange = false,
             isPublic = false,
             bonus = bonus,
-            checkPaytoIdempotent = false
+            checkPaytoIdempotent = false,
+            email = null,
+            phone = null,
+            cashoutPayto = null,
+            tanChannel = null   
         ))
         // Create admin account
         assertEquals(AccountCreationResult.Success, maybeCreateAdminAccount(db, ctx, "admin-password"))
@@ -163,20 +182,30 @@ suspend fun ApplicationTestBuilder.assertBalance(account: String, amount: String
     }
 }
 
+/** Check [account] tan channel and info */
+suspend fun ApplicationTestBuilder.tanInfo(account: String): Pair<TanChannel?, String?> {
+    val res = client.getA("/accounts/$account").assertOkJson<AccountData>()
+    val channel: TanChannel? = res.tan_channel
+    return Pair(channel, when (channel) {
+        TanChannel.sms -> res.contact_data!!.phone.get()
+        TanChannel.email -> res.contact_data!!.email.get()
+        null -> null
+        else -> null
+    })
+}
+
 /** Perform a bank transaction of [amount] [from] account [to] account with [subject} */
 suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String, subject: String = "payout"): Long {
-    return client.post("/accounts/$from/transactions") {
-        basicAuth("$from", "$from-password")
+    return client.postA("/accounts/$from/transactions") {
         json {
-            "payto_uri" to "${paytos[to]}?message=${subject.encodeURLQueryComponent()}&amount=$amount"
+            "payto_uri" to "${paytos[to] ?: tmpPayTo}?message=${subject.encodeURLQueryComponent()}&amount=$amount"
         }
-    }.assertOkJson<TransactionCreateResponse>().row_id
+    }.maybeChallenge().assertOkJson<TransactionCreateResponse>().row_id
 }
 
 /** Perform a taler outgoing transaction of [amount] from exchange to merchant */
 suspend fun ApplicationTestBuilder.transfer(amount: String) {
-    client.post("/accounts/exchange/taler-wire-gateway/transfer") {
-        pwAuth("exchange")
+    client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
         json {
             "request_uid" to randHashCode()
             "amount" to TalerAmount(amount)
@@ -220,11 +249,7 @@ suspend fun ApplicationTestBuilder.cashout(amount: String) {
         } 
     } else { 
         res
-    }.assertOkJson<CashoutPending> {
-        client.postA("/accounts/customer/cashouts/${it.cashout_id}/confirm") {
-            json { "tan" to smsCode("+99") }
-        }.assertNoContent()
-    }
+    }.assertOk()
 }
 
 /** Perform a whithrawal operation of [amount] from customer */
@@ -234,7 +259,7 @@ suspend fun ApplicationTestBuilder.withdrawal(amount: String) {
     }.assertOkJson<BankAccountCreateWithdrawalResponse> {
         val uuid = it.taler_withdraw_uri.split("/").last()
         withdrawalSelect(uuid)
-        client.postA("/withdrawals/${uuid}/confirm")
+        client.postA("/accounts/merchant/withdrawals/${uuid}/confirm")
             .assertNoContent()
     }
 }
@@ -247,6 +272,18 @@ suspend fun ApplicationTestBuilder.fillCashoutInfo(account: String) {
             "contact_data" to obj {
                 "phone" to "+99"
             }
+        }
+    }.assertNoContent()
+}
+
+suspend fun ApplicationTestBuilder.fillTanInfo(account: String) {
+    client.patch("/accounts/$account") {
+        pwAuth("admin")
+        json {
+            "contact_data" to obj {
+                "phone" to "+${Random.nextInt(0, 10000)}"
+            }
+            "tan_channel" to "sms"
         }
     }.assertNoContent()
 }
@@ -265,7 +302,7 @@ suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
         .assertOkJson<ConversionResponse>().amount_credit
 }
 
-suspend fun smsCode(info: String): String? {
+suspend fun tanCode(info: String): String? {
     val file = File("/tmp/tan-$info.txt");
     if (file.exists()) {
         val code = file.readText()
@@ -280,7 +317,7 @@ suspend fun smsCode(info: String): String? {
 /* ----- Assert ----- */
 
 suspend fun HttpResponse.assertStatus(status: HttpStatusCode, err: TalerErrorCode?): HttpResponse {
-    assertEquals(status, this.status);
+    assertEquals(status, this.status, "$err")
     if (err != null) assertErr(err)
     return this
 }
@@ -288,6 +325,8 @@ suspend fun HttpResponse.assertOk(): HttpResponse
     = assertStatus(HttpStatusCode.OK, null)
 suspend fun HttpResponse.assertNoContent(): HttpResponse 
     = assertStatus(HttpStatusCode.NoContent, null)
+suspend fun HttpResponse.assertAccepted(): HttpResponse 
+    = assertStatus(HttpStatusCode.Accepted, null)
 suspend fun HttpResponse.assertNotFound(err: TalerErrorCode?): HttpResponse 
     = assertStatus(HttpStatusCode.NotFound, err)
 suspend fun HttpResponse.assertUnauthorized(): HttpResponse 
@@ -306,6 +345,33 @@ suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
     val err = json<TalerError>()
     assertEquals(code.code, err.code)
     return this
+}
+
+suspend fun HttpResponse.maybeChallenge(): HttpResponse {
+    return if (this.status == HttpStatusCode.Accepted) {
+        this.assertChallenge()
+    } else {
+        this
+    }
+}
+
+suspend fun HttpResponse.assertChallenge(
+    check: suspend (TanChannel, String) -> Unit = { _, _ -> }
+): HttpResponse {
+    val id = assertAcceptedJson<TanChallenge>().challenge_id
+    val username = call.request.url.pathSegments[2]
+    val res = call.client.postA("/accounts/$username/challenge/$id").assertOkJson<TanTransmission>()
+    check(res.tan_channel, res.tan_info)
+    val code = tanCode(res.tan_info)
+    assertNotNull(code)
+    call.client.postA("/accounts/$username/challenge/$id/confirm") {
+        json { "tan" to code }
+    }.assertNoContent()
+    return call.client.request(this.call.request.url) {
+        pwAuth(username)
+        method = call.request.method
+        headers["X-Challenge-Id"] = "$id"
+    }
 }
 
 suspend fun assertTime(min: Int, max: Int, lambda: suspend () -> Unit) {
@@ -355,6 +421,13 @@ inline suspend fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B)
 
 inline suspend fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
     assertOk()
+    val body = json<B>()
+    lambda(body)
+    return body
+}
+
+inline suspend fun <reified B> HttpResponse.assertAcceptedJson(lambda: (B) -> Unit = {}): B {
+    assertAccepted()
     val body = json<B>()
     lambda(body)
     return body

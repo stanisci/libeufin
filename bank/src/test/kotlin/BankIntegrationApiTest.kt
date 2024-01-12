@@ -143,7 +143,6 @@ class BankIntegrationApiTest {
     // POST /taler-integration/withdrawal-operation/UUID/abort
     @Test
     fun abort() = bankSetup { _ ->
-        // TODO auth routine
         // Check abort created
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 
@@ -183,7 +182,7 @@ class BankIntegrationApiTest {
         }
 
         // Check bad UUID
-        client.postA("/taler-integration/withdrawal-operation//chocolate/abort").assertBadRequest()
+        client.postA("/taler-integration/withdrawal-operation/chocolate/abort").assertBadRequest()
 
         // Check unknown
         client.postA("/taler-integration/withdrawal-operation/${UUID.randomUUID()}/abort")

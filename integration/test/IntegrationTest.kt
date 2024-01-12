@@ -174,13 +174,7 @@ class IntegrationTest {
                         "amount_debit" to amount
                         "amount_credit" to convert
                     }
-                }.assertOkJson<CashoutPending> {
-                    val code = File("/tmp/tan-+99.txt").readText()
-                    client.post("http://0.0.0.0:8090/accounts/customer/cashouts/${it.cashout_id}/confirm") {
-                        basicAuth("customer", "password")
-                        json { "tan" to code }
-                    }.assertNoContent()
-                }
+                }.assertOkJson<CashoutResponse>()
             }
         }
     }

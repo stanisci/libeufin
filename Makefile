@@ -94,6 +94,11 @@ install:
 assemble:
 	./gradlew assemble
 
+.PHONY: doc
+doc:
+	./gradlew dokkaHtmlMultiModule
+	open build/dokka/htmlMultiModule/index.html
+
 .PHONY: check
 check: install-nobuild-bank-files
 	./gradlew check
@@ -102,7 +107,6 @@ check: install-nobuild-bank-files
 test: install-nobuild-bank-files
 	./gradlew test --tests $(test) -i
 
-.PHONY: doc
-doc:
-	./gradlew dokkaHtmlMultiModule
-	open build/dokka/htmlMultiModule/index.html
+.PHONY: integration-test
+integration-test: install-nobuild-bank-files
+	./gradlew :integration:test --tests $(test) -i

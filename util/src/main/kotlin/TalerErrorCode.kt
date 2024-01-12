@@ -2650,7 +2650,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The backend lacks a wire transfer method configuration option for the given instance. Thus, this instance is unavailable (not findable for creating new orders).
+   * The merchant instance has no active bank accounts configured. However, at least one bank account must be available to create new orders.
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2658,7 +2658,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The proposal had no timestamp and the backend failed to obtain the local time. Likely to be an internal error.
+   * The proposal had no timestamp and the merchant backend failed to obtain the current local time.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2666,7 +2666,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The order provided to the backend could not be parsed, some required fields were missing or ill-formed.
+   * The order provided to the backend could not be parsed; likely some required fields were missing or ill-formed.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2674,7 +2674,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The backend encountered an error: the proposal already exists.
+   * A conflicting order (sharing the same order identifier) already exists at this merchant backend instance.
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2682,7 +2682,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The request is invalid: the wire deadline is before the refund deadline.
+   * The order creation request is invalid because the given wire deadline is before the refund deadline.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2690,7 +2690,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The request is invalid: a delivery date was given, but it is in the past.
+   * The order creation request is invalid because the delivery date given is in the past.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2698,7 +2698,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The request is invalid: the wire deadline for the order would be "never".
+   * The order creation request is invalid because a wire deadline of "never" is not allowed.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2706,7 +2706,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The request is invalid: a payment deadline was given, but it is in the past.
+   * The order ceration request is invalid because the given payment deadline is in the past.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2714,7 +2714,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The request is invalid: a refund deadline was given, but it is in the past.
+   * The order creation request is invalid because the given refund deadline is in the past.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2722,7 +2722,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The backend does not trust any exchange that would allow funds to be wired to any bank account of this instance using the selected wire method. Note that right now, we do not support the use of exchange bank accounts with mandatory currency conversion.
+   * The backend does not trust any exchange that would allow funds to be wired to any bank account of this instance using the wire method specified with the order. Note that right now, we do not support the use of exchange bank accounts with mandatory currency conversion.
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2746,7 +2746,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The order provided to the backend could not be deleted, our offer is still valid and awaiting payment.
+   * The order provided to the backend could not be deleted, our offer is still valid and awaiting payment. Deletion may work later after the offer has expired if it remains unpaid.
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2762,7 +2762,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The amount to be refunded is inconsistent: either is lower than the previous amount being awarded, or it is too big to be paid back. In this second case, the fault stays on the business dept. side.
+   * The amount to be refunded is inconsistent: either is lower than the previous amount being awarded, or it exceeds the original price paid by the customer.
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2770,7 +2770,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The frontend gave an unpaid order id to issue the refund to.
+   * Only paid orders can be refunded, and the frontend specified an unpaid order to issue a refund for.
    * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2778,7 +2778,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The refund delay was set to 0 and thus no refunds are allowed for this order.
+   * The refund delay was set to 0 and thus no refunds are ever allowed for this order.
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -3495,6 +3495,30 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   BANK_ADMIN_CREDITOR(5142),
+
+
+  /**
+   * The referenced challenge was not found.
+   * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_CHALLENGE_NOT_FOUND(5143),
+
+
+  /**
+   * The referenced challenge has expired.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_TAN_CHALLENGE_EXPIRED(5144),
+
+
+  /**
+   * A non-admin user has tried to create an account with 2fa.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_NON_ADMIN_SET_TAN_CHANNEL(5145),
 
 
   /**

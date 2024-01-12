@@ -72,6 +72,15 @@ enum class Timeframe {
     year
 }
 
+enum class Operation {
+    account_reconfig,
+    account_delete,
+    account_auth_reconfig,
+    bank_transaction,
+    cashout,
+    withdrawal
+}
+
 @Serializable(with = Option.Serializer::class)
 sealed class Option<out T> {
     object None : Option<Nothing>()
@@ -110,6 +119,17 @@ sealed class Option<out T> {
         }
     }
 }
+
+@Serializable
+data class TanChallenge(
+    val challenge_id: Long
+)
+
+@Serializable
+data class TanTransmission(
+    val tan_info: String,
+    val tan_channel: TanChannel
+)
 
 /**
  * HTTP response type of successful token refresh.
@@ -156,9 +176,7 @@ data class RegisterAccountRequest(
     val cashout_payto_uri: IbanPayTo? = null,
     val payto_uri: IbanPayTo? = null,
     val debit_threshold: TalerAmount? = null,
-    // TODO remove
-    val internal_payto_uri: IbanPayTo? = null,
-    val challenge_contact_data: ChallengeContactData? = null,
+    val tan_channel: TanChannel? = null,
 )
 
 @Serializable
@@ -176,8 +194,7 @@ data class AccountReconfiguration(
     val name: String? = null,
     val is_public: Boolean? = null,
     val debit_threshold: TalerAmount? = null,
-    // TODO remove
-    val challenge_contact_data: ChallengeContactData? = null,
+    val tan_channel: Option<TanChannel?> = Option.None,
     val is_taler_exchange: Boolean? = null,
 )
 
@@ -335,6 +352,7 @@ data class AccountData(
     val debit_threshold: TalerAmount,
     val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: String? = null,
+    val tan_channel: TanChannel? = null,
     val is_public: Boolean,
     val is_taler_exchange: Boolean
 )
@@ -389,10 +407,6 @@ data class WithdrawalPublicInfo (
     val username: String,
     val selected_reserve_pub: EddsaPublicKey? = null,
     val selected_exchange_account: String? = null,
-    // TODO remove
-    val aborted: Boolean,
-    val confirmation_done: Boolean,
-    val selection_done: Boolean,
 )
 
 @Serializable
@@ -447,12 +461,11 @@ data class CashoutRequest(
     val request_uid: ShortHashCode,
     val subject: String?,
     val amount_debit: TalerAmount,
-    val amount_credit: TalerAmount,
-    val tan_channel: TanChannel?
+    val amount_credit: TalerAmount
 )
 
 @Serializable
-data class CashoutPending(
+data class CashoutResponse(
     val cashout_id: Long,
 )
 
@@ -493,7 +506,7 @@ data class CashoutStatusResponse(
 )
 
 @Serializable
-data class CashoutConfirm(
+data class ChallengeSolve(
     val tan: String
 )
 
@@ -628,8 +641,6 @@ data class PublicAccount(
     val payto_uri: String,
     val balance: Balance,
     val is_taler_exchange: Boolean,
-    // TODO remove
-    val account_name: String
 )
 
 /**

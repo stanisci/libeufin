@@ -56,6 +56,7 @@ class AmountTest {
                 subject = "test",
                 amount = due,
                 timestamp = Instant.now(),
+                is2fa = false
             )
             val txBool = when (txRes) {
                 BankTransactionResult.BalanceInsufficient -> false
@@ -69,6 +70,7 @@ class AmountTest {
                 login = "merchant",
                 uuid = UUID.randomUUID(),
                 amount = due,
+                now = Instant.now()
             )
             val wBool = when (wRes) {
                 WithdrawalCreationResult.BalanceInsufficient -> false

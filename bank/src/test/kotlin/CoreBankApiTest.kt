@@ -183,13 +183,13 @@ class CoreBankAccountsApiTest {
             // Check idempotency with payto
             client.post("/accounts") {
                 json(req) {
-                    "internal_payto_uri" to payto
+                    "payto_uri" to payto
                 }
             }.assertOk()
             // Check payto conflict
             client.post("/accounts") {
                 json(req) {
-                    "internal_payto_uri" to genIbanPaytoUri()
+                    "payto_uri" to genIbanPaytoUri()
                 }
             }.assertConflict(TalerErrorCode.BANK_REGISTER_USERNAME_REUSE)
         }
@@ -201,7 +201,7 @@ class CoreBankAccountsApiTest {
             "password" to "password"
             "name" to "Jane"
             "is_public" to true
-            "internal_payto_uri" to ibanPayto
+            "payto_uri" to ibanPayto
             "is_taler_exchange" to true
         }
         // Check Ok
@@ -215,7 +215,7 @@ class CoreBankAccountsApiTest {
             json(req)
         }.assertOk()
 
-        // Check debit_threshold
+        // Check admin only debit_threshold
         obj {
             "username" to "bat"
             "password" to "password"
@@ -229,6 +229,38 @@ class CoreBankAccountsApiTest {
                 json(req)
                 pwAuth("admin")
             }.assertOk()
+        }
+
+        // Check admin only tan_channel
+        obj {
+            "username" to "bat2"
+            "password" to "password"
+            "name" to "Bat"
+            "contact_data" to obj {
+                "phone" to "+456"
+            }
+            "tan_channel" to "sms"
+        }.let { req ->
+            client.post("/accounts") {
+                json(req)
+            }.assertErr(TalerErrorCode.BANK_NON_ADMIN_SET_TAN_CHANNEL)
+            client.post("/accounts") {
+                json(req)
+                pwAuth("admin")
+            }.assertOk()
+        }
+
+        // Check tan info
+        for (channel in listOf("sms", "email")) {
+            client.post("/accounts") {
+                pwAuth("admin")
+                json { 
+                    "username" to "bat2"
+                    "password" to "password"
+                    "name" to "Bat"
+                    "tan_channel" to channel
+                }
+            }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
         }
 
         // Reserved account
@@ -317,13 +349,24 @@ class CoreBankAccountsApiTest {
         }.assertOk()
     }
 
+    // Test admin-only account creation
+    @Test
+    fun createTanErr() = bankSetup(conf = "test_tan_err.conf") { _ -> 
+        client.post("/accounts") {
+            pwAuth("admin")
+            json {
+                "username" to "baz"
+                "password" to "xyz"
+                "name" to "Mallory"
+                "tan_channel" to "email"
+            }
+        }.assertConflict(TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED)
+    }
+
     // DELETE /accounts/USERNAME
     @Test
-    fun delete() = bankSetup { _ -> 
-        // Unknown account
-        client.delete("/accounts/unknown") {
-            pwAuth("admin")
-        }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+    fun delete() = bankSetup { db -> 
+        authRoutine(HttpMethod.Delete, "/accounts/merchant", allowAdmin = true)
 
         // Reserved account
         RESERVED_ACCOUNTS.forEach {
@@ -333,31 +376,42 @@ class CoreBankAccountsApiTest {
         }
         client.deleteA("/accounts/exchange")
             .assertConflict(TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT)
-       
-        // successful deletion
+
         client.post("/accounts") {
             json {
                 "username" to "john"
-                "password" to "password"
-                "name" to "John Smith"
+                "password" to "john-password"
+                "name" to "John"
+                "payto_uri" to genTmpPayTo()
             }
         }.assertOk()
-        client.delete("/accounts/john") {
-            pwAuth("admin")
-        }.assertNoContent()
-        // Trying again must yield 404
+        fillTanInfo("john")
+        // Fail to delete, due to a non-zero balance.
+        tx("customer", "KUDOS:1", "john")
+        client.deleteA("/accounts/john")
+            .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
+        // Sucessful deletion
+        tx("john", "KUDOS:1", "customer")
+        // TODO remove with gc
+        db.conn { conn ->
+            val id = conn.prepareStatement("SELECT bank_account_id FROM bank_accounts JOIN customers ON customer_id=owning_customer_id WHERE login = ?").run {
+                setString(1, "john")
+                oneOrNull {
+                    it.getLong(1)
+                }!!
+            }
+            conn.prepareStatement("DELETE FROM bank_account_transactions WHERE bank_account_id=?").run {
+                setLong(1, id)
+                execute()
+            }
+        }
+        client.deleteA("/accounts/john")
+            .assertChallenge()
+            .assertNoContent()
+        // Account no longer exists
         client.delete("/accounts/john") {
             pwAuth("admin")
         }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
-
-        
-        // fail to delete, due to a non-zero balance.
-        tx("customer", "KUDOS:1", "merchant")
-        client.deleteA("/accounts/merchant")
-            .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
-        tx("merchant", "KUDOS:1", "customer")
-        client.deleteA("/accounts/merchant")
-            .assertNoContent()
     }
 
     // Test admin-only account deletion
@@ -399,34 +453,38 @@ class CoreBankAccountsApiTest {
     // PATCH /accounts/USERNAME
     @Test
     fun reconfig() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Patch, "/accounts/merchant", withAdmin = true)
+        authRoutine(HttpMethod.Patch, "/accounts/merchant", allowAdmin = true)
 
-        // Successful attempt now.
+        // Check tan info
+        for (channel in listOf("sms", "email")) {
+            client.patchA("/accounts/merchant") {
+                json { "tan_channel" to channel }
+            }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
+        }
+
+        // Successful attempt now
         val cashout = IbanPayTo(genIbanPaytoUri())
         val req = obj {
             "cashout_payto_uri" to cashout.canonical
             "name" to "Roger"
-            "is_public" to true 
+            "is_public" to true
+            "contact_data" to obj {
+                "phone" to "+99"
+                "email" to "foo@example.com"
+            }
         }
         client.patchA("/accounts/merchant") {
             json(req)
         }.assertNoContent()
-        // Checking idempotence.
+        // Checking idempotence
         client.patchA("/accounts/merchant") {
             json(req)
         }.assertNoContent()
+
         
         checkAdminOnly(
             obj(req) { "debit_threshold" to "KUDOS:100" },
             TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
-        )
-        checkAdminOnly(
-            obj(req) { "contact_data" to obj { "phone" to "+99" } },
-            TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
-        )
-        checkAdminOnly(
-            obj(req) { "contact_data" to obj { "email" to "foo@example.com" } },
-            TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
         )
         
         // Check currency
@@ -466,6 +524,19 @@ class CoreBankAccountsApiTest {
                 "is_public" to true
             }
         }.assertConflict(TalerErrorCode.END)
+
+        // Check 2FA
+        fillTanInfo("merchant")
+        client.patchA("/accounts/merchant") {
+            json { "is_public" to false }
+        }.assertChallenge { _, _ ->
+            client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
+                assert(obj.is_public)
+            }
+        }.assertNoContent();
+        client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
+            assert(!obj.is_public)
+        }
     }
 
     // Test admin-only account patch
@@ -492,10 +563,21 @@ class CoreBankAccountsApiTest {
         }
     }
 
+    // Test TAN check account patch
+    @Test
+    fun patchTanErr() = bankSetup(conf = "test_tan_err.conf") { _ -> 
+        // Check unsupported TAN channel
+        client.patchA("/accounts/customer") {
+            json {
+                "tan_channel" to "email"
+            }
+        }.assertConflict(TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED)
+    }
+
     // PATCH /accounts/USERNAME/auth
     @Test
     fun passwordChange() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Patch, "/accounts/merchant/auth", withAdmin = true)
+        authRoutine(HttpMethod.Patch, "/accounts/merchant/auth", allowAdmin = true)
 
         // Changing the password.
         client.patch("/accounts/customer/auth") {
@@ -540,6 +622,21 @@ class CoreBankAccountsApiTest {
         client.patch("/accounts/customer/auth") {
             pwAuth("admin")
             json {
+                "new_password" to "customer-password"
+            }
+        }.assertNoContent()
+
+        // Check 2FA
+        fillTanInfo("customer")
+        client.patchA("/accounts/customer/auth") {
+            json {
+                "old_password" to "customer-password"
+                "new_password" to "it-password"
+            }
+        }.assertChallenge().assertNoContent()
+        client.patch("/accounts/customer/auth") {
+            pwAuth("admin")
+            json {
                 "new_password" to "new-password"
             }
         }.assertNoContent()
@@ -578,7 +675,7 @@ class CoreBankAccountsApiTest {
             val obj = json<PublicAccountsResponse>()
             assertEquals(3, obj.public_accounts.size)
             obj.public_accounts.forEach {
-                assertEquals(0, it.account_name.toInt() % 2)
+                assertEquals(0, it.username.toInt() % 2)
             }
         }
         // All accounts
@@ -610,7 +707,7 @@ class CoreBankAccountsApiTest {
     // GET /accounts/USERNAME
     @Test
     fun get() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Get, "/accounts/merchant", withAdmin = true)
+        authRoutine(HttpMethod.Get, "/accounts/merchant", allowAdmin = true)
         // Check ok
         client.getA("/accounts/merchant").assertOkJson<AccountData> {
             assertEquals("Merchant", it.name)
@@ -770,8 +867,7 @@ class CoreBankTransactionsApiTest {
         repeat(2) {
             tx("merchant", "KUDOS:3", "customer")
         }
-        client.post("/accounts/merchant/transactions") {
-            pwAuth("merchant")
+        client.postA("/accounts/merchant/transactions") {
             json {
                 "payto_uri" to "$customerPayto?message=payout2&amount=KUDOS:5"
             }
@@ -789,9 +885,9 @@ class CoreBankTransactionsApiTest {
         assertBalance("exchange", "+KUDOS:0")
         tx("merchant", "KUDOS:1", "exchange", "") // Bounce common to transaction
         tx("merchant", "KUDOS:1", "exchange", "Malformed") // Bounce malformed transaction
-        val reserve_pub = randEddsaPublicKey();
-        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reserve_pub)) // Accept incoming
-        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reserve_pub)) // Bounce reserve_pub reuse
+        val reservePub = randEddsaPublicKey();
+        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reservePub)) // Accept incoming
+        tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reservePub)) // Bounce reserve_pub reuse
         assertBalance("merchant", "-KUDOS:1")
         assertBalance("exchange", "+KUDOS:1")
         
@@ -806,6 +902,22 @@ class CoreBankTransactionsApiTest {
         tx("exchange", "KUDOS:1", "merchant", randOutgoingSubject(wtid, exchange)) // Warn wtid reuse
         assertBalance("merchant", "+KUDOS:3")
         assertBalance("exchange", "-KUDOS:3")
+
+        // Check 2fa
+        fillTanInfo("merchant")
+        assertBalance("merchant", "+KUDOS:3")
+        assertBalance("customer", "+KUDOS:0")
+        client.postA("/accounts/merchant/transactions") {
+            json {
+                "payto_uri" to "$customerPayto?message=tan+check&amount=KUDOS:1"
+            }
+        }.assertChallenge { _,_->
+            assertBalance("merchant", "+KUDOS:3")
+            assertBalance("customer", "+KUDOS:0")
+        }.assertOkJson <TransactionCreateResponse> { 
+            assertBalance("merchant", "+KUDOS:2")
+            assertBalance("customer", "+KUDOS:1")
+        }
     }
 }
 
@@ -842,11 +954,7 @@ class CoreBankWithdrawalApiTest {
             client.get("/withdrawals/${it.withdrawal_id}") {
                 pwAuth("merchant")
             }.assertOkJson<WithdrawalPublicInfo> {
-                assert(!it.selection_done)
-                assert(!it.aborted)
-                assert(!it.confirmation_done)
                 assertEquals(amount, it.amount)
-                // TODO check all status
             }
         }
 
@@ -864,7 +972,7 @@ class CoreBankWithdrawalApiTest {
     // POST /accounts/USERNAME/withdrawals/withdrawal_id/confirm
     @Test
     fun confirm() = bankSetup { _ -> 
-        // TODO auth routine
+        authRoutine(HttpMethod.Post, "/accounts/merchant/withdrawals/42/confirm")
         // Check confirm created
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 
@@ -895,7 +1003,7 @@ class CoreBankWithdrawalApiTest {
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
             withdrawalSelect(uuid)
-            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/taler-integration/withdrawal-operation/$uuid/abort").assertNoContent()
 
             // Check error
             client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
@@ -915,7 +1023,19 @@ class CoreBankWithdrawalApiTest {
                 .assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
             // Check can abort because not confirmed
-            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
+            client.postA("/taler-integration/withdrawal-operation/$uuid/abort").assertNoContent()
+        }
+
+        // Check confirm another user's operation
+        client.postA("/accounts/customer/withdrawals") {
+            json { "amount" to "KUDOS:1" } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse> {
+            val uuid = it.taler_withdraw_uri.split("/").last()
+            withdrawalSelect(uuid)
+
+            // Check error
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
+                .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
         }
 
         // Check bad UUID
@@ -924,6 +1044,21 @@ class CoreBankWithdrawalApiTest {
         // Check unknown
         client.postA("/accounts/merchant/withdrawals/${UUID.randomUUID()}/confirm")
             .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+
+        // Check 2fa
+        fillTanInfo("merchant")
+        assertBalance("merchant", "-KUDOS:6")
+        client.postA("/accounts/merchant/withdrawals") {
+            json { "amount" to "KUDOS:1" } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse> {
+            val uuid = it.taler_withdraw_uri.split("/").last()
+            withdrawalSelect(uuid)
+
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
+            .assertChallenge { _,_->
+                assertBalance("merchant", "-KUDOS:6")
+            }.assertNoContent()
+        }
     }
 }
 
@@ -940,40 +1075,17 @@ class CoreBankCashoutApiTest {
             "amount_credit" to convert("KUDOS:1")
         }
 
-        // Check missing TAN info
+        // Missing info
         client.postA("/accounts/customer/cashouts") {
             json(req) 
-        }.assertConflict(TalerErrorCode.BANK_MISSING_TAN_INFO)
-        client.patch("/accounts/customer") {
-            pwAuth("admin")
-            json {
-                "contact_data" to obj {
-                    "phone" to "+99"
-                    "email" to "foo@example.com"
-                }
-            }
-        }.assertNoContent()
+        }.assertConflict(TalerErrorCode.BANK_CONFIRM_INCOMPLETE)
 
-        // Check email TAN error
-        client.postA("/accounts/customer/cashouts") {
-            json(req) {
-                "tan_channel" to "email"
-            }
-        }.assertStatus(HttpStatusCode.BadGateway, TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED)
+        fillCashoutInfo("customer")
 
         // Check OK
         client.postA("/accounts/customer/cashouts") {
             json(req) 
-        }.assertOkJson<CashoutPending> { first ->
-            smsCode("+99")
-            // Check idempotency
-            client.postA("/accounts/customer/cashouts") {
-                json(req) 
-            }.assertOkJson<CashoutPending> { second ->
-                assertEquals(first.cashout_id, second.cashout_id)
-                assertNull(smsCode("+99"))     
-            }
-        }
+        }.assertOkJson<CashoutResponse>()
 
         // Trigger conflict due to reused request_uid
         client.postA("/accounts/customer/cashouts") {
@@ -991,6 +1103,7 @@ class CoreBankCashoutApiTest {
         // Check insufficient fund
         client.postA("/accounts/customer/cashouts") {
             json(req) {
+                "request_uid" to randShortHashCode()
                 "amount_debit" to "KUDOS:75"
                 "amount_credit" to convert("KUDOS:75")
             }
@@ -1014,211 +1127,19 @@ class CoreBankCashoutApiTest {
                 "amount_credit" to "KUDOS:1"
             } 
         }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
-    }
 
-    // POST /accounts/{USERNAME}/cashouts
-    @Test
-    fun createNoTan() = bankSetup("test_no_tan.conf") { _ ->
-        val req = obj {
-            "request_uid" to randShortHashCode()
-            "amount_debit" to "KUDOS:1"
-            "amount_credit" to convert("KUDOS:1")
-        }
-
-        fillCashoutInfo("customer")
-
-        // Check unsupported TAN channel
+        // Check 2fa
+        fillTanInfo("customer")
+        assertBalance("customer", "-KUDOS:1")
         client.postA("/accounts/customer/cashouts") {
-            json(req) 
-        }.assertStatus(HttpStatusCode.NotImplemented, TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED)
-    }
-
-    // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort
-    @Test
-    fun abort() = bankSetup { _ ->
-        authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts/42/abort")
-
-        fillCashoutInfo("customer")
-        
-        val req = obj {
-            "request_uid" to randShortHashCode()
-            "amount_debit" to "KUDOS:1"
-            "amount_credit" to convert("KUDOS:1")
-        }
-
-        // Check abort created
-        client.postA("/accounts/customer/cashouts") {
-            json(req) 
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            // Check OK
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-            // Check idempotence
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-        }
-
-        // Check abort confirmed
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to smsCode("+99") } 
-            }.assertNoContent()
-
-            // Check error
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertConflict(TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT)
-        }
-
-        // Check bad id
-        client.postA("/accounts/customer/cashouts/chocolate/abort") {
-            json { "tan" to "code" } 
-        }.assertBadRequest()
-
-        // Check unknown
-        client.postA("/accounts/customer/cashouts/42/abort") {
-            json { "tan" to "code" } 
-        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
-
-        // Check abort another user's operation
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            // Check error
-            client.postA("/accounts/merchant/cashouts/$id/abort")
-                .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
-        }
-    }
-
-    // POST /accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm
-    @Test
-    fun confirm() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts/42/confirm")
-
-        client.patch("/accounts/customer") {
-            pwAuth("admin")
-            json {
-                "contact_data" to obj {
-                    "phone" to "+99"
-                }
-            }
-        }.assertNoContent()
-
-        val req = obj {
-            "request_uid" to randShortHashCode()
-            "amount_debit" to "KUDOS:1"
-            "amount_credit" to convert("KUDOS:1")
-        }
-
-        // Check confirm
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            // Check missing cashout address
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to "code" }
-            }.assertConflict(TalerErrorCode.BANK_CONFIRM_INCOMPLETE)
-            fillCashoutInfo("customer")
-
-            // Check bad TAN code
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to "nice-try" } 
-            }.assertConflict(TalerErrorCode.BANK_TAN_CHALLENGE_FAILED)
-
-            val code = smsCode("+99")
-           
-            // Check OK
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to code }
-            }.assertNoContent()
-            // Check idempotence
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to code }
-            }.assertNoContent()
-        }
-
-        // Check confirm another user's operation
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { 
+            json(req) {
                 "request_uid" to randShortHashCode()
-                "amount_credit" to convert("KUDOS:1")
             }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-
-            // Check error
-            client.postA("/accounts/merchant/cashouts/$id/confirm") {
-                json { "tan" to "unused" }
-            }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        }.assertChallenge { _,_->
+            assertBalance("customer", "-KUDOS:1")
+        }.assertOkJson<CashoutResponse> {
+            assertBalance("customer", "-KUDOS:2")
         }
-
-        // Check bad conversion
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-            client.post("/conversion-info/conversion-rate") {
-                pwAuth("admin")
-                json {
-                    "cashin_ratio" to "1"
-                    "cashin_fee" to "KUDOS:0.1"
-                    "cashin_tiny_amount" to "KUDOS:0.0001"
-                    "cashin_rounding_mode" to "nearest"
-                    "cashin_min_amount" to "EUR:0.0001"
-                    "cashout_ratio" to "1"
-                    "cashout_fee" to "EUR:0.1"
-                    "cashout_tiny_amount" to "EUR:0.0001"
-                    "cashout_rounding_mode" to "nearest"
-                    "cashout_min_amount" to "KUDOS:0.0001"
-                }
-            }.assertNoContent()
-
-            client.postA("/accounts/customer/cashouts/$id/confirm"){
-                json { "tan" to smsCode("+99") } 
-            }.assertConflict(TalerErrorCode.BANK_BAD_CONVERSION)
-
-            // Check can abort because not confirmed
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-        }
-
-        // Check balance insufficient
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { 
-                "request_uid" to randShortHashCode()
-                "amount_credit" to convert("KUDOS:1")
-            }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-            // Send too much money
-            tx("customer", "KUDOS:9", "merchant")
-            client.postA("/accounts/customer/cashouts/$id/confirm"){
-                json { "tan" to smsCode("+99") } 
-            }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
-
-            // Check can abort because not confirmed
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-        }
-
-        // Check bad UUID
-        client.postA("/accounts/customer/cashouts/chocolate/confirm") {
-            json { "tan" to "code" }
-        }.assertBadRequest()
-
-        // Check unknown
-        client.postA("/accounts/customer/cashouts/42/confirm") {
-            json { "tan" to "code" }
-        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
     // GET /accounts/{USERNAME}/cashouts/{CASHOUT_ID}
@@ -1237,41 +1158,15 @@ class CoreBankCashoutApiTest {
         // Check confirm
         client.postA("/accounts/customer/cashouts") {
             json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
+        }.assertOkJson<CashoutResponse> {
             val id = it.cashout_id
-            client.getA("/accounts/customer/cashouts/$id")
-                .assertOkJson<CashoutStatusResponse> {
-                assertEquals(CashoutStatus.pending, it.status)
-                assertEquals(amountDebit, it.amount_debit)
-                assertEquals(amountCredit, it.amount_credit)
-                assertEquals(TanChannel.sms, it.tan_channel)
-                assertEquals("+99", it.tan_info)
-            }
-
-            client.postA("/accounts/customer/cashouts/$id/confirm") {
-                json { "tan" to smsCode("+99") }
-            }.assertNoContent()
             client.getA("/accounts/customer/cashouts/$id")
                 .assertOkJson<CashoutStatusResponse> {
                 assertEquals(CashoutStatus.confirmed, it.status)
-            }
-        }
-
-        // Check abort
-        client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
-            val id = it.cashout_id
-            client.getA("/accounts/customer/cashouts/$id")
-                .assertOkJson<CashoutStatusResponse> {
-                assertEquals(CashoutStatus.pending, it.status)
-            }
-
-            client.postA("/accounts/customer/cashouts/$id/abort")
-                .assertNoContent()
-            client.getA("/accounts/customer/cashouts/$id")
-                .assertOkJson<CashoutStatusResponse> {
-                assertEquals(CashoutStatus.aborted, it.status)
+                assertEquals(amountDebit, it.amount_debit)
+                assertEquals(amountCredit, it.amount_credit)
+                assertNull(it.tan_channel)
+                assertNull(it.tan_info)
             }
         }
 
@@ -1286,7 +1181,7 @@ class CoreBankCashoutApiTest {
         // Check get another user's operation
         client.postA("/accounts/customer/cashouts") {
             json(req) { "request_uid" to randShortHashCode() }
-        }.assertOkJson<CashoutPending> {
+        }.assertOkJson<CashoutResponse> {
             val id = it.cashout_id
 
             // Check error
@@ -1324,5 +1219,228 @@ class CoreBankCashoutApiTest {
     fun notImplemented() = bankSetup("test_no_conversion.conf") { _ ->
         client.get("/accounts/customer/cashouts")
             .assertNotImplemented()
+    }
+}
+
+class CoreBankTanApiTest {
+    // POST /accounts/{USERNAME}/challenge/{challenge_id}
+    @Test
+    fun send() = bankSetup { _ ->
+        authRoutine(HttpMethod.Post, "/accounts/merchant/challenge/42")
+
+        suspend fun HttpResponse.expectChallenge(channel: TanChannel, info: String): HttpResponse {
+            return assertChallenge { tanChannel, tanInfo ->
+                assertEquals(channel, tanChannel)
+                assertEquals(info, tanInfo)
+            }
+        }
+
+        suspend fun HttpResponse.expectTransmission(channel: TanChannel, info: String) {
+            this.assertOkJson<TanTransmission> {
+                assertEquals(it.tan_channel, channel)
+                assertEquals(it.tan_info, info)
+            }
+        }
+
+        // Set up 2fa 
+        client.patchA("/accounts/merchant") {
+            json { 
+                "contact_data" to obj {
+                    "phone" to "+99"
+                    "email" to "email@example.com"
+                }
+                "tan_channel" to "sms"
+            }
+        }.expectChallenge(TanChannel.sms, "+99")
+            .assertNoContent()
+        
+        // Update 2fa settings - first 2FA challenge then new tan channel check
+        client.patchA("/accounts/merchant") {
+            json { // Info change
+                "contact_data" to obj { "phone" to "+98" }
+            }
+        }.expectChallenge(TanChannel.sms, "+99")
+            .expectChallenge(TanChannel.sms, "+98")
+            .assertNoContent()
+        client.patchA("/accounts/merchant") {
+            json { // Channel change
+                "tan_channel" to "email"
+            }
+        }.expectChallenge(TanChannel.sms, "+98")
+            .expectChallenge(TanChannel.email, "email@example.com")
+            .assertNoContent()
+        client.patchA("/accounts/merchant") {
+            json { // Both change
+                "contact_data" to obj { "phone" to "+97" }
+                "tan_channel" to "sms"
+            }
+        }.expectChallenge(TanChannel.email, "email@example.com")
+            .expectChallenge(TanChannel.sms, "+97")
+            .assertNoContent()
+
+        // Disable 2fa
+        client.patchA("/accounts/merchant") {
+            json { "tan_channel" to null as String? }
+        }.expectChallenge(TanChannel.sms, "+97")
+            .assertNoContent()
+
+        // Admin has no 2FA
+        client.patch("/accounts/merchant") {
+            pwAuth("admin")
+            json { 
+                "contact_data" to obj { "phone" to "+99" }
+                "tan_channel" to "sms"
+            }
+        }.assertNoContent()
+        client.patch("/accounts/merchant") {
+            pwAuth("admin")
+            json { "tan_channel" to "email" }
+        }.assertNoContent()
+        client.patch("/accounts/merchant") {
+            pwAuth("admin")
+            json { "tan_channel" to null as String? }
+        }.assertNoContent()
+
+        // Check retry and invalidate
+        client.patchA("/accounts/merchant") {
+            json { 
+                "contact_data" to obj { "phone" to "+88" }
+                "tan_channel" to "sms"
+            }
+        }.assertChallenge().assertNoContent()
+        client.patchA("/accounts/merchant") {
+            json { "is_public" to false }
+        }.assertAcceptedJson<TanChallenge> { 
+            // Check ok
+            client.postA("/accounts/merchant/challenge/${it.challenge_id}")
+                .expectTransmission(TanChannel.sms, "+88")
+            assertNotNull(tanCode("+88"))
+            // Check retry
+            client.postA("/accounts/merchant/challenge/${it.challenge_id}")
+                .expectTransmission(TanChannel.sms, "+88")
+            assertNull(tanCode("+88"))
+            // Idempotent patch does nothing
+            client.patchA("/accounts/merchant") {
+                json { 
+                    "contact_data" to obj { "phone" to "+88" }
+                    "tan_channel" to "sms"
+                }
+            }
+            client.postA("/accounts/merchant/challenge/${it.challenge_id}")
+                .expectTransmission(TanChannel.sms, "+88")
+            assertNull(tanCode("+88"))
+            // Change 2fa settings
+            client.patchA("/accounts/merchant") {
+                json { 
+                    "tan_channel" to "email"
+                }
+            }.expectChallenge(TanChannel.sms, "+88")
+                .expectChallenge(TanChannel.email, "email@example.com")
+                .assertNoContent()
+            // Check invalidated
+            client.postA("/accounts/merchant/challenge/${it.challenge_id}")
+                .expectTransmission(TanChannel.email, "email@example.com")
+            assertNotNull(tanCode("email@example.com"))
+        }
+
+        // Unknown challenge
+        client.postA("/accounts/merchant/challenge/42")
+            .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+    }
+
+    // POST /accounts/{USERNAME}/challenge/{challenge_id}
+    @Test
+    fun sendTanErr() = bankSetup("test_tan_err.conf") { _ ->
+        // Check fail
+        client.patch("/accounts/merchant") {
+            pwAuth("admin")
+            json { 
+                "contact_data" to obj { "phone" to "+1234" }
+                "tan_channel" to "sms"
+            }
+        }.assertNoContent()
+        client.patchA("/accounts/merchant") {
+            json { "is_public" to false }
+        }.assertAcceptedJson<TanChallenge> { 
+            client.postA("/accounts/merchant/challenge/${it.challenge_id}")
+                .assertStatus(HttpStatusCode.BadGateway, TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED)
+        }
+    }
+
+    // POST /accounts/{USERNAME}/challenge/{challenge_id}/confirm
+    @Test
+    fun confirm() = bankSetup { _ ->
+        authRoutine(HttpMethod.Post, "/accounts/merchant/challenge/42/confirm")
+
+        fillTanInfo("merchant")
+
+        // Check simple case
+        client.patchA("/accounts/merchant") {
+            json { "is_public" to false }
+        }.assertAcceptedJson<TanChallenge> {
+            val id = it.challenge_id
+            val info = client.postA("/accounts/merchant/challenge/$id")
+                .assertOkJson<TanTransmission>().tan_info
+            val code = tanCode(info)
+
+            // Check bad TAN code
+            client.postA("/accounts/merchant/challenge/$id/confirm") {
+                json { "tan" to "nice-try" } 
+            }.assertConflict(TalerErrorCode.BANK_TAN_CHALLENGE_FAILED)
+
+            // Check wrong account
+            client.postA("/accounts/customer/challenge/$id/confirm") {
+                json { "tan" to "nice-try" } 
+            }.assertNotFound(TalerErrorCode.BANK_CHALLENGE_NOT_FOUND)
+        
+            // Check OK
+            client.postA("/accounts/merchant/challenge/$id/confirm") {
+                json { "tan" to code }
+            }.assertNoContent()
+            // Check idempotence
+            client.postA("/accounts/merchant/challenge/$id/confirm") {
+                json { "tan" to code }
+            }.assertNoContent()
+
+            // Unknown challenge
+            client.postA("/accounts/merchant/challenge/42/confirm") {
+                json { "tan" to code }
+            }.assertNotFound(TalerErrorCode.BANK_CHALLENGE_NOT_FOUND)
+        }
+        
+        // Check invalidation
+        client.patchA("/accounts/merchant") {
+            json { "is_public" to true }
+        }.assertAcceptedJson<TanChallenge> {
+            val id = it.challenge_id
+            val info = client.postA("/accounts/merchant/challenge/$id")
+                .assertOkJson<TanTransmission>().tan_info
+             
+            // Check invalidated
+            fillTanInfo("merchant")
+            client.postA("/accounts/merchant/challenge/$id/confirm") {
+                json { "tan" to tanCode(info) }
+            }.assertConflict(TalerErrorCode.BANK_TAN_CHALLENGE_EXPIRED)
+
+            val new = client.postA("/accounts/merchant/challenge/$id")
+                .assertOkJson<TanTransmission>().tan_info
+            val code = tanCode(new)
+            // Idempotent patch does nothing
+            client.patchA("/accounts/merchant") {
+                json { 
+                    "contact_data" to obj { "phone" to "+88" }
+                    "tan_channel" to "sms"
+                }
+            }
+            client.postA("/accounts/merchant/challenge/$id/confirm") {
+                json { "tan" to code }
+            }.assertNoContent()
+            
+            // Solved challenge remain solved
+            fillTanInfo("merchant")
+            client.postA("/accounts/merchant/challenge/$id/confirm") {
+                json { "tan" to code }
+            }.assertNoContent()
+        }
     }
 }

@@ -35,7 +35,7 @@ suspend fun ApplicationTestBuilder.authRoutine(
     body: JsonObject? = null, 
     requireExchange: Boolean = false, 
     requireAdmin: Boolean = false,
-    withAdmin: Boolean = false
+    allowAdmin: Boolean = false
 ) {
     // No body when authentication must happen before parsing the body
     
@@ -63,7 +63,7 @@ suspend fun ApplicationTestBuilder.authRoutine(
             this.method = method
             pwAuth("merchant")
         }.assertUnauthorized()
-    } else if (!withAdmin) {
+    } else if (!allowAdmin) {
         // Check no admin
         client.request(path) {
             this.method = method
@@ -256,7 +256,7 @@ inline suspend fun <reified B> ApplicationTestBuilder.statusRoutine(
                 }
             }
             delay(100)
-            client.post("/withdrawals/$confirmed_uuid/confirm").assertNoContent()
+            client.postA("/accounts/customer/withdrawals/$confirmed_uuid/confirm").assertNoContent()
         }
 
         // Polling abort
@@ -274,7 +274,7 @@ inline suspend fun <reified B> ApplicationTestBuilder.statusRoutine(
                 }
             }
             delay(100)
-            client.post("/withdrawals/$aborted_uuid/abort").assertNoContent()
+            client.post("/taler-integration/withdrawal-operation/$aborted_uuid/abort").assertNoContent()
         }
     }
 }

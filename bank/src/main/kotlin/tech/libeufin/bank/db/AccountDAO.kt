@@ -39,14 +39,15 @@ class AccountDAO(private val db: Database) {
         login: String,
         password: String,
         name: String,
-        email: String? = null,
-        phone: String? = null,
-        cashoutPayto: IbanPayTo? = null,
+        email: String?,
+        phone: String?,
+        cashoutPayto: IbanPayTo?,
         internalPaytoUri: IbanPayTo,
         isPublic: Boolean,
         isTalerExchange: Boolean,
         maxDebt: TalerAmount,
         bonus: TalerAmount,
+        tanChannel: TanChannel?,
         // Whether to check [internalPaytoUri] for idempotency
         checkPaytoIdempotent: Boolean
     ): AccountCreationResult = db.serializable { it ->
@@ -60,11 +61,13 @@ class AccountDAO(private val db: Database) {
                     AND (NOT ? OR internal_payto_uri=?)
                     AND is_public=?
                     AND is_taler_exchange=?
+                    AND tan_channel IS NOT DISTINCT FROM ?::tan_enum
                 FROM customers 
                     JOIN bank_accounts
                         ON customer_id=owning_customer_id
                 WHERE login=?
             """).run {
+                // TODO check max debt
                 setString(1, name)
                 setString(2, email)
                 setString(3, phone)
@@ -73,11 +76,13 @@ class AccountDAO(private val db: Database) {
                 setString(6, internalPaytoUri.canonical)
                 setBoolean(7, isPublic)
                 setBoolean(8, isTalerExchange)
-                setString(9, login)
+                setString(9, tanChannel?.name)
+                setString(10, login)
                 oneOrNull { 
                     CryptoUtil.checkpw(password, it.getString(1)) && it.getBoolean(2)
                 } 
             }
+            
             if (idempotent != null) {
                 if (idempotent) {
                     AccountCreationResult.Success
@@ -85,27 +90,6 @@ class AccountDAO(private val db: Database) {
                     AccountCreationResult.LoginReuse
                 }
             } else {
-                val customerId = conn.prepareStatement("""
-                    INSERT INTO customers (
-                        login
-                        ,password_hash
-                        ,name
-                        ,email
-                        ,phone
-                        ,cashout_payto
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                        RETURNING customer_id
-                """
-                ).run {
-                    setString(1, login)
-                    setString(2, CryptoUtil.hashpw(password))
-                    setString(3, name)
-                    setString(4, email)
-                    setString(5, phone)
-                    setString(6, cashoutPayto?.canonical)
-                    oneOrNull { it.getLong("customer_id") }!!
-                }
-
                 conn.prepareStatement("""
                     INSERT INTO iban_history(
                         iban
@@ -118,6 +102,29 @@ class AccountDAO(private val db: Database) {
                         conn.rollback()
                         return@transaction AccountCreationResult.PayToReuse
                     }
+                }
+
+                val customerId = conn.prepareStatement("""
+                    INSERT INTO customers (
+                        login
+                        ,password_hash
+                        ,name
+                        ,email
+                        ,phone
+                        ,cashout_payto
+                        ,tan_channel
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?::tan_enum)
+                        RETURNING customer_id
+                """
+                ).run {
+                    setString(1, login)
+                    setString(2, CryptoUtil.hashpw(password))
+                    setString(3, name)
+                    setString(4, email)
+                    setString(5, phone)
+                    setString(6, cashoutPayto?.canonical)
+                    setString(7, tanChannel?.name)
+                    oneOrNull { it.getLong("customer_id") }!!
                 }
             
                 conn.prepareStatement("""
@@ -144,7 +151,7 @@ class AccountDAO(private val db: Database) {
                 if (bonus.value != 0L || bonus.frac != 0) {
                     conn.prepareStatement("""
                         SELECT out_balance_insufficient
-                        FROM bank_transaction(?,'admin','bonus',(?,?)::taler_amount,?)
+                        FROM bank_transaction(?,'admin','bonus',(?,?)::taler_amount,?,true)
                     """).run {
                         setString(1, internalPaytoUri.canonical)
                         setLong(2, bonus.value)
@@ -172,36 +179,44 @@ class AccountDAO(private val db: Database) {
     enum class AccountDeletionResult {
         Success,
         UnknownAccount,
-        BalanceNotZero
+        BalanceNotZero,
+        TanRequired
     }
 
     /** Delete account [login] */
-    suspend fun delete(login: String): AccountDeletionResult = db.serializable { conn ->
+    suspend fun delete(
+        login: String, 
+        is2fa: Boolean
+    ): AccountDeletionResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
-              out_nx_customer,
-              out_balance_not_zero
-              FROM customer_delete(?);
+              out_not_found,
+              out_balance_not_zero,
+              out_tan_required
+              FROM account_delete(?,?);
         """)
         stmt.setString(1, login)
+        stmt.setBoolean(2, is2fa)
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw internalServerError("Deletion returned nothing.")
-                it.getBoolean("out_nx_customer") -> AccountDeletionResult.UnknownAccount
+                it.getBoolean("out_not_found") -> AccountDeletionResult.UnknownAccount
                 it.getBoolean("out_balance_not_zero") -> AccountDeletionResult.BalanceNotZero
+                it.getBoolean("out_tan_required") -> AccountDeletionResult.TanRequired
                 else -> AccountDeletionResult.Success
             }
         }
     }
 
     /** Result status of customer account patch */
-    enum class AccountPatchResult {
-        UnknownAccount,
-        NonAdminName,
-        NonAdminCashout,
-        NonAdminDebtLimit,
-        NonAdminContact,
-        Success
+    sealed class AccountPatchResult {
+        data object UnknownAccount: AccountPatchResult()
+        data object NonAdminName: AccountPatchResult()
+        data object NonAdminCashout: AccountPatchResult()
+        data object NonAdminDebtLimit: AccountPatchResult()
+        data object MissingTanInfo: AccountPatchResult()
+        data class TanRequired(val channel: TanChannel?, val info: String?): AccountPatchResult()
+        data object Success: AccountPatchResult()
     }
 
     /** Change account [login] informations */
@@ -211,27 +226,33 @@ class AccountDAO(private val db: Database) {
         cashoutPayto: Option<IbanPayTo?>,
         phone: Option<String?>,
         email: Option<String?>,
+        tan_channel: Option<TanChannel?>,
         isPublic: Boolean?,
         debtLimit: TalerAmount?,
         isAdmin: Boolean,
+        is2fa: Boolean,
+        faChannel: TanChannel?,
+        faInfo: String?,
         allowEditName: Boolean,
         allowEditCashout: Boolean,
     ): AccountPatchResult = db.serializable { it.transaction { conn ->
         val checkName = !isAdmin && !allowEditName && name != null
         val checkCashout = !isAdmin && !allowEditCashout && cashoutPayto.isSome()
         val checkDebtLimit = !isAdmin && debtLimit != null
-        val checkPhone = !isAdmin && phone.isSome()
-        val checkEmail = !isAdmin && email.isSome()
 
         // Get user ID and check reconfig rights
-        val customer_id = conn.prepareStatement("""
+        val (customerId, currChannel, currInfo) = conn.prepareStatement("""
             SELECT
                 customer_id
-                ,(${ if (checkName) "name != ? " else "false" }) as name_change
+                ,(${ if (checkName) "name != ?" else "false" }) as name_change
                 ,(${ if (checkCashout) "cashout_payto IS DISTINCT FROM ?" else "false" }) as cashout_change
                 ,(${ if (checkDebtLimit) "max_debt != (?, ?)::taler_amount" else "false" }) as debt_limit_change
-                ,(${ if (checkPhone) "phone IS DISTINCT FROM  ?" else "false" }) as phone_change
-                ,(${ if (checkEmail) "email IS DISTINCT FROM  ?" else "false" }) as email_change
+                ,(${ when (tan_channel.get()) {
+                    null -> "false"
+                    TanChannel.sms -> if (phone.get() != null) "false" else "phone IS NULL"
+                    TanChannel.email -> if (email.get() != null) "false" else "email IS NULL"
+                }}) as missing_tan_info
+                ,tan_channel, phone, email
             FROM customers
                 JOIN bank_accounts 
                 ON customer_id=owning_customer_id
@@ -248,12 +269,6 @@ class AccountDAO(private val db: Database) {
                 setLong(idx, debtLimit!!.value); idx++
                 setInt(idx, debtLimit.frac); idx++
             }
-            if (checkPhone) {
-                setString(idx, phone.get()); idx++
-            }
-            if (checkEmail) {
-                setString(idx, email.get()); idx++
-            }
             setString(idx, login)
             executeQuery().use {
                 when {
@@ -261,11 +276,48 @@ class AccountDAO(private val db: Database) {
                     it.getBoolean("name_change") -> return@transaction AccountPatchResult.NonAdminName
                     it.getBoolean("cashout_change") -> return@transaction AccountPatchResult.NonAdminCashout
                     it.getBoolean("debt_limit_change") -> return@transaction AccountPatchResult.NonAdminDebtLimit
-                    it.getBoolean("phone_change") -> return@transaction AccountPatchResult.NonAdminContact
-                    it.getBoolean("email_change") -> return@transaction AccountPatchResult.NonAdminContact
-                    else -> it.getLong("customer_id")
+                    it.getBoolean("missing_tan_info") -> return@transaction AccountPatchResult.MissingTanInfo
+                    else -> {
+                        val currChannel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) }
+                        Triple(
+                            it.getLong("customer_id"),
+                            currChannel,
+                            when (tan_channel.get() ?: currChannel) {
+                                TanChannel.sms -> it.getString("phone")
+                                TanChannel.email -> it.getString("email")
+                                null -> null
+                            }
+                        )
+                    }
                 }
             }
+        }
+ 
+        val newChannel = tan_channel.get();
+        val newInfo = when (newChannel ?: currChannel) {
+            TanChannel.sms -> phone.get()
+            TanChannel.email -> email.get()
+            null -> null
+        }
+
+        // Tan channel verification
+        if (!isAdmin) {
+            // Check performed 2fa check
+            if (currChannel != null && !is2fa) {
+                // Perform challenge with current settings
+                return@transaction AccountPatchResult.TanRequired(channel = null, info = null)
+            }
+            // If channel or info changed and the 2fa challenge is performed with old settings perform a new challenge with new settings
+            if ((newChannel != null && newChannel != faChannel) || (newInfo != null && newInfo != faInfo)) {
+                return@transaction AccountPatchResult.TanRequired(channel = newChannel ?: currChannel, info = newInfo ?: currInfo)
+            }
+        }
+
+        // Invalidate current challenges
+        if (newChannel != null || newInfo != null) {
+            val stmt = conn.prepareStatement("UPDATE tan_challenges SET expiration_date=0 WHERE customer=?")
+            stmt.setLong(1, customerId)
+            stmt.execute()
         }
 
         // Update bank info
@@ -279,7 +331,7 @@ class AccountDAO(private val db: Database) {
             sequence {
                 isPublic?.let { yield(it) }
                 debtLimit?.let { yield(it.value); yield(it.frac) }
-                yield(customer_id)
+                yield(customerId)
             }
         )
 
@@ -290,6 +342,7 @@ class AccountDAO(private val db: Database) {
                 cashoutPayto.some { yield("cashout_payto=?") }
                 phone.some { yield("phone=?") }
                 email.some { yield("email=?") }
+                tan_channel.some { yield("tan_channel=?::tan_enum") }
                 name?.let { yield("name=?") }
             },
             "WHERE customer_id = ?",
@@ -297,8 +350,9 @@ class AccountDAO(private val db: Database) {
                 cashoutPayto.some { yield(it?.canonical) }
                 phone.some { yield(it) }
                 email.some { yield(it) }
+                tan_channel.some { yield(it?.name) }
                 name?.let { yield(it) }
-                yield(customer_id)
+                yield(customerId)
             }
         )
 
@@ -310,20 +364,29 @@ class AccountDAO(private val db: Database) {
     enum class AccountPatchAuthResult {
         UnknownAccount,
         OldPasswordMismatch,
+        TanRequired,
         Success
     }
 
     /** Change account [login] password to [newPw] if current match [oldPw] */
-    suspend fun reconfigPassword(login: String, newPw: String, oldPw: String?): AccountPatchAuthResult = db.serializable {
+    suspend fun reconfigPassword(
+        login: String, 
+        newPw: String, 
+        oldPw: String?,
+        is2fa: Boolean
+    ): AccountPatchAuthResult = db.serializable {
         it.transaction { conn ->
-            val currentPwh = conn.prepareStatement("""
-                SELECT password_hash FROM customers WHERE login=?
+            val (currentPwh, tanRequired) = conn.prepareStatement("""
+                SELECT password_hash, (NOT ? AND tan_channel IS NOT NULL) FROM customers WHERE login=?
             """).run {
-                setString(1, login)
-                oneOrNull { it.getString(1) }
+                setBoolean(1, is2fa)
+                setString(2, login)
+                oneOrNull { 
+                    Pair(it.getString(1), it.getBoolean(2))
+                } ?: return@transaction AccountPatchAuthResult.UnknownAccount
             }
-            if (currentPwh == null) {
-                AccountPatchAuthResult.UnknownAccount
+            if (tanRequired) {
+                AccountPatchAuthResult.TanRequired
             } else if (oldPw != null && !CryptoUtil.checkpw(oldPw, currentPwh)) {
                 AccountPatchAuthResult.OldPasswordMismatch
             } else {
@@ -378,6 +441,7 @@ class AccountDAO(private val db: Database) {
                 name
                 ,email
                 ,phone
+                ,tan_channel
                 ,cashout_payto
                 ,internal_payto_uri
                 ,(balance).val AS balance_val
@@ -388,7 +452,7 @@ class AccountDAO(private val db: Database) {
                 ,is_public
                 ,is_taler_exchange
             FROM customers 
-                JOIN  bank_accounts
+                JOIN bank_accounts
                     ON customer_id=owning_customer_id
             WHERE login=?
         """)
@@ -400,6 +464,7 @@ class AccountDAO(private val db: Database) {
                     email = Option.Some(it.getString("email")),
                     phone = Option.Some(it.getString("phone"))
                 ),
+                tan_channel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) },
                 cashout_payto_uri = it.getString("cashout_payto"),
                 payto_uri = it.getString("internal_payto_uri"),
                 balance = Balance(
@@ -442,7 +507,6 @@ class AccountDAO(private val db: Database) {
         ) {
             PublicAccount(
                 username = it.getString("login"),
-                account_name = it.getString("login"),
                 payto_uri = it.getString("internal_payto_uri"),
                 balance = Balance(
                     amount = it.getAmount("balance", db.bankCurrency),

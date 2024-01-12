@@ -144,6 +144,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
             when (cause) {
                 is LibeufinException -> call.err(cause)
                 is SQLException -> {
+                    logger.debug("request failed", cause)
                     when (cause.sqlState) {
                         PSQLState.SERIALIZATION_FAILURE.state -> call.err(
                             HttpStatusCode.InternalServerError,
@@ -190,6 +191,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                     )
                 }
                 else -> {
+                    logger.debug("request failed", cause)
                     call.err(
                         HttpStatusCode.InternalServerError,
                         cause.message,
@@ -331,11 +333,12 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val dbCfg = cfg.loadDbConfig()
         val db = Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency)
         runBlocking {
-            val res = db.account.reconfigPassword(username, password, null)
+            val res = db.account.reconfigPassword(username, password, null, true)
             when (res) {
                 AccountPatchAuthResult.UnknownAccount ->
                     throw Exception("Password change for '$username' account failed: unknown account")
-                AccountPatchAuthResult.OldPasswordMismatch -> { /* Can never happen */ }
+                AccountPatchAuthResult.OldPasswordMismatch,
+                    AccountPatchAuthResult.TanRequired -> { /* Can never happen */ }
                 AccountPatchAuthResult.Success ->
                     logger.info("Password change for '$username' account succeeded")
             }
@@ -365,6 +368,7 @@ class EditAccount : CliktCommand(
     ).boolean()
     private val email: String? by option(help = "E-Mail address used for TAN transmission")
     private val phone: String? by option(help = "Phone number used for TAN transmission")
+    private val tan_channel: String? by option(help = "which channel TAN challenges should be sent to")
     private val cashout_payto_uri: IbanPayTo? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { IbanPayTo(it) }
     private val debit_threshold: TalerAmount? by option(help = "Max debit allowed for this account").convert { TalerAmount(it) }
  
@@ -386,15 +390,17 @@ class EditAccount : CliktCommand(
                 cashout_payto_uri = Option.Some(cashout_payto_uri),
                 debit_threshold = debit_threshold
             )
-            when (patchAccount(db, ctx, req, username, true)) {
+            when (patchAccount(db, ctx, req, username, true, false)) {
                 AccountPatchResult.Success -> 
                     logger.info("Account '$username' edited")
                 AccountPatchResult.UnknownAccount -> 
                     throw Exception("Account '$username' not found")
+                AccountPatchResult.MissingTanInfo -> 
+                    throw Exception("missing info for tan channel ${req.tan_channel.get()}")
                 AccountPatchResult.NonAdminName,
                     AccountPatchResult.NonAdminCashout,
                     AccountPatchResult.NonAdminDebtLimit,
-                    AccountPatchResult.NonAdminContact -> {
+                    is AccountPatchResult.TanRequired  -> {
                         // Unreachable as we edit account as admin
                     }
             }
@@ -444,6 +450,7 @@ class CreateAccount : CliktCommand(
     private val options by CreateAccountOption().cooccurring()
  
     override fun run() = cliCmd(logger) {
+        // TODO support setting tan
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
@@ -461,7 +468,6 @@ class CreateAccount : CliktCommand(
                         phone = Option.Some(phone), 
                     ),
                     cashout_payto_uri = cashout_payto_uri,
-                    internal_payto_uri = internal_payto_uri,
                     payto_uri = payto_uri,
                     debit_threshold = debit_threshold
                 ) 

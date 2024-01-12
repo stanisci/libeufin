@@ -44,7 +44,7 @@ const val MIN_VERSION: Int = 14
 const val SERIALIZATION_RETRY: Int = 10;
 
 // API version
-const val COREBANK_API_VERSION: String = "3:0:3"
+const val COREBANK_API_VERSION: String = "4:0:0"
 const val CONVERSION_API_VERSION: String = "0:0:0"
 const val INTEGRATION_API_VERSION: String = "2:0:2"
 const val WIRE_GATEWAY_API_VERSION: String = "0:1:0"

@@ -28,6 +28,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
 import kotlin.random.Random
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
@@ -35,8 +36,10 @@ import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import tech.libeufin.bank.*
 import tech.libeufin.bank.auth.*
 import tech.libeufin.bank.db.*
+import tech.libeufin.bank.db.TanDAO.*
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.bank.db.CashoutDAO.*
 import tech.libeufin.bank.db.ExchangeDAO.*
@@ -73,6 +76,7 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
     coreBankTransactionsApi(db, ctx)
     coreBankWithdrawalApi(db, ctx)
     coreBankCashoutApi(db, ctx)
+    coreBankTanApi(db, ctx)
 }
 
 private fun Routing.coreBankTokenApi(db: Database) {
@@ -144,29 +148,49 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
         )
 
-    if (req.debit_threshold != null && !isAdmin)
-        throw conflict(
-            "only admin account can choose the debit limit",
-            TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
-        )
+    if (!isAdmin) {
+        if (req.debit_threshold != null)
+            throw conflict(
+                "only admin account can choose the debit limit",
+                TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+            )
 
+        if (req.tan_channel != null)
+            throw conflict(
+                "only admin account can enable 2fa on creation",
+                TalerErrorCode.BANK_NON_ADMIN_SET_TAN_CHANNEL
+            )
+
+    } else if (req.tan_channel != null) {
+        if (ctx.tanChannels.get(req.tan_channel) == null) {
+            throw unsupportedTanChannel(req.tan_channel)
+        } 
+        val missing = when (req.tan_channel) {
+            TanChannel.sms ->  req.contact_data?.phone?.get() == null
+            TanChannel.email ->  req.contact_data?.email?.get() == null
+        }
+        if (missing)
+            throw conflict(
+                "missing info for tan channel ${req.tan_channel}",
+                TalerErrorCode.BANK_MISSING_TAN_INFO
+            )
+    }
+   
     if (req.username == "exchange" && !req.is_taler_exchange)
         throw conflict(
             "'exchange' account must be a taler exchange account",
             TalerErrorCode.END
         )
 
-    val reqPayto = req.payto_uri ?: req.internal_payto_uri
-    val contactData = req.contact_data ?: req.challenge_contact_data
-    var retry = if (reqPayto == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
+    var retry = if (req.payto_uri == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
 
     while (true) {
-        val internalPayto = reqPayto ?: IbanPayTo(genIbanPaytoUri())
+        val internalPayto = req.payto_uri ?: IbanPayTo(genIbanPaytoUri())
         val res = db.account.create(
             login = req.username,
             name = req.name,
-            email = contactData?.email?.get(),
-            phone = contactData?.phone?.get(),
+            email = req.contact_data?.email?.get(),
+            phone = req.contact_data?.phone?.get(),
             cashoutPayto = req.cashout_payto_uri,
             password = req.password,
             internalPaytoUri = internalPayto,
@@ -175,7 +199,8 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             maxDebt = req.debit_threshold ?: ctx.defaultDebtLimit,
             bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
                     else TalerAmount(0, 0, ctx.regionalCurrency),
-            checkPaytoIdempotent = req.internal_payto_uri != null
+            tanChannel = req.tan_channel,
+            checkPaytoIdempotent = req.payto_uri != null
         )
         // Retry with new IBAN
         if (res == AccountCreationResult.PayToReuse && retry > 0) {
@@ -186,25 +211,41 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
     }
 }
 
-suspend fun patchAccount(db: Database, ctx: BankConfig, req: AccountReconfiguration, username: String, isAdmin: Boolean): AccountPatchResult {
+suspend fun patchAccount(
+    db: Database, 
+    ctx: BankConfig, 
+    req: AccountReconfiguration, 
+    username: String, 
+    isAdmin: Boolean, 
+    is2fa: Boolean, 
+    channel: TanChannel? = null, 
+    info: String? = null
+): AccountPatchResult {
     req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
-    val contactData = req.contact_data ?: req.challenge_contact_data
 
     if (username == "admin" && req.is_public == true)
         throw conflict(
             "'admin' account cannot be public",
             TalerErrorCode.END
         )
+    
+    if (req.tan_channel is Option.Some && req.tan_channel.value != null && ctx.tanChannels.get(req.tan_channel.value ) == null) {
+        throw unsupportedTanChannel(req.tan_channel.value)
+    }
 
     return db.account.reconfig( 
         login = username,
         name = req.name,
         cashoutPayto = req.cashout_payto_uri, 
-        email = contactData?.email ?: Option.None,
-        phone = contactData?.phone ?: Option.None,
+        email = req.contact_data?.email ?: Option.None,
+        phone = req.contact_data?.phone ?: Option.None,
+        tan_channel = req.tan_channel,
         isPublic = req.is_public,
         debtLimit = req.debit_threshold,
         isAdmin = isAdmin,
+        is2fa = is2fa,
+        faChannel = channel,
+        faInfo = info,
         allowEditName = ctx.allowEditName,
         allowEditCashout = ctx.allowEditCashout
     )
@@ -239,6 +280,8 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         requireAdmin = !ctx.allowAccountDeletion
     ) {
         delete("/accounts/{USERNAME}") {
+            val challenge = call.challenge(db, Operation.account_delete)
+
             // Not deleting reserved names.
             if (RESERVED_ACCOUNTS.contains(username))
                 throw conflict(
@@ -251,21 +294,26 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_RESERVED_USERNAME_CONFLICT
                 )
 
-            when (db.account.delete(username)) {
+            when (db.account.delete(username, isAdmin || challenge != null)) {
                 AccountDeletionResult.UnknownAccount -> throw unknownAccount(username)
                 AccountDeletionResult.BalanceNotZero -> throw conflict(
                     "Account balance is not zero.",
                     TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO
                 )
+                AccountDeletionResult.TanRequired -> call.respondChallenge(db, Operation.account_delete, Unit)
                 AccountDeletionResult.Success -> call.respond(HttpStatusCode.NoContent)
             }
         }
     }
     auth(db, TokenScope.readwrite, allowAdmin = true) {
         patch("/accounts/{USERNAME}") {
-            val req = call.receive<AccountReconfiguration>()
-            when (patchAccount(db, ctx, req, username, isAdmin)) {
+            val (req, challenge) = call.receiveChallenge<AccountReconfiguration>(db, Operation.account_reconfig)
+            val res = patchAccount(db, ctx, req, username, isAdmin, challenge != null, challenge?.channel, challenge?.info)
+            when (res) {
                 AccountPatchResult.Success -> call.respond(HttpStatusCode.NoContent)
+                is AccountPatchResult.TanRequired -> {
+                    call.respondChallenge(db, Operation.account_reconfig, req, res.channel, res.info)
+                }
                 AccountPatchResult.UnknownAccount -> throw unknownAccount(username)
                 AccountPatchResult.NonAdminName -> throw conflict(
                     "non-admin user cannot change their legal name",
@@ -279,22 +327,24 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     "non-admin user cannot change their debt limit",
                     TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
                 )
-                AccountPatchResult.NonAdminContact -> throw conflict(
-                    "non-admin user cannot change their contact info",
-                    TalerErrorCode.BANK_NON_ADMIN_PATCH_CONTACT
+                AccountPatchResult.MissingTanInfo -> throw conflict(
+                    "missing info for tan channel ${req.tan_channel.get()}",
+                    TalerErrorCode.BANK_MISSING_TAN_INFO
                 )
             }
         }
         patch("/accounts/{USERNAME}/auth") {
-            val req = call.receive<AccountPasswordChange>()
+            val (req, challenge) = call.receiveChallenge<AccountPasswordChange>(db, Operation.account_auth_reconfig)
+
             if (!isAdmin && req.old_password == null) {
                 throw conflict(
                     "non-admin user cannot change password without providing old password",
                     TalerErrorCode.BANK_NON_ADMIN_PATCH_MISSING_OLD_PASSWORD
                 )
             }
-            when (db.account.reconfigPassword(username, req.new_password, req.old_password)) {
+            when (db.account.reconfigPassword(username, req.new_password, req.old_password, isAdmin || challenge != null)) {
                 AccountPatchAuthResult.Success -> call.respond(HttpStatusCode.NoContent)
+                AccountPatchAuthResult.TanRequired -> call.respondChallenge(db, Operation.account_auth_reconfig, req)
                 AccountPatchAuthResult.UnknownAccount -> throw unknownAccount(username)
                 AccountPatchAuthResult.OldPasswordMismatch -> throw conflict(
                     "old password does not match",
@@ -356,33 +406,39 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
     }
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/transactions") {
-            val tx = call.receive<TransactionCreateRequest>()
-            val subject = tx.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
-            val amount =
-                    tx.payto_uri.amount ?: tx.amount ?: throw badRequest("Wire transfer lacks amount")
+            val (req, challenge) = call.receiveChallenge<TransactionCreateRequest>(db, Operation.bank_transaction)
+
+            val subject = req.payto_uri.message ?: throw badRequest("Wire transfer lacks subject")
+            val amount = req.payto_uri.amount ?: req.amount ?: throw badRequest("Wire transfer lacks amount")
+
             ctx.checkRegionalCurrency(amount)
+
             val res = db.transaction.create(
-                creditAccountPayto = tx.payto_uri,
+                creditAccountPayto = req.payto_uri,
                 debitAccountUsername = username,
                 subject = subject,
                 amount = amount,
                 timestamp = Instant.now(),
+                is2fa = challenge != null
             )
             when (res) {
-                is BankTransactionResult.UnknownDebtor -> throw unknownAccount(username)
-                is BankTransactionResult.BothPartySame -> throw conflict(
+                BankTransactionResult.UnknownDebtor -> throw unknownAccount(username)
+                BankTransactionResult.TanRequired -> {
+                    call.respondChallenge(db, Operation.bank_transaction, req)
+                }
+                BankTransactionResult.BothPartySame -> throw conflict(
                     "Wire transfer attempted with credit and debit party being the same bank account",
                     TalerErrorCode.BANK_SAME_ACCOUNT 
                 )
-                is BankTransactionResult.UnknownCreditor -> throw conflict(
+                BankTransactionResult.UnknownCreditor -> throw conflict(
                     "Creditor account was not found",
                     TalerErrorCode.BANK_UNKNOWN_CREDITOR
                 )
-                is BankTransactionResult.AdminCreditor -> throw conflict(
+                BankTransactionResult.AdminCreditor -> throw conflict(
                     "Cannot transfer money to admin account",
                     TalerErrorCode.BANK_ADMIN_CREDITOR
                 )
-                is BankTransactionResult.BalanceInsufficient -> throw conflict(
+                BankTransactionResult.BalanceInsufficient -> throw conflict(
                     "Insufficient funds",
                     TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
@@ -398,7 +454,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             val req = call.receive<BankAccountCreateWithdrawalRequest>()
             ctx.checkRegionalCurrency(req.amount)
             val opId = UUID.randomUUID()
-            when (db.withdrawal.create(username, opId, req.amount)) {
+            when (db.withdrawal.create(username, opId, req.amount, Instant.now())) {
                 WithdrawalCreationResult.UnknownAccount -> throw unknownAccount(username)
                 WithdrawalCreationResult.AccountIsExchange -> throw conflict(
                     "Exchange account cannot perform withdrawal operation",
@@ -420,25 +476,12 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
                 }
             }
         }
-        post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/abort") {
-            val opId = call.uuidParameter("withdrawal_id")
-            when (db.withdrawal.abort(opId)) {
-                AbortResult.UnknownOperation -> throw notFound(
-                    "Withdrawal operation $opId not found",
-                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-                )
-                AbortResult.AlreadyConfirmed -> throw conflict(
-                    "Cannot abort confirmed withdrawal", 
-                    TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
-                )
-                AbortResult.Success -> call.respond(HttpStatusCode.NoContent)
-            }
-        }
         post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
-            val opId = call.uuidParameter("withdrawal_id")
-            when (db.withdrawal.confirm(opId, Instant.now())) {
+            val id = call.uuidParameter("withdrawal_id")
+            val challenge = call.challenge(db, Operation.withdrawal)
+            when (db.withdrawal.confirm(username, id, Instant.now(), challenge != null)) {
                 WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
-                    "Withdrawal operation $opId not found",
+                    "Withdrawal operation $id not found",
                     TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
                 )
                 WithdrawalConfirmationResult.AlreadyAborted -> throw conflict(
@@ -457,6 +500,9 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
                     "Exchange to withdraw from not found",
                     TalerErrorCode.BANK_UNKNOWN_CREDITOR
                 )
+                WithdrawalConfirmationResult.TanRequired -> {
+                    call.respondChallenge(db, Operation.withdrawal, StoredUUID(id))
+                }
                 WithdrawalConfirmationResult.Success -> call.respond(HttpStatusCode.NoContent)
             }
         }
@@ -470,175 +516,51 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         )
         call.respond(op)
     }
-    post("/withdrawals/{withdrawal_id}/abort") {
-        val opId = call.uuidParameter("withdrawal_id")
-        when (db.withdrawal.abort(opId)) {
-            AbortResult.UnknownOperation -> throw notFound(
-                "Withdrawal operation $opId not found",
-                TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-            )
-            AbortResult.AlreadyConfirmed -> throw conflict(
-                "Cannot abort confirmed withdrawal", 
-                TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
-            )
-            AbortResult.Success -> call.respond(HttpStatusCode.NoContent)
-        }
-    }
-    post("/withdrawals/{withdrawal_id}/confirm") {
-        val opId = call.uuidParameter("withdrawal_id")
-        when (db.withdrawal.confirm(opId, Instant.now())) {
-            WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
-                "Withdrawal operation $opId not found",
-                TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-            )
-            WithdrawalConfirmationResult.AlreadyAborted -> throw conflict(
-                "Cannot confirm an aborted withdrawal",
-                TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
-            )
-            WithdrawalConfirmationResult.NotSelected -> throw conflict(
-                "Cannot confirm an unselected withdrawal",
-                TalerErrorCode.BANK_CONFIRM_INCOMPLETE
-            )
-            WithdrawalConfirmationResult.BalanceInsufficient -> throw conflict(
-                "Insufficient funds",
-                TalerErrorCode.BANK_UNALLOWED_DEBIT
-            )
-            WithdrawalConfirmationResult.UnknownExchange -> throw conflict(
-                "Exchange to withdraw from not found",
-                TalerErrorCode.BANK_UNKNOWN_CREDITOR
-            )
-            WithdrawalConfirmationResult.Success -> call.respond(HttpStatusCode.NoContent)
-        }
-    }
 }
 
 private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/cashouts") {
-            val req = call.receive<CashoutRequest>()
+            val (req, challenge) = call.receiveChallenge<CashoutRequest>(db, Operation.cashout)
 
             ctx.checkRegionalCurrency(req.amount_debit)
             ctx.checkFiatCurrency(req.amount_credit)
-
-            val tanChannel = req.tan_channel ?: TanChannel.sms
-            val tanScript = ctx.tanChannels.get(tanChannel) ?: throw libeufinError( 
-                HttpStatusCode.NotImplemented,
-                "Unsupported tan channel $tanChannel",
-                TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED
-            )
-
+        
             val res = db.cashout.create(
                 login = username, 
                 requestUid = req.request_uid,
                 amountDebit = req.amount_debit, 
                 amountCredit = req.amount_credit, 
                 subject = req.subject ?: "", // TODO default subject
-                tanChannel = tanChannel, 
-                tanCode = Tan.genCode(),
-                now = Instant.now(), 
-                retryCounter = TAN_RETRY_COUNTER,
-                validityPeriod = TAN_VALIDITY_PERIOD
+                now = Instant.now(),
+                is2fa = challenge != null
             )
             when (res) {
-                is CashoutCreationResult.AccountNotFound -> throw unknownAccount(username)
-                is CashoutCreationResult.BadConversion -> throw conflict(
+                CashoutCreationResult.AccountNotFound -> throw unknownAccount(username)
+                CashoutCreationResult.BadConversion -> throw conflict(
                     "Wrong currency conversion",
                     TalerErrorCode.BANK_BAD_CONVERSION
                 )
-                is CashoutCreationResult.AccountIsExchange -> throw conflict(
+                CashoutCreationResult.AccountIsExchange -> throw conflict(
                     "Exchange account cannot perform cashout operation",
                     TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
                 )
-                is CashoutCreationResult.BalanceInsufficient -> throw conflict(
+                CashoutCreationResult.BalanceInsufficient -> throw conflict(
                     "Insufficient funds to withdraw with Taler",
                     TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
-                is CashoutCreationResult.MissingTanInfo -> throw conflict(
-                    "Account '$username' missing info for tan channel ${req.tan_channel}",
-                    TalerErrorCode.BANK_MISSING_TAN_INFO
-                )
-                is CashoutCreationResult.RequestUidReuse -> throw conflict(
+                CashoutCreationResult.RequestUidReuse -> throw conflict(
                     "request_uid used already",
                     TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED
                 )
-                is CashoutCreationResult.Success -> {
-                    res.tanCode?.run {
-                        val exitValue = withContext(Dispatchers.IO) {
-                            val process = ProcessBuilder(tanScript, res.tanInfo).start()
-                            try {
-                                process.outputWriter().use { it.write(res.tanCode) }
-                                process.onExit().await()
-                            } catch (e: Exception) {
-                                process.destroy()
-                            }
-                            process.exitValue()
-                        }
-                        if (exitValue != 0) {
-                            throw libeufinError(
-                                HttpStatusCode.BadGateway,
-                                "Tan channel script failure with exit value $exitValue",
-                                TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED
-                            )
-                        }
-                        db.cashout.markSent(res.id, Instant.now(), TAN_RETRANSMISSION_PERIOD, tanChannel, res.tanInfo)
-                    }
-                    call.respond(CashoutPending(res.id))
-                }
-            }
-        }
-        post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/abort") {
-            val id = call.longParameter("CASHOUT_ID")
-            when (db.cashout.abort(id, username)) {
-                AbortResult.UnknownOperation -> throw notFound(
-                    "Cashout operation $id not found",
-                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-                )
-                AbortResult.AlreadyConfirmed -> throw conflict(
-                    "Cannot abort confirmed cashout",
-                    TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
-                )
-                AbortResult.Success -> call.respond(HttpStatusCode.NoContent)
-            }
-        }
-        post("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}/confirm") {
-            val req = call.receive<CashoutConfirm>()
-            val id = call.longParameter("CASHOUT_ID")
-            when (db.cashout.confirm(
-                id = id,
-                login = username,
-                tanCode = req.tan,
-                timestamp = Instant.now()
-            )) {
-                CashoutConfirmationResult.OP_NOT_FOUND -> throw notFound(
-                    "Cashout operation $id not found",
-                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
-                )
-                CashoutConfirmationResult.ABORTED -> throw conflict(
-                    "Cannot confirm an aborted cashout",
-                    TalerErrorCode.BANK_CONFIRM_ABORT_CONFLICT
-                )
-                CashoutConfirmationResult.BAD_TAN_CODE -> throw conflict(
-                    "Incorrect TAN code",
-                    TalerErrorCode.BANK_TAN_CHALLENGE_FAILED
-                )
-                CashoutConfirmationResult.NO_RETRY -> throw libeufinError(
-                    HttpStatusCode.TooManyRequests,
-                    "Too many failed confirmation attempt",
-                    TalerErrorCode.BANK_TAN_RATE_LIMITED
-                )
-                CashoutConfirmationResult.NO_CASHOUT_PAYTO -> throw conflict(
+                CashoutCreationResult.NoCashoutPayto -> throw conflict(
                     "Missing cashout payto uri",
                     TalerErrorCode.BANK_CONFIRM_INCOMPLETE
                 )
-                CashoutConfirmationResult.BALANCE_INSUFFICIENT -> throw conflict(
-                    "Insufficient funds",
-                    TalerErrorCode.BANK_UNALLOWED_DEBIT
-                )
-                CashoutConfirmationResult.BAD_CONVERSION -> throw conflict(
-                    "Wrong currency conversion",
-                    TalerErrorCode.BANK_BAD_CONVERSION
-                )
-                CashoutConfirmationResult.SUCCESS -> call.respond(HttpStatusCode.NoContent)
+                CashoutCreationResult.TanRequired -> {
+                    call.respondChallenge(db, Operation.cashout, req)
+                }
+                is CashoutCreationResult.Success -> call.respond(CashoutResponse(res.id))
             }
         }
     }
@@ -669,6 +591,86 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
                 call.respond(HttpStatusCode.NoContent)
             } else {
                 call.respond(GlobalCashouts(cashouts))
+            }
+        }
+    }
+}
+
+private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
+    auth(db, TokenScope.readwrite) {
+        post("/accounts/{USERNAME}/challenge/{CHALLENGE_ID}") {
+            val id = call.longParameter("CHALLENGE_ID")
+            val res = db.tan.send(
+                id = id,
+                login = username,
+                code = Tan.genCode(),
+                now = Instant.now(), 
+                retryCounter = TAN_RETRY_COUNTER,
+                validityPeriod = TAN_VALIDITY_PERIOD
+            )
+            when (res) {
+                TanSendResult.NotFound -> throw notFound(
+                    "Challenge $id not found",
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+                )
+                is TanSendResult.Success -> {
+                    res.tanCode?.run {
+                        val tanScript = ctx.tanChannels.get(res.tanChannel) 
+                            ?: throw unsupportedTanChannel(res.tanChannel)
+                        val exitValue = withContext(Dispatchers.IO) {
+                            val process = ProcessBuilder(tanScript, res.tanInfo).start()
+                            try {
+                                process.outputWriter().use { it.write(res.tanCode) }
+                                process.onExit().await()
+                            } catch (e: Exception) {
+                                process.destroy()
+                            }
+                            process.exitValue()
+                        }
+                        if (exitValue != 0) {
+                            throw libeufinError(
+                                HttpStatusCode.BadGateway,
+                                "Tan channel script failure with exit value $exitValue",
+                                TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED
+                            )
+                        }
+                        db.tan.markSent(id, Instant.now(), TAN_RETRANSMISSION_PERIOD)
+                    }
+                    call.respond(TanTransmission(
+                        tan_info = res.tanInfo,
+                        tan_channel = res.tanChannel
+                    ))
+                }
+            }
+        }
+        post("/accounts/{USERNAME}/challenge/{CHALLENGE_ID}/confirm") {
+            val id = call.longParameter("CHALLENGE_ID")
+            val req = call.receive<ChallengeSolve>()
+            val res = db.tan.solve(
+                id = id,
+                login = username,
+                code = req.tan,
+                now = Instant.now()
+            )
+            when (res) {
+                TanSolveResult.NotFound -> throw notFound(
+                    "Challenge $id not found",
+                    TalerErrorCode.BANK_CHALLENGE_NOT_FOUND
+                )
+                TanSolveResult.BadCode -> throw conflict(
+                    "Incorrect TAN code",
+                    TalerErrorCode.BANK_TAN_CHALLENGE_FAILED
+                )
+                TanSolveResult.NoRetry -> throw libeufinError(
+                    HttpStatusCode.TooManyRequests,
+                    "Too many failed confirmation attempt",
+                    TalerErrorCode.BANK_TAN_RATE_LIMITED
+                )
+                TanSolveResult.Expired -> throw conflict(
+                    "Challenge expired",
+                    TalerErrorCode.BANK_TAN_CHALLENGE_EXPIRED
+                )
+                is TanSolveResult.Success -> call.respond(HttpStatusCode.NoContent)
             }
         }
     }

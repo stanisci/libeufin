@@ -42,19 +42,21 @@ class WithdrawalDAO(private val db: Database) {
     suspend fun create(
         login: String,
         uuid: UUID,
-        amount: TalerAmount
+        amount: TalerAmount,
+        now: Instant
     ): WithdrawalCreationResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
                 out_account_not_found,
                 out_account_is_exchange,
                 out_balance_insufficient
-            FROM create_taler_withdrawal(?, ?, (?,?)::taler_amount);
+            FROM create_taler_withdrawal(?, ?, (?,?)::taler_amount, ?);
         """)
         stmt.setString(1, login)
         stmt.setObject(2, uuid)
         stmt.setLong(3, amount.value)
         stmt.setInt(4, amount.frac)
+        stmt.setLong(5, now.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.executeQuery().use {
             when {
                 !it.next() ->
@@ -69,7 +71,6 @@ class WithdrawalDAO(private val db: Database) {
 
     /** Abort withdrawal operation [uuid] */
     suspend fun abort(uuid: UUID): AbortResult = db.serializable { conn ->
-        // TODO login check
         val stmt = conn.prepareStatement("""
             SELECT
                 out_no_op,
@@ -140,13 +141,16 @@ class WithdrawalDAO(private val db: Database) {
         UnknownExchange,
         BalanceInsufficient,
         NotSelected,
-        AlreadyAborted
+        AlreadyAborted,
+        TanRequired
     }
 
     /** Confirm withdrawal operation [uuid] */
     suspend fun confirm(
+        login: String,
         uuid: UUID,
-        now: Instant
+        now: Instant,
+        is2fa: Boolean
     ): WithdrawalConfirmationResult = db.serializable { conn ->
          // TODO login check
         val stmt = conn.prepareStatement("""
@@ -155,12 +159,15 @@ class WithdrawalDAO(private val db: Database) {
               out_exchange_not_found,
               out_balance_insufficient,
               out_not_selected,
-              out_aborted
-            FROM confirm_taler_withdrawal(?, ?);
+              out_aborted,
+              out_tan_required
+            FROM confirm_taler_withdrawal(?,?,?,?);
         """
         )
-        stmt.setObject(1, uuid)
-        stmt.setLong(2, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setString(1, login)
+        stmt.setObject(2, uuid)
+        stmt.setLong(3, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setBoolean(4, is2fa)
         stmt.executeQuery().use {
             when {
                 !it.next() ->
@@ -170,6 +177,7 @@ class WithdrawalDAO(private val db: Database) {
                 it.getBoolean("out_balance_insufficient") -> WithdrawalConfirmationResult.BalanceInsufficient
                 it.getBoolean("out_not_selected") -> WithdrawalConfirmationResult.NotSelected
                 it.getBoolean("out_aborted") -> WithdrawalConfirmationResult.AlreadyAborted
+                it.getBoolean("out_tan_required") -> WithdrawalConfirmationResult.TanRequired
                 else -> WithdrawalConfirmationResult.Success
             }
         }
@@ -252,10 +260,7 @@ class WithdrawalDAO(private val db: Database) {
                         amount = it.getAmount("amount", db.bankCurrency),
                         username = it.getString("login"),
                         selected_exchange_account = it.getString("selected_exchange_payto"),
-                        selected_reserve_pub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey),
-                        selection_done = it.getBoolean("selection_done"),
-                        confirmation_done = it.getBoolean("confirmation_done"),
-                        aborted = it.getBoolean("aborted"),
+                        selected_reserve_pub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey)
                     )
                 }
             }

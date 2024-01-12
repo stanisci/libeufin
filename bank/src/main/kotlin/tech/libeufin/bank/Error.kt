@@ -146,3 +146,10 @@ fun unknownAccount(id: String): LibeufinException {
         TalerErrorCode.BANK_UNKNOWN_ACCOUNT
     )
 }
+
+fun unsupportedTanChannel(channel: TanChannel): LibeufinException {
+    return conflict(
+        "Unsupported tan channel $channel",
+        TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED
+    )
+}
