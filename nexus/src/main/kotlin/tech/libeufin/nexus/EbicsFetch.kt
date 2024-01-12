@@ -247,25 +247,17 @@ fun removeSubjectNoise(subject: String): String? {
  * Checks the two conditions that may invalidate one incoming
  * payment: subject validity and availability.
  *
- * @param db database connection.
  * @param payment incoming payment whose subject is to be checked.
  * @return [ByteArray] as the reserve public key, or null if the
  *         payment cannot lead to a Taler withdrawal.
  */
 private suspend fun getTalerReservePub(
-    db: Database,
     payment: IncomingPayment
 ): ByteArray? {
     // Removing noise around the potential reserve public key.
     val maybeReservePub = removeSubjectNoise(payment.wireTransferSubject) ?: return null
     // Checking validity first.
     val dec = isReservePub(maybeReservePub) ?: return null
-    // Now checking availability.
-    val maybeUnavailable = db.isReservePubFound(dec)
-    if (maybeUnavailable) {
-        logger.error("Incoming payment with subject '${payment.wireTransferSubject}' exists already")
-        return null
-    }
     return dec
 }
 
@@ -281,27 +273,15 @@ private suspend fun ingestOutgoingPayment(
     db: Database,
     payment: OutgoingPayment
 ) {
-    logger.debug("Ingesting outgoing payment UID ${payment.bankTransferId}, subject ${payment.wireTransferSubject}")
-    // Check if the payment was ingested already.
-    if (db.isOutgoingPaymentSeen(payment.bankTransferId)) {
-        logger.debug("Outgoing payment with UID '${payment.bankTransferId}' already seen.")
-        return
-    }
-    /**
-     * Getting the initiate payment to link to this.  A missing initiated
-     * payment could mean that a third party is downloading the bank account
-     * history (to conduct an audit, for example)
-     */
-    val initId: Long? = db.initiatedPaymentGetFromUid(payment.bankTransferId);
-    if (initId == null)
-        logger.info("Outgoing payment lacks initiated counterpart with UID ${payment.bankTransferId}")
-    // store the payment and its (maybe null) linked init
-    val insertionResult = db.outgoingPaymentCreate(payment, initId)
-    if (insertionResult != OutgoingPaymentOutcome.SUCCESS) {
-        throw Exception("Could not store outgoing payment with UID " +
-                "'${payment.bankTransferId}' and update its related initiation." +
-                "  DB result: $insertionResult"
-        )
+    when (val result = db.registerOutgoing(payment)) {
+        OutgoingRegistrationResult.AlreadyRegistered ->
+            logger.debug("OUT '${payment.bankTransferId}' already seen")
+        is OutgoingRegistrationResult.New -> {
+            if (result.initiated)
+                logger.debug("$payment")
+            else 
+                logger.debug("$payment recovered")
+        }
     }
 }
 
@@ -312,29 +292,39 @@ private suspend fun ingestOutgoingPayment(
  *
  * @param db database handle.
  * @param currency fiat currency of the watched bank account.
- * @param incomingPayment payment to (maybe) ingest.
+ * @param payment payment to (maybe) ingest.
  */
 private suspend fun ingestIncomingPayment(
     db: Database,
-    incomingPayment: IncomingPayment
+    payment: IncomingPayment
 ) {
-    logger.debug("Ingesting incoming payment UID: ${incomingPayment.bankTransferId}, subject: ${incomingPayment.wireTransferSubject}")
-    if (db.isIncomingPaymentSeen(incomingPayment.bankTransferId)) {
-        logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}' already seen.")
-        return
-    }
-    val reservePub = getTalerReservePub(db, incomingPayment)
+    val reservePub = getTalerReservePub(payment)
     if (reservePub == null) {
-        logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}'" +
-                " has invalid subject: ${incomingPayment.wireTransferSubject}."
+        logger.debug("Incoming payment with UID '${payment.bankTransferId}'" +
+                " has invalid subject: ${payment.wireTransferSubject}."
         )
-        db.incomingPaymentCreateBounced(
-            incomingPayment,
-            UUID.randomUUID().toString().take(35)
-        )
-        return
+        // Generate bounce bank ID from the bounced transaction bank ID
+        val hash = CryptoUtil.hashStringSHA256(payment.bankTransferId)
+        val encoded = Base32Crockford.encode(hash)
+        val bounceId = encoded.take(35)
+        if (db.registerMalformedIncoming(
+            payment, 
+            bounceId, 
+            payment.amount, 
+            "Bounce: ${payment.bankTransferId}", 
+            Instant.now()
+        )) {
+            logger.debug("$payment bounced in '$bounceId'")
+        } else {
+            logger.debug("IN '${payment.bankTransferId}' already seen and bounced in '$bounceId'")
+        }
+    } else {
+        if (db.registerTalerableIncoming(payment, reservePub)) {
+            logger.debug("$payment")
+        } else {
+            logger.debug("IN '${payment.bankTransferId}' already seen")
+        }
     }
-    db.incomingTalerablePaymentCreate(incomingPayment, reservePub)
 }
 
 /**
@@ -388,11 +378,9 @@ private fun ingestNotification(
 
     runBlocking {
         incomingPayments.forEach {
-            logger.debug("$it")
             ingestIncomingPayment(db, it)
         }
         outgoingPayments.forEach {
-            logger.debug("$it")
             ingestOutgoingPayment(db, it)
         }
     }

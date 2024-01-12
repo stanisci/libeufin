@@ -57,11 +57,6 @@ dependencies {
     testImplementation("io.ktor:ktor-client-mock:$ktor_version")
 }
 
-test {
-    failFast = true
-    testLogging.showStandardStreams = false
-}
-
 application {
     mainClassName = "tech.libeufin.nexus.MainKt"
     applicationName = "libeufin-nexus"

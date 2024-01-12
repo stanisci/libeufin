@@ -48,7 +48,7 @@ data class IncomingPayment(
     val bankTransferId: String
 )  {
     override fun toString(): String {
-        return ">> ${executionTime.fmtDate()} $amount $bankTransferId debitor=$debitPaytoUri subject=$wireTransferSubject"
+        return "IN ${executionTime.fmtDate()} '$amount $bankTransferId' debitor=$debitPaytoUri subject=$wireTransferSubject"
     }
 }
 
@@ -128,28 +128,14 @@ data class OutgoingPayment(
     val wireTransferSubject: String? = null // not showing in camt.054
 ) {
     override fun toString(): String {
-        return "<< ${executionTime.fmtDate()} $amount $bankTransferId creditor=$creditPaytoUri subject=$wireTransferSubject"
+        return "OUT ${executionTime.fmtDate()} $amount '$bankTransferId' creditor=$creditPaytoUri subject=$wireTransferSubject"
     }
 }
 
-/**
- * Witnesses the outcome of inserting an outgoing
- * payment into the database.
- */
-enum class OutgoingPaymentOutcome {
-    /**
-     * The caller wanted to link a previously initiated payment
-     * to this outgoing one, but the row ID passed to the inserting
-     * function could not be found in the payment initiations table.
-     * Note: NO insertion takes place in this case.
-     */
-    INITIATED_COUNTERPART_NOT_FOUND,
-    /**
-     * The outgoing payment got inserted and _in case_ the caller
-     * wanted to link a previously initiated payment to this one, that
-     * succeeded too.
-     */
-    SUCCESS
+/** Outgoing payments registration result */
+sealed class OutgoingRegistrationResult {
+    data class New(val initiated: Boolean): OutgoingRegistrationResult()
+    data object AlreadyRegistered: OutgoingRegistrationResult()
 }
 
 /**
@@ -210,24 +196,17 @@ class Database(dbConfig: String): java.io.Closeable {
     // OUTGOING PAYMENTS METHODS
 
     /**
-     * Creates one outgoing payment OPTIONALLY reconciling it with its
+     * Register an outgoing payment OPTIONALLY reconciling it with its
      * initiated payment counterpart.
      *
      * @param paymentData information about the outgoing payment.
-     * @param reconcileId optional row ID of the initiated payment
-     *        that will reference this one.  If null, then only the
-     *        outgoing payment record gets inserted.
      * @return operation outcome enum.
      */
-    suspend fun outgoingPaymentCreate(
-        paymentData: OutgoingPayment,
-        reconcileId: Long? = null
-    ): OutgoingPaymentOutcome = runConn {
+    suspend fun registerOutgoing(paymentData: OutgoingPayment): OutgoingRegistrationResult = runConn {        
         val stmt = it.prepareStatement("""
-            SELECT out_nx_initiated
-              FROM create_outgoing_payment(
+            SELECT out_initiated, out_found
+              FROM register_outgoing(
                 (?,?)::taler_amount
-                ,?
                 ,?
                 ,?
                 ,?
@@ -242,101 +221,56 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.creditPaytoUri)
         stmt.setString(6, paymentData.bankTransferId)
-        if (reconcileId == null)
-            stmt.setNull(7, java.sql.Types.BIGINT)
-        else
-            stmt.setLong(7, reconcileId)
 
         stmt.executeQuery().use {
-            if (!it.next()) throw Exception("Inserting outgoing payment gave no outcome.")
-            if (it.getBoolean("out_nx_initiated"))
-                return@runConn OutgoingPaymentOutcome.INITIATED_COUNTERPART_NOT_FOUND
-        }
-        return@runConn OutgoingPaymentOutcome.SUCCESS
-    }
-
-    /**
-     * Checks if the outgoing payment was already processed by Nexus.
-     *
-     * @param bankUid unique identifier assigned by the bank to the payment.
-     *        Normally, that's the <UETR> value found in camt.05x records.  Outgoing
-     *        payment have been observed to _lack_ the <AcctSvcrRef> element.
-     * @return true if found, false otherwise
-     */
-    suspend fun isOutgoingPaymentSeen(bankUid: String): Boolean = runConn { conn ->
-        val stmt = conn.prepareStatement("""
-             SELECT 1
-               FROM outgoing_transactions
-               WHERE bank_transfer_id = ?;
-        """)
-        stmt.setString(1, bankUid)
-        val res = stmt.executeQuery()
-        res.use {
-            return@runConn it.next()
+            when {
+                !it.next() -> throw Exception("Inserting outgoing payment gave no outcome.")
+                it.getBoolean("out_found") -> OutgoingRegistrationResult.AlreadyRegistered
+                else -> OutgoingRegistrationResult.New(
+                    it.getBoolean("out_initiated")
+                )
+            }
         }
     }
 
     // INCOMING PAYMENTS METHODS
 
     /**
-     * Flags an incoming payment as bounced.  NOTE: the flag merely means
-     * that the payment had an invalid subject for a Taler withdrawal _and_
-     * it got initiated as an outgoing payments.  In NO way this flag
-     * means that the actual value was returned to the initial debtor.
+     * Register an incoming payment and bounce it
      *
-     * @param rowId row ID of the payment to flag as bounced.
-     * @param initiatedRequestUid unique identifier for the outgoing payment to
-     *                            initiate for this bouncing.
-     * @return true if the payment could be set as bounced, false otherwise.
+     * @param paymentData information about the incoming payment
+     * @param requestUid unique identifier of the bounce outgoing payment to
+     *                   initiate
+     * @param bounceAmount amount to send back to the original debtor
+     * @param bounceSubject subject of the bounce outhoing payment
+     * @return true if new
      */
-    suspend fun incomingPaymentSetAsBounced(rowId: Long, initiatedRequestUid: String): Boolean = runConn { conn ->
-        val timestamp = Instant.now().toDbMicros()
-            ?: throw Exception("Could not convert Instant.now() to microseconds, won't bounce this payment.")
-        val stmt = conn.prepareStatement("""
-             SELECT out_nx_incoming_payment
-               FROM bounce_payment(?,?,?)
-             """
-        )
-        stmt.setLong(1, rowId)
-        stmt.setLong(2, timestamp)
-        stmt.setString(3, initiatedRequestUid)
-        stmt.executeQuery().use { maybeResult ->
-            if (!maybeResult.next()) throw Exception("Expected outcome from the SQL bounce_payment function")
-            return@runConn !maybeResult.getBoolean("out_nx_incoming_payment")
-        }
-    }
-
-    /**
-     * Creates an incoming payment as bounced _and_ initiates its
-     * reimbursement.
-     *
-     * @param paymentData information related to the incoming payment.
-     * @param requestUid unique identifier of the outgoing payment to
-     *                   initiate, in order to reimburse the bounced tx.
-     * @param refundAmount amount to send back to the original debtor.  If
-     *                     null, it defaults to the amount of the bounced
-     *                     incoming payment.
-     */
-    suspend fun incomingPaymentCreateBounced(
+    suspend fun registerMalformedIncoming(
         paymentData: IncomingPayment,
         requestUid: String,
-        refundAmount: TalerAmount? = null
-        ): Boolean = runConn { conn ->
-        val refundTimestamp = Instant.now().toDbMicros()
+        bounceAmount: TalerAmount,
+        bounceSubject: String,
+        now: Instant
+    ): Boolean = runConn {       
+        println("$paymentData $requestUid $bounceAmount $bounceSubject") 
+        val stmt = it.prepareStatement("""
+            SELECT out_found
+              FROM register_incoming_and_bounce(
+                (?,?)::taler_amount
+                ,?
+                ,?
+                ,?
+                ,?
+                ,?
+                ,?
+                ,(?,?)::taler_amount
+                ,?
+              )"""
+        )
+        val refundTimestamp = now.toDbMicros()
             ?: throw Exception("Could not convert refund execution time from Instant.now() to microsends.")
         val executionTime = paymentData.executionTime.toDbMicros()
             ?: throw Exception("Could not convert payment execution time from Instant to microseconds.")
-        val stmt = conn.prepareStatement("""
-            SELECT out_ok FROM create_incoming_and_bounce (
-              (?,?)::taler_amount
-              ,?
-              ,?
-              ,?
-              ,?
-              ,?
-              ,?
-              ,(?,?)::taler_amount
-            )""")
         stmt.setLong(1, paymentData.amount.value)
         stmt.setInt(2, paymentData.amount.fraction)
         stmt.setString(3, paymentData.wireTransferSubject)
@@ -345,13 +279,55 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setString(6, paymentData.bankTransferId)
         stmt.setLong(7, refundTimestamp)
         stmt.setString(8, requestUid)
-        val finalRefundAmount: TalerAmount = refundAmount ?: paymentData.amount
-        stmt.setLong(9, finalRefundAmount.value)
-        stmt.setInt(10, finalRefundAmount.fraction)
-        val res = stmt.executeQuery()
-        res.use {
-            if (!it.next()) return@runConn false
-            return@runConn it.getBoolean("out_ok")
+        stmt.setLong(9, bounceAmount.value)
+        stmt.setInt(10, bounceAmount.fraction)
+        stmt.setString(11, bounceSubject)
+        stmt.executeQuery().use {
+            when {
+                !it.next() -> throw Exception("Inserting malformed incoming payment gave no outcome")
+                it.getBoolean("out_found") -> false
+                else -> true
+            }
+        }
+    }
+
+    /**
+     * Register an talerable incoming payment
+     *
+     * @param paymentData incoming talerable payment.
+     * @param reservePub reserve public key.  The caller is
+     *        responsible to check it.
+     */
+    suspend fun registerTalerableIncoming(
+        paymentData: IncomingPayment,
+        reservePub: ByteArray
+    ): Boolean = runConn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT out_found
+              FROM register_incoming_and_talerable(
+                (?,?)::taler_amount
+                ,?
+                ,?
+                ,?
+                ,?
+                ,?
+              )"""
+        )
+        val executionTime = paymentData.executionTime.toDbMicros()
+            ?: throw Exception("Could not convert payment execution time from Instant to microseconds.")
+        stmt.setLong(1, paymentData.amount.value)
+        stmt.setInt(2, paymentData.amount.fraction)
+        stmt.setString(3, paymentData.wireTransferSubject)
+        stmt.setLong(4, executionTime)
+        stmt.setString(5, paymentData.debitPaytoUri)
+        stmt.setString(6, paymentData.bankTransferId)
+        stmt.setBytes(7, reservePub)
+        stmt.executeQuery().use {
+            when {
+                !it.next() -> throw Exception("Inserting talerable incoming payment gave no outcome")
+                it.getBoolean("out_found") -> false
+                else -> true
+            }
         }
     }
 
@@ -392,26 +368,6 @@ class Database(dbConfig: String): java.io.Closeable {
     }
 
     /**
-     * Checks if the incoming payment was already processed by Nexus.
-     *
-     * @param bankUid unique identifier assigned by the bank to the payment.
-     *        Normally, that's the <AcctSvcrRef> value found in camt.05x records.
-     * @return true if found, false otherwise
-     */
-    suspend fun isIncomingPaymentSeen(bankUid: String): Boolean = runConn { conn ->
-        val stmt = conn.prepareStatement("""
-             SELECT 1
-               FROM incoming_transactions
-               WHERE bank_transfer_id = ?;
-        """)
-        stmt.setString(1, bankUid)
-        val res = stmt.executeQuery()
-        res.use {
-            return@runConn it.next()
-        }
-    }
-
-    /**
      * Checks if the reserve public key already exists.
      *
      * @param maybeReservePub reserve public key to look up
@@ -428,84 +384,6 @@ class Database(dbConfig: String): java.io.Closeable {
         res.use {
             return@runConn it.next()
         }
-    }
-
-    /**
-     * Creates an incoming transaction row and  links a new talerable
-     * row to it.
-     *
-     * @param paymentData incoming talerable payment.
-     * @param reservePub reserve public key.  The caller is
-     *        responsible to check it.
-     */
-    suspend fun incomingTalerablePaymentCreate(
-        paymentData: IncomingPayment,
-        reservePub: ByteArray
-    ): Boolean = runConn { conn ->
-        val stmt = conn.prepareStatement("""
-           SELECT out_ok FROM create_incoming_talerable(
-              (?,?)::taler_amount
-              ,?
-              ,?
-              ,?
-              ,?
-              ,?
-           )""")
-        bindIncomingPayment(paymentData, stmt)
-        stmt.setBytes(7, reservePub)
-        stmt.executeQuery().use {
-            if (!it.next()) return@runConn false
-            return@runConn it.getBoolean("out_ok")
-        }
-    }
-
-    /**
-     * Binds the values of an incoming payment to the prepared
-     * statement's placeholders.  Warn: may easily break in case
-     * the placeholders get their positions changed!
-     *
-     * @param data incoming payment to bind to the placeholders
-     * @param stmt statement to receive the values in its placeholders
-     */
-    private fun bindIncomingPayment(
-        data: IncomingPayment,
-        stmt: PreparedStatement
-    ) {
-        stmt.setLong(1, data.amount.value)
-        stmt.setInt(2, data.amount.fraction)
-        stmt.setString(3, data.wireTransferSubject)
-        val executionTime = data.executionTime.toDbMicros() ?: run {
-            throw Exception("Execution time could not be converted to microseconds for the database.")
-        }
-        stmt.setLong(4, executionTime)
-        stmt.setString(5, data.debitPaytoUri)
-        stmt.setString(6, data.bankTransferId)
-    }
-    /**
-     * Creates a new incoming payment record in the database.  It does NOT
-     * update the "talerable" table.
-     *
-     * @param paymentData information related to the incoming payment.
-     * @return true on success, false otherwise.
-     */
-    suspend fun incomingPaymentCreate(paymentData: IncomingPayment): Boolean = runConn { conn ->
-        val stmt = conn.prepareStatement("""
-            INSERT INTO incoming_transactions (
-              amount
-              ,wire_transfer_subject
-              ,execution_time
-              ,debit_payto_uri
-              ,bank_transfer_id
-            ) VALUES (
-              (?,?)::taler_amount
-              ,?
-              ,?
-              ,?
-              ,?
-            )
-        """)
-        bindIncomingPayment(paymentData, stmt)
-        return@runConn stmt.maybeUpdate()
     }
 
     // INITIATED PAYMENTS METHODS

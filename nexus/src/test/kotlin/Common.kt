@@ -91,7 +91,7 @@ fun genInitPay(
     )
 
 // Generates an incoming payment, given its subject.
-fun genIncPay(subject: String = "test wire transfer") =
+fun genInPay(subject: String) =
     IncomingPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
         debitPaytoUri = "payto://iban/not-used",
@@ -101,11 +101,11 @@ fun genIncPay(subject: String = "test wire transfer") =
     )
 
 // Generates an outgoing payment, given its subject.
-fun genOutPay(subject: String = "outgoing payment") =
+fun genOutPay(subject: String, bankTransferId: String) =
     OutgoingPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
         creditPaytoUri = "payto://iban/TEST-IBAN?receiver-name=Test",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
-        bankTransferId = "entropic"
+        bankTransferId = bankTransferId
     )
