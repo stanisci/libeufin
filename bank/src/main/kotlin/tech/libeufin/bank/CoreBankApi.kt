@@ -469,7 +469,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
 }
 
 suspend fun ApplicationCall.confirmWithdrawalHttp(db: Database, ctx: BankConfig, id: UUID, is2fa: Boolean) {
-    when (db.withdrawal.confirm(id, Instant.now(), is2fa)) {
+    when (db.withdrawal.confirm(username, id, Instant.now(), is2fa)) {
         WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
             "Withdrawal operation $id not found",
             TalerErrorCode.BANK_TRANSACTION_NOT_FOUND

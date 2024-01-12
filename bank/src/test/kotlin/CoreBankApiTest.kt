@@ -958,7 +958,7 @@ class CoreBankWithdrawalApiTest {
     // POST /accounts/USERNAME/withdrawals/withdrawal_id/confirm
     @Test
     fun confirm() = bankSetup { _ -> 
-        // TODO auth routine
+        authRoutine(HttpMethod.Post, "/accounts/merchant/withdrawals/42/confirm")
         // Check confirm created
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 
@@ -1012,6 +1012,18 @@ class CoreBankWithdrawalApiTest {
             client.postA("/taler-integration/withdrawal-operation/$uuid/abort").assertNoContent()
         }
 
+        // Check confirm another user's operation
+        client.postA("/accounts/customer/withdrawals") {
+            json { "amount" to "KUDOS:1" } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse> {
+            val uuid = it.taler_withdraw_uri.split("/").last()
+            withdrawalSelect(uuid)
+
+            // Check error
+            client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
+                .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        }
+
         // Check bad UUID
         client.postA("/accounts/merchant/withdrawals/chocolate/confirm").assertBadRequest()
 
@@ -1033,7 +1045,6 @@ class CoreBankWithdrawalApiTest {
                 assertBalance("merchant", "-KUDOS:6")
             }.assertNoContent()
         }
-        
     }
 }
 

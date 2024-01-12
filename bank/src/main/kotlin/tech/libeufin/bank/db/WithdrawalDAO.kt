@@ -144,6 +144,7 @@ class WithdrawalDAO(private val db: Database) {
 
     /** Confirm withdrawal operation [uuid] */
     suspend fun confirm(
+        login: String,
         uuid: UUID,
         now: Instant,
         is2fa: Boolean
@@ -157,12 +158,13 @@ class WithdrawalDAO(private val db: Database) {
               out_not_selected,
               out_aborted,
               out_tan_required
-            FROM confirm_taler_withdrawal(?,?,?);
+            FROM confirm_taler_withdrawal(?,?,?,?);
         """
         )
-        stmt.setObject(1, uuid)
-        stmt.setLong(2, now.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setBoolean(3, is2fa)
+        stmt.setString(1, login)
+        stmt.setObject(2, uuid)
+        stmt.setLong(3, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setBoolean(4, is2fa)
         stmt.executeQuery().use {
             when {
                 !it.next() ->

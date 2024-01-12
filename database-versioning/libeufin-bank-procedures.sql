@@ -640,6 +640,7 @@ END $$;
 COMMENT ON FUNCTION abort_taler_withdrawal IS 'Abort a withdrawal operation.';
 
 CREATE FUNCTION confirm_taler_withdrawal(
+  IN in_login TEXT,
   IN in_withdrawal_uuid uuid,
   IN in_confirmation_date BIGINT,
   IN in_is_tan BOOLEAN,
@@ -662,6 +663,7 @@ DECLARE
   exchange_bank_account_id BIGINT;
   tx_row_id BIGINT;
 BEGIN
+-- Check op exists
 SELECT
   confirmation_done,
   aborted, NOT selection_done,
@@ -681,7 +683,7 @@ SELECT
   FROM taler_withdrawal_operations
     JOIN bank_accounts ON wallet_bank_account=bank_account_id
     JOIN customers ON owning_customer_id=customer_id
-  WHERE withdrawal_uuid=in_withdrawal_uuid;
+  WHERE withdrawal_uuid=in_withdrawal_uuid AND login=in_login;
 IF NOT FOUND THEN
   out_no_op=TRUE;
   RETURN;
@@ -1038,7 +1040,7 @@ COMMENT ON FUNCTION cashin IS 'Perform a cashin operation';
 
 
 CREATE FUNCTION cashout_create(
-  IN in_account_username TEXT,
+  IN in_login TEXT,
   IN in_request_uid BYTEA,
   IN in_amount_debit taler_amount,
   IN in_amount_credit taler_amount,
@@ -1068,13 +1070,13 @@ IF out_bad_conversion THEN
   RETURN;
 END IF;
 
--- check account exists, if has all info and if 2FA is required
+-- Check account exists, has all info and if 2FA is required
 SELECT 
     bank_account_id, is_taler_exchange, cashout_payto IS NULL, (NOT in_is_tan AND tan_channel IS NOT NULL) 
   INTO account_id, out_account_is_exchange, out_no_cashout_payto, out_tan_required
   FROM bank_accounts
   JOIN customers ON bank_accounts.owning_customer_id = customers.customer_id
-  WHERE login=in_account_username;
+  WHERE login=in_login;
 IF NOT FOUND THEN
   out_account_not_found=TRUE;
   RETURN;
