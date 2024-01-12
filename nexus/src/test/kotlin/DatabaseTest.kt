@@ -18,25 +18,25 @@ class OutgoingPaymentsTest {
                     PaymentInitiationOutcome.SUCCESS,
                     db.initiatedPaymentCreate(genInitPay("waiting for reconciliation", "first"))
                 )
-                assertEquals(
-                    OutgoingRegistrationResult.New(true),
-                    db.registerOutgoing(this)
-                )
-                assertEquals(
-                    OutgoingRegistrationResult.AlreadyRegistered,
-                    db.registerOutgoing(this)
-                )
+                db.registerOutgoing(this).run {
+                    assertTrue(new,)
+                    assertTrue(initiated)
+                }
+                db.registerOutgoing(this).run {
+                    assertFalse(new)
+                    assertTrue(initiated)
+                }
             }
             // Without reconciling
             genOutPay("not paid by nexus", "second").run {
-                assertEquals(
-                    OutgoingRegistrationResult.New(false),
-                    db.registerOutgoing(this)
-                )
-                assertEquals(
-                    OutgoingRegistrationResult.AlreadyRegistered,
-                    db.registerOutgoing(this)
-                )
+                db.registerOutgoing(this).run {
+                    assertTrue(new)
+                    assertFalse(initiated)
+                }
+                db.registerOutgoing(this).run {
+                    assertFalse(new)
+                    assertFalse(initiated)
+                }
             }
         }
     }
@@ -50,20 +50,20 @@ class IncomingPaymentsTest {
         runBlocking {
             // creating and bouncing one incoming transaction.
             val payment = genInPay("incoming and bounced")
-            assertTrue(db.registerMalformedIncoming(
+            db.registerMalformedIncoming(
                 payment,
-                "UID",
                 TalerAmount(2, 53000000, "KUDOS"),
-                "Bounce UID",
                 Instant.now()
-            ))
-            assertFalse(db.registerMalformedIncoming(
+            ).run {
+                assertTrue(new)
+            }
+            db.registerMalformedIncoming(
                 payment,
-                "UID",
                 TalerAmount(2, 53000000, "KUDOS"),
-                "Bounce UID",
                 Instant.now()
-            ))
+            ).run {
+                assertFalse(new)
+            }
             db.runConn {
                 // Checking one incoming got created
                 val checkIncoming = it.prepareStatement("""
@@ -111,10 +111,10 @@ class IncomingPaymentsTest {
             val inc = genInPay("reserve-pub")
             // Checking the reserve is not found.
             assertFalse(db.isReservePubFound(reservePub))
-            assertTrue(db.registerTalerableIncoming(inc, reservePub))
+            assertTrue(db.registerTalerableIncoming(inc, reservePub).new)
             // Checking the reserve is not found.
             assertTrue(db.isReservePubFound(reservePub))
-            assertFalse(db.registerTalerableIncoming(inc, reservePub))
+            assertFalse(db.registerTalerableIncoming(inc, reservePub).new)
         }
     }
 }

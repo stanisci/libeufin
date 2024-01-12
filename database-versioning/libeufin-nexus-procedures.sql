@@ -1,5 +1,31 @@
 BEGIN;
+SET search_path TO public;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 SET search_path TO libeufin_nexus;
+
+-- Remove all existing functions
+DO
+$do$
+DECLARE
+  _sql text;
+BEGIN
+  SELECT INTO _sql
+        string_agg(format('DROP %s %s CASCADE;'
+                        , CASE prokind
+                            WHEN 'f' THEN 'FUNCTION'
+                            WHEN 'p' THEN 'PROCEDURE'
+                          END
+                        , oid::regprocedure)
+                  , E'\n')
+  FROM   pg_proc
+  WHERE  pronamespace = 'libeufin_nexus'::regnamespace;
+
+  IF _sql IS NOT NULL THEN
+    EXECUTE _sql;
+  END IF;
+END
+$do$;
 
 CREATE FUNCTION register_outgoing(
   IN in_amount taler_amount
@@ -7,22 +33,25 @@ CREATE FUNCTION register_outgoing(
   ,IN in_execution_time BIGINT
   ,IN in_credit_payto_uri TEXT
   ,IN in_bank_transfer_id TEXT
+  ,OUT out_tx_id BIGINT
   ,OUT out_found BOOLEAN
   ,OUT out_initiated BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
 init_id BIGINT;
-tx_id BIGINT;
 BEGIN
 -- Check if already registered
-SELECT outgoing_transaction_id INTO tx_id
+SELECT outgoing_transaction_id INTO out_tx_id
   FROM outgoing_transactions
   WHERE bank_transfer_id = in_bank_transfer_id;
 IF FOUND THEN
   out_found = true;
   -- TODO Should we update the subject and credit payto if it's finally found
   -- TODO Should we check that amount and other info match ?
+  SELECT true INTO out_initiated
+    FROM initiated_outgoing_transactions
+    WHERE outgoing_transaction_id = out_tx_id;
 ELSE
   -- Store the transaction in the database
   INSERT INTO outgoing_transactions (
@@ -39,17 +68,17 @@ ELSE
     ,in_bank_transfer_id
   )
     RETURNING outgoing_transaction_id
-      INTO tx_id;
+      INTO out_tx_id;
 
-  -- Reconciles the related initiated payment
+  -- Reconciles the related initiated transaction
   UPDATE initiated_outgoing_transactions
-    SET outgoing_transaction_id = tx_id
+    SET outgoing_transaction_id = out_tx_id
     WHERE request_uid = in_bank_transfer_id
     RETURNING true INTO out_initiated;
 END IF;
 END $$;
 COMMENT ON FUNCTION register_outgoing
-  IS 'Register an outgoing payment and optionally reconciles the related initiated payment with it';
+  IS 'Register an outgoing transaction and optionally reconciles the related initiated transaction with it';
 
 CREATE FUNCTION register_incoming(
   IN in_amount taler_amount
@@ -87,29 +116,30 @@ ELSE
 END IF;
 END $$;
 COMMENT ON FUNCTION register_incoming
-  IS 'Register an incoming payment';
+  IS 'Register an incoming transaction';
 
-CREATE FUNCTION register_incoming_and_bounce(
-  IN in_amount taler_amount
-  ,IN in_wire_transfer_subject TEXT
-  ,IN in_execution_time BIGINT
-  ,IN in_debit_payto_uri TEXT
-  ,IN in_bank_transfer_id TEXT
-  ,IN in_timestamp BIGINT
-  ,IN in_request_uid TEXT
+CREATE FUNCTION bounce_incoming(
+  IN tx_id BIGINT
   ,IN in_bounce_amount taler_amount
-  ,IN in_bounce_subject TEXT
-  ,OUT out_found BOOLEAN -- TODO return tx_id
+  ,IN in_now_date BIGINT
+  ,OUT out_bounce_id TEXT
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-tx_id BIGINT;
+bank_id TEXT;
+payto_uri TEXT;
 init_id BIGINT;
 BEGIN
--- Register the incoming transaction
-SELECT reg.out_found, out_tx_id
-  FROM register_incoming(in_amount, in_wire_transfer_subject, in_execution_time, in_debit_payto_uri, in_bank_transfer_id) as reg
-  INTO out_found, tx_id;
+-- Get incoming transaction bank ID and creditor
+SELECT bank_transfer_id, debit_payto_uri 
+  INTO bank_id, payto_uri
+  FROM incoming_transactions
+  WHERE incoming_transaction_id = tx_id;
+-- Generate a bounce ID deterministically from the bank ID
+-- We hash the bank ID with SHA-256 then we encode the hash using base64
+-- As bank id can be at most 35 characters long we truncate the encoded hash
+-- Most banks should be case sensitive but we might have to normalize the id to uppercase for some of them
+SELECT substr(encode(public.digest(bank_id, 'sha256'), 'base64'), 0, 35) INTO out_bounce_id;
 
 -- Initiate the bounce transaction
 INSERT INTO initiated_outgoing_transactions (
@@ -120,24 +150,49 @@ INSERT INTO initiated_outgoing_transactions (
   ,request_uid
   ) VALUES (
     in_bounce_amount
-    ,in_bounce_subject
-    ,in_debit_payto_uri
-    ,in_timestamp
-    ,in_request_uid
+    ,'bounce: ' || bank_id
+    ,payto_uri
+    ,in_now_date
+    ,out_bounce_id
   )
-  ON CONFLICT (request_uid) DO NOTHING
+  ON CONFLICT (request_uid) DO NOTHING -- idempotent
   RETURNING initiated_outgoing_transaction_id INTO init_id;
 IF FOUND THEN
   -- Register the bounce
   INSERT INTO bounced_transactions (
     incoming_transaction_id ,initiated_outgoing_transaction_id
-  ) VALUES (tx_id ,init_id)
-    ON CONFLICT
-      DO NOTHING;
+  ) VALUES (tx_id, init_id);
 END IF;
+END$$;
+COMMENT ON FUNCTION bounce_incoming
+  IS 'Bounce an incoming transaction, initiate a bouce outgoing transaction with a deterministic ID';
+
+CREATE FUNCTION register_incoming_and_bounce(
+  IN in_amount taler_amount
+  ,IN in_wire_transfer_subject TEXT
+  ,IN in_execution_time BIGINT
+  ,IN in_debit_payto_uri TEXT
+  ,IN in_bank_transfer_id TEXT
+  ,IN in_bounce_amount taler_amount
+  ,IN in_now_date BIGINT
+  ,OUT out_found BOOLEAN
+  ,OUT out_tx_id BIGINT
+  ,OUT out_bounce_id TEXT
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+init_id BIGINT;
+BEGIN
+-- Register the incoming transaction
+SELECT reg.out_found, reg.out_tx_id
+  FROM register_incoming(in_amount, in_wire_transfer_subject, in_execution_time, in_debit_payto_uri, in_bank_transfer_id) as reg
+  INTO out_found, out_tx_id;
+
+-- Bounce the incoming transaction
+SELECT b.out_bounce_id INTO out_bounce_id FROM bounce_incoming(out_tx_id, in_bounce_amount, in_now_date) as b;
 END $$;
 COMMENT ON FUNCTION register_incoming_and_bounce
-  IS 'Register an incoming payment and bounce it';
+  IS 'Register an incoming transaction and bounce it';
 
 CREATE FUNCTION register_incoming_and_talerable(
   IN in_amount taler_amount
@@ -146,23 +201,22 @@ CREATE FUNCTION register_incoming_and_talerable(
   ,IN in_debit_payto_uri TEXT
   ,IN in_bank_transfer_id TEXT
   ,IN in_reserve_public_key BYTEA
-  ,OUT out_found BOOLEAN -- TODO return tx_id
+  ,OUT out_found BOOLEAN
+  ,OUT out_tx_id BIGINT
 )
 LANGUAGE plpgsql AS $$
-DECLARE
-tx_id INT8;
 BEGIN
 -- Register the incoming transaction
-SELECT reg.out_found, out_tx_id
+SELECT reg.out_found, reg.out_tx_id
   FROM register_incoming(in_amount, in_wire_transfer_subject, in_execution_time, in_debit_payto_uri, in_bank_transfer_id) as reg
-  INTO out_found, tx_id;
+  INTO out_found, out_tx_id;
 
 -- Register as talerable bounce
 INSERT INTO talerable_incoming_transactions (
   incoming_transaction_id
   ,reserve_public_key
 ) VALUES (
-  tx_id
+  out_tx_id
   ,in_reserve_public_key
 ) ON CONFLICT (incoming_transaction_id) DO NOTHING;
 END $$;

@@ -88,7 +88,8 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
             var hasClientKeys = clientKeysPath.exists()
             var hasBankKeys = bankKeysPath.exists()
 
-            nexusCmd.test("dbinit -r -c $conf").assertOk()
+            if (ask("Reset DB ? y/n>") == "y") nexusCmd.test("dbinit -r -c $conf").assertOk()
+            else  nexusCmd.test("dbinit -c $conf").assertOk()
             val nexusDb = NexusDb("postgresql:///libeufincheck")
 
             when (kind) {

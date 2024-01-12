@@ -273,15 +273,14 @@ private suspend fun ingestOutgoingPayment(
     db: Database,
     payment: OutgoingPayment
 ) {
-    when (val result = db.registerOutgoing(payment)) {
-        OutgoingRegistrationResult.AlreadyRegistered ->
-            logger.debug("OUT '${payment.bankTransferId}' already seen")
-        is OutgoingRegistrationResult.New -> {
-            if (result.initiated)
-                logger.debug("$payment")
-            else 
-                logger.debug("$payment recovered")
-        }
+    val result = db.registerOutgoing(payment)
+    if (result.new) {
+        if (result.initiated)
+            logger.debug("$payment")
+        else 
+            logger.debug("$payment recovered")
+    } else {
+        logger.debug("OUT '${payment.bankTransferId}' already seen")
     }
 }
 
@@ -303,23 +302,19 @@ private suspend fun ingestIncomingPayment(
         logger.debug("Incoming payment with UID '${payment.bankTransferId}'" +
                 " has invalid subject: ${payment.wireTransferSubject}."
         )
-        // Generate bounce bank ID from the bounced transaction bank ID
-        val hash = CryptoUtil.hashStringSHA256(payment.bankTransferId)
-        val encoded = Base32Crockford.encode(hash)
-        val bounceId = encoded.take(35)
-        if (db.registerMalformedIncoming(
-            payment, 
-            bounceId, 
+        val result = db.registerMalformedIncoming(
+            payment,
             payment.amount, 
-            "Bounce: ${payment.bankTransferId}", 
             Instant.now()
-        )) {
-            logger.debug("$payment bounced in '$bounceId'")
+        )
+        if (result.new) {
+            logger.debug("$payment bounced in '${result.bounceId}'")
         } else {
-            logger.debug("IN '${payment.bankTransferId}' already seen and bounced in '$bounceId'")
+            logger.debug("IN '${payment.bankTransferId}' already seen and bounced in '${result.bounceId}'")
         }
     } else {
-        if (db.registerTalerableIncoming(payment, reservePub)) {
+        val result = db.registerTalerableIncoming(payment, reservePub)
+        if (result.new) {
             logger.debug("$payment")
         } else {
             logger.debug("IN '${payment.bankTransferId}' already seen")

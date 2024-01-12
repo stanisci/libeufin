@@ -133,10 +133,24 @@ data class OutgoingPayment(
 }
 
 /** Outgoing payments registration result */
-sealed class OutgoingRegistrationResult {
-    data class New(val initiated: Boolean): OutgoingRegistrationResult()
-    data object AlreadyRegistered: OutgoingRegistrationResult()
-}
+data class OutgoingRegistrationResult(
+    val id: Long,
+    val initiated: Boolean,
+    val new: Boolean
+)
+
+/** Incoming payments registration result */
+data class IncomingRegistrationResult(
+    val id: Long,
+    val new: Boolean
+)
+
+/** Incoming payments bounce registration result */
+data class IncomingBounceRegistrationResult(
+    val id: Long,
+    val bounceId: String,
+    val new: Boolean
+)
 
 /**
  * Performs a INSERT, UPDATE, or DELETE operation.
@@ -204,7 +218,7 @@ class Database(dbConfig: String): java.io.Closeable {
      */
     suspend fun registerOutgoing(paymentData: OutgoingPayment): OutgoingRegistrationResult = runConn {        
         val stmt = it.prepareStatement("""
-            SELECT out_initiated, out_found
+            SELECT out_tx_id, out_initiated, out_found
               FROM register_outgoing(
                 (?,?)::taler_amount
                 ,?
@@ -225,9 +239,10 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw Exception("Inserting outgoing payment gave no outcome.")
-                it.getBoolean("out_found") -> OutgoingRegistrationResult.AlreadyRegistered
-                else -> OutgoingRegistrationResult.New(
-                    it.getBoolean("out_initiated")
+                else -> OutgoingRegistrationResult(
+                    it.getLong("out_tx_id"),
+                    it.getBoolean("out_initiated"),
+                    !it.getBoolean("out_found")
                 )
             }
         }
@@ -247,18 +262,13 @@ class Database(dbConfig: String): java.io.Closeable {
      */
     suspend fun registerMalformedIncoming(
         paymentData: IncomingPayment,
-        requestUid: String,
         bounceAmount: TalerAmount,
-        bounceSubject: String,
         now: Instant
-    ): Boolean = runConn {       
-        println("$paymentData $requestUid $bounceAmount $bounceSubject") 
+    ): IncomingBounceRegistrationResult = runConn {       
         val stmt = it.prepareStatement("""
-            SELECT out_found
+            SELECT out_found, out_tx_id, out_bounce_id
               FROM register_incoming_and_bounce(
                 (?,?)::taler_amount
-                ,?
-                ,?
                 ,?
                 ,?
                 ,?
@@ -277,16 +287,17 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.debitPaytoUri)
         stmt.setString(6, paymentData.bankTransferId)
-        stmt.setLong(7, refundTimestamp)
-        stmt.setString(8, requestUid)
-        stmt.setLong(9, bounceAmount.value)
-        stmt.setInt(10, bounceAmount.fraction)
-        stmt.setString(11, bounceSubject)
+        stmt.setLong(7, bounceAmount.value)
+        stmt.setInt(8, bounceAmount.fraction)
+        stmt.setLong(9, refundTimestamp)
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw Exception("Inserting malformed incoming payment gave no outcome")
-                it.getBoolean("out_found") -> false
-                else -> true
+                else -> IncomingBounceRegistrationResult(
+                    it.getLong("out_tx_id"),
+                    it.getString("out_bounce_id"),
+                    !it.getBoolean("out_found")
+                )
             }
         }
     }
@@ -301,9 +312,9 @@ class Database(dbConfig: String): java.io.Closeable {
     suspend fun registerTalerableIncoming(
         paymentData: IncomingPayment,
         reservePub: ByteArray
-    ): Boolean = runConn { conn ->
+    ): IncomingRegistrationResult = runConn { conn ->
         val stmt = conn.prepareStatement("""
-            SELECT out_found
+            SELECT out_found, out_tx_id
               FROM register_incoming_and_talerable(
                 (?,?)::taler_amount
                 ,?
@@ -325,8 +336,10 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw Exception("Inserting talerable incoming payment gave no outcome")
-                it.getBoolean("out_found") -> false
-                else -> true
+                else -> IncomingRegistrationResult(
+                    it.getLong("out_tx_id"),
+                    !it.getBoolean("out_found")
+                )
             }
         }
     }
