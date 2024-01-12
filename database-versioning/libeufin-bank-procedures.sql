@@ -31,7 +31,7 @@ CREATE FUNCTION amount_normalize(
 LANGUAGE plpgsql AS $$
 BEGIN
   normalized.val = amount.val + amount.frac / 100000000;
-  IF (normalized.val > 1::bigint<<52) THEN
+  IF (normalized.val > 1::INT8<<52) THEN
     RAISE EXCEPTION 'amount value overflowed';
   END IF;
   normalized.frac = amount.frac % 100000000;
@@ -85,7 +85,7 @@ COMMENT ON FUNCTION amount_left_minus_right
   IS 'Subtracts the right amount from the left and returns the difference and TRUE, if the left amount is larger than the right, or an invalid amount and FALSE otherwise.';
 
 CREATE FUNCTION account_balance_is_sufficient(
-  IN in_account_id BIGINT,
+  IN in_account_id INT8,
   IN in_amount taler_amount,
   OUT out_balance_insufficient BOOLEAN
 )
@@ -149,7 +149,7 @@ CREATE FUNCTION account_delete(
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-my_customer_id BIGINT;
+my_customer_id INT8;
 my_balance_val INT8;
 my_balance_frac INT4;
 BEGIN
@@ -196,15 +196,15 @@ CREATE PROCEDURE register_outgoing(
   IN in_request_uid BYTEA,
   IN in_wtid BYTEA,
   IN in_exchange_base_url TEXT,
-  IN in_debtor_account_id BIGINT,
-  IN in_creditor_account_id BIGINT,
-  IN in_debit_row_id BIGINT,
-  IN in_credit_row_id BIGINT
+  IN in_debtor_account_id INT8,
+  IN in_creditor_account_id INT8,
+  IN in_debit_row_id INT8,
+  IN in_credit_row_id INT8
 )
 LANGUAGE plpgsql AS $$
 DECLARE 
   local_amount taler_amount;
-  local_bank_account_id BIGINT;
+  local_bank_account_id INT8;
 BEGIN
 -- register outgoing transaction
 INSERT
@@ -235,12 +235,12 @@ COMMENT ON PROCEDURE register_outgoing
 
 CREATE PROCEDURE register_incoming(
   IN in_reserve_pub BYTEA,
-  IN in_tx_row_id BIGINT
+  IN in_tx_row_id INT8
 )
 LANGUAGE plpgsql AS $$
 DECLARE
 local_amount taler_amount;
-local_bank_account_id BIGINT;
+local_bank_account_id INT8;
 BEGIN
 -- Register incoming transaction
 INSERT
@@ -271,7 +271,7 @@ CREATE FUNCTION taler_transfer(
   IN in_exchange_base_url TEXT,
   IN in_credit_account_payto TEXT,
   IN in_username TEXT,
-  IN in_timestamp BIGINT,
+  IN in_timestamp INT8,
   -- Error status
   OUT out_debtor_not_found BOOLEAN,
   OUT out_debtor_not_exchange BOOLEAN,
@@ -280,14 +280,14 @@ CREATE FUNCTION taler_transfer(
   OUT out_request_uid_reuse BOOLEAN,
   OUT out_exchange_balance_insufficient BOOLEAN,
   -- Success return
-  OUT out_tx_row_id BIGINT,
-  OUT out_timestamp BIGINT
+  OUT out_tx_row_id INT8,
+  OUT out_timestamp INT8
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-exchange_bank_account_id BIGINT;
-receiver_bank_account_id BIGINT;
-credit_row_id BIGINT;
+exchange_bank_account_id INT8;
+receiver_bank_account_id INT8;
+credit_row_id INT8;
 BEGIN
 -- Check for idempotence and conflict
 SELECT (amount != in_amount 
@@ -361,7 +361,7 @@ CREATE FUNCTION taler_add_incoming(
   IN in_amount taler_amount,
   IN in_debit_account_payto TEXT,
   IN in_username TEXT,
-  IN in_timestamp BIGINT,
+  IN in_timestamp INT8,
   -- Error status
   OUT out_creditor_not_found BOOLEAN,
   OUT out_creditor_not_exchange BOOLEAN,
@@ -370,12 +370,12 @@ CREATE FUNCTION taler_add_incoming(
   OUT out_reserve_pub_reuse BOOLEAN,
   OUT out_debitor_balance_insufficient BOOLEAN,
   -- Success return
-  OUT out_tx_row_id BIGINT
+  OUT out_tx_row_id INT8
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-exchange_bank_account_id BIGINT;
-sender_bank_account_id BIGINT;
+exchange_bank_account_id INT8;
+sender_bank_account_id INT8;
 BEGIN
 -- Check conflict
 SELECT true FROM taler_exchange_incoming WHERE reserve_pub = in_reserve_pub
@@ -441,7 +441,7 @@ CREATE FUNCTION bank_transaction(
   IN in_debit_account_username TEXT,
   IN in_subject TEXT,
   IN in_amount taler_amount,
-  IN in_timestamp BIGINT,
+  IN in_timestamp INT8,
   IN in_is_tan BOOLEAN,
   -- Error status
   OUT out_creditor_not_found BOOLEAN,
@@ -451,10 +451,10 @@ CREATE FUNCTION bank_transaction(
   OUT out_creditor_admin BOOLEAN,
   OUT out_tan_required BOOLEAN,
   -- Success return
-  OUT out_credit_bank_account_id BIGINT,
-  OUT out_debit_bank_account_id BIGINT,
-  OUT out_credit_row_id BIGINT,
-  OUT out_debit_row_id BIGINT,
+  OUT out_credit_bank_account_id INT8,
+  OUT out_debit_bank_account_id INT8,
+  OUT out_credit_row_id INT8,
+  OUT out_debit_row_id INT8,
   OUT out_creditor_is_exchange BOOLEAN,
   OUT out_debtor_is_exchange BOOLEAN
 )
@@ -510,6 +510,7 @@ CREATE FUNCTION create_taler_withdrawal(
   IN in_account_username TEXT,
   IN in_withdrawal_uuid UUID,
   IN in_amount taler_amount,
+  IN in_now_date INT8,
    -- Error status
   OUT out_account_not_found BOOLEAN,
   OUT out_account_is_exchange BOOLEAN,
@@ -517,7 +518,7 @@ CREATE FUNCTION create_taler_withdrawal(
 )
 LANGUAGE plpgsql AS $$ 
 DECLARE
-account_id BIGINT;
+account_id INT8;
 BEGIN
 -- Check account exists
 SELECT bank_account_id, is_taler_exchange
@@ -540,8 +541,8 @@ END IF;
 
 -- Create withdrawal operation
 INSERT INTO taler_withdrawal_operations
-    (withdrawal_uuid, wallet_bank_account, amount)
-  VALUES (in_withdrawal_uuid, account_id, in_amount);
+    (withdrawal_uuid, wallet_bank_account, amount, creation_date)
+  VALUES (in_withdrawal_uuid, account_id, in_amount, in_now_date);
 END $$;
 COMMENT ON FUNCTION create_taler_withdrawal IS 'Create a new withdrawal operation';
 
@@ -642,7 +643,7 @@ COMMENT ON FUNCTION abort_taler_withdrawal IS 'Abort a withdrawal operation.';
 CREATE FUNCTION confirm_taler_withdrawal(
   IN in_login TEXT,
   IN in_withdrawal_uuid uuid,
-  IN in_confirmation_date BIGINT,
+  IN in_confirmation_date INT8,
   IN in_is_tan BOOLEAN,
   OUT out_no_op BOOLEAN,
   OUT out_balance_insufficient BOOLEAN,
@@ -658,10 +659,10 @@ DECLARE
   subject_local TEXT;
   reserve_pub_local BYTEA;
   selected_exchange_payto_local TEXT;
-  wallet_bank_account_local BIGINT;
+  wallet_bank_account_local INT8;
   amount_local taler_amount;
-  exchange_bank_account_id BIGINT;
-  tx_row_id BIGINT;
+  exchange_bank_account_id INT8;
+  tx_row_id INT8;
 BEGIN
 -- Check op exists
 SELECT
@@ -740,19 +741,19 @@ COMMENT ON FUNCTION confirm_taler_withdrawal
   IS 'Set a withdrawal operation as confirmed and wire the funds to the exchange.';
 
 CREATE FUNCTION bank_wire_transfer(
-  IN in_creditor_account_id BIGINT,
-  IN in_debtor_account_id BIGINT,
+  IN in_creditor_account_id INT8,
+  IN in_debtor_account_id INT8,
   IN in_subject TEXT,
   IN in_amount taler_amount,
-  IN in_transaction_date BIGINT, -- GNUnet microseconds.
+  IN in_transaction_date INT8,
   IN in_account_servicer_reference TEXT,
   IN in_payment_information_id TEXT,
   IN in_end_to_end_id TEXT,
   -- Error status
   OUT out_balance_insufficient BOOLEAN,
   -- Success return
-  OUT out_credit_row_id BIGINT,
-  OUT out_debit_row_id BIGINT
+  OUT out_credit_row_id INT8,
+  OUT out_debit_row_id INT8
 )
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -961,7 +962,7 @@ PERFORM pg_notify('bank_tx', in_debtor_account_id || ' ' || in_creditor_account_
 END $$;
 
 CREATE FUNCTION cashin(
-  IN in_now_date BIGINT,
+  IN in_now_date INT8,
   IN in_reserve_pub BYTEA,
   IN in_amount taler_amount,
   IN in_subject TEXT,
@@ -974,9 +975,9 @@ CREATE FUNCTION cashin(
 LANGUAGE plpgsql AS $$ 
 DECLARE
   converted_amount taler_amount;
-  admin_account_id BIGINT;
-  exchange_account_id BIGINT;
-  tx_row_id BIGINT;
+  admin_account_id INT8;
+  exchange_account_id INT8;
+  tx_row_id INT8;
 BEGIN
 -- TODO check reserve_pub reuse ?
 
@@ -1056,13 +1057,13 @@ CREATE FUNCTION cashout_create(
   OUT out_no_cashout_payto BOOLEAN,
   OUT out_tan_required BOOLEAN,
   -- Success return
-  OUT out_cashout_id BIGINT
+  OUT out_cashout_id INT8
 )
 LANGUAGE plpgsql AS $$ 
 DECLARE
-account_id BIGINT;
-admin_account_id BIGINT;
-tx_id BIGINT;
+account_id INT8;
+admin_account_id INT8;
+tx_id INT8;
 BEGIN
 -- check conversion
 SELECT too_small OR no_config OR in_amount_credit!=converted INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'cashout'::text);
@@ -1188,7 +1189,7 @@ END $$;
 COMMENT ON FUNCTION tan_challenge_create IS 'Create a new challenge, return the generated id';
 
 CREATE FUNCTION tan_challenge_send (
-  IN in_challenge_id BIGINT,
+  IN in_challenge_id INT8,
   IN in_login TEXT,
   IN in_code TEXT,              -- New code to use if the old code expired
   IN in_now_date INT8,        
@@ -1241,7 +1242,7 @@ END $$;
 COMMENT ON FUNCTION tan_challenge_send IS 'Get the challenge to send, return NULL if nothing should be sent';
 
 CREATE FUNCTION tan_challenge_mark_sent (
-  IN in_challenge_id BIGINT,
+  IN in_challenge_id INT8,
   IN in_now_date INT8,
   IN in_retransmission_period INT8
 ) RETURNS void
@@ -1253,7 +1254,7 @@ $$;
 COMMENT ON FUNCTION tan_challenge_mark_sent IS 'Register a challenge as successfully sent';
 
 CREATE FUNCTION tan_challenge_try (
-  IN in_challenge_id BIGINT, 
+  IN in_challenge_id INT8, 
   IN in_login TEXT,
   IN in_code TEXT,    
   IN in_now_date INT8,
@@ -1305,15 +1306,15 @@ CREATE FUNCTION stats_get_frame(
   IN now TIMESTAMP,
   IN in_timeframe stat_timeframe_enum,
   IN which INTEGER,
-  OUT cashin_count BIGINT,
+  OUT cashin_count INT8,
   OUT cashin_regional_volume taler_amount,
   OUT cashin_fiat_volume taler_amount,
-  OUT cashout_count BIGINT,
+  OUT cashout_count INT8,
   OUT cashout_regional_volume taler_amount,
   OUT cashout_fiat_volume taler_amount,
-  OUT taler_in_count BIGINT,
+  OUT taler_in_count INT8,
   OUT taler_in_volume taler_amount,
-  OUT taler_out_count BIGINT,
+  OUT taler_out_count INT8,
   OUT taler_out_volume taler_amount
 )
 LANGUAGE plpgsql AS $$
@@ -1466,7 +1467,7 @@ BEGIN
   -- Extract product parts
   result = (trunc(product_numeric / 100000000)::int8, (product_numeric % 100000000)::int4);
 
-  IF (result.val > 1::bigint<<52) THEN
+  IF (result.val > 1::INT8<<52) THEN
     RAISE EXCEPTION 'amount value overflowed';
   END IF;
 END $$;
@@ -1503,7 +1504,7 @@ BEGIN
   -- Extract division parts
   result = (trunc(fraction_numeric / 100000000)::int8, (fraction_numeric % 100000000)::int4);
 
-  IF (result.val > 1::bigint<<52) THEN
+  IF (result.val > 1::INT8<<52) THEN
     RAISE EXCEPTION 'amount value overflowed';
   END IF;
 END $$;

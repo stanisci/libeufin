@@ -364,7 +364,7 @@ class CoreBankAccountsApiTest {
 
     // DELETE /accounts/USERNAME
     @Test
-    fun delete() = bankSetup { _ -> 
+    fun delete() = bankSetup { db -> 
         authRoutine(HttpMethod.Delete, "/accounts/merchant", allowAdmin = true)
 
         // Reserved account
@@ -391,6 +391,19 @@ class CoreBankAccountsApiTest {
             .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
         // Sucessful deletion
         tx("john", "KUDOS:1", "customer")
+        // TODO remove with gc
+        db.conn { conn ->
+            val id = conn.prepareStatement("SELECT bank_account_id FROM bank_accounts JOIN customers ON customer_id=owning_customer_id WHERE login = ?").run {
+                setString(1, "john")
+                oneOrNull {
+                    it.getLong(1)
+                }!!
+            }
+            conn.prepareStatement("DELETE FROM bank_account_transactions WHERE bank_account_id=?").run {
+                setLong(1, id)
+                execute()
+            }
+        }
         client.deleteA("/accounts/john")
             .assertChallenge()
             .assertNoContent()

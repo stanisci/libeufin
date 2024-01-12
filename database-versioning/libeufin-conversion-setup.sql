@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION cashout_link()
 RETURNS trigger 
 LANGUAGE plpgsql AS $$
   DECLARE
-    now_date BIGINT;
+    now_date INT8;
     payto_uri TEXT;
   BEGIN
     -- TODO should send to an exchange
@@ -42,7 +42,7 @@ CREATE OR REPLACE FUNCTION cashin_link()
 RETURNS trigger 
 LANGUAGE plpgsql AS $$
   DECLARE
-    now_date BIGINT;
+    now_date INT8;
     local_amount libeufin_bank.taler_amount;
     subject TEXT;
     too_small BOOLEAN;

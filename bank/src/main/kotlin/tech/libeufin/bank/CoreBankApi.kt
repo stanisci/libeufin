@@ -456,7 +456,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             val req = call.receive<BankAccountCreateWithdrawalRequest>()
             ctx.checkRegionalCurrency(req.amount)
             val opId = UUID.randomUUID()
-            when (db.withdrawal.create(username, opId, req.amount)) {
+            when (db.withdrawal.create(username, opId, req.amount, Instant.now())) {
                 WithdrawalCreationResult.UnknownAccount -> throw unknownAccount(username)
                 WithdrawalCreationResult.AccountIsExchange -> throw conflict(
                     "Exchange account cannot perform withdrawal operation",

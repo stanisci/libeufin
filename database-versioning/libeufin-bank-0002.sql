@@ -18,10 +18,10 @@ BEGIN;
 SELECT _v.register_patch('libeufin-bank-0002', NULL, NULL);
 SET search_path TO libeufin_bank;
 
--- forget about all pending operations
+-- Forget about all pending operations
 DELETE FROM cashout_operations WHERE local_transaction IS NULL;
 
--- TODO drop pending cashout operations
+-- Remove challenge logic from cashout tables
 ALTER TABLE cashout_operations 
   DROP COLUMN challenge,
   DROP COLUMN tan_channel,
@@ -50,7 +50,6 @@ CREATE TABLE tan_challenges
   ,customer INT8 NOT NULL
     REFERENCES customers(customer_id)
     ON DELETE CASCADE
-    ON UPDATE RESTRICT
   ,tan_channel tan_enum NULL DEFAULT NULL
   ,tan_info TEXT NULL DEFAULT NULL
 );
@@ -64,5 +63,28 @@ COMMENT ON COLUMN tan_challenges.confirmation_date IS 'When was this challenge s
 COMMENT ON COLUMN tan_challenges.retry_counter IS 'How many tries are left for this code must be > 0';
 COMMENT ON COLUMN tan_challenges.tan_channel IS 'TAN channel to use, if null use customer configured one';
 COMMENT ON COLUMN tan_challenges.tan_info IS 'TAN info to use, if null use customer configured one';
+
+CREATE INDEX tan_challenges_expiration_index
+  ON tan_challenges (expiration_date);
+COMMENT ON INDEX tan_challenges_expiration_index
+  IS 'for garbage collection';
+
+CREATE INDEX bearer_tokens_expiration_index
+  ON bearer_tokens (expiration_time);
+COMMENT ON INDEX bearer_tokens_expiration_index
+  IS 'for garbage collection';
+
+CREATE INDEX bank_account_transactions_expiration_index
+  ON bank_account_transactions (transaction_date);
+COMMENT ON INDEX bank_account_transactions_expiration_index
+  IS 'for garbage collection';
+
+ALTER TABLE taler_withdrawal_operations
+  ADD creation_date INT8 NOT NULL;
+CREATE INDEX taler_withdrawal_operations_expiration_index
+  ON taler_withdrawal_operations (creation_date);
+COMMENT ON INDEX taler_withdrawal_operations_expiration_index
+  IS 'for garbage collection';
+
 
 COMMIT;

@@ -69,6 +69,7 @@ class AmountTest {
                 login = "merchant",
                 uuid = UUID.randomUUID(),
                 amount = due,
+                now = Instant.now()
             )
             val wBool = when (wRes) {
                 WithdrawalCreationResult.BalanceInsufficient -> false

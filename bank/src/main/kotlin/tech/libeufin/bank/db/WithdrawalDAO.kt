@@ -41,19 +41,21 @@ class WithdrawalDAO(private val db: Database) {
     suspend fun create(
         login: String,
         uuid: UUID,
-        amount: TalerAmount
+        amount: TalerAmount,
+        now: Instant
     ): WithdrawalCreationResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
                 out_account_not_found,
                 out_account_is_exchange,
                 out_balance_insufficient
-            FROM create_taler_withdrawal(?, ?, (?,?)::taler_amount);
+            FROM create_taler_withdrawal(?, ?, (?,?)::taler_amount, ?);
         """)
         stmt.setString(1, login)
         stmt.setObject(2, uuid)
         stmt.setLong(3, amount.value)
         stmt.setInt(4, amount.frac)
+        stmt.setLong(5, now.toDbMicros() ?: throw faultyTimestampByBank())
         stmt.executeQuery().use {
             when {
                 !it.next() ->

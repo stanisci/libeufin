@@ -81,7 +81,7 @@ class AccountDAO(private val db: Database) {
                     CryptoUtil.checkpw(password, it.getString(1)) && it.getBoolean(2)
                 } 
             }
-            println(idempotent)
+            
             if (idempotent != null) {
                 if (idempotent) {
                     AccountCreationResult.Success
