@@ -269,7 +269,7 @@ private suspend fun getTalerReservePub(
  * @param db database handle.
  * @param payment payment to (maybe) ingest.
  */
-private suspend fun ingestOutgoingPayment(
+suspend fun ingestOutgoingPayment(
     db: Database,
     payment: OutgoingPayment
 ) {
@@ -293,7 +293,7 @@ private suspend fun ingestOutgoingPayment(
  * @param currency fiat currency of the watched bank account.
  * @param payment payment to (maybe) ingest.
  */
-private suspend fun ingestIncomingPayment(
+suspend fun ingestIncomingPayment(
     db: Database,
     payment: IncomingPayment
 ) {

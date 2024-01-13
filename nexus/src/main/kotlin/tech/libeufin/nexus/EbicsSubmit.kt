@@ -161,8 +161,7 @@ private suspend fun submitInitiatedPayment(
     )
     maybeLog(
         maybeLogDir,
-        xml,
-        initiatedPayment.requestUid
+        xml
     )
     try {
         submitPain001(
