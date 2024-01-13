@@ -50,13 +50,13 @@ CREATE TABLE IF NOT EXISTS incoming_transactions
   ,wire_transfer_subject TEXT NOT NULL
   ,execution_time INT8 NOT NULL
   ,debit_payto_uri TEXT NOT NULL
-  ,bank_transfer_id TEXT NOT NULL -- EBICS or Depolymerizer (generic)
+  ,bank_transfer_id TEXT NOT NULL UNIQUE -- EBICS or Depolymerizer (generic)
   );
 
 -- only active in exchange mode. Note: duplicate keys are another reason to bounce.
 CREATE TABLE IF NOT EXISTS talerable_incoming_transactions
   (incoming_transaction_id INT8 NOT NULL UNIQUE REFERENCES incoming_transactions(incoming_transaction_id) ON DELETE CASCADE
-   ,reserve_public_key BYTEA NOT NULL CHECK (LENGTH(reserve_public_key)=32) UNIQUE
+   ,reserve_public_key BYTEA NOT NULL UNIQUE CHECK (LENGTH(reserve_public_key)=32)
   );
 
 CREATE TABLE IF NOT EXISTS outgoing_transactions
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS outgoing_transactions
   ,wire_transfer_subject TEXT
   ,execution_time INT8 NOT NULL
   ,credit_payto_uri TEXT
-  ,bank_transfer_id TEXT NOT NULL
+  ,bank_transfer_id TEXT NOT NULL UNIQUE
   );
 
 CREATE TABLE IF NOT EXISTS initiated_outgoing_transactions
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS initiated_outgoing_transactions
   ,last_submission_time INT8
   ,submission_counter INT NOT NULL DEFAULT 0
   ,credit_payto_uri TEXT NOT NULL
-  ,outgoing_transaction_id INT8 REFERENCES outgoing_transactions (outgoing_transaction_id)
+  ,outgoing_transaction_id INT8 UNIQUE REFERENCES outgoing_transactions (outgoing_transaction_id)
   ,submitted submission_state DEFAULT 'unsubmitted'
   ,hidden BOOL DEFAULT FALSE -- FIXME: explain this.
   ,request_uid TEXT NOT NULL UNIQUE CHECK (char_length(request_uid) <= 35)

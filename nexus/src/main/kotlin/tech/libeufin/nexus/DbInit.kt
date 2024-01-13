@@ -4,7 +4,6 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
 import tech.libeufin.util.*
-import kotlin.system.exitProcess
 
 /**
  * This subcommand tries to load the SQL files that define
@@ -19,14 +18,12 @@ class DbInit : CliktCommand("Initialize the libeufin-nexus database", name = "db
     ).flag()
 
     override fun run() {
-        val cfg = loadConfigOrFail(common.config).extractDbConfigOrFail()
-        doOrFail {
-            pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
-                if (requestReset) {
-                    resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
-                }
-                initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
+        val cfg = loadConfig(common.config).dbConfig()
+        pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
+            if (requestReset) {
+                resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
             }
+            initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
         }
     }
 }

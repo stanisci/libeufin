@@ -4,7 +4,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import net.taler.wallet.crypto.Base32Crockford
 import net.taler.wallet.crypto.EncodingException
 import tech.libeufin.nexus.ebics.*
@@ -17,9 +17,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
-import kotlin.concurrent.fixedRateTimer
-import kotlin.io.path.createDirectories
-import kotlin.system.exitProcess
+import kotlin.io.path.*
 
 /**
  * Necessary data to perform a download.
@@ -75,7 +73,7 @@ data class FetchContext(
 private suspend inline fun downloadHelper(
     ctx: FetchContext,
     lastExecutionTime: Instant? = null
-): ByteArray? {
+): ByteArray {
     val initXml = if (ctx.ebicsVersion == EbicsVersion.three) {
         createEbics3DownloadInitialization(
             ctx.cfg,
@@ -112,7 +110,7 @@ private suspend inline fun downloadHelper(
          * bank side.  A client with an unreliable bank is not useful, hence
          * failing here.
          */
-        exitProcess(1)
+        throw e
     }
 }
 
@@ -141,26 +139,20 @@ fun maybeLogFile(
     val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
     val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
     // Creating the combined dir.
-    val dirs = Path.of(maybeLogDir, subDir)
-    doOrFail { dirs.createDirectories() }
-    fun maybeWrite(f: File, xml: String) {
-        if (f.exists()) {
-            logger.error("Log file exists already at: ${f.path}")
-            exitProcess(1)
-        }
-        doOrFail { f.writeText(xml) }
-    }
+    val dirs = Path(maybeLogDir, subDir)
+    dirs.createDirectories()
     if (nonZip) {
-        val f  = File(dirs.toString(), "${now.toDbMicros()}_HAC_response.pain.002.xml")
-        maybeWrite(f, content.toString(Charsets.UTF_8))
-        return
+        val f = Path(dirs.toString(), "${now.toDbMicros()}_HAC_response.pain.002.xml")
+        f.writeBytes(content)
+    } else {
+        // Write each ZIP entry in the combined dir.
+        content.unzipForEach { fileName, xmlContent ->
+            val f = Path(dirs.toString(), "${now.toDbMicros()}_$fileName")
+            // Rare: cannot download the same file twice in the same microsecond.
+            f.writeText(xmlContent)
+        }
     }
-    // Write each ZIP entry in the combined dir.
-    content.unzipForEach { fileName, xmlContent ->
-        val f  = File(dirs.toString(), "${now.toDbMicros()}_$fileName")
-        // Rare: cannot download the same file twice in the same microsecond.
-        maybeWrite(f, xmlContent)
-    }
+   
 }
 
 /**
@@ -254,25 +246,17 @@ fun removeSubjectNoise(subject: String): String? {
  * Checks the two conditions that may invalidate one incoming
  * payment: subject validity and availability.
  *
- * @param db database connection.
  * @param payment incoming payment whose subject is to be checked.
  * @return [ByteArray] as the reserve public key, or null if the
  *         payment cannot lead to a Taler withdrawal.
  */
 private suspend fun getTalerReservePub(
-    db: Database,
     payment: IncomingPayment
 ): ByteArray? {
     // Removing noise around the potential reserve public key.
     val maybeReservePub = removeSubjectNoise(payment.wireTransferSubject) ?: return null
     // Checking validity first.
     val dec = isReservePub(maybeReservePub) ?: return null
-    // Now checking availability.
-    val maybeUnavailable = db.isReservePubFound(dec)
-    if (maybeUnavailable) {
-        logger.error("Incoming payment with subject '${payment.wireTransferSubject}' exists already")
-        return null
-    }
     return dec
 }
 
@@ -284,31 +268,18 @@ private suspend fun getTalerReservePub(
  * @param db database handle.
  * @param payment payment to (maybe) ingest.
  */
-private suspend fun ingestOutgoingPayment(
+suspend fun ingestOutgoingPayment(
     db: Database,
     payment: OutgoingPayment
 ) {
-    logger.debug("Ingesting outgoing payment UID ${payment.bankTransferId}, subject ${payment.wireTransferSubject}")
-    // Check if the payment was ingested already.
-    if (db.isOutgoingPaymentSeen(payment.bankTransferId)) {
-        logger.debug("Outgoing payment with UID '${payment.bankTransferId}' already seen.")
-        return
-    }
-    /**
-     * Getting the initiate payment to link to this.  A missing initiated
-     * payment could mean that a third party is downloading the bank account
-     * history (to conduct an audit, for example)
-     */
-    val initId: Long? = db.initiatedPaymentGetFromUid(payment.bankTransferId);
-    if (initId == null)
-        logger.info("Outgoing payment lacks initiated counterpart with UID ${payment.bankTransferId}")
-    // store the payment and its (maybe null) linked init
-    val insertionResult = db.outgoingPaymentCreate(payment, initId)
-    if (insertionResult != OutgoingPaymentOutcome.SUCCESS) {
-        throw Exception("Could not store outgoing payment with UID " +
-                "'${payment.bankTransferId}' and update its related initiation." +
-                "  DB result: $insertionResult"
-        )
+    val result = db.registerOutgoing(payment)
+    if (result.new) {
+        if (result.initiated)
+            logger.debug("$payment")
+        else 
+            logger.debug("$payment recovered")
+    } else {
+        logger.debug("OUT '${payment.bankTransferId}' already seen")
     }
 }
 
@@ -319,29 +290,35 @@ private suspend fun ingestOutgoingPayment(
  *
  * @param db database handle.
  * @param currency fiat currency of the watched bank account.
- * @param incomingPayment payment to (maybe) ingest.
+ * @param payment payment to (maybe) ingest.
  */
-private suspend fun ingestIncomingPayment(
+suspend fun ingestIncomingPayment(
     db: Database,
-    incomingPayment: IncomingPayment
+    payment: IncomingPayment
 ) {
-    logger.debug("Ingesting incoming payment UID: ${incomingPayment.bankTransferId}, subject: ${incomingPayment.wireTransferSubject}")
-    if (db.isIncomingPaymentSeen(incomingPayment.bankTransferId)) {
-        logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}' already seen.")
-        return
-    }
-    val reservePub = getTalerReservePub(db, incomingPayment)
+    val reservePub = getTalerReservePub(payment)
     if (reservePub == null) {
-        logger.debug("Incoming payment with UID '${incomingPayment.bankTransferId}'" +
-                " has invalid subject: ${incomingPayment.wireTransferSubject}."
+        logger.debug("Incoming payment with UID '${payment.bankTransferId}'" +
+                " has invalid subject: ${payment.wireTransferSubject}."
         )
-        db.incomingPaymentCreateBounced(
-            incomingPayment,
-            UUID.randomUUID().toString().take(35)
+        val result = db.registerMalformedIncoming(
+            payment,
+            payment.amount, 
+            Instant.now()
         )
-        return
+        if (result.new) {
+            logger.debug("$payment bounced in '${result.bounceId}'")
+        } else {
+            logger.debug("IN '${payment.bankTransferId}' already seen and bounced in '${result.bounceId}'")
+        }
+    } else {
+        val result = db.registerTalerableIncoming(payment, reservePub)
+        if (result.new) {
+            logger.debug("$payment")
+        } else {
+            logger.debug("IN '${payment.bankTransferId}' already seen")
+        }
     }
-    db.incomingTalerablePaymentCreate(incomingPayment, reservePub)
 }
 
 /**
@@ -373,62 +350,34 @@ fun firstLessThanSecond(
  * @param db database connection.
  * @param content the ZIP file that contains the EBICS
  *        notification as camt.054 records.
- * @return true if the ingestion succeeded, false otherwise.
- *         False should fail the process, since it means that
- *         the notification could not be parsed.
  */
 private fun ingestNotification(
     db: Database,
     ctx: FetchContext,
     content: ByteArray
-): Boolean {
+) {
     val incomingPayments = mutableListOf<IncomingPayment>()
     val outgoingPayments = mutableListOf<OutgoingPayment>()
-    val filenamePrefixForIncoming = "camt.054_P_${ctx.cfg.myIbanAccount.iban}"
-    val filenamePrefixForOutgoing = "camt.054-Debit_P_${ctx.cfg.myIbanAccount.iban}"
+    
     try {
         content.unzipForEach { fileName, xmlContent ->
             if (!fileName.contains("camt.054", ignoreCase = true))
                 throw Exception("Asked for notification but did NOT get a camt.054")
-            /**
-             * We ignore any camt.054 that does not bring Taler-relevant information,
-             * like camt.054-Credit, for example.
-             */
-            if (!fileName.startsWith(filenamePrefixForIncoming) &&
-                    !fileName.startsWith(filenamePrefixForOutgoing)) {
-                logger.debug("Ignoring camt.054: $fileName")
-                return@unzipForEach
-            }
-
-            if (fileName.startsWith(filenamePrefixForIncoming))
-                incomingPayments += parseIncomingTxNotif(xmlContent, ctx.cfg.currency)
-            else outgoingPayments += parseOutgoingTxNotif(xmlContent, ctx.cfg.currency)
+            logger.debug("parse $fileName")
+            parseTxNotif(xmlContent, ctx.cfg.currency, incomingPayments, outgoingPayments)
         }
     } catch (e: IOException) {
-        logger.error("Could not open any ZIP archive")
-        return false
-    } catch (e: Exception) {
-        logger.error(e.message)
-        return false
+        throw Exception("Could not open any ZIP archive", e)
     }
 
-    try {
-        runBlocking {
-            incomingPayments.forEach {
-                ingestIncomingPayment(
-                    db,
-                    it
-                )
-            }
-            outgoingPayments.forEach {
-                ingestOutgoingPayment(db, it)
-            }
+    runBlocking {
+        incomingPayments.forEach {
+            ingestIncomingPayment(db, it)
         }
-    } catch (e: Exception) {
-        logger.error(e.message)
-        return false
+        outgoingPayments.forEach {
+            ingestOutgoingPayment(db, it)
+        }
     }
-    return true
 }
 
 /**
@@ -470,7 +419,7 @@ private suspend fun fetchDocuments(
     val lastExecutionTime: Instant? = ctx.pinnedStart ?: requestFrom
     logger.debug("Fetching ${ctx.whichDocument} from timestamp: $lastExecutionTime")
     // downloading the content
-    val maybeContent = downloadHelper(ctx, lastExecutionTime) ?: exitProcess(1) // client is wrong, failing.
+    val maybeContent = downloadHelper(ctx, lastExecutionTime)
     if (maybeContent.isEmpty()) return
     // logging, if the configuration wants.
     maybeLogFile(
@@ -483,9 +432,10 @@ private suspend fun fetchDocuments(
         logger.warn("Not ingesting ${ctx.whichDocument}.  Only camt.054 notifications supported.")
         return
     }
-    if (!ingestNotification(db, ctx, maybeContent)) {
-        logger.error("Ingesting notifications failed")
-        exitProcess(1)
+    try {
+        ingestNotification(db, ctx, maybeContent)
+    } catch (e: Exception) {
+        throw Exception("Ingesting notifications failed", e)
     }
 }
 
@@ -541,13 +491,9 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
      * mode when no flags are passed to the invocation.
      * FIXME: reduce code duplication with the submit subcommand.
      */
-    override fun run() {
-        val cfg: EbicsSetupConfig = doOrFail {
-            extractEbicsConfig(common.config)
-        }
-
-        val dbCfg = cfg.config.extractDbConfigOrFail()
-        val db = Database(dbCfg.dbConnStr)
+    override fun run() = cliCmd(logger) {
+        val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
+        val dbCfg = cfg.config.dbConfig()
 
         // Deciding what to download.
         var whichDoc = SupportedDocument.CAMT_054
@@ -555,113 +501,77 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (onlyReports) whichDoc = SupportedDocument.CAMT_052
         if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
         if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
-        if (parse || import) {
-            logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
-            val maybeStdin = generateSequence(::readLine).joinToString("\n")
-            when(whichDoc) {
-                SupportedDocument.CAMT_054 -> {
-                    try {
-                        val incomingTxs = parseIncomingTxNotif(maybeStdin, cfg.currency)
+
+        Database(dbCfg.dbConnStr).use { db ->
+            if (parse || import) {
+                logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
+                val maybeStdin = generateSequence(::readLine).joinToString("\n")
+                when(whichDoc) {
+                    SupportedDocument.CAMT_054 -> {
+                        val incomingTxs = mutableListOf<IncomingPayment>()
+                        val outgoingTxs = mutableListOf<OutgoingPayment>()
+                        parseTxNotif(maybeStdin, cfg.currency, incomingTxs, outgoingTxs)
                         println(incomingTxs)
+                        println(outgoingTxs)
                         if (import) {
                             runBlocking {
                                 incomingTxs.forEach {
                                     ingestIncomingPayment(db, it)
                                 }
-                            }
-                        }
-                    } catch (e: WrongPaymentDirection) {
-                        logger.info("Input doesn't contain incoming payments")
-                    } catch (e: Exception) {
-                        logger.error(e.message)
-                        exitProcess(1)
-                    }
-                    try {
-                        val outgoingTxs = parseOutgoingTxNotif(maybeStdin, cfg.currency)
-                        println(outgoingTxs)
-                        if (import) {
-                            runBlocking {
                                 outgoingTxs.forEach {
                                     ingestOutgoingPayment(db, it)
                                 }
                             }
                         }
-                    } catch (e: WrongPaymentDirection) {
-                        logger.debug("Input doesn't contain outgoing payments")
-                    } catch (e: Exception) {
-                        logger.error(e.message)
-                        exitProcess(1)
                     }
+                    else -> throw Exception("Parsing $whichDoc not supported")
                 }
-                else -> {
-                    logger.error("Parsing $whichDoc not supported")
-                    exitProcess(1)
-                }
+                return@cliCmd
             }
-            return
-        }
 
-        // Fail now if keying is incomplete.
-        if (!isKeyingComplete(cfg)) exitProcess(1)
-        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
-        if (!bankKeys.accepted && !import && !parse) {
-            logger.error("Bank keys are not accepted, yet.  Won't fetch any records.")
-            exitProcess(1)
-        }
-        val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-        if (clientKeys == null) {
-            logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
-            exitProcess(1)
-        }
-
-        val ctx = FetchContext(
-            cfg,
-            HttpClient(),
-            clientKeys,
-            bankKeys,
-            whichDoc,
-            EbicsVersion.three,
-            ebicsExtraLog
-        )
-        if (transient) {
-            logger.info("Transient mode: fetching once and returning.")
-            val pinnedStartVal = pinnedStart
-            val pinnedStartArg = if (pinnedStartVal != null) {
-                logger.debug("Pinning start date to: $pinnedStartVal")
-                doOrFail {
+            val (clientKeys, bankKeys) = expectFullKeys(cfg)
+            val ctx = FetchContext(
+                cfg,
+                HttpClient(),
+                clientKeys,
+                bankKeys,
+                whichDoc,
+                EbicsVersion.three,
+                ebicsExtraLog
+            )
+            if (transient) {
+                logger.info("Transient mode: fetching once and returning.")
+                val pinnedStartVal = pinnedStart
+                val pinnedStartArg = if (pinnedStartVal != null) {
+                    logger.debug("Pinning start date to: $pinnedStartVal")
                     // Converting YYYY-MM-DD to Instant.
                     LocalDate.parse(pinnedStartVal).atStartOfDay(ZoneId.of("UTC")).toInstant()
-                }
-            } else null
-            ctx.pinnedStart = pinnedStartArg
-            if (whichDoc == SupportedDocument.PAIN_002_LOGS)
-                ctx.ebicsVersion = EbicsVersion.two
-            runBlocking {
-                fetchDocuments(db, ctx)
-            }
-            return
-        }
-        val frequency: NexusFrequency = doOrFail {
-            val configValue = cfg.config.requireString("nexus-fetch", "frequency")
-            val frequencySeconds = checkFrequency(configValue)
-            return@doOrFail NexusFrequency(frequencySeconds, configValue)
-        }
-        logger.debug("Running with a frequency of ${frequency.fromConfig}")
-        if (frequency.inSeconds == 0) {
-            logger.warn("Long-polling not implemented, running therefore in transient mode")
-            runBlocking {
-                fetchDocuments(db, ctx)
-            }
-            return
-        }
-        fixedRateTimer(
-            name = "ebics submit period",
-            period = (frequency.inSeconds * 1000).toLong(),
-            action = {
+                } else null
+                ctx.pinnedStart = pinnedStartArg
+                if (whichDoc == SupportedDocument.PAIN_002_LOGS)
+                    ctx.ebicsVersion = EbicsVersion.two
                 runBlocking {
                     fetchDocuments(db, ctx)
                 }
+            } else {
+                val configValue = cfg.config.requireString("nexus-fetch", "frequency")
+                val frequencySeconds = checkFrequency(configValue)
+                val cfgFrequency: NexusFrequency = NexusFrequency(frequencySeconds, configValue)
+                logger.debug("Running with a frequency of ${cfgFrequency.fromConfig}")
+                val frequency: NexusFrequency? = if (cfgFrequency.inSeconds == 0) {
+                    logger.warn("Long-polling not implemented, running therefore in transient mode")
+                    null
+                } else {
+                    cfgFrequency
+                }
+                runBlocking {
+                    do {
+                        // TODO error handling
+                        fetchDocuments(db, ctx)
+                        delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
+                    } while (frequency != null)
+                }
             }
-        )
+        }
     }
 }

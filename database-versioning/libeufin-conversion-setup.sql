@@ -60,9 +60,14 @@ LANGUAGE plpgsql AS $$
       FROM libeufin_bank.cashin(now_date, NEW.reserve_public_key, local_amount, subject);
     SET search_path TO libeufin_nexus;
 
+    -- Bounce on soft failures
     IF too_small THEN
-      RAISE EXCEPTION 'cashin currency conversion failed: too small amount';
+      -- TODO bounce fees ?
+      PERFORM bounce_incoming(NEW.incoming_transaction_id, ((local_amount).val, (local_amount).frac)::taler_amount, now_date);
+      RETURN NULL;
     END IF;
+
+    -- Error on hard failures
     IF no_config THEN
       RAISE EXCEPTION 'cashin currency conversion failed: missing conversion rates';
     END IF;

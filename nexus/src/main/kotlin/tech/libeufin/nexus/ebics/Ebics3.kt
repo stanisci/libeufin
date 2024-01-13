@@ -89,7 +89,7 @@ fun createEbics3DownloadInitialization(
     cfg: EbicsSetupConfig,
     bankkeys: BankPublicKeysFile,
     clientKeys: ClientPrivateKeysFile,
-    orderParams: Ebics3Request.OrderDetails.BTOrderParams
+    orderParams: Ebics3Request.OrderDetails.BTDOrderParams
 ): String {
     val nonce = getNonce(128)
     val req = Ebics3Request.createForDownloadInitializationPhase(
@@ -278,7 +278,7 @@ fun prepNotificationRequest3(
     startDate: Instant? = null,
     endDate: Instant? = null,
     isAppendix: Boolean
-): Ebics3Request.OrderDetails.BTOrderParams {
+): Ebics3Request.OrderDetails.BTDOrderParams {
     val service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "REP"
         scope = "CH"
@@ -292,7 +292,7 @@ fun prepNotificationRequest3(
         if (!isAppendix)
             serviceOption = "XDCI"
     }
-    return Ebics3Request.OrderDetails.BTOrderParams().apply {
+    return Ebics3Request.OrderDetails.BTDOrderParams().apply {
         this.service = service
         this.dateRange = if (startDate != null)
             getEbics3DateRange(startDate, endDate ?: Instant.now())
@@ -314,7 +314,7 @@ fun prepNotificationRequest3(
 fun prepAckRequest3(
     startDate: Instant? = null,
     endDate: Instant? = null
-): Ebics3Request.OrderDetails.BTOrderParams {
+): Ebics3Request.OrderDetails.BTDOrderParams {
     val service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "PSR"
         scope = "CH"
@@ -326,7 +326,7 @@ fun prepAckRequest3(
             version = "10"
         }
     }
-    return Ebics3Request.OrderDetails.BTOrderParams().apply {
+    return Ebics3Request.OrderDetails.BTDOrderParams().apply {
         this.service = service
         this.dateRange = if (startDate != null)
             getEbics3DateRange(startDate, endDate ?: Instant.now())
@@ -347,7 +347,7 @@ fun prepAckRequest3(
 fun prepStatementRequest3(
     startDate: Instant? = null,
     endDate: Instant? = null
-): Ebics3Request.OrderDetails.BTOrderParams {
+): Ebics3Request.OrderDetails.BTDOrderParams {
     val service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "EOP"
         scope = "CH"
@@ -359,7 +359,7 @@ fun prepStatementRequest3(
             version = "08"
         }
     }
-    return Ebics3Request.OrderDetails.BTOrderParams().apply {
+    return Ebics3Request.OrderDetails.BTDOrderParams().apply {
         this.service = service
         this.dateRange = if (startDate != null)
             getEbics3DateRange(startDate, endDate ?: Instant.now())
@@ -380,7 +380,7 @@ fun prepStatementRequest3(
 fun prepReportRequest3(
     startDate: Instant? = null,
     endDate: Instant? = null
-): Ebics3Request.OrderDetails.BTOrderParams {
+): Ebics3Request.OrderDetails.BTDOrderParams {
     val service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "STM"
         scope = "CH"
@@ -392,7 +392,7 @@ fun prepReportRequest3(
             version = "08"
         }
     }
-    return Ebics3Request.OrderDetails.BTOrderParams().apply {
+    return Ebics3Request.OrderDetails.BTDOrderParams().apply {
         this.service = service
         this.dateRange = if (startDate != null)
             getEbics3DateRange(startDate, endDate ?: Instant.now())
@@ -413,7 +413,7 @@ fun prepReportRequest3(
 fun prepEbics3Document(
     whichDoc: SupportedDocument,
     startDate: Instant? = null
-): Ebics3Request.OrderDetails.BTOrderParams =
+): Ebics3Request.OrderDetails.BTDOrderParams =
     when(whichDoc) {
         SupportedDocument.PAIN_002 -> prepAckRequest3(startDate)
         SupportedDocument.CAMT_052 -> prepReportRequest3(startDate)

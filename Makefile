@@ -63,6 +63,11 @@ install-nobuild-bank-files:
 	install -m 644 -D -t $(sql_dir) database-versioning/libeufin-bank*.sql
 	install -m 644 -D -t $(sql_dir) database-versioning/libeufin-conversion*.sql
 
+.PHONY: install-nobuild-nexus-files
+install-nobuild-nexus-files:
+	install -m 644 -D -t $(config_dir) contrib/nexus.conf
+	install -m 644 -D -t $(sql_dir) database-versioning/libeufin-nexus*.sql
+
 .PHONY: install-nobuild-bank
 install-nobuild-bank: install-nobuild-common install-nobuild-bank-files
 	install -d $(spa_dir)
@@ -76,9 +81,8 @@ install-nobuild-bank: install-nobuild-common install-nobuild-bank-files
 	install -m=644 -D -t $(lib_dir) bank/build/install/bank-shadow/lib/bank-*.jar
 
 .PHONY: install-nobuild-nexus
-install-nobuild-nexus: install-nobuild-common
+install-nobuild-nexus: install-nobuild-common install-nobuild-nexus-files
 	install -m 644 -D -t $(config_dir) contrib/nexus.conf
-	install -m 644 -D -t $(sql_dir) database-versioning/libeufin-nexus*.sql
 	install -m 644 -D -t $(man_dir)/man1 doc/prebuilt/man/libeufin-nexus.1
 	install -m 644 -D -t $(man_dir)/man5 doc/prebuilt/man/libeufin-nexus.conf.5
 	install -D -t $(bin_dir) contrib/libeufin-nexus-dbinit
@@ -107,6 +111,19 @@ check: install-nobuild-bank-files
 test: install-nobuild-bank-files
 	./gradlew test --tests $(test) -i
 
+.PHONY: nexus-test
+nexus-test: install-nobuild-nexus-files
+	./gradlew :nexus:test --tests $(test) -i
+
 .PHONY: integration-test
-integration-test: install-nobuild-bank-files
+integration-test: install-nobuild-bank-files install-nobuild-nexus-files
 	./gradlew :integration:test --tests $(test) -i
+
+.PHONY: integration
+integration: install-nobuild-bank-files install-nobuild-nexus-files
+	./gradlew :integration:run --console=plain --args="$(test)"
+
+.PHONY: doc
+doc:
+	./gradlew dokkaHtmlMultiModule
+	open build/dokka/htmlMultiModule/index.html

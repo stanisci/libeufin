@@ -35,7 +35,6 @@ import kotlinx.serialization.KSerializer
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
-import kotlin.system.exitProcess
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -49,6 +48,7 @@ import tech.libeufin.nexus.ebics.*
 import tech.libeufin.util.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
+import java.io.FileNotFoundException
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
 val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
@@ -269,46 +269,51 @@ data class BankPublicKeysFile(
 )
 
 /**
- * Runs the argument and fails the process, if that throws
- * an exception.
+ * Load client and bank keys from disk.
+ * Checks that the keying process has been fully completed.
+ * 
+ * Helps to fail before starting to talk EBICS to the bank.
  *
- * @param getLambda function that might return a value.
- * @return the value from getLambda.
+ * @param cfg configuration handle.
+ * @return both client and bank keys
  */
-fun <T>doOrFail(getLambda: () -> T): T =
-    try {
-        getLambda()
-    } catch (e: Exception) {
-        logger.error(e.message)
-        exitProcess(1)
+fun expectFullKeys(
+    cfg: EbicsSetupConfig
+): Pair<ClientPrivateKeysFile, BankPublicKeysFile> {
+    val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
+    if (clientKeys == null) {
+        throw Exception("Cannot operate without client keys. Missing '${cfg.clientPrivateKeysFilename}' file. Run 'libeufin-nexus ebics-setup' first")
+    } else if (!clientKeys.submitted_ini || !clientKeys.submitted_hia) {
+        throw Exception("Cannot operate with unsubmitted client keys, run 'libeufin-nexus ebics-setup' first")
     }
+    val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
+    if (bankKeys == null) {
+        throw Exception("Cannot operate without bank keys. Missing '${cfg.bankPublicKeysFilename}' file. run 'libeufin-nexus ebics-setup' first")
+    } else if (!bankKeys.accepted) {
+        throw Exception("Cannot operate with unaccepted bank keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
+    }
+    return Pair(clientKeys, bankKeys)
+}
 
 /**
  * Load the bank keys file from disk.
  *
  * @param location the keys file location.
  * @return the internal JSON representation of the keys file,
- *         or null on failures.
+ *         or null if the file does not exist
  */
 fun loadBankKeys(location: String): BankPublicKeysFile? {
-    val f = File(location)
-    if (!f.exists()) {
-        logger.error("Could not find the bank keys file at: $location")
+    val content = try {
+        File(location).readText()
+    } catch (e: FileNotFoundException) {
         return null
-    }
-    val fileContent = try {
-        f.readText() // read from disk.
     } catch (e: Exception) {
-        logger.error("Could not read the bank keys file from disk, detail: ${e.message}")
-        return null
+        throw Exception("Could not read the bank keys file from disk", e)
     }
     return try {
-        myJson.decodeFromString(fileContent) // Parse into JSON.
+        myJson.decodeFromString(content)
     } catch (e: Exception) {
-        logger.error(e.message)
-        @OptIn(InternalAPI::class) // enables message below.
-        logger.error(e.rootCause?.message) // actual useful message mentioning failing fields
-        return null
+        throw Exception("Could not decode bank keys", e)
     }
 }
 
@@ -317,60 +322,43 @@ fun loadBankKeys(location: String): BankPublicKeysFile? {
  *
  * @param location the keys file location.
  * @return the internal JSON representation of the keys file,
- *         or null on failures.
+ *         or null if the file does not exist
  */
 fun loadPrivateKeysFromDisk(location: String): ClientPrivateKeysFile? {
-    val f = File(location)
-    if (!f.exists()) {
-        logger.error("Could not find the private keys file at: $location")
+    val content = try {
+        File(location).readText()
+    } catch (e: FileNotFoundException) {
         return null
-    }
-    val fileContent = try {
-        f.readText() // read from disk.
     } catch (e: Exception) {
-        logger.error("Could not read private keys from disk, detail: ${e.message}")
-        return null
+        throw Exception("Could not read private keys from disk", e)
     }
     return try {
-        myJson.decodeFromString(fileContent) // Parse into JSON.
+        myJson.decodeFromString(content)
     } catch (e: Exception) {
-        logger.error(e.message)
-        @OptIn(InternalAPI::class) // enables message below.
-        logger.error(e.rootCause?.message) // actual useful message mentioning failing fields
-        return null
+        throw Exception("Could not decode private keys", e)
     }
 }
 
 /**
- * Abstracts the config loading and exception handling.
+ * Abstracts the config loading
  *
  * @param configFile potentially NULL configuration file location.
  * @return the configuration handle.
  */
-fun loadConfigOrFail(configFile: String?): TalerConfig {
+fun loadConfig(configFile: String?): TalerConfig {
     val config = TalerConfig(NEXUS_CONFIG_SOURCE)
-    try {
-        config.load(configFile)
-    } catch (e: Exception) {
-        logger.error("Could not load configuration from ${configFile}, detail: ${e.message}")
-        exitProcess(1)
-    }
+    config.load(configFile)
     return config
 }
 
 /**
  * Abstracts fetching the DB config values to set up Nexus.
  */
-fun TalerConfig.extractDbConfigOrFail(): DatabaseConfig =
-    try {
-        DatabaseConfig(
-            dbConnStr = requireString("nexus-postgres", "config"),
-            sqlDir = requirePath("libeufin-nexusdb-postgres", "sql_dir")
-        )
-    } catch (e: Exception) {
-        logger.error("Could not load config options for Nexus DB, detail: ${e.message}.")
-        exitProcess(1)
-    }
+fun TalerConfig.dbConfig(): DatabaseConfig =
+    DatabaseConfig(
+        dbConnStr = requireString("nexus-postgres", "config"),
+        sqlDir = requirePath("libeufin-nexusdb-postgres", "sql_dir")
+    )
 
 /**
  * Main CLI class that collects all the subcommands.

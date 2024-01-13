@@ -8,145 +8,113 @@ import kotlin.test.assertEquals
 
 
 class OutgoingPaymentsTest {
-
-    /**
-     * Tests the insertion of outgoing payments, including
-     * the case where we reconcile with an initiated payment.
-     */
     @Test
-    fun outgoingPaymentCreation() {
+    fun register() {
         val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
         runBlocking {
-            // inserting without reconciling
-            assertFalse(db.isOutgoingPaymentSeen("entropic"))
-            assertEquals(
-                OutgoingPaymentOutcome.SUCCESS,
-                db.outgoingPaymentCreate(genOutPay("paid by nexus"))
-            )
-            assertTrue(db.isOutgoingPaymentSeen("entropic"))
-            // inserting trying to reconcile with a non-existing initiated payment.
-            assertEquals(
-                OutgoingPaymentOutcome.INITIATED_COUNTERPART_NOT_FOUND,
-                db.outgoingPaymentCreate(genOutPay(), 5)
-            )
-            // initiating a payment to reconcile later.  Takes row ID == 1
-            assertEquals(
-                PaymentInitiationOutcome.SUCCESS,
-                db.initiatedPaymentCreate(genInitPay("waiting for reconciliation"))
-            )
-            // Creating an outgoing payment, reconciling it with the one above.
-            assertEquals(
-                OutgoingPaymentOutcome.SUCCESS,
-                db.outgoingPaymentCreate(genOutPay(), 1)
-            )
+            // With reconciling
+            genOutPay("paid by nexus", "first").run {
+                assertEquals(
+                    PaymentInitiationOutcome.SUCCESS,
+                    db.initiatedPaymentCreate(genInitPay("waiting for reconciliation", "first"))
+                )
+                db.registerOutgoing(this).run {
+                    assertTrue(new,)
+                    assertTrue(initiated)
+                }
+                db.registerOutgoing(this).run {
+                    assertFalse(new)
+                    assertTrue(initiated)
+                }
+            }
+            // Without reconciling
+            genOutPay("not paid by nexus", "second").run {
+                db.registerOutgoing(this).run {
+                    assertTrue(new)
+                    assertFalse(initiated)
+                }
+                db.registerOutgoing(this).run {
+                    assertFalse(new)
+                    assertFalse(initiated)
+                }
+            }
         }
     }
 }
 
-// @Ignore // enable after having modified the bouncing logic in Kotlin
 class IncomingPaymentsTest {
-    @Test
-    fun bounceWithCustomRefund() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
-        runBlocking {
-            // creating and bouncing one incoming transaction.
-            assertTrue(
-                db.incomingPaymentCreateBounced(
-                    genIncPay("incoming and bounced"),
-                    "UID",
-                    TalerAmount(2, 53000000, "KUDOS")
-                )
-            )
-            db.runConn {
-                // check incoming shows up.
-                val checkIncoming = it.prepareStatement("""
-                    SELECT 
-                      (amount).val as amount_value
-                      ,(amount).frac as amount_frac
-                     FROM incoming_transactions
-                     WHERE incoming_transaction_id = 1;
-                """).executeQuery()
-                assertTrue(checkIncoming.next())
-                assertEquals(44, checkIncoming.getLong("amount_value"))
-                assertEquals(0, checkIncoming.getLong("amount_frac"))
-                // check bounced has the custom value
-                val findBounced = it.prepareStatement("""
-                    SELECT 
-                      initiated_outgoing_transaction_id
-                      FROM bounced_transactions
-                      WHERE incoming_transaction_id = 1;
-                """).executeQuery()
-                assertTrue(findBounced.next())
-                val initiatedId = findBounced.getLong("initiated_outgoing_transaction_id")
-                assertEquals(1, initiatedId)
-                val findInitiatedAmount = it.prepareStatement("""
-                    SELECT
-                      (amount).val as amount_value
-                      ,(amount).frac as amount_frac
-                    FROM initiated_outgoing_transactions
-                    WHERE initiated_outgoing_transaction_id = 1;
-                """).executeQuery()
-                assertTrue(findInitiatedAmount.next())
-                assertEquals(
-                    53000000,
-                    findInitiatedAmount.getInt("amount_frac")
-                )
-                assertEquals(
-                    2,
-                    findInitiatedAmount.getInt("amount_value")
-                )
-            }
-        }
-    }
     // Tests creating and bouncing incoming payments in one DB transaction.
     @Test
-    fun incomingAndBounce() {
+    fun bounce() {
         val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
         runBlocking {
             // creating and bouncing one incoming transaction.
-            assertTrue(db.incomingPaymentCreateBounced(
-                genIncPay("incoming and bounced"),
-                "UID"
-            ))
+            val payment = genInPay("incoming and bounced")
+            db.registerMalformedIncoming(
+                payment,
+                TalerAmount(2, 53000000, "KUDOS"),
+                Instant.now()
+            ).run {
+                assertTrue(new)
+            }
+            db.registerMalformedIncoming(
+                payment,
+                TalerAmount(2, 53000000, "KUDOS"),
+                Instant.now()
+            ).run {
+                assertFalse(new)
+            }
             db.runConn {
                 // Checking one incoming got created
                 val checkIncoming = it.prepareStatement("""
-                    SELECT 1 FROM incoming_transactions WHERE incoming_transaction_id = 1;
+                    SELECT (amount).val as amount_value, (amount).frac as amount_frac 
+                    FROM incoming_transactions WHERE incoming_transaction_id = 1
                 """).executeQuery()
                 assertTrue(checkIncoming.next())
+                assertEquals(payment.amount.value, checkIncoming.getLong("amount_value"))
+                assertEquals(payment.amount.fraction, checkIncoming.getInt("amount_frac"))
                 // Checking the bounced table got its row.
                 val checkBounced = it.prepareStatement("""
-                    SELECT 1 FROM bounced_transactions WHERE incoming_transaction_id = 1;
+                    SELECT 1 FROM bounced_transactions 
+                    WHERE incoming_transaction_id = 1 AND initiated_outgoing_transaction_id = 1
                 """).executeQuery()
                 assertTrue(checkBounced.next())
                 // check the related initiated payment exists.
                 val checkInitiated = it.prepareStatement("""
-                    SELECT 
-                      COUNT(initiated_outgoing_transaction_id) AS how_many
-                      FROM initiated_outgoing_transactions
+                    SELECT
+                        (amount).val as amount_value
+                        ,(amount).frac as amount_frac
+                    FROM initiated_outgoing_transactions
+                    WHERE initiated_outgoing_transaction_id = 1
                 """).executeQuery()
                 assertTrue(checkInitiated.next())
-                assertEquals(1, checkInitiated.getInt("how_many"))
+                assertEquals(
+                    53000000,
+                    checkInitiated.getInt("amount_frac")
+                )
+                assertEquals(
+                    2,
+                    checkInitiated.getInt("amount_value")
+                )
             }
         }
     }
 
     // Tests the creation of a talerable incoming payment.
     @Test
-    fun incomingTalerableCreation() {
+    fun talerable() {
         val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
         val reservePub = ByteArray(32)
         Random.nextBytes(reservePub)
 
         runBlocking {
-            val inc = genIncPay("reserve-pub")
+            val inc = genInPay("reserve-pub")
             // Checking the reserve is not found.
             assertFalse(db.isReservePubFound(reservePub))
-            assertFalse(db.isIncomingPaymentSeen(inc.bankTransferId))
-            assertTrue(db.incomingTalerablePaymentCreate(inc, reservePub))
+            assertTrue(db.registerTalerableIncoming(inc, reservePub).new)
             // Checking the reserve is not found.
             assertTrue(db.isReservePubFound(reservePub))
-            assertTrue(db.isIncomingPaymentSeen(inc.bankTransferId))
+            assertFalse(db.registerTalerableIncoming(inc, reservePub).new)
         }
     }
 }

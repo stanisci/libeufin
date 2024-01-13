@@ -4,6 +4,9 @@
 /sandbox/bin/
 /util/bin/
 nexus/libeufin-nexus-dev
+nexus/test
+integration/test
+integration/config.json
 sandbox/libeufin-sandbox-dev
 configure
 build/
@@ -23,6 +26,7 @@ __pycache__
 *.log
 .DS_Store
 *.mk
+*.xsd
 util/src/main/resources/version.txt
 debian/usr/share/libeufin/demobank-ui/index.js
 debian/usr/share/libeufin/demobank-ui/*.html

@@ -22,24 +22,29 @@ package tech.libeufin.util
 import ConfigSource
 import TalerConfig
 import TalerConfigError
-import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.core.*
 import com.github.ajalt.clikt.parameters.types.*
 import com.github.ajalt.clikt.parameters.arguments.*
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import kotlin.system.exitProcess
 
 private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.ConfigCli")
 
 fun cliCmd(logger: Logger, lambda: () -> Unit) {
     try {
         lambda()
-    } catch (e: Exception) {
-        logger.error(e.message)
-        exitProcess(1)
+    } catch (e: Throwable) {
+        var msg = StringBuilder(e.message)
+        var cause = e.cause;
+        while (cause != null) {
+            msg.append(": ")
+            msg.append(cause.message)
+            cause = cause.cause
+        }
+        logger.error(msg.toString())
+        throw ProgramResult(1)
     }
 }
 
@@ -83,15 +88,13 @@ private class CliConfigGet(private val configSource: ConfigSource) : CliktComman
         if (isPath) {
             val res = config.lookupPath(sectionName, optionName)
             if (res == null) {
-                logger.error("value not found in config")
-                exitProcess(2)
+                throw Exception("value not found in config")
             }
             println(res)
         } else {
             val res = config.lookupString(sectionName, optionName)
             if (res == null) {
-                logger.error("value not found in config")
-                exitProcess(2)
+                throw Exception("value not found in config")
             }
             println(res)
         }

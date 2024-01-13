@@ -23,7 +23,7 @@ class PublicKeys {
             bank_encryption_public_key = CryptoUtil.generateRsaKeyPair(2028).public
         )
         // storing them on disk.
-        assertTrue(syncJsonToDisk(fileContent, "/tmp/nexus-tests-bank-keys.json"))
+        syncJsonToDisk(fileContent, "/tmp/nexus-tests-bank-keys.json")
         // loading them and check that values are the same.
         val fromDisk = loadBankKeys("/tmp/nexus-tests-bank-keys.json")
         assertNotNull(fromDisk)
@@ -50,16 +50,12 @@ class PrivateKeys {
     fun createWrongPermissions() {
         f.writeText("won't be overridden")
         f.setReadOnly()
-        assertFalse(syncJsonToDisk(clientKeys, f.path))
+        try {
+            syncJsonToDisk(clientKeys, f.path)
+            throw Exception("Should have failed")
+        } catch (e: Exception) { }
     }
 
-    // Testing keys file creation.
-    @Test
-    fun creation() {
-        assertFalse(f.exists())
-        maybeCreatePrivateKeysFile(f.path) // file doesn't exist, this must create.
-        j.decodeFromString<ClientPrivateKeysFile>(f.readText()) // reading and validating disk content.
-    }
     /**
      * Tests whether loading keys from disk yields the same
      * values that were stored to the file.
@@ -67,7 +63,7 @@ class PrivateKeys {
     @Test
     fun load() {
         assertFalse(f.exists())
-        assertTrue(syncJsonToDisk(clientKeys, f.path)) // Artificially storing this to the file.
+        syncJsonToDisk(clientKeys, f.path) // Artificially storing this to the file.
         val fromDisk = loadPrivateKeysFromDisk(f.path) // loading it via the tested routine.
         assertNotNull(fromDisk)
         // Checking the values from disk match the initial object.

@@ -26,7 +26,6 @@ import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
 import tech.libeufin.util.ebics_h004.EbicsTypes
 import java.io.File
-import kotlin.system.exitProcess
 import TalerConfigError
 import kotlinx.serialization.encodeToString
 import tech.libeufin.nexus.ebics.*
@@ -34,32 +33,9 @@ import tech.libeufin.util.*
 import tech.libeufin.util.ebics_h004.HTDResponseOrderData
 import java.time.Instant
 import kotlin.reflect.typeOf
-
-/**
- * Checks the configuration to secure that the key exchange between
- * the bank and the subscriber took place.  Helps to fail before starting
- * to talk EBICS to the bank.
- *
- * @param cfg configuration handle.
- * @return true if the keying was made before, false otherwise.
- */
-fun isKeyingComplete(cfg: EbicsSetupConfig): Boolean {
-    val maybeClientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-    if (maybeClientKeys == null ||
-        (!maybeClientKeys.submitted_ini) ||
-        (!maybeClientKeys.submitted_hia)) {
-        logger.error("Cannot operate without or with unsubmitted subscriber keys." +
-                "  Run 'libeufin-nexus ebics-setup' first.")
-        return false
-    }
-    val maybeBankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
-    if (maybeBankKeys == null || (!maybeBankKeys.accepted)) {
-        logger.error("Cannot operate without or with unaccepted bank keys." +
-                "  Run 'libeufin-nexus ebics-setup' until accepting the bank keys.")
-        return false
-    }
-    return true
-}
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import kotlin.io.path.*
 
 /**
  * Writes the JSON content to disk.  Used when we create or update
@@ -67,23 +43,23 @@ fun isKeyingComplete(cfg: EbicsSetupConfig): Boolean {
  * silently what's found under the given location!
  *
  * @param obj the class representing the JSON content to store to disk.
- * @param location where to store `obj`
- * @return true in case of success, false otherwise.
+ * @param path where to store `obj`
  */
-inline fun <reified T> syncJsonToDisk(obj: T, location: String): Boolean {
-    val fileContent = try {
+inline fun <reified T> syncJsonToDisk(obj: T, path: String) {
+    val content = try {
         myJson.encodeToString(obj)
     } catch (e: Exception) {
-        logger.error("Could not encode the input '${typeOf<T>()}' to JSON, detail: ${e.message}")
-        return false
+        throw Exception("Could not encode the input '${typeOf<T>()}' to JSON", e)
     }
     try {
-        File(location).writeText(fileContent)
+        // Write to temp file then rename to enable atomicity when possible
+        val path = Path(path).absolute()
+        val tmp =  Files.createTempFile(path.parent, "tmp_", "_${path.fileName}")
+        tmp.writeText(content)
+        tmp.moveTo(path, StandardCopyOption.REPLACE_EXISTING);
     } catch (e: Exception) {
-        logger.error("Could not write JSON content at $location, detail: ${e.message}")
-        return false
+        throw Exception("Could not write JSON content at $path", e)
     }
-    return true
 }
 
 /**
@@ -99,43 +75,28 @@ fun generateNewKeys(): ClientPrivateKeysFile =
         submitted_hia = false,
         submitted_ini = false
     )
-/**
- * Conditionally generates the client private keys and stores them
- * to disk, if the file does not exist already.  Does nothing if the
- * file exists.
- *
- * @param filename keys file location
- * @return true if the keys file existed already or its creation
- *         went through, false for any error.
- */
-fun maybeCreatePrivateKeysFile(filename: String): Boolean {
-    val f = File(filename)
-    // NOT overriding any file at the wanted location.
-    if (f.exists()) {
-        logger.debug("Private key file found at: $filename.")
-        return true
-    }
-    val newKeys = generateNewKeys()
-    if (!syncJsonToDisk(newKeys, filename))
-        return false
-    logger.info("New client keys created at: $filename")
-    return true
-}
 
 /**
  * Obtains the client private keys, regardless of them being
  * created for the first time, or read from an existing file
  * on disk.
  *
- * @param location path to the file that contains the keys.
- * @return true if the operation succeeds, false otherwise.
+ * @param path path to the file that contains the keys.
+ * @return current or new client keys
  */
-private fun preparePrivateKeys(location: String): ClientPrivateKeysFile? {
-    if (!maybeCreatePrivateKeysFile(location)) {
-        logger.error("Could not create client keys at $location")
-        exitProcess(1)
+private fun preparePrivateKeys(path: String): ClientPrivateKeysFile {
+    // If exists load from disk
+    val current = loadPrivateKeysFromDisk(path)
+    if (current != null) return current
+    // Else create new keys
+    try {
+        val newKeys = generateNewKeys()
+        syncJsonToDisk(newKeys, path)
+        logger.info("New client keys created at: $path")
+        return newKeys
+    } catch (e: Exception) {
+        throw Exception("Could not create client keys at $path", e)
     }
-    return loadPrivateKeysFromDisk(location) // loads what found at location.
 }
 
 /**
@@ -185,47 +146,40 @@ private fun askUserToAcceptKeys(bankKeys: BankPublicKeysFile): Boolean {
  *
  * @param cfg used to get the location of the bank keys file.
  * @param bankKeys bank response to the HPB message.
- * @return true if the keys were stored to disk (as "not accepted"),
- *         false if the storage failed or the content was invalid.
  */
 private fun handleHpbResponse(
     cfg: EbicsSetupConfig,
     bankKeys: EbicsKeyManagementResponseContent
-): Boolean {
+) {
     val hpbBytes = bankKeys.orderData // silences compiler.
     if (hpbBytes == null) {
-        logger.error("HPB content not found in a EBICS response with successful return codes.")
-        return false
+        throw Exception("HPB content not found in a EBICS response with successful return codes.")
     }
     val hpbObj = try {
         parseEbicsHpbOrder(hpbBytes)
-    }
-    catch (e: Exception) {
-        logger.error("HPB response content seems invalid.")
-        return false
+    } catch (e: Exception) {
+        throw Exception("HPB response content seems invalid: e")
     }
     val encPub = try {
         CryptoUtil.loadRsaPublicKey(hpbObj.encryptionPubKey.encoded)
     } catch (e: Exception) {
-        logger.error("Could not import bank encryption key from HPB response, detail: ${e.message}")
-        return false
+        throw Exception("Could not import bank encryption key from HPB response", e)
     }
     val authPub = try {
         CryptoUtil.loadRsaPublicKey(hpbObj.authenticationPubKey.encoded)
     } catch (e: Exception) {
-        logger.error("Could not import bank authentication key from HPB response, detail: ${e.message}")
-        return false
+        throw Exception("Could not import bank authentication key from HPB response", e)
     }
     val json = BankPublicKeysFile(
         bank_authentication_public_key = authPub,
         bank_encryption_public_key = encPub,
         accepted = false
     )
-    if (!syncJsonToDisk(json, cfg.bankPublicKeysFilename)) {
-        logger.error("Failed to persist the bank keys to disk at: ${cfg.bankPublicKeysFilename}")
-        return false
+    try {
+        syncJsonToDisk(json, cfg.bankPublicKeysFilename)
+    } catch (e: Exception) {
+        throw Exception("Failed to persist the bank keys to disk", e)
     }
-    return true
 }
 
 /**
@@ -239,15 +193,13 @@ private fun handleHpbResponse(
  * @param orderType INI or HIA.
  * @param autoAcceptBankKeys only given in case of HPB.  Expresses
  *        the --auto-accept-key CLI flag.
- * @return true if the message fulfilled its purpose AND the state
- *         on disk was accordingly updated, or false otherwise.
  */
 suspend fun doKeysRequestAndUpdateState(
     cfg: EbicsSetupConfig,
     privs: ClientPrivateKeysFile,
     client: HttpClient,
     orderType: KeysOrderType
-): Boolean {
+) {
     logger.debug("Doing key request ${orderType.name}")
     val req = when(orderType) {
         KeysOrderType.INI -> generateIniMessage(cfg, privs)
@@ -256,33 +208,29 @@ suspend fun doKeysRequestAndUpdateState(
     }
     val xml = client.postToBank(cfg.hostBaseUrl, req)
     if (xml == null) {
-        logger.error("Could not POST the ${orderType.name} message to the bank")
-        return false
+        throw Exception("Could not POST the ${orderType.name} message to the bank")
     }
     val ebics = parseKeysMgmtResponse(privs.encryption_private_key, xml)
     if (ebics == null) {
-        logger.error("Could not get any EBICS from the bank ${orderType.name} response ($xml).")
-        return false
+        throw Exception("Could not get any EBICS from the bank ${orderType.name} response ($xml).")
     }
     if (ebics.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
-        logger.error("EBICS ${orderType.name} failed with code: ${ebics.technicalReturnCode}")
-        return false
+        throw Exception("EBICS ${orderType.name} failed with code: ${ebics.technicalReturnCode}")
     }
     if (ebics.bankReturnCode != EbicsReturnCode.EBICS_OK) {
-        logger.error("EBICS ${orderType.name} reached the bank, but could not be fulfilled, error code: ${ebics.bankReturnCode}")
-        return false
+        throw Exception("EBICS ${orderType.name} reached the bank, but could not be fulfilled, error code: ${ebics.bankReturnCode}")
     }
 
-    when(orderType) {
+    when (orderType) {
         KeysOrderType.INI -> privs.submitted_ini = true
         KeysOrderType.HIA -> privs.submitted_hia = true
         KeysOrderType.HPB -> return handleHpbResponse(cfg, ebics)
     }
-    if (!syncJsonToDisk(privs, cfg.clientPrivateKeysFilename)) {
-        logger.error("Could not update the ${orderType.name} state on disk")
-        return false
+    try {
+        syncJsonToDisk(privs, cfg.clientPrivateKeysFilename)
+    } catch (e: Exception) {
+        throw Exception("Could not update the ${orderType.name} state on disk", e)
     }
-    return true
 }
 
 /**
@@ -292,15 +240,8 @@ suspend fun doKeysRequestAndUpdateState(
  * @return internal representation of the configuration.
  */
 fun extractEbicsConfig(configFile: String?): EbicsSetupConfig {
-    val config = loadConfigOrFail(configFile)
-    // Checking the config.
-    val cfg = try {
-        EbicsSetupConfig(config)
-    } catch (e: TalerConfigError) {
-        logger.error(e.message)
-        exitProcess(1)
-    }
-    return cfg
+    val config = loadConfig(configFile)
+    return EbicsSetupConfig(config)
 }
 
 /**
@@ -314,14 +255,12 @@ private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
     val pdf = generateKeysPdf(privs, cfg)
     val pdfFile = File("/tmp/libeufin-nexus-keys-${Instant.now().epochSecond}.pdf")
     if (pdfFile.exists()) {
-        logger.error("PDF file exists already at: ${pdfFile.path}, not overriding it")
-        exitProcess(1)
+        throw Exception("PDF file exists already at: ${pdfFile.path}, not overriding it")
     }
     try {
         pdfFile.writeBytes(pdf)
     } catch (e: Exception) {
-        logger.error("Could not write PDF to ${pdfFile}, detail: ${e.message}")
-        exitProcess(1)
+        throw Exception("Could not write PDF to ${pdfFile}, detail: ${e.message}")
     }
     println("PDF file with keys hex encoding created at: $pdfFile")
 }
@@ -346,104 +285,80 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
     /**
      * This function collects the main steps of setting up an EBICS access.
      */
-    override fun run() {
-        val cfg = doOrFail { extractEbicsConfig(common.config) }
+    override fun run() = cliCmd(logger) {
+        val cfg = extractEbicsConfig(common.config)
         if (checkFullConfig) {
-            doOrFail {
-                cfg.config.requireString("nexus-submit", "frequency").apply {
-                    if (getFrequencyInSeconds(this) == null)
-                        throw Exception("frequency value of nexus-submit section is not valid: $this")
-                }
-                cfg.config.requireString("nexus-fetch", "frequency").apply {
-                    if (getFrequencyInSeconds(this) == null)
-                        throw Exception("frequency value of nexus-fetch section is not valid: $this")
-                }
-                cfg.config.requirePath("nexus-fetch", "statement_log_directory")
-                cfg.config.requireNumber("nexus-httpd", "port")
-                cfg.config.requirePath("nexus-httpd", "unixpath")
-                cfg.config.requireString("nexus-httpd", "serve")
-                cfg.config.requireString("nexus-httpd-wire-gateway-facade", "enabled")
-                cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_method")
-                cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_token")
-                cfg.config.requireString("nexus-httpd-revenue-facade", "enabled")
-                cfg.config.requireString("nexus-httpd-revenue-facade", "auth_method")
-                cfg.config.requireString("nexus-httpd-revenue-facade", "auth_token")
+            cfg.config.requireString("nexus-submit", "frequency").apply {
+                if (getFrequencyInSeconds(this) == null)
+                    throw Exception("frequency value of nexus-submit section is not valid: $this")
             }
-            return
+            cfg.config.requireString("nexus-fetch", "frequency").apply {
+                if (getFrequencyInSeconds(this) == null)
+                    throw Exception("frequency value of nexus-fetch section is not valid: $this")
+            }
+            cfg.config.requirePath("nexus-fetch", "statement_log_directory")
+            cfg.config.requireNumber("nexus-httpd", "port")
+            cfg.config.requirePath("nexus-httpd", "unixpath")
+            cfg.config.requireString("nexus-httpd", "serve")
+            cfg.config.requireString("nexus-httpd-wire-gateway-facade", "enabled")
+            cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_method")
+            cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_token")
+            cfg.config.requireString("nexus-httpd-revenue-facade", "enabled")
+            cfg.config.requireString("nexus-httpd-revenue-facade", "auth_method")
+            cfg.config.requireString("nexus-httpd-revenue-facade", "auth_token")
+            return@cliCmd
         }
         // Config is sane.  Go (maybe) making the private keys.
-        val privsMaybe = preparePrivateKeys(cfg.clientPrivateKeysFilename)
-        if (privsMaybe == null) {
-            logger.error("Private keys preparation failed.")
-            exitProcess(1)
-        }
+        val clientKeys = preparePrivateKeys(cfg.clientPrivateKeysFilename)
         val httpClient = HttpClient()
         // Privs exist.  Upload their pubs
-        val keysNotSub = !privsMaybe.submitted_ini || !privsMaybe.submitted_hia
+        val keysNotSub = !clientKeys.submitted_ini || !clientKeys.submitted_hia
         runBlocking {
-            if ((!privsMaybe.submitted_ini) || forceKeysResubmission)
-                doKeysRequestAndUpdateState(cfg, privsMaybe, httpClient, KeysOrderType.INI).apply { if (!this) exitProcess(1) }
-            if ((!privsMaybe.submitted_hia) || forceKeysResubmission)
-                doKeysRequestAndUpdateState(cfg, privsMaybe, httpClient, KeysOrderType.HIA).apply { if (!this) exitProcess(1) }
-        }
-        // Reloading new state from disk if any upload (and therefore a disk write) actually took place
-        val haveSubmitted = forceKeysResubmission || keysNotSub
-        val privs = if (haveSubmitted) {
-            logger.info("Keys submitted to the bank, at ${cfg.hostBaseUrl}")
-            loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-        } else privsMaybe
-        if (privs == null) {
-            logger.error("Could not reload private keys from disk after submission")
-            exitProcess(1)
-        }
-        // Really both must be submitted here.
-        if ((!privs.submitted_hia) || (!privs.submitted_ini)) {
-            logger.error("Cannot continue with non-submitted client keys.")
-            exitProcess(1)
+            if ((!clientKeys.submitted_ini) || forceKeysResubmission)
+                doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.INI)
+            if ((!clientKeys.submitted_hia) || forceKeysResubmission)
+                doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.HIA)
         }
         // Eject PDF if the keys were submitted for the first time, or the user asked.
-        if (keysNotSub || generateRegistrationPdf) makePdf(privs, cfg)
+        if (keysNotSub || generateRegistrationPdf) makePdf(clientKeys, cfg)
         // Checking if the bank keys exist on disk.
         val bankKeysFile = File(cfg.bankPublicKeysFilename)
         if (!bankKeysFile.exists()) {
-            val areKeysOnDisk = runBlocking {
-                doKeysRequestAndUpdateState(
-                    cfg,
-                    privs,
-                    httpClient,
-                    KeysOrderType.HPB
-                )
-            }
-            if (!areKeysOnDisk) {
-                logger.error("Could not download bank keys.  Send client keys (and/or related PDF document with --generate-registration-pdf) to the bank.")
-                exitProcess(1)
+            runBlocking {
+                try {
+                    doKeysRequestAndUpdateState(
+                        cfg,
+                        clientKeys,
+                        httpClient,
+                        KeysOrderType.HPB
+                    )
+                } catch (e: Exception) {
+                    throw Exception("Could not download bank keys. Send client keys (and/or related PDF document with --generate-registration-pdf) to the bank", e)
+                }
             }
             logger.info("Bank keys stored at ${cfg.bankPublicKeysFilename}")
         }
         // bank keys made it to the disk, check if they're accepted.
         val bankKeysMaybe = loadBankKeys(cfg.bankPublicKeysFilename)
         if (bankKeysMaybe == null) {
-            logger.error("Although previous checks, could not load the bank keys file from: ${cfg.bankPublicKeysFilename}")
-            exitProcess(1)
+            throw Exception("Although previous checks, could not load the bank keys file from: ${cfg.bankPublicKeysFilename}")
         }
-        val printOk = { println("setup ready") }
-
-        if (bankKeysMaybe.accepted) {
-            printOk()
-            return
-        }
-        // Finishing the setup by accepting the bank keys.
-        if (autoAcceptKeys) bankKeysMaybe.accepted = true
-        else bankKeysMaybe.accepted = askUserToAcceptKeys(bankKeysMaybe)
 
         if (!bankKeysMaybe.accepted) {
-            logger.error("Cannot successfully finish the setup without accepting the bank keys.")
-            exitProcess(1)
+            // Finishing the setup by accepting the bank keys.
+            if (autoAcceptKeys) bankKeysMaybe.accepted = true
+            else bankKeysMaybe.accepted = askUserToAcceptKeys(bankKeysMaybe)
+
+            if (!bankKeysMaybe.accepted) {
+                throw Exception("Cannot successfully finish the setup without accepting the bank keys.")
+            }
+            try {
+                syncJsonToDisk(bankKeysMaybe, cfg.bankPublicKeysFilename)
+            } catch (e: Exception) {
+                throw Exception("Could not set bank keys as accepted on disk.", e)
+            }
         }
-        if (!syncJsonToDisk(bankKeysMaybe, cfg.bankPublicKeysFilename)) {
-            logger.error("Could not set bank keys as accepted on disk.")
-            exitProcess(1)
-        }
-        printOk()
+        
+        println("setup ready")
     }
 }

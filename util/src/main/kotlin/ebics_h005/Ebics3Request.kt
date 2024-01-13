@@ -198,7 +198,8 @@ class Ebics3Request {
         }
 
         @XmlAccessorType(XmlAccessType.NONE)
-        class BTOrderParams {
+        @XmlType(propOrder = ["service", "signatureFlag", "dateRange"])
+        class BTUOrderParams {
             @get:XmlElement(name = "Service", required = true)
             lateinit var service: Service
 
@@ -214,11 +215,21 @@ class Ebics3Request {
             var dateRange: DateRange? = null
         }
 
+        @XmlAccessorType(XmlAccessType.NONE)
+        @XmlType(propOrder = ["service", "dateRange"])
+        class BTDOrderParams {
+            @get:XmlElement(name = "Service", required = true)
+            lateinit var service: Service
+
+            @get:XmlElement(name = "DateRange", required = true)
+            var dateRange: DateRange? = null
+        }
+
         @get:XmlElement(name = "BTUOrderParams", required = true)
-        var btuOrderParams: BTOrderParams? = null
+        var btuOrderParams: BTUOrderParams? = null
 
         @get:XmlElement(name = "BTDOrderParams", required = true)
-        var btdOrderParams: BTOrderParams? = null
+        var btdOrderParams: BTDOrderParams? = null
 
         /**
          * Only present if this ebicsRequest is an upload order
@@ -359,7 +370,6 @@ class Ebics3Request {
         fun createForDownloadReceiptPhase(
             transactionId: String?,
             hostId: String
-
         ): Ebics3Request {
             return Ebics3Request().apply {
                 header = Header().apply {
@@ -393,7 +403,7 @@ class Ebics3Request {
             date: XMLGregorianCalendar,
             bankEncPub: RSAPublicKey,
             bankAuthPub: RSAPublicKey,
-            myOrderParams: OrderDetails.BTOrderParams
+            myOrderParams: OrderDetails.BTDOrderParams
         ): Ebics3Request {
             return Ebics3Request().apply {
                 version = "H005"
@@ -463,7 +473,7 @@ class Ebics3Request {
                         userID = userId
                         orderDetails = OrderDetails().apply {
                             this.adminOrderType = "BTU"
-                            this.btuOrderParams = OrderDetails.BTOrderParams().apply {
+                            this.btuOrderParams = OrderDetails.BTUOrderParams().apply {
                                 service = aOrderService
                             }
                         }

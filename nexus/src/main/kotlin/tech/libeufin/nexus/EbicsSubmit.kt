@@ -23,7 +23,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import tech.libeufin.nexus.ebics.EbicsSideError
 import tech.libeufin.nexus.ebics.EbicsSideException
 import tech.libeufin.nexus.ebics.EbicsUploadException
@@ -35,9 +35,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.*
-import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
-import kotlin.system.exitProcess
+import kotlin.io.path.*
 
 /**
  * Possible stages when an error may occur.  These stages
@@ -105,8 +104,7 @@ class NexusSubmitException(
  */
 private fun maybeLog(
     maybeLogDir: String?,
-    xml: String,
-    requestUid: String
+    xml: String
 ) {
     if (maybeLogDir == null) {
         logger.info("Logging pain.001 to files is disabled")
@@ -116,18 +114,17 @@ private fun maybeLog(
     val now = Instant.now()
     val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
     val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
-    val dirs = Path.of(maybeLogDir, subDir)
-    doOrFail { dirs.createDirectories() }
-    val f = File(
+    val dirs = Path(maybeLogDir, subDir)
+    dirs.createDirectories()
+    val f = Path(
         dirs.toString(),
-        "${now.toDbMicros()}_requestUid_${requestUid}_pain.001.xml"
+        "${now.toDbMicros()}_pain.001.xml"
     )
     // Very rare: same pain.001 should not be submitted twice in the same microsecond.
     if (f.exists()) {
-        logger.error("pain.001 log file exists already at: $f")
-        exitProcess(1)
+        throw Exception("pain.001 log file exists already at: $f")
     }
-    doOrFail { f.writeText(xml) }
+    f.writeText(xml)
 }
 
 /**
@@ -163,8 +160,7 @@ private suspend fun submitInitiatedPayment(
     )
     maybeLog(
         maybeLogDir,
-        xml,
-        initiatedPayment.requestUid
+        xml
     )
     try {
         submitPain001(
@@ -270,24 +266,10 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
      * or long-polls (currently not implemented) for new payments.
      * FIXME: reduce code duplication with the fetch subcommand.
      */
-    override fun run() {
-        val cfg: EbicsSetupConfig = doOrFail {
-            extractEbicsConfig(common.config)
-        }
-        // Fail now if keying is incomplete.
-        if (!isKeyingComplete(cfg)) exitProcess(1)
-        val dbCfg = cfg.config.extractDbConfigOrFail()
-        val db = Database(dbCfg.dbConnStr)
-        val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename) ?: exitProcess(1)
-        if (!bankKeys.accepted) {
-            logger.error("Bank keys are not accepted, yet.  Won't submit any payment.")
-            exitProcess(1)
-        }
-        val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-        if (clientKeys == null) {
-            logger.error("Client private keys not found at: ${cfg.clientPrivateKeysFilename}")
-            exitProcess(1)
-        }
+    override fun run() = cliCmd(logger) {
+        val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
+        val dbCfg = cfg.config.dbConfig()
+        val (clientKeys, bankKeys) = expectFullKeys(cfg)
         val ctx = SubmissionContext(
             cfg = cfg,
             bankPublicKeysFile = bankKeys,
@@ -298,42 +280,42 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         if (debug) {
             logger.info("Running in debug mode, submitting STDIN to the bank")
             val maybeStdin = generateSequence(::readLine).joinToString("\n")
-            doOrFail {
-                runBlocking {
-                    submitPain001(
-                        maybeStdin,
-                        ctx.cfg,
-                        ctx.clientPrivateKeysFile,
-                        ctx.bankPublicKeysFile,
-                        ctx.httpClient,
-                        ctx.ebicsExtraLog
-                    )
+            runBlocking {
+                submitPain001(
+                    maybeStdin,
+                    ctx.cfg,
+                    ctx.clientPrivateKeysFile,
+                    ctx.bankPublicKeysFile,
+                    ctx.httpClient,
+                    ctx.ebicsExtraLog
+                )
+            }
+            return@cliCmd
+        }
+        Database(dbCfg.dbConnStr).use { db -> 
+            val frequency = if (transient) {
+                logger.info("Transient mode: submitting what found and returning.")
+                null
+            } else {
+                val configValue = cfg.config.requireString("nexus-submit", "frequency")
+                val frequencySeconds = checkFrequency(configValue)
+                val frequency: NexusFrequency =  NexusFrequency(frequencySeconds, configValue)
+                logger.debug("Running with a frequency of ${frequency.fromConfig}")
+                if (frequency.inSeconds == 0) {
+                    logger.warn("Long-polling not implemented, running therefore in transient mode")
+                    null
+                } else {
+                    frequency
                 }
             }
-            return
-        }
-        if (transient) {
-            logger.info("Transient mode: submitting what found and returning.")
-            submitBatch(ctx, db)
-            return
-        }
-        val frequency: NexusFrequency = doOrFail {
-            val configValue = cfg.config.requireString("nexus-submit", "frequency")
-            val frequencySeconds = checkFrequency(configValue)
-            return@doOrFail NexusFrequency(frequencySeconds, configValue)
-        }
-        logger.debug("Running with a frequency of ${frequency.fromConfig}")
-        if (frequency.inSeconds == 0) {
-            logger.warn("Long-polling not implemented, running therefore in transient mode")
-            submitBatch(ctx, db)
-            return
-        }
-        fixedRateTimer(
-            name = "ebics submit period",
-            period = (frequency.inSeconds * 1000).toLong(),
-            action = {
-                submitBatch(ctx, db)
+            runBlocking {
+                do {
+                    // TODO error handling
+                    submitBatch(ctx, db)
+                    // TODO take submitBatch taken time in the delay
+                    delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
+                } while (frequency != null)
             }
-        )
+        }
     }
 }
