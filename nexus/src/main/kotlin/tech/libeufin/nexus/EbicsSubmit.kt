@@ -23,7 +23,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import tech.libeufin.nexus.ebics.EbicsSideError
 import tech.libeufin.nexus.ebics.EbicsSideException
 import tech.libeufin.nexus.ebics.EbicsUploadException
@@ -35,7 +35,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.*
-import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.createDirectories
 import kotlin.io.path.*
 
@@ -294,27 +293,29 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             return@cliCmd
         }
         Database(dbCfg.dbConnStr).use { db -> 
-            if (transient) {
+            val frequency = if (transient) {
                 logger.info("Transient mode: submitting what found and returning.")
-                submitBatch(ctx, db)
-                return@cliCmd
-            }
-            val configValue = cfg.config.requireString("nexus-submit", "frequency")
-            val frequencySeconds = checkFrequency(configValue)
-            val frequency: NexusFrequency =  NexusFrequency(frequencySeconds, configValue)
-            logger.debug("Running with a frequency of ${frequency.fromConfig}")
-            if (frequency.inSeconds == 0) {
-                logger.warn("Long-polling not implemented, running therefore in transient mode")
-                submitBatch(ctx, db)
-                return@cliCmd
-            }
-            fixedRateTimer(
-                name = "ebics submit period",
-                period = (frequency.inSeconds * 1000).toLong(),
-                action = {
-                    submitBatch(ctx, db)
+                null
+            } else {
+                val configValue = cfg.config.requireString("nexus-submit", "frequency")
+                val frequencySeconds = checkFrequency(configValue)
+                val frequency: NexusFrequency =  NexusFrequency(frequencySeconds, configValue)
+                logger.debug("Running with a frequency of ${frequency.fromConfig}")
+                if (frequency.inSeconds == 0) {
+                    logger.warn("Long-polling not implemented, running therefore in transient mode")
+                    null
+                } else {
+                    frequency
                 }
-            )
+            }
+            runBlocking {
+                do {
+                    // TODO error handling
+                    submitBatch(ctx, db)
+                    // TODO take submitBatch taken time in the delay
+                    delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
+                } while (frequency != null)
+            }
         }
     }
 }

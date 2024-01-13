@@ -4,7 +4,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import net.taler.wallet.crypto.Base32Crockford
 import net.taler.wallet.crypto.EncodingException
 import tech.libeufin.nexus.ebics.*
@@ -17,7 +17,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
-import kotlin.concurrent.fixedRateTimer
 import kotlin.io.path.*
 
 /**
@@ -554,28 +553,25 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 runBlocking {
                     fetchDocuments(db, ctx)
                 }
-                return@cliCmd
-            }
-            val configValue = cfg.config.requireString("nexus-fetch", "frequency")
-            val frequencySeconds = checkFrequency(configValue)
-            val frequency: NexusFrequency = NexusFrequency(frequencySeconds, configValue)
-            logger.debug("Running with a frequency of ${frequency.fromConfig}")
-            if (frequency.inSeconds == 0) {
-                logger.warn("Long-polling not implemented, running therefore in transient mode")
+            } else {
+                val configValue = cfg.config.requireString("nexus-fetch", "frequency")
+                val frequencySeconds = checkFrequency(configValue)
+                val cfgFrequency: NexusFrequency = NexusFrequency(frequencySeconds, configValue)
+                logger.debug("Running with a frequency of ${cfgFrequency.fromConfig}")
+                val frequency: NexusFrequency? = if (cfgFrequency.inSeconds == 0) {
+                    logger.warn("Long-polling not implemented, running therefore in transient mode")
+                    null
+                } else {
+                    cfgFrequency
+                }
                 runBlocking {
-                    fetchDocuments(db, ctx)
-                }
-                return@cliCmd
-            }
-            fixedRateTimer(
-                name = "ebics submit period",
-                period = (frequency.inSeconds * 1000).toLong(),
-                action = {
-                    runBlocking {
+                    do {
+                        // TODO error handling
                         fetchDocuments(db, ctx)
-                    }
+                        delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
+                    } while (frequency != null)
                 }
-            )
+            }
         }
     }
 }
