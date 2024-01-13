@@ -80,11 +80,12 @@ COMMENT ON INDEX bank_account_transactions_expiration_index
   IS 'for garbage collection';
 
 ALTER TABLE taler_withdrawal_operations
-  ADD creation_date INT8 NOT NULL;
+  ADD creation_date INT8 NOT NULL DEFAULT (extract(epoch from now())*1000000)::int8;
+ALTER TABLE taler_withdrawal_operations
+  ALTER creation_date DROP DEFAULT;
 CREATE INDEX taler_withdrawal_operations_expiration_index
   ON taler_withdrawal_operations (creation_date);
 COMMENT ON INDEX taler_withdrawal_operations_expiration_index
   IS 'for garbage collection';
-
 
 COMMIT;
