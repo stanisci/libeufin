@@ -17,6 +17,11 @@ fun Instant.fmtDate(): String {
     return formatter.format(Date.from(this))
 }
 
+fun Instant.fmtDateTime(): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS")
+    return formatter.format(Date.from(this))
+}
+
 
 // Remove this once TalerAmount from the bank
 // module gets moved to the 'util' module (#7987).

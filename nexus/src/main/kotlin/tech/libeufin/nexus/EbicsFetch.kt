@@ -428,14 +428,25 @@ private suspend fun fetchDocuments(
         nonZip = ctx.whichDocument == SupportedDocument.PAIN_002_LOGS
     )
     // Parsing the XML: only camt.054 (Detailavisierung) supported currently.
-    if (ctx.whichDocument != SupportedDocument.CAMT_054) {
-        logger.warn("Not ingesting ${ctx.whichDocument}.  Only camt.054 notifications supported.")
-        return
-    }
-    try {
-        ingestNotification(db, ctx, maybeContent)
-    } catch (e: Exception) {
-        throw Exception("Ingesting notifications failed", e)
+
+    when (ctx.whichDocument) {
+        SupportedDocument.CAMT_054 -> {
+            try {
+                ingestNotification(db, ctx, maybeContent)
+            } catch (e: Exception) {
+                throw Exception("Ingesting notifications failed", e)
+            }
+        }
+        SupportedDocument.PAIN_002_LOGS -> {
+            val acks = parseCustomerAck(maybeContent.toString(Charsets.UTF_8))
+            for (ack in acks) {
+                if (ack.code != null)
+                    println("${ack.timestamp.fmtDateTime()} ${ack.actionType} ${ack.code.name} ${ack.code.isoCode} ${ack.code.description}")
+                else 
+                    println("${ack.timestamp.fmtDateTime()} ${ack.actionType}")
+            }
+        }
+        else -> logger.warn("Not ingesting ${ctx.whichDocument}.  Only camt.054 notifications supported.")
     }
 }
 
@@ -511,8 +522,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                         val incomingTxs = mutableListOf<IncomingPayment>()
                         val outgoingTxs = mutableListOf<OutgoingPayment>()
                         parseTxNotif(maybeStdin, cfg.currency, incomingTxs, outgoingTxs)
-                        println(incomingTxs)
-                        println(outgoingTxs)
                         if (import) {
                             runBlocking {
                                 incomingTxs.forEach {
@@ -522,6 +531,15 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                                     ingestOutgoingPayment(db, it)
                                 }
                             }
+                        }
+                    }
+                    SupportedDocument.PAIN_002_LOGS -> {
+                        val acks = parseCustomerAck(maybeStdin)
+                        for (ack in acks) {
+                            if (ack.code != null)
+                                println("${ack.timestamp.fmtDateTime()} ${ack.actionType} ${ack.code.name} ${ack.code.isoCode} ${ack.code.description}")
+                            else 
+                                println("${ack.timestamp.fmtDateTime()} ${ack.actionType}")
                         }
                     }
                     else -> throw Exception("Parsing $whichDoc not supported")

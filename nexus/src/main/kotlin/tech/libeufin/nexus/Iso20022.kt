@@ -155,6 +155,66 @@ fun createPain001(
     }
 }
 
+data class CustomerAck(
+    val actionType: String,
+    val code: ExternalStatusReasonCode?,
+    val timestamp: Instant
+)
+
+/**
+ * Extract logs from a pain.002 HAC document.
+ *
+ * @param notifXml pain.002 input document
+ */
+fun parseCustomerAck(
+    notifXml: String
+): List<CustomerAck> {
+    val notifDoc = XMLUtil.parseStringIntoDom(notifXml)
+    return destructXml(notifDoc) {
+        requireRootElement("Document") {
+            requireUniqueChildNamed("CstmrPmtStsRpt") {
+                mapEachChildNamed("OrgnlPmtInfAndSts") {
+                    val actionType = requireUniqueChildNamed("OrgnlPmtInfId") {
+                        focusElement.textContent
+                    }
+                    
+                    requireUniqueChildNamed("StsRsnInf") {
+                        var timestamp: Instant? = null;
+                        requireUniqueChildNamed("Orgtr") {
+                            requireUniqueChildNamed("Id") {
+                                requireUniqueChildNamed("OrgId") {
+                                    mapEachChildNamed("Othr") {
+                                        val value = requireUniqueChildNamed("Id") {
+                                            focusElement.textContent
+                                        }
+                                        val key = requireUniqueChildNamed("SchmeNm") {
+                                            requireUniqueChildNamed("Prtry") {
+                                                focusElement.textContent
+                                            }
+                                        }
+                                        when (key) {
+                                            "TimeStamp" -> {
+                                                timestamp = parseCamtTime(value.trimEnd('Z')) // TODO better date parsing
+                                            }
+                                            // TODO extract ids ?
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        val code = maybeUniqueChildNamed("Rsn") {
+                            requireUniqueChildNamed("Cd") {
+                                ExternalStatusReasonCode.valueOf(focusElement.textContent)
+                            }
+                        }
+                        CustomerAck(actionType, code, timestamp!!)
+                    }
+                }
+            }
+        }
+    }
+}
+
 /**
  * Searches payments in a camt.054 (Detailavisierung) document.
  *
