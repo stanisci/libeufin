@@ -506,6 +506,20 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
                 WithdrawalConfirmationResult.Success -> call.respond(HttpStatusCode.NoContent)
             }
         }
+        post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/abort") {
+            val opId = call.uuidParameter("withdrawal_id")
+            when (db.withdrawal.abort(opId)) {
+                AbortResult.UnknownOperation -> throw notFound(
+                    "Withdrawal operation $opId not found",
+                    TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
+                )
+                AbortResult.AlreadyConfirmed -> throw conflict(
+                    "Cannot abort confirmed withdrawal", 
+                    TalerErrorCode.BANK_ABORT_CONFIRM_CONFLICT
+                )
+                AbortResult.Success -> call.respond(HttpStatusCode.NoContent)
+            }
+        }
     }
     get("/withdrawals/{withdrawal_id}") {
         val uuid = call.uuidParameter("withdrawal_id")

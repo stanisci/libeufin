@@ -1003,7 +1003,7 @@ class CoreBankWithdrawalApiTest {
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
             val uuid = it.taler_withdraw_uri.split("/").last()
             withdrawalSelect(uuid)
-            client.postA("/taler-integration/withdrawal-operation/$uuid/abort").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
 
             // Check error
             client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
@@ -1023,7 +1023,7 @@ class CoreBankWithdrawalApiTest {
                 .assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
 
             // Check can abort because not confirmed
-            client.postA("/taler-integration/withdrawal-operation/$uuid/abort").assertNoContent()
+            client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
         }
 
         // Check confirm another user's operation
