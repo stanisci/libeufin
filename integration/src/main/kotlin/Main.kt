@@ -117,34 +117,56 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                             .assertOk("ebics-setup should succeed the second time")
                     }
                    
-                    if (ask("Submit transactions ? y/n>") == "y") {
-                        val payto = "payto://iban/CH2989144971918294289?receiver-name=Test"
-        
-                        step("Test submit one transaction")
-                        nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                            amount = NexusAmount(42L, 0, "CFH"),
-                            creditPaytoUri = payto,
-                            wireTransferSubject = "single transaction test",
-                            initiationTime = Instant.now(),
-                            requestUid = Base32Crockford.encode(randBytes(16))
-                        ))
-                        nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
-        
-                        step("Test submit many transaction")
-                            repeat(4) {
-                                nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                                amount = NexusAmount(100L + it, 0, "CFH"),
-                                creditPaytoUri = payto,
-                                wireTransferSubject = "multi transaction test $it",
-                                initiationTime = Instant.now(),
-                                requestUid = Base32Crockford.encode(randBytes(16))
-                            ))
-                        }
-                        nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
-                    }
+                    val payto = "payto://iban/CH2989144971918294289?receiver-name=Test"
         
                     step("Test fetch transactions")
                     nexusCmd.test("ebics-fetch --transient -c $conf --pinned-start 2022-01-01").assertOk()
+
+                    while (true) {
+                        when (ask("Run 'fetch', 'submit', 'tx', 'txs', 'logs', 'ack' or 'exit'>")) {
+                            "fetch" -> {
+                                step("Fetch new transactions")
+                                nexusCmd.test("ebics-fetch --transient -c $conf").assertOk()
+                            }
+                            "tx" -> {
+                                step("Test submit one transaction")
+                                nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                                    amount = NexusAmount(42L, 0, "CFH"),
+                                    creditPaytoUri = payto,
+                                    wireTransferSubject = "single transaction test",
+                                    initiationTime = Instant.now(),
+                                    requestUid = Base32Crockford.encode(randBytes(16))
+                                ))
+                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                            }
+                            "txs" -> {
+                                step("Test submit many transaction")
+                                repeat(4) {
+                                    nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                                        amount = NexusAmount(100L + it, 0, "CFH"),
+                                        creditPaytoUri = payto,
+                                        wireTransferSubject = "multi transaction test $it",
+                                        initiationTime = Instant.now(),
+                                        requestUid = Base32Crockford.encode(randBytes(16))
+                                    ))
+                                }
+                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                            }
+                            "submit" -> {
+                                step("Submit pending transactions")
+                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                            }
+                            "logs" -> {
+                                step("Fetch logs")
+                                nexusCmd.test("ebics-fetch --transient -c $conf --only-logs").assertOk()
+                            }
+                            "ack" -> {
+                                step("Fetch ack")
+                                nexusCmd.test("ebics-fetch --transient -c $conf --only-ack").assertOk()
+                            }
+                            "exit" -> break
+                        }
+                    }
                 }
                 Kind.netzbon -> {
                     if (!hasClientKeys)
@@ -159,7 +181,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     nexusCmd.test("ebics-fetch --transient -c $conf --pinned-start 2022-01-01").assertOk()
 
                     while (true) {
-                        when (ask("Run 'fetch', 'submit' or 'exit'>")) {
+                        when (ask("Run 'fetch', 'submit', 'logs', 'ack' or 'exit'>")) {
                             "fetch" -> {
                                 step("Fetch new transactions")
                                 nexusCmd.test("ebics-fetch --transient -c $conf").assertOk()
@@ -167,6 +189,26 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                             "submit" -> {
                                 step("Submit pending transactions")
                                 nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                            }
+                            "tx" -> {
+                                step("Submit new transaction")
+                                // TODO interactive payment editor
+                                nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                                    amount = getTalerAmount("1.1", "CFH"),
+                                    creditPaytoUri = "payto://iban/CH6208704048981247126?receiver-name=Grothoff+Hans",
+                                    wireTransferSubject = "single transaction test",
+                                    initiationTime = Instant.now(),
+                                    requestUid = Base32Crockford.encode(randBytes(16))
+                                ))
+                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                            }
+                            "logs" -> {
+                                step("Fetch logs")
+                                nexusCmd.test("ebics-fetch --transient -c $conf --only-logs").assertOk()
+                            }
+                            "ack" -> {
+                                step("Fetch ack")
+                                nexusCmd.test("ebics-fetch --transient -c $conf --only-ack").assertOk()
                             }
                             "exit" -> break
                         }

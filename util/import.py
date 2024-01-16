@@ -17,17 +17,27 @@ files = zip.namelist()
 assert len(files) == 1
 file = zip.open(files[0])
 
-# Extract specific code set from XLSX
-df = (
-    pl.read_excel(file, sheet_name="AllCodeSets")
-    .filter(pl.col("Code Set") == "ExternalStatusReason1Code")
-    .sort("Code Value")
-)
+# Parse excel
+df = pl.read_excel(file, sheet_name="AllCodeSets")
+
+def extractCodeSet(setName: str, className: str) -> str:
+    out = f"enum class {className}(val isoCode: String, val description: String) {{"
+
+    for row in df.filter(pl.col("Code Set") == setName).sort("Code Value").rows(named=True):
+        (value, isoCode, description) = (
+            row["Code Value"],
+            row["Code Name"],
+            row["Code Definition"].split("\n", 1)[0].strip(),
+        )
+        out += f'\n\t{value}("{isoCode}", "{description}"),'
+
+    out += "\n}"
+    return out
 
 # Write kotlin file
-kt = """/*
+kt = f"""/*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Stanisci and Dold.
+ * Copyright (C) 2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -44,26 +54,13 @@ kt = """/*
  * <http://www.gnu.org/licenses/>
  */
 
+// THIS FILE IS GENERATED, DO NOT EDIT
+
 package tech.libeufin.util
 
-enum class ExternalStatusReasonCode(val isoCode: String, val description: String) {"""
-for row in df.rows(named=True):
-    (value, isoCode, description) = (
-        row["Code Value"],
-        row["Code Name"],
-        row["Code Definition"].split("\n", 1)[0].strip().strip("."),
-    )
-    kt += f'\n\t{value}("{isoCode}", "{description}"),'
+{extractCodeSet("ExternalStatusReason1Code", "ExternalStatusReasonCode")}
 
-
-kt += """;
-
-    companion object {
-        fun lookup(statusCode: String): ExternalStatusReasonCode? {
-            return values().find { it.name == statusCode }
-        }
-    }
-}"""
-
+{extractCodeSet("ExternalPaymentGroupStatus1Code", "ExternalPaymentGroupStatusCode")}
+"""
 with open("src/main/kotlin/EbicsCodeSets.kt", "w") as file1:
     file1.write(kt)

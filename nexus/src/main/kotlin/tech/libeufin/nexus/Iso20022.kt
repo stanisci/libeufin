@@ -159,17 +159,22 @@ data class CustomerAck(
     val actionType: String,
     val code: ExternalStatusReasonCode?,
     val timestamp: Instant
-)
+) {
+    override fun toString(): String {
+        return if (code != null)
+            "${timestamp.fmtDateTime()} ${actionType} ${code.isoCode} '${code.description}'"
+        else 
+            "${timestamp.fmtDateTime()} ${actionType}"
+    }
+}
 
 /**
  * Extract logs from a pain.002 HAC document.
  *
- * @param notifXml pain.002 input document
+ * @param xml pain.002 input document
  */
-fun parseCustomerAck(
-    notifXml: String
-): List<CustomerAck> {
-    val notifDoc = XMLUtil.parseStringIntoDom(notifXml)
+fun parseCustomerAck(xml: String): List<CustomerAck> {
+    val notifDoc = XMLUtil.parseStringIntoDom(xml)
     return destructXml(notifDoc) {
         requireRootElement("Document") {
             requireUniqueChildNamed("CstmrPmtStsRpt") {
@@ -209,6 +214,76 @@ fun parseCustomerAck(
                         }
                         CustomerAck(actionType, code, timestamp!!)
                     }
+                }
+            }
+        }
+    }
+}
+
+data class PaymentStatus(
+    val msgId: String,
+    val code: ExternalPaymentGroupStatusCode,
+    val reasons: List<Reason>
+) {
+    override fun toString(): String {
+        var builder = "'${msgId}' ${code.isoCode} '${code.description}'"
+        for (reason in reasons) {
+            builder += " - ${reason.code.isoCode} '${reason.code.description}'"
+        }
+        return builder
+    }
+}
+
+data class Reason (
+    val code: ExternalStatusReasonCode,
+    val information: String
+)
+
+/**
+ * Extract payment status from a pain.002 document.
+ *
+ * @param xml pain.002 input document
+ */
+fun parseCustomerPaymentStatusReport(xml: String): PaymentStatus {
+    val notifDoc = XMLUtil.parseStringIntoDom(xml)
+    fun XmlElementDestructor.reasons(): List<Reason> {
+        return mapEachChildNamed("StsRsnInf") {
+            val code = requireUniqueChildNamed("Rsn") {
+                requireUniqueChildNamed("Cd") {
+                    ExternalStatusReasonCode.valueOf(focusElement.textContent)
+                }
+            }
+            // TODO parse information
+            Reason(code, "")
+        }
+    }
+    return destructXml(notifDoc) {
+        requireRootElement("Document") {
+            requireUniqueChildNamed("CstmrPmtStsRpt") {
+                val (msgId, msgCode, msgReasons) = requireUniqueChildNamed("OrgnlGrpInfAndSts") {
+                    val id = requireUniqueChildNamed("OrgnlMsgId") {
+                        focusElement.textContent
+                    }
+                    val code = maybeUniqueChildNamed("GrpSts") {
+                        ExternalPaymentGroupStatusCode.valueOf(focusElement.textContent)
+                    }
+                    val reasons = reasons()
+                    Triple(id, code, reasons)
+                }
+                val paymentInfo = maybeUniqueChildNamed("OrgnlPmtInfAndSts") {
+                    val code = requireUniqueChildNamed("PmtInfSts") {
+                        ExternalPaymentGroupStatusCode.valueOf(focusElement.textContent)
+                    }
+                    val reasons = reasons()
+                    Pair(code, reasons)
+                }
+
+                // TODO handle multi level code better 
+                if (paymentInfo != null) {
+                    val (code, reasons) = paymentInfo
+                    PaymentStatus(msgId, code, reasons)
+                } else {
+                    PaymentStatus(msgId, msgCode!!, msgReasons)
                 }
             }
         }

@@ -18,6 +18,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 import kotlin.io.path.*
+import kotlin.io.*
 
 /**
  * Necessary data to perform a download.
@@ -340,43 +341,60 @@ fun firstLessThanSecond(
     return a.value < b.value
 }
 
-/**
- * Parses the response of an EBICS notification looking for
- * incoming payments.  As a result, it either creates a Taler
- * withdrawal or bounces the incoming payment.  In detail, this
- * function extracts the camt.054 from the ZIP archive, invokes
- * the lower-level camt.054 parser and updates the database.
- *
- * @param db database connection.
- * @param content the ZIP file that contains the EBICS
- *        notification as camt.054 records.
- */
-private fun ingestNotification(
+private fun ingestDocument(
     db: Database,
-    ctx: FetchContext,
-    content: ByteArray
+    currency: String,
+    content: ByteArray,
+    whichDocument: SupportedDocument
 ) {
-    val incomingPayments = mutableListOf<IncomingPayment>()
-    val outgoingPayments = mutableListOf<OutgoingPayment>()
-    
-    try {
-        content.unzipForEach { fileName, xmlContent ->
-            if (!fileName.contains("camt.054", ignoreCase = true))
-                throw Exception("Asked for notification but did NOT get a camt.054")
-            logger.debug("parse $fileName")
-            parseTxNotif(xmlContent, ctx.cfg.currency, incomingPayments, outgoingPayments)
-        }
-    } catch (e: IOException) {
-        throw Exception("Could not open any ZIP archive", e)
-    }
+    when (whichDocument) {
+        SupportedDocument.CAMT_054 -> {
+            try {
+                val incomingPayments = mutableListOf<IncomingPayment>()
+                val outgoingPayments = mutableListOf<OutgoingPayment>()
+                
+                try {
+                    content.unzipForEach { fileName, xmlContent ->
+                        if (!fileName.contains("camt.054", ignoreCase = true))
+                            throw Exception("Asked for notification but did NOT get a camt.054")
+                        logger.debug("parse $fileName")
+                        parseTxNotif(xmlContent, currency, incomingPayments, outgoingPayments)
+                    }
+                } catch (e: IOException) {
+                    throw Exception("Could not open any ZIP archive", e)
+                }
 
-    runBlocking {
-        incomingPayments.forEach {
-            ingestIncomingPayment(db, it)
+                runBlocking {
+                    incomingPayments.forEach {
+                        ingestIncomingPayment(db, it)
+                    }
+                    outgoingPayments.forEach {
+                        ingestOutgoingPayment(db, it)
+                    }
+                }
+            } catch (e: Exception) {
+                throw Exception("Ingesting notifications failed", e)
+            }
         }
-        outgoingPayments.forEach {
-            ingestOutgoingPayment(db, it)
+        SupportedDocument.PAIN_002_LOGS -> {
+            val acks = parseCustomerAck(content.toString(Charsets.UTF_8))
+            for (ack in acks) {
+                println(ack)
+            }
         }
+        SupportedDocument.PAIN_002 -> {
+            try {
+                content.unzipForEach { fileName, xmlContent ->
+                    logger.debug("parse $fileName")
+                    val status = parseCustomerPaymentStatusReport(xmlContent.toString())
+                    logger.debug("$status") // TODO ingest in db
+                }
+            } catch (e: IOException) {
+                throw Exception("Could not open any ZIP archive", e)
+            }
+           
+        }
+        else -> logger.warn("Not ingesting ${whichDocument}.  Only camt.054 notifications supported.")
     }
 }
 
@@ -427,27 +445,7 @@ private suspend fun fetchDocuments(
         maybeContent,
         nonZip = ctx.whichDocument == SupportedDocument.PAIN_002_LOGS
     )
-    // Parsing the XML: only camt.054 (Detailavisierung) supported currently.
-
-    when (ctx.whichDocument) {
-        SupportedDocument.CAMT_054 -> {
-            try {
-                ingestNotification(db, ctx, maybeContent)
-            } catch (e: Exception) {
-                throw Exception("Ingesting notifications failed", e)
-            }
-        }
-        SupportedDocument.PAIN_002_LOGS -> {
-            val acks = parseCustomerAck(maybeContent.toString(Charsets.UTF_8))
-            for (ack in acks) {
-                if (ack.code != null)
-                    println("${ack.timestamp.fmtDateTime()} ${ack.actionType} ${ack.code.name} ${ack.code.isoCode} ${ack.code.description}")
-                else 
-                    println("${ack.timestamp.fmtDateTime()} ${ack.actionType}")
-            }
-        }
-        else -> logger.warn("Not ingesting ${ctx.whichDocument}.  Only camt.054 notifications supported.")
-    }
+    ingestDocument(db, ctx.cfg.currency, maybeContent, ctx.whichDocument)
 }
 
 class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 notifications") {
@@ -516,34 +514,8 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         Database(dbCfg.dbConnStr).use { db ->
             if (parse || import) {
                 logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
-                val maybeStdin = generateSequence(::readLine).joinToString("\n")
-                when(whichDoc) {
-                    SupportedDocument.CAMT_054 -> {
-                        val incomingTxs = mutableListOf<IncomingPayment>()
-                        val outgoingTxs = mutableListOf<OutgoingPayment>()
-                        parseTxNotif(maybeStdin, cfg.currency, incomingTxs, outgoingTxs)
-                        if (import) {
-                            runBlocking {
-                                incomingTxs.forEach {
-                                    ingestIncomingPayment(db, it)
-                                }
-                                outgoingTxs.forEach {
-                                    ingestOutgoingPayment(db, it)
-                                }
-                            }
-                        }
-                    }
-                    SupportedDocument.PAIN_002_LOGS -> {
-                        val acks = parseCustomerAck(maybeStdin)
-                        for (ack in acks) {
-                            if (ack.code != null)
-                                println("${ack.timestamp.fmtDateTime()} ${ack.actionType} ${ack.code.name} ${ack.code.isoCode} ${ack.code.description}")
-                            else 
-                                println("${ack.timestamp.fmtDateTime()} ${ack.actionType}")
-                        }
-                    }
-                    else -> throw Exception("Parsing $whichDoc not supported")
-                }
+                val stdin = generateSequence(::readLine).joinToString("\n").toByteArray()
+                ingestDocument(db, cfg.currency, stdin, whichDoc) // TODO no db
                 return@cliCmd
             }
 
