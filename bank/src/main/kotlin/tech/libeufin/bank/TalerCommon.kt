@@ -454,6 +454,18 @@ class IbanPayTo: PaytoUri {
         receiverName = params["receiver-name"]
     }
 
+    fun maybeFull(): String {
+        return canonical + if (receiverName != null) ("?receiver-name=" + receiverName.encodeURLParameter()) else ""
+    }
+
+    fun expectFull(): String {
+        return canonical + "?receiver-name=" + receiverName!!.encodeURLParameter()
+    }
+
+    fun fullOptName(defaultName: String): String {
+        return canonical + "?receiver-name=" + (receiverName ?: defaultName).encodeURLParameter()
+    }
+
     override fun toString(): String = canonical
 
     internal object Serializer : KSerializer<IbanPayTo> {

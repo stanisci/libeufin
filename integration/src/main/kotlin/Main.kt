@@ -195,7 +195,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                 // TODO interactive payment editor
                                 nexusDb.initiatedPaymentCreate(InitiatedPayment(
                                     amount = getTalerAmount("1.1", "CFH"),
-                                    creditPaytoUri = "payto://iban/CH6208704048981247126?receiver-name=Grothoff+Hans",
+                                    creditPaytoUri = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans",
                                     wireTransferSubject = "single transaction test",
                                     initiationTime = Instant.now(),
                                     requestUid = Base32Crockford.encode(randBytes(16))

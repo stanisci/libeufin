@@ -71,7 +71,7 @@ class AccountDAO(private val db: Database) {
                 setString(1, name)
                 setString(2, email)
                 setString(3, phone)
-                setString(4, cashoutPayto?.canonical)
+                setString(4, cashoutPayto?.fullOptName(name))
                 setBoolean(5, checkPaytoIdempotent)
                 setString(6, internalPaytoUri.canonical)
                 setBoolean(7, isPublic)
@@ -122,7 +122,7 @@ class AccountDAO(private val db: Database) {
                     setString(3, name)
                     setString(4, email)
                     setString(5, phone)
-                    setString(6, cashoutPayto?.canonical)
+                    setString(6, cashoutPayto?.fullOptName(name))
                     setString(7, tanChannel?.name)
                     oneOrNull { it.getLong("customer_id") }!!
                 }
@@ -240,7 +240,7 @@ class AccountDAO(private val db: Database) {
         val checkCashout = !isAdmin && !allowEditCashout && cashoutPayto.isSome()
         val checkDebtLimit = !isAdmin && debtLimit != null
 
-        // Get user ID and check reconfig rights
+        // Get user ID and check reconfig rights TODO checkout with name
         val (customerId, currChannel, currInfo) = conn.prepareStatement("""
             SELECT
                 customer_id
@@ -263,7 +263,7 @@ class AccountDAO(private val db: Database) {
                 setString(idx, name); idx++
             }
             if (checkCashout) {
-                setString(idx, cashoutPayto.get()?.canonical); idx++
+                setString(idx, cashoutPayto.get()?.maybeFull()); idx++ // TODO cashout with name
             }
             if (checkDebtLimit) {
                 setLong(idx, debtLimit!!.value); idx++

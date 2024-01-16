@@ -142,7 +142,7 @@ SELECT bank_id, debit_payto_uri
 -- As bank id can be at most 35 characters long we truncate the encoded hash
 -- We are not sure whether this field is case-insensitive in all banks as the standard 
 -- does not clearly specify this, so we have chosen to capitalise it
-SELECT upper(substr(encode(public.digest(bank_id, 'sha256'), 'base64'), 0, 35)) INTO out_bounce_id;
+SELECT upper(substr(encode(public.digest(local_bank_id, 'sha256'), 'base64'), 0, 35)) INTO out_bounce_id;
 
 -- Initiate the bounce transaction
 INSERT INTO initiated_outgoing_transactions (
@@ -153,7 +153,7 @@ INSERT INTO initiated_outgoing_transactions (
   ,request_uid
   ) VALUES (
     in_bounce_amount
-    ,'bounce: ' || bank_id
+    ,'bounce: ' || local_bank_id
     ,payto_uri
     ,in_now_date
     ,out_bounce_id

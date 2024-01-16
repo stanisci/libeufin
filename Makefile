@@ -98,18 +98,13 @@ install:
 assemble:
 	./gradlew assemble
 
-.PHONY: doc
-doc:
-	./gradlew dokkaHtmlMultiModule
-	open build/dokka/htmlMultiModule/index.html
-
 .PHONY: check
 check: install-nobuild-bank-files
 	./gradlew check
 
-.PHONY: test
-test: install-nobuild-bank-files
-	./gradlew test --tests $(test) -i
+.PHONY: bank-test
+bank-test: install-nobuild-bank-files
+	./gradlew :bank:test --tests $(test) -i
 
 .PHONY: nexus-test
 nexus-test: install-nobuild-nexus-files
