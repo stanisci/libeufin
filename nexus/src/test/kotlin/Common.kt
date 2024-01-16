@@ -97,15 +97,15 @@ fun genInPay(subject: String) =
         debitPaytoUri = "payto://iban/not-used",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
-        bankTransferId = "entropic"
+        bankId = "entropic"
     )
 
-// Generates an outgoing payment, given its subject.
-fun genOutPay(subject: String, bankTransferId: String) =
+// Generates an outgoing payment, given its subject and messageId
+fun genOutPay(subject: String, messageId: String) =
     OutgoingPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
         creditPaytoUri = "payto://iban/TEST-IBAN?receiver-name=Test",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
-        bankTransferId = bankTransferId
+        messageId = messageId
     )

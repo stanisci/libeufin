@@ -318,8 +318,7 @@ fun parseTxNotif(
         }
         when (kind) {
             "CRDT" -> {
-                // Obtaining payment UID.
-                val uidFromBank: String = requireUniqueChildNamed("Refs") {
+                val bankId: String = requireUniqueChildNamed("Refs") {
                     requireUniqueChildNamed("AcctSvcrRef") {
                         focusElement.textContent
                     }
@@ -334,7 +333,7 @@ fun parseTxNotif(
                     subject
                 }
                 if (subject == null) {
-                    logger.debug("Skip notification $uidFromBank, missing subject")
+                    logger.debug("Skip notification '$bankId', missing subject")
                     return@notificationForEachTx
                 }
 
@@ -361,7 +360,7 @@ fun parseTxNotif(
                 incoming.add(
                     IncomingPayment(
                         amount = amount,
-                        bankTransferId = uidFromBank,
+                        bankId = bankId,
                         debitPaytoUri = debtorPayto.toString(),
                         executionTime = bookDate,
                         wireTransferSubject = subject.toString()
@@ -369,25 +368,16 @@ fun parseTxNotif(
                 )
             }
             "DBIT" -> {
-                /**
-                 * The MsgId extracted in the block below matches the one that
-                 * was specified as the MsgId element in the pain.001 that originated
-                 * this outgoing payment.  MsgId is considered unique because the
-                 * bank enforces its uniqueness.  Associating MsgId to this outgoing
-                 * payment is also convenient to match its initiated outgoing payment
-                 * in the database for reconciliation.
-                 */
-                val uidFromBank = StringBuilder()
-                requireUniqueChildNamed("Refs") {
+                val messageId = requireUniqueChildNamed("Refs") {
                     requireUniqueChildNamed("MsgId") {
-                        uidFromBank.append(focusElement.textContent)
+                        focusElement.textContent
                     }
                 }
 
                 outgoing.add(
                     OutgoingPayment(
                         amount = amount,
-                        bankTransferId = uidFromBank.toString(),
+                        messageId = messageId,
                         executionTime = bookDate
                     )
                 )

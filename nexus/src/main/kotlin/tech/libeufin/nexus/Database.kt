@@ -50,10 +50,11 @@ data class IncomingPayment(
     val wireTransferSubject: String,
     val debitPaytoUri: String,
     val executionTime: Instant,
-    val bankTransferId: String
+    /** ISO20022 AccountServicerReference */
+    val bankId: String
 )  {
     override fun toString(): String {
-        return "IN ${executionTime.fmtDate()} '$amount $bankTransferId' debitor=$debitPaytoUri subject=$wireTransferSubject"
+        return "IN ${executionTime.fmtDate()} $amount '$bankId' debitor=$debitPaytoUri subject=$wireTransferSubject"
     }
 }
 
@@ -128,12 +129,13 @@ enum class PaymentInitiationOutcome {
 data class OutgoingPayment(
     val amount: TalerAmount,
     val executionTime: Instant,
-    val bankTransferId: String,
+    /** ISO20022 MessageIdentification */
+    val messageId: String,
     val creditPaytoUri: String? = null, // not showing in camt.054
     val wireTransferSubject: String? = null // not showing in camt.054
 ) {
     override fun toString(): String {
-        return "OUT ${executionTime.fmtDate()} $amount '$bankTransferId' creditor=$creditPaytoUri subject=$wireTransferSubject"
+        return "OUT ${executionTime.fmtDate()} $amount '$messageId' creditor=$creditPaytoUri subject=$wireTransferSubject"
     }
 }
 
@@ -239,7 +241,7 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.creditPaytoUri)
-        stmt.setString(6, paymentData.bankTransferId)
+        stmt.setString(6, paymentData.messageId)
 
         stmt.executeQuery().use {
             when {
@@ -291,7 +293,7 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.debitPaytoUri)
-        stmt.setString(6, paymentData.bankTransferId)
+        stmt.setString(6, paymentData.bankId)
         stmt.setLong(7, bounceAmount.value)
         stmt.setInt(8, bounceAmount.fraction)
         stmt.setLong(9, refundTimestamp)
@@ -336,7 +338,7 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.debitPaytoUri)
-        stmt.setString(6, paymentData.bankTransferId)
+        stmt.setString(6, paymentData.bankId)
         stmt.setBytes(7, reservePub)
         stmt.executeQuery().use {
             when {

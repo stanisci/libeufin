@@ -30,21 +30,21 @@ $do$;
 CREATE FUNCTION register_outgoing(
   IN in_amount taler_amount
   ,IN in_wire_transfer_subject TEXT
-  ,IN in_execution_time BIGINT
+  ,IN in_execution_time INT8
   ,IN in_credit_payto_uri TEXT
-  ,IN in_bank_transfer_id TEXT
-  ,OUT out_tx_id BIGINT
+  ,IN in_message_id TEXT
+  ,OUT out_tx_id INT8
   ,OUT out_found BOOLEAN
   ,OUT out_initiated BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-init_id BIGINT;
+init_id INT8;
 BEGIN
 -- Check if already registered
 SELECT outgoing_transaction_id INTO out_tx_id
   FROM outgoing_transactions
-  WHERE bank_transfer_id = in_bank_transfer_id;
+  WHERE message_id = in_message_id;
 IF FOUND THEN
   out_found = true;
   -- TODO Should we update the subject and credit payto if it's finally found
@@ -59,21 +59,23 @@ ELSE
     ,wire_transfer_subject
     ,execution_time
     ,credit_payto_uri
-    ,bank_transfer_id
+    ,message_id
   ) VALUES (
     in_amount
     ,in_wire_transfer_subject
     ,in_execution_time
     ,in_credit_payto_uri
-    ,in_bank_transfer_id
+    ,in_message_id
   )
     RETURNING outgoing_transaction_id
       INTO out_tx_id;
 
   -- Reconciles the related initiated transaction
   UPDATE initiated_outgoing_transactions
-    SET outgoing_transaction_id = out_tx_id
-    WHERE request_uid = in_bank_transfer_id
+    SET 
+      outgoing_transaction_id = out_tx_id
+      ,submitted = 'success'
+    WHERE request_uid = in_message_id
     RETURNING true INTO out_initiated;
 END IF;
 END $$;
@@ -83,18 +85,18 @@ COMMENT ON FUNCTION register_outgoing
 CREATE FUNCTION register_incoming(
   IN in_amount taler_amount
   ,IN in_wire_transfer_subject TEXT
-  ,IN in_execution_time BIGINT
+  ,IN in_execution_time INT8
   ,IN in_debit_payto_uri TEXT
-  ,IN in_bank_transfer_id TEXT
+  ,IN in_bank_id TEXT
   ,OUT out_found BOOLEAN
-  ,OUT out_tx_id BIGINT
+  ,OUT out_tx_id INT8
 )
 LANGUAGE plpgsql AS $$
 BEGIN
 -- Check if already registered
 SELECT incoming_transaction_id INTO out_tx_id
   FROM incoming_transactions
-  WHERE bank_transfer_id = in_bank_transfer_id;
+  WHERE bank_id = in_bank_id;
 IF FOUND THEN
   out_found = true;
   -- TODO Should we check that amount and other info match ?
@@ -105,13 +107,13 @@ ELSE
     ,wire_transfer_subject
     ,execution_time
     ,debit_payto_uri
-    ,bank_transfer_id
+    ,bank_id
   ) VALUES (
     in_amount
     ,in_wire_transfer_subject
     ,in_execution_time
     ,in_debit_payto_uri
-    ,in_bank_transfer_id
+    ,in_bank_id
   ) RETURNING incoming_transaction_id INTO out_tx_id;
 END IF;
 END $$;
@@ -119,20 +121,20 @@ COMMENT ON FUNCTION register_incoming
   IS 'Register an incoming transaction';
 
 CREATE FUNCTION bounce_incoming(
-  IN tx_id BIGINT
+  IN tx_id INT8
   ,IN in_bounce_amount taler_amount
-  ,IN in_now_date BIGINT
+  ,IN in_now_date INT8
   ,OUT out_bounce_id TEXT
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-bank_id TEXT;
+local_bank_id TEXT;
 payto_uri TEXT;
-init_id BIGINT;
+init_id INT8;
 BEGIN
 -- Get incoming transaction bank ID and creditor
-SELECT bank_transfer_id, debit_payto_uri 
-  INTO bank_id, payto_uri
+SELECT bank_id, debit_payto_uri 
+  INTO local_bank_id, payto_uri
   FROM incoming_transactions
   WHERE incoming_transaction_id = tx_id;
 -- Generate a bounce ID deterministically from the bank ID
@@ -171,22 +173,22 @@ COMMENT ON FUNCTION bounce_incoming
 CREATE FUNCTION register_incoming_and_bounce(
   IN in_amount taler_amount
   ,IN in_wire_transfer_subject TEXT
-  ,IN in_execution_time BIGINT
+  ,IN in_execution_time INT8
   ,IN in_debit_payto_uri TEXT
-  ,IN in_bank_transfer_id TEXT
+  ,IN in_bank_id TEXT
   ,IN in_bounce_amount taler_amount
-  ,IN in_now_date BIGINT
+  ,IN in_now_date INT8
   ,OUT out_found BOOLEAN
-  ,OUT out_tx_id BIGINT
+  ,OUT out_tx_id INT8
   ,OUT out_bounce_id TEXT
 )
 LANGUAGE plpgsql AS $$
 DECLARE
-init_id BIGINT;
+init_id INT8;
 BEGIN
 -- Register the incoming transaction
 SELECT reg.out_found, reg.out_tx_id
-  FROM register_incoming(in_amount, in_wire_transfer_subject, in_execution_time, in_debit_payto_uri, in_bank_transfer_id) as reg
+  FROM register_incoming(in_amount, in_wire_transfer_subject, in_execution_time, in_debit_payto_uri, in_bank_id) as reg
   INTO out_found, out_tx_id;
 
 -- Bounce the incoming transaction
@@ -198,18 +200,18 @@ COMMENT ON FUNCTION register_incoming_and_bounce
 CREATE FUNCTION register_incoming_and_talerable(
   IN in_amount taler_amount
   ,IN in_wire_transfer_subject TEXT
-  ,IN in_execution_time BIGINT
+  ,IN in_execution_time INT8
   ,IN in_debit_payto_uri TEXT
-  ,IN in_bank_transfer_id TEXT
+  ,IN in_bank_id TEXT
   ,IN in_reserve_public_key BYTEA
   ,OUT out_found BOOLEAN
-  ,OUT out_tx_id BIGINT
+  ,OUT out_tx_id INT8
 )
 LANGUAGE plpgsql AS $$
 BEGIN
 -- Register the incoming transaction
 SELECT reg.out_found, reg.out_tx_id
-  FROM register_incoming(in_amount, in_wire_transfer_subject, in_execution_time, in_debit_payto_uri, in_bank_transfer_id) as reg
+  FROM register_incoming(in_amount, in_wire_transfer_subject, in_execution_time, in_debit_payto_uri, in_bank_id) as reg
   INTO out_found, out_tx_id;
 
 -- Register as talerable bounce

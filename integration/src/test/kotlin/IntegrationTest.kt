@@ -155,7 +155,7 @@ class IntegrationTest {
                 debitPaytoUri = userPayTo.canonical,
                 wireTransferSubject = "Error test ${Base32Crockford.encode(reservePub)}",
                 executionTime = Instant.now(),
-                bankTransferId = "error"
+                bankId = "error"
             )
 
             assertException("ERROR: cashin failed: missing exchange account") {
@@ -214,7 +214,7 @@ class IntegrationTest {
                 debitPaytoUri = userPayTo.canonical,
                 wireTransferSubject = "Success ${Base32Crockford.encode(randBytes(32))}",
                 executionTime = Instant.now(),
-                bankTransferId = "success"
+                bankId = "success"
             ))
             checkCount(db, 2, 1, 1)
             client.get("http://0.0.0.0:8080/accounts/exchange/transactions") {
@@ -287,7 +287,7 @@ class IntegrationTest {
                         debitPaytoUri = userPayTo.canonical,
                         wireTransferSubject = subject,
                         executionTime = Instant.now(),
-                        bankTransferId = Base32Crockford.encode(reservePub)
+                        bankId = Base32Crockford.encode(reservePub)
                     )
                 )
                 val converted = client.get("http://0.0.0.0:8080/conversion-info/cashin-rate?amount_debit=EUR:${20 + i}")

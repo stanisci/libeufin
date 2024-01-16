@@ -262,9 +262,8 @@ private suspend fun getTalerReservePub(
 }
 
 /**
- * Ingests any outgoing payment that was NOT ingested yet.  It
- * links it to the initiated outgoing transaction that originated
- * it.
+ * Ingests an outgoing payment. It links it to the initiated
+ * outgoing transaction that originated it.
  *
  * @param db database handle.
  * @param payment payment to (maybe) ingest.
@@ -280,14 +279,13 @@ suspend fun ingestOutgoingPayment(
         else 
             logger.debug("$payment recovered")
     } else {
-        logger.debug("OUT '${payment.bankTransferId}' already seen")
+        logger.debug("OUT '${payment.messageId}' already seen")
     }
 }
 
 /**
- * Ingests any incoming payment that was NOT ingested yet.  Stores
- * the payment into valid talerable ones or bounces it, according
- * to the subject.
+ * Ingests an incoming payment.  Stores the payment into valid talerable ones
+ * or bounces it, according to the subject.
  *
  * @param db database handle.
  * @param currency fiat currency of the watched bank account.
@@ -299,7 +297,7 @@ suspend fun ingestIncomingPayment(
 ) {
     val reservePub = getTalerReservePub(payment)
     if (reservePub == null) {
-        logger.debug("Incoming payment with UID '${payment.bankTransferId}'" +
+        logger.debug("Incoming payment with UID '${payment.bankId}'" +
                 " has invalid subject: ${payment.wireTransferSubject}."
         )
         val result = db.registerMalformedIncoming(
@@ -310,14 +308,14 @@ suspend fun ingestIncomingPayment(
         if (result.new) {
             logger.debug("$payment bounced in '${result.bounceId}'")
         } else {
-            logger.debug("IN '${payment.bankTransferId}' already seen and bounced in '${result.bounceId}'")
+            logger.debug("IN '${payment.bankId}' already seen and bounced in '${result.bounceId}'")
         }
     } else {
         val result = db.registerTalerableIncoming(payment, reservePub)
         if (result.new) {
             logger.debug("$payment")
         } else {
-            logger.debug("IN '${payment.bankTransferId}' already seen")
+            logger.debug("IN '${payment.bankId}' already seen")
         }
     }
 }
