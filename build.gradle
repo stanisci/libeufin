@@ -11,7 +11,7 @@ plugins {
 }
 
 group = "tech.libeufin"
-version = "0.9.3"
+version = "0.9.4"
 
 if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)){
     throw new GradleException(
