@@ -340,7 +340,7 @@ fun firstLessThanSecond(
 }
 
 private fun ingestDocument(
-    db: Database,
+    db: Database?,
     currency: String,
     content: ByteArray,
     whichDocument: SupportedDocument
@@ -364,10 +364,10 @@ private fun ingestDocument(
 
                 runBlocking {
                     incomingPayments.forEach {
-                        ingestIncomingPayment(db, it)
+                        if (db != null) ingestIncomingPayment(db, it) else logger.debug("$it")
                     }
                     outgoingPayments.forEach {
-                        ingestOutgoingPayment(db, it)
+                        if (db != null) ingestOutgoingPayment(db, it) else logger.debug("$it")
                     }
                 }
             } catch (e: Exception) {
@@ -513,7 +513,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
             if (parse || import) {
                 logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
                 val stdin = generateSequence(::readLine).joinToString("\n").toByteArray()
-                ingestDocument(db, cfg.currency, stdin, whichDoc) // TODO no db
+                ingestDocument(if (import) db else null, cfg.currency, stdin, whichDoc)
                 return@cliCmd
             }
 
