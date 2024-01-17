@@ -454,14 +454,17 @@ class IbanPayTo: PaytoUri {
         receiverName = params["receiver-name"]
     }
 
+    /** Canonical IBAN payto with receiver-name parameter if present */
     fun maybeFull(): String {
         return canonical + if (receiverName != null) ("?receiver-name=" + receiverName.encodeURLParameter()) else ""
     }
 
+    /** Canonical IBAN payto with receiver-name parameter, fail if absent */
     fun expectFull(): String {
         return canonical + "?receiver-name=" + receiverName!!.encodeURLParameter()
     }
 
+    /** Canonical IBAN payto with receiver-name parameter set to [defaultName] if absent */
     fun fullOptName(defaultName: String): String {
         return canonical + "?receiver-name=" + (receiverName ?: defaultName).encodeURLParameter()
     }

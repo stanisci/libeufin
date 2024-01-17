@@ -195,7 +195,7 @@ class CoreBankAccountsApiTest {
         }
 
         // Check given payto
-        val ibanPayto = genIbanPaytoUri()
+        val ibanPayto = IbanPayTo(genIbanPaytoUri())
         val req = obj {
             "username" to "foo"
             "password" to "password"
@@ -208,7 +208,7 @@ class CoreBankAccountsApiTest {
         client.post("/accounts") {
             json(req)
         }.assertOkJson<RegisterAccountResponse> {
-            assertEquals(ibanPayto, it.internal_payto_uri)
+            assertEquals(ibanPayto.canonical, it.internal_payto_uri)
         }
         // Testing idempotency
         client.post("/accounts") {
@@ -298,6 +298,31 @@ class CoreBankAccountsApiTest {
         client.get("/accounts/bar") {
             pwAuth("admin")
         }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+
+        // Check cashout payto receiver name logic
+        client.post("/accounts") {
+            json {
+                "username" to "cashout_guess"
+                "password" to "cashout_guess-password"
+                "name" to "Mr Guess My Name"
+                "cashout_payto_uri" to ibanPayto
+            }
+        }.assertOk()
+        client.getA("/accounts/cashout_guess").assertOkJson<AccountData> {
+            assertEquals(ibanPayto.fullOptName("Mr Guess My Name"), it.cashout_payto_uri)
+        }
+        val full = ibanPayto.fullOptName("Santa Claus")
+        client.post("/accounts") {
+            json {
+                "username" to "cashout_keep"
+                "password" to "cashout_keep-password"
+                "name" to "Mr Keep My Name"
+                "cashout_payto_uri" to full
+            }
+        }.assertOk()
+        client.getA("/accounts/cashout_keep").assertOkJson<AccountData> {
+            assertEquals(full, it.cashout_payto_uri)
+        }
     }
 
     // Test account created with bonus
@@ -465,7 +490,7 @@ class CoreBankAccountsApiTest {
         // Successful attempt now
         val cashout = IbanPayTo(genIbanPaytoUri())
         val req = obj {
-            "cashout_payto_uri" to cashout.canonical
+            "cashout_payto_uri" to cashout
             "name" to "Roger"
             "is_public" to true
             "contact_data" to obj {
@@ -496,7 +521,7 @@ class CoreBankAccountsApiTest {
         // Check patch
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
             assertEquals("Roger", obj.name)
-            assertEquals(cashout.canonical, obj.cashout_payto_uri)
+            assertEquals(cashout.fullOptName(obj.name), obj.cashout_payto_uri)
             assertEquals("+99", obj.contact_data?.phone?.get())
             assertEquals("foo@example.com", obj.contact_data?.email?.get())
             assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
@@ -510,7 +535,7 @@ class CoreBankAccountsApiTest {
         }.assertNoContent()
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
             assertEquals("Roger", obj.name)
-            assertEquals(cashout.canonical, obj.cashout_payto_uri)
+            assertEquals(cashout.fullOptName(obj.name), obj.cashout_payto_uri)
             assertEquals("+99", obj.contact_data?.phone?.get())
             assertEquals("foo@example.com", obj.contact_data?.email?.get())
             assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
@@ -524,6 +549,32 @@ class CoreBankAccountsApiTest {
                 "is_public" to true
             }
         }.assertConflict(TalerErrorCode.END)
+
+        // Check cashout payto receiver name logic
+        client.post("/accounts") {
+            json {
+                "username" to "cashout"
+                "password" to "cashout-password"
+                "name" to "Mr Cashout Cashout"
+            }
+        }.assertOk()
+        for ((cashout, name, expect) in listOf(
+            Triple(cashout.canonical, null, cashout.fullOptName("Mr Cashout Cashout")),
+            Triple(cashout.canonical, "New name", cashout.fullOptName("New name")),
+            Triple(cashout.fullOptName("Full name"), null, cashout.fullOptName("Full name")),
+            Triple(cashout.fullOptName("Full second name"), "Another name", cashout.fullOptName("Full second name"))
+        )) {
+            client.patch("/accounts/cashout") {
+                pwAuth("admin")
+                json {
+                    "cashout_payto_uri" to cashout
+                    if (name != null) "name" to name
+                }
+            }.assertNoContent()
+            client.getA("/accounts/cashout").assertOkJson<AccountData> { obj ->
+                assertEquals(expect, obj.cashout_payto_uri)
+            }
+        }
 
         // Check 2FA
         fillTanInfo("merchant")

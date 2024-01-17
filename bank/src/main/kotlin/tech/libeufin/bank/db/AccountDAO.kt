@@ -240,83 +240,88 @@ class AccountDAO(private val db: Database) {
         val checkCashout = !isAdmin && !allowEditCashout && cashoutPayto.isSome()
         val checkDebtLimit = !isAdmin && debtLimit != null
 
-        // Get user ID and check reconfig rights TODO checkout with name
-        val (customerId, currChannel, currInfo) = conn.prepareStatement("""
-            SELECT
-                customer_id
-                ,(${ if (checkName) "name != ?" else "false" }) as name_change
-                ,(${ if (checkCashout) "cashout_payto IS DISTINCT FROM ?" else "false" }) as cashout_change
-                ,(${ if (checkDebtLimit) "max_debt != (?, ?)::taler_amount" else "false" }) as debt_limit_change
-                ,(${ when (tan_channel.get()) {
-                    null -> "false"
-                    TanChannel.sms -> if (phone.get() != null) "false" else "phone IS NULL"
-                    TanChannel.email -> if (email.get() != null) "false" else "email IS NULL"
-                }}) as missing_tan_info
-                ,tan_channel, phone, email
+        data class CurrentAccount(
+            val id: Long,
+            val channel: TanChannel?,
+            val email: String?,
+            val phone: String?,
+            val name: String,
+            val cashoutPayTo: String?,
+            val debtLimit: TalerAmount,
+        )
+
+        // Get user ID and current data
+        val curr = conn.prepareStatement("""
+            SELECT 
+                customer_id, tan_channel, phone, email, name, cashout_payto
+                ,(max_debt).val AS max_debt_val
+                ,(max_debt).frac AS max_debt_frac
             FROM customers
                 JOIN bank_accounts 
                 ON customer_id=owning_customer_id
             WHERE login=?
         """).run {
-            var idx = 1;
-            if (checkName) {
-                setString(idx, name); idx++
-            }
-            if (checkCashout) {
-                setString(idx, cashoutPayto.get()?.maybeFull()); idx++ // TODO cashout with name
-            }
-            if (checkDebtLimit) {
-                setLong(idx, debtLimit!!.value); idx++
-                setInt(idx, debtLimit.frac); idx++
-            }
-            setString(idx, login)
-            executeQuery().use {
-                when {
-                    !it.next() -> return@transaction AccountPatchResult.UnknownAccount
-                    it.getBoolean("name_change") -> return@transaction AccountPatchResult.NonAdminName
-                    it.getBoolean("cashout_change") -> return@transaction AccountPatchResult.NonAdminCashout
-                    it.getBoolean("debt_limit_change") -> return@transaction AccountPatchResult.NonAdminDebtLimit
-                    it.getBoolean("missing_tan_info") -> return@transaction AccountPatchResult.MissingTanInfo
-                    else -> {
-                        val currChannel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) }
-                        Triple(
-                            it.getLong("customer_id"),
-                            currChannel,
-                            when (tan_channel.get() ?: currChannel) {
-                                TanChannel.sms -> it.getString("phone")
-                                TanChannel.email -> it.getString("email")
-                                null -> null
-                            }
-                        )
-                    }
-                }
-            }
+            setString(1, login)
+            oneOrNull {
+                CurrentAccount(
+                    id = it.getLong("customer_id"),
+                    channel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) },
+                    phone = it.getString("phone"),
+                    email = it.getString("email"),
+                    name = it.getString("name"),
+                    cashoutPayTo = it.getString("cashout_payto"),
+                    debtLimit = it.getAmount("max_debt", db.bankCurrency),
+                )
+            } ?: return@transaction AccountPatchResult.UnknownAccount
         }
- 
-        val newChannel = tan_channel.get();
-        val newInfo = when (newChannel ?: currChannel) {
+
+        // Patched TAN channel
+        val patchChannel = tan_channel.get()
+        // TAN channel after the PATCH
+        val newChannel = patchChannel ?: curr.channel
+        // Patched TAN info
+        val patchInfo = when (newChannel) {
             TanChannel.sms -> phone.get()
             TanChannel.email -> email.get()
             null -> null
         }
+        // TAN info after the PATCH
+        val newInfo = patchInfo ?: when (newChannel) {
+            TanChannel.sms -> curr.phone
+            TanChannel.email -> curr.email
+            null -> null
+        }
+        // Cashout payto with a receiver-name using if receiver-name is missing the new named if present or the current one 
+        val cashoutPaytoNamed = cashoutPayto.get()?.fullOptName(name ?: curr.name)
+
+        // Check reconfig rights
+        if (checkName && name != curr.name) 
+            return@transaction AccountPatchResult.NonAdminName
+        if (checkCashout && cashoutPaytoNamed != curr.cashoutPayTo) 
+            return@transaction AccountPatchResult.NonAdminCashout
+        if (checkDebtLimit && debtLimit != curr.debtLimit)
+            return@transaction AccountPatchResult.NonAdminDebtLimit
+        if (patchChannel != null && newInfo == null)
+            return@transaction AccountPatchResult.MissingTanInfo
+
 
         // Tan channel verification
         if (!isAdmin) {
             // Check performed 2fa check
-            if (currChannel != null && !is2fa) {
+            if (curr.channel != null && !is2fa) {
                 // Perform challenge with current settings
                 return@transaction AccountPatchResult.TanRequired(channel = null, info = null)
             }
             // If channel or info changed and the 2fa challenge is performed with old settings perform a new challenge with new settings
-            if ((newChannel != null && newChannel != faChannel) || (newInfo != null && newInfo != faInfo)) {
-                return@transaction AccountPatchResult.TanRequired(channel = newChannel ?: currChannel, info = newInfo ?: currInfo)
+            if ((patchChannel != null && patchChannel != faChannel) || (patchInfo != null && patchInfo != faInfo)) {
+                return@transaction AccountPatchResult.TanRequired(channel = newChannel, info = newInfo)
             }
         }
 
         // Invalidate current challenges
-        if (newChannel != null || newInfo != null) {
+        if (patchChannel != null || patchInfo != null) {
             val stmt = conn.prepareStatement("UPDATE tan_challenges SET expiration_date=0 WHERE customer=?")
-            stmt.setLong(1, customerId)
+            stmt.setLong(1, curr.id)
             stmt.execute()
         }
 
@@ -331,7 +336,7 @@ class AccountDAO(private val db: Database) {
             sequence {
                 isPublic?.let { yield(it) }
                 debtLimit?.let { yield(it.value); yield(it.frac) }
-                yield(customerId)
+                yield(curr.id)
             }
         )
 
@@ -347,12 +352,12 @@ class AccountDAO(private val db: Database) {
             },
             "WHERE customer_id = ?",
             sequence {
-                cashoutPayto.some { yield(it?.canonical) }
+                cashoutPayto.some { yield(cashoutPaytoNamed) }
                 phone.some { yield(it) }
                 email.some { yield(it) }
                 tan_channel.some { yield(it?.name) }
                 name?.let { yield(it) }
-                yield(customerId)
+                yield(curr.id)
             }
         )
 
