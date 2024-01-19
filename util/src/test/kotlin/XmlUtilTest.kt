@@ -14,9 +14,6 @@ import java.util.*
 import javax.xml.transform.stream.StreamSource
 import tech.libeufin.util.XMLUtil.Companion.signEbicsResponse
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.XmlUnitTest")
-
-
 class XmlUtilTest {
 
     @Test
@@ -68,7 +65,7 @@ class XmlUtilTest {
             </HTDResponseOrderData>""".trimIndent()
         )
 
-        logger.debug(tmp.value.partnerInfo.orderInfoList[0].description)
+        println(tmp.value.partnerInfo.orderInfoList[0].description)
     }
 
     @Test
@@ -77,7 +74,7 @@ class XmlUtilTest {
             XMLUtil.convertStringToJaxb<EbicsKeyManagementResponse>("<malformed xml>")
         } catch (e: javax.xml.bind.UnmarshalException) {
             // just ensuring this is the exception
-            logger.info("caught")
+            println("caught")
             return
         }
         assertTrue(false)

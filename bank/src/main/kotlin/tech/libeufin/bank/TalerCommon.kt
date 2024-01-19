@@ -35,10 +35,6 @@ import kotlinx.serialization.json.*
 import net.taler.common.errorcodes.TalerErrorCode
 import net.taler.wallet.crypto.Base32Crockford
 import net.taler.wallet.crypto.EncodingException
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.TalerCommon")
 
 /** 32-byte Crockford's Base32 encoded data */
 @Serializable(with = Base32Crockford32B.Serializer::class)

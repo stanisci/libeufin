@@ -266,7 +266,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
      * or long-polls (currently not implemented) for new payments.
      * FIXME: reduce code duplication with the fetch subcommand.
      */
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
         val (clientKeys, bankKeys) = expectFullKeys(cfg)

@@ -51,7 +51,7 @@ import java.security.interfaces.RSAPublicKey
 import java.io.FileNotFoundException
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
-val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
+val logger: Logger = LoggerFactory.getLogger("libeufin-nexus")
 val myJson = Json {
     this.serializersModule = SerializersModule {
         contextual(RSAPrivateCrtKey::class) { RSAPrivateCrtKeySerializer }

@@ -498,7 +498,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
      * mode when no flags are passed to the invocation.
      * FIXME: reduce code duplication with the submit subcommand.
      */
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
 

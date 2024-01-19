@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory
 import tech.libeufin.util.*
 import tech.libeufin.bank.*
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.NotificationWatcher")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db-watcher")
 
 /** Postgres notification collector and distributor */
 internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
@@ -103,7 +103,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                             }
                         }
                     } catch (e: Exception) {
-                        logger.warn("notification_watcher failed: $e")
+                        logger.warn("$e")
                         delay(backoff.next())
                     }
                 }

@@ -38,7 +38,7 @@ import io.ktor.http.HttpStatusCode
 import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.bank.*
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Database")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db")
 
 /**
  * This error occurs in case the timestamp took by the bank for some

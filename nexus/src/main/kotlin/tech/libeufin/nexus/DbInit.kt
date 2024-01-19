@@ -17,7 +17,7 @@ class DbInit : CliktCommand("Initialize the libeufin-nexus database", name = "db
         help = "Reset database (DANGEROUS: All existing data is lost)"
     ).flag()
 
-    override fun run() {
+    override fun run() = cliCmd(logger, common.log) {
         val cfg = loadConfig(common.config).dbConfig()
         pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
             if (requestReset) {

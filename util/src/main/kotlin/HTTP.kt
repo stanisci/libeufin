@@ -7,7 +7,7 @@ import io.ktor.server.util.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.HTTP")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-common")
 
 // Get the base URL of a request, returns null if any problem occurs.
 fun ApplicationRequest.getBaseUrl(): String? {

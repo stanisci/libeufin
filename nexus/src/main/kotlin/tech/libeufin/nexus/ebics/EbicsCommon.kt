@@ -56,8 +56,6 @@ import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.zip.DeflaterInputStream
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus.EbicsCommon")
-
 /**
  * Available EBICS versions.
  */
@@ -100,7 +98,7 @@ enum class SupportedDocument {
  */
 fun ByteArray.unzipForEach(lambda: (String, String) -> Unit) {
     if (this.isEmpty()) {
-        tech.libeufin.nexus.logger.warn("Empty archive")
+        logger.warn("Empty archive")
         return
     }
     val mem = SeekableInMemoryByteChannel(this)
@@ -163,7 +161,7 @@ suspend fun HttpClient.postToBank(bankUrl: String, msg: String): String? {
     }
     catch (e: Exception) {
         // hard error (network issue, invalid URL, ..)
-        tech.libeufin.nexus.logger.error("Could not POST to bank at: $bankUrl, detail: ${e.message}")
+        logger.error("Could not POST to bank at: $bankUrl, detail: ${e.message}")
         return null
     }
     // Bank was found, but the EBICS request wasn't served.
@@ -171,7 +169,7 @@ suspend fun HttpClient.postToBank(bankUrl: String, msg: String): String? {
     // _should_ not be related to EBICS.  404 for a wrong URL
     // is one example.
     if (resp.status != HttpStatusCode.OK) {
-        tech.libeufin.nexus.logger.error("Bank was found at $bankUrl, but EBICS wasn't served.  Response status: ${resp.status}, body: ${resp.bodyAsText()}")
+        logger.error("Bank was found at $bankUrl, but EBICS wasn't served.  Response status: ${resp.status}, body: ${resp.bodyAsText()}")
         return null
     }
     return resp.bodyAsText()

@@ -29,19 +29,17 @@ import io.ktor.server.routing.*
 import io.ktor.util.pipeline.PipelineContext
 import java.time.Instant
 import net.taler.common.errorcodes.TalerErrorCode
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import tech.libeufin.bank.db.*
 import tech.libeufin.bank.db.ExchangeDAO.*
 import tech.libeufin.bank.auth.*
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus")
 
 fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
     get("/taler-wire-gateway/config") {
         call.respond(TWGConfigResponse(
             currency = ctx.regionalCurrency
         ))
+        
         return@get
     }
     auth(db, TokenScope.readwrite) {

@@ -39,7 +39,7 @@ import java.time.ZoneId
 import java.util.*
 import javax.xml.datatype.DatatypeFactory
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.nexus.Ebics2")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-nexus-ebics2")
 
 /**
  * Convenience function to download via EBICS with a

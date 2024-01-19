@@ -25,7 +25,7 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.time")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-common")
 
 /**
  * Converts the 'this' Instant to the number of nanoseconds

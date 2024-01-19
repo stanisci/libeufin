@@ -80,6 +80,8 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         runBlocking {
             Path("test/$name").createDirectories()
             val conf = "conf/$name.conf"
+            val log = "DEBUG"
+            val flags = " -c $conf -L $log"
             val cfg = loadConfig(conf)
 
             val clientKeysPath = Path(cfg.requireString("nexus-ebics", "client_private_keys_file"))
@@ -88,8 +90,8 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
             var hasClientKeys = clientKeysPath.exists()
             var hasBankKeys = bankKeysPath.exists()
 
-            if (ask("Reset DB ? y/n>") == "y") nexusCmd.test("dbinit -r -c $conf").assertOk()
-            else  nexusCmd.test("dbinit -c $conf").assertOk()
+            if (ask("Reset DB ? y/n>") == "y") nexusCmd.test("dbinit -r $flags").assertOk()
+            else  nexusCmd.test("dbinit $flags").assertOk()
             val nexusDb = NexusDb("postgresql:///libeufincheck")
 
             when (kind) {
@@ -106,27 +108,27 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     if (!hasClientKeys) {
                         step("Test INI order")
                         ask("Got to https://isotest.postfinance.ch/corporates/user/settings/ebics and click on 'Reset EBICS user'.\nPress Enter when done>")
-                        nexusCmd.test("ebics-setup -c $conf")
+                        nexusCmd.test("ebics-setup $flags")
                             .assertErr("ebics-setup should failed the first time")
                     }
         
                     if (!hasBankKeys) {
                         step("Test HIA order")
                         ask("Got to https://isotest.postfinance.ch/corporates/user/settings/ebics and click on 'Activate EBICS user'.\nPress Enter when done>")
-                        nexusCmd.test("ebics-setup --auto-accept-keys -c $conf")
+                        nexusCmd.test("ebics-setup --auto-accept-keys $flags")
                             .assertOk("ebics-setup should succeed the second time")
                     }
                    
                     val payto = "payto://iban/CH2989144971918294289?receiver-name=Test"
         
                     step("Test fetch transactions")
-                    nexusCmd.test("ebics-fetch --transient -c $conf --pinned-start 2022-01-01").assertOk()
+                    nexusCmd.test("ebics-fetch --transient $flags --pinned-start 2022-01-01").assertOk()
 
                     while (true) {
                         when (ask("Run 'fetch', 'submit', 'tx', 'txs', 'logs', 'ack' or 'exit'>")) {
                             "fetch" -> {
                                 step("Fetch new transactions")
-                                nexusCmd.test("ebics-fetch --transient -c $conf").assertOk()
+                                nexusCmd.test("ebics-fetch --transient $flags").assertOk()
                             }
                             "tx" -> {
                                 step("Test submit one transaction")
@@ -137,7 +139,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                     initiationTime = Instant.now(),
                                     requestUid = Base32Crockford.encode(randBytes(16))
                                 ))
-                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                                nexusCmd.test("ebics-submit --transient $flags").assertOk()
                             }
                             "txs" -> {
                                 step("Test submit many transaction")
@@ -150,19 +152,19 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                         requestUid = Base32Crockford.encode(randBytes(16))
                                     ))
                                 }
-                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                                nexusCmd.test("ebics-submit --transient $flags").assertOk()
                             }
                             "submit" -> {
                                 step("Submit pending transactions")
-                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                                nexusCmd.test("ebics-submit --transient $flags").assertOk()
                             }
                             "logs" -> {
                                 step("Fetch logs")
-                                nexusCmd.test("ebics-fetch --transient -c $conf --only-logs").assertOk()
+                                nexusCmd.test("ebics-fetch --transient $flags --only-logs").assertOk()
                             }
                             "ack" -> {
                                 step("Fetch ack")
-                                nexusCmd.test("ebics-fetch --transient -c $conf --only-ack").assertOk()
+                                nexusCmd.test("ebics-fetch --transient $flags --only-ack").assertOk()
                             }
                             "exit" -> break
                         }
@@ -174,11 +176,11 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                         
                     if (!hasBankKeys) {
                         step("Test HIA order")
-                        nexusCmd.test("ebics-setup --auto-accept-keys -c $conf").assertOk("ebics-setup should succeed the second time")
+                        nexusCmd.test("ebics-setup --auto-accept-keys $flags").assertOk("ebics-setup should succeed the second time")
                     }
     
                     step("Test fetch transactions")
-                    nexusCmd.test("ebics-fetch --transient -c $conf --pinned-start 2022-01-01").assertOk()
+                    nexusCmd.test("ebics-fetch --transient $flags --pinned-start 2022-01-01").assertOk()
 
                     while (true) {
                         when (ask("Run 'fetch', 'submit', 'logs', 'ack' or 'exit'>")) {
@@ -200,15 +202,15 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                     initiationTime = Instant.now(),
                                     requestUid = Base32Crockford.encode(randBytes(16))
                                 ))
-                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                                nexusCmd.test("ebics-submit --transient $flags").assertOk()
                             }
                             "logs" -> {
                                 step("Fetch logs")
-                                nexusCmd.test("ebics-fetch --transient -c $conf --only-logs").assertOk()
+                                nexusCmd.test("ebics-fetch --transient $flags --only-logs").assertOk()
                             }
                             "ack" -> {
                                 step("Fetch ack")
-                                nexusCmd.test("ebics-fetch --transient -c $conf --only-ack").assertOk()
+                                nexusCmd.test("ebics-fetch --transient $flags --only-ack").assertOk()
                             }
                             "exit" -> break
                         }

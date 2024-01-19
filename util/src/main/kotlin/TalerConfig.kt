@@ -25,7 +25,7 @@ import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.listDirectoryEntries
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.TalerConfig")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
 private data class Section(
     val entries: MutableMap<String, String>,

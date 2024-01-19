@@ -47,7 +47,7 @@ import tech.libeufin.bank.db.TransactionDAO.*
 import tech.libeufin.bank.db.WithdrawalDAO.*
 import tech.libeufin.util.*
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.accountsMgmtHandlers")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-api")
 
 fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
     get("/config") {

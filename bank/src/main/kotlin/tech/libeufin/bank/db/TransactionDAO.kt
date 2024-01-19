@@ -26,7 +26,7 @@ import java.time.*
 import java.sql.Types
 import tech.libeufin.bank.*
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.TransactionDAO")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-tx-dao")
 
 /** Data access logic for transactions */
 class TransactionDAO(private val db: Database) {

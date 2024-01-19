@@ -32,7 +32,7 @@ import java.sql.SQLException
 
 fun getCurrentUser(): String = System.getProperty("user.name")
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.DB")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-db")
 
 // Check GANA (https://docs.gnunet.org/gana/index.html) for numbers allowance.
 

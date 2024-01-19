@@ -23,11 +23,7 @@ import TalerConfig
 import TalerConfigError
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import tech.libeufin.util.DatabaseConfig
-
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Config")
 
 /**
  * Application the parsed configuration.

@@ -285,7 +285,7 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
     /**
      * This function collects the main steps of setting up an EBICS access.
      */
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         val cfg = extractEbicsConfig(common.config)
         if (checkFullConfig) {
             cfg.config.requireString("nexus-submit", "frequency").apply {

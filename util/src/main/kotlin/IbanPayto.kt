@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.URLDecoder
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.IbanPayto")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-common")
 
 // Payto information.
 data class IbanPayto(

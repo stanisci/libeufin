@@ -16,7 +16,6 @@
  * License along with LibEuFin; see the file COPYING.  If not, see
  * <http://www.gnu.org/licenses/>
  */
-// Main HTTP handlers and related data definitions.
 
 package tech.libeufin.bank
 
@@ -58,7 +57,7 @@ import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.bank.db.*
 import tech.libeufin.util.*
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.bank.Main")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 // Dirty local variable to stop the server in test TODO remove this ugly hack
 var engine: ApplicationEngine? = null 
 
@@ -108,7 +107,7 @@ val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
  */
 fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     install(CallLogging) {
-        this.level = Level.DEBUG
+        this.level = Level.INFO
         this.logger = tech.libeufin.bank.logger
         this.format { call ->
             val status = call.response.status()
@@ -218,17 +217,6 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     }
 }
 
-class CommonOption: OptionGroup() {
-    val config by option(
-        "--config", "-c",
-        help = "Specifies the configuration file"
-    ).path(
-        mustExist = true, 
-        canBeDir = false, 
-        mustBeReadable = true,
-    ).convert { it.toString() } // TODO take path to load config
-}
-
 class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = "dbinit") {
     private val common by CommonOption()
     private val requestReset by option(
@@ -236,7 +224,7 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
         help = "Reset database (DANGEROUS: All existing data is lost)"
     ).flag()
 
-    override fun run() = cliCmd(logger){
+    override fun run() = cliCmd(logger, common.log) {
         val config = talerConfig(common.config)
         val cfg = config.loadDbConfig()
         val ctx = config.loadBankConfig();
@@ -266,7 +254,7 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
 class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") {
     private val common by CommonOption()
 
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig()
         val dbCfg = cfg.loadDbConfig()
@@ -332,7 +320,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         help = "Account password used for authentication"
     )
 
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
@@ -378,7 +366,7 @@ class EditAccount : CliktCommand(
     private val cashout_payto_uri: IbanPayTo? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { IbanPayTo(it) }
     private val debit_threshold: TalerAmount? by option(help = "Max debit allowed for this account").convert { TalerAmount(it) }
  
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
@@ -456,7 +444,7 @@ class CreateAccount : CliktCommand(
     private val json by argument().convert { Json.decodeFromString<RegisterAccountRequest>(it) }.optional()
     private val options by CreateAccountOption().cooccurring()
  
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         // TODO support setting tan
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 

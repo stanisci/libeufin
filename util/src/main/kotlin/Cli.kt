@@ -29,10 +29,15 @@ import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.slf4j.event.Level
 
-private val logger: Logger = LoggerFactory.getLogger("tech.libeufin.util.ConfigCli")
+private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
-fun cliCmd(logger: Logger, lambda: () -> Unit) {
+fun cliCmd(logger: Logger, level: Level, lambda: () -> Unit) {
+    // Set root log level
+    val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
+    root.setLevel(ch.qos.logback.classic.Level.convertAnSLF4JLevel(level));
+    // Run cli command catching all errors
     try {
         lambda()
     } catch (e: Throwable) {
@@ -44,6 +49,7 @@ fun cliCmd(logger: Logger, lambda: () -> Unit) {
             cause = cause.cause
         }
         logger.error(msg.toString())
+        logger.debug("$e", e)
         throw ProgramResult(1)
     }
 }
@@ -63,6 +69,10 @@ class CommonOption: OptionGroup() {
         canBeDir = false, 
         mustBeReadable = true,
     ).convert { it.toString() } // TODO take path to load config
+    val log by option(
+        "--log", "-L",
+        help = "Configure logging to use LOGLEVEL"
+    ).enum<Level>().default(Level.INFO)
 }
 
 class CliConfigCmd(configSource: ConfigSource) : CliktCommand("Inspect or change the configuration", name = "config") {
@@ -83,7 +93,7 @@ private class CliConfigGet(private val configSource: ConfigSource) : CliktComman
     private val optionName by argument()
 
 
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         val config = talerConfig(configSource, common.config)
         if (isPath) {
             val res = config.lookupPath(sectionName, optionName)
@@ -107,7 +117,7 @@ private class CliConfigPathsub(private val configSource: ConfigSource) : CliktCo
     private val common by CommonOption()
     private val pathExpr by argument()
 
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         val config = talerConfig(configSource, common.config)
         println(config.pathsub(pathExpr))
     }
@@ -116,7 +126,7 @@ private class CliConfigPathsub(private val configSource: ConfigSource) : CliktCo
 private class CliConfigDump(private val configSource: ConfigSource) : CliktCommand("Dump the configuration", name = "dump") {
     private val common by CommonOption()
 
-    override fun run() = cliCmd(logger) {
+    override fun run() = cliCmd(logger, common.log) {
         val config = talerConfig(configSource, common.config)
         println("# install path: ${config.getInstallPath()}")
         println(config.stringify())
