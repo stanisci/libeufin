@@ -111,7 +111,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                 ,taler_out_count
                 ,(taler_out_volume).val as taler_out_volume_val
                 ,(taler_out_volume).frac as taler_out_volume_frac
-            FROM stats_get_frame(now()::timestamp, ?::stat_timeframe_enum, ?)
+            FROM stats_get_frame(NULL, ?::stat_timeframe_enum, ?)
         """)
         stmt.setString(1, params.timeframe.name)
         if (params.which != null) {

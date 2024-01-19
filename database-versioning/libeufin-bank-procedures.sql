@@ -226,7 +226,7 @@ INSERT
 SELECT (amount).val, (amount).frac, bank_account_id
 INTO local_amount.val, local_amount.frac, local_bank_account_id
 FROM bank_account_transactions WHERE bank_transaction_id=in_debit_row_id;
-CALL stats_register_payment('taler_out', now()::TIMESTAMP, local_amount, null);
+CALL stats_register_payment('taler_out', NULL, local_amount, null);
 -- notify new transaction
 PERFORM pg_notify('outgoing_tx', in_debtor_account_id || ' ' || in_creditor_account_id || ' ' || in_debit_row_id || ' ' || in_credit_row_id);
 END $$;
@@ -255,7 +255,7 @@ INSERT
 SELECT (amount).val, (amount).frac, bank_account_id
 INTO local_amount.val, local_amount.frac, local_bank_account_id
 FROM bank_account_transactions WHERE bank_transaction_id=in_tx_row_id;
-CALL stats_register_payment('taler_in', now()::TIMESTAMP, local_amount, null);
+CALL stats_register_payment('taler_in', NULL, local_amount, null);
 -- notify new transaction
 PERFORM pg_notify('incoming_tx', local_bank_account_id || ' ' || in_tx_row_id);
 END $$;
@@ -1034,7 +1034,7 @@ END IF;
 CALL register_incoming(in_reserve_pub, tx_row_id);
 
 -- update stats
-CALL stats_register_payment('cashin', now()::TIMESTAMP, converted_amount, in_amount);
+CALL stats_register_payment('cashin', NULL, converted_amount, in_amount);
 
 END $$;
 COMMENT ON FUNCTION cashin IS 'Perform a cashin operation';
@@ -1142,7 +1142,7 @@ INSERT INTO cashout_operations (
 ) RETURNING cashout_id INTO out_cashout_id;
 
 -- update stats
-CALL stats_register_payment('cashout', now()::TIMESTAMP, in_amount_debit, in_amount_credit);
+CALL stats_register_payment('cashout', NULL, in_amount_debit, in_amount_credit);
 END $$;
 
 CREATE FUNCTION tan_challenge_create (
@@ -1321,6 +1321,9 @@ LANGUAGE plpgsql AS $$
 DECLARE
   local_start_time TIMESTAMP;
 BEGIN
+  IF now IS NULL THEN
+    now = timezone('utc', now())::TIMESTAMP;
+  END IF;
   local_start_time = CASE 
     WHEN which IS NULL          THEN date_trunc(in_timeframe::text, now)
     WHEN in_timeframe = 'hour'  THEN date_trunc('day'  , now) + make_interval(hours  => which)
@@ -1378,6 +1381,9 @@ DECLARE
   frame stat_timeframe_enum;
   query TEXT;
 BEGIN
+  IF now IS NULL THEN
+    now = timezone('utc', now())::TIMESTAMP;
+  END IF;
   IF fiat_amount IS NULL THEN
     query = format('INSERT INTO bank_stats AS s '
       '(timeframe, start_time, %1$I_count, %1$I_volume) '

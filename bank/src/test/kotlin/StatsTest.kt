@@ -160,8 +160,8 @@ class StatsTest {
                         frac = it.getInt("taler_out_volume_frac"),
                         currency = "KUDOS"
                     )
-                    assertEquals(count, talerOutCount)
-                    assertEquals(amount, talerOutVolume)
+                    assertEquals(count, talerOutCount, "taler count")
+                    assertEquals(amount, talerOutVolume, "taler volume")
                 }!!
             }
 
