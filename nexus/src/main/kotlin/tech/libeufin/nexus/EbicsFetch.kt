@@ -67,10 +67,6 @@ data class FetchContext(
      */
     var ebicsVersion: EbicsVersion,
     /**
-     * Logs to STDERR the init phase of an EBICS download request.
-     */
-    val ebicsExtraLog: Boolean,
-    /**
      * Start date of the returned documents.  Only
      * used in --transient mode.
      */
@@ -110,8 +106,7 @@ private suspend inline fun downloadHelper(
             ebics2Req.orderParams
         )
     }
-    if (ctx.ebicsExtraLog)
-        logger.debug(initXml)
+    logger.trace(initXml)
     try {
         return doEbicsDownload(
             ctx.httpClient,
@@ -373,7 +368,7 @@ private fun ingestDocument(
                     content.unzipForEach { fileName, xmlContent ->
                         if (!fileName.contains("camt.054", ignoreCase = true))
                             throw Exception("Asked for notification but did NOT get a camt.054")
-                        logger.trace("parse $fileName")
+                        logger.debug("parse $fileName")
                         parseTxNotif(xmlContent, currency, incomingPayments, outgoingPayments)
                     }
                 } catch (e: IOException) {
@@ -500,8 +495,8 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 " latest document is always until the current time."
     )
 
-    private val ebicsExtraLog by option(
-        help = "Logs to STDERR the init phase of an EBICS download request",
+    private val import by option(
+        help = "Read one ISO20022 document from STDIN and imports its content into the database",
         hidden = true
     ).flag(default = false)
 
@@ -524,6 +519,13 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
 
         Database(dbCfg.dbConnStr).use { db ->
+            if (import) {
+                logger.debug("Reading from STDIN")
+                val stdin = generateSequence(::readLine).joinToString("\n").toByteArray()
+                ingestDocument(db, cfg.currency, stdin, whichDoc)
+                return@cliCmd
+            }
+
             val (clientKeys, bankKeys) = expectFullKeys(cfg)
             val ctx = FetchContext(
                 cfg,
@@ -531,8 +533,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 clientKeys,
                 bankKeys,
                 whichDoc,
-                EbicsVersion.three,
-                ebicsExtraLog
+                EbicsVersion.three
             )
             if (transient) {
                 logger.info("Transient mode: fetching once and returning.")
