@@ -358,7 +358,7 @@ fun firstLessThanSecond(
 }
 
 private fun ingestDocument(
-    db: Database?,
+    db: Database,
     currency: String,
     content: ByteArray,
     whichDocument: SupportedDocument
@@ -373,7 +373,7 @@ private fun ingestDocument(
                     content.unzipForEach { fileName, xmlContent ->
                         if (!fileName.contains("camt.054", ignoreCase = true))
                             throw Exception("Asked for notification but did NOT get a camt.054")
-                        logger.debug("parse $fileName")
+                        logger.trace("parse $fileName")
                         parseTxNotif(xmlContent, currency, incomingPayments, outgoingPayments)
                     }
                 } catch (e: IOException) {
@@ -382,10 +382,10 @@ private fun ingestDocument(
 
                 runBlocking {
                     incomingPayments.forEach {
-                        if (db != null) ingestIncomingPayment(db, it) else logger.debug("$it")
+                        ingestIncomingPayment(db, it)
                     }
                     outgoingPayments.forEach {
-                        if (db != null) ingestOutgoingPayment(db, it) else logger.debug("$it")
+                        ingestOutgoingPayment(db, it)
                     }
                 }
             } catch (e: Exception) {
@@ -401,7 +401,7 @@ private fun ingestDocument(
         SupportedDocument.PAIN_002 -> {
             try {
                 content.unzipForEach { fileName, xmlContent ->
-                    logger.debug("parse $fileName")
+                    logger.trace("parse $fileName")
                     val status = parseCustomerPaymentStatusReport(xmlContent.toString())
                     logger.debug("$status") // TODO ingest in db
                 }
@@ -473,21 +473,25 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
     ).flag(default = false)
 
     private val onlyStatements by option(
-        help = "Downloads only camt.053 statements"
+        help = "Downloads only camt.053 statements",
+        hidden = true
     ).flag(default = false)
 
     private val onlyAck by option(
-        help = "Downloads only pain.002 acknowledgements"
+        help = "Downloads only pain.002 acknowledgements",
+        hidden = true
     ).flag(default = false)
 
     private val onlyReports by option(
-        help = "Downloads only camt.052 intraday reports"
+        help = "Downloads only camt.052 intraday reports",
+        hidden = true
     ).flag(default = false)
 
     private val onlyLogs by option(
         help = "Downloads only EBICS activity logs via pain.002," +
                 " only available to --transient mode.  Config needs" +
-                " log directory"
+                " log directory",
+        hidden = true
     ).flag(default = false)
 
     private val pinnedStart by option(
@@ -496,17 +500,9 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 " latest document is always until the current time."
     )
 
-    private val parse by option(
-        help = "Reads one ISO20022 document from STDIN and prints " +
-                "the parsing results.  It does not affect the database."
-    ).flag(default = false)
-
-    private val import by option(
-        help = "Read one ISO20022 document from STDIN and imports its content into the database"
-    ).flag(default = false)
-
     private val ebicsExtraLog by option(
-        help = "Logs to STDERR the init phase of an EBICS download request"
+        help = "Logs to STDERR the init phase of an EBICS download request",
+        hidden = true
     ).flag(default = false)
 
     /**
@@ -528,13 +524,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
 
         Database(dbCfg.dbConnStr).use { db ->
-            if (parse || import) {
-                logger.debug("Reading from STDIN, running in debug mode.  Not involving the database.")
-                val stdin = generateSequence(::readLine).joinToString("\n").toByteArray()
-                ingestDocument(if (import) db else null, cfg.currency, stdin, whichDoc)
-                return@cliCmd
-            }
-
             val (clientKeys, bankKeys) = expectFullKeys(cfg)
             val ctx = FetchContext(
                 cfg,

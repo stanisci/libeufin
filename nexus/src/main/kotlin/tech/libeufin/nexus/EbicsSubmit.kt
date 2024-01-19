@@ -72,12 +72,7 @@ data class SubmissionContext(
     /**
      * Bank EBICS public keys.
      */
-    val bankPublicKeysFile: BankPublicKeysFile,
-
-    /**
-     * Causes EBICS messages to be logged to STDERR.
-     */
-    val ebicsExtraLog: Boolean = false
+    val bankPublicKeysFile: BankPublicKeysFile
 )
 
 /**
@@ -252,14 +247,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         help = "This flag submits what is found in the database and returns, " +
                 "ignoring the 'frequency' configuration value"
     ).flag(default = false)
-
-    private val debug by option(
-        help = "Reads the pain.001 document from STDIN and submits it to the bank"
-    ).flag(default = false)
-
-    private val ebicsExtraLog by option(
-        help = "Logs init phase of uploaded messages to STDERR.  Only available for EBICS 3"
-    ).flag(default = false)
+    
     /**
      * Submits any initiated payment that was not submitted
      * so far and -- according to the configuration -- returns
@@ -274,24 +262,8 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             cfg = cfg,
             bankPublicKeysFile = bankKeys,
             clientPrivateKeysFile = clientKeys,
-            httpClient = HttpClient(),
-            ebicsExtraLog = ebicsExtraLog
+            httpClient = HttpClient()
         )
-        if (debug) {
-            logger.info("Running in debug mode, submitting STDIN to the bank")
-            val maybeStdin = generateSequence(::readLine).joinToString("\n")
-            runBlocking {
-                submitPain001(
-                    maybeStdin,
-                    ctx.cfg,
-                    ctx.clientPrivateKeysFile,
-                    ctx.bankPublicKeysFile,
-                    ctx.httpClient,
-                    ctx.ebicsExtraLog
-                )
-            }
-            return@cliCmd
-        }
         Database(dbCfg.dbConnStr).use { db -> 
             val frequency = if (transient) {
                 logger.info("Transient mode: submitting what found and returning.")

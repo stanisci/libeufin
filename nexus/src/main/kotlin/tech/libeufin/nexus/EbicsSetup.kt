@@ -270,9 +270,6 @@ private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
  */
 class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
     private val common by CommonOption()
-    private val checkFullConfig by option(
-        help = "Checks config values of ALL the subcommands"
-    ).flag(default = false)
     private val forceKeysResubmission by option(
         help = "Resubmits all the keys to the bank"
     ).flag(default = false)
@@ -287,27 +284,6 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
      */
     override fun run() = cliCmd(logger, common.log) {
         val cfg = extractEbicsConfig(common.config)
-        if (checkFullConfig) {
-            cfg.config.requireString("nexus-submit", "frequency").apply {
-                if (getFrequencyInSeconds(this) == null)
-                    throw Exception("frequency value of nexus-submit section is not valid: $this")
-            }
-            cfg.config.requireString("nexus-fetch", "frequency").apply {
-                if (getFrequencyInSeconds(this) == null)
-                    throw Exception("frequency value of nexus-fetch section is not valid: $this")
-            }
-            cfg.config.requirePath("nexus-fetch", "statement_log_directory")
-            cfg.config.requireNumber("nexus-httpd", "port")
-            cfg.config.requirePath("nexus-httpd", "unixpath")
-            cfg.config.requireString("nexus-httpd", "serve")
-            cfg.config.requireString("nexus-httpd-wire-gateway-facade", "enabled")
-            cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_method")
-            cfg.config.requireString("nexus-httpd-wire-gateway-facade", "auth_token")
-            cfg.config.requireString("nexus-httpd-revenue-facade", "enabled")
-            cfg.config.requireString("nexus-httpd-revenue-facade", "auth_method")
-            cfg.config.requireString("nexus-httpd-revenue-facade", "auth_token")
-            return@cliCmd
-        }
         // Config is sane.  Go (maybe) making the private keys.
         val clientKeys = preparePrivateKeys(cfg.clientPrivateKeysFilename)
         val httpClient = HttpClient()
