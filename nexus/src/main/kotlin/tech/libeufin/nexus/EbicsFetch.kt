@@ -355,7 +355,7 @@ fun firstLessThanSecond(
 private fun ingestDocument(
     db: Database,
     currency: String,
-    content: ByteArray,
+    xml: String,
     whichDocument: SupportedDocument
 ) {
     when (whichDocument) {
@@ -363,17 +363,7 @@ private fun ingestDocument(
             try {
                 val incomingPayments = mutableListOf<IncomingPayment>()
                 val outgoingPayments = mutableListOf<OutgoingPayment>()
-                
-                try {
-                    content.unzipForEach { fileName, xmlContent ->
-                        if (!fileName.contains("camt.054", ignoreCase = true))
-                            throw Exception("Asked for notification but did NOT get a camt.054")
-                        logger.debug("parse $fileName")
-                        parseTxNotif(xmlContent, currency, incomingPayments, outgoingPayments)
-                    }
-                } catch (e: IOException) {
-                    throw Exception("Could not open any ZIP archive", e)
-                }
+                parseTxNotif(xml, currency, incomingPayments, outgoingPayments)
 
                 runBlocking {
                     incomingPayments.forEach {
@@ -388,23 +378,38 @@ private fun ingestDocument(
             }
         }
         SupportedDocument.PAIN_002_LOGS -> {
-            val acks = parseCustomerAck(content.toString(Charsets.UTF_8))
+            val acks = parseCustomerAck(xml)
             for (ack in acks) {
                 println(ack)
             }
         }
         SupportedDocument.PAIN_002 -> {
+            val status = parseCustomerPaymentStatusReport(xml)
+            logger.debug("$status") // TODO ingest in db
+        }
+        else -> logger.warn("Not ingesting ${whichDocument}.  Only camt.054 notifications supported.")
+    }
+}
+
+private fun ingestDocuments(
+    db: Database,
+    currency: String,
+    content: ByteArray,
+    whichDocument: SupportedDocument
+) {
+    when (whichDocument) {
+        SupportedDocument.CAMT_054,
+        SupportedDocument.PAIN_002 -> {
             try {
                 content.unzipForEach { fileName, xmlContent ->
                     logger.trace("parse $fileName")
-                    val status = parseCustomerPaymentStatusReport(xmlContent.toString())
-                    logger.debug("$status") // TODO ingest in db
+                    ingestDocument(db, currency, xmlContent, whichDocument)
                 }
             } catch (e: IOException) {
                 throw Exception("Could not open any ZIP archive", e)
             }
-           
         }
+        SupportedDocument.PAIN_002_LOGS -> ingestDocument(db, currency, content.toString(Charsets.UTF_8), whichDocument)
         else -> logger.warn("Not ingesting ${whichDocument}.  Only camt.054 notifications supported.")
     }
 }
@@ -456,7 +461,7 @@ private suspend fun fetchDocuments(
         maybeContent,
         nonZip = ctx.whichDocument == SupportedDocument.PAIN_002_LOGS
     )
-    ingestDocument(db, ctx.cfg.currency, maybeContent, ctx.whichDocument)
+    ingestDocuments(db, ctx.cfg.currency, maybeContent, ctx.whichDocument)
 }
 
 class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 notifications") {
@@ -521,7 +526,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         Database(dbCfg.dbConnStr).use { db ->
             if (import) {
                 logger.debug("Reading from STDIN")
-                val stdin = generateSequence(::readLine).joinToString("\n").toByteArray()
+                val stdin = generateSequence(::readLine).joinToString("\n")
                 ingestDocument(db, cfg.currency, stdin, whichDoc)
                 return@cliCmd
             }
