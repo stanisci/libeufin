@@ -128,7 +128,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
                 is AddIncomingResult.UnknownDebtor -> throw conflict(
-                    "Debtor account was not found",
+                    "Debtor account ${req.debit_account} was not found",
                     TalerErrorCode.BANK_UNKNOWN_DEBTOR
                 )
                 is AddIncomingResult.BothPartyAreExchange -> throw conflict(

@@ -122,7 +122,7 @@ class StatsTest {
     @Test
     fun timeframe() = bankSetup { db ->
         db.conn { conn ->
-            suspend fun register(now: OffsetDateTime, amount: TalerAmount) {
+            suspend fun register(now: LocalDateTime, amount: TalerAmount) {
                 val stmt = conn.prepareStatement(
                     "CALL stats_register_payment('taler_out', ?::timestamp, (?, ?)::taler_amount, null)"
                 )
@@ -133,7 +133,7 @@ class StatsTest {
             }
 
             suspend fun check(
-                now: OffsetDateTime,
+                now: LocalDateTime,
                 timeframe: Timeframe,
                 which: Int?,
                 count: Long,
@@ -165,7 +165,7 @@ class StatsTest {
                 }!!
             }
 
-            val now = OffsetDateTime.now(ZoneOffset.UTC)
+            val now = LocalDateTime.now()
             val otherHour = now.withHour((now.hour + 1) % 24)
             val otherDay = now.withDayOfMonth((now.dayOfMonth) % 28 + 1)
             val otherMonth = now.withMonth((now.monthValue) % 12 + 1)

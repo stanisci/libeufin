@@ -282,17 +282,36 @@ fun expectFullKeys(
 ): Pair<ClientPrivateKeysFile, BankPublicKeysFile> {
     val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
     if (clientKeys == null) {
-        throw Exception("Cannot operate without client keys. Missing '${cfg.clientPrivateKeysFilename}' file. Run 'libeufin-nexus ebics-setup' first")
+        throw Exception("Missing client private keys file at '${cfg.clientPrivateKeysFilename}', run 'libeufin-nexus ebics-setup' first")
     } else if (!clientKeys.submitted_ini || !clientKeys.submitted_hia) {
-        throw Exception("Cannot operate with unsubmitted client keys, run 'libeufin-nexus ebics-setup' first")
+        throw Exception("Unsubmitted client private keys, run 'libeufin-nexus ebics-setup' first")
     }
     val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
     if (bankKeys == null) {
-        throw Exception("Cannot operate without bank keys. Missing '${cfg.bankPublicKeysFilename}' file. run 'libeufin-nexus ebics-setup' first")
+        throw Exception("Missing bank public keys at '${cfg.bankPublicKeysFilename}', run 'libeufin-nexus ebics-setup' first")
     } else if (!bankKeys.accepted) {
-        throw Exception("Cannot operate with unaccepted bank keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
+        throw Exception("Unaccepted bank public keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
     }
     return Pair(clientKeys, bankKeys)
+}
+
+private inline fun <reified T> loadJsonFile(path: String, name: String): T? {
+    val file = File(path)
+    val content = try {
+        file.readText()
+    } catch (e: Exception) {
+        // FileNotFoundException can be thrown if the file exists, but is not accessible...
+        when {
+            !file.exists() -> return null
+            !file.canRead() -> throw Exception("Could not read $name at '$path': permission denied")
+            else -> throw Exception("Could not read $name at '$path'", e)
+        }
+    }
+    return try {
+        myJson.decodeFromString(content)
+    } catch (e: Exception) {
+        throw Exception("Could not decode $name at '$path'", e)
+    }
 }
 
 /**
@@ -302,20 +321,7 @@ fun expectFullKeys(
  * @return the internal JSON representation of the keys file,
  *         or null if the file does not exist
  */
-fun loadBankKeys(location: String): BankPublicKeysFile? {
-    val content = try {
-        File(location).readText()
-    } catch (e: FileNotFoundException) {
-        return null
-    } catch (e: Exception) {
-        throw Exception("Could not read the bank keys file from disk", e)
-    }
-    return try {
-        myJson.decodeFromString(content)
-    } catch (e: Exception) {
-        throw Exception("Could not decode bank keys", e)
-    }
-}
+fun loadBankKeys(location: String): BankPublicKeysFile? = loadJsonFile(location, "bank public keys")
 
 /**
  * Load the client keys file from disk.
@@ -324,20 +330,7 @@ fun loadBankKeys(location: String): BankPublicKeysFile? {
  * @return the internal JSON representation of the keys file,
  *         or null if the file does not exist
  */
-fun loadPrivateKeysFromDisk(location: String): ClientPrivateKeysFile? {
-    val content = try {
-        File(location).readText()
-    } catch (e: FileNotFoundException) {
-        return null
-    } catch (e: Exception) {
-        throw Exception("Could not read private keys from disk", e)
-    }
-    return try {
-        myJson.decodeFromString(content)
-    } catch (e: Exception) {
-        throw Exception("Could not decode private keys", e)
-    }
-}
+fun loadPrivateKeysFromDisk(location: String): ClientPrivateKeysFile? = loadJsonFile(location, "client private keys")
 
 /**
  * Abstracts the config loading

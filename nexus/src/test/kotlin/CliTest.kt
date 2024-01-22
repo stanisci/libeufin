@@ -58,17 +58,22 @@ class CliTest {
         // Missing client keys
         clientKeysPath.deleteIfExists()
         for (cmd in cmds) {
-            nexusCmd.testErr("$cmd -c $conf", "Cannot operate without client keys. Missing '$clientKeysPath' file. Run 'libeufin-nexus ebics-setup' first")
+            nexusCmd.testErr("$cmd -c $conf", "Missing client private keys file at '$clientKeysPath', run 'libeufin-nexus ebics-setup' first")
         }
         // Bad client json
         clientKeysPath.writeText("CORRUPTION", Charsets.UTF_8)
         for (cmd in allCmds) {
-            nexusCmd.testErr("$cmd -c $conf", "Could not decode private keys: Expected start of the object '{', but had 'EOF' instead at path: $\nJSON input: CORRUPTION")
+            nexusCmd.testErr("$cmd -c $conf", "Could not decode client private keys at '$clientKeysPath': Expected start of the object '{', but had 'EOF' instead at path: $\nJSON input: CORRUPTION")
+        }
+        // Missing permission
+        clientKeysPath.toFile().setReadable(false)
+        for (cmd in allCmds) {
+            nexusCmd.testErr("$cmd -c $conf", "Could not read client private keys at '$clientKeysPath': permission denied")
         }
         // Unfinished client
         syncJsonToDisk(generateNewKeys(), clientKeysPath.toString())
         for (cmd in cmds) {
-            nexusCmd.testErr("$cmd -c $conf", "Cannot operate with unsubmitted client keys, run 'libeufin-nexus ebics-setup' first")
+            nexusCmd.testErr("$cmd -c $conf", "Unsubmitted client private keys, run 'libeufin-nexus ebics-setup' first")
         }
 
         // Missing bank keys
@@ -78,12 +83,17 @@ class CliTest {
         }, clientKeysPath.toString())
         bankKeysPath.deleteIfExists()
         for (cmd in cmds) {
-            nexusCmd.testErr("$cmd -c $conf", "Cannot operate without bank keys. Missing '$bankKeysPath' file. run 'libeufin-nexus ebics-setup' first")
+            nexusCmd.testErr("$cmd -c $conf", "Missing bank public keys at '$bankKeysPath', run 'libeufin-nexus ebics-setup' first")
         }
         // Bad bank json
         bankKeysPath.writeText("CORRUPTION", Charsets.UTF_8)
         for (cmd in allCmds) {
-            nexusCmd.testErr("$cmd -c $conf", "Could not decode bank keys: Expected start of the object '{', but had 'EOF' instead at path: $\nJSON input: CORRUPTION")
+            nexusCmd.testErr("$cmd -c $conf", "Could not decode bank public keys at '$bankKeysPath': Expected start of the object '{', but had 'EOF' instead at path: $\nJSON input: CORRUPTION")
+        }
+        // Missing permission
+        bankKeysPath.toFile().setReadable(false)
+        for (cmd in allCmds) {
+            nexusCmd.testErr("$cmd -c $conf", "Could not read bank public keys at '$bankKeysPath': permission denied")
         }
         // Unfinished bank
         syncJsonToDisk(BankPublicKeysFile(
@@ -92,7 +102,7 @@ class CliTest {
             accepted = false
         ), bankKeysPath.toString())
         for (cmd in cmds) {
-            nexusCmd.testErr("$cmd -c $conf", "Cannot operate with unaccepted bank keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
+            nexusCmd.testErr("$cmd -c $conf", "Unaccepted bank public keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
         }
     }
 }
