@@ -42,27 +42,23 @@ class RevenueApiTest {
     fun history() = bankSetup {
         setMaxDebt("exchange", "KUDOS:1000000")
         authRoutine(HttpMethod.Get, "/accounts/merchant/taler-revenue/history")
-        historyRoutine<MerchantIncomingHistory>(
+        historyRoutine<RevenueIncomingHistory>(
             url = "/accounts/merchant/taler-revenue/history",
             ids = { it.incoming_transactions.map { it.row_id } },
             registered = listOf(
                 { 
                     // Transactions using clean transfer logic
                     transfer("KUDOS:10")
+                },
+                { 
+                    // Common credit transactions
+                    tx("exchange", "KUDOS:10", "merchant", "ignored")
                 }
             ),
             ignored = listOf(
                 {
-                    // Ignore manual incoming transaction
-                    tx("exchange", "KUDOS:10", "merchant", "${randShortHashCode()} http://exchange.example.com/")
-                },
-                {
-                    // Ignore malformed incoming transaction
-                    tx("merchant", "KUDOS:10", "exchange", "ignored")
-                },
-                {
-                    // Ignore malformed outgoing transaction
-                    tx("exchange", "KUDOS:10", "merchant", "ignored")
+                    // Ignore debit transactions
+                    tx("merchant", "KUDOS:10", "customer")
                 }
             )
         )

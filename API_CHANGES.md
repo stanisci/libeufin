@@ -32,6 +32,7 @@ This files contains all the API changes for the current release:
 - GET /accounts/USERNAME: add tan_channel
 - Add GET /accounts/USERNAME/taler-revenue/config
 - Add GET /accounts/USERNAME/taler-wire-gateway/config
+- Change GET /accounts/USERNAME/taler-revenue/history logic and body type
 
 ## bank cli
 

@@ -160,7 +160,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         suspend fun load(): List<T> = page(
             params.page, 
             "bank_transaction_id", 
-            "$query WHERE $accountColumn=? AND", 
+            "$query $accountColumn=? AND", 
             {
                 setLong(1, bankAccountId)
                 1

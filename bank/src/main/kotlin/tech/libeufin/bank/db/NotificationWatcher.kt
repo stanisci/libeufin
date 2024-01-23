@@ -75,14 +75,14 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                                         bankTxFlows[creditor]?.run {
                                             flow.emit(creditRow)
                                         }
+                                        revenueTxFlows[creditor]?.run {
+                                            flow.emit(creditRow)
+                                        }
                                     }
                                     "outgoing_tx" -> {
                                         val (account, merchant, debitRow, creditRow) = it.parameter.split(' ', limit = 4).map { it.toLong() }
                                         outgoingTxFlows[account]?.run {
                                             flow.emit(debitRow)
-                                        }
-                                        revenueTxFlows[merchant]?.run {
-                                            flow.emit(creditRow)
                                         }
                                     }
                                     "incoming_tx" -> {

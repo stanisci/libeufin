@@ -187,7 +187,7 @@ class TransactionDAO(private val db: Database) {
                 ,creditor_payto_uri
                 ,subject
                 ,direction
-            FROM bank_account_transactions
+            FROM bank_account_transactions WHERE
         """) {
             BankAccountTransactionInfo(
                 row_id = it.getLong("bank_transaction_id"),
@@ -200,4 +200,28 @@ class TransactionDAO(private val db: Database) {
             )
         }
     }
+
+    /** Query [accountId] history of incoming transactions to its account */
+    suspend fun revenueHistory(
+        params: HistoryParams, 
+        accountId: Long
+    ): List<RevenueIncomingBankTransaction> 
+        = db.poolHistory(params, accountId, NotificationWatcher::listenRevenue, """
+            SELECT
+                bank_transaction_id
+                ,transaction_date
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,debtor_payto_uri
+                ,subject
+            FROM bank_account_transactions WHERE direction='credit' AND
+        """) {
+            RevenueIncomingBankTransaction(
+                row_id = it.getLong("bank_transaction_id"),
+                date = it.getTalerTimestamp("transaction_date"),
+                amount = it.getAmount("amount", db.bankCurrency),
+                debit_account = it.getString("debtor_payto_uri"),
+                subject = it.getString("subject")
+            )
+        }
 }

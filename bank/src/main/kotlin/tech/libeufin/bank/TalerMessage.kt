@@ -596,19 +596,18 @@ data class OutgoingTransaction(
 )
 
 @Serializable
-data class MerchantIncomingHistory(
-    val incoming_transactions : List<MerchantIncomingBankTransaction>,
+data class RevenueIncomingHistory(
+    val incoming_transactions : List<RevenueIncomingBankTransaction>,
     val credit_account: String
 )
 
 @Serializable
-data class MerchantIncomingBankTransaction(
+data class RevenueIncomingBankTransaction(
     val row_id: Long,
     val date: TalerProtocolTimestamp,
     val amount: TalerAmount,
     val debit_account: String,
-    val exchange_url: String,
-    val wtid: ShortHashCode
+    val subject: String
 )
 
 /**

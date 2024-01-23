@@ -397,19 +397,19 @@ inline suspend fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B)
     val params = PageParams.extract(call.request.url.parameters)
 
     // testing the size is like expected.
-    assertEquals(size, history.size)
+    assertEquals(size, history.size, "bad history lenght: $history")
     if (params.delta < 0) {
         // testing that the first id is at most the 'start' query param.
-        assert(history[0] <= params.start)
+        assert(history[0] <= params.start) { "bad history start: $params $history" }
         // testing that the id decreases.
         if (history.size > 1)
-            assert(history.windowed(2).all { (a, b) -> a > b })
+            assert(history.windowed(2).all { (a, b) -> a > b }) { "bad history order: $history" }
     } else {
         // testing that the first id is at least the 'start' query param.
-        assert(history[0] >= params.start)
+        assert(history[0] >= params.start) { "bad history start: $params $history" }
         // testing that the id increases.
         if (history.size > 1)
-            assert(history.windowed(2).all { (a, b) -> a < b })
+            assert(history.windowed(2).all { (a, b) -> a < b }) { "bad history order: $history" }
     }
 
     return body

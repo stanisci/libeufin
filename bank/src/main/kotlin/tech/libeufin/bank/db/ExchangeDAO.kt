@@ -44,6 +44,7 @@ class ExchangeDAO(private val db: Database) {
             FROM taler_exchange_incoming AS tfr
                 JOIN bank_account_transactions AS txs
                     ON bank_transaction=txs.bank_transaction_id
+            WHERE
         """) {
             IncomingReserveTransaction(
                 row_id = it.getLong("bank_transaction_id"),
@@ -71,6 +72,7 @@ class ExchangeDAO(private val db: Database) {
             FROM taler_exchange_outgoing AS tfr
                 JOIN bank_account_transactions AS txs
                     ON bank_transaction=txs.bank_transaction_id
+            WHERE
         """) {
             OutgoingTransaction(
                 row_id = it.getLong("bank_transaction_id"),
@@ -79,34 +81,6 @@ class ExchangeDAO(private val db: Database) {
                 credit_account = it.getString("creditor_payto_uri"),
                 wtid = ShortHashCode(it.getBytes("wtid")),
                 exchange_base_url = it.getString("exchange_base_url")
-            )
-        }
-
-    /** Query [merchantId] history of taler outgoing transactions to its account */
-    suspend fun revenueHistory(
-        params: HistoryParams, 
-        merchantId: Long
-    ): List<MerchantIncomingBankTransaction> 
-        = db.poolHistory(params, merchantId, NotificationWatcher::listenRevenue, """
-            SELECT
-                bank_transaction_id
-                ,transaction_date
-                ,(amount).val AS amount_val
-                ,(amount).frac AS amount_frac
-                ,debtor_payto_uri
-                ,wtid
-                ,exchange_base_url
-            FROM taler_exchange_outgoing AS tfr
-                JOIN bank_account_transactions AS txs
-                    ON bank_transaction=txs.bank_transaction_id
-        """, "creditor_account_id") {
-            MerchantIncomingBankTransaction(
-                row_id = it.getLong("bank_transaction_id"),
-                date = it.getTalerTimestamp("transaction_date"),
-                amount = it.getAmount("amount", db.bankCurrency),
-                debit_account = it.getString("debtor_payto_uri"),
-                wtid = ShortHashCode(it.getBytes("wtid")),
-                exchange_url = it.getString("exchange_base_url")
             )
         }
 
