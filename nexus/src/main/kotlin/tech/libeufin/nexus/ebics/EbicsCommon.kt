@@ -97,18 +97,14 @@ enum class SupportedDocument {
  *        for each entry in the ZIP archive as input.
  */
 fun ByteArray.unzipForEach(lambda: (String, String) -> Unit) {
-    if (this.isEmpty()) {
-        logger.warn("Empty archive")
-        return
-    }
     val mem = SeekableInMemoryByteChannel(this)
-    val zipFile = ZipFile(mem)
-    zipFile.getEntriesInPhysicalOrder().iterator().forEach {
-        lambda(
-            it.name, zipFile.getInputStream(it).readAllBytes().toString(Charsets.UTF_8)
-        )
+    ZipFile(mem).use { file ->
+        file.getEntriesInPhysicalOrder().iterator().forEach {
+            lambda(
+                it.name, file.getInputStream(it).readAllBytes().toString(Charsets.UTF_8)
+            )
+        }
     }
-    zipFile.close()
 }
 
 /**

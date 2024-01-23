@@ -70,7 +70,8 @@ data class FetchContext(
      * Start date of the returned documents.  Only
      * used in --transient mode.
      */
-    var pinnedStart: Instant? = null
+    var pinnedStart: Instant?,
+    val fileLogger: FileLogger
 )
 
 /**
@@ -126,47 +127,6 @@ private suspend inline fun downloadHelper(
          */
         throw e
     }
-}
-
-/**
- * Extracts the archive entries and logs them to the location
- * optionally specified in the configuration.  It does nothing,
- * if the configuration lacks the log directory.
- *
- * @param cfg config handle.
- * @param content ZIP bytes from the server.
- * @param nonZip only true when downloading via HAC (EBICS 2)
- */
-fun maybeLogFile(
-    cfg: EbicsSetupConfig,
-    content: ByteArray,
-    nonZip: Boolean = false
-) {
-    // Main dir.
-    val maybeLogDir = cfg.config.lookupString(
-        "nexus-fetch",
-        "STATEMENT_LOG_DIRECTORY"
-    ) ?: return
-    logger.debug("Logging to $maybeLogDir")
-    // Subdir based on current day.
-    val now = Instant.now()
-    val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
-    val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
-    // Creating the combined dir.
-    val dirs = Path(maybeLogDir, subDir)
-    dirs.createDirectories()
-    if (nonZip) {
-        val f = Path(dirs.toString(), "${now.toDbMicros()}_HAC_response.pain.002.xml")
-        f.writeBytes(content)
-    } else {
-        // Write each ZIP entry in the combined dir.
-        content.unzipForEach { fileName, xmlContent ->
-            val f = Path(dirs.toString(), "${now.toDbMicros()}_$fileName")
-            // Rare: cannot download the same file twice in the same microsecond.
-            f.writeText(xmlContent)
-        }
-    }
-   
 }
 
 /**
@@ -453,15 +413,13 @@ private suspend fun fetchDocuments(
     val lastExecutionTime: Instant? = ctx.pinnedStart ?: requestFrom
     logger.debug("Fetching ${ctx.whichDocument} from timestamp: $lastExecutionTime")
     // downloading the content
-    val maybeContent = downloadHelper(ctx, lastExecutionTime)
-    if (maybeContent.isEmpty()) return
-    // logging, if the configuration wants.
-    maybeLogFile(
-        ctx.cfg,
-        maybeContent,
-        nonZip = ctx.whichDocument == SupportedDocument.PAIN_002_LOGS
+    val content = downloadHelper(ctx, lastExecutionTime)
+    if (content.isEmpty()) return
+    ctx.fileLogger.logFetch(
+        content,
+        ctx.whichDocument == SupportedDocument.PAIN_002_LOGS
     )
-    ingestDocuments(db, ctx.cfg.currency, maybeContent, ctx.whichDocument)
+    ingestDocuments(db, ctx.cfg.currency, content, ctx.whichDocument)
 }
 
 class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 notifications") {
@@ -505,6 +463,11 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         hidden = true
     ).flag(default = false)
 
+    private val ebicsLog by option(
+        "--debug-ebics",
+        help = "Log EBICS content at SAVEDIR",
+    )
+
     /**
      * This function collects the main steps of fetching banking records.
      * In this current version, it does not implement long polling, instead
@@ -513,6 +476,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
      * FIXME: reduce code duplication with the submit subcommand.
      */
     override fun run() = cliCmd(logger, common.log) {
+        println("start $ebicsLog")
         val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
 
@@ -538,8 +502,12 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 clientKeys,
                 bankKeys,
                 whichDoc,
-                EbicsVersion.three
+                EbicsVersion.three,
+                null,
+                FileLogger(ebicsLog)
             )
+            if (whichDoc == SupportedDocument.PAIN_002_LOGS)
+                ctx.ebicsVersion = EbicsVersion.two
             if (transient) {
                 logger.info("Transient mode: fetching once and returning.")
                 val pinnedStartVal = pinnedStart
@@ -549,8 +517,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                     LocalDate.parse(pinnedStartVal).atStartOfDay(ZoneId.of("UTC")).toInstant()
                 } else null
                 ctx.pinnedStart = pinnedStartArg
-                if (whichDoc == SupportedDocument.PAIN_002_LOGS)
-                    ctx.ebicsVersion = EbicsVersion.two
                 runBlocking {
                     fetchDocuments(db, ctx)
                 }

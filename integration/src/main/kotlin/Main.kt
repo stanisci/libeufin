@@ -59,10 +59,12 @@ fun ask(question: String): String? {
 }
 
 fun CliktCommandTestResult.assertOk(msg: String? = null) {
+    println("$output")
     assertEquals(0, statusCode, msg)
 }
 
 fun CliktCommandTestResult.assertErr(msg: String? = null) {
+    println("$output")
     assertEquals(1, statusCode, msg)
 }
 
@@ -82,6 +84,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
             val conf = "conf/$name.conf"
             val log = "DEBUG"
             val flags = " -c $conf -L $log"
+            val ebicsFlags = "$flags --transient --debug-ebics test/$name"
             val cfg = loadConfig(conf)
 
             val clientKeysPath = Path(cfg.requireString("nexus-ebics", "client_private_keys_file"))
@@ -91,7 +94,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
             var hasBankKeys = bankKeysPath.exists()
 
             if (ask("Reset DB ? y/n>") == "y") nexusCmd.test("dbinit -r $flags").assertOk()
-            else  nexusCmd.test("dbinit $flags").assertOk()
+            else nexusCmd.test("dbinit $flags").assertOk()
             val nexusDb = NexusDb("postgresql:///libeufincheck")
 
             when (kind) {
@@ -122,13 +125,13 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     val payto = "payto://iban/CH2989144971918294289?receiver-name=Test"
         
                     step("Test fetch transactions")
-                    nexusCmd.test("ebics-fetch --transient $flags --pinned-start 2022-01-01").assertOk()
+                    nexusCmd.test("ebics-fetch $ebicsFlag --pinned-start 2022-01-01").assertOk()
 
                     while (true) {
                         when (ask("Run 'fetch', 'submit', 'tx', 'txs', 'logs', 'ack' or 'exit'>")) {
                             "fetch" -> {
                                 step("Fetch new transactions")
-                                nexusCmd.test("ebics-fetch --transient $flags").assertOk()
+                                nexusCmd.test("ebics-fetch $ebicsFlags").assertOk()
                             }
                             "tx" -> {
                                 step("Test submit one transaction")
@@ -139,7 +142,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                     initiationTime = Instant.now(),
                                     requestUid = Base32Crockford.encode(randBytes(16))
                                 ))
-                                nexusCmd.test("ebics-submit --transient $flags").assertOk()
+                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
                             }
                             "txs" -> {
                                 step("Test submit many transaction")
@@ -152,19 +155,19 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                         requestUid = Base32Crockford.encode(randBytes(16))
                                     ))
                                 }
-                                nexusCmd.test("ebics-submit --transient $flags").assertOk()
+                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
                             }
                             "submit" -> {
                                 step("Submit pending transactions")
-                                nexusCmd.test("ebics-submit --transient $flags").assertOk()
+                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
                             }
                             "logs" -> {
                                 step("Fetch logs")
-                                nexusCmd.test("ebics-fetch --transient $flags --only-logs").assertOk()
+                                nexusCmd.test("ebics-fetch $ebicsFlags --only-logs").assertOk()
                             }
                             "ack" -> {
                                 step("Fetch ack")
-                                nexusCmd.test("ebics-fetch --transient $flags --only-ack").assertOk()
+                                nexusCmd.test("ebics-fetch $ebicsFlags --only-ack").assertOk()
                             }
                             "exit" -> break
                         }
@@ -180,17 +183,17 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     }
     
                     step("Test fetch transactions")
-                    nexusCmd.test("ebics-fetch --transient $flags --pinned-start 2022-01-01").assertOk()
+                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01").assertOk()
 
                     while (true) {
                         when (ask("Run 'fetch', 'submit', 'logs', 'ack' or 'exit'>")) {
                             "fetch" -> {
                                 step("Fetch new transactions")
-                                nexusCmd.test("ebics-fetch --transient -c $conf").assertOk()
+                                nexusCmd.test("ebics-fetch $ebicsFlags").assertOk()
                             }
                             "submit" -> {
                                 step("Submit pending transactions")
-                                nexusCmd.test("ebics-submit --transient -c $conf").assertOk()
+                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
                             }
                             "tx" -> {
                                 step("Submit new transaction")
@@ -202,15 +205,15 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                     initiationTime = Instant.now(),
                                     requestUid = Base32Crockford.encode(randBytes(16))
                                 ))
-                                nexusCmd.test("ebics-submit --transient $flags").assertOk()
+                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
                             }
                             "logs" -> {
                                 step("Fetch logs")
-                                nexusCmd.test("ebics-fetch --transient $flags --only-logs").assertOk()
+                                nexusCmd.test("ebics-fetch $ebicsFlags --only-logs").assertOk()
                             }
                             "ack" -> {
                                 step("Fetch ack")
-                                nexusCmd.test("ebics-fetch --transient $flags --only-ack").assertOk()
+                                nexusCmd.test("ebics-fetch $ebicsFlags --only-ack").assertOk()
                             }
                             "exit" -> break
                         }

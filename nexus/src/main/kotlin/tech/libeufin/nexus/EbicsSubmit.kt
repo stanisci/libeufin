@@ -72,7 +72,8 @@ data class SubmissionContext(
     /**
      * Bank EBICS public keys.
      */
-    val bankPublicKeysFile: BankPublicKeysFile
+    val bankPublicKeysFile: BankPublicKeysFile,
+    val fileLogger: FileLogger
 )
 
 /**
@@ -84,43 +85,6 @@ class NexusSubmitException(
     cause: Throwable? = null,
     val stage: NexusSubmissionStage
 ) : Exception(msg, cause)
-
-
-/**
- * Optionally logs the pain.001 in the log directory, if the
- * configuration had this latter.
- *
- * @param maybeLogDir log directory.  Null if the configuration
- *        lacks it.
- * @param xml the pain.001 document to log.
- * @param requestUid UID of the payment request (normally equals
- *                   the pain.001 MsgId element), will be part of
- *                   the filename.
- */
-private fun maybeLog(
-    maybeLogDir: String?,
-    xml: String
-) {
-    if (maybeLogDir == null) {
-        logger.info("Logging pain.001 to files is disabled")
-        return
-    }
-    logger.debug("Logging to $maybeLogDir")
-    val now = Instant.now()
-    val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
-    val subDir = "${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}"
-    val dirs = Path(maybeLogDir, subDir)
-    dirs.createDirectories()
-    val f = Path(
-        dirs.toString(),
-        "${now.toDbMicros()}_pain.001.xml"
-    )
-    // Very rare: same pain.001 should not be submitted twice in the same microsecond.
-    if (f.exists()) {
-        throw Exception("pain.001 log file exists already at: $f")
-    }
-    f.writeText(xml)
-}
 
 /**
  * Takes the initiated payment data as it was returned from the
@@ -148,15 +112,7 @@ private suspend fun submitInitiatedPayment(
         debitAccount = ctx.cfg.myIbanAccount,
         wireTransferSubject = initiatedPayment.wireTransferSubject
     )
-    // Logging first!
-    val maybeLogDir: String? = ctx.cfg.config.lookupString(
-        "nexus-submit",
-        "SUBMISSIONS_LOG_DIRECTORY"
-    )
-    maybeLog(
-        maybeLogDir,
-        xml
-    )
+    ctx.fileLogger.logSubmit(xml)
     try {
         submitPain001(
             xml,
@@ -247,6 +203,10 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
         help = "This flag submits what is found in the database and returns, " +
                 "ignoring the 'frequency' configuration value"
     ).flag(default = false)
+    private val ebicsLog by option(
+        "--debug-ebics",
+        help = "Log EBICS content at SAVEDIR",
+    )
     
     /**
      * Submits any initiated payment that was not submitted
@@ -262,7 +222,8 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             cfg = cfg,
             bankPublicKeysFile = bankKeys,
             clientPrivateKeysFile = clientKeys,
-            httpClient = HttpClient()
+            httpClient = HttpClient(),
+            fileLogger = FileLogger(ebicsLog)
         )
         Database(dbCfg.dbConnStr).use { db -> 
             val frequency = if (transient) {
