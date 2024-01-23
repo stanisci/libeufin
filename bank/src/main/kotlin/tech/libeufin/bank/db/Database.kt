@@ -32,9 +32,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import io.ktor.http.HttpStatusCode
-import net.taler.common.errorcodes.TalerErrorCode
 import tech.libeufin.bank.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db")

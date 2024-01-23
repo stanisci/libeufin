@@ -20,9 +20,9 @@
 import org.junit.Test
 import org.junit.jupiter.api.assertThrows
 import tech.libeufin.nexus.*
-import tech.libeufin.util.*
-import tech.libeufin.util.parseBookDate
-import tech.libeufin.util.parseCamtTime
+import tech.libeufin.common.*
+import tech.libeufin.common.parseBookDate
+import tech.libeufin.common.parseCamtTime
 import java.lang.StringBuilder
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

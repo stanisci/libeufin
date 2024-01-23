@@ -19,12 +19,10 @@
 
 package tech.libeufin.bank
 
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import kotlinx.serialization.*
-import net.taler.wallet.crypto.Base32Crockford
-import net.taler.wallet.crypto.EncodingException
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit

@@ -21,7 +21,7 @@ package tech.libeufin.bank.db
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import java.time.*
 import java.sql.Types
 import tech.libeufin.bank.*

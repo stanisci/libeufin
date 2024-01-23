@@ -28,7 +28,7 @@ import tech.libeufin.nexus.ebics.EbicsSideError
 import tech.libeufin.nexus.ebics.EbicsSideException
 import tech.libeufin.nexus.ebics.EbicsUploadException
 import tech.libeufin.nexus.ebics.submitPain001
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import java.io.File
 import java.nio.file.Path
 import java.time.Instant

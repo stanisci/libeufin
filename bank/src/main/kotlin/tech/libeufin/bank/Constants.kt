@@ -18,7 +18,7 @@
  */
 package tech.libeufin.bank
 
-import ConfigSource
+import tech.libeufin.common.*
 import java.time.Duration
 
 // Config

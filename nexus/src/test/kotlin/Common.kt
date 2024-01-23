@@ -23,7 +23,7 @@ import io.ktor.client.request.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import tech.libeufin.nexus.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.Instant
 

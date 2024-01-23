@@ -26,7 +26,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.http.*
-import net.taler.common.errorcodes.TalerErrorCode
+import tech.libeufin.common.TalerErrorCode
 import tech.libeufin.bank.db.*
 import tech.libeufin.bank.db.WithdrawalDAO.*
 import java.lang.AssertionError

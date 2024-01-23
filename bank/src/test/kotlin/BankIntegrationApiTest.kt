@@ -26,11 +26,10 @@ import java.util.*
 import kotlin.test.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
-import net.taler.common.errorcodes.TalerErrorCode
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.bank.db.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 class BankIntegrationApiTest {
     // GET /taler-integration/config

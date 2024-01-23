@@ -1,5 +1,6 @@
 rootProject.name = 'libeufin'
 include("bank")
 include("nexus")
-include("util")
-include("integration")
+include("common")
+include("testbench")
+include("ebics")

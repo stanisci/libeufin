@@ -1,13 +1,8 @@
 .idea/*
 .vscode
-/nexus/bin/
-/sandbox/bin/
-/util/bin/
-nexus/libeufin-nexus-dev
 nexus/test
-integration/test
-integration/config.json
-sandbox/libeufin-sandbox-dev
+testbench/test
+testbench/config.json
 configure
 build/
 .gradle
@@ -26,7 +21,7 @@ __pycache__
 *.log
 .DS_Store
 *.mk
-util/src/main/resources/version.txt
+common/src/main/resources/version.txt
 debian/usr/share/libeufin/demobank-ui/index.js
 debian/usr/share/libeufin/demobank-ui/*.html
 debian/usr/share/libeufin/demobank-ui/*.css

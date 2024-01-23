@@ -24,7 +24,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import java.util.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import tech.libeufin.bank.auth.*
 import tech.libeufin.bank.db.*
 

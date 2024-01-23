@@ -36,8 +36,7 @@ import java.net.*
 import java.time.*
 import java.time.temporal.*
 import java.util.*
-import net.taler.common.errorcodes.TalerErrorCode
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import tech.libeufin.bank.db.*
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.bank.auth.*

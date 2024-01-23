@@ -28,7 +28,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.util.pipeline.PipelineContext
 import java.time.Instant
-import net.taler.common.errorcodes.TalerErrorCode
+import tech.libeufin.common.*
 import tech.libeufin.bank.db.*
 import tech.libeufin.bank.db.ExchangeDAO.*
 import tech.libeufin.bank.auth.*

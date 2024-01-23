@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.*
 import org.postgresql.ds.PGSimpleDataSource
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import tech.libeufin.bank.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db-watcher")

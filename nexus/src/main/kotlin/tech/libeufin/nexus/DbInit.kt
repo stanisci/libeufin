@@ -21,7 +21,7 @@ package tech.libeufin.nexus
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 /**
  * This subcommand tries to load the SQL files that define

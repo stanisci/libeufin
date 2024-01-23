@@ -19,7 +19,7 @@
 
 import org.junit.Test
 import tech.libeufin.nexus.*
-import tech.libeufin.util.CryptoUtil
+import tech.libeufin.common.CryptoUtil
 import java.io.File
 import kotlin.test.*
 

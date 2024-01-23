@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ebicsUnsecuredRequest Revision="1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                       xsi:schemaLocation="urn:org:ebics:H004 ebics_keymgmt_request_H004.xsd" Version="H004"
+                       xmlns="urn:org:ebics:H004">
+    <header authenticate="true">
+        <static>
+            <HostID>myhost</HostID>
+            <PartnerID>k1</PartnerID>
+            <UserID>u1</UserID>
+            <OrderDetails>
+                <OrderType>INI</OrderType>
+                <OrderAttribute>DZNNN</OrderAttribute>
+            </OrderDetails>
+            <SecurityMedium>0000</SecurityMedium>
+        </static>
+        <mutable/>
+    </header>
+    <body>
+        <DataTransfer>
+            <OrderData>
+                eJx9U1tzmkAUfu9M/wNDH524XIINjprBaOIFCopg8CWzyHK/GHaR1V9fhtg0bWrf9nzfdy57LoN7mqXMEZU4KvIhy3c5lkH5vvCiPBiyFfFv7tj70dcvAzMKckiqEhmVu0QnvfRQOYEEMo1/jvsUR0M2JOTQB6Cu624tdosyAALH8eBZU819iDJ4E+WYwHyPWKbR93ELqsUekjb5B3fkRnvcRjCbCMxVBrTmC/5VXJdij72U5OErFXGAk0Gj8Rq3bxf1f7KzzfcZ5u8GzHO/aImGekNsmFboAjWgh/trU/mEvzFa4VVphUdYSsghEOlT7O52gb1xyLbDoR7F24C/Faz6WGhi5lda57VM5lByDetppc5647Uqz1HsFNgIC6UX19rYpPqd6kMYoNNuQQRNqmdJunDOoq9MyKq0eTeR1rKgQwfIu503o7VIHVkkmbTw7VKbbOXJdCmN+dA6O49eXP0Ar5UAsDeVszqkghM7de2Zq/Oxp4UuMZeyrixi46kQ/YTikPQyaGbrBy+gh3Sum7qQZQZfx9bZtS1tX64TeTnRjrkrJg802mQddDzS597itj44vKtsq6RIFy5U1Fn6SIJNwat5lVoIjGm0pPLskFVTBRo4uUsCr3rGZ0l/nQkBsE/1d4lKPFzaBtU3Y+NkdG6T1XA4AB+a/Gfrp/RQ5CgnI2WljFvdO/I+O/DP4Q3A50H/Xgv77YZGCsf1BuAT3O4QuLZEAwOWJEflfDJK+CbPu9WSFm7fVcNcns1BgmsXOfoJ1l5CIg==
+            </OrderData>
+        </DataTransfer>
+    </body>
+</ebicsUnsecuredRequest>

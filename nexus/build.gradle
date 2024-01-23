@@ -21,8 +21,8 @@ dependencies {
     // Core language libraries
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version")
 
-    // LibEuFin util library
-    implementation(project(":util"))
+    implementation(project(":common"))
+    implementation(project(":ebics"))
 
     // XML parsing/binding and encryption
     implementation("javax.xml.bind:jaxb-api:2.3.0")

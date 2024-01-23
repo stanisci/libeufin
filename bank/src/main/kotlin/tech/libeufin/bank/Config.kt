@@ -18,13 +18,10 @@
  */
 package tech.libeufin.bank
 
-import tech.libeufin.util.*
-import ConfigSource
-import TalerConfig
-import TalerConfigError
+import tech.libeufin.common.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import tech.libeufin.util.DatabaseConfig
+import tech.libeufin.common.DatabaseConfig
 
 /**
  * Application the parsed configuration.

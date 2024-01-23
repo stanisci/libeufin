@@ -20,13 +20,13 @@
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
-import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.RSAPrivateCrtKeySerializer
-import tech.libeufin.util.CryptoUtil
+import tech.libeufin.common.CryptoUtil
 import java.security.interfaces.RSAPrivateCrtKey
 import kotlin.test.assertEquals
+import tech.libeufin.common.*
 
 class MySerializers {
     // Testing deserialization of RSA private keys.

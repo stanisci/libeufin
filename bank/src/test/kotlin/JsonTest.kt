@@ -25,7 +25,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Test
 import tech.libeufin.bank.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 @Serializable
 data class MyJsonType(

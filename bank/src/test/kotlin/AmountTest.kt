@@ -26,8 +26,7 @@ import tech.libeufin.bank.*
 import tech.libeufin.bank.db.*
 import tech.libeufin.bank.db.TransactionDAO.*
 import tech.libeufin.bank.db.WithdrawalDAO.*
-import tech.libeufin.util.*
-import net.taler.common.errorcodes.TalerErrorCode
+import tech.libeufin.common.*
 
 class AmountTest {
     // Test amount computation in database

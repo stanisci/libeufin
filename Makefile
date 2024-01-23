@@ -110,13 +110,13 @@ bank-test: install-nobuild-bank-files
 nexus-test: install-nobuild-nexus-files
 	./gradlew :nexus:test --tests $(test) -i
 
-.PHONY: integration-test
-integration-test: install-nobuild-bank-files install-nobuild-nexus-files
-	./gradlew :integration:test --tests $(test) -i
+.PHONY: testbench-test
+testbench-test: install-nobuild-bank-files install-nobuild-nexus-files
+	./gradlew :testbench:test --tests $(test) -i
 
-.PHONY: integration
-integration: install-nobuild-bank-files install-nobuild-nexus-files
-	./gradlew :integration:run --console=plain --args="$(test)"
+.PHONY: testbench
+testbench: install-nobuild-bank-files install-nobuild-nexus-files
+	./gradlew :testbench:run --console=plain --args="$(platform)"
 
 .PHONY: doc
 doc:

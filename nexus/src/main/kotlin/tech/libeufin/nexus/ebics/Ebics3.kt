@@ -23,11 +23,11 @@ import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig
 import tech.libeufin.nexus.logger
-import tech.libeufin.util.PreparedUploadData
-import tech.libeufin.util.XMLUtil
-import tech.libeufin.util.ebics_h005.Ebics3Request
-import tech.libeufin.util.getNonce
-import tech.libeufin.util.getXmlDate
+import tech.libeufin.ebics.PreparedUploadData
+import tech.libeufin.ebics.XMLUtil
+import tech.libeufin.ebics.ebics_h005.Ebics3Request
+import tech.libeufin.ebics.getNonce
+import tech.libeufin.ebics.getXmlDate
 import java.math.BigInteger
 import java.time.Instant
 import java.util.*

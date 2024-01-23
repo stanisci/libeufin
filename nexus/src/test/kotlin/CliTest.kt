@@ -24,7 +24,7 @@ import kotlin.test.*
 import java.io.*
 import java.nio.file.*
 import kotlin.io.path.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 val nexusCmd = LibeufinNexusCommand()
 

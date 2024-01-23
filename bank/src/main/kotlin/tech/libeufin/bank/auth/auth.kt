@@ -26,12 +26,10 @@ import io.ktor.server.response.header
 import io.ktor.util.AttributeKey
 import io.ktor.util.pipeline.PipelineContext
 import java.time.Instant
-import net.taler.common.errorcodes.TalerErrorCode
-import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.bank.db.*
 import tech.libeufin.bank.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 /** Used to store if the currenly authenticated user is admin */
 private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin");

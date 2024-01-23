@@ -28,7 +28,7 @@ import java.util.*
 import kotlin.test.*
 import org.junit.Test
 import tech.libeufin.bank.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 class StatsTest {
     @Test

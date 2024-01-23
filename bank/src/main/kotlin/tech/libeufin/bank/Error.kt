@@ -23,8 +23,7 @@ import io.ktor.server.response.*
 import io.ktor.server.application.ApplicationCall
 import io.ktor.util.AttributeKey
 import kotlinx.serialization.Serializable
-import net.taler.common.errorcodes.TalerErrorCode
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 /**
  * Convenience type to throw errors along the bank activity
  * and that is meant to be caught by Ktor and responded to the

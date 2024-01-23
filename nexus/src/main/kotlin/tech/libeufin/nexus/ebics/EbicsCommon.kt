@@ -47,8 +47,9 @@ import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.*
-import tech.libeufin.util.*
-import tech.libeufin.util.ebics_h005.Ebics3Request
+import tech.libeufin.common.*
+import tech.libeufin.ebics.*
+import tech.libeufin.ebics.ebics_h005.Ebics3Request
 import java.io.ByteArrayOutputStream
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.LocalDateTime

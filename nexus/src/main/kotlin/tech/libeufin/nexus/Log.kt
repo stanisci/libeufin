@@ -20,7 +20,7 @@
 package tech.libeufin.nexus
 
 import tech.libeufin.nexus.ebics.unzipForEach
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import java.io.*
 import java.nio.file.*
 import kotlin.io.path.*

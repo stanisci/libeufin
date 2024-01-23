@@ -23,11 +23,9 @@ import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
 import kotlinx.coroutines.*
-import net.taler.wallet.crypto.Base32Crockford
-import net.taler.wallet.crypto.EncodingException
 import tech.libeufin.nexus.ebics.*
-import tech.libeufin.util.*
-import tech.libeufin.util.ebics_h005.Ebics3Request
+import tech.libeufin.common.*
+import tech.libeufin.ebics.ebics_h005.Ebics3Request
 import java.io.File
 import java.io.IOException
 import java.nio.file.Path

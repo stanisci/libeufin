@@ -30,7 +30,7 @@ import kotlinx.coroutines.*
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.bank.db.AccountDAO.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 class DatabaseTest {
     

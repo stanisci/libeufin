@@ -24,6 +24,7 @@ import tech.libeufin.nexus.NEXUS_CONFIG_SOURCE
 import tech.libeufin.nexus.getFrequencyInSeconds
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import tech.libeufin.common.*
 
 class ConfigLoading {
     /**

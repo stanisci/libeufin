@@ -24,13 +24,13 @@ import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
-import tech.libeufin.util.ebics_h004.EbicsTypes
+import tech.libeufin.ebics.ebics_h004.EbicsTypes
 import java.io.File
-import TalerConfigError
 import kotlinx.serialization.encodeToString
 import tech.libeufin.nexus.ebics.*
-import tech.libeufin.util.*
-import tech.libeufin.util.ebics_h004.HTDResponseOrderData
+import tech.libeufin.common.*
+import tech.libeufin.ebics.*
+import tech.libeufin.ebics.ebics_h004.HTDResponseOrderData
 import java.time.Instant
 import kotlin.reflect.typeOf
 import java.nio.file.Files

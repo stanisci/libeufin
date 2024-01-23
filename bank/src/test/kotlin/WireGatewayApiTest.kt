@@ -25,10 +25,9 @@ import io.ktor.server.testing.*
 import java.util.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
-import net.taler.common.errorcodes.TalerErrorCode
 import org.junit.Test
 import tech.libeufin.bank.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 class WireGatewayApiTest {
     // Testing the POST /transfer call from the TWG API.

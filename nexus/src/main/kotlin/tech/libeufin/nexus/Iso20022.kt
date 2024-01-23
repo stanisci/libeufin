@@ -18,7 +18,8 @@
  */
 package tech.libeufin.nexus
 
-import tech.libeufin.util.*
+import tech.libeufin.common.*
+import tech.libeufin.ebics.*
 import java.net.URLEncoder
 import java.time.Instant
 import java.time.ZoneId

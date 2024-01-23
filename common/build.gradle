@@ -1,0 +1,30 @@
+plugins {
+    id("kotlin")
+    id("org.jetbrains.kotlin.plugin.serialization") version "$kotlin_version"
+}
+
+version = rootProject.version
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+compileKotlin.kotlinOptions.jvmTarget = "17"
+compileTestKotlin.kotlinOptions.jvmTarget = "17"
+
+sourceSets.main.java.srcDirs = ["src/main/kotlin"]
+
+dependencies {
+    implementation("ch.qos.logback:logback-classic:1.4.5")
+    // Crypto
+    implementation("org.bouncycastle:bcprov-jdk15on:1.69")
+    // Database helper
+    implementation("org.postgresql:postgresql:$postgres_version")
+    implementation("com.zaxxer:HikariCP:5.0.1")
+    
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
+    implementation("io.ktor:ktor-server-test-host:$ktor_version")
+    implementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
+    implementation("com.github.ajalt.clikt:clikt:$clikt_version")
+}

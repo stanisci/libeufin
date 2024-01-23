@@ -20,7 +20,7 @@
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import tech.libeufin.nexus.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import java.time.Instant
 import kotlin.random.Random
 import kotlin.test.*

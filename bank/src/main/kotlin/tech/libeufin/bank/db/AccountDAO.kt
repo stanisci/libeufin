@@ -19,7 +19,7 @@
 
 package tech.libeufin.bank.db
 
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import java.time.*
 import java.sql.Types
 import tech.libeufin.bank.*

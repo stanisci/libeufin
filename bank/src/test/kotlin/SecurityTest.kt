@@ -27,7 +27,7 @@ import kotlin.test.*
 import kotlinx.coroutines.*
 import org.junit.Test
 import tech.libeufin.bank.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 class SecurityTest {
     @Test

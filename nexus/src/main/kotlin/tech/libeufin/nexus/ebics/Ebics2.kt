@@ -30,9 +30,9 @@ import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig
-import tech.libeufin.util.*
-import tech.libeufin.util.ebics_h004.*
-import tech.libeufin.util.ebics_h005.Ebics3Request
+import tech.libeufin.ebics.*
+import tech.libeufin.ebics.ebics_h004.*
+import tech.libeufin.ebics.ebics_h005.Ebics3Request
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.Instant
 import java.time.ZoneId

@@ -23,7 +23,7 @@ import java.util.UUID
 import java.time.Instant
 import java.time.Duration
 import java.util.concurrent.TimeUnit
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import tech.libeufin.bank.*
 
 /** Data access logic for exchange specific logic */

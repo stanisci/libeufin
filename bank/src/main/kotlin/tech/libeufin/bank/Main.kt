@@ -48,14 +48,13 @@ import java.io.File
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.*
-import net.taler.common.errorcodes.TalerErrorCode
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 import org.postgresql.util.PSQLState
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.bank.db.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 // Dirty local variable to stop the server in test TODO remove this ugly hack

@@ -18,7 +18,7 @@
  */
 
 import tech.libeufin.bank.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import io.ktor.client.statement.HttpResponse
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.client.request.*
@@ -26,7 +26,6 @@ import io.ktor.http.*
 import kotlin.test.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
-import net.taler.common.errorcodes.TalerErrorCode
 
 // Test endpoint is correctly authenticated 
 suspend fun ApplicationTestBuilder.authRoutine(

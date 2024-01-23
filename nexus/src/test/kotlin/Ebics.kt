@@ -25,8 +25,8 @@ import org.junit.Ignore
 import org.junit.Test
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.ebics.*
-import tech.libeufin.util.XMLUtil
-import tech.libeufin.util.ebics_h004.EbicsUnsecuredRequest
+import tech.libeufin.ebics.XMLUtil
+import tech.libeufin.ebics.ebics_h004.EbicsUnsecuredRequest
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

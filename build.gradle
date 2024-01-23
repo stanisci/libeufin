@@ -52,7 +52,7 @@ task versionFile() {
     }
     def gitHash = stdout.toString().trim()
     def version = getRootProject().version
-    new File("${projectDir}/util/src/main/resources", "version.txt").text = "v$version-git-$gitHash"
+    new File("${projectDir}/common/src/main/resources", "version.txt").text = "v$version-git-$gitHash"
 }
 
 // See: https://stackoverflow.com/questions/24936781/gradle-plugin-project-version-number

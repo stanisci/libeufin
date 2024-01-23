@@ -30,12 +30,10 @@ import java.util.*
 import kotlin.test.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonElement
-import net.taler.common.errorcodes.TalerErrorCode
-import net.taler.wallet.crypto.Base32Crockford
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.bank.db.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 class CoreBankConfigTest {
     // GET /config

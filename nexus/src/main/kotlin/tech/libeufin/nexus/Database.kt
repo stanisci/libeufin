@@ -22,7 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.postgresql.jdbc.PgConnection
 import org.postgresql.util.PSQLState
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import java.sql.PreparedStatement
 import java.sql.SQLException
 import java.time.Instant

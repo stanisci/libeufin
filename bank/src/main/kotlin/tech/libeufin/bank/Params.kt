@@ -27,8 +27,7 @@ import io.ktor.server.util.*
 import java.time.*
 import java.time.temporal.*
 import java.util.*
-import net.taler.common.errorcodes.TalerErrorCode
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 fun Parameters.expect(name: String): String 
     = get(name) ?: throw badRequest("Missing '$name' parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)

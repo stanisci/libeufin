@@ -19,7 +19,7 @@
 
 package tech.libeufin.bank
 
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -33,9 +33,6 @@ import kotlinx.serialization.*
 import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.encoding.*
 import kotlinx.serialization.json.*
-import net.taler.common.errorcodes.TalerErrorCode
-import net.taler.wallet.crypto.Base32Crockford
-import net.taler.wallet.crypto.EncodingException
 
 /** 32-byte Crockford's Base32 encoded data */
 @Serializable(with = Base32Crockford32B.Serializer::class)

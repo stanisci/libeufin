@@ -32,8 +32,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.withContext
-import net.taler.common.errorcodes.TalerErrorCode
-import net.taler.wallet.crypto.Base32Crockford
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.bank.*
@@ -45,7 +43,7 @@ import tech.libeufin.bank.db.CashoutDAO.*
 import tech.libeufin.bank.db.ExchangeDAO.*
 import tech.libeufin.bank.db.TransactionDAO.*
 import tech.libeufin.bank.db.WithdrawalDAO.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-api")
 

@@ -23,8 +23,7 @@
  * kept in their respective files.
  */
 package tech.libeufin.nexus
-import ConfigSource
-import TalerConfig
+
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.versionOption
@@ -43,9 +42,8 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
-import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.nexus.ebics.*
-import tech.libeufin.util.*
+import tech.libeufin.common.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
 import java.io.FileNotFoundException
