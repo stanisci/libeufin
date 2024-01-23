@@ -85,8 +85,8 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
             val ebicsFlags = "$flags --transient --debug-ebics test/$name"
             val cfg = loadConfig(conf)
 
-            val clientKeysPath = Path(cfg.requireString("nexus-ebics", "client_private_keys_file"))
-            val bankKeysPath = Path(cfg.requireString("nexus-ebics", "bank_public_keys_file"))
+            val clientKeysPath = Path(cfg.requirePath("nexus-ebics", "client_private_keys_file"))
+            val bankKeysPath = Path(cfg.requirePath("nexus-ebics", "bank_public_keys_file"))
         
             var hasClientKeys = clientKeysPath.exists()
             var hasBankKeys = bankKeysPath.exists()

@@ -153,6 +153,9 @@ class EbicsSetupConfig(val config: TalerConfig) {
     private val ebicsSetupRequireString = { option: String ->
         config.requireString("nexus-ebics", option)
     }
+    private val ebicsSetupRequirePath = { option: String ->
+        config.requirePath("nexus-ebics", option)
+    }
     // debug utility to inspect what was loaded.
     fun _dump() {
         this.javaClass.declaredFields.forEach {
@@ -190,11 +193,11 @@ class EbicsSetupConfig(val config: TalerConfig) {
     /**
      * Filename where we store the bank public keys.
      */
-    val bankPublicKeysFilename = ebicsSetupRequireString("bank_public_keys_file")
+    val bankPublicKeysFilename = ebicsSetupRequirePath("bank_public_keys_file")
     /**
      * Filename where we store our private keys.
      */
-    val clientPrivateKeysFilename = ebicsSetupRequireString("client_private_keys_file")
+    val clientPrivateKeysFilename = ebicsSetupRequirePath("client_private_keys_file")
     /**
      * A name that identifies the EBICS and ISO20022 flavour
      * that Nexus should honor in the communication with the
