@@ -193,20 +193,20 @@ class CoreBankAccountsApiTest {
         }
 
         // Check given payto
-        val ibanPayto = IbanPayTo(genIbanPaytoUri())
+        val IbanPayto = IbanPayto(genIbanPaytoUri())
         val req = obj {
             "username" to "foo"
             "password" to "password"
             "name" to "Jane"
             "is_public" to true
-            "payto_uri" to ibanPayto
+            "payto_uri" to IbanPayto
             "is_taler_exchange" to true
         }
         // Check Ok
         client.post("/accounts") {
             json(req)
         }.assertOkJson<RegisterAccountResponse> {
-            assertEquals(ibanPayto.canonical, it.internal_payto_uri)
+            assertEquals(IbanPayto.canonical, it.internal_payto_uri)
         }
         // Testing idempotency
         client.post("/accounts") {
@@ -303,13 +303,13 @@ class CoreBankAccountsApiTest {
                 "username" to "cashout_guess"
                 "password" to "cashout_guess-password"
                 "name" to "Mr Guess My Name"
-                "cashout_payto_uri" to ibanPayto
+                "cashout_payto_uri" to IbanPayto
             }
         }.assertOk()
         client.getA("/accounts/cashout_guess").assertOkJson<AccountData> {
-            assertEquals(ibanPayto.fullOptName("Mr Guess My Name"), it.cashout_payto_uri)
+            assertEquals(IbanPayto.full("Mr Guess My Name").full, it.cashout_payto_uri)
         }
-        val full = ibanPayto.fullOptName("Santa Claus")
+        val full = IbanPayto.full("Santa Claus").full
         client.post("/accounts") {
             json {
                 "username" to "cashout_keep"
@@ -486,7 +486,7 @@ class CoreBankAccountsApiTest {
         }
 
         // Successful attempt now
-        val cashout = IbanPayTo(genIbanPaytoUri())
+        val cashout = IbanPayto(genIbanPaytoUri())
         val req = obj {
             "cashout_payto_uri" to cashout
             "name" to "Roger"
@@ -519,7 +519,7 @@ class CoreBankAccountsApiTest {
         // Check patch
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
             assertEquals("Roger", obj.name)
-            assertEquals(cashout.fullOptName(obj.name), obj.cashout_payto_uri)
+            assertEquals(cashout.full(obj.name).full, obj.cashout_payto_uri)
             assertEquals("+99", obj.contact_data?.phone?.get())
             assertEquals("foo@example.com", obj.contact_data?.email?.get())
             assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
@@ -533,7 +533,7 @@ class CoreBankAccountsApiTest {
         }.assertNoContent()
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
             assertEquals("Roger", obj.name)
-            assertEquals(cashout.fullOptName(obj.name), obj.cashout_payto_uri)
+            assertEquals(cashout.full(obj.name).full, obj.cashout_payto_uri)
             assertEquals("+99", obj.contact_data?.phone?.get())
             assertEquals("foo@example.com", obj.contact_data?.email?.get())
             assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
@@ -557,10 +557,10 @@ class CoreBankAccountsApiTest {
             }
         }.assertOk()
         for ((cashout, name, expect) in listOf(
-            Triple(cashout.canonical, null, cashout.fullOptName("Mr Cashout Cashout")),
-            Triple(cashout.canonical, "New name", cashout.fullOptName("New name")),
-            Triple(cashout.fullOptName("Full name"), null, cashout.fullOptName("Full name")),
-            Triple(cashout.fullOptName("Full second name"), "Another name", cashout.fullOptName("Full second name"))
+            Triple(cashout.canonical, null, cashout.full("Mr Cashout Cashout").full),
+            Triple(cashout.canonical, "New name", cashout.full("New name").full),
+            Triple(cashout.full("Full name").full, null, cashout.full("Full name").full),
+            Triple(cashout.full("Full second name").full, "Another name", cashout.full("Full second name").full)
         )) {
             client.patch("/accounts/cashout") {
                 pwAuth("admin")

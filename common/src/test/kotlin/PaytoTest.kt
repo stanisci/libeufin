@@ -18,34 +18,63 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.IbanPayto
-import tech.libeufin.common.parsePayto
+import tech.libeufin.common.*
+import kotlin.test.*
 
 class PaytoTest {
-
     @Test
     fun wrongCases() {
-        assert(parsePayto("http://iban/BIC123/IBAN123?receiver-name=The%20Name") == null)
-        assert(parsePayto("payto:iban/BIC123/IBAN123?receiver-name=The%20Name&address=house") == null)
-        assert(parsePayto("payto://wrong/BIC123/IBAN123?sender-name=Foo&receiver-name=Foo") == null)
+        assertFailsWith<CommonError.IbanPayto> { IbanPayto("http://iban/BIC123/IBAN123?receiver-name=The%20Name") }
+        assertFailsWith<CommonError.IbanPayto> { IbanPayto("payto:iban/BIC123/IBAN123?receiver-name=The%20Name&address=house") }
+        assertFailsWith<CommonError.IbanPayto> { IbanPayto("payto://wrong/BIC123/IBAN123?sender-name=Foo&receiver-name=Foo") }
     }
 
     @Test
     fun parsePaytoTest() {
-        val withBic: IbanPayto = parsePayto("payto://iban/BIC123/IBAN123?receiver-name=The%20Name")!!
-        assert(withBic.iban == "IBAN123")
-        assert(withBic.bic == "BIC123")
-        assert(withBic.receiverName == "The Name")
-        val complete = parsePayto("payto://iban/BIC123/IBAN123?sender-name=The%20Name&amount=EUR:1&message=donation")!!
-        assert(withBic.iban == "IBAN123")
-        assert(withBic.bic == "BIC123")
-        assert(withBic.receiverName == "The Name")
-        assert(complete.message == "donation")
-        assert(complete.amount == "EUR:1")
-        val withoutOptionals = parsePayto("payto://iban/IBAN123")!!
-        assert(withoutOptionals.bic == null)
-        assert(withoutOptionals.message == null)
-        assert(withoutOptionals.receiverName == null)
-        assert(withoutOptionals.amount == null)
+        val withBic = IbanPayto("payto://iban/BIC123/CH9300762011623852957?receiver-name=The%20Name")
+        assertEquals(withBic.iban, "CH9300762011623852957")
+        assertEquals(withBic.receiverName, "The Name")
+        val complete = IbanPayto("payto://iban/BIC123/CH9300762011623852957?sender-name=The%20Name&amount=EUR:1&message=donation")
+        assertEquals(withBic.iban, "CH9300762011623852957")
+        assertEquals(withBic.receiverName, "The Name")
+        assertEquals(complete.message, "donation")
+        assertEquals(complete.amount.toString(), "EUR:1")
+        val withoutOptionals = IbanPayto("payto://iban/CH9300762011623852957")
+        assertNull(withoutOptionals.message)
+        assertNull(withoutOptionals.receiverName)
+        assertNull(withoutOptionals.amount)
+    }
+
+    @Test
+    fun normalization() {
+        val canonical = "payto://iban/CH9300762011623852957"
+        val inputs = listOf(
+            "payto://iban/BIC/CH9300762011623852957?receiver-name=NotGiven",
+            "payto://iban/CH9300762011623852957?receiver-name=Grothoff%20Hans",
+            "payto://iban/ch%209300-7620-1162-3852-957",
+        )
+        val names = listOf(
+            "NotGiven", "Grothoff Hans", null
+        )
+        val full = listOf(
+            "payto://iban/CH9300762011623852957?receiver-name=NotGiven",
+            "payto://iban/CH9300762011623852957?receiver-name=Grothoff%20Hans",
+            canonical
+        )
+        for ((i, input) in inputs.withIndex()) {
+            val payto = IbanPayto(input)
+            assertEquals(canonical, payto.canonical)
+            assertEquals(full[i], payto.maybeFull()?.full ?: payto.canonical)
+            assertEquals(names[i], payto.receiverName)
+        }
+        
+        assertEquals(
+            "payto://iban/CH9300762011623852957?receiver-name=Grothoff%20Hans",
+            IbanPayto("payto://iban/CH9300762011623852957?receiver-name=Grothoff%20Hans").full("Santa Claus").full
+        )
+        assertEquals(
+            "payto://iban/CH9300762011623852957?receiver-name=Santa%20Claus",
+            IbanPayto("payto://iban/CH9300762011623852957").full("Santa Claus").full
+        )
     }
 }

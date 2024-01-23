@@ -36,19 +36,19 @@ import tech.libeufin.common.*
 
 /* ----- Setup ----- */
 
-val merchantPayto = IbanPayTo(genIbanPaytoUri())
-val exchangePayto = IbanPayTo(genIbanPaytoUri())
-val customerPayto = IbanPayTo(genIbanPaytoUri())
-val unknownPayto  = IbanPayTo(genIbanPaytoUri())
-var tmpPayTo      = IbanPayTo(genIbanPaytoUri())
+val merchantPayto = IbanPayto(genIbanPaytoUri())
+val exchangePayto = IbanPayto(genIbanPaytoUri())
+val customerPayto = IbanPayto(genIbanPaytoUri())
+val unknownPayto  = IbanPayto(genIbanPaytoUri())
+var tmpPayTo      = IbanPayto(genIbanPaytoUri())
 val paytos = mapOf(
     "merchant" to merchantPayto, 
     "exchange" to exchangePayto, 
     "customer" to customerPayto
 )
 
-fun genTmpPayTo(): IbanPayTo {
-    tmpPayTo = IbanPayTo(genIbanPaytoUri())
+fun genTmpPayTo(): IbanPayto {
+    tmpPayTo = IbanPayto(genIbanPaytoUri())
     return tmpPayTo
 }
 

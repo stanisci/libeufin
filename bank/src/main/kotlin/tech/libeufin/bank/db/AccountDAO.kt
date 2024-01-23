@@ -41,8 +41,8 @@ class AccountDAO(private val db: Database) {
         name: String,
         email: String?,
         phone: String?,
-        cashoutPayto: IbanPayTo?,
-        internalPaytoUri: IbanPayTo,
+        cashoutPayto: IbanPayto?,
+        internalPaytoUri: IbanPayto,
         isPublic: Boolean,
         isTalerExchange: Boolean,
         maxDebt: TalerAmount,
@@ -71,7 +71,7 @@ class AccountDAO(private val db: Database) {
                 setString(1, name)
                 setString(2, email)
                 setString(3, phone)
-                setString(4, cashoutPayto?.fullOptName(name))
+                setString(4, cashoutPayto?.full(name)?.full)
                 setBoolean(5, checkPaytoIdempotent)
                 setString(6, internalPaytoUri.canonical)
                 setBoolean(7, isPublic)
@@ -122,7 +122,7 @@ class AccountDAO(private val db: Database) {
                     setString(3, name)
                     setString(4, email)
                     setString(5, phone)
-                    setString(6, cashoutPayto?.fullOptName(name))
+                    setString(6, cashoutPayto?.full(name)?.full)
                     setString(7, tanChannel?.name)
                     oneOrNull { it.getLong("customer_id") }!!
                 }
@@ -223,7 +223,7 @@ class AccountDAO(private val db: Database) {
     suspend fun reconfig(
         login: String,
         name: String?,
-        cashoutPayto: Option<IbanPayTo?>,
+        cashoutPayto: Option<IbanPayto?>,
         phone: Option<String?>,
         email: Option<String?>,
         tan_channel: Option<TanChannel?>,
@@ -292,12 +292,12 @@ class AccountDAO(private val db: Database) {
             null -> null
         }
         // Cashout payto with a receiver-name using if receiver-name is missing the new named if present or the current one 
-        val cashoutPaytoNamed = cashoutPayto.get()?.fullOptName(name ?: curr.name)
+        val fullCashoutPayto = cashoutPayto.get()?.full(name ?: curr.name)
 
         // Check reconfig rights
         if (checkName && name != curr.name) 
             return@transaction AccountPatchResult.NonAdminName
-        if (checkCashout && cashoutPaytoNamed != curr.cashoutPayTo) 
+        if (checkCashout && fullCashoutPayto?.full != curr.cashoutPayTo) 
             return@transaction AccountPatchResult.NonAdminCashout
         if (checkDebtLimit && debtLimit != curr.debtLimit)
             return@transaction AccountPatchResult.NonAdminDebtLimit
@@ -352,7 +352,7 @@ class AccountDAO(private val db: Database) {
             },
             "WHERE customer_id = ?",
             sequence {
-                cashoutPayto.some { yield(cashoutPaytoNamed) }
+                cashoutPayto.some { yield(fullCashoutPayto?.full) }
                 phone.some { yield(it) }
                 email.some { yield(it) }
                 tan_channel.some { yield(it?.name) }

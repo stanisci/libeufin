@@ -135,7 +135,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                 step("Test submit one transaction")
                                 nexusDb.initiatedPaymentCreate(InitiatedPayment(
                                     amount = TalerAmount("CFH:42"),
-                                    creditPaytoUri = payto,
+                                    creditPaytoUri = IbanPayto(payto).requireFull(),
                                     wireTransferSubject = "single transaction test",
                                     initiationTime = Instant.now(),
                                     requestUid = Base32Crockford.encode(randBytes(16))
@@ -147,7 +147,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                 repeat(4) {
                                     nexusDb.initiatedPaymentCreate(InitiatedPayment(
                                         amount = TalerAmount("CFH:${100L+it}"),
-                                        creditPaytoUri = payto,
+                                        creditPaytoUri = IbanPayto(payto).requireFull(),
                                         wireTransferSubject = "multi transaction test $it",
                                         initiationTime = Instant.now(),
                                         requestUid = Base32Crockford.encode(randBytes(16))
@@ -198,7 +198,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                 // TODO interactive payment editor
                                 nexusDb.initiatedPaymentCreate(InitiatedPayment(
                                     amount = TalerAmount("CFH:1.1"),
-                                    creditPaytoUri = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans",
+                                    creditPaytoUri = IbanPayto("payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans").requireFull(),
                                     wireTransferSubject = "single transaction test",
                                     initiationTime = Instant.now(),
                                     requestUid = Base32Crockford.encode(randBytes(16))

@@ -172,8 +172,8 @@ data class RegisterAccountRequest(
     val is_public: Boolean = false,
     val is_taler_exchange: Boolean = false,
     val contact_data: ChallengeContactData? = null,
-    val cashout_payto_uri: IbanPayTo? = null,
-    val payto_uri: IbanPayTo? = null,
+    val cashout_payto_uri: IbanPayto? = null,
+    val payto_uri: IbanPayto? = null,
     val debit_threshold: TalerAmount? = null,
     val tan_channel: TanChannel? = null,
 )
@@ -189,7 +189,7 @@ data class RegisterAccountResponse(
 @Serializable
 data class AccountReconfiguration(
     val contact_data: ChallengeContactData? = null,
-    val cashout_payto_uri: Option<IbanPayTo?> = Option.None,
+    val cashout_payto_uri: Option<IbanPayto?> = Option.None,
     val name: String? = null,
     val is_public: Boolean? = null,
     val debit_threshold: TalerAmount? = null,
@@ -358,7 +358,7 @@ data class AccountData(
 
 @Serializable
 data class TransactionCreateRequest(
-    val payto_uri: IbanPayTo,
+    val payto_uri: IbanPayto,
     val amount: TalerAmount?
 )
 
@@ -440,7 +440,7 @@ data class BankWithdrawalOperationStatus(
 @Serializable
 data class BankWithdrawalOperationPostRequest(
     val reserve_pub: EddsaPublicKey,
-    val selected_exchange: IbanPayTo,
+    val selected_exchange: IbanPayto,
 )
 
 /**
@@ -523,7 +523,7 @@ data class ConversionResponse(
 data class AddIncomingRequest(
     val amount: TalerAmount,
     val reserve_pub: EddsaPublicKey,
-    val debit_account: IbanPayTo
+    val debit_account: IbanPayto
 )
 
 /**
@@ -611,7 +611,7 @@ data class TransferRequest(
     val amount: TalerAmount,
     val exchange_base_url: ExchangeUrl,
     val wtid: ShortHashCode,
-    val credit_account: IbanPayTo
+    val credit_account: IbanPayto
 )
 
 /**

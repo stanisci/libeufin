@@ -179,6 +179,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                         rootCause is CommonError -> when (rootCause) {
                             is CommonError.AmountFormat -> TalerErrorCode.BANK_BAD_FORMAT_AMOUNT
                             is CommonError.AmountNumberTooBig -> TalerErrorCode.BANK_NUMBER_TOO_BIG
+                            is CommonError.IbanPayto -> TalerErrorCode.GENERIC_JSON_INVALID
                         }
                         else -> TalerErrorCode.GENERIC_JSON_INVALID
                     }
@@ -364,7 +365,7 @@ class EditAccount : CliktCommand(
     private val email: String? by option(help = "E-Mail address used for TAN transmission")
     private val phone: String? by option(help = "Phone number used for TAN transmission")
     private val tan_channel: String? by option(help = "which channel TAN challenges should be sent to")
-    private val cashout_payto_uri: IbanPayTo? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { IbanPayTo(it) }
+    private val cashout_payto_uri: IbanPayto? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { IbanPayto(it) }
     private val debit_threshold: TalerAmount? by option(help = "Max debit allowed for this account").convert { TalerAmount(it) }
  
     override fun run() = cliCmd(logger, common.log) {
@@ -425,13 +426,13 @@ class CreateAccountOption: OptionGroup() {
     ).flag()
     val email: String? by option(help = "E-Mail address used for TAN transmission")
     val phone: String? by option(help = "Phone number used for TAN transmission")
-    val cashout_payto_uri: IbanPayTo? by option(
+    val cashout_payto_uri: IbanPayto? by option(
         help = "Payto URI of a fiant account who receive cashout amount"
-    ).convert { IbanPayTo(it) }
-    val internal_payto_uri: IbanPayTo? by option(hidden = true).convert { IbanPayTo(it) }
-    val payto_uri: IbanPayTo? by option(
+    ).convert { IbanPayto(it) }
+    val internal_payto_uri: IbanPayto? by option(hidden = true).convert { IbanPayto(it) }
+    val payto_uri: IbanPayto? by option(
         help = "Payto URI of this account"
-    ).convert { IbanPayTo(it) }
+    ).convert { IbanPayto(it) }
     val debit_threshold: TalerAmount? by option(
         help = "Max debit allowed for this account")
     .convert { TalerAmount(it) }

@@ -103,7 +103,7 @@ fun genInitPay(
 ) =
     InitiatedPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
-        creditPaytoUri = "payto://iban/TEST-IBAN?receiver-name=Test",
+        creditPaytoUri = IbanPayto("payto://iban/CH9300762011623852957?receiver-name=Test").requireFull(),
         wireTransferSubject = subject,
         initiationTime = Instant.now(),
         requestUid = requestUid
@@ -123,7 +123,7 @@ fun genInPay(subject: String) =
 fun genOutPay(subject: String, messageId: String) =
     OutgoingPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
-        creditPaytoUri = "payto://iban/TEST-IBAN?receiver-name=Test",
+        creditPaytoUri = "payto://iban/CH9300762011623852957?receiver-name=Test",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
         messageId = messageId

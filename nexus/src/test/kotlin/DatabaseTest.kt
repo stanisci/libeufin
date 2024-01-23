@@ -206,7 +206,7 @@ class PaymentInitiationsTest {
         }
         val initPay = InitiatedPayment(
             amount = TalerAmount(44, 0, "KUDOS"),
-            creditPaytoUri = "payto://iban/TEST-IBAN?receiver-name=Test",
+            creditPaytoUri = IbanPayto("payto://iban/CH9300762011623852957?receiver-name=Test").requireFull(),
             wireTransferSubject = "test",
             requestUid = "unique",
             initiationTime = Instant.now()

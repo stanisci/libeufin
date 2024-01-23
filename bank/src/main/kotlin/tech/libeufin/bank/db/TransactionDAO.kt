@@ -43,7 +43,7 @@ class TransactionDAO(private val db: Database) {
 
     /** Create a new transaction */
     suspend fun create(
-        creditAccountPayto: IbanPayTo,
+        creditAccountPayto: IbanPayto,
         debitAccountUsername: String,
         subject: String,
         amount: TalerAmount,

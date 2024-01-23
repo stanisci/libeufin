@@ -102,7 +102,7 @@ class WithdrawalDAO(private val db: Database) {
     /** Set details ([exchangePayto] & [reservePub]) for withdrawal operation [uuid] */
     suspend fun setDetails(
         uuid: UUID,
-        exchangePayto: IbanPayTo,
+        exchangePayto: IbanPayto,
         reservePub: EddsaPublicKey
     ): WithdrawalSelectionResult = db.serializable { conn ->
         val stmt = conn.prepareStatement("""

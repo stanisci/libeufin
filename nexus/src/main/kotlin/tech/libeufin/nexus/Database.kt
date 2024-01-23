@@ -88,7 +88,7 @@ enum class DatabaseSubmissionState {
 data class InitiatedPayment(
     val amount: TalerAmount,
     val wireTransferSubject: String,
-    val creditPaytoUri: String,
+    val creditPaytoUri: FullIbanPayto,
     val initiationTime: Instant,
     val requestUid: String
 )
@@ -98,16 +98,6 @@ data class InitiatedPayment(
  * into the database.
  */
 enum class PaymentInitiationOutcome {
-    /**
-     * The Payto address to send the payment to was invalid.
-     */
-    BAD_CREDIT_PAYTO,
-
-    /**
-     * The receiver payto address lacks the name, that would
-     * cause the bank to reject the pain.001.
-     */
-    RECEIVER_NAME_MISSING,
 
     /**
      * The row contains a client_request_uid that exists
@@ -461,7 +451,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
                 }
                 maybeMap[rowId] = InitiatedPayment(
                     amount = it.getAmount("amount", currency),
-                    creditPaytoUri = it.getString("credit_payto_uri"),
+                    creditPaytoUri = IbanPayto(it.getString("credit_payto_uri")).requireFull(),
                     wireTransferSubject = it.getString("wire_transfer_subject"),
                     initiationTime = initiationTime,
                     requestUid = it.getString("request_uid")
@@ -497,11 +487,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
         stmt.setLong(1, paymentData.amount.value)
         stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
-        parsePayto(paymentData.creditPaytoUri).apply {
-            if (this == null) return@conn PaymentInitiationOutcome.BAD_CREDIT_PAYTO
-            if (this.receiverName == null) return@conn PaymentInitiationOutcome.RECEIVER_NAME_MISSING
-        }
-        stmt.setString(4, paymentData.creditPaytoUri)
+        stmt.setString(4, paymentData.creditPaytoUri.full)
         val initiationTime = paymentData.initiationTime.toDbMicros() ?: run {
             throw Exception("Initiation time could not be converted to microseconds for the database.")
         }

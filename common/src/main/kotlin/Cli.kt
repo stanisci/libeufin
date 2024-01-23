@@ -38,11 +38,11 @@ fun cliCmd(logger: Logger, level: Level, lambda: () -> Unit) {
     try {
         lambda()
     } catch (e: Throwable) {
-        var msg = StringBuilder(e.message)
+        var msg = StringBuilder(e.message ?: e::class.simpleName)
         var cause = e.cause;
         while (cause != null) {
             msg.append(": ")
-            msg.append(cause.message)
+            msg.append(cause.message ?: cause::class.simpleName)
             cause = cause.cause
         }
         logger.error(msg.toString())

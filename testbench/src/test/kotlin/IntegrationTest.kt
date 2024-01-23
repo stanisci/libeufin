@@ -101,12 +101,13 @@ class IntegrationTest {
 
     @Test
     fun mini() {
-        bankCmd.run("dbinit -c conf/mini.conf -r")
-        bankCmd.run("passwd admin password -c conf/mini.conf")
-        bankCmd.run("dbinit -c conf/mini.conf") // Indempotent
+        val flags = "-c conf/mini.conf -L DEBUG"
+        bankCmd.run("dbinit $flags -r")
+        bankCmd.run("passwd admin password $flags")
+        bankCmd.run("dbinit $flags") // Indempotent
         
         server {
-            bankCmd.run("serve -c conf/mini.conf")
+            bankCmd.run("serve $flags")
         }
         
         setup { _ ->
@@ -117,9 +118,10 @@ class IntegrationTest {
 
     @Test
     fun errors() {
-        nexusCmd.run("dbinit -c conf/integration.conf -r")
-        bankCmd.run("dbinit -c conf/integration.conf -r")
-        bankCmd.run("passwd admin password -c conf/integration.conf")
+        val flags = "-c conf/integration.conf -L DEBUG"
+        nexusCmd.run("dbinit $flags -r")
+        bankCmd.run("dbinit $flags -r")
+        bankCmd.run("passwd admin password $flags")
 
         suspend fun checkCount(db: NexusDb, nbIncoming: Int, nbBounce: Int, nbTalerable: Int) {
             db.conn { conn ->
@@ -136,8 +138,8 @@ class IntegrationTest {
         }
 
         setup { db ->
-            val userPayTo = IbanPayTo(genIbanPaytoUri())
-            val fiatPayTo = IbanPayTo(genIbanPaytoUri())
+            val userPayTo = IbanPayto(genIbanPaytoUri())
+            val fiatPayTo = IbanPayto(genIbanPaytoUri())
     
             // Load conversion setup manually as the server would refuse to start without an exchange account
             val sqlProcedures = File("../database-versioning/libeufin-conversion-setup.sql")
@@ -160,7 +162,7 @@ class IntegrationTest {
             }
 
             // Create exchange account
-            bankCmd.run("create-account -c conf/integration.conf -u exchange -p password --name 'Mr Money' --exchange")
+            bankCmd.run("create-account $flags -u exchange -p password --name 'Mr Money' --exchange")
     
             assertException("ERROR: cashin currency conversion failed: missing conversion rates") {
                 ingestIncomingPayment(db, payment)
@@ -168,7 +170,7 @@ class IntegrationTest {
 
             // Start server
             server {
-                bankCmd.run("serve -c conf/integration.conf")
+                bankCmd.run("serve $flags")
             }
 
             // Set conversion rates
@@ -193,7 +195,7 @@ class IntegrationTest {
             }
 
             // Allow admin debt
-            bankCmd.run("edit-account admin --debit_threshold KUDOS:100 -c conf/integration.conf")
+            bankCmd.run("edit-account admin --debit_threshold KUDOS:100 $flags")
 
             // Too small amount
             checkCount(db, 0, 0, 0)
@@ -224,21 +226,22 @@ class IntegrationTest {
 
     @Test
     fun conversion() {
-        nexusCmd.run("dbinit -c conf/integration.conf -r")
-        bankCmd.run("dbinit -c conf/integration.conf -r")
-        bankCmd.run("passwd admin password -c conf/integration.conf")
-        bankCmd.run("edit-account admin --debit_threshold KUDOS:1000 -c conf/integration.conf")
-        bankCmd.run("create-account -c conf/integration.conf -u exchange -p password --name 'Mr Money' --exchange")
-        nexusCmd.run("dbinit -c conf/integration.conf") // Idempotent
-        bankCmd.run("dbinit -c conf/integration.conf") // Idempotent
+        val flags = "-c conf/integration.conf -L DEBUG"
+        nexusCmd.run("dbinit $flags -r")
+        bankCmd.run("dbinit $flags -r")
+        bankCmd.run("passwd admin password $flags")
+        bankCmd.run("edit-account admin --debit_threshold KUDOS:1000 $flags")
+        bankCmd.run("create-account $flags -u exchange -p password --name 'Mr Money' --exchange")
+        nexusCmd.run("dbinit $flags") // Idempotent
+        bankCmd.run("dbinit $flags") // Idempotent
 
         server {
-            bankCmd.run("serve -c conf/integration.conf")
+            bankCmd.run("serve $flags")
         }
         
         setup { db -> 
-            val userPayTo = IbanPayTo(genIbanPaytoUri())
-            val fiatPayTo = IbanPayTo(genIbanPaytoUri())
+            val userPayTo = IbanPayto(genIbanPaytoUri())
+            val fiatPayTo = IbanPayto(genIbanPaytoUri())
 
             // Create user
             client.post("http://0.0.0.0:8080/accounts") {

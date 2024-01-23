@@ -138,7 +138,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
     }
 }
 
-suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountRequest, isAdmin: Boolean): Pair<AccountCreationResult, IbanPayTo>  {
+suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountRequest, isAdmin: Boolean): Pair<AccountCreationResult, IbanPayto>  {
     // Prohibit reserved usernames:
     if (RESERVED_ACCOUNTS.contains(req.username))
         throw conflict(
@@ -183,7 +183,7 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
     var retry = if (req.payto_uri == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
 
     while (true) {
-        val internalPayto = req.payto_uri ?: IbanPayTo(genIbanPaytoUri())
+        val internalPayto = req.payto_uri ?: IbanPayto(genIbanPaytoUri())
         val res = db.account.create(
             login = req.username,
             name = req.name,

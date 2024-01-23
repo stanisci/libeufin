@@ -97,18 +97,12 @@ class NexusSubmitException(
 private suspend fun submitInitiatedPayment(
     ctx: SubmissionContext,
     initiatedPayment: InitiatedPayment
-) {
-    val creditor = parsePayto(initiatedPayment.creditPaytoUri)
-    if (creditor?.receiverName == null)
-        throw NexusSubmitException(
-            "Won't create pain.001 without the receiver name",
-            stage = NexusSubmissionStage.pain
-        )
+) { 
     val xml = createPain001(
         requestUid = initiatedPayment.requestUid,
         initiationTimestamp = initiatedPayment.initiationTime,
         amount = initiatedPayment.amount,
-        creditAccount = creditor,
+        creditAccount = initiatedPayment.creditPaytoUri,
         debitAccount = ctx.cfg.myIbanAccount,
         wireTransferSubject = initiatedPayment.wireTransferSubject
     )

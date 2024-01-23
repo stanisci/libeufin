@@ -168,40 +168,6 @@ class DatabaseTest {
             assertEquals(Triple(true, false, false), cTry(this, "new-code", expired))
         }
     }}
-
-    // Testing iban payto uri normalization
-    @Test
-    fun ibanPayto() = setup { _, _ ->
-        val canonical = "payto://iban/CH9300762011623852957"
-        val inputs = listOf(
-            "payto://iban/BIC/CH9300762011623852957?receiver-name=NotGiven",
-            "payto://iban/CH9300762011623852957?receiver-name=Grothoff%20Hans",
-            "payto://iban/ch%209300-7620-1162-3852-957",
-        )
-        val names = listOf(
-            "NotGiven", "Grothoff Hans", null
-        )
-        val full = listOf(
-            "payto://iban/CH9300762011623852957?receiver-name=NotGiven",
-            "payto://iban/CH9300762011623852957?receiver-name=Grothoff%20Hans",
-            canonical
-        )
-        for ((i, input) in inputs.withIndex()) {
-            val payto = IbanPayTo(input)
-            assertEquals(canonical, payto.canonical)
-            assertEquals(full[i], payto.maybeFull())
-            assertEquals(names[i], payto.receiverName)
-        }
-        
-        assertEquals(
-            "payto://iban/CH9300762011623852957?receiver-name=Grothoff%20Hans",
-            IbanPayTo("payto://iban/CH9300762011623852957?receiver-name=Grothoff%20Hans").fullOptName("Santa Claus")
-        )
-        assertEquals(
-            "payto://iban/CH9300762011623852957?receiver-name=Santa%20Claus",
-            IbanPayTo("payto://iban/CH9300762011623852957").fullOptName("Santa Claus")
-        )
-    }
 }
 
 

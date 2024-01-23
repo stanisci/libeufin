@@ -77,7 +77,7 @@ fun createPain001(
     debitAccount: IbanAccountMetadata,
     amount: TalerAmount,
     wireTransferSubject: String,
-    creditAccount: IbanPayto
+    creditAccount: FullIbanPayto
 ): String {
     val namespace = Pain001Namespaces(
         fullNamespace = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09",
@@ -85,11 +85,6 @@ fun createPain001(
     )
     val zonedTimestamp = ZonedDateTime.ofInstant(initiationTimestamp, ZoneId.of("UTC"))
     val amountWithoutCurrency: String = getAmountNoCurrency(amount)
-    val creditorName: String = creditAccount.receiverName
-        ?: throw NexusSubmitException(
-            "Cannot operate without the creditor name",
-            stage=NexusSubmissionStage.pain
-        )
     return constructXml {
         root("Document") {
             attribute(
@@ -157,10 +152,10 @@ fun createPain001(
                             text(amountWithoutCurrency)
                         }
                         element("Cdtr/Nm") {
-                            text(creditorName)
+                            text(creditAccount.receiverName)
                         }
                         element("CdtrAcct/Id/IBAN") {
-                            text(creditAccount.iban)
+                            text(creditAccount.payto.iban)
                         }
                         element("RmtInf/Ustrd") {
                             text(wireTransferSubject)
