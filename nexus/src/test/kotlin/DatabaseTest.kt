@@ -20,6 +20,7 @@
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import tech.libeufin.nexus.*
+import tech.libeufin.util.*
 import java.time.Instant
 import kotlin.random.Random
 import kotlin.test.*
@@ -70,14 +71,14 @@ class IncomingPaymentsTest {
             val payment = genInPay("incoming and bounced")
             db.registerMalformedIncoming(
                 payment,
-                TalerAmount(2, 53000000, "KUDOS"),
+                TalerAmount("KUDOS:2.53"),
                 Instant.now()
             ).run {
                 assertTrue(new)
             }
             db.registerMalformedIncoming(
                 payment,
-                TalerAmount(2, 53000000, "KUDOS"),
+                TalerAmount("KUDOS:2.53"),
                 Instant.now()
             ).run {
                 assertFalse(new)
@@ -90,7 +91,7 @@ class IncomingPaymentsTest {
                 """).executeQuery()
                 assertTrue(checkIncoming.next())
                 assertEquals(payment.amount.value, checkIncoming.getLong("amount_value"))
-                assertEquals(payment.amount.fraction, checkIncoming.getInt("amount_frac"))
+                assertEquals(payment.amount.frac, checkIncoming.getInt("amount_frac"))
                 // Checking the bounced table got its row.
                 val checkBounced = it.prepareStatement("""
                     SELECT 1 FROM bounced_transactions 

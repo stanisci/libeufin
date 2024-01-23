@@ -18,6 +18,7 @@
  */
 package tech.libeufin.bank
 
+import tech.libeufin.util.*
 import ConfigSource
 import TalerConfig
 import TalerConfigError

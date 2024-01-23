@@ -211,11 +211,3 @@ fun ResultSet.getTalerTimestamp(name: String): TalerProtocolTimestamp{
         getLong(name).microsToJavaInstant() ?: throw faultyTimestampByBank()
     )
 }
-
-fun ResultSet.getAmount(name: String, currency: String): TalerAmount{
-    return TalerAmount(
-        getLong("${name}_val"),
-        getInt("${name}_frac"),
-        currency
-    )
-}

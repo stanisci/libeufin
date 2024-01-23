@@ -19,6 +19,7 @@
 
 package tech.libeufin.bank
 
+import tech.libeufin.util.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
@@ -194,98 +195,6 @@ data class TalerProtocolTimestamp(
         }
     
         override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
-    }
-}
-
-/**
- * Represents a Taler amount.  This type can be used both
- * to hold database records and amounts coming from the parser.
- * If maybeCurrency is null, then the constructor defaults it
- * to be the "internal currency".  Internal currency is the one
- * with which Libeufin-Bank moves funds within itself, therefore
- * not to be mistaken with the cashout currency, which is the one
- * that gets credited to Libeufin-Bank users to their cashout_payto_uri.
- *
- * maybeCurrency is typically null when the TalerAmount object gets
- * defined by the Database class.
- */
-@Serializable(with = TalerAmount.Serializer::class)
-class TalerAmount {
-    val value: Long
-    val frac: Int
-    val currency: String
-
-    constructor(value: Long, frac: Int, currency: String) {
-        this.value = value
-        this.frac = frac
-        this.currency = currency
-    }
-    constructor(encoded: String) {
-        val match = PATTERN.matchEntire(encoded) ?: throw badRequest(
-            "Invalid amount format",
-            TalerErrorCode.BANK_BAD_FORMAT_AMOUNT
-        );
-        val (currency, value, frac) = match.destructured
-        this.currency = currency
-        this.value = value.toLongOrNull() ?: throw badRequest(
-            "Invalid value",
-            TalerErrorCode.BANK_BAD_FORMAT_AMOUNT
-        )
-        if (this.value > MAX_VALUE) throw badRequest(
-            "Value specified in amount is too large",
-            TalerErrorCode.BANK_NUMBER_TOO_BIG
-        )
-        this.frac = if (frac.isEmpty()) {
-            0
-        } else {
-            var tmp = frac.toIntOrNull() ?: throw badRequest(
-                "Invalid fractional value",
-                TalerErrorCode.BANK_BAD_FORMAT_AMOUNT
-            )
-            if (tmp > FRACTION_BASE) throw badRequest(
-                "Fractional calue specified in amount is too large",
-                TalerErrorCode.BANK_NUMBER_TOO_BIG
-            )
-            repeat(8 - frac.length) {
-                tmp *= 10
-            }
-            tmp
-        }
-    }
-
-    override fun equals(other: Any?): Boolean {
-        return other is TalerAmount &&
-                other.value == this.value &&
-                other.frac == this.frac &&
-                other.currency == this.currency
-    }
-
-    override fun toString(): String {
-        if (frac == 0) {
-            return "$currency:$value"
-        } else {
-            return "$currency:$value.${frac.toString().padStart(8, '0')}"
-                .dropLastWhile { it == '0' } // Trim useless fractional trailing 0
-        }
-    }
-
-    internal object Serializer : KSerializer<TalerAmount> {
-        override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("TalerAmount", PrimitiveKind.STRING)
-    
-        override fun serialize(encoder: Encoder, value: TalerAmount) {
-            encoder.encodeString(value.toString())
-        }
-    
-        override fun deserialize(decoder: Decoder): TalerAmount {
-            return TalerAmount(decoder.decodeString())
-        }
-    }
-
-    companion object {
-        const val FRACTION_BASE = 100000000
-        const val MAX_VALUE = 4503599627370496L; // 2^52
-        private val PATTERN = Regex("([A-Z]{1,11}):([0-9]+)(?:\\.([0-9]{1,8}))?");
     }
 }
 

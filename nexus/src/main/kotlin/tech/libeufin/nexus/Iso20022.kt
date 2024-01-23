@@ -44,12 +44,10 @@ data class Pain001Namespaces(
  * @return [String] of the amount number without the currency.
  */
 fun getAmountNoCurrency(amount: TalerAmount): String {
-    if (amount.fraction.toString().length > 8)
-        throw Exception("Taler amount must have at most 8 fractional digits")
-    if (amount.fraction == 0) {
+    if (amount.frac == 0) {
         return amount.value.toString()
     } else {
-        val fractionFormat = amount.fraction.toString().padStart(8, '0').dropLastWhile { it == '0' }
+        val fractionFormat = amount.frac.toString().padStart(8, '0').dropLastWhile { it == '0' }
         if (fractionFormat.length > 2) throw Exception("Sub-cent amounts not supported")
         return "${amount.value}.${fractionFormat}"
     }
@@ -332,7 +330,7 @@ fun parseTxNotif(
              * FIXME: test by sending non-CHF to PoFi and see which currency gets here.
              */
             if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
-            getTalerAmount(focusElement.textContent, currency)
+            TalerAmount("$currency:${focusElement.textContent}")
         }
         when (kind) {
             "CRDT" -> {

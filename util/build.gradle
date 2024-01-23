@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     id("java")
     id("kotlin")
+    id("org.jetbrains.kotlin.plugin.serialization") version "$kotlin_version"
 }
 
 version = rootProject.version

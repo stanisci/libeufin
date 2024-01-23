@@ -146,37 +146,6 @@ private fun makeTalerFrac(bankFrac: String): Int {
 }
 
 /**
- * Gets Taler amount from a currency-agnostic value.
- *
- * @param noCurrencyAmount currency-agnostic value coming from the bank.
- * @param currency currency to set to the result.
- * @return [TalerAmount]
- */
-fun getTalerAmount(
-    noCurrencyAmount: String,
-    currency: String,
-    errorMessagePrefix: String = ""
-): TalerAmount {
-    if (currency.isEmpty()) throw Exception("Wrong helper invocation: currency is empty")
-    val split = noCurrencyAmount.split(".")
-    // only 1 (no fraction) or 2 (with fraction) sizes allowed.
-    if (split.size != 1 && split.size != 2)
-        throw Exception("${errorMessagePrefix}invalid amount: $noCurrencyAmount")
-    val value = split[0].toLongOrNull()
-        ?: throw Exception("${errorMessagePrefix}value part '${split[0]}' not a long")
-    if (split.size == 1) return TalerAmount(
-        value = value,
-        fraction = 0,
-        currency = currency
-    )
-    return TalerAmount(
-        value = value,
-        fraction = makeTalerFrac(split[1]),
-        currency = currency
-    )
-}
-
-/**
  * Converts valid reserve pubs to its binary representation.
  *
  * @param maybeReservePub input.
@@ -291,25 +260,6 @@ suspend fun ingestIncomingPayment(
             logger.debug("IN '${payment.bankId}' already seen")
         }
     }
-}
-
-/**
- * Compares amounts.
- *
- * @param a first argument
- * @param b second argument
- * @return true if the first argument
- *         is less than the second
- */
-fun firstLessThanSecond(
-    a: TalerAmount,
-    b: TalerAmount
-): Boolean {
-    if (a.currency != b.currency)
-        throw Exception("different currencies: ${a.currency} vs. ${b.currency}")
-    if (a.value == b.value)
-        return a.fraction < b.fraction
-    return a.value < b.value
 }
 
 private fun ingestDocument(

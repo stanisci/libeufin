@@ -39,24 +39,6 @@ fun Instant.fmtDateTime(): String {
     return formatter.format(Date.from(this))
 }
 
-
-// Remove this once TalerAmount from the bank
-// module gets moved to the 'util' module (#7987).
-data class TalerAmount(
-    val value: Long,
-    val fraction: Int, // has at most 8 digits.
-    val currency: String
-) {
-    override fun toString(): String {
-        if (fraction == 0) {
-            return "$currency:$value"
-        } else {
-            return "$currency:$value.${fraction.toString().padStart(8, '0')}"
-                .dropLastWhile { it == '0' } // Trim useless fractional trailing 0
-        }
-    }
-}
-
 // INCOMING PAYMENTS STRUCTS
 
 /**
@@ -222,7 +204,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
         val executionTime = paymentData.executionTime.toDbMicros()
             ?: throw Exception("Could not convert outgoing payment execution_time to microseconds")
         stmt.setLong(1, paymentData.amount.value)
-        stmt.setInt(2, paymentData.amount.fraction)
+        stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.creditPaytoUri)
@@ -274,13 +256,13 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
         val executionTime = paymentData.executionTime.toDbMicros()
             ?: throw Exception("Could not convert payment execution time from Instant to microseconds.")
         stmt.setLong(1, paymentData.amount.value)
-        stmt.setInt(2, paymentData.amount.fraction)
+        stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.debitPaytoUri)
         stmt.setString(6, paymentData.bankId)
         stmt.setLong(7, bounceAmount.value)
-        stmt.setInt(8, bounceAmount.fraction)
+        stmt.setInt(8, bounceAmount.frac)
         stmt.setLong(9, refundTimestamp)
         stmt.executeQuery().use {
             when {
@@ -319,7 +301,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
         val executionTime = paymentData.executionTime.toDbMicros()
             ?: throw Exception("Could not convert payment execution time from Instant to microseconds.")
         stmt.setLong(1, paymentData.amount.value)
-        stmt.setInt(2, paymentData.amount.fraction)
+        stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.debitPaytoUri)
@@ -478,11 +460,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
                     throw Exception("Found invalid timestamp at initiated payment with ID: $rowId")
                 }
                 maybeMap[rowId] = InitiatedPayment(
-                    amount = TalerAmount(
-                        value = it.getLong("amount_val"),
-                        fraction = it.getInt("amount_frac"),
-                        currency = currency
-                    ),
+                    amount = it.getAmount("amount", currency),
                     creditPaytoUri = it.getString("credit_payto_uri"),
                     wireTransferSubject = it.getString("wire_transfer_subject"),
                     initiationTime = initiationTime,
@@ -517,7 +495,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
            )
         """)
         stmt.setLong(1, paymentData.amount.value)
-        stmt.setInt(2, paymentData.amount.fraction)
+        stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
         parsePayto(paymentData.creditPaytoUri).apply {
             if (this == null) return@conn PaymentInitiationOutcome.BAD_CREDIT_PAYTO

@@ -19,6 +19,7 @@
 
 package tech.libeufin.bank
 
+import tech.libeufin.util.*
 import io.ktor.http.*
 import io.ktor.server.application.*
 import kotlinx.serialization.*

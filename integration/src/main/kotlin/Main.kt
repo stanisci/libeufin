@@ -20,7 +20,6 @@
 package tech.libeufin.integration
 
 import tech.libeufin.nexus.Database as NexusDb
-import tech.libeufin.nexus.TalerAmount as NexusAmount
 import tech.libeufin.nexus.*
 import tech.libeufin.bank.*
 import tech.libeufin.util.*
@@ -136,7 +135,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                             "tx" -> {
                                 step("Test submit one transaction")
                                 nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                                    amount = NexusAmount(42L, 0, "CFH"),
+                                    amount = TalerAmount("CFH:42"),
                                     creditPaytoUri = payto,
                                     wireTransferSubject = "single transaction test",
                                     initiationTime = Instant.now(),
@@ -148,7 +147,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                 step("Test submit many transaction")
                                 repeat(4) {
                                     nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                                        amount = NexusAmount(100L + it, 0, "CFH"),
+                                        amount = TalerAmount("CFH:${100L+it}"),
                                         creditPaytoUri = payto,
                                         wireTransferSubject = "multi transaction test $it",
                                         initiationTime = Instant.now(),
@@ -199,7 +198,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                                 step("Submit new transaction")
                                 // TODO interactive payment editor
                                 nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                                    amount = getTalerAmount("1.1", "CFH"),
+                                    amount = TalerAmount("CFH:1.1"),
                                     creditPaytoUri = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans",
                                     wireTransferSubject = "single transaction test",
                                     initiationTime = Instant.now(),

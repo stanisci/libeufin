@@ -20,6 +20,7 @@
 import org.junit.Test
 import org.junit.jupiter.api.assertThrows
 import tech.libeufin.nexus.*
+import tech.libeufin.util.*
 import tech.libeufin.util.parseBookDate
 import tech.libeufin.util.parseCamtTime
 import java.lang.StringBuilder
@@ -30,18 +31,6 @@ import kotlin.test.assertTrue
 
 class Parsing {
 
-    @Test // move eventually to util (#7987)
-    fun amountComparison() {
-        val one = TalerAmount(1, 0, "KUDOS")
-        val two = TalerAmount(2, 0, "KUDOS")
-        val moreFrac = TalerAmount(2, 4, "KUDOS")
-        val lessFrac = TalerAmount(2, 3, "KUDOS")
-        val zeroMoreFrac = TalerAmount(0, 4, "KUDOS")
-        val zeroLessFrac = TalerAmount(0, 3, "KUDOS")
-        assertTrue(firstLessThanSecond(one, two))
-        assertTrue(firstLessThanSecond(lessFrac, moreFrac))
-        assertTrue(firstLessThanSecond(zeroLessFrac, zeroMoreFrac))
-    }
     @Test
     fun gregorianTime() {
         parseCamtTime("2023-11-06T20:00:00")
@@ -118,50 +107,6 @@ class Parsing {
             "0.1",
             getAmountNoCurrency(TalerAmount(0, 10000000, "KUDOS"))
         )
-    }
-    @Test // parses amounts as found in the camt.05x documents.
-    fun parseCurrencyAgnosticAmount() {
-        assertTrue {
-            getTalerAmount("1.00", "KUDOS").run {
-                this.value == 1L && this.fraction == 0 && this.currency == "KUDOS"
-            }
-        }
-        assertTrue {
-            getTalerAmount("1", "KUDOS").run {
-                this.value == 1L && this.fraction == 0 && this.currency == "KUDOS"
-            }
-        }
-        assertTrue {
-            getTalerAmount("0.99", "KUDOS").run {
-                this.value == 0L && this.fraction == 99000000 && this.currency == "KUDOS"
-            }
-        }
-        assertTrue {
-            getTalerAmount("0.01", "KUDOS").run {
-                this.value == 0L && this.fraction == 1000000 && this.currency == "KUDOS"
-            }
-        }
-        assertThrows<Exception> {
-            getTalerAmount("", "")
-        }
-        assertThrows<Exception> {
-            getTalerAmount(".1", "KUDOS")
-        }
-        assertThrows<Exception> {
-            getTalerAmount("1.", "KUDOS")
-        }
-        assertThrows<Exception> {
-            getTalerAmount("0.123", "KUDOS")
-        }
-        assertThrows<Exception> {
-            getTalerAmount("noise", "KUDOS")
-        }
-        assertThrows<Exception> {
-            getTalerAmount("1.noise", "KUDOS")
-        }
-        assertThrows<Exception> {
-            getTalerAmount("5", "")
-        }
     }
 
     // Checks that the input decodes to a 32-bytes value.

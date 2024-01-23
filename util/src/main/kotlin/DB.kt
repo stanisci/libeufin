@@ -329,3 +329,11 @@ abstract class DbPool(cfg: String, schema: String): java.io.Closeable {
         pool.close()
     }
 }
+
+fun ResultSet.getAmount(name: String, currency: String): TalerAmount{
+    return TalerAmount(
+        getLong("${name}_val"),
+        getInt("${name}_frac"),
+        currency
+    )
+}

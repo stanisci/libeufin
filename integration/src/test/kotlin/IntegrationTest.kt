@@ -20,10 +20,8 @@
 import org.junit.Test
 import net.taler.wallet.crypto.Base32Crockford
 import tech.libeufin.bank.*
-import tech.libeufin.bank.TalerAmount as BankAmount
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.Database as NexusDb
-import tech.libeufin.nexus.TalerAmount as NexusAmount
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.util.*
 import java.io.File
@@ -151,7 +149,7 @@ class IntegrationTest {
 
             val reservePub = randBytes(32)
             val payment = IncomingPayment(
-                amount = NexusAmount(10, 0, "EUR"),
+                amount = TalerAmount("EUR:10"),
                 debitPaytoUri = userPayTo.canonical,
                 wireTransferSubject = "Error test ${Base32Crockford.encode(reservePub)}",
                 executionTime = Instant.now(),
@@ -201,7 +199,7 @@ class IntegrationTest {
             // Too small amount
             checkCount(db, 0, 0, 0)
             ingestIncomingPayment(db, payment.copy(
-                amount = NexusAmount(0, 10, "EUR"),
+                amount = TalerAmount("EUR:0.01"),
             ))
             checkCount(db, 1, 1, 0)
             client.get("http://0.0.0.0:8080/accounts/exchange/transactions") {
@@ -210,7 +208,7 @@ class IntegrationTest {
 
             // Check success
             ingestIncomingPayment(db, IncomingPayment(
-                amount = NexusAmount(10, 0, "EUR"),
+                amount = TalerAmount("EUR:10"),
                 debitPaytoUri = userPayTo.canonical,
                 wireTransferSubject = "Success ${Base32Crockford.encode(randBytes(32))}",
                 executionTime = Instant.now(),
@@ -279,7 +277,7 @@ class IntegrationTest {
             // Cashin
             repeat(3) { i ->
                 val reservePub = randBytes(32);
-                val amount = NexusAmount(20L + i, 0, "EUR")
+                val amount = TalerAmount("EUR:${20+i}")
                 val subject = "cashin test $i: ${Base32Crockford.encode(reservePub)}"
                 ingestIncomingPayment(db, 
                     IncomingPayment(
@@ -311,7 +309,7 @@ class IntegrationTest {
             // Cashout
             repeat(3) { i ->  
                 val requestUid = randBytes(32);
-                val amount = BankAmount("KUDOS:${10+i}")
+                val amount = TalerAmount("KUDOS:${10+i}")
                 val convert = client.get("http://0.0.0.0:8080/conversion-info/cashout-rate?amount_debit=$amount")
                     .assertOkJson<ConversionResponse>().amount_credit;
                 client.post("http://0.0.0.0:8080/accounts/customer/cashouts") {

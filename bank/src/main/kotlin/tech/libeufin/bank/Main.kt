@@ -172,13 +172,15 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                     while (rootCause?.cause != null)
                         rootCause = rootCause.cause
                     // Telling apart invalid JSON vs missing parameter vs invalid parameter.
-                    val talerErrorCode = when (cause) {
-                        is MissingRequestParameterException ->
+                    val talerErrorCode = when {
+                        cause is MissingRequestParameterException ->
                             TalerErrorCode.GENERIC_PARAMETER_MISSING
-
-                        is ParameterConversionException ->
+                        cause is ParameterConversionException ->
                             TalerErrorCode.GENERIC_PARAMETER_MALFORMED
-
+                        rootCause is CommonError -> when (rootCause) {
+                            is CommonError.AmountFormat -> TalerErrorCode.BANK_BAD_FORMAT_AMOUNT
+                            is CommonError.AmountNumberTooBig -> TalerErrorCode.BANK_NUMBER_TOO_BIG
+                        }
                         else -> TalerErrorCode.GENERIC_JSON_INVALID
                     }
                     call.err(

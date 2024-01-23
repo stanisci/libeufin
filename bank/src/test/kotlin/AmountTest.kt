@@ -27,6 +27,7 @@ import tech.libeufin.bank.db.*
 import tech.libeufin.bank.db.TransactionDAO.*
 import tech.libeufin.bank.db.WithdrawalDAO.*
 import tech.libeufin.util.*
+import net.taler.common.errorcodes.TalerErrorCode
 
 class AmountTest {
     // Test amount computation in database
@@ -125,26 +126,6 @@ class AmountTest {
             maxDebt = TalerAmount(0, 1, "KUDOS")
         ))
     }}
-
-    @Test
-    fun parse() {
-        assertEquals(TalerAmount("EUR:4"), TalerAmount(4L, 0, "EUR"))
-        assertEquals(TalerAmount("EUR:0.02"), TalerAmount(0L, 2000000, "EUR"))
-        assertEquals(TalerAmount("EUR:4.12"), TalerAmount(4L, 12000000, "EUR"))
-        assertEquals(TalerAmount("LOCAL:4444.1000"), TalerAmount(4444L, 10000000, "LOCAL"))
-        assertEquals(TalerAmount("EUR:${TalerAmount.MAX_VALUE}.99999999"), TalerAmount(TalerAmount.MAX_VALUE, 99999999, "EUR"))
-
-        assertException("Invalid amount format") {TalerAmount("")}
-        assertException("Invalid amount format") {TalerAmount("EUR")}
-        assertException("Invalid amount format") {TalerAmount("eur:12")}
-        assertException("Invalid amount format") {TalerAmount(" EUR:12")}
-        assertException("Invalid amount format") {TalerAmount("EUR:1.")}
-        assertException("Invalid amount format") {TalerAmount("EUR:.1")}
-        assertException("Invalid amount format") {TalerAmount("AZERTYUIOPQSD:12")}
-        assertException("Value specified in amount is too large") {TalerAmount("EUR:${Long.MAX_VALUE}")}
-        assertException("Invalid amount format") {TalerAmount("EUR:4.000000000")}
-        assertException("Invalid amount format") {TalerAmount("EUR:4.4a")}
-    }
 
     @Test
     fun parseRoundTrip() {
@@ -332,5 +313,20 @@ class AmountTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun apiError() = bankSetup { _ -> 
+        val base = obj {
+            "payto_uri" to "$exchangePayto?message=payout"
+        }
+
+        // Check OK
+        client.postA("/accounts/merchant/transactions") {
+            json(base) { "amount" to "KUDOS:0.3ABC" }
+        }.assertBadRequest(TalerErrorCode.BANK_BAD_FORMAT_AMOUNT)
+        client.postA("/accounts/merchant/transactions") {
+            json(base) { "amount" to "KUDOS:999999999999999999" }
+        }.assertBadRequest(TalerErrorCode.BANK_NUMBER_TOO_BIG)
     }
 }
