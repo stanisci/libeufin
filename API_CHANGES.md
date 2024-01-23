@@ -30,6 +30,8 @@ This files contains all the API changes for the current release:
 - POST /cashouts: remove status field
 - PATCH /accounts/USERNAME: add tan_channel
 - GET /accounts/USERNAME: add tan_channel
+- Add GET /accounts/USERNAME/taler-revenue/config
+- Add GET /accounts/USERNAME/taler-wire-gateway/config
 
 ## bank cli
 

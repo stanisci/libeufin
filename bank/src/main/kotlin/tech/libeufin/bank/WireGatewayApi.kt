@@ -35,14 +35,12 @@ import tech.libeufin.bank.auth.*
 
 
 fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
-    get("/taler-wire-gateway/config") {
-        call.respond(TWGConfigResponse(
-            currency = ctx.regionalCurrency
-        ))
-        
-        return@get
-    }
     auth(db, TokenScope.readwrite) {
+        get("/accounts/{USERNAME}/taler-wire-gateway/config") {
+            call.respond(WireGatewayConfig(
+                currency = ctx.regionalCurrency
+            ))
+        }
         post("/accounts/{USERNAME}/taler-wire-gateway/transfer") {
             val req = call.receive<TransferRequest>()
             ctx.checkRegionalCurrency(req.amount)

@@ -304,8 +304,24 @@ data class TalerIntegrationConfigResponse(
     val currency: String,
     val currency_specification: CurrencySpecification
 ) {
-    val name: String = "taler-bank-integration";
-    val version: String = INTEGRATION_API_VERSION;
+    val name: String = "taler-bank-integration"
+    val version: String = INTEGRATION_API_VERSION
+}
+
+@Serializable
+data class WireGatewayConfig(
+    val currency: String
+) {
+    val name: String = "taler-wire-gateway"
+    val version: String = WIRE_GATEWAY_API_VERSION
+}
+
+@Serializable
+data class RevenueConfig(
+    val currency: String
+) {
+    val name: String = "taler-revenue"
+    val version: String = REVENUE_API_VERSION
 }
 
 enum class CreditDebitInfo {
@@ -533,13 +549,6 @@ data class AddIncomingRequest(
 data class AddIncomingResponse(
     val timestamp: TalerProtocolTimestamp,
     val row_id: Long
-)
-
-@Serializable
-data class TWGConfigResponse(
-    val name: String = "taler-wire-gateway",
-    val version: String = WIRE_GATEWAY_API_VERSION,
-    val currency: String
 )
 
 /**

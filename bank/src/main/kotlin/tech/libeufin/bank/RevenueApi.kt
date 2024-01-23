@@ -28,8 +28,13 @@ import tech.libeufin.common.*
 import tech.libeufin.bank.auth.*
 import tech.libeufin.bank.db.*
 
-fun Routing.revenueApi(db: Database) { 
+fun Routing.revenueApi(db: Database, ctx: BankConfig) { 
     auth(db, TokenScope.readonly) {
+        get("/accounts/{USERNAME}/taler-revenue/config") {
+            call.respond(RevenueConfig(
+                currency = ctx.regionalCurrency
+            ))
+        }
         get("/accounts/{USERNAME}/taler-revenue/history") {
             val params = HistoryParams.extract(context.request.queryParameters)
             val bankAccount = call.bankInfo(db)

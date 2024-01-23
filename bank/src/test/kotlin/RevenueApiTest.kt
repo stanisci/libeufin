@@ -29,6 +29,14 @@ import org.junit.Test
 import tech.libeufin.bank.*
 
 class RevenueApiTest {
+    // GET /accounts/{USERNAME}/taler-revenue/config
+    @Test
+    fun config() = bankSetup { _ ->
+        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-revenue/config")
+
+        client.getA("/accounts/merchant/taler-revenue/config").assertOk()
+    }
+
     // GET /accounts/{USERNAME}/taler-revenue/history
     @Test
     fun history() = bankSetup {

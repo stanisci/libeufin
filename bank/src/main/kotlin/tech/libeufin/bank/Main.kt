@@ -209,7 +209,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
         conversionApi(db, ctx)
         bankIntegrationApi(db, ctx)
         wireGatewayApi(db, ctx)
-        revenueApi(db)
+        revenueApi(db, ctx)
         ctx.spaPath?.let {
             get("/") {
                 call.respondRedirect("/webui/")

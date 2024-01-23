@@ -30,6 +30,14 @@ import tech.libeufin.bank.*
 import tech.libeufin.common.*
 
 class WireGatewayApiTest {
+    // GET /accounts/{USERNAME}/taler-wire-gateway/config
+    @Test
+    fun config() = bankSetup { _ ->
+        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/config")
+
+        client.getA("/accounts/merchant/taler-wire-gateway/config").assertOk()
+    }
+
     // Testing the POST /transfer call from the TWG API.
     @Test
     fun transfer() = bankSetup { _ -> 
