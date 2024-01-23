@@ -18,30 +18,26 @@
  */
 
 import org.junit.Test
-import org.junit.jupiter.api.assertThrows
 import tech.libeufin.nexus.*
 import tech.libeufin.common.*
 import tech.libeufin.common.parseBookDate
 import tech.libeufin.common.parseCamtTime
 import java.lang.StringBuilder
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 class Parsing {
 
     @Test
     fun gregorianTime() {
         parseCamtTime("2023-11-06T20:00:00")
-        assertThrows<Exception> { parseCamtTime("2023-11-06T20:00:00+01:00") }
-        assertThrows<Exception> { parseCamtTime("2023-11-06T20:00:00Z") }
+        assertFailsWith<Exception> { parseCamtTime("2023-11-06T20:00:00+01:00") }
+        assertFailsWith<Exception> { parseCamtTime("2023-11-06T20:00:00Z") }
     }
 
     @Test
     fun bookDateTest() {
         parseBookDate("1970-01-01")
-        assertThrows<Exception> { parseBookDate("1970-01-01T00:00:01Z") }
+        assertFailsWith<Exception> { parseBookDate("1970-01-01T00:00:01Z") }
     }
 
     @Test
@@ -87,15 +83,15 @@ class Parsing {
 
     @Test // Could be moved in a dedicated Amounts.kt test module.
     fun generateCurrencyAgnosticAmount() {
-        assertThrows<Exception> {
+        assertFailsWith<Exception> {
             // Too many fractional digits.
             getAmountNoCurrency(TalerAmount(1, 123456789, "KUDOS"))
         }
-        assertThrows<Exception> {
+        assertFailsWith<Exception> {
             // Nexus doesn't support sub-cents.
             getAmountNoCurrency(TalerAmount(1, 12345678, "KUDOS"))
         }
-        assertThrows<Exception> {
+        assertFailsWith<Exception> {
             // Nexus doesn't support sub-cents.
             getAmountNoCurrency(TalerAmount(0, 1, "KUDOS"))
         }
@@ -122,6 +118,6 @@ class Parsing {
         val invalidChar = StringBuilder(valid)
         invalidChar.setCharAt(10, '*')
         assertNull(isReservePub(invalidChar.toString()))
-        // assertNull(isReservePub(valid.dropLast(1))) // FIXME: this fails now because the decoder is buggy.
+        assertNull(isReservePub(valid.dropLast(1)))
     }
 }

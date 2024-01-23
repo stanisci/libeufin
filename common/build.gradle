@@ -16,12 +16,12 @@ compileTestKotlin.kotlinOptions.jvmTarget = "17"
 sourceSets.main.java.srcDirs = ["src/main/kotlin"]
 
 dependencies {
-    implementation("ch.qos.logback:logback-classic:1.4.5")
+    implementation("ch.qos.logback:logback-classic:1.4.14")
     // Crypto
-    implementation("org.bouncycastle:bcprov-jdk15on:1.69")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.77")
     // Database helper
     implementation("org.postgresql:postgresql:$postgres_version")
-    implementation("com.zaxxer:HikariCP:5.0.1")
+    implementation("com.zaxxer:HikariCP:5.1.0")
     
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
     implementation("io.ktor:ktor-server-test-host:$ktor_version")

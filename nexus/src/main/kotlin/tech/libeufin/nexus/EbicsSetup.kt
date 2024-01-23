@@ -54,7 +54,7 @@ inline fun <reified T> syncJsonToDisk(obj: T, path: String) {
     try {
         // Write to temp file then rename to enable atomicity when possible
         val path = Path(path).absolute()
-        val tmp =  Files.createTempFile(path.parent, "tmp_", "_${path.fileName}")
+        val tmp = Files.createTempFile(path.parent, "tmp_", "_${path.fileName}")
         tmp.writeText(content)
         tmp.moveTo(path, StandardCopyOption.REPLACE_EXISTING);
     } catch (e: Exception) {
@@ -95,7 +95,8 @@ private fun preparePrivateKeys(path: String): ClientPrivateKeysFile {
         logger.info("New client keys created at: $path")
         return newKeys
     } catch (e: Exception) {
-        throw Exception("Could not create client keys at $path", e)
+        throw Exception("Could not create client keys at $path", e) 
+        // TODO Better log
     }
 }
 

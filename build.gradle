@@ -3,7 +3,7 @@
 import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "1.9.20"
+    id("org.jetbrains.kotlin.jvm") version "1.9.22"
     id("org.jetbrains.dokka") version "1.9.10"
     id("idea")
     id("java-library")
@@ -21,11 +21,11 @@ if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)){
 
 allprojects {
     ext {
-        set("kotlin_version", "1.9.20")
-        set("ktor_version", "2.3.6")
-        set("clikt_version", "4.2.1")
+        set("kotlin_version", "1.9.22")
+        set("ktor_version", "2.3.7")
+        set("clikt_version", "4.2.2")
         set("coroutines_version", "1.7.3")
-        set("postgres_version", "42.7.0")
+        set("postgres_version", "42.7.1")
         set("junixsocket_version", "2.8.3")
     }
 

@@ -18,12 +18,10 @@
  */
 
 import org.junit.Test
-import org.junit.jupiter.api.assertThrows
 import tech.libeufin.nexus.EbicsSetupConfig
 import tech.libeufin.nexus.NEXUS_CONFIG_SOURCE
 import tech.libeufin.nexus.getFrequencyInSeconds
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.*
 import tech.libeufin.common.*
 
 class ConfigLoading {
@@ -59,7 +57,7 @@ class ConfigLoading {
             # All the other defaults won't be loaded.
             BANK_DIALECT = postfinance
         """.trimIndent())
-        assertThrows<TalerConfigError> {
+        assertFailsWith<TalerConfigError> {
             EbicsSetupConfig(handle)
         }
     }
