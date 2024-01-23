@@ -36,8 +36,7 @@ class FileLogger(path: String?) {
     private val dir = if (path != null) Path(path) else null
 
     init {
-        println("$path $dir")
-                if (dir != null) {
+        if (dir != null) {
             try {
                 // Create logging directory if missing
                 dir.createDirectories()

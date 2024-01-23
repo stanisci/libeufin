@@ -424,7 +424,6 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
      * FIXME: reduce code duplication with the submit subcommand.
      */
     override fun run() = cliCmd(logger, common.log) {
-        println("start $ebicsLog")
         val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
 

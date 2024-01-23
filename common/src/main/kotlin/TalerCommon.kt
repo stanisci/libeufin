@@ -121,7 +121,6 @@ class IbanPayto: PaytoUri {
     override val receiverName: String?
 
     constructor(raw: String) {
-        println(raw)
         try {
             parsed = URI(raw)
         } catch (e: Exception) {
