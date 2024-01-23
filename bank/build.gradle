@@ -25,7 +25,6 @@ dependencies {
     implementation(project(":util"))
 
     implementation("org.postgresql:postgresql:$postgres_version")
-    implementation("com.zaxxer:HikariCP:5.0.1")
     implementation("com.github.ajalt.clikt:clikt:$clikt_version")
 
     implementation("io.ktor:ktor-server-core:$ktor_version")

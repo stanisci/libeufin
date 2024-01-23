@@ -29,6 +29,8 @@ import java.net.URI
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
+import kotlinx.coroutines.*
+import com.zaxxer.hikari.*
 
 fun getCurrentUser(): String = System.getProperty("user.name")
 
@@ -276,4 +278,54 @@ fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: 
 
     val sqlDrop = File("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
     conn.execSQLUpdate(sqlDrop)
+}
+
+abstract class DbPool(cfg: String, schema: String): java.io.Closeable {
+    val pgSource = pgDataSource(cfg)
+    private val pool: HikariDataSource
+
+    init {
+        val config = HikariConfig();
+        config.dataSource = pgSource
+        config.schema = schema
+        config.transactionIsolation = "TRANSACTION_SERIALIZABLE"
+        pool = HikariDataSource(config)
+        pool.getConnection().use { con -> 
+            val meta = con.getMetaData();
+            val majorVersion = meta.getDatabaseMajorVersion()
+            val minorVersion = meta.getDatabaseMinorVersion()
+            if (majorVersion < MIN_VERSION) {
+                throw Exception("postgres version must be at least $MIN_VERSION.0 got $majorVersion.$minorVersion")
+            }
+        }
+    }
+
+    suspend fun <R> conn(lambda: suspend (PgConnection) -> R): R {
+        // Use a coroutine dispatcher that we can block as JDBC API is blocking
+        return withContext(Dispatchers.IO) {
+            val conn = pool.getConnection()
+            conn.use{ it -> lambda(it.unwrap(PgConnection::class.java)) }
+        }
+    }
+
+    suspend fun <R> serializable(lambda: suspend (PgConnection) -> R): R = conn { conn ->
+        repeat(SERIALIZATION_RETRY) {
+            try {
+                return@conn lambda(conn);
+            } catch (e: SQLException) {
+                if (e.sqlState != PSQLState.SERIALIZATION_FAILURE.state)
+                    throw e
+            }
+        }
+        try {
+            return@conn lambda(conn)
+        } catch(e: SQLException) {
+            logger.warn("Serialization failure after $SERIALIZATION_RETRY retry")
+            throw e
+        }
+    }
+
+    override fun close() {
+        pool.close()
+    }
 }

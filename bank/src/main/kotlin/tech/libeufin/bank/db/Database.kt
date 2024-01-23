@@ -32,7 +32,6 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.*
-import com.zaxxer.hikari.*
 import tech.libeufin.util.*
 import io.ktor.http.HttpStatusCode
 import net.taler.common.errorcodes.TalerErrorCode
@@ -59,27 +58,8 @@ private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db")
 internal fun faultyTimestampByBank() = internalServerError("Bank took overflowing timestamp")
 internal fun faultyDurationByClient() = badRequest("Overflowing duration, please specify 'forever' instead.")
 
-class Database(dbConfig: String, internal val bankCurrency: String, internal val fiatCurrency: String?): java.io.Closeable {
-    val dbPool: HikariDataSource
-    internal val notifWatcher: NotificationWatcher
-
-    init {
-        val pgSource = pgDataSource(dbConfig)
-        val config = HikariConfig();
-        config.dataSource = pgSource
-        config.connectionInitSql = "SET search_path TO libeufin_bank;SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE;"
-        config.validate()
-        dbPool = HikariDataSource(config);
-        dbPool.getConnection().use { con -> 
-            val meta = con.getMetaData();
-            val majorVersion = meta.getDatabaseMajorVersion()
-            val minorVersion = meta.getDatabaseMinorVersion()
-            if (majorVersion < MIN_VERSION) {
-                throw Exception("postgres version must be at least $MIN_VERSION.0 got $majorVersion.$minorVersion")
-            }
-        }
-        notifWatcher = NotificationWatcher(pgSource)
-    }
+class Database(dbConfig: String, internal val bankCurrency: String, internal val fiatCurrency: String?): DbPool(dbConfig, "libeufin_bank") {
+    internal val notifWatcher: NotificationWatcher = NotificationWatcher(pgSource)
 
     val cashout = CashoutDAO(this)
     val withdrawal = WithdrawalDAO(this)
@@ -140,36 +120,6 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                 talerOutVolume = it.getAmount("taler_out_volume", bankCurrency),
             )
         } ?: throw internalServerError("No result from DB procedure stats_get_frame")
-    }
-
-    override fun close() {
-        dbPool.close()
-    }
-
-    suspend fun <R> conn(lambda: suspend (PgConnection) -> R): R {
-        // Use a coroutine dispatcher that we can block as JDBC API is blocking
-        return withContext(Dispatchers.IO) {
-            val conn = dbPool.getConnection()
-            conn.use{ it -> lambda(it.unwrap(PgConnection::class.java)) }
-        }
-    }
-
-
-    suspend fun <R> serializable(lambda: suspend (PgConnection) -> R): R = conn { conn ->
-        repeat(SERIALIZATION_RETRY) {
-            try {
-                return@conn lambda(conn);
-            } catch (e: SQLException) {
-                if (e.sqlState != PSQLState.SERIALIZATION_FAILURE.state)
-                    throw e
-            }
-        }
-        try {
-            return@conn lambda(conn)
-        } catch(e: SQLException) {
-            logger.warn("Serialization failure after $SERIALIZATION_RETRY retry")
-            throw e
-        }
     }
 
     /** Apply paging logic to a sql query */

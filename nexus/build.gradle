@@ -35,7 +35,6 @@ dependencies {
     // Command line parsing
     implementation("com.github.ajalt.clikt:clikt:$clikt_version")
     implementation("org.postgresql:postgresql:$postgres_version")
-    implementation("com.zaxxer:HikariCP:5.0.1")
     // Ktor client library
     implementation("io.ktor:ktor-client-apache:$ktor_version")
 

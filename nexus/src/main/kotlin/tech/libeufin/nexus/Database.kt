@@ -22,7 +22,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.postgresql.jdbc.PgConnection
 import org.postgresql.util.PSQLState
-import com.zaxxer.hikari.*
 import tech.libeufin.util.*
 import java.sql.PreparedStatement
 import java.sql.SQLException
@@ -198,39 +197,7 @@ private fun PreparedStatement.maybeUpdate(): Boolean {
 /**
  * Collects database connection steps and any operation on the Nexus tables.
  */
-class Database(dbConfig: String): java.io.Closeable {
-    val dbPool: HikariDataSource
-
-    init {
-        val pgSource = pgDataSource(dbConfig)
-        val config = HikariConfig();
-        config.dataSource = pgSource
-        config.connectionInitSql = "SET search_path TO libeufin_nexus;"
-        config.validate()
-        dbPool = HikariDataSource(config);
-    }
-
-    /**
-     * Closes the database connection.
-     */
-    override fun close() {
-        dbPool.close()
-    }
-
-    /**
-     * Moves the database operations where they can block, without
-     * blocking the whole process.
-     *
-     * @param lambda actual statement preparation and execution logic.
-     * @return what lambda returns.
-     */
-    suspend fun <R> runConn(lambda: suspend (PgConnection) -> R): R {
-        // Use a coroutine dispatcher that we can block as JDBC API is blocking
-        return withContext(Dispatchers.IO) {
-            val conn = dbPool.getConnection()
-            conn.use { it -> lambda(it.unwrap(PgConnection::class.java)) }
-        }
-    }
+class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
 
     // OUTGOING PAYMENTS METHODS
 
@@ -241,7 +208,7 @@ class Database(dbConfig: String): java.io.Closeable {
      * @param paymentData information about the outgoing payment.
      * @return operation outcome enum.
      */
-    suspend fun registerOutgoing(paymentData: OutgoingPayment): OutgoingRegistrationResult = runConn {        
+    suspend fun registerOutgoing(paymentData: OutgoingPayment): OutgoingRegistrationResult = conn {        
         val stmt = it.prepareStatement("""
             SELECT out_tx_id, out_initiated, out_found
               FROM register_outgoing(
@@ -289,7 +256,7 @@ class Database(dbConfig: String): java.io.Closeable {
         paymentData: IncomingPayment,
         bounceAmount: TalerAmount,
         now: Instant
-    ): IncomingBounceRegistrationResult = runConn {       
+    ): IncomingBounceRegistrationResult = conn {       
         val stmt = it.prepareStatement("""
             SELECT out_found, out_tx_id, out_bounce_id
               FROM register_incoming_and_bounce(
@@ -337,7 +304,7 @@ class Database(dbConfig: String): java.io.Closeable {
     suspend fun registerTalerableIncoming(
         paymentData: IncomingPayment,
         reservePub: ByteArray
-    ): IncomingRegistrationResult = runConn { conn ->
+    ): IncomingRegistrationResult = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT out_found, out_tx_id
               FROM register_incoming_and_talerable(
@@ -374,15 +341,15 @@ class Database(dbConfig: String): java.io.Closeable {
      *
      * @return [Instant] or null if no results were found
      */
-    suspend fun outgoingPaymentLastExecTime(): Instant? = runConn { conn ->
+    suspend fun outgoingPaymentLastExecTime(): Instant? = conn { conn ->
         val stmt = conn.prepareStatement(
             "SELECT MAX(execution_time) as latest_execution_time FROM outgoing_transactions"
         )
         stmt.executeQuery().use {
-            if (!it.next()) return@runConn null
+            if (!it.next()) return@conn null
             val timestamp = it.getLong("latest_execution_time")
-            if (timestamp == 0L) return@runConn null
-            return@runConn timestamp.microsToJavaInstant()
+            if (timestamp == 0L) return@conn null
+            return@conn timestamp.microsToJavaInstant()
                 ?: throw Exception("Could not convert latest_execution_time to Instant")
         }
     }
@@ -392,15 +359,15 @@ class Database(dbConfig: String): java.io.Closeable {
      *
      * @return [Instant] or null if no results were found
      */
-    suspend fun incomingPaymentLastExecTime(): Instant? = runConn { conn ->
+    suspend fun incomingPaymentLastExecTime(): Instant? = conn { conn ->
         val stmt = conn.prepareStatement(
             "SELECT MAX(execution_time) as latest_execution_time FROM incoming_transactions"
         )
         stmt.executeQuery().use {
-            if (!it.next()) return@runConn null
+            if (!it.next()) return@conn null
             val timestamp = it.getLong("latest_execution_time")
-            if (timestamp == 0L) return@runConn null
-            return@runConn timestamp.microsToJavaInstant()
+            if (timestamp == 0L) return@conn null
+            return@conn timestamp.microsToJavaInstant()
                 ?: throw Exception("Could not convert latest_execution_time to Instant")
         }
     }
@@ -411,7 +378,7 @@ class Database(dbConfig: String): java.io.Closeable {
      * @param maybeReservePub reserve public key to look up
      * @return true if found, false otherwise
      */
-    suspend fun isReservePubFound(maybeReservePub: ByteArray): Boolean = runConn { conn ->
+    suspend fun isReservePubFound(maybeReservePub: ByteArray): Boolean = conn { conn ->
         val stmt = conn.prepareStatement("""
              SELECT 1
                FROM talerable_incoming_transactions
@@ -420,7 +387,7 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setBytes(1, maybeReservePub)
         val res = stmt.executeQuery()
         res.use {
-            return@runConn it.next()
+            return@conn it.next()
         }
     }
 
@@ -445,7 +412,7 @@ class Database(dbConfig: String): java.io.Closeable {
     suspend fun initiatedPaymentSetSubmittedState(
         rowId: Long,
         submissionState: DatabaseSubmissionState
-    ): Boolean = runConn { conn ->
+    ): Boolean = conn { conn ->
         val stmt = conn.prepareStatement("""
              UPDATE initiated_outgoing_transactions
                       SET submitted = submission_state(?), last_submission_time = ?
@@ -458,7 +425,7 @@ class Database(dbConfig: String): java.io.Closeable {
             throw Exception("Submission time could not be converted to microseconds for the database.")
         })
         stmt.setLong(3, rowId)
-        return@runConn stmt.maybeUpdate()
+        return@conn stmt.maybeUpdate()
     }
 
     /**
@@ -468,7 +435,7 @@ class Database(dbConfig: String): java.io.Closeable {
      * @param failureMessage error associated to this initiated payment.
      * @return true on success, false if no payment was affected.
      */
-    suspend fun initiatedPaymentSetFailureMessage(rowId: Long, failureMessage: String): Boolean = runConn { conn ->
+    suspend fun initiatedPaymentSetFailureMessage(rowId: Long, failureMessage: String): Boolean = conn { conn ->
         val stmt = conn.prepareStatement("""
              UPDATE initiated_outgoing_transactions
                       SET failure_message = ?
@@ -477,7 +444,7 @@ class Database(dbConfig: String): java.io.Closeable {
         )
         stmt.setString(1, failureMessage)
         stmt.setLong(2, rowId)
-        return@runConn stmt.maybeUpdate()
+        return@conn stmt.maybeUpdate()
     }
 
     /**
@@ -487,7 +454,7 @@ class Database(dbConfig: String): java.io.Closeable {
      * @param currency in which currency should the payment be submitted to the bank.
      * @return [Map] of the initiated payment row ID and [InitiatedPayment]
      */
-    suspend fun initiatedPaymentsSubmittableGet(currency: String): Map<Long, InitiatedPayment> = runConn { conn ->
+    suspend fun initiatedPaymentsSubmittableGet(currency: String): Map<Long, InitiatedPayment> = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
               initiated_outgoing_transaction_id
@@ -523,7 +490,7 @@ class Database(dbConfig: String): java.io.Closeable {
                 )
             } while (it.next())
         }
-        return@runConn maybeMap
+        return@conn maybeMap
     }
     /**
      * Initiate a payment in the database.  The "submit"
@@ -533,7 +500,7 @@ class Database(dbConfig: String): java.io.Closeable {
      * @param paymentData any data that's used to prepare the payment.
      * @return true if the insertion went through, false in case of errors.
      */
-    suspend fun initiatedPaymentCreate(paymentData: InitiatedPayment): PaymentInitiationOutcome = runConn { conn ->
+    suspend fun initiatedPaymentCreate(paymentData: InitiatedPayment): PaymentInitiationOutcome = conn { conn ->
         val stmt = conn.prepareStatement("""
            INSERT INTO initiated_outgoing_transactions (
              amount
@@ -553,8 +520,8 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setInt(2, paymentData.amount.fraction)
         stmt.setString(3, paymentData.wireTransferSubject)
         parsePayto(paymentData.creditPaytoUri).apply {
-            if (this == null) return@runConn PaymentInitiationOutcome.BAD_CREDIT_PAYTO
-            if (this.receiverName == null) return@runConn PaymentInitiationOutcome.RECEIVER_NAME_MISSING
+            if (this == null) return@conn PaymentInitiationOutcome.BAD_CREDIT_PAYTO
+            if (this.receiverName == null) return@conn PaymentInitiationOutcome.RECEIVER_NAME_MISSING
         }
         stmt.setString(4, paymentData.creditPaytoUri)
         val initiationTime = paymentData.initiationTime.toDbMicros() ?: run {
@@ -563,12 +530,12 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setLong(5, initiationTime)
         stmt.setString(6, paymentData.requestUid) // can be null.
         if (stmt.maybeUpdate())
-            return@runConn PaymentInitiationOutcome.SUCCESS
+            return@conn PaymentInitiationOutcome.SUCCESS
         /**
          * _very_ likely, Nexus didn't check the request idempotency,
          * as the row ID would never fall into the following problem.
          */
-        return@runConn PaymentInitiationOutcome.UNIQUE_CONSTRAINT_VIOLATION
+        return@conn PaymentInitiationOutcome.UNIQUE_CONSTRAINT_VIOLATION
     }
 
     /**
@@ -583,7 +550,7 @@ class Database(dbConfig: String): java.io.Closeable {
      *         null gets returned even when the initiated payment exists,
      *         *but* it was NOT flagged as submitted.
      */
-    suspend fun initiatedPaymentGetFromUid(uid: String): Long? = runConn { conn ->
+    suspend fun initiatedPaymentGetFromUid(uid: String): Long? = conn { conn ->
         val stmt = conn.prepareStatement("""
            SELECT initiated_outgoing_transaction_id
              FROM initiated_outgoing_transactions
@@ -592,8 +559,8 @@ class Database(dbConfig: String): java.io.Closeable {
         stmt.setString(1, uid)
         val res = stmt.executeQuery()
         res.use {
-            if (!it.next()) return@runConn null
-            return@runConn it.getLong("initiated_outgoing_transaction_id")
+            if (!it.next()) return@conn null
+            return@conn it.getLong("initiated_outgoing_transaction_id")
         }
     }
 }

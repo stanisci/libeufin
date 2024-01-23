@@ -27,6 +27,7 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk15on:1.69")
     // Database helper
     implementation("org.postgresql:postgresql:$postgres_version")
+    implementation("com.zaxxer:HikariCP:5.0.1")
     
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktor_version")
     implementation("io.ktor:ktor-server-test-host:$ktor_version")

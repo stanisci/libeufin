@@ -82,7 +82,7 @@ class IncomingPaymentsTest {
             ).run {
                 assertFalse(new)
             }
-            db.runConn {
+            db.conn {
                 // Checking one incoming got created
                 val checkIncoming = it.prepareStatement("""
                     SELECT (amount).val as amount_value, (amount).frac as amount_frac 
@@ -150,7 +150,7 @@ class PaymentInitiationsTest {
             assertFalse(db.initiatedPaymentSetFailureMessage(3, "3 not existing"))
             assertTrue(db.initiatedPaymentSetFailureMessage(1, "expired"))
             // Checking the value from the database.
-            db.runConn { conn ->
+            db.conn { conn ->
                 val idOne = conn.execSQLQuery("""
                     SELECT failure_message
                       FROM initiated_outgoing_transactions
@@ -178,7 +178,7 @@ class PaymentInitiationsTest {
                 db.initiatedPaymentCreate(genInitPay("not submitted, has row ID == 1")),
             )
             // Asserting on the false default submitted state.
-            db.runConn { conn ->
+            db.conn { conn ->
                 val isSubmitted = conn.execSQLQuery(getRowOne)
                 assertTrue(isSubmitted.next())
                 assertEquals("unsubmitted", isSubmitted.getString("submitted"))
@@ -186,7 +186,7 @@ class PaymentInitiationsTest {
             // Switching the submitted state to success.
             assertTrue(db.initiatedPaymentSetSubmittedState(1, DatabaseSubmissionState.success))
             // Asserting on the submitted state being TRUE now.
-            db.runConn { conn ->
+            db.conn { conn ->
                 val isSubmitted = conn.execSQLQuery(getRowOne)
                 assertTrue(isSubmitted.next())
                 assertEquals("success", isSubmitted.getString("submitted"))
@@ -275,7 +275,7 @@ class PaymentInitiationsTest {
             assertEquals(db.initiatedPaymentCreate(genInitPay("#4", "unique4")), PaymentInitiationOutcome.SUCCESS)
 
             // Marking one as submitted, hence not expecting it in the results.
-            db.runConn { conn ->
+            db.conn { conn ->
                 conn.execSQLUpdate("""
                     UPDATE initiated_outgoing_transactions
                       SET submitted='success'

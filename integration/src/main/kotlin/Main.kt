@@ -125,7 +125,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     val payto = "payto://iban/CH2989144971918294289?receiver-name=Test"
         
                     step("Test fetch transactions")
-                    nexusCmd.test("ebics-fetch $ebicsFlag --pinned-start 2022-01-01").assertOk()
+                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01").assertOk()
 
                     while (true) {
                         when (ask("Run 'fetch', 'submit', 'tx', 'txs', 'logs', 'ack' or 'exit'>")) {

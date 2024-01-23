@@ -125,7 +125,7 @@ class IntegrationTest {
         bankCmd.run("passwd admin password -c conf/integration.conf")
 
         suspend fun checkCount(db: NexusDb, nbIncoming: Int, nbBounce: Int, nbTalerable: Int) {
-            db.runConn { conn ->
+            db.conn { conn ->
                 conn.prepareStatement("SELECT count(*) FROM incoming_transactions").oneOrNull {
                     assertEquals(nbIncoming, it.getInt(1))
                 }
@@ -144,7 +144,7 @@ class IntegrationTest {
     
             // Load conversion setup manually as the server would refuse to start without an exchange account
             val sqlProcedures = File("../database-versioning/libeufin-conversion-setup.sql")
-            db.runConn { 
+            db.conn { 
                 it.execSQLUpdate(sqlProcedures.readText())
                 it.execSQLUpdate("SET search_path TO libeufin_nexus;")
             }

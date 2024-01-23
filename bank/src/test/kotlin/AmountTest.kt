@@ -31,8 +31,7 @@ import tech.libeufin.util.*
 class AmountTest {
     // Test amount computation in database
     @Test
-    fun computationTest() = bankSetup { db ->  
-        val conn = db.dbPool.getConnection().unwrap(PgConnection::class.java)
+    fun computationTest() = bankSetup { db -> db.conn { conn ->
         conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 100000 WHERE internal_payto_uri = '$customerPayto'")
         val stmt = conn.prepareStatement("""
             UPDATE libeufin_bank.bank_accounts 
@@ -125,9 +124,7 @@ class AmountTest {
             hasBalanceDebt = true,
             maxDebt = TalerAmount(0, 1, "KUDOS")
         ))
-
-
-    }
+    }}
 
     @Test
     fun parse() {

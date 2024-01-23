@@ -43,7 +43,6 @@ class ConfigLoading {
         val handle = TalerConfig(NEXUS_CONFIG_SOURCE)
         handle.load()
         val cfg = EbicsSetupConfig(handle)
-        cfg.config.requirePath("nexus-fetch", "statement_log_directory")
     }
 
 
