@@ -32,49 +32,8 @@ import tech.libeufin.common.*
 import tech.libeufin.ebics.*
 import tech.libeufin.ebics.ebics_h004.HTDResponseOrderData
 import java.time.Instant
-import kotlin.reflect.typeOf
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
+import java.nio.file.*
 import kotlin.io.path.*
-
-/**
- * Writes the JSON content to disk.  Used when we create or update
- * keys and other metadata JSON content to disk.  WARNING: this overrides
- * silently what's found under the given location!
- *
- * @param obj the class representing the JSON content to store to disk.
- * @param path where to store `obj`
- */
-inline fun <reified T> syncJsonToDisk(obj: T, path: String) {
-    val content = try {
-        myJson.encodeToString(obj)
-    } catch (e: Exception) {
-        throw Exception("Could not encode the input '${typeOf<T>()}' to JSON", e)
-    }
-    try {
-        // Write to temp file then rename to enable atomicity when possible
-        val path = Path(path).absolute()
-        val tmp = Files.createTempFile(path.parent, "tmp_", "_${path.fileName}")
-        tmp.writeText(content)
-        tmp.moveTo(path, StandardCopyOption.REPLACE_EXISTING);
-    } catch (e: Exception) {
-        throw Exception("Could not write JSON content at $path", e)
-    }
-}
-
-/**
- * Generates new client private keys.
- *
- * @return [ClientPrivateKeysFile]
- */
-fun generateNewKeys(): ClientPrivateKeysFile =
-    ClientPrivateKeysFile(
-        authentication_private_key = CryptoUtil.generateRsaKeyPair(2048).private,
-        encryption_private_key = CryptoUtil.generateRsaKeyPair(2048).private,
-        signature_private_key = CryptoUtil.generateRsaKeyPair(2048).private,
-        submitted_hia = false,
-        submitted_ini = false
-    )
 
 /**
  * Obtains the client private keys, regardless of them being
@@ -84,20 +43,15 @@ fun generateNewKeys(): ClientPrivateKeysFile =
  * @param path path to the file that contains the keys.
  * @return current or new client keys
  */
-private fun preparePrivateKeys(path: String): ClientPrivateKeysFile {
+private fun loadOrGenerateClientKeys(path: String): ClientPrivateKeysFile {
     // If exists load from disk
-    val current = loadPrivateKeysFromDisk(path)
+    val current = loadClientKeys(path)
     if (current != null) return current
     // Else create new keys
-    try {
-        val newKeys = generateNewKeys()
-        syncJsonToDisk(newKeys, path)
-        logger.info("New client keys created at: $path")
-        return newKeys
-    } catch (e: Exception) {
-        throw Exception("Could not create client keys at $path", e) 
-        // TODO Better log
-    }
+    val newKeys = generateNewKeys()
+    persistClientKeys(newKeys, path)
+    logger.info("New client private keys created at '$path'")
+    return newKeys
 }
 
 /**
@@ -159,7 +113,7 @@ private fun handleHpbResponse(
     val hpbObj = try {
         parseEbicsHpbOrder(hpbBytes)
     } catch (e: Exception) {
-        throw Exception("HPB response content seems invalid: e")
+        throw Exception("HPB response content seems invalid", e)
     }
     val encPub = try {
         CryptoUtil.loadRsaPublicKey(hpbObj.encryptionPubKey.encoded)
@@ -176,11 +130,7 @@ private fun handleHpbResponse(
         bank_encryption_public_key = encPub,
         accepted = false
     )
-    try {
-        syncJsonToDisk(json, cfg.bankPublicKeysFilename)
-    } catch (e: Exception) {
-        throw Exception("Failed to persist the bank keys to disk", e)
-    }
+    persistBankKeys(json, cfg.bankPublicKeysFilename)
 }
 
 /**
@@ -201,7 +151,7 @@ suspend fun doKeysRequestAndUpdateState(
     client: HttpClient,
     orderType: KeysOrderType
 ) {
-    logger.debug("Doing key request ${orderType.name}")
+    logger.info("Doing key request ${orderType.name}")
     val req = when(orderType) {
         KeysOrderType.INI -> generateIniMessage(cfg, privs)
         KeysOrderType.HIA -> generateHiaMessage(cfg, privs)
@@ -228,7 +178,7 @@ suspend fun doKeysRequestAndUpdateState(
         KeysOrderType.HPB -> return handleHpbResponse(cfg, ebics)
     }
     try {
-        syncJsonToDisk(privs, cfg.clientPrivateKeysFilename)
+        persistClientKeys(privs, cfg.clientPrivateKeysFilename)
     } catch (e: Exception) {
         throw Exception("Could not update the ${orderType.name} state on disk", e)
     }
@@ -286,7 +236,7 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
     override fun run() = cliCmd(logger, common.log) {
         val cfg = extractEbicsConfig(common.config)
         // Config is sane.  Go (maybe) making the private keys.
-        val clientKeys = preparePrivateKeys(cfg.clientPrivateKeysFilename)
+        val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysFilename)
         val httpClient = HttpClient()
         // Privs exist.  Upload their pubs
         val keysNotSub = !clientKeys.submitted_ini || !clientKeys.submitted_hia
@@ -330,7 +280,7 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
                 throw Exception("Cannot successfully finish the setup without accepting the bank keys.")
             }
             try {
-                syncJsonToDisk(bankKeysMaybe, cfg.bankPublicKeysFilename)
+                persistBankKeys(bankKeysMaybe, cfg.bankPublicKeysFilename)
             } catch (e: Exception) {
                 throw Exception("Could not set bank keys as accepted on disk.", e)
             }

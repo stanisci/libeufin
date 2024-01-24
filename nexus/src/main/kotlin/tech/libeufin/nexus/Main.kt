@@ -29,33 +29,13 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.versionOption
 import io.ktor.client.*
 import io.ktor.util.*
-import kotlinx.serialization.Contextual
-import kotlinx.serialization.KSerializer
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.io.File
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.modules.SerializersModule
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.common.*
-import java.security.interfaces.RSAPrivateCrtKey
-import java.security.interfaces.RSAPublicKey
-import java.io.FileNotFoundException
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
 val logger: Logger = LoggerFactory.getLogger("libeufin-nexus")
-val myJson = Json {
-    this.serializersModule = SerializersModule {
-        contextual(RSAPrivateCrtKey::class) { RSAPrivateCrtKeySerializer }
-        contextual(RSAPublicKey::class) { RSAPublicKeySerializer }
-    }
-}
 
 /**
  * Triple identifying one IBAN bank account.
@@ -208,130 +188,6 @@ class EbicsSetupConfig(val config: TalerConfig) {
         return@run this
     }
 }
-
-/**
- * Converts base 32 representation of RSA public keys and vice versa.
- */
-object RSAPublicKeySerializer : KSerializer<RSAPublicKey> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("RSAPublicKey", PrimitiveKind.STRING)
-    override fun serialize(encoder: Encoder, value: RSAPublicKey) {
-        encoder.encodeString(Base32Crockford.encode(value.encoded))
-    }
-
-    // Caller must handle exceptions here.
-    override fun deserialize(decoder: Decoder): RSAPublicKey {
-        val fieldValue = decoder.decodeString()
-        val bytes = Base32Crockford.decode(fieldValue)
-        return CryptoUtil.loadRsaPublicKey(bytes)
-    }
-}
-
-/**
- * Converts base 32 representation of RSA private keys and vice versa.
- */
-object RSAPrivateCrtKeySerializer : KSerializer<RSAPrivateCrtKey> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("RSAPrivateCrtKey", PrimitiveKind.STRING)
-    override fun serialize(encoder: Encoder, value: RSAPrivateCrtKey) {
-        encoder.encodeString(Base32Crockford.encode(value.encoded))
-    }
-
-    // Caller must handle exceptions here.
-    override fun deserialize(decoder: Decoder): RSAPrivateCrtKey {
-        val fieldValue = decoder.decodeString()
-        val bytes = Base32Crockford.decode(fieldValue)
-        return CryptoUtil.loadRsaPrivateKey(bytes)
-    }
-}
-
-/**
- * Structure of the JSON file that contains the client
- * private keys on disk.
- */
-@Serializable
-data class ClientPrivateKeysFile(
-    @Contextual val signature_private_key: RSAPrivateCrtKey,
-    @Contextual val encryption_private_key: RSAPrivateCrtKey,
-    @Contextual val authentication_private_key: RSAPrivateCrtKey,
-    var submitted_ini: Boolean,
-    var submitted_hia: Boolean
-)
-
-/**
- * Structure of the JSON file that contains the bank
- * public keys on disk.
- */
-@Serializable
-data class BankPublicKeysFile(
-    @Contextual val bank_encryption_public_key: RSAPublicKey,
-    @Contextual val bank_authentication_public_key: RSAPublicKey,
-    var accepted: Boolean
-)
-
-/**
- * Load client and bank keys from disk.
- * Checks that the keying process has been fully completed.
- * 
- * Helps to fail before starting to talk EBICS to the bank.
- *
- * @param cfg configuration handle.
- * @return both client and bank keys
- */
-fun expectFullKeys(
-    cfg: EbicsSetupConfig
-): Pair<ClientPrivateKeysFile, BankPublicKeysFile> {
-    val clientKeys = loadPrivateKeysFromDisk(cfg.clientPrivateKeysFilename)
-    if (clientKeys == null) {
-        throw Exception("Missing client private keys file at '${cfg.clientPrivateKeysFilename}', run 'libeufin-nexus ebics-setup' first")
-    } else if (!clientKeys.submitted_ini || !clientKeys.submitted_hia) {
-        throw Exception("Unsubmitted client private keys, run 'libeufin-nexus ebics-setup' first")
-    }
-    val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
-    if (bankKeys == null) {
-        throw Exception("Missing bank public keys at '${cfg.bankPublicKeysFilename}', run 'libeufin-nexus ebics-setup' first")
-    } else if (!bankKeys.accepted) {
-        throw Exception("Unaccepted bank public keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
-    }
-    return Pair(clientKeys, bankKeys)
-}
-
-private inline fun <reified T> loadJsonFile(path: String, name: String): T? {
-    val file = File(path)
-    val content = try {
-        file.readText()
-    } catch (e: Exception) {
-        // FileNotFoundException can be thrown if the file exists, but is not accessible...
-        when {
-            !file.exists() -> return null
-            !file.canRead() -> throw Exception("Could not read $name at '$path': permission denied")
-            else -> throw Exception("Could not read $name at '$path'", e)
-        }
-    }
-    return try {
-        myJson.decodeFromString(content)
-    } catch (e: Exception) {
-        throw Exception("Could not decode $name at '$path'", e)
-    }
-}
-
-/**
- * Load the bank keys file from disk.
- *
- * @param location the keys file location.
- * @return the internal JSON representation of the keys file,
- *         or null if the file does not exist
- */
-fun loadBankKeys(location: String): BankPublicKeysFile? = loadJsonFile(location, "bank public keys")
-
-/**
- * Load the client keys file from disk.
- *
- * @param location the keys file location.
- * @return the internal JSON representation of the keys file,
- *         or null if the file does not exist
- */
-fun loadPrivateKeysFromDisk(location: String): ClientPrivateKeysFile? = loadJsonFile(location, "client private keys")
 
 /**
  * Abstracts the config loading

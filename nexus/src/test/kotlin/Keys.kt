@@ -42,7 +42,7 @@ class PublicKeys {
             bank_encryption_public_key = CryptoUtil.generateRsaKeyPair(2028).public
         )
         // storing them on disk.
-        syncJsonToDisk(fileContent, "/tmp/nexus-tests-bank-keys.json")
+        persistBankKeys(fileContent, "/tmp/nexus-tests-bank-keys.json")
         // loading them and check that values are the same.
         val fromDisk = loadBankKeys("/tmp/nexus-tests-bank-keys.json")
         assertNotNull(fromDisk)
@@ -64,17 +64,6 @@ class PrivateKeys {
             f.delete()
     }
 
-    // Testing write failure due to insufficient permissions.
-    @Test
-    fun createWrongPermissions() {
-        f.writeText("won't be overridden")
-        f.setReadOnly()
-        try {
-            syncJsonToDisk(clientKeys, f.path)
-            throw Exception("Should have failed")
-        } catch (e: Exception) { }
-    }
-
     /**
      * Tests whether loading keys from disk yields the same
      * values that were stored to the file.
@@ -82,8 +71,8 @@ class PrivateKeys {
     @Test
     fun load() {
         assertFalse(f.exists())
-        syncJsonToDisk(clientKeys, f.path) // Artificially storing this to the file.
-        val fromDisk = loadPrivateKeysFromDisk(f.path) // loading it via the tested routine.
+        persistClientKeys(clientKeys, f.path) // Artificially storing this to the file.
+        val fromDisk = loadClientKeys(f.path) // loading it via the tested routine.
         assertNotNull(fromDisk)
         // Checking the values from disk match the initial object.
         assertTrue {
@@ -98,6 +87,6 @@ class PrivateKeys {
     // Testing failure on file not found.
     @Test
     fun loadNotFound() {
-        assertNull(loadPrivateKeysFromDisk("/tmp/highly-unlikely-to-be-found.json"))
+        assertNull(loadClientKeys("/tmp/highly-unlikely-to-be-found.json"))
     }
 }

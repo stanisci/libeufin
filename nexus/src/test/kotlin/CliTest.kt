@@ -52,8 +52,9 @@ class CliTest {
         val cfg = loadConfig(conf)
         val clientKeysPath = Path(cfg.requireString("nexus-ebics", "client_private_keys_file"))
         val bankKeysPath = Path(cfg.requireString("nexus-ebics", "bank_public_keys_file"))
-        clientKeysPath.parent?.createDirectories()
-        bankKeysPath.parent?.createDirectories()
+        clientKeysPath.parent!!.createDirectories()
+        clientKeysPath.parent!!.toFile().setWritable(true)
+        bankKeysPath.parent!!.createDirectories()
         
         // Missing client keys
         clientKeysPath.deleteIfExists()
@@ -71,13 +72,13 @@ class CliTest {
             nexusCmd.testErr("$cmd -c $conf", "Could not read client private keys at '$clientKeysPath': permission denied")
         }
         // Unfinished client
-        syncJsonToDisk(generateNewKeys(), clientKeysPath.toString())
+        persistClientKeys(generateNewKeys(), clientKeysPath.toString())
         for (cmd in cmds) {
             nexusCmd.testErr("$cmd -c $conf", "Unsubmitted client private keys, run 'libeufin-nexus ebics-setup' first")
         }
 
         // Missing bank keys
-        syncJsonToDisk(generateNewKeys().apply {
+        persistClientKeys(generateNewKeys().apply {
             submitted_hia = true
             submitted_ini = true
         }, clientKeysPath.toString())
@@ -96,7 +97,7 @@ class CliTest {
             nexusCmd.testErr("$cmd -c $conf", "Could not read bank public keys at '$bankKeysPath': permission denied")
         }
         // Unfinished bank
-        syncJsonToDisk(BankPublicKeysFile(
+        persistBankKeys(BankPublicKeysFile(
             bank_authentication_public_key = CryptoUtil.generateRsaKeyPair(2048).public,
             bank_encryption_public_key = CryptoUtil.generateRsaKeyPair(2048).public,
             accepted = false
@@ -104,5 +105,10 @@ class CliTest {
         for (cmd in cmds) {
             nexusCmd.testErr("$cmd -c $conf", "Unaccepted bank public keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
         }
+
+        // Missing permission
+        clientKeysPath.deleteIfExists()
+        clientKeysPath.parent!!.toFile().setWritable(false)
+        nexusCmd.testErr("ebics-setup -c $conf", "Could not write client private keys at '$clientKeysPath': permission denied on '${clientKeysPath.parent}'")
     }
 }
