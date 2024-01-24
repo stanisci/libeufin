@@ -203,17 +203,15 @@ fun extractEbicsConfig(configFile: String?): EbicsSetupConfig {
  */
 private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
     val pdf = generateKeysPdf(privs, cfg)
-    // TODO rewrite with a single file access
-    val pdfFile = Path("/tmp/libeufin-nexus-keys-${Instant.now().epochSecond}.pdf")
-    if (pdfFile.exists()) {
-        throw Exception("PDF file exists already at: ${pdfFile}, not overriding it")
-    }
+    val path = Path("/tmp/libeufin-nexus-keys-${Instant.now().epochSecond}.pdf")
     try {
-        pdfFile.writeBytes(pdf)
+        path.writeBytes(pdf, StandardOpenOption.CREATE_NEW)
     } catch (e: Exception) {
-        throw Exception("Could not write PDF to ${pdfFile}, detail: ${e.message}")
+        if (e is FileAlreadyExistsException) throw Exception("PDF file exists already at '$path', not overriding it")
+        throw Exception("Could not write PDF to '$path'", e)
     }
-    println("PDF file with keys hex encoding created at: $pdfFile")
+
+    println("PDF file with keys hex encoding created at: $path")
 }
 
 /**

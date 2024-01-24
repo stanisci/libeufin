@@ -129,8 +129,8 @@ private inline fun <reified T> persistJsonFile(obj: T, path: Path, name: String)
         tmp.moveTo(path, StandardCopyOption.REPLACE_EXISTING);
     } catch (e: Exception) {
         when {
-            !parent.toFile().canWrite() -> throw Exception("Could not write $name at '$path': permission denied on '$parent'")
-            !path.toFile().canWrite() -> throw Exception("Could not write $name at '$path': permission denied")
+            !parent.isWritable() -> throw Exception("Could not write $name at '$path': permission denied on '$parent'")
+            !path.isWritable() -> throw Exception("Could not write $name at '$path': permission denied")
             else -> throw Exception("Could not write $name at '$path'", e)
         }
     }

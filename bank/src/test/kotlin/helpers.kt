@@ -24,6 +24,7 @@ import io.ktor.http.*
 import io.ktor.server.testing.*
 import java.io.ByteArrayOutputStream
 import java.util.zip.DeflaterOutputStream
+import java.nio.file.*
 import kotlin.test.*
 import kotlin.io.path.*
 import kotlin.random.Random
@@ -301,14 +302,14 @@ suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
 }
 
 suspend fun tanCode(info: String): String? {
-    // TODO rewrite with only two files access
-    val file = Path("/tmp/tan-$info.txt")
-    if (file.exists()) {
+    try {
+        val file = Path("/tmp/tan-$info.txt")
         val code = file.readText()
         file.deleteExisting()
         return code;
-    } else {
-        return null
+    } catch (e: Exception) {
+        if (e is NoSuchFileException) return null
+        throw e
     }
 }
 
