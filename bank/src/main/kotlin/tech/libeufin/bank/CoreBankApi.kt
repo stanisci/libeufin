@@ -630,7 +630,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                         val tanScript = ctx.tanChannels.get(res.tanChannel) 
                             ?: throw unsupportedTanChannel(res.tanChannel)
                         val exitValue = withContext(Dispatchers.IO) {
-                            val process = ProcessBuilder(tanScript, res.tanInfo).start()
+                            val process = ProcessBuilder(tanScript.toString(), res.tanInfo).start()
                             try {
                                 process.outputWriter().use { it.write(res.tanCode) }
                                 process.onExit().await()

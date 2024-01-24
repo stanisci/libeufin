@@ -30,12 +30,10 @@ import com.github.ajalt.clikt.testing.*
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import kotlin.test.*
-import java.io.File
-import java.nio.file.*
+import kotlin.io.path.*
 import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import io.ktor.client.request.*
-import kotlin.io.path.*
 
 fun randBytes(lenght: Int): ByteArray {
     val bytes = ByteArray(lenght)
@@ -85,8 +83,8 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
             val ebicsFlags = "$flags --transient --debug-ebics test/$name"
             val cfg = loadConfig(conf)
 
-            val clientKeysPath = Path(cfg.requirePath("nexus-ebics", "client_private_keys_file"))
-            val bankKeysPath = Path(cfg.requirePath("nexus-ebics", "bank_public_keys_file"))
+            val clientKeysPath = cfg.requirePath("nexus-ebics", "client_private_keys_file")
+            val bankKeysPath = cfg.requirePath("nexus-ebics", "bank_public_keys_file")
         
             var hasClientKeys = clientKeysPath.exists()
             var hasBankKeys = bankKeysPath.exists()

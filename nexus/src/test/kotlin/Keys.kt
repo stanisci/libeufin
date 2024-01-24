@@ -20,7 +20,7 @@
 import org.junit.Test
 import tech.libeufin.nexus.*
 import tech.libeufin.common.CryptoUtil
-import java.io.File
+import kotlin.io.path.*
 import kotlin.test.*
 
 class PublicKeys {
@@ -42,9 +42,9 @@ class PublicKeys {
             bank_encryption_public_key = CryptoUtil.generateRsaKeyPair(2028).public
         )
         // storing them on disk.
-        persistBankKeys(fileContent, "/tmp/nexus-tests-bank-keys.json")
+        persistBankKeys(fileContent, Path("/tmp/nexus-tests-bank-keys.json"))
         // loading them and check that values are the same.
-        val fromDisk = loadBankKeys("/tmp/nexus-tests-bank-keys.json")
+        val fromDisk = loadBankKeys(Path("/tmp/nexus-tests-bank-keys.json"))
         assertNotNull(fromDisk)
         assertTrue {
             fromDisk.accepted &&
@@ -54,14 +54,13 @@ class PublicKeys {
     }
     @Test
     fun loadNotFound() {
-        assertNull(loadBankKeys("/tmp/highly-unlikely-to-be-found.json"))
+        assertNull(loadBankKeys(Path("/tmp/highly-unlikely-to-be-found.json")))
     }
 }
 class PrivateKeys {
-    val f = File("/tmp/nexus-privs-test.json")
+    val f = Path("/tmp/nexus-privs-test.json")
     init {
-        if (f.exists())
-            f.delete()
+        f.deleteIfExists()
     }
 
     /**
@@ -70,9 +69,9 @@ class PrivateKeys {
      */
     @Test
     fun load() {
-        assertFalse(f.exists())
-        persistClientKeys(clientKeys, f.path) // Artificially storing this to the file.
-        val fromDisk = loadClientKeys(f.path) // loading it via the tested routine.
+        assert(f.notExists())
+        persistClientKeys(clientKeys, f) // Artificially storing this to the file.
+        val fromDisk = loadClientKeys(f) // loading it via the tested routine.
         assertNotNull(fromDisk)
         // Checking the values from disk match the initial object.
         assertTrue {
@@ -87,6 +86,6 @@ class PrivateKeys {
     // Testing failure on file not found.
     @Test
     fun loadNotFound() {
-        assertNull(loadClientKeys("/tmp/highly-unlikely-to-be-found.json"))
+        assertNull(loadClientKeys(Path("/tmp/highly-unlikely-to-be-found.json")))
     }
 }

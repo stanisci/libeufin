@@ -20,6 +20,7 @@
 import org.junit.Test
 import kotlin.test.assertEquals
 import tech.libeufin.common.*
+import kotlin.io.path.*
 
 class TalerConfigTest {
 
@@ -54,10 +55,10 @@ class TalerConfigTest {
         conf.putValueString("foo", "bar2", "baz")
 
         assertEquals("baz", conf.lookupString("foo", "bar"))
-        assertEquals("baz", conf.lookupPath("foo", "bar"))
+        assertEquals(Path("baz"), conf.lookupPath("foo", "bar"))
 
         conf.putValueString("foo", "dir1", "foo/\$DATADIR/bar")
 
-        assertEquals("foo/mydir/bar", conf.lookupPath("foo", "dir1"))
+        assertEquals(Path("foo/mydir/bar"), conf.lookupPath("foo", "dir1"))
     }
 }

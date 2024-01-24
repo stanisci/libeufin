@@ -22,6 +22,8 @@ import tech.libeufin.common.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import tech.libeufin.common.DatabaseConfig
+import java.nio.file.*
+import kotlin.io.path.*
 
 /**
  * Application the parsed configuration.
@@ -46,8 +48,8 @@ data class BankConfig(
     val allowConversion: Boolean,
     val fiatCurrency: String?,
     val fiatCurrencySpec: CurrencySpecification?,
-    val spaPath: String?,
-    val tanChannels: Map<TanChannel, String> 
+    val spaPath: Path?,
+    val tanChannels: Map<TanChannel, Path> 
 )
 
 @Serializable
@@ -101,7 +103,7 @@ fun TalerConfig.loadBankConfig(): BankConfig  {
     }
     val tanChannels = buildMap {
         for (channel in TanChannel.entries) {
-            lookupPath("libeufin-bank", "tan_$channel")?.notEmptyOrNull()?.let {
+            lookupPath("libeufin-bank", "tan_$channel")?.let {
                 put(channel, it)
             }
         }

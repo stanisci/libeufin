@@ -29,14 +29,8 @@ import tech.libeufin.nexus.ebics.EbicsSideException
 import tech.libeufin.nexus.ebics.EbicsUploadException
 import tech.libeufin.nexus.ebics.submitPain001
 import tech.libeufin.common.*
-import java.io.File
-import java.nio.file.Path
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
+import java.time.*
 import java.util.*
-import kotlin.io.path.createDirectories
-import kotlin.io.path.*
 
 /**
  * Possible stages when an error may occur.  These stages

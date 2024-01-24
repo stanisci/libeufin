@@ -50,8 +50,8 @@ class CliTest {
         val allCmds = listOf("ebics-submit", "ebics-fetch", "ebics-setup")
         val conf = "conf/test.conf"
         val cfg = loadConfig(conf)
-        val clientKeysPath = Path(cfg.requireString("nexus-ebics", "client_private_keys_file"))
-        val bankKeysPath = Path(cfg.requireString("nexus-ebics", "bank_public_keys_file"))
+        val clientKeysPath = cfg.requirePath("nexus-ebics", "client_private_keys_file")
+        val bankKeysPath = cfg.requirePath("nexus-ebics", "bank_public_keys_file")
         clientKeysPath.parent!!.createDirectories()
         clientKeysPath.parent!!.toFile().setWritable(true)
         bankKeysPath.parent!!.createDirectories()
@@ -72,7 +72,7 @@ class CliTest {
             nexusCmd.testErr("$cmd -c $conf", "Could not read client private keys at '$clientKeysPath': permission denied")
         }
         // Unfinished client
-        persistClientKeys(generateNewKeys(), clientKeysPath.toString())
+        persistClientKeys(generateNewKeys(), clientKeysPath)
         for (cmd in cmds) {
             nexusCmd.testErr("$cmd -c $conf", "Unsubmitted client private keys, run 'libeufin-nexus ebics-setup' first")
         }
@@ -81,7 +81,7 @@ class CliTest {
         persistClientKeys(generateNewKeys().apply {
             submitted_hia = true
             submitted_ini = true
-        }, clientKeysPath.toString())
+        }, clientKeysPath)
         bankKeysPath.deleteIfExists()
         for (cmd in cmds) {
             nexusCmd.testErr("$cmd -c $conf", "Missing bank public keys at '$bankKeysPath', run 'libeufin-nexus ebics-setup' first")
@@ -101,7 +101,7 @@ class CliTest {
             bank_authentication_public_key = CryptoUtil.generateRsaKeyPair(2048).public,
             bank_encryption_public_key = CryptoUtil.generateRsaKeyPair(2048).public,
             accepted = false
-        ), bankKeysPath.toString())
+        ), bankKeysPath)
         for (cmd in cmds) {
             nexusCmd.testErr("$cmd -c $conf", "Unaccepted bank public keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
         }

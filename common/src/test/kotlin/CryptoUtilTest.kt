@@ -19,8 +19,8 @@
 
 import org.junit.Ignore
 import org.junit.Test
+import kotlin.io.path.*
 import tech.libeufin.common.*
-import java.io.File
 import java.security.KeyPairGenerator
 import java.security.interfaces.RSAPrivateCrtKey
 import java.util.*
@@ -179,7 +179,7 @@ class CryptoUtilTest {
     fun gnunetEncodeCheck() {
         val blob = ByteArray(30)
         Random().nextBytes(blob)
-        val b = File("/tmp/libeufin-blob.bin")
+        val b = Path("/tmp/libeufin-blob.bin")
         b.writeBytes(blob)
         val enc = Base32Crockford.encode(blob)
         // The following output needs to match the one from
@@ -194,8 +194,8 @@ class CryptoUtilTest {
     @Ignore
     fun gnunetDecodeCheck() {
         // condition: "gnunet-base32 -d /tmp/blob.enc" needs to decode to /tmp/blob.bin
-        val blob = File("/tmp/blob.bin").readBytes()
-        val blobEnc = File("/tmp/blob.enc").readText(Charsets.UTF_8)
+        val blob = Path("/tmp/blob.bin").readBytes()
+        val blobEnc = Path("/tmp/blob.enc").readText(Charsets.UTF_8)
         val dec = Base32Crockford.decode(blobEnc)
         assertTrue(blob.contentEquals(dec))
     }

@@ -23,9 +23,9 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import java.io.ByteArrayOutputStream
-import java.io.File
 import java.util.zip.DeflaterOutputStream
 import kotlin.test.*
+import kotlin.io.path.*
 import kotlin.random.Random
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
@@ -66,7 +66,7 @@ fun setup(
                 initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
                 resetDatabaseTables(conn, dbCfg, "libeufin-bank")
                 initializeDatabaseTables(conn, dbCfg, "libeufin-bank")
-                val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
+                val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
                 conn.execSQLUpdate(sqlProcedures.readText())
             }
             lambda(it, ctx)
@@ -301,10 +301,11 @@ suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
 }
 
 suspend fun tanCode(info: String): String? {
-    val file = File("/tmp/tan-$info.txt");
+    // TODO rewrite with only two files access
+    val file = Path("/tmp/tan-$info.txt")
     if (file.exists()) {
         val code = file.readText()
-        file.delete()
+        file.deleteExisting()
         return code;
     } else {
         return null

@@ -24,7 +24,8 @@ import org.postgresql.jdbc.PgConnection
 import org.postgresql.util.PSQLState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.io.File
+import kotlin.io.path.*
+import java.nio.file.*
 import java.net.URI
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -100,7 +101,7 @@ fun getJdbcConnectionFromPg(pgConn: String): String {
 
 data class DatabaseConfig(
     val dbConnStr: String,
-    val sqlDir: String
+    val sqlDir: Path
 )
 
 fun pgDataSource(dbConfig: String): PGSimpleDataSource {
@@ -219,7 +220,7 @@ fun maybeApplyV(conn: PgConnection, cfg: DatabaseConfig) {
         )
         if (!checkVSchema.executeQueryCheck()) {
             logger.debug("_v schema not found, applying versioning.sql")
-            val sqlVersioning = File("${cfg.sqlDir}/versioning.sql").readText()
+            val sqlVersioning = Path("${cfg.sqlDir}/versioning.sql").readText()
             conn.execSQLUpdate(sqlVersioning)
         }
     }
@@ -243,7 +244,7 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
                 continue
             }
 
-            val path = File("${cfg.sqlDir}/$sqlFilePrefix-$numStr.sql")
+            val path = Path("${cfg.sqlDir}/$sqlFilePrefix-$numStr.sql")
             if (!path.exists()) {
                 logger.info("path $path doesn't exist anymore, stopping")
                 break
@@ -252,7 +253,7 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
             val sqlPatchText = path.readText()
             conn.execSQLUpdate(sqlPatchText)
         }
-        val sqlProcedures = File("${cfg.sqlDir}/$sqlFilePrefix-procedures.sql")
+        val sqlProcedures = Path("${cfg.sqlDir}/$sqlFilePrefix-procedures.sql")
         if (!sqlProcedures.exists()) {
             logger.info("no procedures.sql for the SQL collection: $sqlFilePrefix")
             return@transaction
@@ -276,7 +277,7 @@ fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: 
         return
     }
 
-    val sqlDrop = File("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
+    val sqlDrop = Path("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
     conn.execSQLUpdate(sqlDrop)
 }
 

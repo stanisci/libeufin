@@ -21,11 +21,8 @@ package tech.libeufin.common
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.io.File
-import java.nio.file.Paths
-import kotlin.io.path.Path
-import kotlin.io.path.isReadable
-import kotlin.io.path.listDirectoryEntries
+import kotlin.io.path.*
+import java.nio.file.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
@@ -82,7 +79,7 @@ class TalerConfig(
     private val installPathBinary = configSource.installPathBinary
     val sections: Set<String> get() = sectionMap.keys
 
-    private fun internalLoadFromString(s: String, sourceFilename: String?) {
+    private fun internalLoadFromString(s: String, source: Path?) {
         val lines = s.lines()
         var lineNum = 0
         var currentSection: String? = null
@@ -97,22 +94,20 @@ class TalerConfig(
 
             val directiveMatch = reDirective.matchEntire(line)
             if (directiveMatch != null) {
-                if (sourceFilename == null) {
+                if (source == null) {
                     throw TalerConfigError("Directives are only supported when loading from file")
                 }
                 val directiveName = directiveMatch.groups[1]!!.value.lowercase()
                 val directiveArg = directiveMatch.groups[2]!!.value
                 when (directiveName) {
                     "inline" -> {
-                        val innerFilename = normalizeInlineFilename(sourceFilename, directiveArg.trim())
+                        val innerFilename = source.resolveSibling(directiveArg.trim())
                         this.loadFromFilename(innerFilename)
                     }
-
                     "inline-matching" -> {
                         val glob = directiveArg.trim()
-                        this.loadFromGlob(sourceFilename, glob)
+                        this.loadFromGlob(source, glob)
                     }
-
                     "inline-secret" -> {
                         val arg = directiveArg.trim()
                         val sp = arg.split(" ")
@@ -120,7 +115,7 @@ class TalerConfig(
                             throw TalerConfigError("invalid configuration, @inline-secret@ directive requires exactly two arguments")
                         }
                         val sectionName = sp[0]
-                        val secretFilename = normalizeInlineFilename(sourceFilename, sp[1])
+                        val secretFilename = source.resolveSibling(sp[1])
                         loadSecret(sectionName, secretFilename)
                     }
 
@@ -152,42 +147,19 @@ class TalerConfig(
                 section.entries[optName] = optVal
                 continue
             }
-            throw TalerConfigError("expected section header, option assignment or directive in line $lineNum file ${sourceFilename ?: "<input>"}")
+            throw TalerConfigError("expected section header, option assignment or directive in line $lineNum file ${source ?: "<input>"}")
         }
     }
 
-    private fun loadFromGlob(parentFilename: String, glob: String) {
-        val fullFileglob: String
-        val parentDir = Path(parentFilename).parent!!.toString()
-        if (glob.startsWith("/")) {
-            fullFileglob = glob
-        } else {
-            fullFileglob = Paths.get(parentDir, glob).toString()
-        }
-
-        val head = Path(fullFileglob).parent.toString()
-        val tail = Path(fullFileglob).fileName.toString()
-
+    private fun loadFromGlob(source: Path, glob: String) {
         // FIXME: Check that the Kotlin glob matches the glob from our spec
-        for (entry in Path(head).listDirectoryEntries(tail)) {
-            loadFromFilename(entry.toString())
+        for (entry in source.parent.listDirectoryEntries(glob)) {
+            loadFromFilename(entry)
         }
     }
 
-    private fun normalizeInlineFilename(parentFilename: String, f: String): String {
-        if (f[0] == '/') {
-            return f
-        }
-        val parentDirPath = Path(parentFilename).toRealPath().parent
-        if (parentDirPath == null) {
-            throw TalerConfigError("unable to normalize inline path, cannot resolve parent directory of $parentFilename")
-        }
-        val parentDir = parentDirPath.toString()
-        return Paths.get(parentDir, f).toRealPath().toString()
-    }
-
-    private fun loadSecret(sectionName: String, secretFilename: String) {
-        if (!Path(secretFilename).isReadable()) {
+    private fun loadSecret(sectionName: String, secretFilename: Path) {
+        if (!secretFilename.isReadable()) {
             logger.warn("unable to read secrets from $secretFilename")
         } else {
             this.loadFromFilename(secretFilename)
@@ -245,15 +217,13 @@ class TalerConfig(
      * Read values into the configuration from the given entry point
      * filename.  Defaults are *not* loaded automatically.
      */
-    fun loadFromFilename(filename: String) {
-        val f = File(filename)
-        val contents = f.readText()
-        internalLoadFromString(contents, filename)
+    fun loadFromFilename(path: Path) {
+        internalLoadFromString(path.readText(), path)
     }
 
-    private fun loadDefaultsFromDir(dirname: String) {
-        for (filePath in Path(dirname).listDirectoryEntries()) {
-            loadFromFilename(filePath.toString())
+    private fun loadDefaultsFromDir(dirname: Path) {
+        for (filePath in dirname.listDirectoryEntries()) {
+            loadFromFilename(filePath)
         }
     }
 
@@ -263,26 +233,26 @@ class TalerConfig(
      */
     fun loadDefaults() {
         val installDir = getInstallPath()
-        val baseConfigDir = Paths.get(installDir, "share/$projectName/config.d").toString()
-        setSystemDefault("PATHS", "PREFIX", "${installDir}/")
-        setSystemDefault("PATHS", "BINDIR", "${installDir}/bin/")
-        setSystemDefault("PATHS", "LIBEXECDIR", "${installDir}/$projectName/libexec/")
-        setSystemDefault("PATHS", "DOCDIR", "${installDir}/share/doc/$projectName/")
-        setSystemDefault("PATHS", "ICONDIR", "${installDir}/share/icons/")
-        setSystemDefault("PATHS", "LOCALEDIR", "${installDir}/share/locale/")
-        setSystemDefault("PATHS", "LIBDIR", "${installDir}/lib/$projectName/")
-        setSystemDefault("PATHS", "DATADIR", "${installDir}/share/$projectName/")
+        val baseConfigDir = Path(installDir, "share/$projectName/config.d")
+        setSystemDefault("PATHS", "PREFIX", "$installDir/")
+        setSystemDefault("PATHS", "BINDIR", "$installDir/bin/")
+        setSystemDefault("PATHS", "LIBEXECDIR", "$installDir/$projectName/libexec/")
+        setSystemDefault("PATHS", "DOCDIR", "$installDir/share/doc/$projectName/")
+        setSystemDefault("PATHS", "ICONDIR", "$installDir/share/icons/")
+        setSystemDefault("PATHS", "LOCALEDIR", "$installDir/share/locale/")
+        setSystemDefault("PATHS", "LIBDIR", "$installDir/lib/$projectName/")
+        setSystemDefault("PATHS", "DATADIR", "$installDir/share/$projectName/")
         loadDefaultsFromDir(baseConfigDir)
     }
 
-    private fun variableLookup(x: String, recursionDepth: Int = 0): String? {
+    private fun variableLookup(x: String, recursionDepth: Int = 0): Path? {
         val pathRes = this.lookupString("PATHS", x)
         if (pathRes != null) {
             return pathsub(pathRes, recursionDepth + 1)
         }
         val envVal = System.getenv(x)
         if (envVal != null) {
-            return envVal
+            return Path(envVal)
         }
         return null
     }
@@ -294,7 +264,7 @@ class TalerConfig(
      *
      * This substitution is typically only done for paths.
      */
-    fun pathsub(x: String, recursionDepth: Int = 0): String {
+    fun pathsub(x: String, recursionDepth: Int = 0): Path {
         if (recursionDepth > 128) {
             throw TalerConfigError("recursion limit in path substitution exceeded")
         }
@@ -372,7 +342,7 @@ class TalerConfig(
                 l = varEnd
             }
         }
-        return result.toString()
+        return Path(result.toString())
     }
 
     /**
@@ -383,7 +353,7 @@ class TalerConfig(
     fun load(entrypoint: String? = null) {
         loadDefaults()
         if (entrypoint != null) {
-            loadFromFilename(entrypoint)
+            loadFromFilename(Path(entrypoint))
         } else {
             val defaultFilename = findDefaultConfigFilename()
             if (defaultFilename != null) {
@@ -397,25 +367,25 @@ class TalerConfig(
      *
      * If no such file can be found, return null.
      */
-    private fun findDefaultConfigFilename(): String? {
+    private fun findDefaultConfigFilename(): Path? {
         val xdg = System.getenv("XDG_CONFIG_HOME")
         val home = System.getenv("HOME")
 
-        var filename: String? = null
+        var filename: Path? = null
         if (xdg != null) {
-            filename = Paths.get(xdg, "$componentName.conf").toString()
+            filename = Path(xdg, "$componentName.conf")
         } else if (home != null) {
-            filename = Paths.get(home, ".config/$componentName.conf").toString()
+            filename = Path(home, ".config/$componentName.conf")
         }
-        if (filename != null && File(filename).exists()) {
+        if (filename != null && filename.exists()) {
             return filename
         }
-        val etc1 = "/etc/$componentName.conf"
-        if (File(etc1).exists()) {
+        val etc1 = Path("/etc/$componentName.conf")
+        if (etc1.exists()) {
             return etc1
         }
-        val etc2 = "/etc/$projectName/$componentName.conf"
-        if (File(etc2).exists()) {
+        val etc2 = Path("/etc/$projectName/$componentName.conf")
+        if (etc2.exists()) {
             return etc2
         }
         return null
@@ -436,9 +406,9 @@ class TalerConfig(
         val pathEnv = System.getenv("PATH")
         val paths = pathEnv.split(":")
         for (p in paths) {
-            val possiblePath = Paths.get(p, name).toString()
-            if (File(possiblePath).exists()) {
-                return Paths.get(p, "..").toRealPath().toString()
+            val possiblePath = Path(p, name)
+            if (possiblePath.exists()) {
+                return Path(p, "..").toRealPath().toString()
             }
         }
         return "/usr"
@@ -478,12 +448,12 @@ class TalerConfig(
         lookupBoolean(section, option) ?:
             throw TalerConfigError("expected boolean in configuration section $section option $option")
 
-    fun lookupPath(section: String, option: String): String? {
+    fun lookupPath(section: String, option: String): Path? {
         val entry = lookupString(section, option) ?: return null
         return pathsub(entry)
     }
 
-    fun requirePath(section: String, option: String): String  =
+    fun requirePath(section: String, option: String): Path =
         lookupPath(section, option) ?:
             throw TalerConfigError("expected path for section $section option $option")
 }

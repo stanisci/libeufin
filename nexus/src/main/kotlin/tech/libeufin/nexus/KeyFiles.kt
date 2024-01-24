@@ -29,8 +29,6 @@ import java.security.interfaces.RSAPublicKey
 import tech.libeufin.common.*
 import java.nio.file.*
 import kotlin.io.path.*
-import java.io.File
-import kotlin.reflect.typeOf
 
 val JSON = Json {
     this.serializersModule = SerializersModule {
@@ -113,15 +111,14 @@ fun generateNewKeys(): ClientPrivateKeysFile =
         submitted_ini = false
     )
 
-private inline fun <reified T> persistJsonFile(obj: T, path: String, name: String) {
+private inline fun <reified T> persistJsonFile(obj: T, path: Path, name: String) {
     val content = try {
         JSON.encodeToString(obj)
     } catch (e: Exception) {
-        throw Exception("Could not encode '${typeOf<T>()}' to JSON", e)
+        throw Exception("Could not encode $name", e)
     }
-    val (path, parent) = try {
-        val path = Path(path)
-        Pair(path, path.parent ?: path.absolute().parent)
+    val parent = try {
+        path.parent ?: path.absolute().parent
     } catch (e: Exception) {
         throw Exception("Could not write $name at '$path'", e)
     }
@@ -136,7 +133,6 @@ private inline fun <reified T> persistJsonFile(obj: T, path: String, name: Strin
             !path.toFile().canWrite() -> throw Exception("Could not write $name at '$path': permission denied")
             else -> throw Exception("Could not write $name at '$path'", e)
         }
-        throw Exception("Could not write $name at '$path'", e)
     }
 }
 
@@ -145,19 +141,18 @@ private inline fun <reified T> persistJsonFile(obj: T, path: String, name: Strin
  *
  * @param location the keys file location
  */
-fun persistBankKeys(keys: BankPublicKeysFile, location: String) = persistJsonFile(keys, location, "bank public keys")
+fun persistBankKeys(keys: BankPublicKeysFile, location: Path) = persistJsonFile(keys, location, "bank public keys")
 
 /**
  * Persist the client keys file to disk
  *
  * @param location the keys file location
  */
-fun persistClientKeys(keys: ClientPrivateKeysFile, location: String) = persistJsonFile(keys, location, "client private keys")
+fun persistClientKeys(keys: ClientPrivateKeysFile, location: Path) = persistJsonFile(keys, location, "client private keys")
 
 
-private inline fun <reified T> loadJsonFile(path: String, name: String): T? {
+private inline fun <reified T> loadJsonFile(path: Path, name: String): T? {
     val content = try {
-        val path = Path(path)
         path.readText()
     } catch (e: Exception) {
         when {
@@ -180,7 +175,7 @@ private inline fun <reified T> loadJsonFile(path: String, name: String): T? {
  * @return the internal JSON representation of the keys file,
  *         or null if the file does not exist
  */
-fun loadBankKeys(location: String): BankPublicKeysFile? = loadJsonFile(location, "bank public keys")
+fun loadBankKeys(location: Path): BankPublicKeysFile? = loadJsonFile(location, "bank public keys")
 
 /**
  * Load the client keys file from disk.
@@ -189,7 +184,7 @@ fun loadBankKeys(location: String): BankPublicKeysFile? = loadJsonFile(location,
  * @return the internal JSON representation of the keys file,
  *         or null if the file does not exist
  */
-fun loadClientKeys(location: String): ClientPrivateKeysFile? = loadJsonFile(location, "client private keys")
+fun loadClientKeys(location: Path): ClientPrivateKeysFile? = loadJsonFile(location, "client private keys")
 
 /**
  * Load client and bank keys from disk.

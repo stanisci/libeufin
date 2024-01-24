@@ -26,9 +26,7 @@ import kotlinx.coroutines.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.common.*
 import tech.libeufin.ebics.ebics_h005.Ebics3Request
-import java.io.File
 import java.io.IOException
-import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId

@@ -27,11 +27,8 @@ import tech.libeufin.nexus.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.ebics.XMLUtil
 import tech.libeufin.ebics.ebics_h004.EbicsUnsecuredRequest
-import java.io.File
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import kotlin.test.*
+import kotlin.io.path.*
 
 class Ebics {
     // Checks XML is valid and INI.
@@ -83,6 +80,6 @@ class Ebics {
     @Test
     fun keysPdf() {
         val pdf = generateKeysPdf(clientKeys, config)
-        File("/tmp/libeufin-nexus-test-keys.pdf").writeBytes(pdf)
+        Path("/tmp/libeufin-nexus-test-keys.pdf").writeBytes(pdf)
     }
 }

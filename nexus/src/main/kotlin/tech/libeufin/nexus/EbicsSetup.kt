@@ -25,15 +25,14 @@ import com.github.ajalt.clikt.parameters.groups.*
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
 import tech.libeufin.ebics.ebics_h004.EbicsTypes
-import java.io.File
 import kotlinx.serialization.encodeToString
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.common.*
 import tech.libeufin.ebics.*
 import tech.libeufin.ebics.ebics_h004.HTDResponseOrderData
 import java.time.Instant
-import java.nio.file.*
 import kotlin.io.path.*
+import java.nio.file.*
 
 /**
  * Obtains the client private keys, regardless of them being
@@ -43,7 +42,7 @@ import kotlin.io.path.*
  * @param path path to the file that contains the keys.
  * @return current or new client keys
  */
-private fun loadOrGenerateClientKeys(path: String): ClientPrivateKeysFile {
+private fun loadOrGenerateClientKeys(path: Path): ClientPrivateKeysFile {
     // If exists load from disk
     val current = loadClientKeys(path)
     if (current != null) return current
@@ -204,9 +203,10 @@ fun extractEbicsConfig(configFile: String?): EbicsSetupConfig {
  */
 private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
     val pdf = generateKeysPdf(privs, cfg)
-    val pdfFile = File("/tmp/libeufin-nexus-keys-${Instant.now().epochSecond}.pdf")
+    // TODO rewrite with a single file access
+    val pdfFile = Path("/tmp/libeufin-nexus-keys-${Instant.now().epochSecond}.pdf")
     if (pdfFile.exists()) {
-        throw Exception("PDF file exists already at: ${pdfFile.path}, not overriding it")
+        throw Exception("PDF file exists already at: ${pdfFile}, not overriding it")
     }
     try {
         pdfFile.writeBytes(pdf)
@@ -249,8 +249,8 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         // Eject PDF if the keys were submitted for the first time, or the user asked.
         if (keysNotSub || generateRegistrationPdf) makePdf(clientKeys, cfg)
         // Checking if the bank keys exist on disk.
-        val bankKeysFile = File(cfg.bankPublicKeysFilename)
-        if (!bankKeysFile.exists()) {
+        var bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
+        if (bankKeys == null) {
             runBlocking {
                 try {
                     doKeysRequestAndUpdateState(
@@ -264,23 +264,19 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
                 }
             }
             logger.info("Bank keys stored at ${cfg.bankPublicKeysFilename}")
-        }
-        // bank keys made it to the disk, check if they're accepted.
-        val bankKeysMaybe = loadBankKeys(cfg.bankPublicKeysFilename)
-        if (bankKeysMaybe == null) {
-            throw Exception("Although previous checks, could not load the bank keys file from: ${cfg.bankPublicKeysFilename}")
+            bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)!!
         }
 
-        if (!bankKeysMaybe.accepted) {
+        if (!bankKeys.accepted) {
             // Finishing the setup by accepting the bank keys.
-            if (autoAcceptKeys) bankKeysMaybe.accepted = true
-            else bankKeysMaybe.accepted = askUserToAcceptKeys(bankKeysMaybe)
+            if (autoAcceptKeys) bankKeys.accepted = true
+            else bankKeys.accepted = askUserToAcceptKeys(bankKeys)
 
-            if (!bankKeysMaybe.accepted) {
+            if (!bankKeys.accepted) {
                 throw Exception("Cannot successfully finish the setup without accepting the bank keys.")
             }
             try {
-                persistBankKeys(bankKeysMaybe, cfg.bankPublicKeysFilename)
+                persistBankKeys(bankKeys, cfg.bankPublicKeysFilename)
             } catch (e: Exception) {
                 throw Exception("Could not set bank keys as accepted on disk.", e)
             }

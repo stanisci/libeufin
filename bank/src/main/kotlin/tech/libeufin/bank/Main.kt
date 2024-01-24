@@ -44,7 +44,6 @@ import java.time.Duration
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
 import java.sql.SQLException
-import java.io.File
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.*
@@ -55,6 +54,7 @@ import org.postgresql.util.PSQLState
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.bank.db.*
 import tech.libeufin.common.*
+import kotlin.io.path.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 // Dirty local variable to stop the server in test TODO remove this ugly hack
@@ -214,7 +214,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
             get("/") {
                 call.respondRedirect("/webui/")
             }
-            staticFiles("/webui/", File(it))
+            staticFiles("/webui/", it.toFile())
         }
     }
 }
@@ -272,14 +272,14 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
                         throw Exception("Account is not an exchange: an exchange account named 'exchange' is required for conversion to be enabled")
                     }
                     logger.info("Ensure conversion is enabled")
-                    val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
+                    val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
                     if (!sqlProcedures.exists()) {
                         throw Exception("Missing libeufin-conversion-setup.sql file")
                     }
                     db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
                 } else {
                     logger.info("Ensure conversion is disabled")
-                    val sqlProcedures = File("${dbCfg.sqlDir}/libeufin-conversion-drop.sql")
+                    val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-drop.sql")
                     if (!sqlProcedures.exists()) {
                         throw Exception("Missing libeufin-conversion-drop.sql file")
                     }

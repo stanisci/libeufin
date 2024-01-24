@@ -23,7 +23,6 @@ import tech.libeufin.nexus.*
 import tech.libeufin.nexus.Database as NexusDb
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.common.*
-import java.io.File
 import java.time.Instant
 import java.util.Arrays
 import java.sql.SQLException
@@ -32,6 +31,7 @@ import com.github.ajalt.clikt.testing.test
 import com.github.ajalt.clikt.core.CliktCommand
 import org.postgresql.jdbc.PgConnection
 import kotlin.test.*
+import kotlin.io.path.*
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
@@ -142,7 +142,7 @@ class IntegrationTest {
             val fiatPayTo = IbanPayto(genIbanPaytoUri())
     
             // Load conversion setup manually as the server would refuse to start without an exchange account
-            val sqlProcedures = File("../database-versioning/libeufin-conversion-setup.sql")
+            val sqlProcedures = Path("../database-versioning/libeufin-conversion-setup.sql")
             db.conn { 
                 it.execSQLUpdate(sqlProcedures.readText())
                 it.execSQLUpdate("SET search_path TO libeufin_nexus;")

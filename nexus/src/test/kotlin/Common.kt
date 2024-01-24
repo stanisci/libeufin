@@ -43,7 +43,7 @@ fun prepDb(cfg: TalerConfig): Database {
     cfg.loadDefaults()
     val dbCfg = DatabaseConfig(
         dbConnStr = "postgresql:///libeufincheck",
-        sqlDir = cfg.requirePath("paths", "datadir") + "sql"
+        sqlDir = cfg.requirePath("paths", "datadir").resolve("sql")
     )
     pgDataSource(dbCfg.dbConnStr).pgConnection().use { conn ->
         println("SQL dir for testing: ${dbCfg.sqlDir}")
