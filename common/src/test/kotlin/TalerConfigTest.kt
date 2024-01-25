@@ -27,9 +27,7 @@ class TalerConfigTest {
     @Test
     fun parsing() {
         // We assume that libeufin-bank is installed. We could also try to locate the source tree here.
-        val conf = TalerConfig(ConfigSource("libeufin", "libeufin-bank", "libeufin-bank"))
-        conf.loadDefaults()
-        conf.loadFromString(
+        val conf = ConfigSource("libeufin", "libeufin-bank", "libeufin-bank").fromMem(
             """
 
             [foo]
@@ -49,7 +47,7 @@ class TalerConfigTest {
     @Test
     fun substitution() {
         // We assume that libeufin-bank is installed. We could also try to locate the source tree here.
-        val conf = TalerConfig(ConfigSource("libeufin", "libeufin-bank", "libeufin-bank"))
+        val conf = ConfigSource("libeufin", "libeufin-bank", "libeufin-bank").fromFile(null)
         conf.putValueString("PATHS", "DATADIR", "mydir")
         conf.putValueString("foo", "bar", "baz")
         conf.putValueString("foo", "bar2", "baz")

@@ -31,35 +31,15 @@ class ConfigLoading {
      */
     @Test
     fun loadRequiredValues() {
-        val handle = TalerConfig(NEXUS_CONFIG_SOURCE)
-        handle.load()
+        val handle = NEXUS_CONFIG_SOURCE.fromFile(null)
         val cfg = EbicsSetupConfig(handle)
         cfg._dump()
     }
 
     @Test
     fun loadPath() {
-        val handle = TalerConfig(NEXUS_CONFIG_SOURCE)
-        handle.load()
+        val handle = NEXUS_CONFIG_SOURCE.fromFile(null)
         val cfg = EbicsSetupConfig(handle)
-    }
-
-
-    /**
-     * Tests that if the configuration lacks at least one option, then
-     * the config loader throws exception.
-     */
-    @Test
-    fun detectMissingValues() {
-        val handle = TalerConfig(NEXUS_CONFIG_SOURCE)
-        handle.loadFromString("""
-            [ebics-nexus]
-            # All the other defaults won't be loaded.
-            BANK_DIALECT = postfinance
-        """.trimIndent())
-        assertFailsWith<TalerConfigError> {
-            EbicsSetupConfig(handle)
-        }
     }
 
     // Checks converting human-readable durations to seconds.

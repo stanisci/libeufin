@@ -81,8 +81,9 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
 
         // Augment config
         val simpleCfg = Path("test/$platform/ebics.conf").readText()
-        val conf = "test/$platform/ebics.edited.conf"
-        Path(conf).writeText("""$simpleCfg
+        val conf = Path("test/$platform/ebics.edited.conf")
+        conf.writeText(
+        """$simpleCfg
         [paths]
         LIBEUFIN_NEXUS_HOME = test/$platform
 

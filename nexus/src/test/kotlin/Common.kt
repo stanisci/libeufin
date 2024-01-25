@@ -34,13 +34,11 @@ val j = Json {
 }
 
 val config: EbicsSetupConfig = run {
-    val handle = TalerConfig(NEXUS_CONFIG_SOURCE)
-    handle.load()
+    val handle = NEXUS_CONFIG_SOURCE.fromFile(null)
     EbicsSetupConfig(handle)
 }
 
 fun prepDb(cfg: TalerConfig): Database {
-    cfg.loadDefaults()
     val dbCfg = DatabaseConfig(
         dbConnStr = "postgresql:///libeufincheck",
         sqlDir = cfg.requirePath("paths", "datadir").resolve("sql")

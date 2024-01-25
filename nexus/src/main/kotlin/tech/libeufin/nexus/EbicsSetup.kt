@@ -189,7 +189,7 @@ suspend fun doKeysRequestAndUpdateState(
  * @param configFile location of the configuration entry point.
  * @return internal representation of the configuration.
  */
-fun extractEbicsConfig(configFile: String?): EbicsSetupConfig {
+fun extractEbicsConfig(configFile: Path?): EbicsSetupConfig {
     val config = loadConfig(configFile)
     return EbicsSetupConfig(config)
 }

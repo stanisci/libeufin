@@ -33,6 +33,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.common.*
+import java.nio.file.Path
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
 val logger: Logger = LoggerFactory.getLogger("libeufin-nexus")
@@ -195,11 +196,7 @@ class EbicsSetupConfig(val config: TalerConfig) {
  * @param configFile potentially NULL configuration file location.
  * @return the configuration handle.
  */
-fun loadConfig(configFile: String?): TalerConfig {
-    val config = TalerConfig(NEXUS_CONFIG_SOURCE)
-    config.load(configFile)
-    return config
-}
+fun loadConfig(configFile: Path?): TalerConfig = NEXUS_CONFIG_SOURCE.fromFile(configFile)
 
 /**
  * Abstracts fetching the DB config values to set up Nexus.

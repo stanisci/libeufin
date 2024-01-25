@@ -27,6 +27,7 @@ import com.github.ajalt.clikt.parameters.groups.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
+import java.nio.file.Path
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
@@ -51,21 +52,11 @@ fun cliCmd(logger: Logger, level: Level, lambda: () -> Unit) {
     }
 }
 
-private fun talerConfig(configSource: ConfigSource, configPath: String?): TalerConfig {
-    val config = TalerConfig(configSource)
-    config.load(configPath)
-    return config
-}
-
 class CommonOption: OptionGroup() {
     val config by option(
         "--config", "-c",
         help = "Specifies the configuration file"
-    ).path(
-        mustExist = true, 
-        canBeDir = false, 
-        mustBeReadable = true,
-    ).convert { it.toString() } // TODO take path to load config
+    ).path()
     val log by option(
         "--log", "-L",
         help = "Configure logging to use LOGLEVEL"
@@ -91,7 +82,7 @@ private class CliConfigGet(private val configSource: ConfigSource) : CliktComman
 
 
     override fun run() = cliCmd(logger, common.log) {
-        val config = talerConfig(configSource, common.config)
+        val config = configSource.fromFile(common.config)
         if (isPath) {
             val res = config.lookupPath(sectionName, optionName)
             if (res == null) {
@@ -115,7 +106,7 @@ private class CliConfigPathsub(private val configSource: ConfigSource) : CliktCo
     private val pathExpr by argument()
 
     override fun run() = cliCmd(logger, common.log) {
-        val config = talerConfig(configSource, common.config)
+        val config = configSource.fromFile(common.config)
         println(config.pathsub(pathExpr))
     }
 }
@@ -124,7 +115,7 @@ private class CliConfigDump(private val configSource: ConfigSource) : CliktComma
     private val common by CommonOption()
 
     override fun run() = cliCmd(logger, common.log) {
-        val config = talerConfig(configSource, common.config)
+        val config = configSource.fromFile(common.config)
         println("# install path: ${config.getInstallPath()}")
         println(config.stringify())
     }

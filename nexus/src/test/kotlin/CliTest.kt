@@ -49,7 +49,7 @@ class CliTest {
         val cmds = listOf("ebics-submit", "ebics-fetch")
         val allCmds = listOf("ebics-submit", "ebics-fetch", "ebics-setup")
         val conf = "conf/test.conf"
-        val cfg = loadConfig(conf)
+        val cfg = loadConfig(Path(conf))
         val clientKeysPath = cfg.requirePath("nexus-ebics", "client_private_keys_file")
         val bankKeysPath = cfg.requirePath("nexus-ebics", "bank_public_keys_file")
         clientKeysPath.parent!!.createDirectories()

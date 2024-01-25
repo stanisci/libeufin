@@ -57,7 +57,7 @@ fun setup(
     conf: String = "test.conf",
     lambda: suspend (Database, BankConfig) -> Unit
 ) {
-    val config = talerConfig("conf/$conf")
+    val config = talerConfig(Path("conf/$conf"))
     val dbCfg = config.loadDbConfig()
     val ctx = config.loadBankConfig()
     Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use {

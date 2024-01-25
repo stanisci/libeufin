@@ -61,6 +61,21 @@ data class ConfigSource(
     val installPathBinary: String = "taler-config",
 )
 
+fun ConfigSource.fromMem(content: String): TalerConfig {
+    val cfg = TalerConfig(this)
+    cfg.loadDefaults()
+    cfg.loadFromMem(content, null)
+    return cfg
+}
+
+fun ConfigSource.fromFile(file: Path?): TalerConfig {
+    val cfg = TalerConfig(this)
+    cfg.loadDefaults()
+    val path = file ?: cfg.findDefaultConfigFilename()
+    if (path != null) cfg.loadFromFile(path)
+    return cfg
+}
+
 /**
  * Reader and writer for Taler-style configuration files.
  *
@@ -69,8 +84,8 @@ data class ConfigSource(
  *
  * @param configSource information about where to load configuration defaults from
  */
-class TalerConfig(
-    private val configSource: ConfigSource,
+class TalerConfig internal constructor(
+    val configSource: ConfigSource,
 ) {
     private val sectionMap: MutableMap<String, Section> = mutableMapOf()
 
@@ -79,7 +94,55 @@ class TalerConfig(
     private val installPathBinary = configSource.installPathBinary
     val sections: Set<String> get() = sectionMap.keys
 
-    private fun internalLoadFromString(s: String, source: Path?) {
+    /**
+     * Load configuration defaults from the file system
+     * and populate the PATHS section based on the installation path.
+     */
+    internal fun loadDefaults() {
+        val installDir = getInstallPath()
+        val baseConfigDir = Path(installDir, "share/$projectName/config.d")
+        setSystemDefault("PATHS", "PREFIX", "$installDir/")
+        setSystemDefault("PATHS", "BINDIR", "$installDir/bin/")
+        setSystemDefault("PATHS", "LIBEXECDIR", "$installDir/$projectName/libexec/")
+        setSystemDefault("PATHS", "DOCDIR", "$installDir/share/doc/$projectName/")
+        setSystemDefault("PATHS", "ICONDIR", "$installDir/share/icons/")
+        setSystemDefault("PATHS", "LOCALEDIR", "$installDir/share/locale/")
+        setSystemDefault("PATHS", "LIBDIR", "$installDir/lib/$projectName/")
+        setSystemDefault("PATHS", "DATADIR", "$installDir/share/$projectName/")
+        for (filePath in baseConfigDir.listDirectoryEntries()) {
+            loadFromFile(filePath)
+        }
+    }
+
+    private fun loadFromGlob(source: Path, glob: String) {
+        // FIXME: Check that the Kotlin glob matches the glob from our spec
+        for (entry in source.parent.listDirectoryEntries(glob)) {
+            loadFromFile(entry)
+        }
+    }
+
+    private fun loadSecret(sectionName: String, secretFilename: Path) {
+        if (!secretFilename.isReadable()) {
+            logger.warn("unable to read secrets from $secretFilename")
+        } else {
+            loadFromFile(secretFilename)
+        }
+    }
+
+    internal fun loadFromFile(file: Path) {
+        val content =  try {
+            file.readText()
+        } catch (e: Exception) {
+            when {
+                e is NoSuchFileException -> throw Exception("Could not read config at '$file': no such file")
+                e is AccessDeniedException -> throw Exception("Could not read config at '$file': permission denied")
+                else -> throw Exception("Could not read config at '$file'", e)
+            }
+        }
+        loadFromMem(content, file)
+    }
+
+    internal fun loadFromMem(s: String, source: Path?) {
         val lines = s.lines()
         var lineNum = 0
         var currentSection: String? = null
@@ -102,11 +165,11 @@ class TalerConfig(
                 when (directiveName) {
                     "inline" -> {
                         val innerFilename = source.resolveSibling(directiveArg.trim())
-                        this.loadFromFilename(innerFilename)
+                        loadFromFile(innerFilename)
                     }
                     "inline-matching" -> {
                         val glob = directiveArg.trim()
-                        this.loadFromGlob(source, glob)
+                        loadFromGlob(source, glob)
                     }
                     "inline-secret" -> {
                         val arg = directiveArg.trim()
@@ -151,21 +214,6 @@ class TalerConfig(
         }
     }
 
-    private fun loadFromGlob(source: Path, glob: String) {
-        // FIXME: Check that the Kotlin glob matches the glob from our spec
-        for (entry in source.parent.listDirectoryEntries(glob)) {
-            loadFromFilename(entry)
-        }
-    }
-
-    private fun loadSecret(sectionName: String, secretFilename: Path) {
-        if (!secretFilename.isReadable()) {
-            logger.warn("unable to read secrets from $secretFilename")
-        } else {
-            this.loadFromFilename(secretFilename)
-        }
-    }
-
     private fun provideSection(name: String): Section {
         val canonSecName = name.uppercase()
         val existingSec = this.sectionMap[canonSecName]
@@ -175,10 +223,6 @@ class TalerConfig(
         val newSection = Section(entries = mutableMapOf())
         this.sectionMap[canonSecName] = newSection
         return newSection
-    }
-
-    fun loadFromString(s: String) {
-        internalLoadFromString(s, null)
     }
 
     private fun setSystemDefault(section: String, option: String, value: String) {
@@ -211,38 +255,6 @@ class TalerConfig(
             }
         }
         return outStr.toString()
-    }
-
-    /**
-     * Read values into the configuration from the given entry point
-     * filename.  Defaults are *not* loaded automatically.
-     */
-    fun loadFromFilename(path: Path) {
-        internalLoadFromString(path.readText(), path)
-    }
-
-    private fun loadDefaultsFromDir(dirname: Path) {
-        for (filePath in dirname.listDirectoryEntries()) {
-            loadFromFilename(filePath)
-        }
-    }
-
-    /**
-     * Load configuration defaults from the file system
-     * and populate the PATHS section based on the installation path.
-     */
-    fun loadDefaults() {
-        val installDir = getInstallPath()
-        val baseConfigDir = Path(installDir, "share/$projectName/config.d")
-        setSystemDefault("PATHS", "PREFIX", "$installDir/")
-        setSystemDefault("PATHS", "BINDIR", "$installDir/bin/")
-        setSystemDefault("PATHS", "LIBEXECDIR", "$installDir/$projectName/libexec/")
-        setSystemDefault("PATHS", "DOCDIR", "$installDir/share/doc/$projectName/")
-        setSystemDefault("PATHS", "ICONDIR", "$installDir/share/icons/")
-        setSystemDefault("PATHS", "LOCALEDIR", "$installDir/share/locale/")
-        setSystemDefault("PATHS", "LIBDIR", "$installDir/lib/$projectName/")
-        setSystemDefault("PATHS", "DATADIR", "$installDir/share/$projectName/")
-        loadDefaultsFromDir(baseConfigDir)
     }
 
     private fun variableLookup(x: String, recursionDepth: Int = 0): Path? {
@@ -346,28 +358,11 @@ class TalerConfig(
     }
 
     /**
-     * Load configuration values from the file system.
-     * If no entrypoint is specified, the default entrypoint
-     * is used.
-     */
-    fun load(entrypoint: String? = null) {
-        loadDefaults()
-        if (entrypoint != null) {
-            loadFromFilename(Path(entrypoint))
-        } else {
-            val defaultFilename = findDefaultConfigFilename()
-            if (defaultFilename != null) {
-                loadFromFilename(defaultFilename)
-            }
-        }
-    }
-
-    /**
      * Determine the filename of the default configuration file.
      *
      * If no such file can be found, return null.
      */
-    private fun findDefaultConfigFilename(): Path? {
+    internal fun findDefaultConfigFilename(): Path? {
         val xdg = System.getenv("XDG_CONFIG_HOME")
         val home = System.getenv("HOME")
 

@@ -29,7 +29,7 @@ import kotlin.test.assertEquals
 class OutgoingPaymentsTest {
     @Test
     fun register() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        val db = prepDb(NEXUS_CONFIG_SOURCE.fromFile(null))
         runBlocking {
             // With reconciling
             genOutPay("paid by nexus", "first").run {
@@ -65,7 +65,7 @@ class IncomingPaymentsTest {
     // Tests creating and bouncing incoming payments in one DB transaction.
     @Test
     fun bounce() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        val db = prepDb(NEXUS_CONFIG_SOURCE.fromFile(null))
         runBlocking {
             // creating and bouncing one incoming transaction.
             val payment = genInPay("incoming and bounced")
@@ -122,7 +122,7 @@ class IncomingPaymentsTest {
     // Tests the creation of a talerable incoming payment.
     @Test
     fun talerable() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        val db = prepDb(NEXUS_CONFIG_SOURCE.fromFile(null))
         val reservePub = ByteArray(32)
         Random.nextBytes(reservePub)
 
@@ -142,7 +142,7 @@ class PaymentInitiationsTest {
     // Testing the insertion of the failure message.
     @Test
     fun setFailureMessage() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        val db = prepDb(NEXUS_CONFIG_SOURCE.fromFile(null))
         runBlocking {
             assertEquals(
                 db.initiatedPaymentCreate(genInitPay("not submitted, has row ID == 1")),
@@ -166,7 +166,7 @@ class PaymentInitiationsTest {
     // Tests the flagging of payments as submitted.
     @Test
     fun paymentInitiationSetAsSubmitted() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        val db = prepDb(NEXUS_CONFIG_SOURCE.fromFile(null))
         val getRowOne = """
                     SELECT submitted
                       FROM initiated_outgoing_transactions
@@ -199,7 +199,7 @@ class PaymentInitiationsTest {
     // retrieving only one non-submitted payment.
     @Test
     fun paymentInitiation() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        val db = prepDb(NEXUS_CONFIG_SOURCE.fromFile(null))
         runBlocking {
             val beEmpty = db.initiatedPaymentsSubmittableGet("KUDOS") // expect no records.
             assertEquals(beEmpty.size, 0)
@@ -232,7 +232,7 @@ class PaymentInitiationsTest {
      */
     @Test
     fun submittablePayments() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        val db = prepDb(NEXUS_CONFIG_SOURCE.fromFile(null))
         runBlocking {
             val beEmpty = db.initiatedPaymentsSubmittableGet("KUDOS")
             assertEquals(0, beEmpty.size)
@@ -268,7 +268,7 @@ class PaymentInitiationsTest {
     // multiple unsubmitted payment initiations.
     @Test
     fun paymentInitiationsMultiple() {
-        val db = prepDb(TalerConfig(NEXUS_CONFIG_SOURCE))
+        val db = prepDb(NEXUS_CONFIG_SOURCE.fromFile(null))
         runBlocking {
             assertEquals(db.initiatedPaymentCreate(genInitPay("#1", "unique1")), PaymentInitiationOutcome.SUCCESS)
             assertEquals(db.initiatedPaymentCreate(genInitPay("#2", "unique2")), PaymentInitiationOutcome.SUCCESS)

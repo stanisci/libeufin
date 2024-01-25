@@ -71,11 +71,7 @@ sealed class ServerConfig {
     data class Tcp(val port: Int): ServerConfig()
 }
 
-fun talerConfig(configPath: String?): TalerConfig {
-    val config = TalerConfig(BANK_CONFIG_SOURCE)
-    config.load(configPath)
-    return config
-}
+fun talerConfig(configPath: Path?): TalerConfig = BANK_CONFIG_SOURCE.fromFile(configPath)
 
 fun TalerConfig.loadDbConfig(): DatabaseConfig  {
     return DatabaseConfig(
