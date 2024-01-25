@@ -237,15 +237,15 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysFilename)
         val httpClient = HttpClient()
         // Privs exist.  Upload their pubs
-        val keysNotSub = !clientKeys.submitted_ini || !clientKeys.submitted_hia
         runBlocking {
+            val keysNotSub = !clientKeys.submitted_ini
             if ((!clientKeys.submitted_ini) || forceKeysResubmission)
                 doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.INI)
+            // Eject PDF if the keys were submitted for the first time, or the user asked.
+            if (keysNotSub || generateRegistrationPdf) makePdf(clientKeys, cfg)
             if ((!clientKeys.submitted_hia) || forceKeysResubmission)
                 doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.HIA)
         }
-        // Eject PDF if the keys were submitted for the first time, or the user asked.
-        if (keysNotSub || generateRegistrationPdf) makePdf(clientKeys, cfg)
         // Checking if the bank keys exist on disk.
         var bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
         if (bankKeys == null) {
