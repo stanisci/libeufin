@@ -64,161 +64,176 @@ fun CliktCommandTestResult.assertErr(msg: String? = null) {
     assertEquals(1, statusCode, msg)
 }
 
-enum class Kind {
-    postfinance, 
-    netzbon
+data class Kind(val name: String, val settings: String?) {
+    val test get() = settings != null
 }
 
 class Cli : CliktCommand("Run integration tests on banks provider") {
-    val kind: Kind by argument().enum<Kind>()
+    val platform by argument()
+
     override fun run() {
-        val name = kind.name
-        step("Test init $name")
+        // List available platform
+        val platforms = Path("test").listDirectoryEntries().filter { it.isDirectory() }.map { it.getFileName().toString() }
+        if (!platforms.contains(platform)) {
+            println("Unknown platform '$platform', expected one of $platforms")
+            throw ProgramResult(1)
+        }
 
-        runBlocking {
-            Path("test/$name").createDirectories()
-            val conf = "conf/$name.conf"
-            val log = "DEBUG"
-            val flags = " -c $conf -L $log"
-            val ebicsFlags = "$flags --transient --debug-ebics test/$name"
-            val cfg = loadConfig(conf)
+        // Augment config
+        val simpleCfg = Path("test/$platform/ebics.conf").readText()
+        val conf = "test/$platform/ebics.edited.conf"
+        Path(conf).writeText("""$simpleCfg
+        [paths]
+        LIBEUFIN_NEXUS_HOME = test/$platform
 
-            val clientKeysPath = cfg.requirePath("nexus-ebics", "client_private_keys_file")
-            val bankKeysPath = cfg.requirePath("nexus-ebics", "bank_public_keys_file")
+        [nexus-fetch]
+        FREQUENCY = 5s
+
+        [nexus-submit]
+        FREQUENCY = 5s
+
+        [nexus-postgres]
+        CONFIG = postgres:///libeufincheck
+        """)
+        val cfg = loadConfig(conf)
+
+        // Check if paltform is known
+        val kind = when (cfg.requireString("nexus-ebics", "host_base_url")) {
+            "https://isotest.postfinance.ch/ebicsweb/ebicsweb" -> 
+                Kind("PostFinance IsoTest", "https://isotest.postfinance.ch/corporates/user/settings/ebics")
+            "https://iso20022test.credit-suisse.com/ebicsweb/ebicsweb" ->
+                Kind("Credit Suisse isoTest", "https://iso20022test.credit-suisse.com/user/settings/ebics")   
+            "https://ebics.postfinance.ch/ebics/ebics.aspx" -> 
+                Kind("PostFinance", null)
+            else -> Kind("Unknown", null)
+        }
+
+        // Prepare cmds
+        val log = "DEBUG"
+        val flags = " -c $conf -L $log"
+        val ebicsFlags = "$flags --transient --debug-ebics test/$platform"
+        val clientKeysPath = cfg.requirePath("nexus-ebics", "client_private_keys_file")
+        val bankKeysPath = cfg.requirePath("nexus-ebics", "bank_public_keys_file")
+
+        var hasClientKeys = clientKeysPath.exists()
+        var hasBankKeys = bankKeysPath.exists()
+
+        // Alternative payto ?
+        val payto = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans"
         
-            var hasClientKeys = clientKeysPath.exists()
-            var hasBankKeys = bankKeysPath.exists()
+        runBlocking {
+            step("Test init ${kind.name}")
 
             if (ask("Reset DB ? y/n>") == "y") nexusCmd.test("dbinit -r $flags").assertOk()
             else nexusCmd.test("dbinit $flags").assertOk()
             val nexusDb = NexusDb("postgresql:///libeufincheck")
 
-            when (kind) {
-                Kind.postfinance -> {
-                    if (hasClientKeys || hasBankKeys) {
-                        if (ask("Reset keys ? y/n>") == "y") {
-                            if (hasClientKeys) clientKeysPath.deleteIfExists()
-                            if (hasBankKeys) bankKeysPath.deleteIfExists()
-                            hasClientKeys = false
-                            hasBankKeys = false
+            val cmds = buildMap<String, suspend () -> Unit> {
+                put("reset-db", suspend {
+                    nexusCmd.test("dbinit -r $flags").assertOk()
+                })
+                put("recover", suspend {
+                    step("Recover old transactions")
+                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01").assertOk()
+                })
+                put("fetch", suspend {
+                    step("Fetch new transactions")
+                    nexusCmd.test("ebics-fetch $ebicsFlags").assertOk()
+                })
+                put("submit", suspend {
+                    step("Submit pending transactions")
+                    nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
+                })
+                put("logs", suspend {
+                    step("Fetch HAC logs")
+                    nexusCmd.test("ebics-fetch $ebicsFlags --only-logs").assertOk()
+                })
+                put("ack", suspend {
+                    step("Fetch CustomerPaymentStatusReport")
+                    nexusCmd.test("ebics-fetch $ebicsFlags --only-ack").assertOk()
+                })
+                if (kind.test) {
+                    put("reset-keys", suspend {
+                        clientKeysPath.deleteIfExists()
+                        bankKeysPath.deleteIfExists()
+                        hasClientKeys = false
+                        hasBankKeys = false
+                    })
+                    put("tx", suspend {
+                        step("Test submit one transaction")
+                        nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                            amount = TalerAmount("CFH:42"),
+                            creditPaytoUri = IbanPayto(payto).requireFull(),
+                            wireTransferSubject = "single transaction test",
+                            initiationTime = Instant.now(),
+                            requestUid = Base32Crockford.encode(randBytes(16))
+                        ))
+                        nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
+                    })
+                    put("txs", suspend {
+                        step("Test submit many transaction")
+                        repeat(4) {
+                            nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                                amount = TalerAmount("CFH:${100L+it}"),
+                                creditPaytoUri = IbanPayto(payto).requireFull(),
+                                wireTransferSubject = "multi transaction test $it",
+                                initiationTime = Instant.now(),
+                                requestUid = Base32Crockford.encode(randBytes(16))
+                            ))
                         }
-                    }
-                  
-                    if (!hasClientKeys) {
+                        nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
+                    })
+                } else {
+                    put("tx", suspend {
+                        step("Submit new transaction")
+                        // TODO interactive payment editor
+                        nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                            amount = TalerAmount("CFH:1.1"),
+                            creditPaytoUri = IbanPayto(payto).requireFull(),
+                            wireTransferSubject = "single transaction test",
+                            initiationTime = Instant.now(),
+                            requestUid = Base32Crockford.encode(randBytes(16))
+                        ))
+                        nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
+                    })
+                }
+            }
+
+            while (true) {
+                if (!hasClientKeys) {
+                    if (kind.test) {
                         step("Test INI order")
-                        ask("Got to https://isotest.postfinance.ch/corporates/user/settings/ebics and click on 'Reset EBICS user'.\nPress Enter when done>")
+                        ask("Got to ${kind.settings} and click on 'Reset EBICS user'.\nPress Enter when done>")
                         nexusCmd.test("ebics-setup $flags")
                             .assertErr("ebics-setup should failed the first time")
-                    }
-        
-                    if (!hasBankKeys) {
-                        step("Test HIA order")
-                        ask("Got to https://isotest.postfinance.ch/corporates/user/settings/ebics and click on 'Activate EBICS user'.\nPress Enter when done>")
-                        nexusCmd.test("ebics-setup --auto-accept-keys $flags")
-                            .assertOk("ebics-setup should succeed the second time")
-                    }
-                   
-                    val payto = "payto://iban/CH2989144971918294289?receiver-name=Test"
-        
-                    step("Test fetch transactions")
-                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01").assertOk()
-
-                    while (true) {
-                        when (ask("Run 'fetch', 'submit', 'tx', 'txs', 'logs', 'ack' or 'exit'>")) {
-                            "fetch" -> {
-                                step("Fetch new transactions")
-                                nexusCmd.test("ebics-fetch $ebicsFlags").assertOk()
-                            }
-                            "tx" -> {
-                                step("Test submit one transaction")
-                                nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                                    amount = TalerAmount("CFH:42"),
-                                    creditPaytoUri = IbanPayto(payto).requireFull(),
-                                    wireTransferSubject = "single transaction test",
-                                    initiationTime = Instant.now(),
-                                    requestUid = Base32Crockford.encode(randBytes(16))
-                                ))
-                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
-                            }
-                            "txs" -> {
-                                step("Test submit many transaction")
-                                repeat(4) {
-                                    nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                                        amount = TalerAmount("CFH:${100L+it}"),
-                                        creditPaytoUri = IbanPayto(payto).requireFull(),
-                                        wireTransferSubject = "multi transaction test $it",
-                                        initiationTime = Instant.now(),
-                                        requestUid = Base32Crockford.encode(randBytes(16))
-                                    ))
-                                }
-                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
-                            }
-                            "submit" -> {
-                                step("Submit pending transactions")
-                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
-                            }
-                            "logs" -> {
-                                step("Fetch logs")
-                                nexusCmd.test("ebics-fetch $ebicsFlags --only-logs").assertOk()
-                            }
-                            "ack" -> {
-                                step("Fetch ack")
-                                nexusCmd.test("ebics-fetch $ebicsFlags --only-ack").assertOk()
-                            }
-                            "exit" -> break
-                        }
-                    }
-                }
-                Kind.netzbon -> {
-                    if (!hasClientKeys)
+                        ask("Got to ${kind.settings} and click on 'Activate EBICS user'.\nPress Enter when done>")
+                    } else {
                         throw Exception("Clients keys are required to run netzbon tests")
-                        
-                    if (!hasBankKeys) {
-                        step("Test HIA order")
-                        nexusCmd.test("ebics-setup --auto-accept-keys $flags").assertOk("ebics-setup should succeed the second time")
                     }
+                } 
     
-                    step("Test fetch transactions")
-                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01").assertOk()
+                if (!hasBankKeys) {
+                    step("Test HIA order")
+                    nexusCmd.test("ebics-setup --auto-accept-keys $flags")
+                        .assertOk("ebics-setup should succeed the second time")
+                }
 
-                    while (true) {
-                        when (ask("Run 'fetch', 'submit', 'logs', 'ack' or 'exit'>")) {
-                            "fetch" -> {
-                                step("Fetch new transactions")
-                                nexusCmd.test("ebics-fetch $ebicsFlags").assertOk()
-                            }
-                            "submit" -> {
-                                step("Submit pending transactions")
-                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
-                            }
-                            "tx" -> {
-                                step("Submit new transaction")
-                                // TODO interactive payment editor
-                                nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                                    amount = TalerAmount("CFH:1.1"),
-                                    creditPaytoUri = IbanPayto("payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans").requireFull(),
-                                    wireTransferSubject = "single transaction test",
-                                    initiationTime = Instant.now(),
-                                    requestUid = Base32Crockford.encode(randBytes(16))
-                                ))
-                                nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
-                            }
-                            "logs" -> {
-                                step("Fetch logs")
-                                nexusCmd.test("ebics-fetch $ebicsFlags --only-logs").assertOk()
-                            }
-                            "ack" -> {
-                                step("Fetch ack")
-                                nexusCmd.test("ebics-fetch $ebicsFlags --only-ack").assertOk()
-                            }
-                            "exit" -> break
-                        }
+                val arg = ask("testbench >")!!.trim()
+                if (arg == "exit") break
+                val cmd = cmds[arg]
+                if (cmd != null) {
+                    cmd()
+                } else {
+                    if (arg != "?" && arg != "help") {
+                        println("Unknown command '$arg'")
+                    }
+                    println("Commands:")
+                    for ((name, _) in cmds) {
+                        println("  $name")
                     }
                 }
             }
         }
-                
-        step("Test succeed")
     }
 }
 
