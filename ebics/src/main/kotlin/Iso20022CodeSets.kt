@@ -307,3 +307,24 @@ enum class ExternalPaymentGroupStatusCode(val isoCode: String, val description: 
 	RCVD("Received", "Payment initiation has been received by the receiving agent"),
 	RJCT("Rejected", "Payment initiation or individual transaction included in the payment initiation has been rejected."),
 }
+
+enum class ExternalPaymentTransactionStatusCode(val isoCode: String, val description: String) {
+	ACCC("AcceptedSettlementCompletedCreditorAccount", "Settlement on the creditor's account has been completed."),
+	ACCP("AcceptedCustomerProfile", "Preceding check of technical validation was successful. Customer profile check was also successful."),
+	ACFC("AcceptedFundsChecked", "Preceding check of technical validation and customer profile was successful and an automatic funds check was positive."),
+	ACIS("AcceptedandChequeIssued", "Payment instruction to issue a cheque has been accepted, and the cheque has been issued but not yet been deposited or cleared."),
+	ACPD("AcceptedClearingProcessed", "Status of transaction released from the Debtor Agent and accepted by the clearing."),
+	ACSC("AcceptedSettlementCompletedDebitorAccount", "Settlement completed."),
+	ACSP("AcceptedSettlementInProcess", "All preceding checks such as technical validation and customer profile were successful and therefore the payment instruction has been accepted for execution."),
+	ACTC("AcceptedTechnicalValidation", "Authentication and syntactical and semantical validation are successful"),
+	ACWC("AcceptedWithChange", "Instruction is accepted but a change will be made, such as date or remittance not sent."),
+	ACWP("AcceptedWithoutPosting", "Payment instruction included in the credit transfer is accepted without being posted to the creditor customer’s account."),
+	BLCK("Blocked", "Payment transaction previously reported with status 'ACWP' is blocked, for example, funds will neither be posted to the Creditor's account, nor be returned to the Debtor."),
+	CANC("Cancelled", "Payment initiation has been successfully cancelled after having received a request for cancellation."),
+	CPUC("CashPickedUpByCreditor", "Cash has been picked up by the Creditor."),
+	PATC("PartiallyAcceptedTechnicalCorrect", "Payment initiation needs multiple authentications, where some but not yet all have been performed. Syntactical and semantical validations are successful."),
+	PDNG("Pending", "Payment instruction is pending. Further checks and status update will be performed."),
+	PRES("Presented", "Request for Payment has been presented to the Debtor."),
+	RCVD("Received", "Payment instruction has been received."),
+	RJCT("Rejected", "Payment instruction has been rejected."),
+}

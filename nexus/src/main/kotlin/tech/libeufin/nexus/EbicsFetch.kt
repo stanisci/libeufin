@@ -25,6 +25,7 @@ import io.ktor.client.*
 import kotlinx.coroutines.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.common.*
+import tech.libeufin.ebics.*
 import tech.libeufin.ebics.ebics_h005.Ebics3Request
 import java.io.IOException
 import java.time.Instant
@@ -286,12 +287,31 @@ private fun ingestDocument(
         SupportedDocument.PAIN_002_LOGS -> {
             val acks = parseCustomerAck(xml)
             for (ack in acks) {
-                println(ack)
+                when (ack.actionType) {
+                    HacAction.FILE_DOWNLOAD -> logger.trace("$ack")
+                    HacAction.ORDER_HAC_FINAL_POS -> {
+                        // TODO update pending transaction status
+                        logger.debug("$ack")
+                        logger.info("Order '${ack.orderId}' was accepted at ${ack.timestamp.fmtDateTime()}")
+                    }
+                    HacAction.ORDER_HAC_FINAL_NEG -> {
+                        // TODO update pending transaction status
+                        logger.debug("$ack")
+                        logger.warn("Order '${ack.orderId}' was refused at ${ack.timestamp.fmtDateTime()}")
+                    }
+                    else -> {
+                        // TODO update pending transaction status
+                        logger.debug("$ack")
+                    }
+                }
             }
         }
         SupportedDocument.PAIN_002 -> {
             val status = parseCustomerPaymentStatusReport(xml)
-            logger.debug("$status") // TODO ingest in db
+            if (status.paymentCode == ExternalPaymentGroupStatusCode.RJCT)
+                logger.warn("Transaction '${status.id()}' was rejected")
+            // TODO update pending transaction status
+            logger.debug("$status")
         }
         else -> logger.warn("Not ingesting ${whichDocument}.  Only camt.054 notifications supported.")
     }

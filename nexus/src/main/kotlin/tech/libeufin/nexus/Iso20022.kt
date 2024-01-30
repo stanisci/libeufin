@@ -122,15 +122,19 @@ fun createPain001(
 }
 
 data class CustomerAck(
-    val actionType: String,
+    val actionType: HacAction,
+    val orderId: String?,
     val code: ExternalStatusReasonCode?,
     val timestamp: Instant
 ) {
     override fun toString(): String {
-        return if (code != null)
-            "${timestamp.fmtDateTime()} ${actionType} ${code.isoCode} '${code.description}'"
-        else 
-            "${timestamp.fmtDateTime()} ${actionType}"
+        var str = "${timestamp.fmtDateTime()}"
+        if (orderId != null) str += " ${orderId}"
+        str += " ${actionType}"
+        if (code != null) str += " ${code.isoCode}"
+        str += " - '${actionType.description}'"
+        if (code != null) str += " '${code.description}'"
+        return str
     }
 }
 
@@ -142,9 +146,10 @@ data class CustomerAck(
 fun parseCustomerAck(xml: ByteArray): List<CustomerAck> {
     return destructXml(xml, "Document") {
         one("CstmrPmtStsRpt").map("OrgnlPmtInfAndSts") {
-            val actionType = one("OrgnlPmtInfId").text()
+            val actionType = one("OrgnlPmtInfId").enum<HacAction>()
             one("StsRsnInf") {
                 var timestamp: Instant? = null;
+                var orderId: String? = null
                 one("Orgtr").one("Id").one("OrgId").each("Othr") {
                     val value = one("Id")
                     val key = one("SchmeNm").one("Prtry").text()
@@ -152,11 +157,12 @@ fun parseCustomerAck(xml: ByteArray): List<CustomerAck> {
                         "TimeStamp" -> {
                             timestamp = value.dateTime().toInstant(ZoneOffset.UTC)
                         }
+                        "OrderID" -> orderId = value.text()
                         // TODO extract ids ?
                     }
                 }
                 val code = opt("Rsn")?.one("Cd")?.enum<ExternalStatusReasonCode>()
-                CustomerAck(actionType, code, timestamp!!)
+                CustomerAck(actionType, orderId, code, timestamp!!)
             }
         }
     }
@@ -164,15 +170,35 @@ fun parseCustomerAck(xml: ByteArray): List<CustomerAck> {
 
 data class PaymentStatus(
     val msgId: String,
-    val code: ExternalPaymentGroupStatusCode,
+    val paymentId: String?,
+    val txId: String?,
+    val paymentCode: ExternalPaymentGroupStatusCode,
+    val txCode: ExternalPaymentTransactionStatusCode?,
     val reasons: List<Reason>
-) {
+) { 
+    fun id(): String {
+        var str = "$msgId"
+        if (paymentId != null) str += ".$paymentId"
+        if (txId != null) str += ".$txId"
+        return str
+    }
+
+    fun code(): String = txCode?.isoCode ?: paymentCode.isoCode
+
+    fun description(): String = txCode?.description ?: paymentCode.description
+
     override fun toString(): String {
-        var builder = "'${msgId}' ${code.isoCode} '${code.description}'"
-        for (reason in reasons) {
-            builder += " - ${reason.code.isoCode} '${reason.code.description}'"
+        return if (reasons.isEmpty()) {
+            "'${id()}' ${code()} '${description()}'"
+        } else if (reasons.size == 1) {
+            "'${id()}' ${code()} ${reasons[0].code.isoCode} - '${description()}' '${reasons[0].code.description}'"
+        } else {
+            var str = "'${id()}' ${code()} '${description()}' - "
+            for (reason in reasons) {
+                str += "${reason.code.isoCode} '${reason.code.description}'"
+            }
+            str
         }
-        return builder
     }
 }
 
@@ -195,6 +221,7 @@ fun parseCustomerPaymentStatusReport(xml: ByteArray): PaymentStatus {
         }
     }
     return destructXml(xml, "Document") {
+        // TODO handle batch status
         one("CstmrPmtStsRpt") {
             val (msgId, msgCode, msgReasons) = one("OrgnlGrpInfAndSts") {
                 val id = one("OrgnlMsgId").text()
@@ -202,19 +229,17 @@ fun parseCustomerPaymentStatusReport(xml: ByteArray): PaymentStatus {
                 val reasons = reasons()
                 Triple(id, code, reasons)
             }
-            val paymentInfo = opt("OrgnlPmtInfAndSts") {
-                val code = one("PmtInfSts").enum<ExternalPaymentGroupStatusCode>()
-                val reasons = reasons()
-                Pair(code, reasons)
-            }
-
-            // TODO handle multi level code better 
-            if (paymentInfo != null) {
-                val (code, reasons) = paymentInfo
-                PaymentStatus(msgId, code, reasons)
-            } else {
-                PaymentStatus(msgId, msgCode!!, msgReasons)
-            }
+            opt("OrgnlPmtInfAndSts") {
+                val payId = one("OrgnlPmtInfId").text()
+                val payCode = one("PmtInfSts").enum<ExternalPaymentGroupStatusCode>()
+                val payReasons = reasons()
+                opt("TxInfAndSts") {
+                    val txId = one("OrgnlInstrId").text()
+                    val txCode = one("TxSts").enum<ExternalPaymentTransactionStatusCode>()
+                    val txReasons = reasons()
+                    PaymentStatus(msgId, payId, txId, payCode, txCode, txReasons)
+                } ?: PaymentStatus(msgId, payId, null, payCode, null, payReasons)
+            } ?: PaymentStatus(msgId, null, null, msgCode!!, null, msgReasons)
         }
     }
 }
