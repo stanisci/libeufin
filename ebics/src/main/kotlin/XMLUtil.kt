@@ -405,6 +405,16 @@ class XMLUtil private constructor() {
             return builder.parse(InputSource(xmlInputStream))
         }
 
+        /** Parse [xml] into a XML DOM */
+        fun parseBytesIntoDom(xml: ByteArray): Document {
+            val factory = DocumentBuilderFactory.newInstance().apply {
+                isNamespaceAware = true
+            }
+            val xmlInputStream = ByteArrayInputStream(xml)
+            val builder = factory.newDocumentBuilder()
+            return builder.parse(InputSource(xmlInputStream))
+        }
+
         fun signEbicsResponse(ebicsResponse: EbicsResponse, privateKey: RSAPrivateCrtKey): String {
             val doc = convertJaxbToDocument(ebicsResponse)
             signEbicsDocument(doc, privateKey)

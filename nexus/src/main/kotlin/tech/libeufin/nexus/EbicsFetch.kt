@@ -261,7 +261,7 @@ suspend fun ingestIncomingPayment(
 private fun ingestDocument(
     db: Database,
     currency: String,
-    xml: String,
+    xml: ByteArray,
     whichDocument: SupportedDocument
 ) {
     when (whichDocument) {
@@ -315,7 +315,7 @@ private fun ingestDocuments(
                 throw Exception("Could not open any ZIP archive", e)
             }
         }
-        SupportedDocument.PAIN_002_LOGS -> ingestDocument(db, currency, content.toString(Charsets.UTF_8), whichDocument)
+        SupportedDocument.PAIN_002_LOGS -> ingestDocument(db, currency, content, whichDocument)
         else -> logger.warn("Not ingesting ${whichDocument}.  Only camt.054 notifications supported.")
     }
 }
@@ -435,7 +435,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         Database(dbCfg.dbConnStr).use { db ->
             if (import) {
                 logger.debug("Reading from STDIN")
-                val stdin = generateSequence(::readLine).joinToString("\n")
+                val stdin = generateSequence(::readLine).joinToString("\n").toByteArray()
                 ingestDocument(db, cfg.currency, stdin, whichDoc)
                 return@cliCmd
             }

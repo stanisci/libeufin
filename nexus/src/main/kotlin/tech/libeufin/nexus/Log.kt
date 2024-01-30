@@ -68,7 +68,7 @@ class FileLogger(path: String?) {
         } else {
             // Write each ZIP entry in the combined dir.
             content.unzipForEach { fileName, xmlContent ->
-                subDir.resolve("${nowMs}_$fileName").writeText(xmlContent)
+                subDir.resolve("${nowMs}_$fileName").writeBytes(xmlContent)
             }
         }
     }

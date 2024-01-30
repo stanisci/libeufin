@@ -21,10 +21,8 @@ package tech.libeufin.nexus
 import tech.libeufin.common.*
 import tech.libeufin.ebics.*
 import java.net.URLEncoder
-import java.time.Instant
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
+import java.time.*
+import java.time.format.*
 
 
 /**
@@ -85,82 +83,38 @@ fun createPain001(
     )
     val zonedTimestamp = ZonedDateTime.ofInstant(initiationTimestamp, ZoneId.of("UTC"))
     val amountWithoutCurrency: String = getAmountNoCurrency(amount)
-    return constructXml {
-        root("Document") {
-            attribute(
-                "xmlns",
-                namespace.fullNamespace
-            )
-            attribute(
-                "xmlns:xsi",
-                "http://www.w3.org/2001/XMLSchema-instance"
-            )
-            attribute(
-                "xsi:schemaLocation",
-                "${namespace.fullNamespace} ${namespace.xsdFilename}"
-            )
-            element("CstmrCdtTrfInitn") {
-                element("GrpHdr") {
-                    element("MsgId") {
-                        text(requestUid)
+    return constructXml("Document") {
+        attr("xmlns", namespace.fullNamespace)
+        attr("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
+        attr("xsi:schemaLocation", "${namespace.fullNamespace} ${namespace.xsdFilename}")
+        el("CstmrCdtTrfInitn") {
+            el("GrpHdr") {
+                el("MsgId", requestUid)
+                el("CreDtTm", DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(zonedTimestamp))
+                el("NbOfTxs", "1")
+                el("CtrlSum", amountWithoutCurrency)
+                el("InitgPty/Nm", debitAccount.name)
+            }
+            el("PmtInf") {
+                el("PmtInfId", "NOTPROVIDED")
+                el("PmtMtd", "TRF")
+                el("BtchBookg", "false")
+                el("ReqdExctnDt/Dt", DateTimeFormatter.ISO_DATE.format(zonedTimestamp))
+                el("Dbtr/Nm", debitAccount.name)
+                el("DbtrAcct/Id/IBAN", debitAccount.iban)
+                el("DbtrAgt/FinInstnId/BICFI", debitAccount.bic)
+                el("CdtTrfTxInf") {
+                    el("PmtId") {
+                        el("InstrId", "NOTPROVIDED")
+                        el("EndToEndId", "NOTPROVIDED")
                     }
-                    element("CreDtTm") {
-                        val dateFormatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME
-                        text(dateFormatter.format(zonedTimestamp))
-                    }
-                    element("NbOfTxs") {
-                        text("1")
-                    }
-                    element("CtrlSum") {
+                    el("Amt/InstdAmt") {
+                        attr("Ccy", amount.currency)
                         text(amountWithoutCurrency)
                     }
-                    element("InitgPty/Nm") {
-                        text(debitAccount.name)
-                    }
-                }
-                element("PmtInf") {
-                    element("PmtInfId") {
-                        text("NOTPROVIDED")
-                    }
-                    element("PmtMtd") {
-                        text("TRF")
-                    }
-                    element("BtchBookg") {
-                        text("false")
-                    }
-                    element("ReqdExctnDt") {
-                        element("Dt") {
-                            text(DateTimeFormatter.ISO_DATE.format(zonedTimestamp))
-                        }
-                    }
-                    element("Dbtr/Nm") {
-                        text(debitAccount.name)
-                    }
-                    element("DbtrAcct/Id/IBAN") {
-                        text(debitAccount.iban)
-                    }
-                    element("DbtrAgt/FinInstnId/BICFI") {
-                        text(debitAccount.bic)
-                    }
-                    element("CdtTrfTxInf") {
-                        element("PmtId") {
-                            element("InstrId") { text("NOTPROVIDED") }
-                            element("EndToEndId") { text("NOTPROVIDED") }
-                        }
-                        element("Amt/InstdAmt") {
-                            attribute("Ccy", amount.currency)
-                            text(amountWithoutCurrency)
-                        }
-                        element("Cdtr/Nm") {
-                            text(creditAccount.receiverName)
-                        }
-                        element("CdtrAcct/Id/IBAN") {
-                            text(creditAccount.payto.iban)
-                        }
-                        element("RmtInf/Ustrd") {
-                            text(wireTransferSubject)
-                        }
-                    }
+                    el("Cdtr/Nm", creditAccount.receiverName)
+                    el("CdtrAcct/Id/IBAN", creditAccount.payto.iban)
+                    el("RmtInf/Ustrd", wireTransferSubject)
                 }
             }
         }
@@ -185,48 +139,24 @@ data class CustomerAck(
  *
  * @param xml pain.002 input document
  */
-fun parseCustomerAck(xml: String): List<CustomerAck> {
-    val notifDoc = XMLUtil.parseStringIntoDom(xml)
-    return destructXml(notifDoc) {
-        requireRootElement("Document") {
-            requireUniqueChildNamed("CstmrPmtStsRpt") {
-                mapEachChildNamed("OrgnlPmtInfAndSts") {
-                    val actionType = requireUniqueChildNamed("OrgnlPmtInfId") {
-                        focusElement.textContent
-                    }
-                    
-                    requireUniqueChildNamed("StsRsnInf") {
-                        var timestamp: Instant? = null;
-                        requireUniqueChildNamed("Orgtr") {
-                            requireUniqueChildNamed("Id") {
-                                requireUniqueChildNamed("OrgId") {
-                                    mapEachChildNamed("Othr") {
-                                        val value = requireUniqueChildNamed("Id") {
-                                            focusElement.textContent
-                                        }
-                                        val key = requireUniqueChildNamed("SchmeNm") {
-                                            requireUniqueChildNamed("Prtry") {
-                                                focusElement.textContent
-                                            }
-                                        }
-                                        when (key) {
-                                            "TimeStamp" -> {
-                                                timestamp = parseCamtTime(value.trimEnd('Z')) // TODO better date parsing
-                                            }
-                                            // TODO extract ids ?
-                                        }
-                                    }
-                                }
-                            }
+fun parseCustomerAck(xml: ByteArray): List<CustomerAck> {
+    return destructXml(xml, "Document") {
+        one("CstmrPmtStsRpt").map("OrgnlPmtInfAndSts") {
+            val actionType = one("OrgnlPmtInfId").text()
+            one("StsRsnInf") {
+                var timestamp: Instant? = null;
+                one("Orgtr").one("Id").one("OrgId").each("Othr") {
+                    val value = one("Id")
+                    val key = one("SchmeNm").one("Prtry").text()
+                    when (key) {
+                        "TimeStamp" -> {
+                            timestamp = value.dateTime().toInstant(ZoneOffset.UTC)
                         }
-                        val code = maybeUniqueChildNamed("Rsn") {
-                            requireUniqueChildNamed("Cd") {
-                                ExternalStatusReasonCode.valueOf(focusElement.textContent)
-                            }
-                        }
-                        CustomerAck(actionType, code, timestamp!!)
+                        // TODO extract ids ?
                     }
                 }
+                val code = opt("Rsn")?.one("Cd")?.enum<ExternalStatusReasonCode>()
+                CustomerAck(actionType, code, timestamp!!)
             }
         }
     }
@@ -256,47 +186,34 @@ data class Reason (
  *
  * @param xml pain.002 input document
  */
-fun parseCustomerPaymentStatusReport(xml: String): PaymentStatus {
-    val notifDoc = XMLUtil.parseStringIntoDom(xml)
-    fun XmlElementDestructor.reasons(): List<Reason> {
-        return mapEachChildNamed("StsRsnInf") {
-            val code = requireUniqueChildNamed("Rsn") {
-                requireUniqueChildNamed("Cd") {
-                    ExternalStatusReasonCode.valueOf(focusElement.textContent)
-                }
-            }
+fun parseCustomerPaymentStatusReport(xml: ByteArray): PaymentStatus {
+    fun XmlDestructor.reasons(): List<Reason> {
+        return map("StsRsnInf") {
+            val code = one("Rsn").one("Cd").enum<ExternalStatusReasonCode>()
             // TODO parse information
             Reason(code, "")
         }
     }
-    return destructXml(notifDoc) {
-        requireRootElement("Document") {
-            requireUniqueChildNamed("CstmrPmtStsRpt") {
-                val (msgId, msgCode, msgReasons) = requireUniqueChildNamed("OrgnlGrpInfAndSts") {
-                    val id = requireUniqueChildNamed("OrgnlMsgId") {
-                        focusElement.textContent
-                    }
-                    val code = maybeUniqueChildNamed("GrpSts") {
-                        ExternalPaymentGroupStatusCode.valueOf(focusElement.textContent)
-                    }
-                    val reasons = reasons()
-                    Triple(id, code, reasons)
-                }
-                val paymentInfo = maybeUniqueChildNamed("OrgnlPmtInfAndSts") {
-                    val code = requireUniqueChildNamed("PmtInfSts") {
-                        ExternalPaymentGroupStatusCode.valueOf(focusElement.textContent)
-                    }
-                    val reasons = reasons()
-                    Pair(code, reasons)
-                }
+    return destructXml(xml, "Document") {
+        one("CstmrPmtStsRpt") {
+            val (msgId, msgCode, msgReasons) = one("OrgnlGrpInfAndSts") {
+                val id = one("OrgnlMsgId").text()
+                val code = opt("GrpSts")?.enum<ExternalPaymentGroupStatusCode>()
+                val reasons = reasons()
+                Triple(id, code, reasons)
+            }
+            val paymentInfo = opt("OrgnlPmtInfAndSts") {
+                val code = one("PmtInfSts").enum<ExternalPaymentGroupStatusCode>()
+                val reasons = reasons()
+                Pair(code, reasons)
+            }
 
-                // TODO handle multi level code better 
-                if (paymentInfo != null) {
-                    val (code, reasons) = paymentInfo
-                    PaymentStatus(msgId, code, reasons)
-                } else {
-                    PaymentStatus(msgId, msgCode!!, msgReasons)
-                }
+            // TODO handle multi level code better 
+            if (paymentInfo != null) {
+                val (code, reasons) = paymentInfo
+                PaymentStatus(msgId, code, reasons)
+            } else {
+                PaymentStatus(msgId, msgCode!!, msgReasons)
             }
         }
     }
@@ -311,39 +228,26 @@ fun parseCustomerPaymentStatusReport(xml: String): PaymentStatus {
  * @param outgoing list of outgoing payments
  */
 fun parseTxNotif(
-    notifXml: String,
+    notifXml: ByteArray,
     acceptedCurrency: String,
     incoming: MutableList<IncomingPayment>,
     outgoing: MutableList<OutgoingPayment>
 ) {
     notificationForEachTx(notifXml) { bookDate ->
-        val kind = requireUniqueChildNamed("CdtDbtInd") {
-            focusElement.textContent
-        }
-        val amount: TalerAmount = requireUniqueChildNamed("Amt") {
-            val currency = focusElement.getAttribute("Ccy")
+        val kind = one("CdtDbtInd").text()
+        val amount: TalerAmount = one("Amt") {
+            val currency = attr("Ccy")
             /**
              * FIXME: test by sending non-CHF to PoFi and see which currency gets here.
              */
             if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
-            TalerAmount("$currency:${focusElement.textContent}")
+            TalerAmount("$currency:${text()}")
         }
         when (kind) {
             "CRDT" -> {
-                val bankId: String = requireUniqueChildNamed("Refs") {
-                    requireUniqueChildNamed("AcctSvcrRef") {
-                        focusElement.textContent
-                    }
-                }
+                val bankId: String = one("Refs").one("AcctSvcrRef").text()
                 // Obtaining payment subject. 
-                val subject = maybeUniqueChildNamed("RmtInf") {
-                    val subject = StringBuilder()
-                    mapEachChildNamed("Ustrd") {
-                        val piece = focusElement.textContent
-                        subject.append(piece)
-                    }
-                    subject
-                }
+                val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString()
                 if (subject == null) {
                     logger.debug("Skip notification '$bankId', missing subject")
                     return@notificationForEachTx
@@ -351,22 +255,14 @@ fun parseTxNotif(
 
                 // Obtaining the payer's details
                 val debtorPayto = StringBuilder("payto://iban/")
-                requireUniqueChildNamed("RltdPties") {
-                    requireUniqueChildNamed("DbtrAcct") {
-                        requireUniqueChildNamed("Id") {
-                            requireUniqueChildNamed("IBAN") {
-                                debtorPayto.append(focusElement.textContent)
-                            }
-                        }
+                one("RltdPties") {
+                    one("DbtrAcct").one("Id").one("IBAN") {
+                        debtorPayto.append(text())
                     }
                     // warn: it might need the postal address too..
-                    requireUniqueChildNamed("Dbtr") {
-                        maybeUniqueChildNamed("Pty") {
-                            requireUniqueChildNamed("Nm") {
-                                val urlEncName = URLEncoder.encode(focusElement.textContent, "utf-8")
-                                debtorPayto.append("?receiver-name=$urlEncName")
-                            }
-                        }
+                    one("Dbtr").opt("Pty")?.one("Nm") {
+                        val urlEncName = URLEncoder.encode(text(), "utf-8")
+                        debtorPayto.append("?receiver-name=$urlEncName")
                     }
                 }
                 incoming.add(
@@ -380,12 +276,7 @@ fun parseTxNotif(
                 )
             }
             "DBIT" -> {
-                val messageId = requireUniqueChildNamed("Refs") {
-                    requireUniqueChildNamed("MsgId") {
-                        focusElement.textContent
-                    }
-                }
-
+                val messageId = one("Refs").one("MsgId").text()
                 outgoing.add(
                     OutgoingPayment(
                         amount = amount,
@@ -403,39 +294,29 @@ fun parseTxNotif(
  * Navigates the camt.054 (Detailavisierung) until its leaves, where
  * then it invokes the related parser, according to the payment direction.
  *
- * @param notifXml the input document.
- * @return any incoming payment as a list of [IncomingPayment]
+ * @param xml the input document.
  */
 private fun notificationForEachTx(
-    notifXml: String,
-    directionLambda: XmlElementDestructor.(Instant) -> Unit
+    xml: ByteArray,
+    directionLambda: XmlDestructor.(Instant) -> Unit
 ) {
-    val notifDoc = XMLUtil.parseStringIntoDom(notifXml)
-    destructXml(notifDoc) {
-        requireRootElement("Document") {
-            requireUniqueChildNamed("BkToCstmrDbtCdtNtfctn") {
-                mapEachChildNamed("Ntfctn") {
-                    mapEachChildNamed("Ntry") {
-                        requireUniqueChildNamed("Sts") {
-                            if (focusElement.textContent != "BOOK") {
-                                requireUniqueChildNamed("Cd") {
-                                    if (focusElement.textContent != "BOOK")
-                                        throw Exception("Found non booked transaction, " +
-                                                "stop parsing.  Status was: ${focusElement.textContent}"
-                                        )
-                                }
+    destructXml(xml, "Document") {
+        one("BkToCstmrDbtCdtNtfctn") {
+            each("Ntfctn") {
+                each("Ntry") {
+                    one("Sts") {
+                        if (text() != "BOOK") {
+                            one("Cd") {
+                                if (text() != "BOOK")
+                                    throw Exception("Found non booked transaction, " +
+                                            "stop parsing.  Status was: ${text()}"
+                                    )
                             }
                         }
-                        val bookDate: Instant = requireUniqueChildNamed("BookgDt") {
-                            requireUniqueChildNamed("Dt") {
-                                parseBookDate(focusElement.textContent)
-                            }
-                        }
-                        mapEachChildNamed("NtryDtls") {
-                            mapEachChildNamed("TxDtls") {
-                                directionLambda(this, bookDate)
-                            }
-                        }
+                    }
+                    val bookDate: Instant = one("BookgDt").one("Dt").dateTime().toInstant(ZoneOffset.UTC)
+                    one("NtryDtls").one("TxDtls") {
+                        directionLambda(this, bookDate)
                     }
                 }
             }

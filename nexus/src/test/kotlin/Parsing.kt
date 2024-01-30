@@ -20,25 +20,10 @@
 import org.junit.Test
 import tech.libeufin.nexus.*
 import tech.libeufin.common.*
-import tech.libeufin.common.parseBookDate
-import tech.libeufin.common.parseCamtTime
 import java.lang.StringBuilder
 import kotlin.test.*
 
 class Parsing {
-
-    @Test
-    fun gregorianTime() {
-        parseCamtTime("2023-11-06T20:00:00")
-        assertFailsWith<Exception> { parseCamtTime("2023-11-06T20:00:00+01:00") }
-        assertFailsWith<Exception> { parseCamtTime("2023-11-06T20:00:00Z") }
-    }
-
-    @Test
-    fun bookDateTest() {
-        parseBookDate("1970-01-01")
-        assertFailsWith<Exception> { parseBookDate("1970-01-01T00:00:01Z") }
-    }
 
     @Test
     fun reservePublicKey() {

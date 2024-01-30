@@ -18,58 +18,50 @@
  */
 
 import org.junit.Test
-import tech.libeufin.ebics.XmlElementBuilder
+import tech.libeufin.ebics.XmlBuilder
 import tech.libeufin.ebics.constructXml
+import kotlin.test.*
 
 class XmlCombinatorsTest {
 
     @Test
     fun testWithModularity() {
-        fun module(base: XmlElementBuilder) {
-            base.element("module")
+        fun module(base: XmlBuilder) {
+            base.el("module")
         }
-        val s = constructXml {
-            root("root") {
-                module(this)
-            }
+        val s = constructXml("root") {
+            module(this)
         }
         println(s)
+        assertEquals("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><root><module/></root>", s)
     }
 
     @Test
     fun testWithIterable() {
-        val s = constructXml(indent = true) {
-            namespace("iter", "able")
-            root("iterable") {
-                element("endOfDocument") {
-                    for (i in 1..10)
-                        element("$i") {
-                            element("$i$i") {
-                                text("$i$i$i")
-                            }
-                        }
-                }
+        val s = constructXml("iterable") {
+            el("endOfDocument") {
+                for (i in 1..10)
+                    el("$i/$i$i", "$i$i$i")
             }
         }
         println(s)
+        assertEquals("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><iterable><endOfDocument><1><11>111</11></1><2><22>222</22></2><3><33>333</33></3><4><44>444</44></4><5><55>555</55></5><6><66>666</66></6><7><77>777</77></7><8><88>888</88></8><9><99>999</99></9><10><1010>101010</1010></10></endOfDocument></iterable>", s)
     }
 
     @Test
     fun testBasicXmlBuilding() {
-        val s = constructXml(indent = true) {
-            namespace("ebics", "urn:org:ebics:H004")
-            root("ebics:ebicsRequest") {
-                attribute("version", "H004")
-                element("a/b/c") {
-                    attribute("attribute-of", "c")
-                    element("//d/e/f//") {
-                        attribute("nested", "true")
-                        element("g/h/")
-                    }
+        val s = constructXml("ebics:ebicsRequest") {
+            attr("version", "H004")
+            el("a/b/c") {
+                attr("attribute-of", "c")
+                el("//d/e/f//") {
+                    attr("nested", "true")
+                    el("g/h/")
                 }
-                element("one more")
             }
+            el("one more")
         }
         println(s)
+        assertEquals("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><ebics:ebicsRequest version=\"H004\"><a><b><c attribute-of=\"c\"><><><d><e><f><>< nested=\"true\"><g><h></></h></g></></></f></e></d></></></c></b></a><one more/></ebics:ebicsRequest>", s)
     }
 }

@@ -116,9 +116,6 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         val clientKeysPath = cfg.requirePath("nexus-ebics", "client_private_keys_file")
         val bankKeysPath = cfg.requirePath("nexus-ebics", "bank_public_keys_file")
 
-        var hasClientKeys = clientKeysPath.exists()
-        var hasBankKeys = bankKeysPath.exists()
-
         // Alternative payto ?
         val payto = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans"
         
@@ -157,8 +154,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     put("reset-keys", suspend {
                         clientKeysPath.deleteIfExists()
                         bankKeysPath.deleteIfExists()
-                        hasClientKeys = false
-                        hasBankKeys = false
+                        Unit
                     })
                     put("tx", suspend {
                         step("Test submit one transaction")
@@ -201,6 +197,9 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
             }
 
             while (true) {
+                var hasClientKeys = clientKeysPath.exists()
+                var hasBankKeys = bankKeysPath.exists()
+
                 if (!hasClientKeys) {
                     if (kind.test) {
                         step("Test INI order")
@@ -219,7 +218,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                         .assertOk("ebics-setup should succeed the second time")
                 }
 
-                val arg = ask("testbench >")!!.trim()
+                val arg = ask("testbench> ")!!.trim()
                 if (arg == "exit") break
                 val cmd = cmds[arg]
                 if (cmd != null) {

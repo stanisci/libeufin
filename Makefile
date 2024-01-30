@@ -110,6 +110,10 @@ bank-test: install-nobuild-bank-files
 nexus-test: install-nobuild-nexus-files
 	./gradlew :nexus:test --tests $(test) -i
 
+.PHONY: ebics-test
+ebics-test:
+	./gradlew :ebics:test --tests $(test) -i
+
 .PHONY: testbench-test
 testbench-test: install-nobuild-bank-files install-nobuild-nexus-files
 	./gradlew :testbench:test --tests $(test) -i

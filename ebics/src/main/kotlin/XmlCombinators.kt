@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2020 Taler Systems S.A.
+ * Copyright (C) 2020, 2024 Taler Systems S.A.
  *
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -25,28 +25,27 @@ import org.w3c.dom.Element
 import java.io.StringWriter
 import javax.xml.stream.XMLOutputFactory
 import javax.xml.stream.XMLStreamWriter
+import java.time.format.*
+import java.time.*
 
-class XmlElementBuilder(val w: XMLStreamWriter) {
-    /**
-     * First consumes all the path's components, and _then_ starts applying f.
-     */
-    fun element(path: MutableList<String>, f: XmlElementBuilder.() -> Unit = {}) {
-        /* the wanted path got constructed, go on with f's logic now.  */
-        if (path.isEmpty()) {
-            f()
-            return
+class XmlBuilder(private val w: XMLStreamWriter) {
+    fun el(path: String, lambda: XmlBuilder.() -> Unit = {}) {
+        path.splitToSequence('/').forEach { 
+            w.writeStartElement(it)
         }
-        w.writeStartElement(path.removeAt(0))
-        this.element(path, f)
-        w.writeEndElement()
+        lambda()
+        path.splitToSequence('/').forEach { 
+            w.writeEndElement()
+        }
     }
 
-    fun element(path: String, f: XmlElementBuilder.() -> Unit = {}) {
-        val splitPath = path.trim('/').split("/").toMutableList()
-        this.element(splitPath, f)
+    fun el(path: String, content: String) {
+        el(path) {
+            text(content)
+        }
     }
 
-    fun attribute(name: String, value: String) {
+    fun attr(name: String, value: String) {
         w.writeAttribute(name, value)
     }
 
@@ -55,130 +54,89 @@ class XmlElementBuilder(val w: XMLStreamWriter) {
     }
 }
 
-class XmlDocumentBuilder {
-
-    private var maybeWriter: XMLStreamWriter? = null
-    internal var writer: XMLStreamWriter
-        get() {
-            val w = maybeWriter
-            return w ?: throw AssertionError("no writer set")
-        }
-        set(w: XMLStreamWriter) {
-            maybeWriter = w
-        }
-
-    fun namespace(uri: String) {
-        writer.setDefaultNamespace(uri)
-    }
-
-    fun namespace(prefix: String, uri: String) {
-        writer.setPrefix(prefix, uri)
-    }
-
-    fun defaultNamespace(uri: String) {
-        writer.setDefaultNamespace(uri)
-    }
-
-    fun root(name: String, f: XmlElementBuilder.() -> Unit) {
-        val elementBuilder = XmlElementBuilder(writer)
-        writer.writeStartElement(name)
-        elementBuilder.f()
-        writer.writeEndElement()
-    }
-}
-
-fun constructXml(indent: Boolean = false, f: XmlDocumentBuilder.() -> Unit): String {
-    val b = XmlDocumentBuilder()
+fun constructXml(root: String, f: XmlBuilder.() -> Unit): String {
     val factory = XMLOutputFactory.newFactory()
-    factory.setProperty(XMLOutputFactory.IS_REPAIRING_NAMESPACES, true)
     val stream = StringWriter()
     var writer = factory.createXMLStreamWriter(stream)
-    if (indent) {
-        writer = IndentingXMLStreamWriter(writer)
-    }
-    b.writer = writer
     /**
      * NOTE: commenting out because it wasn't obvious how to output the
      * "standalone = 'yes' directive".  Manual forge was therefore preferred.
      */
-    // writer.writeStartDocument()
-    f(b)
+    stream.write("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+    XmlBuilder(writer).el(root) {
+        this.f()
+    }
     writer.writeEndDocument()
-    return "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n${stream.buffer.toString()}"
+    return stream.buffer.toString()
 }
 
 class DestructionError(m: String) : Exception(m)
 
-private fun Element.getChildElements(ns: String, tag: String): List<Element> {
-    val elements = mutableListOf<Element>()
-    for (i in 0..this.childNodes.length) {
-        val el = this.childNodes.item(i)
+private fun Element.childrenByTag(tag: String): Sequence<Element> = sequence {
+    for (i in 0..childNodes.length) {
+        val el = childNodes.item(i)
         if (el !is Element) {
             continue
         }
-        if (ns != "*" && el.namespaceURI != ns) {
+        if (el.localName != tag) {
             continue
         }
-        if (tag != "*" && el.localName != tag) {
-            continue
-        }
-        elements.add(el)
-    }
-    return elements
-}
-
-class XmlElementDestructor internal constructor(val focusElement: Element) {
-    fun <T> requireOnlyChild(f: XmlElementDestructor.(e: Element) -> T): T {
-        val children = focusElement.getChildElements("*", "*")
-        if (children.size != 1) throw DestructionError("expected singleton child tag")
-        val destr = XmlElementDestructor(children[0])
-        return f(destr, children[0])
-    }
-
-    fun <T> mapEachChildNamed(s: String, f: XmlElementDestructor.() -> T): List<T> {
-        val res = mutableListOf<T>()
-        val els = focusElement.getChildElements("*", s)
-        for (child in els) {
-            val destr = XmlElementDestructor(child)
-            res.add(f(destr))
-        }
-        return res
-    }
-
-    fun <T> requireUniqueChildNamed(s: String, f: XmlElementDestructor.() -> T): T {
-        val cl = focusElement.getChildElements("*", s)
-        if (cl.size != 1) {
-            throw DestructionError("expected exactly one unique $s child, got ${cl.size} instead at ${focusElement}")
-        }
-        val el = cl[0]
-        val destr = XmlElementDestructor(el)
-        return f(destr)
-    }
-
-    fun <T> maybeUniqueChildNamed(s: String, f: XmlElementDestructor.() -> T): T? {
-        val cl = focusElement.getChildElements("*", s)
-        if (cl.size > 1) {
-            throw DestructionError("expected at most one unique $s child, got ${cl.size} instead")
-        }
-        if (cl.size == 1) {
-            val el = cl[0]
-            val destr = XmlElementDestructor(el)
-            return f(destr)
-        }
-        return null
+        yield(el)
     }
 }
 
-class XmlDocumentDestructor internal constructor(val d: Document) {
-    fun <T> requireRootElement(name: String, f: XmlElementDestructor.() -> T): T {
-        if (this.d.documentElement.tagName != name) {
-            throw DestructionError("expected '$name' tag")
+class XmlDestructor internal constructor(private val el: Element) {
+    fun each(path: String, f: XmlDestructor.() -> Unit) {
+        el.childrenByTag(path).forEach {
+            f(XmlDestructor(it))
         }
-        val destr = XmlElementDestructor(d.documentElement)
-        return f(destr)
     }
+
+    fun <T> map(path: String, f: XmlDestructor.() -> T): List<T> {
+        return el.childrenByTag(path).map {
+            f(XmlDestructor(it))
+        }.toList()
+    }
+
+    fun one(path: String): XmlDestructor {
+        val children = el.childrenByTag(path).iterator()
+        if (!children.hasNext()) {
+            throw DestructionError("expected a single $path child, got none instead at $el")
+        }
+        val el = children.next()
+        if (children.hasNext()) {
+            throw DestructionError("expected a single $path child, got ${children.asSequence() + 1} instead at $el")
+        }
+        return XmlDestructor(el)
+    }
+    fun opt(path: String): XmlDestructor? {
+        val children = el.childrenByTag(path).iterator()
+        if (!children.hasNext()) {
+            return null
+        }
+        val el = children.next()
+        if (children.hasNext()) {
+            throw DestructionError("expected an optional $path child, got ${children.asSequence().count() + 1} instead at $el")
+        }
+        return XmlDestructor(el)
+    }
+
+    fun <T> one(path: String, f: XmlDestructor.() -> T): T = f(one(path))
+    fun <T> opt(path: String, f: XmlDestructor.() -> T): T? = opt(path)?.run(f)
+
+    fun text(): String = el.textContent
+    fun date(): LocalDate = LocalDate.parse(text(), DateTimeFormatter.ISO_DATE)
+    fun dateTime(): LocalDateTime = LocalDateTime.parse(text(), DateTimeFormatter.ISO_DATE_TIME)
+    inline fun <reified T : kotlin.Enum<T>> enum(): T = java.lang.Enum.valueOf(T::class.java, text())
+
+    fun attr(index: String): String = el.getAttribute(index)
 }
 
-fun <T> destructXml(d: Document, f: XmlDocumentDestructor.() -> T): T {
-    return f(XmlDocumentDestructor(d))
+fun <T> destructXml(xml: ByteArray, root: String, f: XmlDestructor.() -> T): T {
+    val doc = XMLUtil.parseBytesIntoDom(xml)
+    if (doc.documentElement.tagName != root) {
+        throw DestructionError("expected root '$root' got '${doc.documentElement.tagName}'")
+    }
+    val destr = XmlDestructor(doc.documentElement)
+    return f(destr)
 }
