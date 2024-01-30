@@ -236,9 +236,6 @@ suspend fun ingestIncomingPayment(
 ) {
     val reservePub = getTalerReservePub(payment)
     if (reservePub == null) {
-        logger.debug("Incoming payment with UID '${payment.bankId}'" +
-                " has invalid subject: ${payment.wireTransferSubject}."
-        )
         val result = db.registerMalformedIncoming(
             payment,
             payment.amount, 

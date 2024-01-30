@@ -38,11 +38,7 @@ class Iso20022Test {
                         } else if (name.contains("pain.002")) {
                             parseCustomerPaymentStatusReport(str)
                         } else {
-                            try {
-                                parseTxNotif(str, "CHF", mutableListOf(), mutableListOf())
-                            } catch (e: Exception) {
-                                println(e) // TODO import tx notif
-                            }
+                            parseTxNotif(str, "CHF", mutableListOf(), mutableListOf())
                         }
                     }
                 }

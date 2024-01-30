@@ -326,9 +326,11 @@ private fun notificationForEachTx(
     directionLambda: XmlDestructor.(Instant) -> Unit
 ) {
     destructXml(xml, "Document") {
-        one("BkToCstmrDbtCdtNtfctn") {
-            each("Ntfctn") {
-                each("Ntry") {
+        opt("BkToCstmrDbtCdtNtfctn")?.each("Ntfctn") {
+            each("Ntry") {
+                if (opt("RvslInd")?.bool() ?: false) {
+                    logger.warn("Skip reversal transaction")
+                } else {
                     one("Sts") {
                         if (text() != "BOOK") {
                             one("Cd") {
@@ -339,8 +341,8 @@ private fun notificationForEachTx(
                             }
                         }
                     }
-                    val bookDate: Instant = one("BookgDt").one("Dt").dateTime().toInstant(ZoneOffset.UTC)
-                    one("NtryDtls").one("TxDtls") {
+                    val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
+                    one("NtryDtls").each("TxDtls") {
                         directionLambda(this, bookDate)
                     }
                 }
