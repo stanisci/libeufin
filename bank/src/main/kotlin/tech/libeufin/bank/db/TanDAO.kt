@@ -56,9 +56,9 @@ class TanDAO(private val db: Database) {
     }
 
     /** Result of TAN challenge transmission */
-    sealed class TanSendResult {
-        data class Success(val tanInfo: String, val tanChannel: TanChannel, val tanCode: String?): TanSendResult()
-        object NotFound: TanSendResult()
+    sealed interface TanSendResult {
+        data class Success(val tanInfo: String, val tanChannel: TanChannel, val tanCode: String?): TanSendResult
+        data object NotFound: TanSendResult
     }
 
     /** Request TAN challenge transmission */

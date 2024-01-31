@@ -31,14 +31,14 @@ private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-tx-dao")
 /** Data access logic for transactions */
 class TransactionDAO(private val db: Database) {
     /** Result status of bank transaction creation .*/
-    sealed class BankTransactionResult {
-        data class Success(val id: Long): BankTransactionResult()
-        object UnknownCreditor: BankTransactionResult()
-        object AdminCreditor: BankTransactionResult()
-        object UnknownDebtor: BankTransactionResult()
-        object BothPartySame: BankTransactionResult()
-        object BalanceInsufficient: BankTransactionResult()
-        object TanRequired: BankTransactionResult()
+    sealed interface BankTransactionResult {
+        data class Success(val id: Long): BankTransactionResult
+        data object UnknownCreditor: BankTransactionResult
+        data object AdminCreditor: BankTransactionResult
+        data object UnknownDebtor: BankTransactionResult
+        data object BothPartySame: BankTransactionResult
+        data object BalanceInsufficient: BankTransactionResult
+        data object TanRequired: BankTransactionResult
     }
 
     /** Create a new transaction */

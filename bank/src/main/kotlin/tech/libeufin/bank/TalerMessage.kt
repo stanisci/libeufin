@@ -82,7 +82,7 @@ enum class Operation {
 
 @Serializable(with = Option.Serializer::class)
 sealed class Option<out T> {
-    object None : Option<Nothing>()
+    data object None : Option<Nothing>()
     data class Some<T>(val value: T) : Option<T>()
 
     fun get(): T? {
@@ -209,7 +209,7 @@ data class TokenRequest(
 )
 
 @Serializable
-sealed class MonitorResponse {
+sealed interface MonitorResponse {
     abstract val talerInCount: Long
     abstract val talerInVolume: TalerAmount
     abstract val talerOutCount: Long
@@ -223,7 +223,7 @@ data class MonitorNoConversion(
     override val talerInVolume: TalerAmount,
     override val talerOutCount: Long,
     override val talerOutVolume: TalerAmount
-) : MonitorResponse()
+) : MonitorResponse
 
 @Serializable
 @SerialName("with-conversions")
@@ -238,7 +238,7 @@ data class MonitorWithConversion(
     override val talerInVolume: TalerAmount,
     override val talerOutCount: Long,
     override val talerOutVolume: TalerAmount
-) : MonitorResponse()
+) : MonitorResponse
 
 /**
  * Convenience type to get bank account information

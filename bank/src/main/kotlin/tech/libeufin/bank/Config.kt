@@ -66,9 +66,9 @@ data class ConversionRate (
     val cashout_min_amount: TalerAmount,
 )
 
-sealed class ServerConfig {
-    data class Unix(val path: String, val mode: Int): ServerConfig()
-    data class Tcp(val port: Int): ServerConfig()
+sealed interface ServerConfig {
+    data class Unix(val path: String, val mode: Int): ServerConfig
+    data class Tcp(val port: Int): ServerConfig
 }
 
 fun talerConfig(configPath: Path?): TalerConfig = BANK_CONFIG_SOURCE.fromFile(configPath)

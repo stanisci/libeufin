@@ -209,14 +209,14 @@ class AccountDAO(private val db: Database) {
     }
 
     /** Result status of customer account patch */
-    sealed class AccountPatchResult {
-        data object UnknownAccount: AccountPatchResult()
-        data object NonAdminName: AccountPatchResult()
-        data object NonAdminCashout: AccountPatchResult()
-        data object NonAdminDebtLimit: AccountPatchResult()
-        data object MissingTanInfo: AccountPatchResult()
-        data class TanRequired(val channel: TanChannel?, val info: String?): AccountPatchResult()
-        data object Success: AccountPatchResult()
+    sealed interface AccountPatchResult {
+        data object UnknownAccount: AccountPatchResult
+        data object NonAdminName: AccountPatchResult
+        data object NonAdminCashout: AccountPatchResult
+        data object NonAdminDebtLimit: AccountPatchResult
+        data object MissingTanInfo: AccountPatchResult
+        data class TanRequired(val channel: TanChannel?, val info: String?): AccountPatchResult
+        data object Success: AccountPatchResult
     }
 
     /** Change account [login] informations */

@@ -40,7 +40,7 @@ class JsonBuilder(from: JsonObject) {
 
     infix inline fun <reified T> String.to(v: T) {
         val json = Json.encodeToJsonElement(kotlinx.serialization.serializer<T>(), v);
-        content.put(this, json)
+        content[this] = json
     }
 }
 

@@ -100,10 +100,10 @@ class ConversionDAO(private val db: Database) {
     }
 
     /** Result of conversions operations */
-    sealed class ConversionResult {
-        data class Success(val converted: TalerAmount): ConversionResult()
-        object ToSmall: ConversionResult()
-        object MissingConfig: ConversionResult()
+    sealed interface ConversionResult {
+        data class Success(val converted: TalerAmount): ConversionResult
+        data object ToSmall: ConversionResult
+        data object MissingConfig: ConversionResult
     }
 
     /** Perform [direction] conversion of [amount] using in-db [function] */

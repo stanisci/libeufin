@@ -85,15 +85,15 @@ class ExchangeDAO(private val db: Database) {
         }
 
     /** Result of taler transfer transaction creation */
-    sealed class TransferResult {
+    sealed interface TransferResult {
         /** Transaction [id] and wire transfer [timestamp] */
-        data class Success(val id: Long, val timestamp: TalerProtocolTimestamp): TransferResult()
-        object NotAnExchange: TransferResult()
-        object UnknownExchange: TransferResult()
-        object UnknownCreditor: TransferResult()
-        object BothPartyAreExchange: TransferResult()
-        object BalanceInsufficient: TransferResult()
-        object ReserveUidReuse: TransferResult()
+        data class Success(val id: Long, val timestamp: TalerProtocolTimestamp): TransferResult
+        data object NotAnExchange: TransferResult
+        data object UnknownExchange: TransferResult
+        data object UnknownCreditor: TransferResult
+        data object BothPartyAreExchange: TransferResult
+        data object BalanceInsufficient: TransferResult
+        data object ReserveUidReuse: TransferResult
     }
 
     /** Perform a Taler transfer */
@@ -150,15 +150,15 @@ class ExchangeDAO(private val db: Database) {
     }
 
     /** Result of taler add incoming transaction creation */
-    sealed class AddIncomingResult {
+    sealed interface AddIncomingResult {
         /** Transaction [id] and wire transfer [timestamp] */
-        data class Success(val id: Long, val timestamp: TalerProtocolTimestamp): AddIncomingResult()
-        object NotAnExchange: AddIncomingResult()
-        object UnknownExchange: AddIncomingResult()
-        object UnknownDebtor: AddIncomingResult()
-        object BothPartyAreExchange: AddIncomingResult()
-        object ReservePubReuse: AddIncomingResult()
-        object BalanceInsufficient: AddIncomingResult()
+        data class Success(val id: Long, val timestamp: TalerProtocolTimestamp): AddIncomingResult
+        data object NotAnExchange: AddIncomingResult
+        data object UnknownExchange: AddIncomingResult
+        data object UnknownDebtor: AddIncomingResult
+        data object BothPartyAreExchange: AddIncomingResult
+        data object ReservePubReuse: AddIncomingResult
+        data object BalanceInsufficient: AddIncomingResult
     }
 
      /** Add a new taler incoming transaction */

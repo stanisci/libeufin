@@ -28,15 +28,15 @@ import tech.libeufin.bank.*
 /** Data access logic for cashout operations */
 class CashoutDAO(private val db: Database) {
     /** Result of cashout operation creation */
-    sealed class CashoutCreationResult {
-        data class Success(val id: Long): CashoutCreationResult()
-        object BadConversion: CashoutCreationResult()
-        object AccountNotFound: CashoutCreationResult()
-        object AccountIsExchange: CashoutCreationResult()
-        object BalanceInsufficient: CashoutCreationResult()
-        object RequestUidReuse: CashoutCreationResult()
-        object NoCashoutPayto: CashoutCreationResult()
-        object TanRequired: CashoutCreationResult()
+    sealed interface CashoutCreationResult {
+        data class Success(val id: Long): CashoutCreationResult
+        data object BadConversion: CashoutCreationResult
+        data object AccountNotFound: CashoutCreationResult
+        data object AccountIsExchange: CashoutCreationResult
+        data object BalanceInsufficient: CashoutCreationResult
+        data object RequestUidReuse: CashoutCreationResult
+        data object NoCashoutPayto: CashoutCreationResult
+        data object TanRequired: CashoutCreationResult
     }
 
     /** Create a new cashout operation */

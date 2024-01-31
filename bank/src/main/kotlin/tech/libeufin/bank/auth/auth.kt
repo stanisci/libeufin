@@ -87,9 +87,7 @@ fun Route.auth(db: Database, scope: TokenScope, allowAdmin: Boolean = false, req
     intercept(callback) {
         val authLogin = context.authenticateBankRequest(db, scope)
         if (requireAdmin && authLogin != "admin") {
-            if (authLogin != "admin") {
-                throw unauthorized("Only administrator allowed")
-            }
+            throw unauthorized("Only administrator allowed")
         } else {
             val hasRight = authLogin == username || (allowAdmin && authLogin == "admin");
             if (!hasRight) {

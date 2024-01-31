@@ -155,9 +155,9 @@ private inline fun <reified T> loadJsonFile(path: Path, name: String): T? {
     val content = try {
         path.readText()
     } catch (e: Exception) {
-        when {
-            e is NoSuchFileException -> return null
-            e is AccessDeniedException -> throw Exception("Could not read $name at '$path': permission denied")
+        when (e) {
+            is NoSuchFileException -> return null
+            is AccessDeniedException -> throw Exception("Could not read $name at '$path': permission denied")
             else -> throw Exception("Could not read $name at '$path'", e)
         }
     }

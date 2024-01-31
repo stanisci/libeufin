@@ -304,7 +304,7 @@ class IntegrationTest {
                 }.assertOkJson<IncomingHistory> {
                     val tx = it.incoming_transactions.first()
                     assertEquals(converted, tx.amount)
-                    assert(Arrays.equals(reservePub, tx.reserve_pub.raw))
+                    assert(reservePub.contentEquals(tx.reserve_pub.raw))
                 }
             }
 

@@ -72,7 +72,7 @@ class Base32Crockford32B {
         return encoded()
     }
 
-    override fun equals(other: Any?) = (other is Base32Crockford32B) && Arrays.equals(raw, other.raw)
+    override fun equals(other: Any?) = (other is Base32Crockford32B) && raw.contentEquals(other.raw)
 
     internal object Serializer : KSerializer<Base32Crockford32B> {
         override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford32B", PrimitiveKind.STRING)
@@ -125,7 +125,7 @@ class Base32Crockford64B {
         return encoded()
     }
 
-    override fun equals(other: Any?) = (other is Base32Crockford64B) && Arrays.equals(raw, other.raw)
+    override fun equals(other: Any?) = (other is Base32Crockford64B) && raw.contentEquals(other.raw)
 
     internal object Serializer : KSerializer<Base32Crockford64B> {
         override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford64B", PrimitiveKind.STRING)

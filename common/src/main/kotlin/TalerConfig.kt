@@ -133,9 +133,9 @@ class TalerConfig internal constructor(
         val content =  try {
             file.readText()
         } catch (e: Exception) {
-            when {
-                e is NoSuchFileException -> throw Exception("Could not read config at '$file': no such file")
-                e is AccessDeniedException -> throw Exception("Could not read config at '$file': permission denied")
+            when (e) {
+                is NoSuchFileException -> throw Exception("Could not read config at '$file': no such file")
+                is AccessDeniedException -> throw Exception("Could not read config at '$file': permission denied")
                 else -> throw Exception("Could not read config at '$file'", e)
             }
         }
