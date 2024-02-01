@@ -180,7 +180,7 @@ data class RegisterAccountRequest(
 
 @Serializable
 data class RegisterAccountResponse(
-    val internal_payto_uri: String
+    val internal_payto_uri: FullIbanPayto
 )
 
 /**
@@ -245,7 +245,7 @@ data class MonitorWithConversion(
  * from/to the database.
  */
 data class BankInfo(
-    val internalPaytoUri: String,
+    val payto: FullIbanPayto,
     val bankAccountId: Long,
     val isTalerExchange: Boolean,
 )
@@ -341,7 +341,7 @@ data class Balance(
 data class AccountMinimalData(
     val username: String,
     val name: String,
-    val payto_uri: String,
+    val payto_uri: FullIbanPayto,
     val balance: Balance,
     val debit_threshold: TalerAmount,
     val is_public: Boolean,
@@ -363,7 +363,7 @@ data class ListBankAccountsResponse(
 data class AccountData(
     val name: String,
     val balance: Balance,
-    val payto_uri: String,
+    val payto_uri: FullIbanPayto,
     val debit_threshold: TalerAmount,
     val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: String? = null,
@@ -387,8 +387,8 @@ data class TransactionCreateResponse(
   or from GET /transactions */
 @Serializable
 data class BankAccountTransactionInfo(
-    val creditor_payto_uri: String,
-    val debtor_payto_uri: String,
+    val creditor_payto_uri: FullIbanPayto,
+    val debtor_payto_uri: FullIbanPayto,
     val amount: TalerAmount,
     val direction: TransactionDirection,
     val subject: String,
@@ -557,7 +557,7 @@ data class AddIncomingResponse(
 @Serializable
 data class IncomingHistory(
     val incoming_transactions: List<IncomingReserveTransaction>,
-    val credit_account: String // Receiver's Payto URI.
+    val credit_account: FullIbanPayto
 )
 
 /**
@@ -569,7 +569,7 @@ data class IncomingReserveTransaction(
     val row_id: Long, // DB row ID of the payment.
     val date: TalerProtocolTimestamp,
     val amount: TalerAmount,
-    val debit_account: String, // Payto of the sender.
+    val debit_account: FullIbanPayto,
     val reserve_pub: EddsaPublicKey
 )
 
@@ -579,7 +579,7 @@ data class IncomingReserveTransaction(
 @Serializable
 data class OutgoingHistory(
     val outgoing_transactions: List<OutgoingTransaction>,
-    val debit_account: String // Debitor's Payto URI.
+    val debit_account: FullIbanPayto
 )
 
 /**
@@ -590,7 +590,7 @@ data class OutgoingTransaction(
     val row_id: Long, // DB row ID of the payment.
     val date: TalerProtocolTimestamp,
     val amount: TalerAmount,
-    val credit_account: String, // Payto of the receiver.
+    val credit_account: FullIbanPayto,
     val wtid: ShortHashCode,
     val exchange_base_url: String,
 )
@@ -598,7 +598,7 @@ data class OutgoingTransaction(
 @Serializable
 data class RevenueIncomingHistory(
     val incoming_transactions : List<RevenueIncomingBankTransaction>,
-    val credit_account: String
+    val credit_account: FullIbanPayto
 )
 
 @Serializable
@@ -606,7 +606,7 @@ data class RevenueIncomingBankTransaction(
     val row_id: Long,
     val date: TalerProtocolTimestamp,
     val amount: TalerAmount,
-    val debit_account: String,
+    val debit_account: FullIbanPayto,
     val subject: String
 )
 
@@ -645,7 +645,7 @@ data class PublicAccountsResponse(
 @Serializable
 data class PublicAccount(
     val username: String,
-    val payto_uri: String,
+    val payto_uri: FullIbanPayto,
     val balance: Balance,
     val is_taler_exchange: Boolean,
 )

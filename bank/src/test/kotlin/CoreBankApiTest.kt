@@ -206,7 +206,7 @@ class CoreBankAccountsApiTest {
         client.post("/accounts") {
             json(req)
         }.assertOkJson<RegisterAccountResponse> {
-            assertEquals(IbanPayto.canonical, it.internal_payto_uri)
+            assertEquals(IbanPayto.withName("Jane").full, it.internal_payto_uri.full)
         }
         // Testing idempotency
         client.post("/accounts") {
@@ -902,10 +902,10 @@ class CoreBankTransactionsApiTest {
             }
         }.assertConflict(TalerErrorCode.BANK_SAME_ACCOUNT)
         // Transaction to admin
-        val adminPayto = db.account.bankInfo("admin")!!.internalPaytoUri
+        val adminPayto = db.account.bankInfo("admin")!!.payto
         client.postA("/accounts/merchant/transactions") {
             json(valid_req) {
-                "payto_uri" to "$adminPayto?message=payout"
+                "payto_uri" to "${adminPayto.payto}?message=payout"
             }
         }.assertConflict(TalerErrorCode.BANK_ADMIN_CREDITOR)
 

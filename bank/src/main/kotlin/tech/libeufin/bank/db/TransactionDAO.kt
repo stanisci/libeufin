@@ -145,7 +145,9 @@ class TransactionDAO(private val db: Database) {
         val stmt = conn.prepareStatement("""
             SELECT 
               creditor_payto_uri
+              ,creditor_name
               ,debtor_payto_uri
+              ,debtor_name
               ,subject
               ,(amount).val AS amount_val
               ,(amount).frac AS amount_frac
@@ -161,8 +163,8 @@ class TransactionDAO(private val db: Database) {
         stmt.setString(2, login)
         stmt.oneOrNull {
             BankAccountTransactionInfo(
-                creditor_payto_uri = it.getString("creditor_payto_uri"),
-                debtor_payto_uri = it.getString("debtor_payto_uri"),
+                creditor_payto_uri = it.getFullPayto("creditor_payto_uri", "creditor_name"),
+                debtor_payto_uri = it.getFullPayto("debtor_payto_uri", "debtor_name"),
                 amount = it.getAmount("amount", db.bankCurrency),
                 direction = TransactionDirection.valueOf(it.getString("direction")),
                 subject = it.getString("subject"),
@@ -184,7 +186,9 @@ class TransactionDAO(private val db: Database) {
                 ,(amount).val AS amount_val
                 ,(amount).frac AS amount_frac
                 ,debtor_payto_uri
+                ,debtor_name
                 ,creditor_payto_uri
+                ,creditor_name
                 ,subject
                 ,direction
             FROM bank_account_transactions WHERE
@@ -192,8 +196,8 @@ class TransactionDAO(private val db: Database) {
             BankAccountTransactionInfo(
                 row_id = it.getLong("bank_transaction_id"),
                 date = it.getTalerTimestamp("transaction_date"),
-                debtor_payto_uri = it.getString("debtor_payto_uri"),
-                creditor_payto_uri = it.getString("creditor_payto_uri"),
+                creditor_payto_uri = it.getFullPayto("creditor_payto_uri", "creditor_name"),
+                debtor_payto_uri = it.getFullPayto("debtor_payto_uri", "debtor_name"),
                 amount = it.getAmount("amount", db.bankCurrency),
                 subject = it.getString("subject"),
                 direction = TransactionDirection.valueOf(it.getString("direction"))
@@ -213,6 +217,7 @@ class TransactionDAO(private val db: Database) {
                 ,(amount).val AS amount_val
                 ,(amount).frac AS amount_frac
                 ,debtor_payto_uri
+                ,debtor_name
                 ,subject
             FROM bank_account_transactions WHERE direction='credit' AND
         """) {
@@ -220,7 +225,7 @@ class TransactionDAO(private val db: Database) {
                 row_id = it.getLong("bank_transaction_id"),
                 date = it.getTalerTimestamp("transaction_date"),
                 amount = it.getAmount("amount", db.bankCurrency),
-                debit_account = it.getString("debtor_payto_uri"),
+                debit_account = it.getFullPayto("debtor_payto_uri", "debtor_name"),
                 subject = it.getString("subject")
             )
         }

@@ -96,7 +96,7 @@ class AccountDAO(private val db: Database) {
                         ,creation_time
                     ) VALUES (?, ?)
                 """).run {
-                    setString(1, internalPaytoUri.iban)
+                    setString(1, internalPaytoUri.iban.value)
                     setLong(2, now)
                     if (!executeUpdateViolation()) {
                         conn.rollback()
@@ -423,6 +423,7 @@ class AccountDAO(private val db: Database) {
             SELECT
              bank_account_id
              ,internal_payto_uri
+             ,name
              ,is_taler_exchange
             FROM bank_accounts
                 JOIN customers 
@@ -432,7 +433,7 @@ class AccountDAO(private val db: Database) {
         stmt.setString(1, login)
         stmt.oneOrNull {
             BankInfo(
-                internalPaytoUri = it.getString("internal_payto_uri"),
+                payto = it.getFullPayto("internal_payto_uri", "name"),
                 isTalerExchange = it.getBoolean("is_taler_exchange"),
                 bankAccountId = it.getLong("bank_account_id")
             )
@@ -471,7 +472,7 @@ class AccountDAO(private val db: Database) {
                 ),
                 tan_channel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) },
                 cashout_payto_uri = it.getString("cashout_payto"),
-                payto_uri = it.getString("internal_payto_uri"),
+                payto_uri = it.getFullPayto("internal_payto_uri", "name"),
                 balance = Balance(
                     amount = it.getAmount("balance", db.bankCurrency),
                     credit_debit_indicator =
@@ -499,8 +500,9 @@ class AccountDAO(private val db: Database) {
               (balance).frac AS balance_frac,
               has_debt,
               internal_payto_uri,
-              c.login
-              ,is_taler_exchange
+              c.login,
+              is_taler_exchange,
+              name
               FROM bank_accounts JOIN customers AS c
                 ON owning_customer_id = c.customer_id
                 WHERE is_public=true AND c.login LIKE ? AND
@@ -512,7 +514,7 @@ class AccountDAO(private val db: Database) {
         ) {
             PublicAccount(
                 username = it.getString("login"),
-                payto_uri = it.getString("internal_payto_uri"),
+                payto_uri = it.getFullPayto("internal_payto_uri", "name"),
                 balance = Balance(
                     amount = it.getAmount("balance", db.bankCurrency),
                     credit_debit_indicator = if (it.getBoolean("has_debt")) {
@@ -565,7 +567,7 @@ class AccountDAO(private val db: Database) {
                 debit_threshold = it.getAmount("max_debt", db.bankCurrency),
                 is_public = it.getBoolean("is_public"),
                 is_taler_exchange = it.getBoolean("is_taler_exchange"),
-                payto_uri = it.getString("internal_payto_uri"),
+                payto_uri = it.getFullPayto("internal_payto_uri", "name"),
             )
         }
 }

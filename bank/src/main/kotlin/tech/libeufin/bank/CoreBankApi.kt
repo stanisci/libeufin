@@ -138,7 +138,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
     }
 }
 
-suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountRequest, isAdmin: Boolean): Pair<AccountCreationResult, IbanPayto>  {
+suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountRequest, isAdmin: Boolean): Pair<AccountCreationResult, FullIbanPayto>  {
     // Prohibit reserved usernames:
     if (RESERVED_ACCOUNTS.contains(req.username))
         throw conflict(
@@ -205,7 +205,7 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             retry--
             continue
         }
-        return Pair(res, internalPayto)
+        return Pair(res, internalPayto.withName(req.name))
     }
 }
 
@@ -264,10 +264,10 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_REGISTER_USERNAME_REUSE
                 )
                 AccountCreationResult.PayToReuse -> throw conflict(
-                    "Bank internalPayToUri reuse '${internalPayto.canonical}'",
+                    "Bank internalPayToUri reuse '${internalPayto.payto}'",
                     TalerErrorCode.BANK_REGISTER_PAYTO_URI_REUSE
                 )
-                AccountCreationResult.Success -> call.respond(RegisterAccountResponse(internalPayto.canonical))
+                AccountCreationResult.Success -> call.respond(RegisterAccountResponse(internalPayto))
             }
         }
     }

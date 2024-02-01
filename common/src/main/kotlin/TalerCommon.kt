@@ -102,6 +102,31 @@ class TalerAmount {
     }
 }
 
+@JvmInline
+value class IBAN private constructor(val value: String) {
+    override fun toString(): String = value
+
+    companion object {
+        private val SEPARATOR = Regex("[\\ \\-]");
+
+        fun parse(raw: String): IBAN {
+            val iban: String = raw.uppercase().replace(SEPARATOR, "")
+            val builder = StringBuilder(iban.length + iban.asSequence().map { if (it.isDigit()) 1 else 2 }.sum())
+            (iban.subSequence(4, iban.length).asSequence() + iban.subSequence(0, 4).asSequence()).forEach {
+                if (it.isDigit()) {
+                    builder.append(it)
+                } else {
+                    builder.append((it.code - 'A'.code) + 10)
+                }
+            }
+            val str = builder.toString()
+            val mod = str.toBigInteger().mod(97.toBigInteger()).toInt();
+            if (mod != 1) throw CommonError.IbanPayto("Iban malformed, modulo is $mod expected 1")
+            return IBAN(iban)
+        }
+    }
+}
+
 
 sealed class PaytoUri {
     abstract val amount: TalerAmount?
@@ -115,10 +140,12 @@ sealed class PaytoUri {
 class IbanPayto: PaytoUri {
     val parsed: URI
     val canonical: String
-    val iban: String
+    val iban: IBAN
     override val amount: TalerAmount?
     override val message: String?
     override val receiverName: String?
+
+    // TODO maybe add a fster builder that performs less expensive checks when the payto is from the database ?
 
     constructor(raw: String) {
         try {
@@ -136,8 +163,7 @@ class IbanPayto: PaytoUri {
             2 -> splitPath[1]
             else -> throw CommonError.IbanPayto("too many path segments")
         }
-        iban = rawIban.uppercase().replace(SEPARATOR, "")
-        checkIban(iban)
+        iban = IBAN.parse(rawIban)
         canonical = "payto://iban/$iban"
     
         val params = (parsed.query ?: "").parseUrlEncodedParameters();
@@ -146,20 +172,21 @@ class IbanPayto: PaytoUri {
         receiverName = params["receiver-name"]
     }
 
+    /** Full IBAN payto with receiver-name parameter set to [name] */
+    fun withName(name: String): FullIbanPayto = FullIbanPayto(this, name)
+
     /** Full IBAN payto with receiver-name parameter if present */
     fun maybeFull(): FullIbanPayto? {
-        return FullIbanPayto(this, receiverName ?: return null)
+        return withName(receiverName ?: return null)
     }
+
+    /** Full IBAN payto with receiver-name parameter set to [defaultName] if absent */
+    fun full(defaultName: String): FullIbanPayto = withName(receiverName ?: defaultName)
 
     /** Full IBAN payto with receiver-name parameter if present, fail if absent */
     fun requireFull(): FullIbanPayto {
         return maybeFull() ?: throw Exception("Missing receiver-name")
-    }
-
-    /** Full IBAN payto with receiver-name parameter set to [defaultName] if absent */
-    fun full(defaultName: String): FullIbanPayto {
-        return FullIbanPayto(this, receiverName ?: defaultName)
-    }
+    }    
 
     override fun toString(): String = canonical
 
@@ -175,26 +202,24 @@ class IbanPayto: PaytoUri {
             return IbanPayto(decoder.decodeString())
         }
     }
-
-    companion object {
-        private val SEPARATOR = Regex("[\\ \\-]");
-
-        fun checkIban(iban: String) {
-            val builder = StringBuilder(iban.length + iban.asSequence().map { if (it.isDigit()) 1 else 2 }.sum())
-            (iban.subSequence(4, iban.length).asSequence() + iban.subSequence(0, 4).asSequence()).forEach {
-                if (it.isDigit()) {
-                    builder.append(it)
-                } else {
-                    builder.append((it.code - 'A'.code) + 10)
-                }
-            }
-            val str = builder.toString()
-            val mod = str.toBigInteger().mod(97.toBigInteger()).toInt();
-            if (mod != 1) throw CommonError.IbanPayto("Iban malformed, modulo is $mod expected 1")
-        }
-    }
 }
 
+@Serializable(with = FullIbanPayto.Serializer::class)
 class FullIbanPayto(val payto: IbanPayto, val receiverName: String) {
     val full = payto.canonical + "?receiver-name=" + receiverName.encodeURLParameter()
+
+    override fun toString(): String = full
+
+    internal object Serializer : KSerializer<FullIbanPayto> {
+        override val descriptor: SerialDescriptor =
+            PrimitiveSerialDescriptor("IbanPayto", PrimitiveKind.STRING)
+
+        override fun serialize(encoder: Encoder, value: FullIbanPayto) {
+            encoder.encodeString(value.full)
+        }
+
+        override fun deserialize(decoder: Decoder): FullIbanPayto {
+            return IbanPayto(decoder.decodeString()).requireFull()
+        }
+    }
 }

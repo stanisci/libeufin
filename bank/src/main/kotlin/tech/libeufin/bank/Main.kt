@@ -141,10 +141,10 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
     }
     install(StatusPages) {
         exception<Exception> { call, cause ->
+            logger.debug("request failed", cause)
             when (cause) {
                 is LibeufinException -> call.err(cause)
                 is SQLException -> {
-                    logger.debug("request failed", cause)
                     when (cause.sqlState) {
                         PSQLState.SERIALIZATION_FAILURE.state -> call.err(
                             HttpStatusCode.InternalServerError,
@@ -194,7 +194,6 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                     )
                 }
                 else -> {
-                    logger.debug("request failed", cause)
                     call.err(
                         HttpStatusCode.InternalServerError,
                         cause.message,
@@ -478,7 +477,7 @@ class CreateAccount : CliktCommand(
                         AccountCreationResult.LoginReuse ->
                             throw Exception("Account username reuse '${req.username}'")
                         AccountCreationResult.PayToReuse ->
-                            throw Exception("Bank internalPayToUri reuse '${internalPayto.canonical}'")
+                            throw Exception("Bank internalPayToUri reuse '${internalPayto.payto}'")
                         AccountCreationResult.Success ->
                             logger.info("Account '${req.username}' created")
                     }

@@ -32,10 +32,10 @@ class PaytoTest {
     @Test
     fun parsePaytoTest() {
         val withBic = IbanPayto("payto://iban/BIC123/CH9300762011623852957?receiver-name=The%20Name")
-        assertEquals(withBic.iban, "CH9300762011623852957")
+        assertEquals(withBic.iban.value, "CH9300762011623852957")
         assertEquals(withBic.receiverName, "The Name")
         val complete = IbanPayto("payto://iban/BIC123/CH9300762011623852957?sender-name=The%20Name&amount=EUR:1&message=donation")
-        assertEquals(withBic.iban, "CH9300762011623852957")
+        assertEquals(withBic.iban.value, "CH9300762011623852957")
         assertEquals(withBic.receiverName, "The Name")
         assertEquals(complete.message, "donation")
         assertEquals(complete.amount.toString(), "EUR:1")

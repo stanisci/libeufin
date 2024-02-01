@@ -82,7 +82,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
     }
     auth(db, TokenScope.readonly) {
         suspend fun <T> PipelineContext<Unit, ApplicationCall>.historyEndpoint(
-            reduce: (List<T>, String) -> Any, 
+            reduce: (List<T>, FullIbanPayto) -> Any, 
             dbLambda: suspend ExchangeDAO.(HistoryParams, Long) -> List<T>
         ) {
             val params = HistoryParams.extract(context.request.queryParameters)
@@ -99,7 +99,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
             if (items.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)
             } else {
-                call.respond(reduce(items, bankAccount.internalPaytoUri))
+                call.respond(reduce(items, bankAccount.payto))
             }
         }
         get("/accounts/{USERNAME}/taler-wire-gateway/history/incoming") {

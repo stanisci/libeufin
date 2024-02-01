@@ -40,6 +40,7 @@ class ExchangeDAO(private val db: Database) {
                 ,(amount).val AS amount_val
                 ,(amount).frac AS amount_frac
                 ,debtor_payto_uri
+                ,debtor_name
                 ,reserve_pub
             FROM taler_exchange_incoming AS tfr
                 JOIN bank_account_transactions AS txs
@@ -50,7 +51,7 @@ class ExchangeDAO(private val db: Database) {
                 row_id = it.getLong("bank_transaction_id"),
                 date = it.getTalerTimestamp("transaction_date"),
                 amount = it.getAmount("amount", db.bankCurrency),
-                debit_account = it.getString("debtor_payto_uri"),
+                debit_account = it.getFullPayto("debtor_payto_uri", "debtor_name"),
                 reserve_pub = EddsaPublicKey(it.getBytes("reserve_pub")),
             )
         }
@@ -67,6 +68,7 @@ class ExchangeDAO(private val db: Database) {
                 ,(amount).val AS amount_val
                 ,(amount).frac AS amount_frac
                 ,creditor_payto_uri
+                ,creditor_name
                 ,wtid
                 ,exchange_base_url
             FROM taler_exchange_outgoing AS tfr
@@ -78,7 +80,7 @@ class ExchangeDAO(private val db: Database) {
                 row_id = it.getLong("bank_transaction_id"),
                 date = it.getTalerTimestamp("transaction_date"),
                 amount = it.getAmount("amount", db.bankCurrency),
-                credit_account = it.getString("creditor_payto_uri"),
+                credit_account = it.getFullPayto("creditor_payto_uri", "creditor_name"),
                 wtid = ShortHashCode(it.getBytes("wtid")),
                 exchange_base_url = it.getString("exchange_base_url")
             )

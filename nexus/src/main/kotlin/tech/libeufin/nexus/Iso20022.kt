@@ -113,7 +113,7 @@ fun createPain001(
                         text(amountWithoutCurrency)
                     }
                     el("Cdtr/Nm", creditAccount.receiverName)
-                    el("CdtrAcct/Id/IBAN", creditAccount.payto.iban)
+                    el("CdtrAcct/Id/IBAN", creditAccount.payto.iban.value)
                     el("RmtInf/Ustrd", wireTransferSubject)
                 }
             }

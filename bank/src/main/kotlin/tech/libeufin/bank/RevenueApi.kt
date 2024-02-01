@@ -43,7 +43,7 @@ fun Routing.revenueApi(db: Database, ctx: BankConfig) {
             if (items.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)
             } else {
-                call.respond(RevenueIncomingHistory(items, bankAccount.internalPaytoUri))
+                call.respond(RevenueIncomingHistory(items, bankAccount.payto))
             }
         }
     }
