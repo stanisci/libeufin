@@ -210,8 +210,7 @@ private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
         if (e is FileAlreadyExistsException) throw Exception("PDF file exists already at '$path', not overriding it")
         throw Exception("Could not write PDF to '$path'", e)
     }
-
-    println("PDF file with keys hex encoding created at: $path")
+    println("PDF file with keys created at '$path'")
 }
 
 /**
