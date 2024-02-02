@@ -32,13 +32,13 @@ class AmountTest {
     // Test amount computation in database
     @Test
     fun computationTest() = bankSetup { db -> db.conn { conn ->
-        conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 100000 WHERE internal_payto_uri = '$customerPayto'")
+        conn.execSQLUpdate("UPDATE libeufin_bank.bank_accounts SET balance.val = 100000 WHERE internal_payto_uri = '${customerPayto.canonical}'")
         val stmt = conn.prepareStatement("""
             UPDATE libeufin_bank.bank_accounts 
                 SET balance = (?, ?)::taler_amount
                     ,has_debt = ?
                     ,max_debt = (?, ?)::taler_amount
-            WHERE internal_payto_uri = '$merchantPayto'
+            WHERE internal_payto_uri = '${merchantPayto.canonical}'
         """)
         suspend fun routine(balance: TalerAmount, due: TalerAmount, hasBalanceDebt: Boolean, maxDebt: TalerAmount): Boolean {
             stmt.setLong(1, balance.value)

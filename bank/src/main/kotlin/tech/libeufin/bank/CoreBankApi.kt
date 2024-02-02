@@ -138,7 +138,12 @@ private fun Routing.coreBankTokenApi(db: Database) {
     }
 }
 
-suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountRequest, isAdmin: Boolean): Pair<AccountCreationResult, FullIbanPayto>  {
+suspend fun createAccount(
+    db: Database, 
+    cfg: BankConfig, 
+    req: RegisterAccountRequest, 
+    isAdmin: Boolean
+): Pair<AccountCreationResult, String>  {
     // Prohibit reserved usernames:
     if (RESERVED_ACCOUNTS.contains(req.username))
         throw conflict(
@@ -160,7 +165,7 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             )
 
     } else if (req.tan_channel != null) {
-        if (ctx.tanChannels.get(req.tan_channel) == null) {
+        if (cfg.tanChannels.get(req.tan_channel) == null) {
             throw unsupportedTanChannel(req.tan_channel)
         } 
         val missing = when (req.tan_channel) {
@@ -183,7 +188,7 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
     var retry = if (req.payto_uri == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
 
     while (true) {
-        val internalPayto = req.payto_uri ?: IbanPayto(genIbanPaytoUri())
+        val internalPayto = req.payto_uri ?: IbanPayto.rand() as Payto
         val res = db.account.create(
             login = req.username,
             name = req.name,
@@ -194,9 +199,9 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             internalPaytoUri = internalPayto,
             isPublic = req.is_public,
             isTalerExchange = req.is_taler_exchange,
-            maxDebt = req.debit_threshold ?: ctx.defaultDebtLimit,
-            bonus = if (!req.is_taler_exchange) ctx.registrationBonus 
-                    else TalerAmount(0, 0, ctx.regionalCurrency),
+            maxDebt = req.debit_threshold ?: cfg.defaultDebtLimit,
+            bonus = if (!req.is_taler_exchange) cfg.registrationBonus 
+                    else TalerAmount(0, 0, cfg.regionalCurrency),
             tanChannel = req.tan_channel,
             checkPaytoIdempotent = req.payto_uri != null
         )
@@ -205,13 +210,13 @@ suspend fun createAccount(db: Database, ctx: BankConfig, req: RegisterAccountReq
             retry--
             continue
         }
-        return Pair(res, internalPayto.withName(req.name))
+        return Pair(res, internalPayto.bank(req.name, cfg.payto))
     }
 }
 
 suspend fun patchAccount(
     db: Database, 
-    ctx: BankConfig, 
+    cfg: BankConfig, 
     req: AccountReconfiguration, 
     username: String, 
     isAdmin: Boolean, 
@@ -219,7 +224,7 @@ suspend fun patchAccount(
     channel: TanChannel? = null, 
     info: String? = null
 ): AccountPatchResult {
-    req.debit_threshold?.run { ctx.checkRegionalCurrency(this) }
+    req.debit_threshold?.run { cfg.checkRegionalCurrency(this) }
 
     if (username == "admin" && req.is_public == true)
         throw conflict(
@@ -227,7 +232,7 @@ suspend fun patchAccount(
             TalerErrorCode.END
         )
     
-    if (req.tan_channel is Option.Some && req.tan_channel.value != null && ctx.tanChannels.get(req.tan_channel.value ) == null) {
+    if (req.tan_channel is Option.Some && req.tan_channel.value != null && !cfg.tanChannels.contains(req.tan_channel.value)) {
         throw unsupportedTanChannel(req.tan_channel.value)
     }
 
@@ -244,8 +249,8 @@ suspend fun patchAccount(
         is2fa = is2fa,
         faChannel = channel,
         faInfo = info,
-        allowEditName = ctx.allowEditName,
-        allowEditCashout = ctx.allowEditCashout
+        allowEditName = cfg.allowEditName,
+        allowEditCashout = cfg.allowEditCashout
     )
 }
 
@@ -264,7 +269,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_REGISTER_USERNAME_REUSE
                 )
                 AccountCreationResult.PayToReuse -> throw conflict(
-                    "Bank internalPayToUri reuse '${internalPayto.payto}'",
+                    "Bank internalPayToUri reuse '$internalPayto'",
                     TalerErrorCode.BANK_REGISTER_PAYTO_URI_REUSE
                 )
                 AccountCreationResult.Success -> call.respond(RegisterAccountResponse(internalPayto))
@@ -353,7 +358,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     }
     get("/public-accounts") {
         val params = AccountParams.extract(call.request.queryParameters)
-        val publicAccounts = db.account.pagePublic(params)
+        val publicAccounts = db.account.pagePublic(params, ctx.payto)
         if (publicAccounts.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
         } else {
@@ -363,7 +368,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     authAdmin(db, TokenScope.readonly) {
         get("/accounts") {
             val params = AccountParams.extract(call.request.queryParameters)
-            val accounts = db.account.pageAdmin(params)
+            val accounts = db.account.pageAdmin(params, ctx.payto)
             if (accounts.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)
             } else {
@@ -373,7 +378,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     }
     auth(db, TokenScope.readonly, allowAdmin = true) {
         get("/accounts/{USERNAME}") {
-            val account = db.account.get(username) ?: throw unknownAccount(username)
+            val account = db.account.get(username, ctx.payto) ?: throw unknownAccount(username)
             call.respond(account)
         }
     }
@@ -383,10 +388,10 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readonly) {
         get("/accounts/{USERNAME}/transactions") {
             val params = HistoryParams.extract(call.request.queryParameters)
-            val bankAccount = call.bankInfo(db)
+            val bankAccount = call.bankInfo(db, ctx.payto)
     
             val history: List<BankAccountTransactionInfo> =
-                    db.transaction.pollHistory(params, bankAccount.bankAccountId)
+                    db.transaction.pollHistory(params, bankAccount.bankAccountId, ctx.payto)
             if (history.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)
             } else {
@@ -395,7 +400,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
         }
         get("/accounts/{USERNAME}/transactions/{T_ID}") {
             val tId = call.longParameter("T_ID")
-            val tx = db.transaction.get(tId, username) ?: throw notFound(
+            val tx = db.transaction.get(tId, username, ctx.payto) ?: throw notFound(
                     "Bank transaction '$tId' not found",
                     TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
                 )

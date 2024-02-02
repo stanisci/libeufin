@@ -82,11 +82,11 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
     }
     auth(db, TokenScope.readonly) {
         suspend fun <T> PipelineContext<Unit, ApplicationCall>.historyEndpoint(
-            reduce: (List<T>, FullIbanPayto) -> Any, 
-            dbLambda: suspend ExchangeDAO.(HistoryParams, Long) -> List<T>
+            reduce: (List<T>, String) -> Any, 
+            dbLambda: suspend ExchangeDAO.(HistoryParams, Long, BankPaytoCtx) -> List<T>
         ) {
             val params = HistoryParams.extract(context.request.queryParameters)
-            val bankAccount = call.bankInfo(db)
+            val bankAccount = call.bankInfo(db, ctx.payto)
             
             if (!bankAccount.isTalerExchange)
                 throw conflict(
@@ -94,7 +94,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
 
-            val items = db.exchange.dbLambda(params, bankAccount.bankAccountId);
+            val items = db.exchange.dbLambda(params, bankAccount.bankAccountId, ctx.payto);
         
             if (items.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)

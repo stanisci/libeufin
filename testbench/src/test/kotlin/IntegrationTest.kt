@@ -138,8 +138,8 @@ class IntegrationTest {
         }
 
         setup { db ->
-            val userPayTo = IbanPayto(genIbanPaytoUri())
-            val fiatPayTo = IbanPayto(genIbanPaytoUri())
+            val userPayTo = IbanPayto.rand()
+            val fiatPayTo = IbanPayto.rand()
     
             // Load conversion setup manually as the server would refuse to start without an exchange account
             val sqlProcedures = Path("../database-versioning/libeufin-conversion-setup.sql")
@@ -151,7 +151,7 @@ class IntegrationTest {
             val reservePub = randBytes(32)
             val payment = IncomingPayment(
                 amount = TalerAmount("EUR:10"),
-                debitPaytoUri = userPayTo.canonical,
+                debitPaytoUri = userPayTo.toString(),
                 wireTransferSubject = "Error test ${Base32Crockford.encode(reservePub)}",
                 executionTime = Instant.now(),
                 bankId = "error"
@@ -210,7 +210,7 @@ class IntegrationTest {
             // Check success
             ingestIncomingPayment(db, IncomingPayment(
                 amount = TalerAmount("EUR:10"),
-                debitPaytoUri = userPayTo.canonical,
+                debitPaytoUri = userPayTo.toString(),
                 wireTransferSubject = "Success ${Base32Crockford.encode(randBytes(32))}",
                 executionTime = Instant.now(),
                 bankId = "success"
@@ -240,8 +240,8 @@ class IntegrationTest {
         }
         
         setup { db -> 
-            val userPayTo = IbanPayto(genIbanPaytoUri())
-            val fiatPayTo = IbanPayto(genIbanPaytoUri())
+            val userPayTo = IbanPayto.rand()
+            val fiatPayTo = IbanPayto.rand()
 
             // Create user
             client.post("http://0.0.0.0:8080/accounts") {
@@ -284,7 +284,7 @@ class IntegrationTest {
                 ingestIncomingPayment(db, 
                     IncomingPayment(
                         amount = amount,
-                        debitPaytoUri = userPayTo.canonical,
+                        debitPaytoUri = userPayTo.toString(),
                         wireTransferSubject = subject,
                         executionTime = Instant.now(),
                         bankId = Base32Crockford.encode(reservePub)

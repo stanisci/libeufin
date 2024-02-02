@@ -43,7 +43,7 @@ class TransactionDAO(private val db: Database) {
 
     /** Create a new transaction */
     suspend fun create(
-        creditAccountPayto: IbanPayto,
+        creditAccountPayto: Payto,
         debitAccountUsername: String,
         subject: String,
         amount: TalerAmount,
@@ -141,7 +141,7 @@ class TransactionDAO(private val db: Database) {
     }
     
     /** Get transaction [rowId] owned by [login] */
-    suspend fun get(rowId: Long, login: String): BankAccountTransactionInfo? = db.conn { conn ->
+    suspend fun get(rowId: Long, login: String, ctx: BankPaytoCtx): BankAccountTransactionInfo? = db.conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT 
               creditor_payto_uri
@@ -163,8 +163,8 @@ class TransactionDAO(private val db: Database) {
         stmt.setString(2, login)
         stmt.oneOrNull {
             BankAccountTransactionInfo(
-                creditor_payto_uri = it.getFullPayto("creditor_payto_uri", "creditor_name"),
-                debtor_payto_uri = it.getFullPayto("debtor_payto_uri", "debtor_name"),
+                creditor_payto_uri = it.getBankPayto("creditor_payto_uri", "creditor_name", ctx),
+                debtor_payto_uri = it.getBankPayto("debtor_payto_uri", "debtor_name", ctx),
                 amount = it.getAmount("amount", db.bankCurrency),
                 direction = TransactionDirection.valueOf(it.getString("direction")),
                 subject = it.getString("subject"),
@@ -177,7 +177,8 @@ class TransactionDAO(private val db: Database) {
     /** Pool [accountId] transactions history */
     suspend fun pollHistory(
         params: HistoryParams, 
-        accountId: Long
+        accountId: Long,
+        ctx: BankPaytoCtx
     ): List<BankAccountTransactionInfo> {
         return db.poolHistory(params, accountId, NotificationWatcher::listenBank,  """
             SELECT
@@ -196,8 +197,8 @@ class TransactionDAO(private val db: Database) {
             BankAccountTransactionInfo(
                 row_id = it.getLong("bank_transaction_id"),
                 date = it.getTalerTimestamp("transaction_date"),
-                creditor_payto_uri = it.getFullPayto("creditor_payto_uri", "creditor_name"),
-                debtor_payto_uri = it.getFullPayto("debtor_payto_uri", "debtor_name"),
+                creditor_payto_uri = it.getBankPayto("creditor_payto_uri", "creditor_name", ctx),
+                debtor_payto_uri = it.getBankPayto("debtor_payto_uri", "debtor_name", ctx),
                 amount = it.getAmount("amount", db.bankCurrency),
                 subject = it.getString("subject"),
                 direction = TransactionDirection.valueOf(it.getString("direction"))
@@ -208,7 +209,8 @@ class TransactionDAO(private val db: Database) {
     /** Query [accountId] history of incoming transactions to its account */
     suspend fun revenueHistory(
         params: HistoryParams, 
-        accountId: Long
+        accountId: Long,
+        ctx: BankPaytoCtx
     ): List<RevenueIncomingBankTransaction> 
         = db.poolHistory(params, accountId, NotificationWatcher::listenRevenue, """
             SELECT
@@ -225,7 +227,7 @@ class TransactionDAO(private val db: Database) {
                 row_id = it.getLong("bank_transaction_id"),
                 date = it.getTalerTimestamp("transaction_date"),
                 amount = it.getAmount("amount", db.bankCurrency),
-                debit_account = it.getFullPayto("debtor_payto_uri", "debtor_name"),
+                debit_account = it.getBankPayto("debtor_payto_uri", "debtor_name", ctx),
                 subject = it.getString("subject")
             )
         }

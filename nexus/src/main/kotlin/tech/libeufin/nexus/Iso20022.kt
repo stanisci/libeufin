@@ -75,7 +75,7 @@ fun createPain001(
     debitAccount: IbanAccountMetadata,
     amount: TalerAmount,
     wireTransferSubject: String,
-    creditAccount: FullIbanPayto
+    creditAccount: IbanAccountMetadata
 ): String {
     val namespace = Pain001Namespaces(
         fullNamespace = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09",
@@ -102,7 +102,8 @@ fun createPain001(
                 el("ReqdExctnDt/Dt", DateTimeFormatter.ISO_DATE.format(zonedTimestamp))
                 el("Dbtr/Nm", debitAccount.name)
                 el("DbtrAcct/Id/IBAN", debitAccount.iban)
-                el("DbtrAgt/FinInstnId/BICFI", debitAccount.bic)
+                if (debitAccount.bic != null) 
+                    el("DbtrAgt/FinInstnId/BICFI", debitAccount.bic)
                 el("CdtTrfTxInf") {
                     el("PmtId") {
                         el("InstrId", "NOTPROVIDED")
@@ -112,8 +113,9 @@ fun createPain001(
                         attr("Ccy", amount.currency)
                         text(amountWithoutCurrency)
                     }
-                    el("Cdtr/Nm", creditAccount.receiverName)
-                    el("CdtrAcct/Id/IBAN", creditAccount.payto.iban.value)
+                    el("Cdtr/Nm", creditAccount.name)
+                    // TODO write credit account bic if we have it
+                    el("CdtrAcct/Id/IBAN", creditAccount.iban)
                     el("RmtInf/Ustrd", wireTransferSubject)
                 }
             }

@@ -90,15 +90,27 @@ class NexusSubmitException(
  */
 private suspend fun submitInitiatedPayment(
     ctx: SubmissionContext,
-    initiatedPayment: InitiatedPayment
+    payment: InitiatedPayment
 ) { 
+    val creditAccount = try {
+        val payto = Payto.parse(payment.creditPaytoUri).expectIban()
+        IbanAccountMetadata(
+            iban = payto.iban.value,
+            bic = payto.bic,
+            name = payto.receiverName!!
+        )
+    } catch (e: Exception) {
+        throw e // TODO handle payto error
+    }
+    
+    
     val xml = createPain001(
-        requestUid = initiatedPayment.requestUid,
-        initiationTimestamp = initiatedPayment.initiationTime,
-        amount = initiatedPayment.amount,
-        creditAccount = initiatedPayment.creditPaytoUri,
+        requestUid = payment.requestUid,
+        initiationTimestamp = payment.initiationTime,
+        amount = payment.amount,
+        creditAccount = creditAccount,
         debitAccount = ctx.cfg.myIbanAccount,
-        wireTransferSubject = initiatedPayment.wireTransferSubject
+        wireTransferSubject = payment.wireTransferSubject
     )
     ctx.fileLogger.logSubmit(xml)
     try {
@@ -152,9 +164,9 @@ private fun submitBatch(
     logger.debug("Running submit at: ${Instant.now()}")
     runBlocking {
         db.initiatedPaymentsSubmittableGet(ctx.cfg.currency).forEach {
-            logger.debug("Submitting payment initiation with row ID: ${it.key}")
+            logger.debug("Submitting payment initiation with row ID: ${it.id}")
             val submissionState = try {
-                submitInitiatedPayment(ctx, initiatedPayment = it.value)
+                submitInitiatedPayment(ctx, it)
                 DatabaseSubmissionState.success
             } catch (e: NexusSubmitException) {
                 logger.error(e.message)
@@ -179,7 +191,7 @@ private fun submitBatch(
                     NexusSubmissionStage.ebics -> DatabaseSubmissionState.permanent_failure
                 }
             }
-            db.initiatedPaymentSetSubmittedState(it.key, submissionState)
+            db.initiatedPaymentSetSubmittedState(it.id, submissionState)
         }
     }
 }

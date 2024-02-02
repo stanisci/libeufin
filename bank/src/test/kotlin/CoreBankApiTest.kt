@@ -187,26 +187,26 @@ class CoreBankAccountsApiTest {
             // Check payto conflict
             client.post("/accounts") {
                 json(req) {
-                    "payto_uri" to genIbanPaytoUri()
+                    "payto_uri" to IbanPayto.rand()
                 }
             }.assertConflict(TalerErrorCode.BANK_REGISTER_USERNAME_REUSE)
         }
 
         // Check given payto
-        val IbanPayto = IbanPayto(genIbanPaytoUri())
+        val payto = IbanPayto.rand()
         val req = obj {
             "username" to "foo"
             "password" to "password"
             "name" to "Jane"
             "is_public" to true
-            "payto_uri" to IbanPayto
+            "payto_uri" to payto
             "is_taler_exchange" to true
         }
         // Check Ok
         client.post("/accounts") {
             json(req)
         }.assertOkJson<RegisterAccountResponse> {
-            assertEquals(IbanPayto.withName("Jane").full, it.internal_payto_uri.full)
+            assertEquals(payto.full("Jane"), it.internal_payto_uri)
         }
         // Testing idempotency
         client.post("/accounts") {
@@ -303,13 +303,13 @@ class CoreBankAccountsApiTest {
                 "username" to "cashout_guess"
                 "password" to "cashout_guess-password"
                 "name" to "Mr Guess My Name"
-                "cashout_payto_uri" to IbanPayto
+                "cashout_payto_uri" to payto
             }
         }.assertOk()
         client.getA("/accounts/cashout_guess").assertOkJson<AccountData> {
-            assertEquals(IbanPayto.full("Mr Guess My Name").full, it.cashout_payto_uri)
+            assertEquals(payto.full("Mr Guess My Name"), it.cashout_payto_uri)
         }
-        val full = IbanPayto.full("Santa Claus").full
+        val full = payto.full("Santa Claus")
         client.post("/accounts") {
             json {
                 "username" to "cashout_keep"
@@ -486,7 +486,7 @@ class CoreBankAccountsApiTest {
         }
 
         // Successful attempt now
-        val cashout = IbanPayto(genIbanPaytoUri())
+        val cashout = IbanPayto.rand()
         val req = obj {
             "cashout_payto_uri" to cashout
             "name" to "Roger"
@@ -519,7 +519,7 @@ class CoreBankAccountsApiTest {
         // Check patch
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
             assertEquals("Roger", obj.name)
-            assertEquals(cashout.full(obj.name).full, obj.cashout_payto_uri)
+            assertEquals(cashout.full(obj.name), obj.cashout_payto_uri)
             assertEquals("+99", obj.contact_data?.phone?.get())
             assertEquals("foo@example.com", obj.contact_data?.email?.get())
             assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
@@ -533,7 +533,7 @@ class CoreBankAccountsApiTest {
         }.assertNoContent()
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
             assertEquals("Roger", obj.name)
-            assertEquals(cashout.full(obj.name).full, obj.cashout_payto_uri)
+            assertEquals(cashout.full(obj.name), obj.cashout_payto_uri)
             assertEquals("+99", obj.contact_data?.phone?.get())
             assertEquals("foo@example.com", obj.contact_data?.email?.get())
             assertEquals(TalerAmount("KUDOS:100"), obj.debit_threshold)
@@ -556,11 +556,12 @@ class CoreBankAccountsApiTest {
                 "name" to "Mr Cashout Cashout"
             }
         }.assertOk()
+        val canonical = Payto.parse(cashout.canonical).expectIban()
         for ((cashout, name, expect) in listOf(
-            Triple(cashout.canonical, null, cashout.full("Mr Cashout Cashout").full),
-            Triple(cashout.canonical, "New name", cashout.full("New name").full),
-            Triple(cashout.full("Full name").full, null, cashout.full("Full name").full),
-            Triple(cashout.full("Full second name").full, "Another name", cashout.full("Full second name").full)
+            Triple(cashout.canonical, null, canonical.full("Mr Cashout Cashout")),
+            Triple(cashout.canonical, "New name", canonical.full("New name")),
+            Triple(cashout.full("Full name"), null, cashout.full("Full name")),
+            Triple(cashout.full("Full second name"), "Another name", cashout.full("Full second name"))
         )) {
             client.patch("/accounts/cashout") {
                 pwAuth("admin")
@@ -597,7 +598,7 @@ class CoreBankAccountsApiTest {
             TalerErrorCode.BANK_NON_ADMIN_PATCH_LEGAL_NAME
         )
         checkAdminOnly(
-            obj { "cashout_payto_uri" to genIbanPaytoUri() },
+            obj { "cashout_payto_uri" to IbanPayto.rand() },
             TalerErrorCode.BANK_NON_ADMIN_PATCH_CASHOUT
         )
         // Check idempotent
@@ -902,10 +903,11 @@ class CoreBankTransactionsApiTest {
             }
         }.assertConflict(TalerErrorCode.BANK_SAME_ACCOUNT)
         // Transaction to admin
-        val adminPayto = db.account.bankInfo("admin")!!.payto
+        val adminPayto = client.getA("/accounts/admin")
+            .assertOkJson<AccountData>().payto_uri
         client.postA("/accounts/merchant/transactions") {
             json(valid_req) {
-                "payto_uri" to "${adminPayto.payto}?message=payout"
+                "payto_uri" to "$adminPayto&message=payout"
             }
         }.assertConflict(TalerErrorCode.BANK_ADMIN_CREDITOR)
 

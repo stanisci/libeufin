@@ -43,7 +43,7 @@ val logger: Logger = LoggerFactory.getLogger("libeufin-nexus")
  */
 data class IbanAccountMetadata(
     val iban: String,
-    val bic: String,
+    val bic: String?,
     val name: String
 )
 

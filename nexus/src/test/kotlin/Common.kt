@@ -100,8 +100,9 @@ fun genInitPay(
     requestUid: String = "unique"
 ) =
     InitiatedPayment(
+        id = -1,
         amount = TalerAmount(44, 0, "KUDOS"),
-        creditPaytoUri = IbanPayto("payto://iban/CH9300762011623852957?receiver-name=Test").requireFull(),
+        creditPaytoUri = "payto://iban/CH9300762011623852957?receiver-name=Test",
         wireTransferSubject = subject,
         initiationTime = Instant.now(),
         requestUid = requestUid

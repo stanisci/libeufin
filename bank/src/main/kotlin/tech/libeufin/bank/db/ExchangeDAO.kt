@@ -31,7 +31,8 @@ class ExchangeDAO(private val db: Database) {
     /** Query [exchangeId] history of taler incoming transactions  */
     suspend fun incomingHistory(
         params: HistoryParams, 
-        exchangeId: Long
+        exchangeId: Long,
+        ctx: BankPaytoCtx
     ): List<IncomingReserveTransaction> 
         = db.poolHistory(params, exchangeId, NotificationWatcher::listenIncoming,  """
             SELECT
@@ -51,7 +52,7 @@ class ExchangeDAO(private val db: Database) {
                 row_id = it.getLong("bank_transaction_id"),
                 date = it.getTalerTimestamp("transaction_date"),
                 amount = it.getAmount("amount", db.bankCurrency),
-                debit_account = it.getFullPayto("debtor_payto_uri", "debtor_name"),
+                debit_account = it.getBankPayto("debtor_payto_uri", "debtor_name", ctx),
                 reserve_pub = EddsaPublicKey(it.getBytes("reserve_pub")),
             )
         }
@@ -59,7 +60,8 @@ class ExchangeDAO(private val db: Database) {
     /** Query [exchangeId] history of taler outgoing transactions  */
     suspend fun outgoingHistory(
         params: HistoryParams, 
-        exchangeId: Long
+        exchangeId: Long,
+        ctx: BankPaytoCtx
     ): List<OutgoingTransaction> 
         = db.poolHistory(params, exchangeId, NotificationWatcher::listenOutgoing,  """
             SELECT
@@ -80,7 +82,7 @@ class ExchangeDAO(private val db: Database) {
                 row_id = it.getLong("bank_transaction_id"),
                 date = it.getTalerTimestamp("transaction_date"),
                 amount = it.getAmount("amount", db.bankCurrency),
-                credit_account = it.getFullPayto("creditor_payto_uri", "creditor_name"),
+                credit_account = it.getBankPayto("creditor_payto_uri", "creditor_name", ctx),
                 wtid = ShortHashCode(it.getBytes("wtid")),
                 exchange_base_url = it.getString("exchange_base_url")
             )

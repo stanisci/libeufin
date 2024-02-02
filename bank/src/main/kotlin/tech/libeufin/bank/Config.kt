@@ -49,7 +49,8 @@ data class BankConfig(
     val fiatCurrency: String?,
     val fiatCurrencySpec: CurrencySpecification?,
     val spaPath: Path?,
-    val tanChannels: Map<TanChannel, Path> 
+    val tanChannels: Map<TanChannel, Path>,
+    val payto: BankPaytoCtx
 )
 
 @Serializable
@@ -104,6 +105,15 @@ fun TalerConfig.loadBankConfig(): BankConfig  {
             }
         }
     }
+    val method = when (val raw = lookupString("libeufin-bank", "payment_method")) {
+        "iban" -> WireMethod.IBAN
+        "x-taler-bank" -> WireMethod.X_TALER_BANK
+        else -> throw TalerConfigError("expected wire method for section libeufin-bank, option payment_method, but $raw is unknown")
+    }
+    val payto = when (method) {
+        WireMethod.IBAN -> BankPaytoCtx(bic = lookupString("libeufin-bank", "iban_payto_bic"))
+        WireMethod.X_TALER_BANK -> BankPaytoCtx(hostname = lookupString("libeufin-bank", "x_taler_bank_payto_hostname"))
+    }
     return BankConfig(
         regionalCurrency = regionalCurrency,
         regionalCurrencySpec =  currencySpecificationFor(regionalCurrency),
@@ -119,7 +129,8 @@ fun TalerConfig.loadBankConfig(): BankConfig  {
         allowConversion = allowConversion,
         fiatCurrency = fiatCurrency,
         fiatCurrencySpec = fiatCurrencySpec,
-        tanChannels = tanChannels
+        tanChannels = tanChannels,
+        payto = payto
     )
 }
 

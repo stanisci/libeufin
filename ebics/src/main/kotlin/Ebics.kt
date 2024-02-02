@@ -57,14 +57,14 @@ data class EbicsDateRange(
     val end: Instant
 )
 
-sealed class EbicsOrderParams
+sealed interface EbicsOrderParams
 data class EbicsStandardOrderParams(
     val dateRange: EbicsDateRange? = null
-) : EbicsOrderParams()
+) : EbicsOrderParams
 
 data class EbicsGenericOrderParams(
     val params: Map<String, String> = mapOf()
-) : EbicsOrderParams()
+) : EbicsOrderParams
 
 enum class EbicsInitState {
     SENT, NOT_SENT, UNKNOWN

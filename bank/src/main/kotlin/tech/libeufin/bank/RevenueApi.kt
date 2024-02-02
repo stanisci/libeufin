@@ -37,8 +37,8 @@ fun Routing.revenueApi(db: Database, ctx: BankConfig) {
         }
         get("/accounts/{USERNAME}/taler-revenue/history") {
             val params = HistoryParams.extract(context.request.queryParameters)
-            val bankAccount = call.bankInfo(db)
-            val items = db.transaction.revenueHistory(params, bankAccount.bankAccountId);
+            val bankAccount = call.bankInfo(db, ctx.payto)
+            val items = db.transaction.revenueHistory(params, bankAccount.bankAccountId, ctx.payto);
         
             if (items.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)

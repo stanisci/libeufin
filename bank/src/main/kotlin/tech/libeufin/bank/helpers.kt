@@ -48,11 +48,8 @@ fun ApplicationCall.expectParameter(name: String) =
     )
 
 /** Retrieve the bank account info for the selected username*/
-suspend fun ApplicationCall.bankInfo(db: Database): BankInfo
-    = db.account.bankInfo(username) ?: throw unknownAccount(username)
-
-// Generates a new Payto-URI with IBAN scheme.
-fun genIbanPaytoUri(): String = "payto://iban/${getIban()}"
+suspend fun ApplicationCall.bankInfo(db: Database, ctx: BankPaytoCtx): BankInfo
+    = db.account.bankInfo(username, ctx) ?: throw unknownAccount(username)
 
 /**
  *  Builds the taler://withdraw-URI.  Such URI will serve the requests
@@ -125,7 +122,7 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? =
         login = "admin",
         password = pwStr,
         name = "Bank administrator",
-        internalPaytoUri = IbanPayto(genIbanPaytoUri()),
+        internalPaytoUri = IbanPayto.rand(),
         isPublic = false,
         isTalerExchange = false,
         maxDebt = ctx.defaultDebtLimit,

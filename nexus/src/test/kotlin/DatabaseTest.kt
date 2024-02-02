@@ -205,8 +205,9 @@ class PaymentInitiationsTest {
             assertEquals(beEmpty.size, 0)
         }
         val initPay = InitiatedPayment(
+            id = -1,
             amount = TalerAmount(44, 0, "KUDOS"),
-            creditPaytoUri = IbanPayto("payto://iban/CH9300762011623852957?receiver-name=Test").requireFull(),
+            creditPaytoUri = "payto://iban/CH9300762011623852957?receiver-name=Test",
             wireTransferSubject = "test",
             requestUid = "unique",
             initiationTime = Instant.now()
@@ -218,8 +219,8 @@ class PaymentInitiationsTest {
             val haveOne = db.initiatedPaymentsSubmittableGet("KUDOS")
             assertTrue("Size ${haveOne.size} instead of 1") {
                 haveOne.size == 1
-                        && haveOne.containsKey(1)
-                        && haveOne[1]?.requestUid == "unique"
+                        && haveOne.first().id == 1L
+                        && haveOne.first().requestUid == "unique"
             }
             assertTrue(db.initiatedPaymentSetSubmittedState(1, DatabaseSubmissionState.success))
             assertNotNull(db.initiatedPaymentGetFromUid("unique"))
@@ -286,10 +287,11 @@ class PaymentInitiationsTest {
 
             // Expecting all the payments BUT the #3 in the result.
             db.initiatedPaymentsSubmittableGet("KUDOS").apply {
+
                 assertEquals(3, this.size)
-                assertEquals("#1", this[1]?.wireTransferSubject)
-                assertEquals("#2", this[2]?.wireTransferSubject)
-                assertEquals("#4", this[4]?.wireTransferSubject)
+                assertEquals("#1", this[0]?.wireTransferSubject)
+                assertEquals("#2", this[1]?.wireTransferSubject)
+                assertEquals("#4", this[2]?.wireTransferSubject)
             }
         }
     }

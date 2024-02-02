@@ -339,9 +339,6 @@ fun ResultSet.getAmount(name: String, currency: String): TalerAmount{
     )
 }
 
-fun ResultSet.getFullPayto(payto: String, name: String): FullIbanPayto{
-    return FullIbanPayto(
-        IbanPayto(getString(payto)),
-        getString(name),
-    )
+fun ResultSet.getBankPayto(payto: String, name: String, ctx: BankPaytoCtx): String {
+    return Payto.parse(getString(payto)).bank(getString(name), ctx) 
 }

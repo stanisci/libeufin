@@ -104,12 +104,12 @@ class TanDAO(private val db: Database) {
     }
 
     /** Result of TAN challenge solution */
-    sealed class TanSolveResult {
-        data class Success(val body: String, val op: Operation, val channel: TanChannel?, val info: String?): TanSolveResult()
-        data object NotFound: TanSolveResult()
-        data object NoRetry: TanSolveResult()
-        data object Expired: TanSolveResult()
-        data object BadCode: TanSolveResult()
+    sealed interface TanSolveResult {
+        data class Success(val body: String, val op: Operation, val channel: TanChannel?, val info: String?): TanSolveResult
+        data object NotFound: TanSolveResult
+        data object NoRetry: TanSolveResult
+        data object Expired: TanSolveResult
+        data object BadCode: TanSolveResult
     }
 
     /** Solve TAN challenge */

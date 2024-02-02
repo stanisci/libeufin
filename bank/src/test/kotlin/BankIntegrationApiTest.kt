@@ -75,7 +75,7 @@ class BankIntegrationApiTest {
         val reserve_pub = randEddsaPublicKey()
         val req = obj {
             "reserve_pub" to reserve_pub
-            "selected_exchange" to exchangePayto
+            "selected_exchange" to exchangePayto.canonical
         }
 
         // Check bad UUID

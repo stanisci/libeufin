@@ -159,8 +159,9 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     put("tx", suspend {
                         step("Test submit one transaction")
                         nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                            id = -1,
                             amount = TalerAmount("CFH:42"),
-                            creditPaytoUri = IbanPayto(payto).requireFull(),
+                            creditPaytoUri = payto,
                             wireTransferSubject = "single transaction test",
                             initiationTime = Instant.now(),
                             requestUid = Base32Crockford.encode(randBytes(16))
@@ -171,8 +172,9 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                         step("Test submit many transaction")
                         repeat(4) {
                             nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                                id = -1,
                                 amount = TalerAmount("CFH:${100L+it}"),
-                                creditPaytoUri = IbanPayto(payto).requireFull(),
+                                creditPaytoUri = payto,
                                 wireTransferSubject = "multi transaction test $it",
                                 initiationTime = Instant.now(),
                                 requestUid = Base32Crockford.encode(randBytes(16))
@@ -185,8 +187,9 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                         step("Submit new transaction")
                         // TODO interactive payment editor
                         nexusDb.initiatedPaymentCreate(InitiatedPayment(
+                            id = -1,
                             amount = TalerAmount("CFH:1.1"),
-                            creditPaytoUri = IbanPayto(payto).requireFull(),
+                            creditPaytoUri = payto,
                             wireTransferSubject = "single transaction test",
                             initiationTime = Instant.now(),
                             requestUid = Base32Crockford.encode(randBytes(16))

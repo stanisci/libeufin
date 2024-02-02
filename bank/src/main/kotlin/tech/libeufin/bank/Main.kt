@@ -179,7 +179,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
                         rootCause is CommonError -> when (rootCause) {
                             is CommonError.AmountFormat -> TalerErrorCode.BANK_BAD_FORMAT_AMOUNT
                             is CommonError.AmountNumberTooBig -> TalerErrorCode.BANK_NUMBER_TOO_BIG
-                            is CommonError.IbanPayto -> TalerErrorCode.GENERIC_JSON_INVALID
+                            is CommonError.Payto -> TalerErrorCode.GENERIC_JSON_INVALID
                         }
                         else -> TalerErrorCode.GENERIC_JSON_INVALID
                     }
@@ -264,7 +264,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
             runBlocking {
                 if (ctx.allowConversion) {
                     logger.info("Ensure exchange account exists")
-                    val info = db.account.bankInfo("exchange")
+                    val info = db.account.bankInfo("exchange", ctx.payto)
                     if (info == null) {
                         throw Exception("Exchange account missing: an exchange account named 'exchange' is required for conversion to be enabled")
                     } else if (!info.isTalerExchange) {
@@ -364,7 +364,7 @@ class EditAccount : CliktCommand(
     private val email: String? by option(help = "E-Mail address used for TAN transmission")
     private val phone: String? by option(help = "Phone number used for TAN transmission")
     private val tan_channel: String? by option(help = "which channel TAN challenges should be sent to")
-    private val cashout_payto_uri: IbanPayto? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { IbanPayto(it) }
+    private val cashout_payto_uri: IbanPayto? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { Payto.parse(it).expectIban() }
     private val debit_threshold: TalerAmount? by option(help = "Max debit allowed for this account").convert { TalerAmount(it) }
  
     override fun run() = cliCmd(logger, common.log) {
@@ -427,11 +427,10 @@ class CreateAccountOption: OptionGroup() {
     val phone: String? by option(help = "Phone number used for TAN transmission")
     val cashout_payto_uri: IbanPayto? by option(
         help = "Payto URI of a fiant account who receive cashout amount"
-    ).convert { IbanPayto(it) }
-    val internal_payto_uri: IbanPayto? by option(hidden = true).convert { IbanPayto(it) }
-    val payto_uri: IbanPayto? by option(
+    ).convert { Payto.parse(it).expectIban() }
+    val payto_uri: Payto? by option(
         help = "Payto URI of this account"
-    ).convert { IbanPayto(it) }
+    ).convert { Payto.parse(it) }
     val debit_threshold: TalerAmount? by option(
         help = "Max debit allowed for this account")
     .convert { TalerAmount(it) }
@@ -477,7 +476,7 @@ class CreateAccount : CliktCommand(
                         AccountCreationResult.LoginReuse ->
                             throw Exception("Account username reuse '${req.username}'")
                         AccountCreationResult.PayToReuse ->
-                            throw Exception("Bank internalPayToUri reuse '${internalPayto.payto}'")
+                            throw Exception("Bank internalPayToUri reuse '$internalPayto'")
                         AccountCreationResult.Success ->
                             logger.info("Account '${req.username}' created")
                     }

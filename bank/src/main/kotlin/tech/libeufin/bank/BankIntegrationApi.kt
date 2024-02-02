@@ -78,11 +78,11 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
                 TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT
             )
             is WithdrawalSelectionResult.UnknownAccount -> throw conflict(
-                "Account ${req.selected_exchange.canonical} not found",
+                "Account ${req.selected_exchange} not found",
                 TalerErrorCode.BANK_UNKNOWN_ACCOUNT
             )
             is WithdrawalSelectionResult.AccountIsNotExchange -> throw conflict(
-                "Account ${req.selected_exchange.canonical} is not an exchange",
+                "Account ${req.selected_exchange} is not an exchange",
                 TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
             )
             is WithdrawalSelectionResult.Success -> {

@@ -42,7 +42,7 @@ class AccountDAO(private val db: Database) {
         email: String?,
         phone: String?,
         cashoutPayto: IbanPayto?,
-        internalPaytoUri: IbanPayto,
+        internalPaytoUri: Payto,
         isPublic: Boolean,
         isTalerExchange: Boolean,
         maxDebt: TalerAmount,
@@ -71,7 +71,7 @@ class AccountDAO(private val db: Database) {
                 setString(1, name)
                 setString(2, email)
                 setString(3, phone)
-                setString(4, cashoutPayto?.full(name)?.full)
+                setString(4, cashoutPayto?.full(name))
                 setBoolean(5, checkPaytoIdempotent)
                 setString(6, internalPaytoUri.canonical)
                 setBoolean(7, isPublic)
@@ -90,19 +90,20 @@ class AccountDAO(private val db: Database) {
                     AccountCreationResult.LoginReuse
                 }
             } else {
-                conn.prepareStatement("""
-                    INSERT INTO iban_history(
-                        iban
-                        ,creation_time
-                    ) VALUES (?, ?)
-                """).run {
-                    setString(1, internalPaytoUri.iban.value)
-                    setLong(2, now)
-                    if (!executeUpdateViolation()) {
-                        conn.rollback()
-                        return@transaction AccountCreationResult.PayToReuse
+                if (internalPaytoUri is IbanPayto)
+                    conn.prepareStatement("""
+                        INSERT INTO iban_history(
+                            iban
+                            ,creation_time
+                        ) VALUES (?, ?)
+                    """).run {
+                        setString(1, internalPaytoUri.iban.value)
+                        setLong(2, now)
+                        if (!executeUpdateViolation()) {
+                            conn.rollback()
+                            return@transaction AccountCreationResult.PayToReuse
+                        }
                     }
-                }
 
                 val customerId = conn.prepareStatement("""
                     INSERT INTO customers (
@@ -122,7 +123,7 @@ class AccountDAO(private val db: Database) {
                     setString(3, name)
                     setString(4, email)
                     setString(5, phone)
-                    setString(6, cashoutPayto?.full(name)?.full)
+                    setString(6, cashoutPayto?.full(name))
                     setString(7, tanChannel?.name)
                     oneOrNull { it.getLong("customer_id") }!!
                 }
@@ -297,7 +298,7 @@ class AccountDAO(private val db: Database) {
         // Check reconfig rights
         if (checkName && name != curr.name) 
             return@transaction AccountPatchResult.NonAdminName
-        if (checkCashout && fullCashoutPayto?.full != curr.cashoutPayTo) 
+        if (checkCashout && fullCashoutPayto != curr.cashoutPayTo) 
             return@transaction AccountPatchResult.NonAdminCashout
         if (checkDebtLimit && debtLimit != curr.debtLimit)
             return@transaction AccountPatchResult.NonAdminDebtLimit
@@ -352,7 +353,7 @@ class AccountDAO(private val db: Database) {
             },
             "WHERE customer_id = ?",
             sequence {
-                cashoutPayto.some { yield(fullCashoutPayto?.full) }
+                cashoutPayto.some { yield(fullCashoutPayto) }
                 phone.some { yield(it) }
                 email.some { yield(it) }
                 tan_channel.some { yield(it?.name) }
@@ -418,7 +419,7 @@ class AccountDAO(private val db: Database) {
     }
 
     /** Get bank info of account [login] */
-    suspend fun bankInfo(login: String): BankInfo? = db.conn { conn ->
+    suspend fun bankInfo(login: String, ctx: BankPaytoCtx): BankInfo? = db.conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
              bank_account_id
@@ -433,7 +434,7 @@ class AccountDAO(private val db: Database) {
         stmt.setString(1, login)
         stmt.oneOrNull {
             BankInfo(
-                payto = it.getFullPayto("internal_payto_uri", "name"),
+                payto = it.getBankPayto("internal_payto_uri", "name", ctx),
                 isTalerExchange = it.getBoolean("is_taler_exchange"),
                 bankAccountId = it.getLong("bank_account_id")
             )
@@ -441,7 +442,7 @@ class AccountDAO(private val db: Database) {
     }
 
     /** Get data of account [login] */
-    suspend fun get(login: String): AccountData? = db.conn { conn ->
+    suspend fun get(login: String, ctx: BankPaytoCtx): AccountData? = db.conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
                 name
@@ -472,7 +473,7 @@ class AccountDAO(private val db: Database) {
                 ),
                 tan_channel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) },
                 cashout_payto_uri = it.getString("cashout_payto"),
-                payto_uri = it.getFullPayto("internal_payto_uri", "name"),
+                payto_uri = it.getBankPayto("internal_payto_uri", "name", ctx),
                 balance = Balance(
                     amount = it.getAmount("balance", db.bankCurrency),
                     credit_debit_indicator =
@@ -490,7 +491,7 @@ class AccountDAO(private val db: Database) {
     }
 
     /** Get a page of all public accounts */
-    suspend fun pagePublic(params: AccountParams): List<PublicAccount>
+    suspend fun pagePublic(params: AccountParams, ctx: BankPaytoCtx): List<PublicAccount>
         = db.page(
             params.page,
             "bank_account_id",
@@ -514,7 +515,7 @@ class AccountDAO(private val db: Database) {
         ) {
             PublicAccount(
                 username = it.getString("login"),
-                payto_uri = it.getFullPayto("internal_payto_uri", "name"),
+                payto_uri = it.getBankPayto("internal_payto_uri", "name", ctx),
                 balance = Balance(
                     amount = it.getAmount("balance", db.bankCurrency),
                     credit_debit_indicator = if (it.getBoolean("has_debt")) {
@@ -528,7 +529,7 @@ class AccountDAO(private val db: Database) {
         }
 
     /** Get a page of accounts */
-    suspend fun pageAdmin(params: AccountParams): List<AccountMinimalData>
+    suspend fun pageAdmin(params: AccountParams, ctx: BankPaytoCtx): List<AccountMinimalData>
         = db.page(
             params.page,
             "bank_account_id",
@@ -567,7 +568,7 @@ class AccountDAO(private val db: Database) {
                 debit_threshold = it.getAmount("max_debt", db.bankCurrency),
                 is_public = it.getBoolean("is_public"),
                 is_taler_exchange = it.getBoolean("is_taler_exchange"),
-                payto_uri = it.getFullPayto("internal_payto_uri", "name"),
+                payto_uri = it.getBankPayto("internal_payto_uri", "name", ctx),
             )
         }
 }

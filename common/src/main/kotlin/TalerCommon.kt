@@ -29,7 +29,7 @@ import java.net.URI
 sealed class CommonError(msg: String): Exception(msg) {
     class AmountFormat(msg: String): CommonError(msg)
     class AmountNumberTooBig(msg: String): CommonError(msg)
-    class IbanPayto(msg: String): CommonError(msg)
+    class Payto(msg: String): CommonError(msg)
 }
 
 @Serializable(with = TalerAmount.Serializer::class)
@@ -121,105 +121,139 @@ value class IBAN private constructor(val value: String) {
             }
             val str = builder.toString()
             val mod = str.toBigInteger().mod(97.toBigInteger()).toInt();
-            if (mod != 1) throw CommonError.IbanPayto("Iban malformed, modulo is $mod expected 1")
+            if (mod != 1) throw CommonError.Payto("Iban malformed, modulo is $mod expected 1")
             return IBAN(iban)
+        }
+
+        fun rand(): IBAN {
+            val ccNoCheck = "131400" // DE00
+            val bban = (0..10).map {
+                (0..9).random()
+            }.joinToString("") // 10 digits account number
+            var checkDigits: String = "98".toBigInteger().minus("$bban$ccNoCheck".toBigInteger().mod("97".toBigInteger())).toString()
+            if (checkDigits.length == 1) {
+                checkDigits = "0${checkDigits}"
+            }
+            return IBAN("DE$checkDigits$bban")
         }
     }
 }
 
-
-sealed class PaytoUri {
+@Serializable(with = Payto.Serializer::class)
+sealed class Payto {
+    abstract val parsed: URI
+    abstract val canonical: String
     abstract val amount: TalerAmount?
     abstract val message: String?
     abstract val receiverName: String?
+
+    /** Transform a payto URI to its bank form, using [name] as the receiver-name and the bank [ctx] */
+    fun bank(name: String, ctx: BankPaytoCtx): String = when (this) {
+        is IbanPayto -> "payto://iban/${ctx.bic!!}/$iban?receiver-name=${name.encodeURLParameter()}"
+    }
+
+    fun expectIban(): IbanPayto {
+        return when (this) {
+            is IbanPayto -> this
+            else -> throw CommonError.Payto("expected a IBAN payto URI got '${parsed.host}'")
+        }
+    }
+
+    internal object Serializer : KSerializer<Payto> {
+        override val descriptor: SerialDescriptor =
+            PrimitiveSerialDescriptor("Payto", PrimitiveKind.STRING)
+
+        override fun serialize(encoder: Encoder, value: Payto) {
+            encoder.encodeString(value.toString())
+        }
+
+        override fun deserialize(decoder: Decoder): Payto {
+            return Payto.parse(decoder.decodeString())
+        }
+    }
+
+    companion object {
+        fun parse(raw: String): Payto {
+            val parsed = try {
+                URI(raw)
+            } catch (e: Exception) {
+                throw CommonError.Payto("expected a valid URI")
+            }
+            if (parsed.scheme != "payto") throw CommonError.Payto("expect a payto URI got '${parsed.scheme}'")
+
+            val params = (parsed.query ?: "").parseUrlEncodedParameters();
+            val amount = params["amount"]?.run { TalerAmount(this) }
+            val message = params["message"]
+            val receiverName = params["receiver-name"]
+
+            return when (parsed.host) {
+                "iban" -> {
+                    val splitPath = parsed.path.split("/").filter { it.isNotEmpty() }
+                    val (bic, rawIban) = when (splitPath.size) {
+                        1 -> Pair(null, splitPath[0])
+                        2 -> Pair(splitPath[0], splitPath[1])
+                        else -> throw CommonError.Payto("too many path segments for a IBAN payto URI")
+                    }
+                    val iban = IBAN.parse(rawIban)
+                    IbanPayto(
+                        parsed, 
+                        "payto://iban/$iban",
+                        amount, 
+                        message,
+                        receiverName,
+                        bic,
+                        iban
+                    )
+                }
+                else -> throw CommonError.Payto("unsupported payto URI kind '${parsed.host}'")
+            }
+        }
+    }
 }
 
 // TODO x-taler-bank Payto
 
 @Serializable(with = IbanPayto.Serializer::class)
-class IbanPayto: PaytoUri {
-    val parsed: URI
-    val canonical: String
+class IbanPayto internal constructor(
+    override val parsed: URI,
+    override val canonical: String,
+    override val amount: TalerAmount?,
+    override val message: String?,
+    override val receiverName: String?,
+    val bic: String?,
     val iban: IBAN
-    override val amount: TalerAmount?
-    override val message: String?
-    override val receiverName: String?
+): Payto() {
 
-    // TODO maybe add a fster builder that performs less expensive checks when the payto is from the database ?
+    override fun toString(): String = parsed.toString()
 
-    constructor(raw: String) {
-        try {
-            parsed = URI(raw)
-        } catch (e: Exception) {
-            throw CommonError.IbanPayto("expecteda valid URI")
-        }
-        
-        if (parsed.scheme != "payto") throw CommonError.IbanPayto("expect a payto URI")
-        if (parsed.host != "iban") throw CommonError.IbanPayto("expect a IBAN payto URI")
-
-        val splitPath = parsed.path.split("/").filter { it.isNotEmpty() }
-        val rawIban = when (splitPath.size) {
-            1 -> splitPath[0]
-            2 -> splitPath[1]
-            else -> throw CommonError.IbanPayto("too many path segments")
-        }
-        iban = IBAN.parse(rawIban)
-        canonical = "payto://iban/$iban"
-    
-        val params = (parsed.query ?: "").parseUrlEncodedParameters();
-        amount = params["amount"]?.run { TalerAmount(this) }
-        message = params["message"]
-        receiverName = params["receiver-name"]
+    /** Transform an IBAN payto URI to its full form, using [defaultName] if receiver-name is missing */
+    fun full(defaultName: String): String {
+        val bic = if (this.bic != null) "$bic/" else ""
+        return "payto://iban/$bic$iban?receiver-name=${(receiverName ?: defaultName).encodeURLParameter()}"
     }
-
-    /** Full IBAN payto with receiver-name parameter set to [name] */
-    fun withName(name: String): FullIbanPayto = FullIbanPayto(this, name)
-
-    /** Full IBAN payto with receiver-name parameter if present */
-    fun maybeFull(): FullIbanPayto? {
-        return withName(receiverName ?: return null)
-    }
-
-    /** Full IBAN payto with receiver-name parameter set to [defaultName] if absent */
-    fun full(defaultName: String): FullIbanPayto = withName(receiverName ?: defaultName)
-
-    /** Full IBAN payto with receiver-name parameter if present, fail if absent */
-    fun requireFull(): FullIbanPayto {
-        return maybeFull() ?: throw Exception("Missing receiver-name")
-    }    
-
-    override fun toString(): String = canonical
 
     internal object Serializer : KSerializer<IbanPayto> {
         override val descriptor: SerialDescriptor =
             PrimitiveSerialDescriptor("IbanPayto", PrimitiveKind.STRING)
 
         override fun serialize(encoder: Encoder, value: IbanPayto) {
-            encoder.encodeString(value.parsed.toString())
+            encoder.encodeString(value.toString())
         }
 
         override fun deserialize(decoder: Decoder): IbanPayto {
-            return IbanPayto(decoder.decodeString())
+            return Payto.parse(decoder.decodeString()).expectIban()
+        }
+    }
+
+    companion object {
+        fun rand(): IbanPayto {
+            return Payto.parse("payto://iban/SANDBOXX/${IBAN.rand()}").expectIban()
         }
     }
 }
 
-@Serializable(with = FullIbanPayto.Serializer::class)
-class FullIbanPayto(val payto: IbanPayto, val receiverName: String) {
-    val full = payto.canonical + "?receiver-name=" + receiverName.encodeURLParameter()
-
-    override fun toString(): String = full
-
-    internal object Serializer : KSerializer<FullIbanPayto> {
-        override val descriptor: SerialDescriptor =
-            PrimitiveSerialDescriptor("IbanPayto", PrimitiveKind.STRING)
-
-        override fun serialize(encoder: Encoder, value: FullIbanPayto) {
-            encoder.encodeString(value.full)
-        }
-
-        override fun deserialize(decoder: Decoder): FullIbanPayto {
-            return IbanPayto(decoder.decodeString()).requireFull()
-        }
-    }
-}
+/** Context specific data nescessary to create a bank payto URI from a canonical payto URI */
+data class BankPaytoCtx(
+    val bic: String? = null,
+    val hostname: String? = null
+)

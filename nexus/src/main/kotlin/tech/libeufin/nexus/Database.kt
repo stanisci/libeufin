@@ -86,9 +86,10 @@ enum class DatabaseSubmissionState {
  * the database.
  */
 data class InitiatedPayment(
+    val id: Long,
     val amount: TalerAmount,
     val wireTransferSubject: String,
-    val creditPaytoUri: FullIbanPayto,
+    val creditPaytoUri: String,
     val initiationTime: Instant,
     val requestUid: String
 )
@@ -426,7 +427,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
      * @param currency in which currency should the payment be submitted to the bank.
      * @return [Map] of the initiated payment row ID and [InitiatedPayment]
      */
-    suspend fun initiatedPaymentsSubmittableGet(currency: String): Map<Long, InitiatedPayment> = conn { conn ->
+    suspend fun initiatedPaymentsSubmittableGet(currency: String): List<InitiatedPayment> = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT
               initiated_outgoing_transaction_id
@@ -440,25 +441,21 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
              WHERE (submitted='unsubmitted' OR submitted='transient_failure')
                AND ((amount).val != 0 OR (amount).frac != 0);
         """)
-        val maybeMap = mutableMapOf<Long, InitiatedPayment>()
-        stmt.executeQuery().use {
-            if (!it.next()) return@use
-            do {
-                val rowId = it.getLong("initiated_outgoing_transaction_id")
-                val initiationTime = it.getLong("initiation_time").microsToJavaInstant()
-                if (initiationTime == null) { // nexus fault
-                    throw Exception("Found invalid timestamp at initiated payment with ID: $rowId")
-                }
-                maybeMap[rowId] = InitiatedPayment(
-                    amount = it.getAmount("amount", currency),
-                    creditPaytoUri = IbanPayto(it.getString("credit_payto_uri")).requireFull(),
-                    wireTransferSubject = it.getString("wire_transfer_subject"),
-                    initiationTime = initiationTime,
-                    requestUid = it.getString("request_uid")
-                )
-            } while (it.next())
+        stmt.all {
+            val rowId = it.getLong("initiated_outgoing_transaction_id")
+            val initiationTime = it.getLong("initiation_time").microsToJavaInstant()
+            if (initiationTime == null) { // nexus fault
+                throw Exception("Found invalid timestamp at initiated payment with ID: $rowId")
+            }
+            InitiatedPayment(
+                id = it.getLong("initiated_outgoing_transaction_id"),
+                amount = it.getAmount("amount", currency),
+                creditPaytoUri = it.getString("credit_payto_uri"),
+                wireTransferSubject = it.getString("wire_transfer_subject"),
+                initiationTime = initiationTime,
+                requestUid = it.getString("request_uid")
+            )
         }
-        return@conn maybeMap
     }
     /**
      * Initiate a payment in the database.  The "submit"
@@ -487,7 +484,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
         stmt.setLong(1, paymentData.amount.value)
         stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
-        stmt.setString(4, paymentData.creditPaytoUri.full)
+        stmt.setString(4, paymentData.creditPaytoUri.toString())
         val initiationTime = paymentData.initiationTime.toDbMicros() ?: run {
             throw Exception("Initiation time could not be converted to microseconds for the database.")
         }

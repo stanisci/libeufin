@@ -46,7 +46,7 @@ class WireGatewayApiTest {
             "amount" to "KUDOS:55"
             "exchange_base_url" to "http://exchange.example.com/"
             "wtid" to randShortHashCode()
-            "credit_account" to merchantPayto
+            "credit_account" to merchantPayto.canonical
         };
 
         authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/transfer", valid_req)
@@ -207,7 +207,7 @@ class WireGatewayApiTest {
         val valid_req = obj {
             "amount" to "KUDOS:44"
             "reserve_pub" to randEddsaPublicKey()
-            "debit_account" to merchantPayto
+            "debit_account" to merchantPayto.canonical
         };
 
         authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req, requireAdmin = true)
