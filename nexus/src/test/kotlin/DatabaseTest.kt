@@ -289,9 +289,9 @@ class PaymentInitiationsTest {
             db.initiatedPaymentsSubmittableGet("KUDOS").apply {
 
                 assertEquals(3, this.size)
-                assertEquals("#1", this[0]?.wireTransferSubject)
-                assertEquals("#2", this[1]?.wireTransferSubject)
-                assertEquals("#4", this[2]?.wireTransferSubject)
+                assertEquals("#1", this[0].wireTransferSubject)
+                assertEquals("#2", this[1].wireTransferSubject)
+                assertEquals("#4", this[2].wireTransferSubject)
             }
         }
     }

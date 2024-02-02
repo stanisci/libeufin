@@ -267,7 +267,7 @@ class WithdrawalDAO(private val db: Database) {
         }
 
     /** Pool public status of operation [uuid] */
-    suspend fun pollStatus(uuid: UUID, params: StatusParams): BankWithdrawalOperationStatus? =
+    suspend fun pollStatus(uuid: UUID, params: StatusParams, wire: WireMethod): BankWithdrawalOperationStatus? =
         poll(uuid, params, status = { it.status }) {
             db.conn { conn ->
                 val stmt = conn.prepareStatement("""
@@ -303,6 +303,12 @@ class WithdrawalDAO(private val db: Database) {
                         suggested_exchange = null,
                         selected_exchange_account = it.getString("selected_exchange_payto"),
                         selected_reserve_pub = it.getBytes("reserve_pub")?.run(::EddsaPublicKey),
+                        wire_types = listOf(
+                            when (wire) {
+                                WireMethod.IBAN -> "iban"
+                                WireMethod.X_TALER_BANK -> "x-taler-bank"
+                            } 
+                        )
                     )
                 }
             }

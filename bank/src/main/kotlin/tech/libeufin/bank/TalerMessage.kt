@@ -448,7 +448,7 @@ data class BankWithdrawalOperationStatus(
     val confirm_transfer_url: String? = null,
     val selected_reserve_pub: EddsaPublicKey? = null,
     val selected_exchange_account: String? = null,
-    val wire_types: MutableList<String> = mutableListOf("iban"),
+    val wire_types: List<String>,
     // TODO remove
     val aborted: Boolean,
     val selection_done: Boolean,

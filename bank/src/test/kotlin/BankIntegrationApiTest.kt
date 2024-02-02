@@ -53,7 +53,8 @@ class BankIntegrationApiTest {
                 assert(!it.aborted)
                 assert(!it.transfer_done)
                 assertEquals(amount, it.amount)
-                // TODO check all status
+                assertEquals(listOf("iban"), it.wire_types)
+                assertEquals(amount, it.amount)
             }
         }
 

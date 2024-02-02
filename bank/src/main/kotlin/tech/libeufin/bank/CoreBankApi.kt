@@ -185,33 +185,59 @@ suspend fun createAccount(
             TalerErrorCode.END
         )
 
-    var retry = if (req.payto_uri == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
+    when (cfg.wireMethod) {
+        WireMethod.IBAN -> {
+            var retry = if (req.payto_uri == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
 
-    while (true) {
-        val internalPayto = req.payto_uri ?: IbanPayto.rand() as Payto
-        val res = db.account.create(
-            login = req.username,
-            name = req.name,
-            email = req.contact_data?.email?.get(),
-            phone = req.contact_data?.phone?.get(),
-            cashoutPayto = req.cashout_payto_uri,
-            password = req.password,
-            internalPaytoUri = internalPayto,
-            isPublic = req.is_public,
-            isTalerExchange = req.is_taler_exchange,
-            maxDebt = req.debit_threshold ?: cfg.defaultDebtLimit,
-            bonus = if (!req.is_taler_exchange) cfg.registrationBonus 
-                    else TalerAmount(0, 0, cfg.regionalCurrency),
-            tanChannel = req.tan_channel,
-            checkPaytoIdempotent = req.payto_uri != null
-        )
-        // Retry with new IBAN
-        if (res == AccountCreationResult.PayToReuse && retry > 0) {
-            retry--
-            continue
+            while (true) {
+                val internalPayto = req.payto_uri ?: IbanPayto.rand() as Payto
+                val res = db.account.create(
+                    login = req.username,
+                    name = req.name,
+                    email = req.contact_data?.email?.get(),
+                    phone = req.contact_data?.phone?.get(),
+                    cashoutPayto = req.cashout_payto_uri,
+                    password = req.password,
+                    internalPayto = internalPayto,
+                    isPublic = req.is_public,
+                    isTalerExchange = req.is_taler_exchange,
+                    maxDebt = req.debit_threshold ?: cfg.defaultDebtLimit,
+                    bonus = if (!req.is_taler_exchange) cfg.registrationBonus 
+                            else TalerAmount(0, 0, cfg.regionalCurrency),
+                    tanChannel = req.tan_channel,
+                    checkPaytoIdempotent = req.payto_uri != null
+                )
+                // Retry with new IBAN
+                if (res == AccountCreationResult.PayToReuse && retry > 0) {
+                    retry--
+                    continue
+                }
+                return Pair(res, internalPayto.bank(req.name, cfg.payto))
+            }
         }
-        return Pair(res, internalPayto.bank(req.name, cfg.payto))
+        WireMethod.X_TALER_BANK -> {
+            val internalPayto = XTalerBankPayto.forUsername(req.username)
+            val res = db.account.create(
+                login = req.username,
+                name = req.name,
+                email = req.contact_data?.email?.get(),
+                phone = req.contact_data?.phone?.get(),
+                cashoutPayto = req.cashout_payto_uri,
+                password = req.password,
+                internalPayto = internalPayto,
+                isPublic = req.is_public,
+                isTalerExchange = req.is_taler_exchange,
+                maxDebt = req.debit_threshold ?: cfg.defaultDebtLimit,
+                bonus = if (!req.is_taler_exchange) cfg.registrationBonus 
+                        else TalerAmount(0, 0, cfg.regionalCurrency),
+                tanChannel = req.tan_channel,
+                checkPaytoIdempotent = req.payto_uri != null
+            )
+            return Pair(res, internalPayto.bank(req.name, cfg.payto))
+        }
     }
+
+    
 }
 
 suspend fun patchAccount(

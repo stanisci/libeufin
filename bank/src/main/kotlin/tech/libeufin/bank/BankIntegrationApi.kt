@@ -43,7 +43,7 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     get("/taler-integration/withdrawal-operation/{wopid}") {
         val uuid = call.uuidParameter("wopid")
         val params = StatusParams.extract(call.request.queryParameters)
-        val op = db.withdrawal.pollStatus(uuid, params) ?: throw notFound(
+        val op = db.withdrawal.pollStatus(uuid, params, ctx.wireMethod) ?: throw notFound(
             "Withdrawal operation '$uuid' not found", 
             TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
         )

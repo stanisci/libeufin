@@ -50,7 +50,8 @@ data class BankConfig(
     val fiatCurrencySpec: CurrencySpecification?,
     val spaPath: Path?,
     val tanChannels: Map<TanChannel, Path>,
-    val payto: BankPaytoCtx
+    val payto: BankPaytoCtx,
+    val wireMethod: WireMethod
 )
 
 @Serializable
@@ -130,7 +131,8 @@ fun TalerConfig.loadBankConfig(): BankConfig  {
         fiatCurrency = fiatCurrency,
         fiatCurrencySpec = fiatCurrencySpec,
         tanChannels = tanChannels,
-        payto = payto
+        payto = payto,
+        wireMethod = method
     )
 }
 

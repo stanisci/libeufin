@@ -42,7 +42,7 @@ class AccountDAO(private val db: Database) {
         email: String?,
         phone: String?,
         cashoutPayto: IbanPayto?,
-        internalPaytoUri: Payto,
+        internalPayto: Payto,
         isPublic: Boolean,
         isTalerExchange: Boolean,
         maxDebt: TalerAmount,
@@ -73,7 +73,7 @@ class AccountDAO(private val db: Database) {
                 setString(3, phone)
                 setString(4, cashoutPayto?.full(name))
                 setBoolean(5, checkPaytoIdempotent)
-                setString(6, internalPaytoUri.canonical)
+                setString(6, internalPayto.canonical)
                 setBoolean(7, isPublic)
                 setBoolean(8, isTalerExchange)
                 setString(9, tanChannel?.name)
@@ -90,14 +90,14 @@ class AccountDAO(private val db: Database) {
                     AccountCreationResult.LoginReuse
                 }
             } else {
-                if (internalPaytoUri is IbanPayto)
+                if (internalPayto is IbanPayto)
                     conn.prepareStatement("""
                         INSERT INTO iban_history(
                             iban
                             ,creation_time
                         ) VALUES (?, ?)
                     """).run {
-                        setString(1, internalPaytoUri.iban.value)
+                        setString(1, internalPayto.iban.value)
                         setLong(2, now)
                         if (!executeUpdateViolation()) {
                             conn.rollback()
@@ -137,7 +137,7 @@ class AccountDAO(private val db: Database) {
                         ,max_debt
                     ) VALUES (?, ?, ?, ?, (?, ?)::taler_amount)
                 """).run {
-                    setString(1, internalPaytoUri.canonical)
+                    setString(1, internalPayto.canonical)
                     setLong(2, customerId)
                     setBoolean(3, isPublic)
                     setBoolean(4, isTalerExchange)
@@ -154,7 +154,7 @@ class AccountDAO(private val db: Database) {
                         SELECT out_balance_insufficient
                         FROM bank_transaction(?,'admin','bonus',(?,?)::taler_amount,?,true)
                     """).run {
-                        setString(1, internalPaytoUri.canonical)
+                        setString(1, internalPayto.canonical)
                         setLong(2, bonus.value)
                         setInt(3, bonus.frac)
                         setLong(4, now)

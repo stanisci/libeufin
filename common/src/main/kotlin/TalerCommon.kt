@@ -150,12 +150,20 @@ sealed class Payto {
     /** Transform a payto URI to its bank form, using [name] as the receiver-name and the bank [ctx] */
     fun bank(name: String, ctx: BankPaytoCtx): String = when (this) {
         is IbanPayto -> "payto://iban/${ctx.bic!!}/$iban?receiver-name=${name.encodeURLParameter()}"
+        is XTalerBankPayto -> "payto://x-taler-bank/${ctx.hostname!!}/$username?receiver-name=${name.encodeURLParameter()}"
     }
 
     fun expectIban(): IbanPayto {
         return when (this) {
             is IbanPayto -> this
-            else -> throw CommonError.Payto("expected a IBAN payto URI got '${parsed.host}'")
+            else -> throw CommonError.Payto("expected an IBAN payto URI got '${parsed.host}'")
+        }
+    }
+
+    fun expectXTalerBank(): XTalerBankPayto {
+        return when (this) {
+            is XTalerBankPayto -> this
+            else -> throw CommonError.Payto("expected a x-taler-bank payto URI got '${parsed.host}'")
         }
     }
 
@@ -188,11 +196,11 @@ sealed class Payto {
 
             return when (parsed.host) {
                 "iban" -> {
-                    val splitPath = parsed.path.split("/").filter { it.isNotEmpty() }
+                    val splitPath = parsed.path.split("/", limit=3).filter { it.isNotEmpty() }
                     val (bic, rawIban) = when (splitPath.size) {
                         1 -> Pair(null, splitPath[0])
                         2 -> Pair(splitPath[0], splitPath[1])
-                        else -> throw CommonError.Payto("too many path segments for a IBAN payto URI")
+                        else -> throw CommonError.Payto("too many path segments for an IBAN payto URI")
                     }
                     val iban = IBAN.parse(rawIban)
                     IbanPayto(
@@ -205,13 +213,25 @@ sealed class Payto {
                         iban
                     )
                 }
+                "x-taler-bank" -> {
+                    val splitPath = parsed.path.split("/", limit=3).filter { it.isNotEmpty() }
+                    if (splitPath.size != 2)
+                        throw CommonError.Payto("bad number of path segments for a x-taler-bank payto URI")
+                    val username = splitPath[1]
+                    XTalerBankPayto(
+                        parsed, 
+                        "payto://x-taler-bank/localhost/$username",
+                        amount, 
+                        message,
+                        receiverName,
+                        username
+                    )
+                }
                 else -> throw CommonError.Payto("unsupported payto URI kind '${parsed.host}'")
             }
         }
     }
 }
-
-// TODO x-taler-bank Payto
 
 @Serializable(with = IbanPayto.Serializer::class)
 class IbanPayto internal constructor(
@@ -248,6 +268,23 @@ class IbanPayto internal constructor(
     companion object {
         fun rand(): IbanPayto {
             return Payto.parse("payto://iban/SANDBOXX/${IBAN.rand()}").expectIban()
+        }
+    }
+}
+
+class XTalerBankPayto internal constructor(
+    override val parsed: URI,
+    override val canonical: String,
+    override val amount: TalerAmount?,
+    override val message: String?,
+    override val receiverName: String?,
+    val username: String
+): Payto() {
+    override fun toString(): String = parsed.toString()
+
+    companion object {
+        fun forUsername(username: String): XTalerBankPayto {
+            return Payto.parse("payto://x-taler-bank/hostname/$username").expectXTalerBank()
         }
     }
 }
