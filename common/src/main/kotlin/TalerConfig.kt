@@ -36,7 +36,10 @@ private val reSection = Regex("^\\s*\\[\\s*([^]]*)\\s*]\\s*$")
 private val reParam = Regex("^\\s*([^=]+?)\\s*=\\s*(.*?)\\s*$")
 private val reDirective = Regex("^\\s*@([a-zA-Z-_]+)@\\s*(.*?)\\s*$")
 
-class TalerConfigError(m: String) : Exception(m)
+class TalerConfigError(m: String) : Exception(m) {
+    constructor(type: String, section: String, option: String, err: String): this("expected $type in configuration section $section option $option $err")
+    constructor(type: String, section: String, option: String): this("expected $type in configuration section $section option $option")
+}
 
 /**
  * Information about how the configuration is loaded.
@@ -423,25 +426,22 @@ class TalerConfig internal constructor(
     }
 
     fun requireString(section: String, option: String): String  =
-        lookupString(section, option) ?:
-            throw TalerConfigError("expected string in configuration section $section option $option")
+        lookupString(section, option) ?: throw TalerConfigError("string", section, option)
 
     fun requireNumber(section: String, option: String): Int = 
-        lookupString(section, option)?.toInt() ?:
-            throw TalerConfigError("expected number in configuration section $section option $option")
+        lookupString(section, option)?.toInt() ?: throw TalerConfigError("number", section, option)
 
     fun lookupBoolean(section: String, option: String): Boolean? {
         val entry = lookupString(section, option) ?: return null
         return when (val v = entry.lowercase()) {
             "yes" -> true
             "no" -> false
-            else -> throw TalerConfigError("expected yes/no in configuration section $section option $option but got $v")
+            else -> throw TalerConfigError("yes/no", section, option, "but got '$v'")
         }
     }
 
     fun requireBoolean(section: String, option: String): Boolean =
-        lookupBoolean(section, option) ?:
-            throw TalerConfigError("expected boolean in configuration section $section option $option")
+        lookupBoolean(section, option) ?: throw TalerConfigError("boolean", section, option)
 
     fun lookupPath(section: String, option: String): Path? {
         val entry = lookupString(section, option) ?: return null
@@ -449,6 +449,5 @@ class TalerConfig internal constructor(
     }
 
     fun requirePath(section: String, option: String): Path =
-        lookupPath(section, option) ?:
-            throw TalerConfigError("expected path for section $section option $option")
+        lookupPath(section, option) ?: throw TalerConfigError("path", section, option)
 }

@@ -110,7 +110,7 @@ fun ApplicationCall.longParameter(name: String): Long {
  *
  * It returns false in case of problems, true otherwise.
  */
-suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? = null): AccountCreationResult {
+suspend fun createAdminAccount(db: Database, cfg: BankConfig, pw: String? = null): AccountCreationResult {
     var pwStr = pw;
     if (pwStr == null) {
         val pwBuf = ByteArray(32)
@@ -118,15 +118,20 @@ suspend fun maybeCreateAdminAccount(db: Database, ctx: BankConfig, pw: String? =
         pwStr = String(pwBuf, Charsets.UTF_8)
     }
     
+    val payto = when (cfg.wireMethod) {
+        WireMethod.IBAN -> IbanPayto.rand()
+        WireMethod.X_TALER_BANK -> XTalerBankPayto.forUsername("admin")
+    }
+
     return db.account.create(
         login = "admin",
         password = pwStr,
         name = "Bank administrator",
-        internalPayto = IbanPayto.rand(),
+        internalPayto = payto,
         isPublic = false,
         isTalerExchange = false,
-        maxDebt = ctx.defaultDebtLimit,
-        bonus = TalerAmount(0, 0, ctx.regionalCurrency),
+        maxDebt = cfg.defaultDebtLimit,
+        bonus = TalerAmount(0, 0, cfg.regionalCurrency),
         checkPaytoIdempotent = false,
         email = null,
         phone = null,

@@ -236,8 +236,6 @@ suspend fun createAccount(
             return Pair(res, internalPayto.bank(req.name, cfg.payto))
         }
     }
-
-    
 }
 
 suspend fun patchAccount(

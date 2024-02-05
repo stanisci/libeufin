@@ -128,7 +128,7 @@ fun bankSetup(
             tanChannel = null   
         ))
         // Create admin account
-        assertEquals(AccountCreationResult.Success, maybeCreateAdminAccount(db, ctx, "admin-password"))
+        assertEquals(AccountCreationResult.Success, createAdminAccount(db, ctx, "admin-password"))
         testApplication {
             application {
                 corebankWebApp(db, ctx)

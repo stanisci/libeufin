@@ -238,7 +238,7 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
                     initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
                 }
                 // Create admin account if missing
-                val res = maybeCreateAdminAccount(db, ctx) // logs provided by the helper
+                val res = createAdminAccount(db, ctx) // logs provided by the helper
                 when (res) {
                     AccountCreationResult.BonusBalanceInsufficient -> {}
                     AccountCreationResult.LoginReuse -> {}

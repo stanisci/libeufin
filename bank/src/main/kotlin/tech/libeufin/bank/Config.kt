@@ -86,7 +86,7 @@ fun TalerConfig.loadServerConfig(): ServerConfig {
     return when (val method = requireString("libeufin-bank", "serve")) {
         "tcp" -> ServerConfig.Tcp(requireNumber("libeufin-bank", "port"))
         "unix" -> ServerConfig.Unix(requireString("libeufin-bank", "unixpath"), requireNumber("libeufin-bank", "unixpath_mode"))
-        else -> throw Exception("Unknown server method '$method' expected 'tcp' or 'unix'")
+        else -> throw Exception(" Unknown server method '$method' expected 'tcp' or 'unix' got '$method'")
     }
 }
 
@@ -106,10 +106,10 @@ fun TalerConfig.loadBankConfig(): BankConfig  {
             }
         }
     }
-    val method = when (val raw = lookupString("libeufin-bank", "payment_method")) {
+    val method = when (val raw = lookupString("libeufin-bank", "wire_type")) {
         "iban" -> WireMethod.IBAN
         "x-taler-bank" -> WireMethod.X_TALER_BANK
-        else -> throw TalerConfigError("expected wire method for section libeufin-bank, option payment_method, but $raw is unknown")
+        else -> throw TalerConfigError("expected a payment target type for section libeufin-bank, option wire_type, but $raw is unknown")
     }
     val payto = when (method) {
         WireMethod.IBAN -> BankPaytoCtx(bic = lookupString("libeufin-bank", "iban_payto_bic"))
@@ -158,39 +158,35 @@ private fun TalerConfig.amount(section: String, option: String, currency: String
     val amount = try {
         TalerAmount(amountStr)
     } catch (e: Exception) {
-        throw TalerConfigError("expected amount for section $section, option $option, but amount is malformed")
+        throw TalerConfigError("amount", section, option, "but amount is malformed")
     }
 
     if (amount.currency != currency) {
-        throw TalerConfigError(
-            "expected amount for section $section, option $option, but currency is wrong (got ${amount.currency} expected $currency"
-        )
+        throw TalerConfigError("amount", section, option, "but currency is wrong : got ${amount.currency} expected $currency")
     }
     return amount
 }
 
 private fun TalerConfig.requireAmount(section: String, option: String, currency: String): TalerAmount =
-    amount(section, option, currency) ?:
-        throw TalerConfigError("expected amount for section $section, option $option, but config value is empty")
+    amount(section, option, currency) ?: throw TalerConfigError("amount", section, option, "but config value is empty")
 
 private fun TalerConfig.decimalNumber(section: String, option: String): DecimalNumber? {
     val numberStr = lookupString(section, option) ?: return null
     try {
         return DecimalNumber(numberStr)
     } catch (e: Exception) {
-        throw TalerConfigError("expected decimal number for section $section, option $option, but number is malformed")
+        throw TalerConfigError("decimal number", section, option, "but number is malformed")
     }
 }
 
 private fun TalerConfig.requireDecimalNumber(section: String, option: String): DecimalNumber
-    = decimalNumber(section, option) ?:
-        throw TalerConfigError("expected decimal number for section $section, option $option, but config value is empty")
+    = decimalNumber(section, option) ?: throw TalerConfigError("decimal number", section, option, "but config value is empty")
 
 private fun TalerConfig.RoundingMode(section: String, option: String): RoundingMode? {
     val str = lookupString(section, option) ?: return null;
     try {
         return RoundingMode.valueOf(str)
     } catch (e: Exception) {
-        throw TalerConfigError("expected rouding mode for section $section, option $option, but $str is unknown")
+        throw TalerConfigError("rouding mode", section, option, "but $str is unknown")
     }
 }

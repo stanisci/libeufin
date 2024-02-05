@@ -38,9 +38,9 @@ class DatabaseTest {
     @Test
     fun createAdmin() = setup { db, ctx ->
         // Create admin account
-        assertEquals(AccountCreationResult.Success, maybeCreateAdminAccount(db, ctx))
+        assertEquals(AccountCreationResult.Success, createAdminAccount(db, ctx))
         // Checking idempotency
-        assertEquals(AccountCreationResult.LoginReuse, maybeCreateAdminAccount(db, ctx))
+        assertEquals(AccountCreationResult.LoginReuse, createAdminAccount(db, ctx))
     }
 
     @Test
