@@ -159,21 +159,18 @@ if [ 1 = "$DO_CREATE" ]; then
   fi
 fi
 
-if [ 1 = "$SKIP_DBINIT" ]; then
-  echo "Database configuration finished, skipping dbinit." 1>&2
-  exit 0
-fi
-
-echo "Initializing database $DBNAME." 1>&2
+# We first initialize the libeufin-nexus DB
+# and then adjust permissions for the _v schema,
+# so that libeufin-bank can properly initialize
+# its DB without running into permission problems.
 
 if [ 0 = "$SKIP_DBINIT" ]; then
   echo "Initializing database '$DBNAME' for libeufin-nexus." 1>&2
   sudo -u "$NEXUS_DBUSER" "$NEXUS_DBINIT" -c "$NEXUS_CFGFILE"
-  echo "Initializing database '$DBNAME' for libeufin-bank." 1>&2
-  sudo -u "$BANK_DBUSER" "$BANK_DBINIT" -c "$BANK_CFGFILE"
 fi
 
 if [ 0 = "$SKIP_DBINIT" ] || [ 1 = "$FORCE_PERMS" ]; then
+  echo "Setting postgres permissions for $BANK_DBUSER" 1>&2
   if ! echo "GRANT ALL PRIVILEGES ON DATABASE $DBNAME TO \"$BANK_DBUSER\"" |
     sudo -i -u postgres psql "$DBNAME"; then
     exit_fail "Failed to grant access to database '$DBNAME' to '$BANK_DBUSER'."
@@ -194,7 +191,15 @@ if [ 0 = "$SKIP_DBINIT" ] || [ 1 = "$FORCE_PERMS" ]; then
     sudo -i -u postgres psql "$DBNAME"; then
     exit_fail "Failed to grant all privileges on schema 'libeufin_nexus' to '$BANK_DBUSER'."
   fi
+fi
 
+if [ 0 = "$SKIP_DBINIT" ]; then
+  echo "Initializing database '$DBNAME' for libeufin-bank." 1>&2
+  sudo -u "$BANK_DBUSER" "$BANK_DBINIT" -c "$BANK_CFGFILE"
+fi
+
+if [ 0 = "$SKIP_DBINIT" ] || [ 1 = "$FORCE_PERMS" ]; then
+  echo "Setting postgres permissions for $NEXUS_DBUSER" 1>&2
   if ! echo "GRANT USAGE ON SCHEMA libeufin_bank TO \"$NEXUS_DBUSER\"" |
     sudo -i -u postgres psql "$DBNAME"; then
     exit_fail "Failed to grant usage privilege on schema 'libeufin_bank' to '$NEXUS_DBUSER'."
