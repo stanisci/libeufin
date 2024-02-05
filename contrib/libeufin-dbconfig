@@ -116,7 +116,7 @@ fi
 # Remove URI, host and query from postgres URI.
 NEXUS_DBNAME=$(echo "$NEXUS_DBPATH" | sed -e 's|postgres://.*||' -e 's|?.*||')
 
-BANK_DBPATH=$(libeufin-bank config get nexus-postgres CONFIG)
+BANK_DBPATH=$(libeufin-bank config get libeufin-bankdb-postgres CONFIG)
 
 if ! echo "$BANK_DBPATH" | grep "postgres://" >/dev/null; then
   echo "Invalid libeufin-bank database configuration value '$BANK_DBPATH'." 1>&2
