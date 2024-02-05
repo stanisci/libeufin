@@ -286,7 +286,8 @@ data class Config(
     val allow_edit_name: Boolean,
     val allow_edit_cashout_payto_uri: Boolean,
     val default_debit_threshold: TalerAmount,
-    val supported_tan_channels: Set<TanChannel>
+    val supported_tan_channels: Set<TanChannel>,
+    val wire_type: WireMethod
 ) {
     val name: String = "libeufin-bank"
     val version: String = COREBANK_API_VERSION

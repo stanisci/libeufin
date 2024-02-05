@@ -33,6 +33,7 @@ This files contains all the API changes for the current release:
 - Add GET /accounts/USERNAME/taler-revenue/config
 - Add GET /accounts/USERNAME/taler-wire-gateway/config
 - Change GET /accounts/USERNAME/taler-revenue/history logic and body type
+- GET /config: new wire_type field for the bank supported payment target type
 
 ## bank cli
 

@@ -59,7 +59,8 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
                 default_debit_threshold = ctx.defaultDebtLimit,
                 supported_tan_channels = ctx.tanChannels.keys,
                 allow_edit_name = ctx.allowEditName,
-                allow_edit_cashout_payto_uri = ctx.allowEditCashout
+                allow_edit_cashout_payto_uri = ctx.allowEditCashout,
+                wire_type = ctx.wireMethod
             )
         )
     }
