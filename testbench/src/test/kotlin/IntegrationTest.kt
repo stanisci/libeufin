@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
  *
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -281,15 +281,7 @@ class IntegrationTest {
                 val reservePub = randBytes(32);
                 val amount = TalerAmount("EUR:${20+i}")
                 val subject = "cashin test $i: ${Base32Crockford.encode(reservePub)}"
-                ingestIncomingPayment(db, 
-                    IncomingPayment(
-                        amount = amount,
-                        debitPaytoUri = userPayTo.toString(),
-                        wireTransferSubject = subject,
-                        executionTime = Instant.now(),
-                        bankId = Base32Crockford.encode(reservePub)
-                    )
-                )
+                nexusCmd.run("testing fake-incoming $flags --subject \"$subject\" --amount $amount $userPayTo")
                 val converted = client.get("http://0.0.0.0:8080/conversion-info/cashin-rate?amount_debit=EUR:${20 + i}")
                     .assertOkJson<ConversionResponse>().amount_credit
                 client.get("http://0.0.0.0:8080/accounts/exchange/transactions") {

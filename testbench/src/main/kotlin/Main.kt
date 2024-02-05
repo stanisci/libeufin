@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
  *
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -19,7 +19,6 @@
 
 package tech.libeufin.testbench
 
-import tech.libeufin.nexus.Database as NexusDb
 import tech.libeufin.nexus.*
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
@@ -120,11 +119,10 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         val payto = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans"
         
         runBlocking {
-            step("Test init ${kind.name}")
+            step("Init ${kind.name}")
 
             if (ask("Reset DB ? y/n>") == "y") nexusCmd.test("dbinit -r $flags").assertOk()
             else nexusCmd.test("dbinit $flags").assertOk()
-            val nexusDb = NexusDb("postgresql:///libeufincheck")
 
             val cmds = buildMap<String, suspend () -> Unit> {
                 put("reset-db", suspend {
@@ -157,28 +155,14 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                         Unit
                     })
                     put("tx", suspend {
-                        step("Test submit one transaction")
-                        nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                            id = -1,
-                            amount = TalerAmount("CFH:42"),
-                            creditPaytoUri = payto,
-                            wireTransferSubject = "single transaction test",
-                            initiationTime = Instant.now(),
-                            requestUid = Base32Crockford.encode(randBytes(16))
-                        ))
+                        step("Submit one transaction")
+                        nexusCmd.test("initiate-payment $flags \"$payto&amount=CHF:42&message=single%20transaction%20test\"").assertOk()
                         nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
                     })
                     put("txs", suspend {
-                        step("Test submit many transaction")
+                        step("Submit many transaction")
                         repeat(4) {
-                            nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                                id = -1,
-                                amount = TalerAmount("CFH:${100L+it}"),
-                                creditPaytoUri = payto,
-                                wireTransferSubject = "multi transaction test $it",
-                                initiationTime = Instant.now(),
-                                requestUid = Base32Crockford.encode(randBytes(16))
-                            ))
+                            nexusCmd.test("initiate-payment $flags --amount=CHF:${100L+it} --subject \"multi transaction test $it\" \"$payto\"").assertOk()
                         }
                         nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
                     })
@@ -186,14 +170,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     put("tx", suspend {
                         step("Submit new transaction")
                         // TODO interactive payment editor
-                        nexusDb.initiatedPaymentCreate(InitiatedPayment(
-                            id = -1,
-                            amount = TalerAmount("CFH:1.1"),
-                            creditPaytoUri = payto,
-                            wireTransferSubject = "single transaction test",
-                            initiationTime = Instant.now(),
-                            requestUid = Base32Crockford.encode(randBytes(16))
-                        ))
+                        nexusCmd.test("initiate-payment $flags \"$payto&amount=CHF:1.1&message=single%20transaction%20test\"").assertOk()
                         nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
                     })
                 }

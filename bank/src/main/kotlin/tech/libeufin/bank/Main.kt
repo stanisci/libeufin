@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -432,8 +432,8 @@ class CreateAccountOption: OptionGroup() {
         help = "Payto URI of this account"
     ).convert { Payto.parse(it) }
     val debit_threshold: TalerAmount? by option(
-        help = "Max debit allowed for this account")
-    .convert { TalerAmount(it) }
+        help = "Max debit allowed for this account"
+    ).convert { TalerAmount(it) }
 }
 
 class CreateAccount : CliktCommand(
