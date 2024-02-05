@@ -114,7 +114,7 @@ if ! echo "$NEXUS_DBPATH" | grep "postgres://" >/dev/null; then
 fi
 
 # Remove URI, host and query from postgres URI.
-NEXUS_DBNAME=$(echo "$NEXUS_DBPATH" | sed -e 's|postgres://.*||' -e 's|?.*||')
+NEXUS_DBNAME=$(echo "$NEXUS_DBPATH" | sed -e 's|postgres://.*/||' -e 's|?.*||')
 
 BANK_DBPATH=$(libeufin-bank config get libeufin-bankdb-postgres CONFIG)
 
@@ -124,7 +124,7 @@ if ! echo "$BANK_DBPATH" | grep "postgres://" >/dev/null; then
 fi
 
 # Remove URI, host and query from postgres URI.
-BANK_DBNAME=$(echo "$BANK_DBPATH" | sed -e 's|postgres://.*||' -e 's|?.*||')
+BANK_DBNAME=$(echo "$BANK_DBPATH" | sed -e 's|postgres://.*/||' -e 's|?.*||')
 
 if [[ $NEXUS_DBNAME != "$BANK_DBNAME" ]]; then
   echo "Database names for libeufin-bank and libeufin-nexus must match ($NEXUS_DBNAME vs $BANK_DBNAME)" 1>&2
