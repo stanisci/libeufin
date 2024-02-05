@@ -133,6 +133,9 @@ fi
 
 # Both are the same now!
 DBNAME=$BANK_DBNAME
+# The DB is created by the nexus user.
+# This is an arbitrary choice we make here.
+DBUSER=$NEXUS_DBUSER
 
 if sudo -i -u postgres psql "$DBNAME" </dev/null 2>/dev/null; then
   if [ 1 = "$RESET_DB" ]; then
@@ -152,7 +155,6 @@ fi
 
 if [ 1 = "$DO_CREATE" ]; then
   echo "Creating database '$DBNAME'." 1>&2
-
   if ! sudo -i -u postgres createdb -O "$DBUSER" "$DBNAME"; then
     echo "Failed to create database '$DBNAME'"
     exit 1
