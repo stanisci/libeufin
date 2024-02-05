@@ -36,9 +36,17 @@ private val reSection = Regex("^\\s*\\[\\s*([^]]*)\\s*]\\s*$")
 private val reParam = Regex("^\\s*([^=]+?)\\s*=\\s*(.*?)\\s*$")
 private val reDirective = Regex("^\\s*@([a-zA-Z-_]+)@\\s*(.*?)\\s*$")
 
-class TalerConfigError(m: String) : Exception(m) {
-    constructor(type: String, section: String, option: String, err: String): this("expected $type in configuration section $section option $option $err")
-    constructor(type: String, section: String, option: String): this("expected $type in configuration section $section option $option")
+class TalerConfigError private constructor (m: String) : Exception(m) {
+    companion object {
+        fun missing(type: String, option: String, section: String): TalerConfigError =
+            TalerConfigError("Missing $type option '$option' in section '$section'")
+
+        fun invalid(type: String, option: String, section: String, err: String): TalerConfigError =
+            TalerConfigError("Expected $type option '$option' in section '$section': $err")
+
+        fun generic(msg: String): TalerConfigError =
+            TalerConfigError(msg)
+    }
 }
 
 /**
@@ -161,7 +169,7 @@ class TalerConfig internal constructor(
             val directiveMatch = reDirective.matchEntire(line)
             if (directiveMatch != null) {
                 if (source == null) {
-                    throw TalerConfigError("Directives are only supported when loading from file")
+                    throw TalerConfigError.generic("Directives are only supported when loading from file")
                 }
                 val directiveName = directiveMatch.groups[1]!!.value.lowercase()
                 val directiveArg = directiveMatch.groups[2]!!.value
@@ -178,7 +186,7 @@ class TalerConfig internal constructor(
                         val arg = directiveArg.trim()
                         val sp = arg.split(" ")
                         if (sp.size != 2) {
-                            throw TalerConfigError("invalid configuration, @inline-secret@ directive requires exactly two arguments")
+                            throw TalerConfigError.generic("invalid configuration, @inline-secret@ directive requires exactly two arguments")
                         }
                         val sectionName = sp[0]
                         val secretFilename = source.resolveSibling(sp[1])
@@ -186,7 +194,7 @@ class TalerConfig internal constructor(
                     }
 
                     else -> {
-                        throw TalerConfigError("unsupported directive '$directiveName'")
+                        throw TalerConfigError.generic("unsupported directive '$directiveName'")
                     }
                 }
                 continue
@@ -198,7 +206,7 @@ class TalerConfig internal constructor(
                 continue
             }
             if (currentSection == null) {
-                throw TalerConfigError("section expected")
+                throw TalerConfigError.generic("section expected")
             }
 
             val paramMatch = reParam.matchEntire(line)
@@ -213,7 +221,7 @@ class TalerConfig internal constructor(
                 section.entries[optName] = optVal
                 continue
             }
-            throw TalerConfigError("expected section header, option assignment or directive in line $lineNum file ${source ?: "<input>"}")
+            throw TalerConfigError.generic("expected section header, option assignment or directive in line $lineNum file ${source ?: "<input>"}")
         }
     }
 
@@ -281,7 +289,7 @@ class TalerConfig internal constructor(
      */
     fun pathsub(x: String, recursionDepth: Int = 0): Path {
         if (recursionDepth > 128) {
-            throw TalerConfigError("recursion limit in path substitution exceeded")
+            throw TalerConfigError.generic("recursion limit in path substitution exceeded")
         }
         val result = StringBuilder()
         var l = 0
@@ -339,10 +347,10 @@ class TalerConfig internal constructor(
                         l = p
                         continue
                     } else {
-                        throw TalerConfigError("malformed variable expression can't resolve variable '$varName'")
+                        throw TalerConfigError.generic("malformed variable expression can't resolve variable '$varName'")
                     }
                 }
-                throw TalerConfigError("malformed variable expression (unbalanced)")
+                throw TalerConfigError.generic("malformed variable expression (unbalanced)")
             } else {
                 // $var
                 var varEnd = l + 1
@@ -426,22 +434,24 @@ class TalerConfig internal constructor(
     }
 
     fun requireString(section: String, option: String): String  =
-        lookupString(section, option) ?: throw TalerConfigError("string", section, option)
+        lookupString(section, option) ?: throw TalerConfigError.missing("string", section, option)
 
-    fun requireNumber(section: String, option: String): Int = 
-        lookupString(section, option)?.toInt() ?: throw TalerConfigError("number", section, option)
+    fun requireNumber(section: String, option: String): Int {
+        val raw = lookupString(section, option) ?: throw TalerConfigError.missing("number", section, option)
+        return raw.toIntOrNull() ?: throw TalerConfigError.invalid("number", section, option, "'$raw' not a valid number")
+    }
 
     fun lookupBoolean(section: String, option: String): Boolean? {
         val entry = lookupString(section, option) ?: return null
         return when (val v = entry.lowercase()) {
             "yes" -> true
             "no" -> false
-            else -> throw TalerConfigError("yes/no", section, option, "but got '$v'")
+            else -> throw TalerConfigError.invalid("yes/no", section, option, "got '$v'")
         }
     }
 
     fun requireBoolean(section: String, option: String): Boolean =
-        lookupBoolean(section, option) ?: throw TalerConfigError("boolean", section, option)
+        lookupBoolean(section, option) ?: throw TalerConfigError.missing("boolean", section, option)
 
     fun lookupPath(section: String, option: String): Path? {
         val entry = lookupString(section, option) ?: return null
@@ -449,5 +459,5 @@ class TalerConfig internal constructor(
     }
 
     fun requirePath(section: String, option: String): Path =
-        lookupPath(section, option) ?: throw TalerConfigError("path", section, option)
+        lookupPath(section, option) ?: throw TalerConfigError.missing("path", section, option)
 }
