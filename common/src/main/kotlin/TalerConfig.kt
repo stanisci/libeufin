@@ -38,10 +38,10 @@ private val reDirective = Regex("^\\s*@([a-zA-Z-_]+)@\\s*(.*?)\\s*$")
 
 class TalerConfigError private constructor (m: String) : Exception(m) {
     companion object {
-        fun missing(type: String, option: String, section: String): TalerConfigError =
+        fun missing(type: String, section: String, option: String): TalerConfigError =
             TalerConfigError("Missing $type option '$option' in section '$section'")
 
-        fun invalid(type: String, option: String, section: String, err: String): TalerConfigError =
+        fun invalid(type: String, section: String, option: String, err: String): TalerConfigError =
             TalerConfigError("Expected $type option '$option' in section '$section': $err")
 
         fun generic(msg: String): TalerConfigError =
@@ -430,7 +430,10 @@ class TalerConfig internal constructor(
     fun lookupString(section: String, option: String): String? {
         val canonSection = section.uppercase()
         val canonOption = option.uppercase()
-        return this.sectionMap[canonSection]?.entries?.get(canonOption)
+        val str = this.sectionMap[canonSection]?.entries?.get(canonOption)
+        if (str == null) return null
+        if (str == "") return null
+        return str
     }
 
     fun requireString(section: String, option: String): String  =

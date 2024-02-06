@@ -22,10 +22,12 @@ import io.ktor.client.engine.mock.*
 import io.ktor.client.request.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
+import kotlinx.coroutines.*
 import tech.libeufin.nexus.*
 import tech.libeufin.common.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.Instant
+import kotlin.io.path.*
 
 val j = Json {
     this.serializersModule = SerializersModule {
@@ -33,28 +35,33 @@ val j = Json {
     }
 }
 
-val config: EbicsSetupConfig = run {
-    val handle = NEXUS_CONFIG_SOURCE.fromFile(null)
-    EbicsSetupConfig(handle)
+fun conf(
+    conf: String = "test.conf",
+    lambda: suspend (EbicsSetupConfig) -> Unit
+) {
+    val config = NEXUS_CONFIG_SOURCE.fromFile(Path("conf/$conf"))
+    val ctx = EbicsSetupConfig(config)
+    runBlocking {
+        lambda(ctx)
+    }
 }
 
-fun prepDb(cfg: TalerConfig): Database {
-    val dbCfg = DatabaseConfig(
-        dbConnStr = "postgresql:///libeufincheck",
-        sqlDir = cfg.requirePath("paths", "datadir").resolve("sql")
-    )
-    pgDataSource(dbCfg.dbConnStr).pgConnection().use { conn ->
-        println("SQL dir for testing: ${dbCfg.sqlDir}")
-        try {
-            resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
-        } catch (e: Exception) {
-            logger.warn("Resetting an empty database throws, tolerating this...")
-            logger.warn(e.message)
+fun setup(
+    conf: String = "test.conf",
+    lambda: suspend (Database, EbicsSetupConfig) -> Unit
+) {
+    val config = NEXUS_CONFIG_SOURCE.fromFile(Path("conf/$conf"))
+    val dbCfg = config.dbConfig()
+    val ctx = EbicsSetupConfig(config)
+    Database(dbCfg.dbConnStr).use {
+        runBlocking {
+            it.conn { conn ->
+                resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
+                initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
+            }
+            lambda(it, ctx)
         }
-        initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
     }
-   
-    return Database(dbCfg.dbConnStr)
 }
 
 val clientKeys = generateNewKeys()
@@ -72,27 +79,6 @@ fun getMockedClient(
         }
     }
 }
-
-// Partial config to talk to PostFinance.
-fun getPofiConfig(
-    userId: String,
-    partnerId: String,
-    accountOwner: String? = "NotGiven"
-    ) = """
-    [nexus-ebics]
-    CURRENCY = KUDOS
-    HOST_BASE_URL = https://isotest.postfinance.ch/ebicsweb/ebicsweb
-    HOST_ID = PFEBICS
-    USER_ID = $userId
-    PARTNER_ID = $partnerId
-    SYSTEM_ID = not-used
-    IBAN = CH9789144829733648596
-    BIC = POFICHBE
-    NAME = LibEuFin
-    BANK_PUBLIC_KEYS_FILE = /tmp/pofi-testplatform-bank-keys.json
-    CLIENT_PRIVATE_KEYS_FILE = /tmp/pofi-testplatform-subscriber-keys.json
-    BANK_DIALECT = postfinance
-""".trimIndent()
 
 // Generates a payment initiation, given its subject.
 fun genInitPay(

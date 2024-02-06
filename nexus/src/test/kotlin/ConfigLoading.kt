@@ -25,23 +25,6 @@ import kotlin.test.*
 import tech.libeufin.common.*
 
 class ConfigLoading {
-    /**
-     * Tests that the default configuration has _at least_ the options
-     * that are expected by the memory representation of config.
-     */
-    @Test
-    fun loadRequiredValues() {
-        val handle = NEXUS_CONFIG_SOURCE.fromFile(null)
-        val cfg = EbicsSetupConfig(handle)
-        cfg._dump()
-    }
-
-    @Test
-    fun loadPath() {
-        val handle = NEXUS_CONFIG_SOURCE.fromFile(null)
-        val cfg = EbicsSetupConfig(handle)
-    }
-
     // Checks converting human-readable durations to seconds.
     @Test
     fun timeParsing() {

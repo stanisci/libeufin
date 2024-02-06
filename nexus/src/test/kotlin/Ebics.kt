@@ -33,7 +33,7 @@ import kotlin.io.path.*
 class Ebics {
     // Checks XML is valid and INI.
     @Test
-    fun iniMessage() {
+    fun iniMessage() = conf { config -> 
         val msg = generateIniMessage(config, clientKeys)
         val ini = XMLUtil.convertStringToJaxb<EbicsUnsecuredRequest>(msg) // ensures is valid
         assertEquals(ini.value.header.static.orderDetails.orderType, "INI") // ensures is INI
@@ -41,7 +41,7 @@ class Ebics {
 
     // Checks XML is valid and HIA.
     @Test
-    fun hiaMessage() {
+    fun hiaMessage() = conf { config -> 
         val msg = generateHiaMessage(config, clientKeys)
         val ini = XMLUtil.convertStringToJaxb<EbicsUnsecuredRequest>(msg) // ensures is valid
         assertEquals(ini.value.header.static.orderDetails.orderType, "HIA") // ensures is HIA
@@ -49,7 +49,7 @@ class Ebics {
 
     // Checks XML is valid and HPB.
     @Test
-    fun hpbMessage() {
+    fun hpbMessage() = conf { config -> 
         val msg = generateHpbMessage(config, clientKeys)
         val ini = XMLUtil.convertStringToJaxb<EbicsUnsecuredRequest>(msg) // ensures is valid
         assertEquals(ini.value.header.static.orderDetails.orderType, "HPB") // ensures is HPB
@@ -58,7 +58,7 @@ class Ebics {
     // the main branches: unreachable bank, non-200 status
     // code, and 200.
     @Test
-    fun postMessage() {
+    fun postMessage() = conf { config -> 
         val client404 = getMockedClient {
             respondError(HttpStatusCode.NotFound)
         }
@@ -68,17 +68,15 @@ class Ebics {
         val clientOk = getMockedClient {
             respondOk("Not EBICS anyway.")
         }
-        runBlocking {
-            assertNull(client404.postToBank("http://ignored.example.com/", "ignored"))
-            assertNull(clientNoResponse.postToBank("http://ignored.example.com/", "ignored"))
-            assertNotNull(clientOk.postToBank("http://ignored.example.com/", "ignored"))
-        }
+        assertNull(client404.postToBank("http://ignored.example.com/", "ignored"))
+        assertNull(clientNoResponse.postToBank("http://ignored.example.com/", "ignored"))
+        assertNotNull(clientOk.postToBank("http://ignored.example.com/", "ignored"))
     }
 
     // Tests that internal repr. of keys lead to valid PDF.
     // Mainly tests that the function does not throw any error.
     @Test
-    fun keysPdf() {
+    fun keysPdf() = conf { config -> 
         val pdf = generateKeysPdf(clientKeys, config)
         Path("/tmp/libeufin-nexus-test-keys.pdf").writeBytes(pdf)
     }
