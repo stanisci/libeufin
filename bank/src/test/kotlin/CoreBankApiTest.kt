@@ -296,6 +296,15 @@ class CoreBankAccountsApiTest {
         client.get("/accounts/bar") {
             pwAuth("admin")
         }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+        // Testing bad payto kind
+        client.post("/accounts") {
+            json(req) {
+                "username" to "bar"
+                "password" to "bar-password"
+                "name" to "Mr Bar"
+                "payto_uri" to "payto://x-taler-bank/bank.hostname.test/bar"
+            }
+        }.assertBadRequest()
 
         // Check cashout payto receiver name logic
         client.post("/accounts") {

@@ -45,13 +45,31 @@ class PaytoTest {
             assertEquals("payto://x-taler-bank/bank.hostname.test/john?receiver-name=John", it.internal_payto_uri)
         }
 
-        // Check payto_uri is ignored
+        // Bad IBAN payto
         client.post("/accounts") {
             json {
                 "username" to "foo"
                 "password" to "foo-password"
                 "name" to "Jane"
                 "payto_uri" to IbanPayto.rand()
+            }
+        }.assertBadRequest()
+        // Bad payto username
+        client.post("/accounts") {
+            json {
+                "username" to "foo"
+                "password" to "foo-password"
+                "name" to "Jane"
+                "payto_uri" to "payto://x-taler-bank/bank.hostname.test/not-foo"
+            }
+        }.assertBadRequest()
+        // Check Ok
+        client.post("/accounts") {
+            json {
+                "username" to "foo"
+                "password" to "foo-password"
+                "name" to "Jane"
+                "payto_uri" to "payto://x-taler-bank/bank.hostname.test/foo"
             }
         }.assertOkJson<RegisterAccountResponse> {
             assertEquals("payto://x-taler-bank/bank.hostname.test/foo?receiver-name=Jane", it.internal_payto_uri)

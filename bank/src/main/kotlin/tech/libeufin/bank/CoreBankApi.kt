@@ -188,6 +188,8 @@ suspend fun createAccount(
 
     when (cfg.wireMethod) {
         WireMethod.IBAN -> {
+            if (req.payto_uri != null && !(req.payto_uri is IbanPayto))
+                throw badRequest("Expected an IBAN payto uri")
             var retry = if (req.payto_uri == null) IBAN_ALLOCATION_RETRY_COUNTER else 0
 
             while (true) {
@@ -217,7 +219,15 @@ suspend fun createAccount(
             }
         }
         WireMethod.X_TALER_BANK -> {
+            if (req.payto_uri != null) {
+                if (!(req.payto_uri is XTalerBankPayto))
+                    throw badRequest("Expected an IBAN payto uri")
+                else if (req.payto_uri.username != req.username)
+                    throw badRequest("Expected a payto uri for '${req.username}' got one for 'req.payto_uri.username'")
+            }
+         
             val internalPayto = XTalerBankPayto.forUsername(req.username)
+        
             val res = db.account.create(
                 login = req.username,
                 name = req.name,
