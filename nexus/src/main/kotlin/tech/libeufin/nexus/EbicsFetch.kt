@@ -414,7 +414,7 @@ enum class Document {
         Document.acknowledgement -> "EBICS acknowledgement"
         Document.status -> "Payment status"
         //Document.report -> "Account intraday reports"
-        Document.notification -> "Debit & credit notificatio"
+        Document.notification -> "Debit & credit notifications"
         //Document.statement -> "Account statements"
     }
 
@@ -422,7 +422,7 @@ enum class Document {
         Document.acknowledgement -> "EBICS acknowledgement - CustomerAcknowledgement HAC pain.002"
         Document.status -> "Payment status - CustomerPaymentStatusReport pain.002"
         //report -> "Account intraday reports - BankToCustomerAccountReport camt.052"
-        Document.notification -> "Debit & credit notificatio - BankToCustomerDebitCreditNotification camt.054"
+        Document.notification -> "Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054"
         //statement -> "Account statements - BankToCustomerStatement camt.053"
     }
 
