@@ -92,7 +92,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         [nexus-submit]
         FREQUENCY = 5s
 
-        [nexus-postgres]
+        [libeufin-nexusdb-postgres]
         CONFIG = postgres:///libeufincheck
         """)
         val cfg = loadConfig(conf)

@@ -209,7 +209,7 @@ fun loadConfig(configFile: Path?): TalerConfig = NEXUS_CONFIG_SOURCE.fromFile(co
  */
 fun TalerConfig.dbConfig(): DatabaseConfig =
     DatabaseConfig(
-        dbConnStr = requireString("nexus-postgres", "config"),
+        dbConnStr = lookupString("libeufin-nexusdb-postgres", "config") ?: requireString("nexus-postgres", "config"),
         sqlDir = requirePath("libeufin-nexusdb-postgres", "sql_dir")
     )
 
