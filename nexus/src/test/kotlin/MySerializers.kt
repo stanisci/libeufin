@@ -21,12 +21,11 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import org.junit.Test
-import tech.libeufin.nexus.ClientPrivateKeysFile
-import tech.libeufin.nexus.RSAPrivateCrtKeySerializer
 import tech.libeufin.common.CryptoUtil
 import java.security.interfaces.RSAPrivateCrtKey
 import kotlin.test.assertEquals
 import tech.libeufin.common.*
+import tech.libeufin.nexus.*
 
 class MySerializers {
     // Testing deserialization of RSA private keys.
@@ -35,7 +34,7 @@ class MySerializers {
         val s = Base32Crockford.encode(CryptoUtil.generateRsaKeyPair(2048).private.encoded)
         val a = Base32Crockford.encode(CryptoUtil.generateRsaKeyPair(2048).private.encoded)
         val e = Base32Crockford.encode(CryptoUtil.generateRsaKeyPair(2048).private.encoded)
-        val obj = j.decodeFromString<ClientPrivateKeysFile>("""
+        val obj = JSON.decodeFromString<ClientPrivateKeysFile>("""
             {
               "signature_private_key": "$s",
               "authentication_private_key": "$a",

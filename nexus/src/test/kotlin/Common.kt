@@ -29,12 +29,6 @@ import java.security.interfaces.RSAPrivateCrtKey
 import java.time.Instant
 import kotlin.io.path.*
 
-val j = Json {
-    this.serializersModule = SerializersModule {
-        contextual(RSAPrivateCrtKey::class) { RSAPrivateCrtKeySerializer }
-    }
-}
-
 fun conf(
     conf: String = "test.conf",
     lambda: suspend (EbicsSetupConfig) -> Unit
