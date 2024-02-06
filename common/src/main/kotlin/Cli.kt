@@ -31,6 +31,18 @@ import java.nio.file.Path
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
+fun Throwable.fmtLog(logger: Logger) {
+    var msg = StringBuilder(message ?: this::class.simpleName)
+    var cause = cause;
+    while (cause != null) {
+        msg.append(": ")
+        msg.append(cause.message ?: cause::class.simpleName)
+        cause = cause.cause
+    }
+    logger.error(msg.toString())
+    logger.debug("{}", this)
+}
+
 fun cliCmd(logger: Logger, level: Level, lambda: () -> Unit) {
     // Set root log level
     val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
@@ -39,15 +51,7 @@ fun cliCmd(logger: Logger, level: Level, lambda: () -> Unit) {
     try {
         lambda()
     } catch (e: Throwable) {
-        var msg = StringBuilder(e.message ?: e::class.simpleName)
-        var cause = e.cause;
-        while (cause != null) {
-            msg.append(": ")
-            msg.append(cause.message ?: cause::class.simpleName)
-            cause = cause.cause
-        }
-        logger.error(msg.toString())
-        logger.debug("$e", e)
+        e.fmtLog(logger)
         throw ProgramResult(1)
     }
 }

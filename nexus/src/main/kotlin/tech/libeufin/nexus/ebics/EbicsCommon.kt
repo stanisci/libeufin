@@ -66,27 +66,10 @@ enum class EbicsVersion { two, three }
  * Which documents can be downloaded via EBICS.
  */
 enum class SupportedDocument {
-    /**
-     * Payment acknowledgement.
-     */
     PAIN_002,
-    /**
-     * From an HAC request.  Informs about any
-     * download/upload activity, including wrong
-     * documents.
-     */
     PAIN_002_LOGS,
-    /**
-     * Account statements.
-     */
     CAMT_053,
-    /**
-     * Account intraday reports.
-     */
     CAMT_052,
-    /**
-     * Account notifications.
-     */
     CAMT_054
 }
 
@@ -334,7 +317,7 @@ suspend fun doEbicsDownload(
         throw Exception("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
     }
     if (initResp.bankReturnCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE && tolerateEmptyResult) {
-        logger.info("Download content is empty")
+        logger.debug("Download content is empty")
         return ByteArray(0)
     }
     if (initResp.bankReturnCode != EbicsReturnCode.EBICS_OK) {

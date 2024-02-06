@@ -21,6 +21,8 @@ package tech.libeufin.nexus
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
+import com.github.ajalt.clikt.parameters.arguments.*
+import com.github.ajalt.clikt.parameters.types.*
 import io.ktor.client.*
 import kotlinx.coroutines.*
 import tech.libeufin.nexus.ebics.*
@@ -56,14 +58,6 @@ data class FetchContext(
      */
     val bankKeys: BankPublicKeysFile,
     /**
-     * Type of document to download.
-     */
-    val whichDocument: SupportedDocument,
-    /**
-     * EBICS version.  For the HAC message type, version gets switched to EBICS 2.
-     */
-    var ebicsVersion: EbicsVersion,
-    /**
      * Start date of the returned documents.  Only
      * used in --transient mode.
      */
@@ -85,17 +79,19 @@ data class FetchContext(
  */
 private suspend inline fun downloadHelper(
     ctx: FetchContext,
-    lastExecutionTime: Instant? = null
+    lastExecutionTime: Instant? = null,
+    doc: SupportedDocument
 ): ByteArray {
-    val initXml = if (ctx.ebicsVersion == EbicsVersion.three) {
+    val isEbics3 = doc != SupportedDocument.PAIN_002_LOGS
+    val initXml = if (isEbics3) {
         createEbics3DownloadInitialization(
             ctx.cfg,
             ctx.bankKeys,
             ctx.clientKeys,
-            prepEbics3Document(ctx.whichDocument, lastExecutionTime)
+            prepEbics3Document(doc, lastExecutionTime)
         )
     } else {
-        val ebics2Req = prepEbics2Document(ctx.whichDocument, lastExecutionTime)
+        val ebics2Req = prepEbics2Document(doc, lastExecutionTime)
         createEbics25DownloadInit(
             ctx.cfg,
             ctx.clientKeys,
@@ -112,7 +108,7 @@ private suspend inline fun downloadHelper(
             ctx.clientKeys,
             ctx.bankKeys,
             initXml,
-            isEbics3 = ctx.ebicsVersion == EbicsVersion.three,
+            isEbics3,
             tolerateEmptyResult = true
         )
     } catch (e: EbicsSideException) {
@@ -214,9 +210,9 @@ suspend fun ingestOutgoingPayment(
     val result = db.registerOutgoing(payment)
     if (result.new) {
         if (result.initiated)
-            logger.debug("$payment")
+            logger.info("$payment")
         else 
-            logger.debug("$payment recovered")
+            logger.warn("$payment recovered")
     } else {
         logger.debug("OUT '${payment.messageId}' already seen")
     }
@@ -242,14 +238,14 @@ suspend fun ingestIncomingPayment(
             Instant.now()
         )
         if (result.new) {
-            logger.debug("$payment bounced in '${result.bounceId}'")
+            logger.info("$payment bounced in '${result.bounceId}'")
         } else {
             logger.debug("IN '${payment.bankId}' already seen and bounced in '${result.bounceId}'")
         }
     } else {
         val result = db.registerTalerableIncoming(payment, reservePub)
         if (result.new) {
-            logger.debug("$payment")
+            logger.info("$payment")
         } else {
             logger.debug("IN '${payment.bankId}' already seen")
         }
@@ -310,7 +306,11 @@ private fun ingestDocument(
             // TODO update pending transaction status
             logger.debug("$status")
         }
-        else -> logger.warn("Not ingesting ${whichDocument}.  Only camt.054 notifications supported.")
+        SupportedDocument.CAMT_053, 
+        SupportedDocument.CAMT_052 -> {
+            // TODO parsing
+            // TODO ingesting
+        }
     }
 }
 
@@ -322,7 +322,9 @@ private fun ingestDocuments(
 ) {
     when (whichDocument) {
         SupportedDocument.CAMT_054,
-        SupportedDocument.PAIN_002 -> {
+        SupportedDocument.PAIN_002,
+        SupportedDocument.CAMT_053, 
+        SupportedDocument.CAMT_052 -> {
             try {
                 content.unzipForEach { fileName, xmlContent ->
                     logger.trace("parse $fileName")
@@ -333,7 +335,6 @@ private fun ingestDocuments(
             }
         }
         SupportedDocument.PAIN_002_LOGS -> ingestDocument(db, currency, content, whichDocument)
-        else -> logger.warn("Not ingesting ${whichDocument}.  Only camt.054 notifications supported.")
     }
 }
 
@@ -359,8 +360,9 @@ private fun ingestDocuments(
  */
 private suspend fun fetchDocuments(
     db: Database,
-    ctx: FetchContext
-) {
+    ctx: FetchContext,
+    docs: List<Document>
+): Boolean {
     /**
      * Getting the least execution between the latest incoming
      * and outgoing payments.  This way, if ingesting outgoing
@@ -374,15 +376,63 @@ private suspend fun fetchDocuments(
     val requestFrom: Instant? = minTimestamp(lastIncomingTime, lastOutgoingTime)
 
     val lastExecutionTime: Instant? = ctx.pinnedStart ?: requestFrom
-    logger.debug("Fetching ${ctx.whichDocument} from timestamp: $lastExecutionTime")
-    // downloading the content
-    val content = downloadHelper(ctx, lastExecutionTime)
-    if (content.isEmpty()) return
-    ctx.fileLogger.logFetch(
-        content,
-        ctx.whichDocument == SupportedDocument.PAIN_002_LOGS
-    )
-    ingestDocuments(db, ctx.cfg.currency, content, ctx.whichDocument)
+    return docs.all { doc ->
+        try {
+            logger.info("Fetching '${doc.fullDescription()}' from timestamp: $lastExecutionTime")
+            val doc = doc.doc()
+            // downloading the content
+            val content = downloadHelper(ctx, lastExecutionTime, doc)
+            if (!content.isEmpty()) {
+                ctx.fileLogger.logFetch(
+                    content,
+                    doc == SupportedDocument.PAIN_002_LOGS
+                )
+                ingestDocuments(db, ctx.cfg.currency, content, doc)
+            }
+            true
+        } catch (e: Exception) {
+            e.fmtLog(logger)
+            false
+        }
+    }
+}
+
+enum class Document {
+    /// EBICS acknowledgement - CustomerAcknowledgement HAC pain.002
+    acknowledgement,
+    /// Payment status - CustomerPaymentStatusReport pain.002
+    status,
+    /// Account intraday reports - BankToCustomerAccountReport camt.052
+    // report, TODO add support
+    /// Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054
+    notification,
+    /// Account statements - BankToCustomerStatement camt.053
+    // statement, TODO add support
+    ;
+
+    fun shortDescription(): String = when (this) {
+        Document.acknowledgement -> "EBICS acknowledgement"
+        Document.status -> "Payment status"
+        //Document.report -> "Account intraday reports"
+        Document.notification -> "Debit & credit notificatio"
+        //Document.statement -> "Account statements"
+    }
+
+    fun fullDescription(): String = when (this) {
+        Document.acknowledgement -> "EBICS acknowledgement - CustomerAcknowledgement HAC pain.002"
+        Document.status -> "Payment status - CustomerPaymentStatusReport pain.002"
+        //report -> "Account intraday reports - BankToCustomerAccountReport camt.052"
+        Document.notification -> "Debit & credit notificatio - BankToCustomerDebitCreditNotification camt.054"
+        //statement -> "Account statements - BankToCustomerStatement camt.053"
+    }
+
+    fun doc(): SupportedDocument = when (this) {
+        Document.acknowledgement -> SupportedDocument.PAIN_002_LOGS
+        Document.status -> SupportedDocument.PAIN_002
+        //Document.report -> SupportedDocument.CAMT_052
+        Document.notification -> SupportedDocument.CAMT_054
+        //Document.statement -> SupportedDocument.CAMT_053
+    }
 }
 
 class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 notifications") {
@@ -392,40 +442,15 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         help = "This flag fetches only once from the bank and returns, " +
                 "ignoring the 'frequency' configuration value"
     ).flag(default = false)
-
-    private val onlyStatements by option(
-        help = "Downloads only camt.053 statements",
-        hidden = true
-    ).flag(default = false)
-
-    private val onlyAck by option(
-        help = "Downloads only pain.002 acknowledgements",
-        hidden = true
-    ).flag(default = false)
-
-    private val onlyReports by option(
-        help = "Downloads only camt.052 intraday reports",
-        hidden = true
-    ).flag(default = false)
-
-    private val onlyLogs by option(
-        help = "Downloads only EBICS activity logs via pain.002," +
-                " only available to --transient mode.  Config needs" +
-                " log directory",
-        hidden = true
-    ).flag(default = false)
-
+    private val documents: Set<Document> by argument(
+        help = "Which documents should be fetched? If none are specified, all supported documents will be fetched",
+        helpTags = Document.entries.map { Pair(it.name, it.shortDescription()) }.toMap()
+    ).enum<Document>().multiple().unique()
     private val pinnedStart by option(
         help = "Constant YYYY-MM-DD date for the earliest document" +
                 " to download (only consumed in --transient mode).  The" +
                 " latest document is always until the current time."
     )
-
-    private val import by option(
-        help = "Read one ISO20022 document from STDIN and imports its content into the database",
-        hidden = true
-    ).flag(default = false)
-
     private val ebicsLog by option(
         "--debug-ebics",
         help = "Log EBICS content at SAVEDIR",
@@ -442,34 +467,17 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
         val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
 
-        // Deciding what to download.
-        var whichDoc = SupportedDocument.CAMT_054
-        if (onlyAck) whichDoc = SupportedDocument.PAIN_002
-        if (onlyReports) whichDoc = SupportedDocument.CAMT_052
-        if (onlyStatements) whichDoc = SupportedDocument.CAMT_053
-        if (onlyLogs) whichDoc = SupportedDocument.PAIN_002_LOGS
-
         Database(dbCfg.dbConnStr).use { db ->
-            if (import) {
-                logger.debug("Reading from STDIN")
-                val stdin = generateSequence(::readLine).joinToString("\n").toByteArray()
-                ingestDocument(db, cfg.currency, stdin, whichDoc)
-                return@cliCmd
-            }
-
             val (clientKeys, bankKeys) = expectFullKeys(cfg)
             val ctx = FetchContext(
                 cfg,
                 HttpClient(),
                 clientKeys,
                 bankKeys,
-                whichDoc,
-                EbicsVersion.three,
                 null,
                 FileLogger(ebicsLog)
             )
-            if (whichDoc == SupportedDocument.PAIN_002_LOGS)
-                ctx.ebicsVersion = EbicsVersion.two
+            val docs = if (documents.isEmpty()) Document.entries else documents.toList()
             if (transient) {
                 logger.info("Transient mode: fetching once and returning.")
                 val pinnedStartVal = pinnedStart
@@ -480,7 +488,9 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 } else null
                 ctx.pinnedStart = pinnedStartArg
                 runBlocking {
-                    fetchDocuments(db, ctx)
+                    if (!fetchDocuments(db, ctx, docs)) {
+                        throw Exception("Failed to fetch documents")
+                    }
                 }
             } else {
                 val configValue = cfg.config.requireString("nexus-fetch", "frequency")
@@ -495,8 +505,7 @@ class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 noti
                 }
                 runBlocking {
                     do {
-                        // TODO error handling
-                        fetchDocuments(db, ctx)
+                        fetchDocuments(db, ctx, docs)
                         delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
                     } while (frequency != null)
                 }

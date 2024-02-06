@@ -130,23 +130,27 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                 })
                 put("recover", suspend {
                     step("Recover old transactions")
-                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01").assertOk()
+                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01 notification").assertOk()
                 })
                 put("fetch", suspend {
-                    step("Fetch new transactions")
+                    step("Fetch all documents")
                     nexusCmd.test("ebics-fetch $ebicsFlags").assertOk()
+                })
+                put("ack", suspend {
+                    step("Fetch CustomerAcknowledgement")
+                    nexusCmd.test("ebics-fetch $ebicsFlags acknowledgement").assertOk()
+                })
+                put("status", suspend {
+                    step("Fetch CustomerPaymentStatusReport")
+                    nexusCmd.test("ebics-fetch $ebicsFlags status").assertOk()
+                })
+                put("notification", suspend {
+                    step("Fetch BankToCustomerDebitCreditNotification")
+                    nexusCmd.test("ebics-fetch $ebicsFlags notification").assertOk()
                 })
                 put("submit", suspend {
                     step("Submit pending transactions")
                     nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
-                })
-                put("logs", suspend {
-                    step("Fetch HAC logs")
-                    nexusCmd.test("ebics-fetch $ebicsFlags --only-logs").assertOk()
-                })
-                put("ack", suspend {
-                    step("Fetch CustomerPaymentStatusReport")
-                    nexusCmd.test("ebics-fetch $ebicsFlags --only-ack").assertOk()
                 })
                 if (kind.test) {
                     put("reset-keys", suspend {
