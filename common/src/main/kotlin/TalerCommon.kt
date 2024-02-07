@@ -149,8 +149,11 @@ sealed class Payto {
 
     /** Transform a payto URI to its bank form, using [name] as the receiver-name and the bank [ctx] */
     fun bank(name: String, ctx: BankPaytoCtx): String = when (this) {
-        is IbanPayto -> "payto://iban/${ctx.bic!!}/$iban?receiver-name=${name.encodeURLParameter()}"
-        is XTalerBankPayto -> "payto://x-taler-bank/${ctx.hostname!!}/$username?receiver-name=${name.encodeURLParameter()}"
+        is IbanPayto -> {
+            val bic = if (ctx.bic != null) "${ctx.bic}/" else ""
+            "payto://iban/$bic$iban?receiver-name=${name.encodeURLParameter()}"
+        }
+        is XTalerBankPayto -> "payto://x-taler-bank/${ctx.hostname ?: "localhost"}/$username?receiver-name=${name.encodeURLParameter()}"
     }
 
     fun expectIban(): IbanPayto {

@@ -41,7 +41,7 @@ import java.nio.file.Path
 import java.time.Instant
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
-val logger: Logger = LoggerFactory.getLogger("libeufin-nexus")
+internal val logger: Logger = LoggerFactory.getLogger("libeufin-nexus")
 
 /**
  * Triple identifying one IBAN bank account.

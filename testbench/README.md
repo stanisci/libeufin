@@ -4,7 +4,6 @@
 
 To add a platform write a minimal configuration file at `testbench/test/PLATFORM/ebics.conf` such as :
 
-
 ``` ini
 [nexus-ebics]
 currency = CHF
@@ -19,6 +18,8 @@ USER_ID = PFC00563
 PARTNER_ID = PFC00563
 
 IBAN = CH7789144474425692816
+BIC = POFICHBEXXX
+NAME = LibEuFin Tests
 ```
 
 To start the interactive EBICS test run :
@@ -27,6 +28,6 @@ To start the interactive EBICS test run :
 make testbench platform=PLATFORM
 ```
 
-If HOST_BASE_URL is one a known test platform we will generate and then offer to reset client private keys to test keys registration, otherwise, we will expect existing keys to be found at `testbench/test/PLATFORM/ebics.edited.conf`.
+If HOST_BASE_URL is one a known test platform we will generate and then offer to reset client private keys to test keys registration, otherwise, we will expect existing keys to be found at `testbench/test/PLATFORM/client-ebics-keys.json`.
 
-This minimal configuration will be augmented on start, you can find the full documentation at `testbench/test/PLATFORM/client-ebics-keys.json`.
+This minimal configuration will be augmented on start, you can find the full documentation at `testbench/test/PLATFORM/ebics.edited.conf`.

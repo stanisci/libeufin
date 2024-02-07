@@ -24,6 +24,10 @@ import kotlinx.serialization.json.Json
 import tech.libeufin.common.DatabaseConfig
 import java.nio.file.*
 import kotlin.io.path.*
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 
 /**
  * Application the parsed configuration.
@@ -90,7 +94,7 @@ fun TalerConfig.loadServerConfig(): ServerConfig {
     }
 }
 
-fun TalerConfig.loadBankConfig(): BankConfig  {
+fun TalerConfig.loadBankConfig(): BankConfig {
     val regionalCurrency = requireString("libeufin-bank", "currency")
     var fiatCurrency: String? = null;
     var fiatCurrencySpec: CurrencySpecification? = null
@@ -109,11 +113,24 @@ fun TalerConfig.loadBankConfig(): BankConfig  {
     val method = when (val type = lookupString("libeufin-bank", "wire_type")) {
         "iban" -> WireMethod.IBAN
         "x-taler-bank" -> WireMethod.X_TALER_BANK
+        null -> {
+            val err = TalerConfigError.missing("payment target type", "libeufin-bank", "wire_type").message
+            logger.warn("$err, defaulting to 'iban' but will fail in a future update")
+            WireMethod.IBAN
+        }
         else -> throw TalerConfigError.invalid("payment target type", "libeufin-bank", "wire_type", "expected 'iban' or 'x-taler-bank' got '$type'")
     }
-    val payto = when (method) {
-        WireMethod.IBAN -> BankPaytoCtx(bic = lookupString("libeufin-bank", "iban_payto_bic"))
-        WireMethod.X_TALER_BANK -> BankPaytoCtx(hostname = lookupString("libeufin-bank", "x_taler_bank_payto_hostname"))
+    val payto = BankPaytoCtx(
+        bic = lookupString("libeufin-bank", "iban_payto_bic"),
+        hostname = lookupString("libeufin-bank", "x_taler_bank_payto_hostname")
+    )
+    when (method) {
+        WireMethod.IBAN -> if (payto.bic == null) {
+            logger.warn(TalerConfigError.missing("BIC", "libeufin-bank", "iban_payto_bic").message + " will fail in a future update")
+        }
+        WireMethod.X_TALER_BANK -> if (payto.hostname == null) {
+            logger.warn(TalerConfigError.missing("hostname", "libeufin-bank", "x_taler_bank_payto_hostname").message + " will fail in a future update")
+        }
     }
     return BankConfig(
         regionalCurrency = regionalCurrency,

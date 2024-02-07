@@ -223,7 +223,7 @@ suspend fun createAccount(
                 if (!(req.payto_uri is XTalerBankPayto))
                     throw badRequest("Expected an IBAN payto uri")
                 else if (req.payto_uri.username != req.username)
-                    throw badRequest("Expected a payto uri for '${req.username}' got one for 'req.payto_uri.username'")
+                    throw badRequest("Expected a payto uri for '${req.username}' got one for '${req.payto_uri.username}'")
             }
          
             val internalPayto = XTalerBankPayto.forUsername(req.username)
