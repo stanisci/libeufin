@@ -49,24 +49,19 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
         )
         call.respond(op.copy(
             suggested_exchange = ctx.suggestedWithdrawalExchange,
-            confirm_transfer_url = ctx.spaCaptchaURL?.run {
-                getWithdrawalConfirmUrl(
-                    baseUrl = this,
-                    wopId = uuid
-                )
-            }
+            confirm_transfer_url = if (op.status == WithdrawalStatus.selected) call.request.withdrawConfirmUrl(uuid) else null
         ))
     }
     post("/taler-integration/withdrawal-operation/{wopid}") {
-        val opId = call.uuidParameter("wopid")
+        val uuid = call.uuidParameter("wopid")
         val req = call.receive<BankWithdrawalOperationPostRequest>()
 
         val res = db.withdrawal.setDetails(
-            opId, req.selected_exchange, req.reserve_pub
+            uuid, req.selected_exchange, req.reserve_pub
         )
         when (res) {
             is WithdrawalSelectionResult.UnknownOperation -> throw notFound(
-                "Withdrawal operation $opId not found", 
+                "Withdrawal operation '$uuid' not found", 
                 TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
             )
             is WithdrawalSelectionResult.AlreadySelected -> throw conflict(
@@ -86,25 +81,19 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
                 TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
             )
             is WithdrawalSelectionResult.Success -> {
-                val confirmUrl: String? = if (ctx.spaCaptchaURL !== null && res.status == WithdrawalStatus.selected) {
-                    getWithdrawalConfirmUrl(
-                        baseUrl = ctx.spaCaptchaURL,
-                        wopId = opId
-                    )
-                } else null
                 call.respond(BankWithdrawalOperationPostResponse(
                     transfer_done = res.status == WithdrawalStatus.confirmed, 
                     status = res.status,
-                    confirm_transfer_url = confirmUrl
+                    confirm_transfer_url = if (res.status == WithdrawalStatus.selected) call.request.withdrawConfirmUrl(uuid) else null
                 ))
             }
         }
     }
     post("/taler-integration/withdrawal-operation/{wopid}/abort") {
-        val opId = call.uuidParameter("wopid")
-        when (db.withdrawal.abort(opId)) {
+        val uuid = call.uuidParameter("wopid")
+        when (db.withdrawal.abort(uuid)) {
             AbortResult.UnknownOperation -> throw notFound(
-                "Withdrawal operation $opId not found",
+                "Withdrawal operation '$uuid' not found",
                 TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
             )
             AbortResult.AlreadyConfirmed -> throw conflict(

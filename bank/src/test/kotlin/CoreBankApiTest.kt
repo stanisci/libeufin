@@ -990,7 +990,9 @@ class CoreBankWithdrawalApiTest {
         // Check OK
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:9.0" } 
-        }.assertOk()
+        }.assertOkJson<BankAccountCreateWithdrawalResponse> {
+            assertEquals("taler+http://withdraw/localhost/taler-integration/${it.withdrawal_id}", it.taler_withdraw_uri)
+        }
 
         // Check exchange account
         client.postA("/accounts/exchange/withdrawals") {

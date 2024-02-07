@@ -22,7 +22,7 @@ if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)){
 allprojects {
     ext {
         set("kotlin_version", "1.9.22")
-        set("ktor_version", "2.3.7")
+        set("ktor_version", "2.3.8")
         set("clikt_version", "4.2.2")
         set("coroutines_version", "1.7.3")
         set("postgres_version", "42.7.1")

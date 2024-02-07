@@ -42,13 +42,6 @@ data class BankConfig(
     val defaultDebtLimit: TalerAmount,
     val registrationBonus: TalerAmount,
     val suggestedWithdrawalExchange: String?,
-    /**
-     * URL where the user should be redirected to complete the captcha.
-     * It can contain the substring "{woid}" that is going to be replaced
-     * with the withdrawal operation id and should point where the bank
-     * SPA is located.
-     */
-    val spaCaptchaURL: String?,
     val allowConversion: Boolean,
     val fiatCurrency: String?,
     val fiatCurrencySpec: CurrencySpecification?,
@@ -142,7 +135,6 @@ fun TalerConfig.loadBankConfig(): BankConfig {
         defaultDebtLimit = amount("libeufin-bank", "default_debt_limit", regionalCurrency) ?: TalerAmount(0, 0, regionalCurrency),
         registrationBonus = amount("libeufin-bank", "registration_bonus", regionalCurrency) ?: TalerAmount(0, 0, regionalCurrency),
         suggestedWithdrawalExchange = lookupString("libeufin-bank", "suggested_withdrawal_exchange"),
-        spaCaptchaURL = lookupString("libeufin-bank", "spa_captcha_url"),
         spaPath = lookupPath("libeufin-bank", "spa"),
         allowConversion = allowConversion,
         fiatCurrency = fiatCurrency,

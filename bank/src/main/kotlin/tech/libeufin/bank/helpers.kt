@@ -59,32 +59,29 @@ suspend fun ApplicationCall.bankInfo(db: Database, ctx: BankPaytoCtx): BankInfo
  *
  *      https://$BANK_URL/taler-integration
  */
-fun getTalerWithdrawUri(baseUrl: String, woId: String) = url {
-    val baseUrlObj = URI(baseUrl).toURL()
+fun ApplicationRequest.talerWithdrawUri(id: UUID) = url {
     protocol = URLProtocol(
-        name = "taler".plus(if (baseUrlObj.protocol.lowercase() == "http") "+http" else ""), defaultPort = -1
+        name = if (origin.scheme == "http") "taler+http" else "taler",
+        defaultPort = -1
     )
     host = "withdraw"
-    val pathSegments = mutableListOf(
-        // adds the hostname(+port) of the actual bank that will serve the withdrawal request.
-        baseUrlObj.host.plus(
-            if (baseUrlObj.port != -1) ":${baseUrlObj.port}"
-            else ""
-        )
-    )
-    // Removing potential double slashes.
-    baseUrlObj.path.split("/").forEach {
-        if (it.isNotEmpty()) pathSegments.add(it)
+    appendPathSegments(origin.serverHost)
+    headers["X-Forward-Prefix"]?.let {
+        appendPathSegments(it)
     }
-    pathSegments.add("taler-integration/${woId}")
-    this.appendPathSegments(pathSegments)
+    appendPathSegments("taler-integration", id.toString())
 }
 
-// Builds a withdrawal confirm URL.
-fun getWithdrawalConfirmUrl(
-    baseUrl: String, wopId: UUID
-): String {
-    return baseUrl.replace("{woid}", wopId.toString())
+fun ApplicationRequest.withdrawConfirmUrl(id: UUID) = url {
+    protocol = URLProtocol(
+        name = origin.scheme,
+        defaultPort = -1
+    )
+    host = origin.serverHost
+    headers["X-Forward-Prefix"]?.let {
+        appendPathSegments(it)
+    }
+    appendEncodedPathSegments("webui", "#", "operation", id.toString())
 }
 
 fun ApplicationCall.uuidParameter(name: String): UUID {

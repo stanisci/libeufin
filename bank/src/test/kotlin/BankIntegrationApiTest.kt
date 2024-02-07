@@ -99,12 +99,14 @@ class BankIntegrationApiTest {
                 json(req)
             }.assertOkJson<BankWithdrawalOperationPostResponse> {
                 assertEquals(WithdrawalStatus.selected, it.status)
+                assertEquals("http://localhost/webui/#/operation/$uuid", it.confirm_transfer_url)
             }
             // Check idempotence
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 json(req)
             }.assertOkJson<BankWithdrawalOperationPostResponse> {
                 assertEquals(WithdrawalStatus.selected, it.status)
+                assertEquals("http://localhost/webui/#/operation/$uuid", it.confirm_transfer_url)
             }
             // Check already selected
             client.post("/taler-integration/withdrawal-operation/$uuid") {
@@ -187,35 +189,5 @@ class BankIntegrationApiTest {
         // Check unknown
         client.postA("/taler-integration/withdrawal-operation/${UUID.randomUUID()}/abort")
             .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
-    }
-
-    // Testing the generation of taler://withdraw-URIs.
-    @Test
-    fun testWithdrawUri() {
-        // Checking the taler+http://-style.
-        val withHttp = getTalerWithdrawUri(
-            "http://example.com",
-            "my-id"
-        )
-        assertEquals(withHttp, "taler+http://withdraw/example.com/taler-integration/my-id")
-        // Checking the taler://-style
-        val onlyTaler = getTalerWithdrawUri(
-            "https://example.com/",
-            "my-id"
-        )
-        // Note: this tests as well that no double slashes belong to the result
-        assertEquals(onlyTaler, "taler://withdraw/example.com/taler-integration/my-id")
-        // Checking the removal of subsequent slashes
-        val manySlashes = getTalerWithdrawUri(
-            "https://www.example.com//////",
-            "my-id"
-        )
-        assertEquals(manySlashes, "taler://withdraw/www.example.com/taler-integration/my-id")
-        // Checking with specified port number
-        val withPort = getTalerWithdrawUri(
-            "https://www.example.com:9876",
-            "my-id"
-        )
-        assertEquals(withPort, "taler://withdraw/www.example.com:9876/taler-integration/my-id")
     }
 }

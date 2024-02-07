@@ -36,6 +36,7 @@ import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.plugins.forwardedheaders.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -120,6 +121,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
             }
         }
     }
+    install(XForwardedHeaders)
     install(CORS) {
         anyHost()
         allowHeader(HttpHeaders.Authorization)

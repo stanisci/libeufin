@@ -435,7 +435,7 @@ enum class Document {
     }
 }
 
-class EbicsFetch: CliktCommand("Fetches bank records.  Defaults to camt.054 notifications") {
+class EbicsFetch: CliktCommand("Fetches EBICS files") {
     private val common by CommonOption()
     private val transient by option(
         "--transient",

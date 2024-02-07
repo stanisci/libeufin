@@ -503,12 +503,10 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_UNALLOWED_DEBIT
                 )
                 WithdrawalCreationResult.Success -> {
-                    val bankBaseUrl = call.request.getBaseUrl()
-                        ?: throw internalServerError("Bank could not find its own base URL")
                     call.respond(
                         BankAccountCreateWithdrawalResponse(
                             withdrawal_id = opId.toString(),
-                            taler_withdraw_uri = getTalerWithdrawUri(bankBaseUrl, opId.toString())
+                            taler_withdraw_uri = call.request.talerWithdrawUri(opId)
                         )
                     )
                 }
