@@ -183,8 +183,11 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                     val init = load()
                     // Long polling if we found no transactions
                     if (init.isEmpty()) {
-                        polling.join()
-                        load()
+                        if (polling.join() != null) {
+                            load()
+                        } else {
+                            init
+                        }
                     } else {
                         polling.cancel()
                         init
