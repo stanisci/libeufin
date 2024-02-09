@@ -65,7 +65,7 @@ fun ApplicationRequest.talerWithdrawUri(id: UUID) = url {
         defaultPort = -1
     )
     host = "withdraw"
-    appendPathSegments(origin.serverHost)
+    appendPathSegments("${origin.serverHost}:${origin.serverPort}")
     headers["X-Forward-Prefix"]?.let {
         appendPathSegments(it)
     }
@@ -77,7 +77,7 @@ fun ApplicationRequest.withdrawConfirmUrl(id: UUID) = url {
         name = origin.scheme,
         defaultPort = -1
     )
-    host = origin.serverHost
+    host = "${origin.serverHost}:${origin.serverPort}"
     headers["X-Forward-Prefix"]?.let {
         appendPathSegments(it)
     }

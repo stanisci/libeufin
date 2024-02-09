@@ -242,6 +242,9 @@ class AmountTest {
                     }
                 }
             }
+            for (mode in listOf("zero", "up", "nearest")) {
+                assertEquals(TalerAmount("HUF:5"), apply(TalerAmount("HUF:5"), DecimalNumber("1"), DecimalNumber("1"), mode))
+            }
         }
     }
 
@@ -296,7 +299,7 @@ class AmountTest {
             for (mode in listOf("zero", "up", "nearest")) {
                 for (amount in listOf(10, 11, 12, 12, 14, 15, 16, 17, 18, 19)) {
                     for (tiny in listOf("0.01", "0.00000001", "5")) {
-                        for (ratio in listOf("0.341", "0.00000001")) {
+                        for (ratio in listOf("1", "0.341", "0.00000001")) {
                             val tiny = DecimalNumber(tiny)
                             val ratio = DecimalNumber(ratio)
                             val base = TalerAmount("EUR:$amount")

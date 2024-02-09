@@ -99,14 +99,14 @@ class BankIntegrationApiTest {
                 json(req)
             }.assertOkJson<BankWithdrawalOperationPostResponse> {
                 assertEquals(WithdrawalStatus.selected, it.status)
-                assertEquals("http://localhost/webui/#/operation/$uuid", it.confirm_transfer_url)
+                assertEquals("http://localhost:80/webui/#/operation/$uuid", it.confirm_transfer_url)
             }
             // Check idempotence
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 json(req)
             }.assertOkJson<BankWithdrawalOperationPostResponse> {
                 assertEquals(WithdrawalStatus.selected, it.status)
-                assertEquals("http://localhost/webui/#/operation/$uuid", it.confirm_transfer_url)
+                assertEquals("http://localhost:80/webui/#/operation/$uuid", it.confirm_transfer_url)
             }
             // Check already selected
             client.post("/taler-integration/withdrawal-operation/$uuid") {
