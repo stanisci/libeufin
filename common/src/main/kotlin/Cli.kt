@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -81,22 +81,22 @@ private class CliConfigGet(private val configSource: ConfigSource) : CliktComman
         "--filename", "-f",
         help = "Interpret value as path with dollar-expansion"
     ).flag()
-    private val sectionName by argument()
-    private val optionName by argument()
+    private val section by argument()
+    private val option by argument()
 
 
     override fun run() = cliCmd(logger, common.log) {
         val config = configSource.fromFile(common.config)
         if (isPath) {
-            val res = config.lookupPath(sectionName, optionName)
+            val res = config.lookupPath(section, option)
             if (res == null) {
-                throw Exception("value not found in config")
+                throw Exception("option '$option' in section '$section' not found in config")
             }
             println(res)
         } else {
-            val res = config.lookupString(sectionName, optionName)
+            val res = config.lookupString(section, option)
             if (res == null) {
-                throw Exception("value not found in config")
+                throw Exception("option '$option' in section '$section' not found in config")
             }
             println(res)
         }

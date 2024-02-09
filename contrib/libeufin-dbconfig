@@ -106,7 +106,7 @@ fi
 # When using this dbconfig script, the libeufin-bank and libeufin-nexus
 # databases *must* match.
 
-NEXUS_DBPATH=$(libeufin-nexus config get nexus-postgres CONFIG)
+NEXUS_DBPATH=$(libeufin-nexus config get nexus-postgres CONFIG | libeufin-nexus config get libeufin-nexusdb-postgres CONFIG)
 
 if ! echo "$NEXUS_DBPATH" | grep "postgres://" >/dev/null; then
   echo "Invalid libeufin-nexus database configuration value '$NEXUS_DBPATH'." 1>&2
