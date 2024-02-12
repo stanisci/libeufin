@@ -24,6 +24,7 @@ import com.github.ajalt.clikt.parameters.groups.*
 import com.github.ajalt.clikt.parameters.arguments.*
 import com.github.ajalt.clikt.parameters.types.*
 import io.ktor.client.*
+import io.ktor.client.plugins.*
 import kotlinx.coroutines.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.common.*
@@ -463,7 +464,12 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
             val (clientKeys, bankKeys) = expectFullKeys(cfg)
             val ctx = FetchContext(
                 cfg,
-                HttpClient(),
+                HttpClient {
+                    install(HttpTimeout) {
+                        // It can take a lot of time for the bank to generate documents
+                        socketTimeoutMillis = 5 * 60 * 1000
+                    }
+                },
                 clientKeys,
                 bankKeys,
                 null,
