@@ -366,7 +366,7 @@ private suspend fun fetchDocuments(
     val lastExecutionTime: Instant? = ctx.pinnedStart;
     return docs.all { doc ->
         try {
-            if (lastExecutionTime != null) {
+            if (lastExecutionTime == null) {
                 logger.info("Fetching new '${doc.fullDescription()}'")
             } else {
                 logger.info("Fetching '${doc.fullDescription()}' from timestamp: $lastExecutionTime")
