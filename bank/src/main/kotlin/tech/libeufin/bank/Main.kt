@@ -62,7 +62,7 @@ private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 var engine: ApplicationEngine? = null 
 
 /**
- * This plugin check for body lenght limit and inflates the requests that have "Content-Encoding: deflate"
+ * This plugin check for body length limit and inflates the requests that have "Content-Encoding: deflate"
  */
 val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
     onCallReceive { call ->
