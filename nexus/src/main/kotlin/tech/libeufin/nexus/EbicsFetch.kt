@@ -363,22 +363,14 @@ private suspend fun fetchDocuments(
     ctx: FetchContext,
     docs: List<Document>
 ): Boolean {
-    /**
-     * Getting the least execution between the latest incoming
-     * and outgoing payments.  This way, if ingesting outgoing
-     * (incoming) payments crashed, we make sure we request from
-     * the last successful outgoing (incoming) payment execution
-     * time, to obtain again from the bank those payments that did
-     * not make it to the database due to the crash.
-     */
-    val lastIncomingTime = db.incomingPaymentLastExecTime()
-    val lastOutgoingTime = db.outgoingPaymentLastExecTime()
-    val requestFrom: Instant? = minTimestamp(lastIncomingTime, lastOutgoingTime)
-
-    val lastExecutionTime: Instant? = ctx.pinnedStart ?: requestFrom
+    val lastExecutionTime: Instant? = ctx.pinnedStart;
     return docs.all { doc ->
         try {
-            logger.info("Fetching '${doc.fullDescription()}' from timestamp: $lastExecutionTime")
+            if (lastExecutionTime != null) {
+                logger.info("Fetching new '${doc.fullDescription()}'")
+            } else {
+                logger.info("Fetching '${doc.fullDescription()}' from timestamp: $lastExecutionTime")
+            }
             val doc = doc.doc()
             // downloading the content
             val content = downloadHelper(ctx, lastExecutionTime, doc)
