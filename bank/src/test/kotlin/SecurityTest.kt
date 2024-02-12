@@ -20,14 +20,30 @@
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.engine.*
 import io.ktor.server.testing.*
 import kotlin.test.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.*
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
+import tech.libeufin.common.*
+import java.io.ByteArrayOutputStream
+import java.util.zip.DeflaterOutputStream
+
+inline fun <reified B> HttpRequestBuilder.jsonDeflate(b: B) {
+    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b);
+    contentType(ContentType.Application.Json)
+    headers.set(HttpHeaders.ContentEncoding, "deflate")
+    val bos = ByteArrayOutputStream()
+    val ios = DeflaterOutputStream(bos)
+    ios.write(json.toByteArray())
+    ios.finish()
+    setBody(bos.toByteArray())
+}
 
 class SecurityTest {
     @Test
@@ -49,10 +65,16 @@ class SecurityTest {
 
         // Check body too big even after compression
         client.postA("/accounts/merchant/transactions") {
-            json(valid_req, deflate = true) {
+            jsonDeflate(obj(valid_req) {
                 "payto_uri" to "$exchangePayto?message=payout${"A".repeat(4100)}"
-            }
+            })
         }.assertBadRequest()
+
+        // Check uknown encoding
+        client.postA("/accounts/merchant/transactions") {
+            headers.set(HttpHeaders.ContentEncoding, "unknown")
+            json(valid_req)
+        }.assertStatus(HttpStatusCode.UnsupportedMediaType, TalerErrorCode.GENERIC_COMPRESSION_INVALID)
     }
 }
 

@@ -70,32 +70,41 @@ val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
         transformBody { body ->
             val bytes = ByteArray(MAX_BODY_LENGTH.toInt() + 1)
             var read = 0;
-            if (call.request.headers[HttpHeaders.ContentEncoding] == "deflate") {
-                // Decompress and check decompressed length
-                val inflater = Inflater()
-                while (!body.isClosedForRead) {
-                    body.read { buf ->
-                        inflater.setInput(buf)
-                        try {
-                            read += inflater.inflate(bytes, read, bytes.size - read)
-                        } catch (e: DataFormatException) {
-                            logger.error("Deflated request failed to inflate: ${e.message}")
-                            throw badRequest(
-                                "Could not inflate request",
-                                TalerErrorCode.GENERIC_COMPRESSION_INVALID
-                            )
+            when (val encoding = call.request.headers[HttpHeaders.ContentEncoding])  {
+                "deflate" -> {
+                    // Decompress and check decompressed length
+                    val inflater = Inflater()
+                    while (!body.isClosedForRead) {
+                        body.read { buf ->
+                            inflater.setInput(buf)
+                            try {
+                                read += inflater.inflate(bytes, read, bytes.size - read)
+                            } catch (e: DataFormatException) {
+                                logger.error("Deflated request failed to inflate: ${e.message}")
+                                throw badRequest(
+                                    "Could not inflate request",
+                                    TalerErrorCode.GENERIC_COMPRESSION_INVALID
+                                )
+                            }
                         }
+                        if (read > MAX_BODY_LENGTH)
+                            throw badRequest("Decompressed body is suspiciously big > $MAX_BODY_LENGTH B")
                     }
-                    if (read > MAX_BODY_LENGTH)
-                        throw badRequest("Decompressed body is suspiciously big")
                 }
-            } else {
-                // Check body length
-                while (!body.isClosedForRead) {
-                    read += body.readAvailable(bytes, read, bytes.size - read)
-                    if (read > MAX_BODY_LENGTH)
-                        throw badRequest("Body is suspiciously big")
-                }
+                null -> {
+                    // Check body length
+                    while (true) {
+                        val new = body.readAvailable(bytes, read, bytes.size - read)
+                        if (new == -1) break; // Channel is closed
+                        read += new
+                        if (read > MAX_BODY_LENGTH)
+                            throw badRequest("Body is suspiciously big > $MAX_BODY_LENGTH B")
+                    }
+                } 
+                else -> throw unsupportedMediaType(
+                    "Content encoding '$encoding' not supported, expected plain or deflate",
+                    TalerErrorCode.GENERIC_COMPRESSION_INVALID
+                )
             }
             ByteReadChannel(bytes, 0, read)
         }

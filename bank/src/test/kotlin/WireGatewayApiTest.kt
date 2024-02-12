@@ -220,7 +220,7 @@ class WireGatewayApiTest {
         // Giving debt allowance and checking the OK case.
         setMaxDebt("merchant", "KUDOS:1000")
         client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            json(valid_req, deflate = true)
+            json(valid_req)
         }.assertOk()
 
         // Trigger conflict due to reused reserve_pub

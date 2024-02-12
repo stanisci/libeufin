@@ -120,6 +120,11 @@ fun badRequest(
     detail: String? = null
 ): LibeufinException = libeufinError(HttpStatusCode.BadRequest, hint, error, detail)
 
+fun unsupportedMediaType(
+    hint: String, 
+    error: TalerErrorCode = TalerErrorCode.END,
+): LibeufinException = libeufinError(HttpStatusCode.UnsupportedMediaType, hint, error)
+
 
 /* ----- Currency checks ----- */
 

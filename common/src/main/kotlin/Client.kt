@@ -24,7 +24,6 @@ import kotlinx.serialization.json.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import java.io.ByteArrayOutputStream
-import java.util.zip.DeflaterOutputStream
 import kotlin.test.assertEquals
 
 /* ----- Json DSL ----- */
@@ -46,27 +45,17 @@ class JsonBuilder(from: JsonObject) {
 
 /* ----- Json body helper ----- */
 
-inline fun <reified B> HttpRequestBuilder.json(b: B, deflate: Boolean = false) {
+inline fun <reified B> HttpRequestBuilder.json(b: B) {
     val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b);
     contentType(ContentType.Application.Json)
-    if (deflate) {
-        headers.set("Content-Encoding", "deflate")
-        val bos = ByteArrayOutputStream()
-        val ios = DeflaterOutputStream(bos)
-        ios.write(json.toByteArray())
-        ios.finish()
-        setBody(bos.toByteArray())
-    } else {
-        setBody(json)
-    }
+    setBody(json)
 }
 
 inline fun HttpRequestBuilder.json(
-    from: JsonObject = JsonObject(emptyMap()), 
-    deflate: Boolean = false, 
+    from: JsonObject = JsonObject(emptyMap()),
     builderAction: JsonBuilder.() -> Unit
 ) {
-    json(obj(from, builderAction), deflate)
+    json(obj(from, builderAction))
 }
 
 inline suspend fun <reified B> HttpResponse.json(): B =
