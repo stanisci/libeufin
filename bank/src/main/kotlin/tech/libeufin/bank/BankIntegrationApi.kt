@@ -49,7 +49,7 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
         )
         call.respond(op.copy(
             suggested_exchange = ctx.suggestedWithdrawalExchange,
-            confirm_transfer_url = if (op.status == WithdrawalStatus.selected) call.request.withdrawConfirmUrl(uuid) else null
+            confirm_transfer_url = if (op.status == WithdrawalStatus.pending || op.status == WithdrawalStatus.selected) call.request.withdrawConfirmUrl(uuid) else null
         ))
     }
     post("/taler-integration/withdrawal-operation/{wopid}") {
@@ -84,7 +84,7 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
                 call.respond(BankWithdrawalOperationPostResponse(
                     transfer_done = res.status == WithdrawalStatus.confirmed, 
                     status = res.status,
-                    confirm_transfer_url = if (res.status == WithdrawalStatus.selected) call.request.withdrawConfirmUrl(uuid) else null
+                    confirm_transfer_url = if (res.status == WithdrawalStatus.pending || res.status == WithdrawalStatus.selected) call.request.withdrawConfirmUrl(uuid) else null
                 ))
             }
         }
