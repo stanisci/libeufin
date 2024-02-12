@@ -66,7 +66,7 @@ var engine: ApplicationEngine? = null
  */
 val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
     onCallReceive { call ->
-        // TODO check content lenght as an optimisation
+        // TODO check content length as an optimisation
         transformBody { body ->
             val bytes = ByteArray(MAX_BODY_LENGTH.toInt() + 1)
             var read = 0;
