@@ -42,20 +42,20 @@ import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import org.apache.commons.compress.archivers.zip.ZipFile
-import org.apache.commons.compress.utils.SeekableInMemoryByteChannel
+import io.ktor.utils.io.jvm.javaio.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.nexus.*
 import tech.libeufin.common.*
 import tech.libeufin.ebics.*
 import tech.libeufin.ebics.ebics_h005.Ebics3Request
+import java.io.SequenceInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
-import java.util.zip.DeflaterInputStream
 
 /**
  * Available EBICS versions.
@@ -73,24 +73,6 @@ enum class SupportedDocument {
     CAMT_054
 }
 
-
-/**
- * Unzips the ByteArray and runs the lambda over each entry.
- *
- * @param lambda function that gets the (fileName, fileContent) pair
- *        for each entry in the ZIP archive as input.
- */
-fun ByteArray.unzipForEach(lambda: (String, ByteArray) -> Unit) {
-    val mem = SeekableInMemoryByteChannel(this)
-    ZipFile(mem).use { file ->
-        file.getEntriesInPhysicalOrder().iterator().forEach {
-            lambda(
-                it.name, file.getInputStream(it).readAllBytes()
-            )
-        }
-    }
-}
-
 /**
  * Decrypts and decompresses the business payload that was
  * transported within an EBICS message from the bank
@@ -106,21 +88,16 @@ fun decryptAndDecompressPayload(
     clientEncryptionKey: RSAPrivateCrtKey,
     encryptionInfo: DataEncryptionInfo,
     chunks: List<String>
-): ByteArray {
-    val buf = StringBuilder()
-    chunks.forEach { buf.append(it) }
-    val decoded = Base64.getDecoder().decode(buf.toString())
-    val er = CryptoUtil.EncryptionResult(
-        encryptionInfo.transactionKey,
-        encryptionInfo.bankPubDigest,
-        decoded
-    )
-    val dataCompr = CryptoUtil.decryptEbicsE002(
-        er,
-        clientEncryptionKey
-    )
-    return EbicsOrderUtil.decodeOrderData(dataCompr)
-}
+): InputStream =
+    SequenceInputStream(Collections.enumeration(chunks.map { it.toByteArray().inputStream() })) // Aggregate
+        .decodeBase64()
+        .run {
+            CryptoUtil.decryptEbicsE002(
+                encryptionInfo.transactionKey,
+                this,
+                clientEncryptionKey
+            )
+        }.inflate()
 
 /**
  * POSTs the EBICS message to the bank.
@@ -129,7 +106,7 @@ fun decryptAndDecompressPayload(
  * @param msg EBICS message as raw bytes.
  * @return the raw bank response.
  */
-suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray): ByteArray {
+suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray): InputStream {
     logger.debug("POSTing EBICS to '$bankUrl'")
     val res = post(urlString = bankUrl) {
         contentType(ContentType.Text.Xml)
@@ -138,7 +115,7 @@ suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray): ByteArray {
     if (res.status != HttpStatusCode.OK) {
         throw Exception("Invalid response status: ${res.status}")
     }
-    return res.readBytes() // TODO input stream
+    return res.bodyAsChannel().toInputStream()
 }
 
 /**
@@ -278,19 +255,19 @@ private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
  * @param bankKeys bank EBICS public keys.
  * @param reqXml raw EBICS XML request of the init phase.
  * @param isEbics3 true for EBICS 3, false otherwise.
- * @param processing processing lambda receiving EBICS files as bytes or empty bytes if nothing to download.
- * @return T if the transaction was successful and null if the transaction was empty. If the failure is at the EBICS 
+ * @param processing processing lambda receiving EBICS files as a byte stream if the transaction was not empty.
+ * @return T if the transaction was successful. If the failure is at the EBICS 
  *         level EbicsSideException is thrown else ités the expection of the processing lambda.
  */
-suspend fun <T> ebicsDownload(
+suspend fun ebicsDownload(
     client: HttpClient,
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     reqXml: ByteArray,
     isEbics3: Boolean,
-    processing: (ByteArray) -> T
-): T {
+    processing: (InputStream) -> Unit
+) {
     val initResp = postEbics(client, cfg, bankKeys, reqXml, isEbics3)
     logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${initResp.technicalReturnCode}, ${initResp.bankReturnCode}")
     if (initResp.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
@@ -298,7 +275,7 @@ suspend fun <T> ebicsDownload(
     }
     if (initResp.bankReturnCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
         logger.debug("Download content is empty")
-        return processing(ByteArray(0))
+        return
     }
     if (initResp.bankReturnCode != EbicsReturnCode.EBICS_OK) {
         throw Exception("Download init phase has bank-technical error: ${initResp.bankReturnCode}")
@@ -419,11 +396,11 @@ class EbicsSideException(
  */
 fun parseAndValidateEbicsResponse(
     bankKeys: BankPublicKeysFile,
-    resp: ByteArray,
+    resp: InputStream,
     withEbics3: Boolean
 ): EbicsResponseContent {
-    val responseDocument = try {
-        XMLUtil.parseBytesIntoDom(resp)
+    val doc = try {
+        XMLUtil.parseIntoDom(resp)
     } catch (e: Exception) {
         throw EbicsSideException(
             "Bank response apparently invalid",
@@ -431,9 +408,9 @@ fun parseAndValidateEbicsResponse(
         )
     }
     if (!XMLUtil.verifyEbicsDocument(
-            responseDocument,
-            bankKeys.bank_authentication_public_key,
-            withEbics3
+        doc,
+        bankKeys.bank_authentication_public_key,
+        withEbics3
     )) {
         throw EbicsSideException(
             "Bank signature did not verify",
@@ -441,8 +418,8 @@ fun parseAndValidateEbicsResponse(
         )
     }
     if (withEbics3)
-        return ebics3toInternalRepr(resp)
-    return ebics25toInternalRepr(resp)
+        return ebics3toInternalRepr(doc)
+    return ebics25toInternalRepr(doc)
 }
 
 /**
@@ -490,9 +467,7 @@ fun prepareUploadPayload(
     val plainTransactionKey = encryptionResult.plainTransactionKey
         ?: throw Exception("Could not generate the transaction key, cannot encrypt the payload!")
     // Then only E002 symmetric (with ephemeral key) encrypt.
-    val compressedInnerPayload = DeflaterInputStream(
-        payload.inputStream()
-    ).use { it.readAllBytes() }
+    val compressedInnerPayload = payload.inputStream().deflate().readAllBytes()
     val encryptedPayload = CryptoUtil.encryptEbicsE002withTransactionKey(
         compressedInnerPayload,
         bankKeys.bank_encryption_public_key,

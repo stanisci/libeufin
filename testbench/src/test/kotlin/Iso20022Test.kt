@@ -30,15 +30,15 @@ class Iso20022Test {
                 val fetch = file.resolve("fetch")
                 if (file.isDirectory() && fetch.exists()) {
                     for (log in fetch.listDirectoryEntries()) {
-                        val str = log.readBytes()
+                        val content = Files.newInputStream(log)
                         val name = log.toString()
                         println(name)
                         if (name.contains("HAC")) {
-                            parseCustomerAck(str)
+                            parseCustomerAck(content)
                         } else if (name.contains("pain.002")) {
-                            parseCustomerPaymentStatusReport(str)
+                            parseCustomerPaymentStatusReport(content)
                         } else {
-                            parseTxNotif(str, "CHF", mutableListOf(), mutableListOf())
+                            parseTxNotif(content, "CHF", mutableListOf(), mutableListOf())
                         }
                     }
                 }

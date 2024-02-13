@@ -31,6 +31,7 @@ import tech.libeufin.common.*
 import tech.libeufin.ebics.*
 import tech.libeufin.ebics.ebics_h005.Ebics3Request
 import java.io.IOException
+import java.io.InputStream
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -78,12 +79,12 @@ data class FetchContext(
  *         length is zero.  It returns null, if the bank assigned an
  *         error to the EBICS transaction.
  */
-private suspend fun <T> downloadHelper(
+private suspend fun downloadHelper(
     ctx: FetchContext,
     lastExecutionTime: Instant? = null,
     doc: SupportedDocument,
-    processing: (ByteArray) -> T
-): T? {
+    processing: (InputStream) -> Unit
+) {
     val isEbics3 = doc != SupportedDocument.PAIN_002_LOGS
     val initXml = if (isEbics3) {
         createEbics3DownloadInitialization(
@@ -246,7 +247,7 @@ suspend fun ingestIncomingPayment(
 private fun ingestDocument(
     db: Database,
     currency: String,
-    xml: ByteArray,
+    xml: InputStream,
     whichDocument: SupportedDocument
 ) {
     when (whichDocument) {
@@ -308,7 +309,7 @@ private fun ingestDocument(
 private fun ingestDocuments(
     db: Database,
     currency: String,
-    content: ByteArray,
+    content: InputStream,
     whichDocument: SupportedDocument
 ) {
     when (whichDocument) {
@@ -317,7 +318,7 @@ private fun ingestDocuments(
         SupportedDocument.CAMT_053, 
         SupportedDocument.CAMT_052 -> {
             try {
-                content.unzipForEach { fileName, xmlContent ->
+                content.unzipEach { fileName, xmlContent ->
                     logger.trace("parse $fileName")
                     ingestDocument(db, currency, xmlContent, whichDocument)
                 }
@@ -364,14 +365,12 @@ private suspend fun fetchDocuments(
             }
             val doc = doc.doc()
             // downloading the content
-            downloadHelper(ctx, lastExecutionTime, doc) { content ->
-                if (!content.isEmpty()) {
-                    ctx.fileLogger.logFetch(
-                        content,
-                        doc == SupportedDocument.PAIN_002_LOGS
-                    )
-                    ingestDocuments(db, ctx.cfg.currency, content, doc)
-                }
+            downloadHelper(ctx, lastExecutionTime, doc) { stream ->
+                val loggedStream = ctx.fileLogger.logFetch(
+                    stream,
+                    doc == SupportedDocument.PAIN_002_LOGS
+                )
+                ingestDocuments(db, ctx.cfg.currency, loggedStream, doc)
             }
             true
         } catch (e: Exception) {

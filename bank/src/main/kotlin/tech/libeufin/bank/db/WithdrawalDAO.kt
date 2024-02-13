@@ -152,7 +152,6 @@ class WithdrawalDAO(private val db: Database) {
         now: Instant,
         is2fa: Boolean
     ): WithdrawalConfirmationResult = db.serializable { conn ->
-         // TODO login check
         val stmt = conn.prepareStatement("""
             SELECT
               out_no_op,

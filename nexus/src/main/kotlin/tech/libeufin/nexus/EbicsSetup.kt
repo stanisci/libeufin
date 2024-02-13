@@ -110,7 +110,7 @@ private fun handleHpbResponse(
         throw Exception("HPB content not found in a EBICS response with successful return codes.")
     }
     val hpbObj = try {
-        parseEbicsHpbOrder(hpbBytes)
+        parseEbicsHpbOrder(hpbBytes.inputStream())
     } catch (e: Exception) {
         throw Exception("HPB response content seems invalid", e)
     }

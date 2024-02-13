@@ -36,9 +36,11 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.*
+import java.io.InputStream
 import javax.xml.bind.JAXBElement
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
+import org.w3c.dom.Document
 
 data class EbicsProtocolError(
     val httpStatusCode: HttpStatusCode,
@@ -308,9 +310,9 @@ class HpbResponseData(
     val authenticationVersion: String
 )
 
-fun parseEbicsHpbOrder(orderDataRaw: ByteArray): HpbResponseData {
+fun parseEbicsHpbOrder(orderDataRaw: InputStream): HpbResponseData {
     val resp = try {
-        XMLUtil.convertBytesToJaxb<HPBResponseOrderData>(orderDataRaw)
+        XMLUtil.convertToJaxb<HPBResponseOrderData>(orderDataRaw)
     } catch (e: Exception) {
         throw EbicsProtocolError(HttpStatusCode.InternalServerError, "Invalid XML (as HPB response) received from bank")
     }
@@ -331,10 +333,10 @@ fun parseEbicsHpbOrder(orderDataRaw: ByteArray): HpbResponseData {
     )
 }
 
-fun ebics3toInternalRepr(response: ByteArray): EbicsResponseContent {
+fun ebics3toInternalRepr(response: Document): EbicsResponseContent {
     // logger.debug("Converting bank resp to internal repr.: $response")
     val resp: JAXBElement<Ebics3Response> = try {
-        XMLUtil.convertBytesToJaxb(response)
+        XMLUtil.convertDomToJaxb(response)
     } catch (e: Exception) {
         throw EbicsProtocolError(
             HttpStatusCode.InternalServerError,
@@ -368,9 +370,9 @@ fun ebics3toInternalRepr(response: ByteArray): EbicsResponseContent {
     )
 }
 
-fun ebics25toInternalRepr(response: ByteArray): EbicsResponseContent {
+fun ebics25toInternalRepr(response: Document): EbicsResponseContent {
     val resp: JAXBElement<EbicsResponse> = try {
-        XMLUtil.convertBytesToJaxb(response)
+        XMLUtil.convertDomToJaxb(response)
     } catch (e: Exception) {
         throw EbicsProtocolError(
             HttpStatusCode.InternalServerError,

@@ -27,9 +27,6 @@ dependencies {
     // XML parsing/binding and encryption
     implementation("jakarta.xml.bind:jakarta.xml.bind-api:2.3.3")
 
-    // Compression
-    implementation("org.apache.commons:commons-compress:1.25.0")
-
     // Command line parsing
     implementation("com.github.ajalt.clikt:clikt:$clikt_version")
     implementation("org.postgresql:postgresql:$postgres_version")

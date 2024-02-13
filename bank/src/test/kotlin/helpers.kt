@@ -23,7 +23,6 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import java.io.ByteArrayOutputStream
-import java.util.zip.DeflaterOutputStream
 import java.nio.file.*
 import kotlin.test.*
 import kotlin.io.path.*

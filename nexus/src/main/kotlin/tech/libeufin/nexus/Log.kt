@@ -19,7 +19,6 @@
 
 package tech.libeufin.nexus
 
-import tech.libeufin.nexus.ebics.unzipForEach
 import tech.libeufin.common.*
 import java.io.*
 import java.nio.file.*
@@ -50,12 +49,12 @@ class FileLogger(path: String?) {
     /**
      * Logs EBICS fetch content if EBICS debug logging is enabled
      *
-     * @param content EBICS fetch content
+     * @param stream EBICS fetch content
      * @param hac only true when downloading via HAC (EBICS 2)
      */
-    fun logFetch(content: ByteArray, hac: Boolean = false) {
-        if (dir == null) return;
-
+    fun logFetch(stream: InputStream, hac: Boolean = false): InputStream {
+        if (dir == null) return stream;
+        val content = stream.readBytes()
         // Subdir based on current day.
         val now = Instant.now()
         val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
@@ -67,10 +66,13 @@ class FileLogger(path: String?) {
             subDir.resolve("${nowMs}_HAC_response.pain.002.xml").writeBytes(content)
         } else {
             // Write each ZIP entry in the combined dir.
-            content.unzipForEach { fileName, xmlContent ->
-                subDir.resolve("${nowMs}_$fileName").writeBytes(xmlContent)
+            content.inputStream().unzipEach { fileName, xmlContent ->
+                xmlContent.use {
+                    Files.copy(it, subDir.resolve("${nowMs}_$fileName"))
+                }
             }
         }
+        return content.inputStream()
     }
 
     /**

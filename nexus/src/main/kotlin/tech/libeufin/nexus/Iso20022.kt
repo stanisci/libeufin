@@ -23,6 +23,7 @@ import tech.libeufin.ebics.*
 import java.net.URLEncoder
 import java.time.*
 import java.time.format.*
+import java.io.InputStream
 
 
 /**
@@ -145,7 +146,7 @@ data class CustomerAck(
  *
  * @param xml pain.002 input document
  */
-fun parseCustomerAck(xml: ByteArray): List<CustomerAck> {
+fun parseCustomerAck(xml: InputStream): List<CustomerAck> {
     return destructXml(xml, "Document") {
         one("CstmrPmtStsRpt").map("OrgnlPmtInfAndSts") {
             val actionType = one("OrgnlPmtInfId").enum<HacAction>()
@@ -214,7 +215,7 @@ data class Reason (
  *
  * @param xml pain.002 input document
  */
-fun parseCustomerPaymentStatusReport(xml: ByteArray): PaymentStatus {
+fun parseCustomerPaymentStatusReport(xml: InputStream): PaymentStatus {
     fun XmlDestructor.reasons(): List<Reason> {
         return map("StsRsnInf") {
             val code = one("Rsn").one("Cd").enum<ExternalStatusReasonCode>()
@@ -255,7 +256,7 @@ fun parseCustomerPaymentStatusReport(xml: ByteArray): PaymentStatus {
  * @param outgoing list of outgoing payments
  */
 fun parseTxNotif(
-    notifXml: ByteArray,
+    notifXml: InputStream,
     acceptedCurrency: String,
     incoming: MutableList<IncomingPayment>,
     outgoing: MutableList<OutgoingPayment>
@@ -324,7 +325,7 @@ fun parseTxNotif(
  * @param xml the input document.
  */
 private fun notificationForEachTx(
-    xml: ByteArray,
+    xml: InputStream,
     directionLambda: XmlDestructor.(Instant) -> Unit
 ) {
     destructXml(xml, "Document") {

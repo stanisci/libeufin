@@ -40,8 +40,8 @@ class EbicsMessagesTest {
     @Test
     fun testImportNonRoot() {
         val classLoader = ClassLoader.getSystemClassLoader()
-        val ini = classLoader.getResource("ebics_ini_inner_key.xml")
-        val jaxb = XMLUtil.convertBytesToJaxb<SignatureTypes.SignaturePubKeyOrderData>(ini.readBytes())
+        val ini = classLoader.getResourceAsStream("ebics_ini_inner_key.xml")
+        val jaxb = XMLUtil.convertToJaxb<SignatureTypes.SignaturePubKeyOrderData>(ini)
         assertEquals("A006", jaxb.value.signaturePubKeyInfo.signatureVersion)
     }
 
@@ -51,8 +51,8 @@ class EbicsMessagesTest {
     @Test
     fun testStringToJaxb() {
         val classLoader = ClassLoader.getSystemClassLoader()
-        val ini = classLoader.getResource("ebics_ini_request_sample.xml")
-        val jaxb = XMLUtil.convertBytesToJaxb<EbicsUnsecuredRequest>(ini.readBytes())
+        val ini = classLoader.getResourceAsStream("ebics_ini_request_sample.xml")
+        val jaxb = XMLUtil.convertToJaxb<EbicsUnsecuredRequest>(ini)
         println("jaxb loaded")
         assertEquals(
             "INI",
@@ -81,10 +81,9 @@ class EbicsMessagesTest {
     @Test
     fun testDomToJaxb() {
         val classLoader = ClassLoader.getSystemClassLoader()
-        val ini = classLoader.getResource("ebics_ini_request_sample.xml")!!
-        val iniDom = XMLUtil.parseBytesIntoDom(ini.readBytes())
+        val ini = classLoader.getResourceAsStream("ebics_ini_request_sample.xml")
+        val iniDom = XMLUtil.parseIntoDom(ini)
         XMLUtil.convertDomToJaxb<EbicsUnsecuredRequest>(
-            EbicsUnsecuredRequest::class.java,
             iniDom
         )
     }
@@ -114,15 +113,15 @@ class EbicsMessagesTest {
     @Test
     fun testParseHiaRequestOrderData() {
         val classLoader = ClassLoader.getSystemClassLoader()
-        val hia = classLoader.getResource("hia_request_order_data.xml")!!.readBytes()
-        XMLUtil.convertBytesToJaxb<HIARequestOrderData>(hia)
+        val hia = classLoader.getResourceAsStream("hia_request_order_data.xml")
+        XMLUtil.convertToJaxb<HIARequestOrderData>(hia)
     }
 
     @Test
     fun testHiaLoad() {
         val classLoader = ClassLoader.getSystemClassLoader()
-        val hia = classLoader.getResource("hia_request.xml")!!
-        val hiaDom = XMLUtil.parseBytesIntoDom(hia.readBytes())
+        val hia = classLoader.getResourceAsStream("hia_request.xml")
+        val hiaDom = XMLUtil.parseIntoDom(hia)
         val x: Element = hiaDom.getElementsByTagNameNS(
             "urn:org:ebics:H004",
             "OrderDetails"
@@ -135,7 +134,6 @@ class EbicsMessagesTest {
         )
 
         XMLUtil.convertDomToJaxb<EbicsUnsecuredRequest>(
-            EbicsUnsecuredRequest::class.java,
             hiaDom
         )
     }
@@ -144,11 +142,11 @@ class EbicsMessagesTest {
     fun testLoadInnerKey() {
         val jaxbKey = run {
             val classLoader = ClassLoader.getSystemClassLoader()
-            val file = classLoader.getResource(
+            val file = classLoader.getResourceAsStream(
                 "ebics_ini_inner_key.xml"
             )
             assertNotNull(file)
-            XMLUtil.convertBytesToJaxb<SignatureTypes.SignaturePubKeyOrderData>(file.readBytes())
+            XMLUtil.convertToJaxb<SignatureTypes.SignaturePubKeyOrderData>(file)
         }
 
         val modulus = jaxbKey.value.signaturePubKeyInfo.pubKeyValue.rsaKeyValue.modulus
@@ -159,8 +157,8 @@ class EbicsMessagesTest {
     @Test
     fun testLoadIniMessage() {
         val classLoader = ClassLoader.getSystemClassLoader()
-        val text = classLoader.getResource("ebics_ini_request_sample.xml")!!.readBytes()
-        XMLUtil.convertBytesToJaxb<EbicsUnsecuredRequest>(text)
+        val text = classLoader.getResourceAsStream("ebics_ini_request_sample.xml")!!
+        XMLUtil.convertToJaxb<EbicsUnsecuredRequest>(text)
     }
 
     @Test
@@ -189,8 +187,8 @@ class EbicsMessagesTest {
     @Test
     fun testLoadHpb() {
         val classLoader = ClassLoader.getSystemClassLoader()
-        val text = classLoader.getResource("hpb_request.xml")!!.readBytes()
-        XMLUtil.convertBytesToJaxb<EbicsNpkdRequest>(text)
+        val text = classLoader.getResourceAsStream("hpb_request.xml")!!
+        XMLUtil.convertToJaxb<EbicsNpkdRequest>(text)
     }
 
     @Test
@@ -358,7 +356,7 @@ class EbicsMessagesTest {
         }
 
         val str = XMLUtil.convertJaxbToBytes(ebicsRequestObj)
-        val doc = XMLUtil.parseBytesIntoDom(str)
+        val doc = XMLUtil.parseIntoDom(str.inputStream())
         val pair = CryptoUtil.generateRsaKeyPair(1024)
         XMLUtil.signEbicsDocument(doc, pair.private)
         val bytes = XMLUtil.convertDomToBytes(doc)

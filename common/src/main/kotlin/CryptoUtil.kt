@@ -21,6 +21,7 @@ package tech.libeufin.common
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.math.BigInteger
 import java.security.*
 import java.security.interfaces.RSAPrivateCrtKey
@@ -176,18 +177,18 @@ object CryptoUtil {
     }
 
     fun decryptEbicsE002(enc: EncryptionResult, privateKey: RSAPrivateCrtKey): ByteArray {
-        return decryptEbicsE002(
+        return CryptoUtil.decryptEbicsE002(
             enc.encryptedTransactionKey,
-            enc.encryptedData,
+            enc.encryptedData.inputStream(),
             privateKey
-        )
+        ).readBytes()
     }
 
     fun decryptEbicsE002(
         encryptedTransactionKey: ByteArray,
-        encryptedData: ByteArray,
+        encryptedData: InputStream,
         privateKey: RSAPrivateCrtKey
-    ): ByteArray {
+    ): CipherInputStream {
         val asymmetricCipher = Cipher.getInstance(
             "RSA/None/PKCS1Padding",
             bouncyCastleProvider
@@ -201,8 +202,7 @@ object CryptoUtil {
         )
         val ivParameterSpec = IvParameterSpec(ByteArray(16))
         symmetricCipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec)
-        val data = symmetricCipher.doFinal(encryptedData)
-        return data
+        return CipherInputStream(encryptedData, symmetricCipher)
     }
 
     /**

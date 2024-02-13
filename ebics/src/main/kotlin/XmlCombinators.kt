@@ -25,6 +25,7 @@ import org.w3c.dom.Element
 import java.io.StringWriter
 import javax.xml.stream.XMLOutputFactory
 import javax.xml.stream.XMLStreamWriter
+import java.io.InputStream
 import java.time.format.*
 import java.time.*
 
@@ -133,8 +134,8 @@ class XmlDestructor internal constructor(private val el: Element) {
     fun attr(index: String): String = el.getAttribute(index)
 }
 
-fun <T> destructXml(xml: ByteArray, root: String, f: XmlDestructor.() -> T): T {
-    val doc = XMLUtil.parseBytesIntoDom(xml)
+fun <T> destructXml(xml: InputStream, root: String, f: XmlDestructor.() -> T): T {
+    val doc = XMLUtil.parseIntoDom(xml)
     if (doc.documentElement.tagName != root) {
         throw DestructionError("expected root '$root' got '${doc.documentElement.tagName}'")
     }

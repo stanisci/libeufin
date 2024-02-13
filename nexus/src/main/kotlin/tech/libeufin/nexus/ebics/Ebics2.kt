@@ -36,6 +36,7 @@ import java.security.interfaces.RSAPrivateCrtKey
 import java.time.Instant
 import java.time.ZoneId
 import java.util.*
+import java.io.InputStream
 import javax.xml.datatype.DatatypeFactory
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-nexus-ebics2")
@@ -151,10 +152,11 @@ fun createEbics25DownloadTransferPhase(
  */
 fun parseKeysMgmtResponse(
     clientEncryptionKey: RSAPrivateCrtKey,
-    xml: ByteArray
+    xml: InputStream
 ): EbicsKeyManagementResponseContent? {
+    // TODO throw instead of null
     val jaxb = try {
-        XMLUtil.convertBytesToJaxb<EbicsKeyManagementResponse>(xml)
+        XMLUtil.convertToJaxb<EbicsKeyManagementResponse>(xml)
     } catch (e: Exception) {
         tech.libeufin.nexus.logger.error("Could not parse the raw response from bank into JAXB.")
         return null
@@ -172,7 +174,7 @@ fun parseKeysMgmtResponse(
                 clientEncryptionKey,
                 DataEncryptionInfo(this.transactionKey, this.encryptionPubKeyDigest.value),
                 listOf(encOrderData)
-            )
+            ).readBytes()
         }
     }
     val bankReturnCode = EbicsReturnCode.lookup(jaxb.value.body.returnCode.value) // business error

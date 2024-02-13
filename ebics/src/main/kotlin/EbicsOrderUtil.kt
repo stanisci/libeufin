@@ -21,33 +21,23 @@ package tech.libeufin.ebics
 
 import java.lang.IllegalArgumentException
 import java.security.SecureRandom
-import java.util.zip.DeflaterInputStream
-import java.util.zip.InflaterInputStream
+import java.io.InputStream
+import tech.libeufin.common.*
 
 /**
  * Helpers for dealing with order compression, encryption, decryption, chunking and re-assembly.
  */
 object EbicsOrderUtil {
 
-    // Decompression only, no XML involved.
-    fun decodeOrderData(encodedOrderData: ByteArray): ByteArray {
-        return InflaterInputStream(encodedOrderData.inputStream()).use {
-            it.readAllBytes()
-        }
-    }
-
     inline fun <reified T> decodeOrderDataXml(encodedOrderData: ByteArray): T {
-        return InflaterInputStream(encodedOrderData.inputStream()).use {
-            val bytes = it.readAllBytes()
-            XMLUtil.convertBytesToJaxb<T>(bytes).value
+        return encodedOrderData.inputStream().inflate().use {
+            XMLUtil.convertToJaxb<T>(it).value
         }
     }
 
     inline fun <reified T> encodeOrderDataXml(obj: T): ByteArray {
         val bytes = XMLUtil.convertJaxbToBytes(obj)
-        return DeflaterInputStream(bytes.inputStream()).use {
-            it.readAllBytes()
-        }
+        return bytes.inputStream().deflate().readAllBytes()
     }
 
     @kotlin.ExperimentalStdlibApi

@@ -288,9 +288,7 @@ class XMLUtil private constructor() {
          * @return InputStream object, as wanted by the validator.
          */
         fun validateFromBytes(xml: ByteArray): Boolean {
-            val xmlInputStream: InputStream = ByteArrayInputStream(xml)
-            val xmlSource = StreamSource(xmlInputStream)
-            return validate(xmlSource)
+            return validate(StreamSource(xml.inputStream()))
         }
 
         inline fun <reified T> convertJaxbToBytes(
@@ -333,11 +331,11 @@ class XMLUtil private constructor() {
          * @param documentBytes the bytes to convert into JAXB.
          * @return the JAXB object reflecting the original XML document.
          */
-        inline fun <reified T> convertBytesToJaxb(documentBytes: ByteArray): JAXBElement<T> {
+        inline fun <reified T> convertToJaxb(documentBytes: InputStream): JAXBElement<T> {
             val jc = JAXBContext.newInstance(T::class.java)
             val u = jc.createUnmarshaller()
             return u.unmarshal(            /* Marshalling the object into the document.  */
-                StreamSource(ByteArrayInputStream(documentBytes)),
+                StreamSource(documentBytes),
                 T::class.java
             )
         }
@@ -374,25 +372,25 @@ class XMLUtil private constructor() {
         /**
          * Convert a DOM document to the JAXB representation.
          *
-         * @param finalType class type of the output
          * @param document the document to convert into JAXB.
          * @return the JAXB object reflecting the original XML document.
          */
-        fun <T> convertDomToJaxb(finalType: Class<T>, document: Document): JAXBElement<T> {
-            val jc = JAXBContext.newInstance(finalType)
+        inline fun <reified T> convertDomToJaxb(document: Document): JAXBElement<T> {
+            val jc = JAXBContext.newInstance(T::class.java)
             /* Marshalling the object into the document.  */
             val m = jc.createUnmarshaller()
-            return m.unmarshal(document, finalType) // document "went" into Jaxb
+            return m.unmarshal(document, T::class.java) // document "went" into Jaxb
         }
 
         /** Parse [xml] into a XML DOM */
-        fun parseBytesIntoDom(xml: ByteArray): Document {
+        fun parseIntoDom(xml: InputStream): Document {
             val factory = DocumentBuilderFactory.newInstance().apply {
                 isNamespaceAware = true
             }
-            val xmlInputStream = ByteArrayInputStream(xml)
             val builder = factory.newDocumentBuilder()
-            return builder.parse(InputSource(xmlInputStream))
+            return xml.use { 
+                builder.parse(InputSource(it))
+            }
         }
 
         fun signEbicsResponse(ebicsResponse: EbicsResponse, privateKey: RSAPrivateCrtKey): ByteArray {

@@ -30,19 +30,12 @@ import kotlinx.serialization.json.*
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
-import tech.libeufin.common.*
-import java.io.ByteArrayOutputStream
-import java.util.zip.DeflaterOutputStream
 
 inline fun <reified B> HttpRequestBuilder.jsonDeflate(b: B) {
     val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b);
     contentType(ContentType.Application.Json)
     headers.set(HttpHeaders.ContentEncoding, "deflate")
-    val bos = ByteArrayOutputStream()
-    val ios = DeflaterOutputStream(bos)
-    ios.write(json.toByteArray())
-    ios.finish()
-    setBody(bos.toByteArray())
+    setBody(json.toByteArray().inputStream().deflate().readBytes())
 }
 
 class SecurityTest {
