@@ -153,6 +153,13 @@ fun unknownAccount(id: String): LibeufinException {
     )
 }
 
+fun unknownCreditorAccount(id: String): LibeufinException {
+    return conflict(
+        "Creditor account '$id' not found",
+        TalerErrorCode.BANK_UNKNOWN_CREDITOR
+    )
+}
+
 fun unsupportedTanChannel(channel: TanChannel): LibeufinException {
     return conflict(
         "Unsupported tan channel $channel",

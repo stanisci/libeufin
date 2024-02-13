@@ -60,10 +60,7 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
                     "$username is not an exchange account.",
                     TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
-                is TransferResult.UnknownCreditor -> throw conflict(
-                    "Creditor account was not found",
-                    TalerErrorCode.BANK_UNKNOWN_CREDITOR
-                )
+                is TransferResult.UnknownCreditor -> throw unknownCreditorAccount(req.credit_account.canonical)
                 is TransferResult.BothPartyAreExchange -> throw conflict(
                     "Wire transfer attempted with credit and debit party being both exchange account",
                     TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE

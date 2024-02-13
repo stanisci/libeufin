@@ -468,10 +468,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
                     "Wire transfer attempted with credit and debit party being the same bank account",
                     TalerErrorCode.BANK_SAME_ACCOUNT 
                 )
-                BankTransactionResult.UnknownCreditor -> throw conflict(
-                    "Creditor account was not found",
-                    TalerErrorCode.BANK_UNKNOWN_CREDITOR
-                )
+                BankTransactionResult.UnknownCreditor -> throw unknownCreditorAccount(req.payto_uri.canonical)
                 BankTransactionResult.AdminCreditor -> throw conflict(
                     "Cannot transfer money to admin account",
                     TalerErrorCode.BANK_ADMIN_CREDITOR
