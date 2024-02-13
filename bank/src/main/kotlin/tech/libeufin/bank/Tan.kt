@@ -18,29 +18,27 @@
  */
 package tech.libeufin.bank
 
-import java.security.SecureRandom
-import java.time.Instant
-import java.time.Duration
-import java.text.DecimalFormat
-import kotlinx.serialization.json.Json
 import io.ktor.http.*
+import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
-import io.ktor.server.application.*
-import tech.libeufin.bank.db.TanDAO.*
-import tech.libeufin.bank.db.*
-import tech.libeufin.bank.auth.*
-import io.ktor.util.pipeline.PipelineContext
+import kotlinx.serialization.json.Json
+import tech.libeufin.bank.auth.username
+import tech.libeufin.bank.db.Database
+import tech.libeufin.bank.db.TanDAO.Challenge
+import java.security.SecureRandom
+import java.text.DecimalFormat
+import java.time.Instant
 
 
-inline suspend fun <reified B> ApplicationCall.respondChallenge(
+suspend inline fun <reified B> ApplicationCall.respondChallenge(
     db: Database, 
     op: Operation, 
     body: B, 
     channel: TanChannel? = null,
     info: String? = null
 ) {
-    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), body); 
+    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), body)
     val code = Tan.genCode()
     val id = db.tan.new(
         login = username, 
@@ -59,7 +57,7 @@ inline suspend fun <reified B> ApplicationCall.respondChallenge(
     )
 }
 
-inline suspend fun <reified B> ApplicationCall.receiveChallenge(
+suspend inline fun <reified B> ApplicationCall.receiveChallenge(
     db: Database,
     op: Operation
 ): Pair<B, Challenge?> {
@@ -85,7 +83,7 @@ suspend fun ApplicationCall.challenge(
 }
 
 object Tan {
-    private val CODE_FORMAT = DecimalFormat("00000000");  
+    private val CODE_FORMAT = DecimalFormat("00000000")
     private val SECURE_RNG = SecureRandom()
 
     fun genCode(): String {

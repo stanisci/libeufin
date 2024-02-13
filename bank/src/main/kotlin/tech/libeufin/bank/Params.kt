@@ -20,14 +20,11 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
-import io.ktor.server.application.*
-import io.ktor.server.plugins.*
-import io.ktor.server.request.*
-import io.ktor.server.util.*
-import java.time.*
-import java.time.temporal.*
-import java.util.*
-import tech.libeufin.common.*
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.TalerErrorCode
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.temporal.TemporalAdjusters
 
 fun Parameters.expect(name: String): String 
     = get(name) ?: throw badRequest("Missing '$name' parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)
@@ -53,10 +50,10 @@ data class MonitorParams(
     val which: Int?
 ) {
     companion object {
-        val names = Timeframe.values().map { it.name }
+        val names = Timeframe.entries.map { it.name }
         val names_fmt = names.joinToString()
         fun extract(params: Parameters): MonitorParams {
-            val raw = params.get("timeframe") ?: "hour";
+            val raw = params.get("timeframe") ?: "hour"
             if (!names.contains(raw)) {
                 throw badRequest("Param 'timeframe' must be one of $names_fmt", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
             }
@@ -150,10 +147,10 @@ data class StatusParams(
     val old_state: WithdrawalStatus
 ) {
     companion object {
-        val names = WithdrawalStatus.values().map { it.name }
+        val names = WithdrawalStatus.entries.map { it.name }
         val names_fmt = names.joinToString()
         fun extract(params: Parameters): StatusParams {
-            val old_state = params.get("old_state") ?: "pending";
+            val old_state = params.get("old_state") ?: "pending"
             if (!names.contains(old_state)) {
                 throw badRequest("Param 'old_state' must be one of $names_fmt", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
             }

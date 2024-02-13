@@ -264,7 +264,7 @@ class XMLUtil private constructor() {
                 logger.warn("Validation failed: ${e}")
                 return false
             }
-            return true;
+            return true
         }
 
         /**
@@ -361,7 +361,7 @@ class XMLUtil private constructor() {
             /* Make Transformer.  */
             val tf = TransformerFactory.newInstance()
             val t = tf.newTransformer()
-            t.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            t.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes")
             /* Make string writer.  */
             val sw = StringWriter()
             /* Extract string.  */
@@ -396,7 +396,7 @@ class XMLUtil private constructor() {
         fun signEbicsResponse(ebicsResponse: EbicsResponse, privateKey: RSAPrivateCrtKey): ByteArray {
             val doc = convertJaxbToDocument(ebicsResponse)
             signEbicsDocument(doc, privateKey)
-            val signedDoc = XMLUtil.convertDomToBytes(doc)
+            val signedDoc = convertDomToBytes(doc)
             // logger.debug("response: $signedDoc")
             return signedDoc
         }

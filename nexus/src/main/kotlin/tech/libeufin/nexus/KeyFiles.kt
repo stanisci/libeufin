@@ -19,15 +19,22 @@
 
 package tech.libeufin.nexus
 
-import kotlinx.serialization.*
-import kotlinx.serialization.descriptors.*
-import kotlinx.serialization.encoding.*
+import kotlinx.serialization.Contextual
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
+import tech.libeufin.common.Base32Crockford
+import tech.libeufin.common.CryptoUtil
+import java.nio.file.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
-import tech.libeufin.common.*
-import java.nio.file.*
 import kotlin.io.path.*
 
 val JSON = Json {
@@ -126,7 +133,7 @@ private inline fun <reified T> persistJsonFile(obj: T, path: Path, name: String)
         // Write to temp file then rename to enable atomicity when possible
         val tmp = Files.createTempFile(parent, "tmp_", "_${path.fileName}")
         tmp.writeText(content)
-        tmp.moveTo(path, StandardCopyOption.REPLACE_EXISTING);
+        tmp.moveTo(path, StandardCopyOption.REPLACE_EXISTING)
     } catch (e: Exception) {
         when {
             !parent.isWritable() -> throw Exception("Could not write $name at '$path': permission denied on '$parent'")

@@ -17,15 +17,20 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
-import io.ktor.client.statement.HttpResponse
-import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlin.test.*
-import kotlinx.coroutines.*
-import kotlinx.serialization.json.*
+import io.ktor.server.testing.*
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import tech.libeufin.bank.BankAccountCreateWithdrawalResponse
+import tech.libeufin.bank.WithdrawalStatus
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.TalerErrorCode
+import tech.libeufin.common.json
+import kotlin.test.assertEquals
 
 // Test endpoint is correctly authenticated 
 suspend fun ApplicationTestBuilder.authRoutine(
@@ -80,7 +85,7 @@ suspend fun ApplicationTestBuilder.authRoutine(
     }
 }
 
-inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
+suspend inline fun <reified B> ApplicationTestBuilder.historyRoutine(
     url: String,
     crossinline ids: (B) -> List<Long>,
     registered: List<suspend () -> Unit>,
@@ -201,7 +206,7 @@ inline suspend fun <reified B> ApplicationTestBuilder.historyRoutine(
     history("delta=-10&start=${id-4}").assertHistory(10)
 }
 
-inline suspend fun <reified B> ApplicationTestBuilder.statusRoutine(
+suspend inline fun <reified B> ApplicationTestBuilder.statusRoutine(
     url: String,
     crossinline status: (B) -> WithdrawalStatus
 ) {

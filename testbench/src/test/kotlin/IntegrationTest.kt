@@ -96,7 +96,7 @@ inline fun assertException(msg: String, lambda: () -> Unit) {
 
 class IntegrationTest {
     val nexusCmd = LibeufinNexusCommand()
-    val bankCmd = LibeufinBankCommand();
+    val bankCmd = LibeufinBankCommand()
     val client = HttpClient(CIO)
 
     @Test
@@ -278,7 +278,7 @@ class IntegrationTest {
 
             // Cashin
             repeat(3) { i ->
-                val reservePub = randBytes(32);
+                val reservePub = randBytes(32)
                 val amount = TalerAmount("EUR:${20+i}")
                 val subject = "cashin test $i: ${Base32Crockford.encode(reservePub)}"
                 nexusCmd.run("testing fake-incoming $flags --subject \"$subject\" --amount $amount $userPayTo")
@@ -302,10 +302,10 @@ class IntegrationTest {
 
             // Cashout
             repeat(3) { i ->  
-                val requestUid = randBytes(32);
+                val requestUid = randBytes(32)
                 val amount = TalerAmount("KUDOS:${10+i}")
                 val convert = client.get("http://0.0.0.0:8080/conversion-info/cashout-rate?amount_debit=$amount")
-                    .assertOkJson<ConversionResponse>().amount_credit;
+                    .assertOkJson<ConversionResponse>().amount_credit
                 client.post("http://0.0.0.0:8080/accounts/customer/cashouts") {
                     basicAuth("customer", "password")
                     json {

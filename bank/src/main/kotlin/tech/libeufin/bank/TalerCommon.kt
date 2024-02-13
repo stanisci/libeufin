@@ -19,20 +19,25 @@
 
 package tech.libeufin.bank
 
-import tech.libeufin.common.*
-import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
-import io.ktor.server.application.*
-import java.net.*
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import tech.libeufin.common.Base32Crockford
+import tech.libeufin.common.EncodingException
+import tech.libeufin.common.TalerAmount
+import java.net.URL
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.*
 import java.util.concurrent.TimeUnit
-import kotlinx.serialization.*
-import kotlinx.serialization.descriptors.*
-import kotlinx.serialization.encoding.*
-import kotlinx.serialization.json.*
 
 /** 32-byte Crockford's Base32 encoded data */
 @Serializable(with = Base32Crockford32B.Serializer::class)
@@ -141,20 +146,20 @@ class Base32Crockford64B {
 }
 
 /** 32-byte hash code */
-typealias ShortHashCode = Base32Crockford32B;
+typealias ShortHashCode = Base32Crockford32B
 /** 64-byte hash code */
-typealias HashCode = Base32Crockford64B;
+typealias HashCode = Base32Crockford64B
 /**
  * EdDSA and ECDHE public keys always point on Curve25519
  * and represented  using the standard 256 bits Ed25519 compact format,
  * converted to Crockford Base32.
  */
-typealias EddsaPublicKey = Base32Crockford32B;
+typealias EddsaPublicKey = Base32Crockford32B
 
 /** Timestamp containing the number of seconds since epoch */
 @Serializable
 data class TalerProtocolTimestamp(
-    @Serializable(with = TalerProtocolTimestamp.Serializer::class)
+    @Serializable(with = Serializer::class)
     val t_s: Instant,
 ) {
     companion object {
@@ -186,7 +191,7 @@ data class TalerProtocolTimestamp(
                 ?: throw badRequest("Could not convert t_s '${maybeTs.content}' to a number")
             when {
                 ts < 0 -> throw badRequest("Negative timestamp not allowed")
-                ts > Instant.MAX.getEpochSecond() -> throw badRequest("Timestamp $ts too big to be represented in Kotlin")
+                ts > Instant.MAX.epochSecond -> throw badRequest("Timestamp $ts too big to be represented in Kotlin")
                 else -> return Instant.ofEpochSecond(ts)
             }
         }
@@ -205,7 +210,7 @@ class DecimalNumber {
         this.frac = frac
     }
     constructor(encoded: String) {
-        val match = PATTERN.matchEntire(encoded) ?: throw badRequest("Invalid decimal number format");
+        val match = PATTERN.matchEntire(encoded) ?: throw badRequest("Invalid decimal number format")
         val (value, frac) = match.destructured
         this.value = value.toLongOrNull() ?: throw badRequest("Invalid value")
         if (this.value > TalerAmount.MAX_VALUE) throw badRequest("Value specified in decimal number is too large")
@@ -249,7 +254,7 @@ class DecimalNumber {
     }
 
     companion object {
-        private val PATTERN = Regex("([0-9]+)(?:\\.([0-9]{1,8}))?");
+        private val PATTERN = Regex("([0-9]+)(?:\\.([0-9]{1,8}))?")
     }
 }
 
@@ -260,7 +265,7 @@ class DecimalNumber {
  */
 @Serializable()
 data class RelativeTime(
-    @Serializable(with = RelativeTime.Serializer::class)
+    @Serializable(with = Serializer::class)
     val d_us: Duration
 ) {
     internal object Serializer : KSerializer<Duration> {
@@ -292,7 +297,7 @@ data class RelativeTime(
     }
 
     companion object {
-        private const val MAX_SAFE_INTEGER = 9007199254740991L; // 2^53 - 1
+        private const val MAX_SAFE_INTEGER = 9007199254740991L // 2^53 - 1
     }
 }
 

@@ -258,7 +258,7 @@ object Ebics3Types {
     @XmlAccessorType(XmlAccessType.NONE)
     class UserIDType {
         @get:XmlValue
-        lateinit var value: String;
+        lateinit var value: String
 
         @get:XmlAttribute(name = "Status")
         var status: Int? = null

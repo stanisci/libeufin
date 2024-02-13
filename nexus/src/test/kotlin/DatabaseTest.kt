@@ -17,15 +17,14 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import kotlinx.coroutines.runBlocking
 import org.junit.Test
-import tech.libeufin.nexus.*
-import tech.libeufin.common.*
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.nexus.DatabaseSubmissionState
+import tech.libeufin.nexus.InitiatedPayment
+import tech.libeufin.nexus.PaymentInitiationOutcome
 import java.time.Instant
 import kotlin.random.Random
 import kotlin.test.*
-import kotlin.test.assertEquals
-import kotlin.io.path.*
 
 class OutgoingPaymentsTest {
     @Test

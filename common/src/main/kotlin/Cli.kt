@@ -19,21 +19,26 @@
 
 package tech.libeufin.common
 
-import com.github.ajalt.clikt.core.*
-import com.github.ajalt.clikt.parameters.types.*
-import com.github.ajalt.clikt.parameters.arguments.*
-import com.github.ajalt.clikt.parameters.options.*
-import com.github.ajalt.clikt.parameters.groups.*
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.ProgramResult
+import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.groups.OptionGroup
+import com.github.ajalt.clikt.parameters.groups.provideDelegate
+import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.enum
+import com.github.ajalt.clikt.parameters.types.path
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
-import java.nio.file.Path
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
 fun Throwable.fmtLog(logger: Logger) {
     var msg = StringBuilder(message ?: this::class.simpleName)
-    var cause = cause;
+    var cause = cause
     while (cause != null) {
         msg.append(": ")
         msg.append(cause.message ?: cause::class.simpleName)
@@ -45,8 +50,8 @@ fun Throwable.fmtLog(logger: Logger) {
 
 fun cliCmd(logger: Logger, level: Level, lambda: () -> Unit) {
     // Set root log level
-    val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
-    root.setLevel(ch.qos.logback.classic.Level.convertAnSLF4JLevel(level));
+    val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
+    root.level = ch.qos.logback.classic.Level.convertAnSLF4JLevel(level)
     // Run cli command catching all errors
     try {
         lambda()

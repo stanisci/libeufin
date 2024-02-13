@@ -17,18 +17,15 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import io.ktor.client.plugins.*
 import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.server.testing.*
-import java.util.*
-import kotlinx.coroutines.*
-import kotlinx.serialization.json.*
 import org.junit.Test
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
-import kotlin.test.*
+import tech.libeufin.bank.BankAccountTransactionInfo
+import tech.libeufin.bank.RegisterAccountResponse
+import tech.libeufin.bank.TransactionCreateResponse
+import tech.libeufin.common.IbanPayto
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.json
+import kotlin.test.assertEquals
 
 class PaytoTest {
     // x-taler-bank

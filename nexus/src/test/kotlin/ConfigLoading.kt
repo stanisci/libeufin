@@ -18,11 +18,9 @@
  */
 
 import org.junit.Test
-import tech.libeufin.nexus.EbicsSetupConfig
-import tech.libeufin.nexus.NEXUS_CONFIG_SOURCE
 import tech.libeufin.nexus.getFrequencyInSeconds
-import kotlin.test.*
-import tech.libeufin.common.*
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class ConfigLoading {
     // Checks converting human-readable durations to seconds.

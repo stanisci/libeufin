@@ -21,7 +21,7 @@ package tech.libeufin.bank
 private val PATTERN = Regex("[a-z0-9A-Z]{52}")
 
 fun parseIncomingTxMetadata(subject: String): EddsaPublicKey? {
-    val match = PATTERN.find(subject)?.value ?: return null;
+    val match = PATTERN.find(subject)?.value ?: return null
     try {
         return EddsaPublicKey(match)
     } catch (e: Exception) { 

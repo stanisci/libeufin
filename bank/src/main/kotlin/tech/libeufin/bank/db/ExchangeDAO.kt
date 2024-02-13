@@ -19,12 +19,12 @@
 
 package tech.libeufin.bank.db
 
-import java.util.UUID
-import java.time.Instant
-import java.time.Duration
-import java.util.concurrent.TimeUnit
-import tech.libeufin.common.*
 import tech.libeufin.bank.*
+import tech.libeufin.common.BankPaytoCtx
+import tech.libeufin.common.getAmount
+import tech.libeufin.common.getBankPayto
+import tech.libeufin.common.toDbMicros
+import java.time.Instant
 
 /** Data access logic for exchange specific logic */
 class ExchangeDAO(private val db: Database) {

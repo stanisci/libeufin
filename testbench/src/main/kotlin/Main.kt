@@ -78,7 +78,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
 
     override fun run() {
         // List available platform
-        val platforms = Path("test").listDirectoryEntries().filter { it.isDirectory() }.map { it.getFileName().toString() }
+        val platforms = Path("test").listDirectoryEntries().filter { it.isDirectory() }.map { it.fileName.toString() }
         if (!platforms.contains(platform)) {
             println("Unknown platform '$platform', expected one of $platforms")
             throw ProgramResult(1)

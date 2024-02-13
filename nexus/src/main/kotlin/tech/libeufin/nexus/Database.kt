@@ -18,16 +18,13 @@
  */
 package tech.libeufin.nexus
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.postgresql.jdbc.PgConnection
 import org.postgresql.util.PSQLState
 import tech.libeufin.common.*
 import java.sql.PreparedStatement
 import java.sql.SQLException
-import java.time.Instant
-import java.util.Date
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.util.*
 
 fun Instant.fmtDate(): String {
     val formatter = SimpleDateFormat("yyyy-MM-dd")

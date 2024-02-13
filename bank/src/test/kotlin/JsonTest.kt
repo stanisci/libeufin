@@ -17,15 +17,17 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import java.time.Duration
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Test
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
+import tech.libeufin.bank.CreditDebitInfo
+import tech.libeufin.bank.RelativeTime
+import tech.libeufin.bank.TalerProtocolTimestamp
+import tech.libeufin.common.TalerAmount
+import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 @Serializable
 data class MyJsonType(

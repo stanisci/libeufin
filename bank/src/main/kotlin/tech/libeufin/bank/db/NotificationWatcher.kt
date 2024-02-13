@@ -19,15 +19,15 @@
 
 package tech.libeufin.bank.db
 
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.postgresql.ds.PGSimpleDataSource
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.common.*
 import tech.libeufin.bank.*
+import tech.libeufin.common.*
+import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db-watcher")
 
@@ -115,18 +115,18 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
     private suspend fun <R, K, V> listen(map: ConcurrentHashMap<K, CountedSharedFlow<V>>, key: K, lambda: suspend (Flow<V>) -> R): R {
         // Register listener, create a new flow if missing
         val flow = map.compute(key) { _, v ->
-            val tmp = v ?: CountedSharedFlow(MutableSharedFlow(), 0);
-            tmp.count++;
+            val tmp = v ?: CountedSharedFlow(MutableSharedFlow(), 0)
+            tmp.count++
             tmp
-        }!!.flow;
+        }!!.flow
 
         try {
             return lambda(flow)
         } finally {
             // Unregister listener, removing unused flow
             map.compute(key) { _, v ->
-                v!!;
-                v.count--;
+                v!!
+                v.count--
                 if (v.count > 0) v else null
             }
         }

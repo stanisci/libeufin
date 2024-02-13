@@ -19,19 +19,23 @@
 
 package tech.libeufin.common
 
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.jdbc.PgConnection
 import org.postgresql.util.PSQLState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import kotlin.io.path.*
-import java.nio.file.*
 import java.net.URI
+import java.nio.file.Path
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
-import kotlinx.coroutines.*
-import com.zaxxer.hikari.*
+import kotlin.io.path.Path
+import kotlin.io.path.exists
+import kotlin.io.path.readText
 
 fun getCurrentUser(): String = System.getProperty("user.name")
 
@@ -122,15 +126,15 @@ fun PGSimpleDataSource.pgConnection(): PgConnection {
 
 fun <R> PgConnection.transaction(lambda: (PgConnection) -> R): R {
     try {
-        setAutoCommit(false);
+        autoCommit = false
         val result = lambda(this)
-        commit();
-        setAutoCommit(true);
+        commit()
+        autoCommit = true
         return result
-    } catch(e: Exception){
-        rollback();
-        setAutoCommit(true);
-        throw e;
+    } catch (e: Exception) {
+        rollback()
+        autoCommit = true
+        throw e
     }
 }
 
@@ -178,13 +182,13 @@ fun PreparedStatement.executeUpdateViolation(): Boolean {
 }
 
 fun PreparedStatement.executeProcedureViolation(): Boolean {
-    val savepoint = connection.setSavepoint();
+    val savepoint = connection.setSavepoint()
     return try {
         executeUpdate()
         connection.releaseSavepoint(savepoint)
         true
     } catch (e: SQLException) {
-        connection.rollback(savepoint);
+        connection.rollback(savepoint)
         if (e.sqlState == PSQLState.UNIQUE_VIOLATION.state) return false
         throw e // rethrowing, not to hide other types of errors.
     }
@@ -192,16 +196,16 @@ fun PreparedStatement.executeProcedureViolation(): Boolean {
 
 // TODO comment
 fun PgConnection.dynamicUpdate(
-    table: String, 
-    fields: Sequence<String>, 
+    table: String,
+    fields: Sequence<String>,
     filter: String,
-    bind: Sequence<Any?>, 
+    bind: Sequence<Any?>,
 ) {
     val sql = fields.joinToString()
     if (sql.isEmpty()) return
     prepareStatement("UPDATE $table SET $sql $filter").run {
         for ((idx, value) in bind.withIndex()) {
-            setObject(idx+1, value)
+            setObject(idx + 1, value)
         }
         executeUpdate()
     }
@@ -238,7 +242,7 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
             val patchName = "$sqlFilePrefix-$numStr"
 
             checkStmt.setString(1, patchName)
-            val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Exception("unable to query patches");
+            val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Exception("unable to query patches")
             if (patchCount >= 1) {
                 logger.info("patch $patchName already applied")
                 continue
@@ -266,10 +270,12 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
 // sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
 fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
     logger.info("reset DB, sqldir ${cfg.sqlDir}")
-    val isInitialized = conn.prepareStatement("""
+    val isInitialized = conn.prepareStatement(
+        """
         SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='_v') AND
             EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='${sqlFilePrefix.replace("-", "_")}')
-        """).oneOrNull {
+        """
+    ).oneOrNull {
         it.getBoolean(1)
     }!!
     if (!isInitialized) {
@@ -281,20 +287,20 @@ fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: 
     conn.execSQLUpdate(sqlDrop)
 }
 
-abstract class DbPool(cfg: String, schema: String): java.io.Closeable {
+abstract class DbPool(cfg: String, schema: String) : java.io.Closeable {
     val pgSource = pgDataSource(cfg)
     private val pool: HikariDataSource
 
     init {
-        val config = HikariConfig();
+        val config = HikariConfig()
         config.dataSource = pgSource
         config.schema = schema
         config.transactionIsolation = "TRANSACTION_SERIALIZABLE"
         pool = HikariDataSource(config)
-        pool.getConnection().use { con -> 
-            val meta = con.getMetaData();
-            val majorVersion = meta.getDatabaseMajorVersion()
-            val minorVersion = meta.getDatabaseMinorVersion()
+        pool.connection.use { con ->
+            val meta = con.metaData
+            val majorVersion = meta.databaseMajorVersion
+            val minorVersion = meta.databaseMinorVersion
             if (majorVersion < MIN_VERSION) {
                 throw Exception("postgres version must be at least $MIN_VERSION.0 got $majorVersion.$minorVersion")
             }
@@ -304,15 +310,14 @@ abstract class DbPool(cfg: String, schema: String): java.io.Closeable {
     suspend fun <R> conn(lambda: suspend (PgConnection) -> R): R {
         // Use a coroutine dispatcher that we can block as JDBC API is blocking
         return withContext(Dispatchers.IO) {
-            val conn = pool.getConnection()
-            conn.use{ it -> lambda(it.unwrap(PgConnection::class.java)) }
+            pool.connection.use { lambda(it.unwrap(PgConnection::class.java)) }
         }
     }
 
     suspend fun <R> serializable(lambda: suspend (PgConnection) -> R): R = conn { conn ->
         repeat(SERIALIZATION_RETRY) {
             try {
-                return@conn lambda(conn);
+                return@conn lambda(conn)
             } catch (e: SQLException) {
                 if (e.sqlState != PSQLState.SERIALIZATION_FAILURE.state)
                     throw e
@@ -320,7 +325,7 @@ abstract class DbPool(cfg: String, schema: String): java.io.Closeable {
         }
         try {
             return@conn lambda(conn)
-        } catch(e: SQLException) {
+        } catch (e: SQLException) {
             logger.warn("Serialization failure after $SERIALIZATION_RETRY retry")
             throw e
         }
@@ -331,7 +336,7 @@ abstract class DbPool(cfg: String, schema: String): java.io.Closeable {
     }
 }
 
-fun ResultSet.getAmount(name: String, currency: String): TalerAmount{
+fun ResultSet.getAmount(name: String, currency: String): TalerAmount {
     return TalerAmount(
         getLong("${name}_val"),
         getInt("${name}_frac"),
@@ -340,5 +345,5 @@ fun ResultSet.getAmount(name: String, currency: String): TalerAmount{
 }
 
 fun ResultSet.getBankPayto(payto: String, name: String, ctx: BankPaytoCtx): String {
-    return Payto.parse(getString(payto)).bank(getString(name), ctx) 
+    return Payto.parse(getString(payto)).bank(getString(name), ctx)
 }

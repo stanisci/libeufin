@@ -18,10 +18,14 @@
  */
 
 import org.junit.Test
-import tech.libeufin.nexus.*
-import tech.libeufin.common.*
-import java.lang.StringBuilder
-import kotlin.test.*
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.nexus.getAmountNoCurrency
+import tech.libeufin.nexus.isReservePub
+import tech.libeufin.nexus.removeSubjectNoise
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class Parsing {
 

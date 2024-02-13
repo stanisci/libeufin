@@ -29,13 +29,13 @@ class ExpoBackoffDecorr(
 ) {
     private var sleep: Long = base
 
-    public fun next() : Long {
+    fun next() : Long {
         sleep = Random.nextDouble(base.toDouble(), sleep.toDouble() * factor)
                         .toLong().coerceAtMost(max)
         return sleep
     }
 
-    public fun reset() {
+    fun reset() {
         sleep = base
     }
 }

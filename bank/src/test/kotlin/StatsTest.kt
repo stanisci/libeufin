@@ -18,17 +18,17 @@
  */
 
 import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.http.content.*
-import io.ktor.server.testing.*
-import java.time.*
-import java.time.Instant
-import java.util.*
-import kotlin.test.*
 import org.junit.Test
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
+import tech.libeufin.bank.MonitorResponse
+import tech.libeufin.bank.MonitorWithConversion
+import tech.libeufin.bank.Timeframe
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.executeQueryCheck
+import tech.libeufin.common.oneOrNull
+import tech.libeufin.common.toDbMicros
+import java.time.Instant
+import java.time.LocalDateTime
+import kotlin.test.assertEquals
 
 class StatsTest {
     @Test
@@ -46,7 +46,7 @@ class StatsTest {
                 stmt.setLong(3, amount.value)
                 stmt.setInt(4, amount.frac)
                 stmt.setString(5, "")
-                stmt.executeQueryCheck();
+                stmt.executeQueryCheck()
             }
         }
 

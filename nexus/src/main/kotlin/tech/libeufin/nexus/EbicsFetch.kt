@@ -19,25 +19,24 @@
 package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.*
-import com.github.ajalt.clikt.parameters.groups.*
 import com.github.ajalt.clikt.parameters.arguments.*
+import com.github.ajalt.clikt.parameters.groups.*
+import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.*
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import kotlinx.coroutines.*
-import tech.libeufin.nexus.ebics.*
 import tech.libeufin.common.*
 import tech.libeufin.ebics.*
 import tech.libeufin.ebics.ebics_h005.Ebics3Request
+import tech.libeufin.nexus.ebics.*
 import java.io.IOException
 import java.io.InputStream
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.util.UUID
-import kotlin.io.path.*
 import kotlin.io.*
+import kotlin.io.path.*
 
 /**
  * Necessary data to perform a download.
@@ -355,7 +354,7 @@ private suspend fun fetchDocuments(
     ctx: FetchContext,
     docs: List<Document>
 ): Boolean {
-    val lastExecutionTime: Instant? = ctx.pinnedStart;
+    val lastExecutionTime: Instant? = ctx.pinnedStart
     return docs.all { doc ->
         try {
             if (lastExecutionTime == null) {
@@ -394,26 +393,26 @@ enum class Document {
     ;
 
     fun shortDescription(): String = when (this) {
-        Document.acknowledgement -> "EBICS acknowledgement"
-        Document.status -> "Payment status"
+        acknowledgement -> "EBICS acknowledgement"
+        status -> "Payment status"
         //Document.report -> "Account intraday reports"
-        Document.notification -> "Debit & credit notifications"
+        notification -> "Debit & credit notifications"
         //Document.statement -> "Account statements"
     }
 
     fun fullDescription(): String = when (this) {
-        Document.acknowledgement -> "EBICS acknowledgement - CustomerAcknowledgement HAC pain.002"
-        Document.status -> "Payment status - CustomerPaymentStatusReport pain.002"
+        acknowledgement -> "EBICS acknowledgement - CustomerAcknowledgement HAC pain.002"
+        status -> "Payment status - CustomerPaymentStatusReport pain.002"
         //report -> "Account intraday reports - BankToCustomerAccountReport camt.052"
-        Document.notification -> "Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054"
+        notification -> "Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054"
         //statement -> "Account statements - BankToCustomerStatement camt.053"
     }
 
     fun doc(): SupportedDocument = when (this) {
-        Document.acknowledgement -> SupportedDocument.PAIN_002_LOGS
-        Document.status -> SupportedDocument.PAIN_002
+        acknowledgement -> SupportedDocument.PAIN_002_LOGS
+        status -> SupportedDocument.PAIN_002
         //Document.report -> SupportedDocument.CAMT_052
-        Document.notification -> SupportedDocument.CAMT_054
+        notification -> SupportedDocument.CAMT_054
         //Document.statement -> SupportedDocument.CAMT_053
     }
 }

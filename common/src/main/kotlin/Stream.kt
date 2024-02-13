@@ -19,22 +19,22 @@
 
 package tech.libeufin.common
 
-import java.io.InputStream
 import java.io.FilterInputStream
+import java.io.InputStream
+import java.util.*
 import java.util.zip.DeflaterInputStream
 import java.util.zip.InflaterInputStream
-import java.util.zip.*
-import java.util.Base64
+import java.util.zip.ZipInputStream
 
 /** Unzip an input stream and run [lambda] over each entry */
 fun InputStream.unzipEach(lambda: (String, InputStream) -> Unit) {
     ZipInputStream(this).use { zip ->
         while (true) {
             val entry = zip.getNextEntry()
-            if (entry == null) break;
+            if (entry == null) break
             val entryStream = object: FilterInputStream(zip) {
                 override fun close() {
-                    zip.closeEntry();
+                    zip.closeEntry()
                 }
             }
             lambda(entry.name, entryStream)

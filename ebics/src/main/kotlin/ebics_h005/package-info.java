@@ -8,6 +8,6 @@
         elementFormDefault = XmlNsForm.QUALIFIED
 )
 package tech.libeufin.ebics.ebics_h005;
-import javax.xml.bind.annotation.XmlNs;
+
 import javax.xml.bind.annotation.XmlNsForm;
 import javax.xml.bind.annotation.XmlSchema;

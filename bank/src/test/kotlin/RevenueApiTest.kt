@@ -17,16 +17,9 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import io.ktor.client.plugins.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.testing.*
-import java.util.*
-import kotlinx.coroutines.*
-import kotlinx.serialization.json.*
 import org.junit.Test
-import tech.libeufin.bank.*
+import tech.libeufin.bank.RevenueIncomingHistory
 
 class RevenueApiTest {
     // GET /accounts/{USERNAME}/taler-revenue/config

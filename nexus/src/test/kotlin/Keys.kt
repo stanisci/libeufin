@@ -18,10 +18,15 @@
  */
 
 import org.junit.Test
-import tech.libeufin.nexus.*
 import tech.libeufin.common.CryptoUtil
-import kotlin.io.path.*
-import kotlin.test.*
+import tech.libeufin.nexus.*
+import kotlin.io.path.Path
+import kotlin.io.path.deleteIfExists
+import kotlin.io.path.notExists
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PublicKeys {
 

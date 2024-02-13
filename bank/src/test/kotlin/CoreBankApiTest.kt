@@ -17,23 +17,20 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.http.content.*
-import io.ktor.server.engine.*
 import io.ktor.server.testing.*
-import java.time.Duration
-import java.time.Instant
-import java.util.*
-import kotlin.test.*
-import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonElement
 import org.junit.Test
 import tech.libeufin.bank.*
-import tech.libeufin.bank.db.*
 import tech.libeufin.common.*
+import java.time.Duration
+import java.time.Instant
+import java.util.*
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class CoreBankConfigTest {
     // GET /config
@@ -592,7 +589,7 @@ class CoreBankAccountsApiTest {
             client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
                 assert(obj.is_public)
             }
-        }.assertNoContent();
+        }.assertNoContent()
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->
             assert(!obj.is_public)
         }
@@ -945,7 +942,7 @@ class CoreBankTransactionsApiTest {
         assertBalance("exchange", "+KUDOS:0")
         tx("merchant", "KUDOS:1", "exchange", "") // Bounce common to transaction
         tx("merchant", "KUDOS:1", "exchange", "Malformed") // Bounce malformed transaction
-        val reservePub = randEddsaPublicKey();
+        val reservePub = randEddsaPublicKey()
         tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reservePub)) // Accept incoming
         tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reservePub)) // Bounce reserve_pub reuse
         assertBalance("merchant", "-KUDOS:1")

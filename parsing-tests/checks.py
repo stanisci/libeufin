@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-import os
-import sys
 import json
-from subprocess import Popen, PIPE
+import os
 from deepdiff import DeepDiff
+from subprocess import Popen, PIPE
+
 
 # return dict with parse-result.
 def call_parser(xml_file):

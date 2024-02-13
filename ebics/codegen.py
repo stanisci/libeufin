@@ -1,9 +1,10 @@
 # Update EBICS constants file using latest external code sets files
 
-import requests
-from zipfile import ZipFile
-from io import BytesIO
 import polars as pl
+import requests
+from io import BytesIO
+from zipfile import ZipFile
+
 
 def iso20022codegen():
     # Get XLSX zip file from server

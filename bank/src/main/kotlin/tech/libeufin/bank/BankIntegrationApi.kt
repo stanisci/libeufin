@@ -21,15 +21,15 @@
 * that are typically requested by wallets.  */
 package tech.libeufin.bank
 
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.http.*
+import tech.libeufin.bank.db.AbortResult
+import tech.libeufin.bank.db.Database
+import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalSelectionResult
 import tech.libeufin.common.TalerErrorCode
-import tech.libeufin.bank.db.*
-import tech.libeufin.bank.db.WithdrawalDAO.*
-import java.lang.AssertionError
 
 fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     get("/taler-integration/config") {

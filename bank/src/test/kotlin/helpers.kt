@@ -17,22 +17,23 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import io.ktor.client.HttpClient
+import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
-import java.io.ByteArrayOutputStream
-import java.nio.file.*
-import kotlin.test.*
-import kotlin.io.path.*
-import kotlin.random.Random
-import kotlinx.coroutines.*
-import kotlinx.serialization.json.*
+import kotlinx.coroutines.runBlocking
 import tech.libeufin.bank.*
-import tech.libeufin.bank.db.*
-import tech.libeufin.bank.db.AccountDAO.*
+import tech.libeufin.bank.db.AccountDAO.AccountCreationResult
+import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
+import java.nio.file.NoSuchFileException
+import kotlin.io.path.Path
+import kotlin.io.path.deleteExisting
+import kotlin.io.path.readText
+import kotlin.random.Random
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 /* ----- Setup ----- */
 
@@ -156,7 +157,7 @@ fun bankSetup(
 }
 
 fun dbSetup(lambda: suspend (Database) -> Unit) {
-    setup() { db, _ -> lambda(db) }
+    setup { db, _ -> lambda(db) }
 }
 
 /* ----- Common actions ----- */
@@ -174,7 +175,7 @@ suspend fun ApplicationTestBuilder.assertBalance(account: String, amount: String
     client.get("/accounts/$account") { 
         pwAuth("admin")
     }.assertOkJson<AccountData> {
-        val balance = it.balance;
+        val balance = it.balance
         val fmt = "${if (balance.credit_debit_indicator == CreditDebitInfo.debit) '-' else '+'}${balance.amount}"
         assertEquals(amount, fmt, "For $account")
     }
@@ -305,7 +306,7 @@ suspend fun tanCode(info: String): String? {
         val file = Path("/tmp/tan-$info.txt")
         val code = file.readText()
         file.deleteExisting()
-        return code;
+        return code
     } catch (e: Exception) {
         if (e is NoSuchFileException) return null
         throw e
@@ -391,7 +392,7 @@ fun assertException(msg: String, lambda: () -> Unit) {
     }
 }
 
-inline suspend fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B) -> List<Long>): B {
+suspend inline fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B) -> List<Long>): B {
     assertOk()
     val body = json<B>()
     val history = ids(body)
@@ -418,14 +419,14 @@ inline suspend fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B)
 
 /* ----- Body helper ----- */
 
-inline suspend fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
+suspend inline fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
     assertOk()
     val body = json<B>()
     lambda(body)
     return body
 }
 
-inline suspend fun <reified B> HttpResponse.assertAcceptedJson(lambda: (B) -> Unit = {}): B {
+suspend inline fun <reified B> HttpResponse.assertAcceptedJson(lambda: (B) -> Unit = {}): B {
     assertAccepted()
     val body = json<B>()
     lambda(body)
@@ -435,7 +436,7 @@ inline suspend fun <reified B> HttpResponse.assertAcceptedJson(lambda: (B) -> Un
 /* ----- Auth ----- */
 
 /** Auto auth get request */
-inline suspend fun HttpClient.getA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+suspend inline fun HttpClient.getA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
     return get(url) {
         pwAuth()
         builder(this)
@@ -443,7 +444,7 @@ inline suspend fun HttpClient.getA(url: String, builder: HttpRequestBuilder.() -
 }
 
 /** Auto auth post request */
-inline suspend fun HttpClient.postA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+suspend inline fun HttpClient.postA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
     return post(url) {
         pwAuth()
         builder(this)
@@ -451,7 +452,7 @@ inline suspend fun HttpClient.postA(url: String, builder: HttpRequestBuilder.() 
 }
 
 /** Auto auth patch request */
-inline suspend fun HttpClient.patchA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+suspend inline fun HttpClient.patchA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
     return patch(url) {
         pwAuth()
         builder(this)
@@ -459,7 +460,7 @@ inline suspend fun HttpClient.patchA(url: String, builder: HttpRequestBuilder.()
 }
 
 /** Auto auth delete request */
-inline suspend fun HttpClient.deleteA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+suspend inline fun HttpClient.deleteA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
     return delete(url) {
         pwAuth()
         builder(this)
@@ -483,7 +484,7 @@ fun HttpRequestBuilder.pwAuth(username: String? = null) {
 
 fun randBytes(lenght: Int): ByteArray {
     val bytes = ByteArray(lenght)
-    kotlin.random.Random.nextBytes(bytes)
+    Random.nextBytes(bytes)
     return bytes
 }
 

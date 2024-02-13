@@ -19,21 +19,19 @@
 
 package tech.libeufin.bank.db
 
-import org.postgresql.jdbc.PgConnection
-import org.postgresql.ds.PGSimpleDataSource
-import org.postgresql.util.PSQLState
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.sql.*
-import java.time.*
-import java.util.*
-import java.util.concurrent.TimeUnit
-import kotlin.math.abs
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.*
-import tech.libeufin.common.*
-import io.ktor.http.HttpStatusCode
 import tech.libeufin.bank.*
+import tech.libeufin.common.*
+import java.sql.PreparedStatement
+import java.sql.ResultSet
+import java.sql.Types
+import kotlin.math.abs
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db")
 
@@ -95,7 +93,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
         if (params.which != null) {
             stmt.setInt(2, params.which)
         } else {
-            stmt.setNull(2, java.sql.Types.INTEGER)
+            stmt.setNull(2, Types.INTEGER)
         }
         stmt.oneOrNull {
             fiatCurrency?.run {

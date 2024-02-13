@@ -19,10 +19,10 @@
 
 package tech.libeufin.ebics
 
-import java.lang.IllegalArgumentException
+import tech.libeufin.common.deflate
+import tech.libeufin.common.inflate
+import tech.libeufin.common.toHexString
 import java.security.SecureRandom
-import java.io.InputStream
-import tech.libeufin.common.*
 
 /**
  * Helpers for dealing with order compression, encryption, decryption, chunking and re-assembly.
@@ -40,7 +40,7 @@ object EbicsOrderUtil {
         return bytes.inputStream().deflate().readAllBytes()
     }
 
-    @kotlin.ExperimentalStdlibApi
+    @ExperimentalStdlibApi
     fun generateTransactionId(): String {
         val rng = SecureRandom()
         val res = ByteArray(16)

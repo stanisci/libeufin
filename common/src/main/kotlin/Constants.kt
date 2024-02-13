@@ -20,4 +20,4 @@ package tech.libeufin.common
 
 // DB
 const val MIN_VERSION: Int = 14
-const val SERIALIZATION_RETRY: Int = 10;
+const val SERIALIZATION_RETRY: Int = 10

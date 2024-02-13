@@ -24,23 +24,25 @@
 
 package tech.libeufin.ebics
 
+import io.ktor.http.*
+import org.w3c.dom.Document
 import tech.libeufin.common.CryptoUtil
-import io.ktor.http.HttpStatusCode
-import tech.libeufin.ebics.ebics_h004.*
+import tech.libeufin.ebics.ebics_h004.EbicsRequest
+import tech.libeufin.ebics.ebics_h004.EbicsResponse
+import tech.libeufin.ebics.ebics_h004.EbicsTypes
+import tech.libeufin.ebics.ebics_h004.HPBResponseOrderData
 import tech.libeufin.ebics.ebics_h005.Ebics3Response
 import tech.libeufin.ebics.ebics_s001.UserSignatureData
+import java.io.InputStream
 import java.security.SecureRandom
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import java.util.*
-import java.io.InputStream
 import javax.xml.bind.JAXBElement
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
-import org.w3c.dom.Document
 
 data class EbicsProtocolError(
     val httpStatusCode: HttpStatusCode,
@@ -271,7 +273,7 @@ enum class EbicsReturnCode(val errorCode: String) {
 
     companion object {
         fun lookup(errorCode: String): EbicsReturnCode {
-            for (x in values()) {
+            for (x in entries) {
                 if (x.errorCode == errorCode) {
                     return x
                 }

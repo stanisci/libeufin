@@ -204,7 +204,7 @@ class EbicsUnsecuredRequest {
                                     signaturePubKeyInfo = SignatureTypes.SignaturePubKeyInfoType().apply {
                                         signatureVersion = "A006"
                                         pubKeyValue = SignatureTypes.PubKeyValueType().apply {
-                                            rsaKeyValue = org.apache.xml.security.binding.xmldsig.RSAKeyValueType().apply {
+                                            rsaKeyValue = RSAKeyValueType().apply {
                                                 exponent = signKey.publicExponent.toByteArray()
                                                 modulus = signKey.modulus.toByteArray()
                                             }

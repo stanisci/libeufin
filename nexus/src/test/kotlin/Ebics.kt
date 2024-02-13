@@ -17,18 +17,15 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
-import kotlinx.coroutines.runBlocking
-import org.junit.Ignore
 import org.junit.Test
-import tech.libeufin.nexus.*
-import tech.libeufin.nexus.ebics.*
 import tech.libeufin.ebics.XMLUtil
 import tech.libeufin.ebics.ebics_h004.EbicsUnsecuredRequest
-import kotlin.test.*
-import kotlin.io.path.*
+import tech.libeufin.nexus.ebics.*
+import kotlin.io.path.Path
+import kotlin.io.path.writeBytes
+import kotlin.test.assertEquals
 
 class Ebics {
     // Checks XML is valid and INI.

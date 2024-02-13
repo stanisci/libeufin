@@ -177,7 +177,7 @@ object CryptoUtil {
     }
 
     fun decryptEbicsE002(enc: EncryptionResult, privateKey: RSAPrivateCrtKey): ByteArray {
-        return CryptoUtil.decryptEbicsE002(
+        return decryptEbicsE002(
             enc.encryptedTransactionKey,
             enc.encryptedData.inputStream(),
             privateKey
@@ -289,10 +289,7 @@ object CryptoUtil {
         } catch (e: Exception) {
             return false
         }
-        if (data.size != 32) {
-            return false
-        }
-        return true
+        return data.size == 32
     }
 
     fun hashStringSHA256(input: String): ByteArray {
@@ -303,7 +300,7 @@ object CryptoUtil {
         val saltBytes = ByteArray(8)
         SecureRandom().nextBytes(saltBytes)
         val salt = bytesToBase64(saltBytes)
-        val pwh = bytesToBase64(CryptoUtil.hashStringSHA256("$salt|$pw"))
+        val pwh = bytesToBase64(hashStringSHA256("$salt|$pw"))
         return "sha256-salted\$$salt\$$pwh"
     }
 
@@ -313,14 +310,14 @@ object CryptoUtil {
             "sha256" -> {  // Support legacy unsalted passwords
                 if (components.size != 2) throw Exception("bad password hash")
                 val hash = components[1]
-                val pwh = bytesToBase64(CryptoUtil.hashStringSHA256(pw))
+                val pwh = bytesToBase64(hashStringSHA256(pw))
                 return pwh == hash
             }
             "sha256-salted" -> {
                 if (components.size != 3) throw Exception("bad password hash")
                 val salt = components[1]
                 val hash = components[2]
-                val pwh = bytesToBase64(CryptoUtil.hashStringSHA256("$salt|$pw"))
+                val pwh = bytesToBase64(hashStringSHA256("$salt|$pw"))
                 return pwh == hash
             }
             else -> throw Exception("unsupported hash algo: '$algo'")

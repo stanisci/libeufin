@@ -1,6 +1,5 @@
 package tech.libeufin.ebics.ebics_h004
 
-import java.security.Permission
 import javax.xml.bind.annotation.*
 
 @XmlAccessorType(XmlAccessType.NONE)

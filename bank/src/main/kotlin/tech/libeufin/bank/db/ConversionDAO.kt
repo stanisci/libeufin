@@ -19,9 +19,14 @@
 
 package tech.libeufin.bank.db
 
-import tech.libeufin.common.*
-import tech.libeufin.bank.*
-import tech.libeufin.bank.*
+import tech.libeufin.bank.ConversionRate
+import tech.libeufin.bank.DecimalNumber
+import tech.libeufin.bank.RoundingMode
+import tech.libeufin.bank.internalServerError
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.getAmount
+import tech.libeufin.common.oneOrNull
+import tech.libeufin.common.transaction
 
 /** Data access logic for conversion */
 class ConversionDAO(private val db: Database) {
@@ -68,8 +73,8 @@ class ConversionDAO(private val db: Database) {
         it.transaction { conn -> 
             val check = conn.prepareStatement("select exists(select 1 from config where key='cashin_ratio')").oneOrNull { it.getBoolean(1) }!!
             if (!check) return@transaction null
-            val amount = conn.prepareStatement("SELECT (amount).val as amount_val, (amount).frac as amount_frac FROM config_get_amount(?) as amount");
-            val roundingMode = conn.prepareStatement("SELECT config_get_rounding_mode(?)");
+            val amount = conn.prepareStatement("SELECT (amount).val as amount_val, (amount).frac as amount_frac FROM config_get_amount(?) as amount")
+            val roundingMode = conn.prepareStatement("SELECT config_get_rounding_mode(?)")
             fun getAmount(name: String, currency: String): TalerAmount {
                 amount.setString(1, name)
                 return amount.oneOrNull { it.getAmount("amount", currency) }!!

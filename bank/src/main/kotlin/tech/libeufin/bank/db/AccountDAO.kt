@@ -19,10 +19,9 @@
 
 package tech.libeufin.bank.db
 
-import tech.libeufin.common.*
-import java.time.*
-import java.sql.Types
 import tech.libeufin.bank.*
+import tech.libeufin.common.*
+import java.time.Instant
 
 /** Data access logic for accounts */
 class AccountDAO(private val db: Database) {
@@ -51,7 +50,7 @@ class AccountDAO(private val db: Database) {
         // Whether to check [internalPaytoUri] for idempotency
         checkPaytoIdempotent: Boolean
     ): AccountCreationResult = db.serializable { it ->
-        val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank();
+        val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank()
         it.transaction { conn ->
             val idempotent = conn.prepareStatement("""
                 SELECT password_hash, name=?

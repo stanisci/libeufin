@@ -19,18 +19,17 @@
 
 package tech.libeufin.bank
 
-import tech.libeufin.common.*
-import io.ktor.http.*
-import io.ktor.server.application.*
-import kotlinx.serialization.*
-import java.time.Duration
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-import java.util.*
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.descriptors.*
-import kotlinx.serialization.encoding.*
 import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import tech.libeufin.common.IbanPayto
+import tech.libeufin.common.Payto
+import tech.libeufin.common.TalerAmount
+import java.time.Instant
 
 /**
  * Allowed lengths for fractional digits in amounts.
@@ -92,18 +91,18 @@ sealed class Option<out T> {
 
     fun get(): T? {
         return when (this) {
-            Option.None -> null
-            is Option.Some -> this.value
+            None -> null
+            is Some -> this.value
         }
     }
 
     inline fun some(lambda: (T) -> Unit) {
-        if (this is Option.Some) {
+        if (this is Some) {
             lambda(value)
         }
     }
 
-    fun isSome(): Boolean = this is Option.Some
+    fun isSome(): Boolean = this is Some
 
     @OptIn(ExperimentalSerializationApi::class)
     internal class Serializer<T> (
@@ -113,13 +112,13 @@ sealed class Option<out T> {
 
         override fun serialize(encoder: Encoder, value: Option<T>) {
             when (value) {
-                Option.None -> encoder.encodeNull()
-                is Option.Some -> valueSerializer.serialize(encoder, value.value)
+                None -> encoder.encodeNull()
+                is Some -> valueSerializer.serialize(encoder, value.value)
             }
         }
 
         override fun deserialize(decoder: Decoder): Option<T> {
-            return Option.Some(valueSerializer.deserialize(decoder))
+            return Some(valueSerializer.deserialize(decoder))
         }
     }
 }
@@ -156,10 +155,10 @@ data class ChallengeContactData(
     val phone: Option<String?> = Option.None
 ) {
     init {
-        if (email.get()?.let { !EMAIL_PATTERN.matches(it) } ?: false)
+        if (email.get()?.let { !EMAIL_PATTERN.matches(it) } == true)
             throw badRequest("email contact data '$email' is malformed")
 
-        if (phone.get()?.let { !PHONE_PATTERN.matches(it) } ?: false)
+        if (phone.get()?.let { !PHONE_PATTERN.matches(it) } == true)
             throw badRequest("phone contact data '$phone' is malformed")
     }
     companion object {
@@ -215,10 +214,10 @@ data class TokenRequest(
 
 @Serializable
 sealed interface MonitorResponse {
-    abstract val talerInCount: Long
-    abstract val talerInVolume: TalerAmount
-    abstract val talerOutCount: Long
-    abstract val talerOutVolume: TalerAmount
+    val talerInCount: Long
+    val talerInVolume: TalerAmount
+    val talerOutCount: Long
+    val talerOutVolume: TalerAmount
 }
 
 @Serializable

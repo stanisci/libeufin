@@ -20,19 +20,16 @@
 package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.groups.*
+import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
-import tech.libeufin.ebics.ebics_h004.EbicsTypes
-import kotlinx.serialization.encodeToString
-import tech.libeufin.nexus.ebics.*
 import tech.libeufin.common.*
 import tech.libeufin.ebics.*
-import tech.libeufin.ebics.ebics_h004.HTDResponseOrderData
+import tech.libeufin.nexus.ebics.*
+import java.nio.file.*
 import java.time.Instant
 import kotlin.io.path.*
-import java.nio.file.*
 
 /**
  * Obtains the client private keys, regardless of them being
@@ -90,9 +87,7 @@ private fun askUserToAcceptKeys(bankKeys: BankPublicKeysFile): Boolean {
     println("Encryption key: ${encHash.spaceEachTwo()}")
     println("Authentication key: ${authHash.spaceEachTwo()}")
     val userResponse: String? = readlnOrNull()
-    if (userResponse == "yes, accept")
-        return true
-    return false
+    return userResponse == "yes, accept"
 }
 
 /**

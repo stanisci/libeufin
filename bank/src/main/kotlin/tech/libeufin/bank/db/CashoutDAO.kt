@@ -19,11 +19,9 @@
 
 package tech.libeufin.bank.db
 
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.TimeUnit
-import tech.libeufin.common.*
 import tech.libeufin.bank.*
+import tech.libeufin.common.*
+import java.time.Instant
 
 /** Data access logic for cashout operations */
 class CashoutDAO(private val db: Database) {

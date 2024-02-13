@@ -17,17 +17,13 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import io.ktor.client.plugins.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.testing.*
-import java.util.*
-import kotlinx.coroutines.*
-import kotlinx.serialization.json.*
 import org.junit.Test
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
+import tech.libeufin.bank.IncomingHistory
+import tech.libeufin.bank.OutgoingHistory
+import tech.libeufin.common.TalerErrorCode
+import tech.libeufin.common.json
+import tech.libeufin.common.obj
 
 class WireGatewayApiTest {
     // GET /accounts/{USERNAME}/taler-wire-gateway/config
@@ -47,7 +43,7 @@ class WireGatewayApiTest {
             "exchange_base_url" to "http://exchange.example.com/"
             "wtid" to randShortHashCode()
             "credit_account" to merchantPayto.canonical
-        };
+        }
 
         authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/transfer", valid_req)
 
@@ -208,7 +204,7 @@ class WireGatewayApiTest {
             "amount" to "KUDOS:44"
             "reserve_pub" to randEddsaPublicKey()
             "debit_account" to merchantPayto.canonical
-        };
+        }
 
         authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req, requireAdmin = true)
 

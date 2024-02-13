@@ -27,16 +27,16 @@ package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.options.*
-import com.github.ajalt.clikt.parameters.groups.*
 import com.github.ajalt.clikt.parameters.arguments.*
-import kotlinx.coroutines.*
+import com.github.ajalt.clikt.parameters.groups.*
+import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.client.*
 import io.ktor.util.*
+import kotlinx.coroutines.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.nexus.ebics.*
 import tech.libeufin.common.*
+import tech.libeufin.nexus.ebics.*
 import java.nio.file.Path
 import java.time.Instant
 
@@ -84,8 +84,7 @@ fun getFrequencyInSeconds(humanFormat: String): Int? {
         logger.error("Input was empty")
         return null
     }
-    val lastChar = trimmed.last()
-    val howManySeconds: Int = when (lastChar) {
+    val howManySeconds: Int = when (val lastChar = trimmed.last()) {
         's' -> {1}
         'm' -> {60}
         'h' -> {60 * 60}

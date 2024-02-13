@@ -19,11 +19,13 @@
 package tech.libeufin.bank
 
 import io.ktor.http.*
+import io.ktor.server.application.*
 import io.ktor.server.response.*
-import io.ktor.server.application.ApplicationCall
-import io.ktor.util.AttributeKey
+import io.ktor.util.*
 import kotlinx.serialization.Serializable
-import tech.libeufin.common.*
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.TalerErrorCode
+
 /**
  * Convenience type to throw errors along the bank activity
  * and that is meant to be caught by Ktor and responded to the
@@ -50,7 +52,7 @@ data class TalerError(
     val detail: String? = null
 )
 
-private val LOG_MSG = AttributeKey<String>("log_msg");
+private val LOG_MSG = AttributeKey<String>("log_msg")
 
 fun ApplicationCall.logMsg(): String? = attributes.getOrNull(LOG_MSG)
 

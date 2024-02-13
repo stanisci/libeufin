@@ -83,7 +83,7 @@ fun getQueryParam(uriQueryString: String, param: String): String? {
 }
 
 fun String.splitOnce(pat: String): Pair<String, String>? {
-    val split = split(pat, limit=2);
+    val split = split(pat, limit=2)
     if (split.size != 2) return null
     return Pair(split[0], split[1])
 }

@@ -21,41 +21,46 @@ package tech.libeufin.bank
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.types.*
-import com.github.ajalt.clikt.parameters.arguments.*
+import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.arguments.convert
+import com.github.ajalt.clikt.parameters.arguments.optional
+import com.github.ajalt.clikt.parameters.groups.OptionGroup
+import com.github.ajalt.clikt.parameters.groups.cooccurring
+import com.github.ajalt.clikt.parameters.groups.provideDelegate
 import com.github.ajalt.clikt.parameters.options.*
-import com.github.ajalt.clikt.parameters.groups.*
+import com.github.ajalt.clikt.parameters.types.boolean
 import io.ktor.http.*
-import io.ktor.server.application.*
-import io.ktor.server.http.content.*
 import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.application.*
 import io.ktor.server.engine.*
+import io.ktor.server.http.content.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.*
 import io.ktor.server.plugins.callloging.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
-import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.plugins.forwardedheaders.*
+import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.*
-import java.time.Duration
-import java.util.zip.DataFormatException
-import java.util.zip.Inflater
-import java.sql.SQLException
-import kotlinx.coroutines.*
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import org.postgresql.util.PSQLState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
-import org.postgresql.util.PSQLState
 import tech.libeufin.bank.db.AccountDAO.*
-import tech.libeufin.bank.db.*
+import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
-import kotlin.io.path.*
+import java.sql.SQLException
+import java.util.zip.DataFormatException
+import java.util.zip.Inflater
+import kotlin.io.path.Path
+import kotlin.io.path.exists
+import kotlin.io.path.readText
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 // Dirty local variable to stop the server in test TODO remove this ugly hack
@@ -69,7 +74,7 @@ val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
         // TODO check content length as an optimisation
         transformBody { body ->
             val bytes = ByteArray(MAX_BODY_LENGTH.toInt() + 1)
-            var read = 0;
+            var read = 0
             when (val encoding = call.request.headers[HttpHeaders.ContentEncoding])  {
                 "deflate" -> {
                     // Decompress and check decompressed length
@@ -95,7 +100,7 @@ val bodyPlugin = createApplicationPlugin("BodyLimitAndDecompression") {
                     // Check body length
                     while (true) {
                         val new = body.readAvailable(bytes, read, bytes.size - read)
-                        if (new == -1) break; // Channel is closed
+                        if (new == -1) break // Channel is closed
                         read += new
                         if (read > MAX_BODY_LENGTH)
                             throw badRequest("Body is suspiciously big > $MAX_BODY_LENGTH B")
@@ -239,7 +244,7 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
     override fun run() = cliCmd(logger, common.log) {
         val config = talerConfig(common.config)
         val cfg = config.loadDbConfig()
-        val ctx = config.loadBankConfig();
+        val ctx = config.loadBankConfig()
         Database(cfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db -> 
             runBlocking {
                 db.conn { conn ->
@@ -480,7 +485,7 @@ class CreateAccount : CliktCommand(
                     ) 
                 }
                 req?.let {
-                    val (result, internalPayto) = createAccount(db, ctx, req, true);
+                    val (result, internalPayto) = createAccount(db, ctx, req, true)
                     when (result) {
                         AccountCreationResult.BonusBalanceInsufficient ->
                             throw Exception("Insufficient admin funds to grant bonus")

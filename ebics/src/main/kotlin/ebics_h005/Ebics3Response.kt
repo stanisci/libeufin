@@ -1,9 +1,7 @@
 package tech.libeufin.ebics.ebics_h005
 
 import org.apache.xml.security.binding.xmldsig.SignatureType
-import org.apache.xml.security.binding.xmldsig.SignedInfoType
 import tech.libeufin.common.CryptoUtil
-import tech.libeufin.ebics.XMLUtil
 import tech.libeufin.ebics.ebics_h004.EbicsTypes
 import java.math.BigInteger
 import javax.xml.bind.annotation.*
@@ -133,18 +131,18 @@ class Ebics3Response {
             val resp = Ebics3Response().apply {
                 this.version = "H005"
                 this.revision = 1
-                this.header = Ebics3Response.Header().apply {
+                this.header = Header().apply {
                     this.authenticate = true
-                    this.mutable = Ebics3Response.MutableHeaderType().apply {
+                    this.mutable = MutableHeaderType().apply {
                         this.reportText = errorText
                         this.returnCode = errorCode
                         this.transactionPhase = phase
                     }
-                    _static = Ebics3Response.StaticHeaderType()
+                    _static = StaticHeaderType()
                 }
                 this.authSignature = SignatureType()
-                this.body = Ebics3Response.Body().apply {
-                    this.returnCode = Ebics3Response.ReturnCode().apply {
+                this.body = Body().apply {
+                    this.returnCode = ReturnCode().apply {
                         this.authenticate = true
                         this.value = errorCode
                     }

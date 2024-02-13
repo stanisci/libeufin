@@ -21,8 +21,7 @@ package tech.libeufin.common
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.time.*
-import java.time.format.DateTimeFormatter
+import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-common")

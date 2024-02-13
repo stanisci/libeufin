@@ -20,13 +20,10 @@ package tech.libeufin.bank
 
 import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import java.util.*
-import tech.libeufin.common.*
-import tech.libeufin.bank.auth.*
-import tech.libeufin.bank.db.*
+import tech.libeufin.bank.auth.auth
+import tech.libeufin.bank.db.Database
 
 fun Routing.revenueApi(db: Database, ctx: BankConfig) { 
     auth(db, TokenScope.readonly) {
@@ -38,8 +35,8 @@ fun Routing.revenueApi(db: Database, ctx: BankConfig) {
         get("/accounts/{USERNAME}/taler-revenue/history") {
             val params = HistoryParams.extract(context.request.queryParameters)
             val bankAccount = call.bankInfo(db, ctx.payto)
-            val items = db.transaction.revenueHistory(params, bankAccount.bankAccountId, ctx.payto);
-        
+            val items = db.transaction.revenueHistory(params, bankAccount.bankAccountId, ctx.payto)
+
             if (items.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)
             } else {

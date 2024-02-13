@@ -43,15 +43,13 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.jvm.javaio.*
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-import tech.libeufin.nexus.*
 import tech.libeufin.common.*
 import tech.libeufin.ebics.*
 import tech.libeufin.ebics.ebics_h005.Ebics3Request
-import java.io.SequenceInputStream
+import tech.libeufin.nexus.*
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.io.SequenceInputStream
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter

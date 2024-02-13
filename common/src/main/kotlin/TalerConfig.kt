@@ -21,8 +21,10 @@ package tech.libeufin.common
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.nio.file.AccessDeniedException
+import java.nio.file.NoSuchFileException
+import java.nio.file.Path
 import kotlin.io.path.*
-import java.nio.file.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
@@ -298,14 +300,14 @@ class TalerConfig internal constructor(
             if (s[l] != '$') {
                 // normal character
                 result.append(s[l])
-                l++;
+                l++
                 continue
             }
             if (l + 1 < s.length && s[l + 1] == '{') {
                 // ${var}
                 var depth = 1
                 val start = l
-                var p = start + 2;
+                var p = start + 2
                 var hasDefault = false
                 var insideNamePath = true
                 // Find end of the ${...} expression

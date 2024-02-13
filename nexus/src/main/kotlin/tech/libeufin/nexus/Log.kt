@@ -22,9 +22,9 @@ package tech.libeufin.nexus
 import tech.libeufin.common.*
 import java.io.*
 import java.nio.file.*
-import kotlin.io.path.*
-import kotlin.io.*
 import java.time.*
+import kotlin.io.*
+import kotlin.io.path.*
 
 /** 
  * Log EBICS files for debugging
@@ -53,7 +53,7 @@ class FileLogger(path: String?) {
      * @param hac only true when downloading via HAC (EBICS 2)
      */
     fun logFetch(stream: InputStream, hac: Boolean = false): InputStream {
-        if (dir == null) return stream;
+        if (dir == null) return stream
         val content = stream.readBytes()
         // Subdir based on current day.
         val now = Instant.now()
@@ -81,7 +81,7 @@ class FileLogger(path: String?) {
      * @param content EBICS submit content
      */
     fun logSubmit(content: String) {
-        if (dir == null) return;
+        if (dir == null) return
 
         // Subdir based on current day.
         val now = Instant.now()

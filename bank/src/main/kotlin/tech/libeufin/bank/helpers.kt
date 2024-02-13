@@ -23,23 +23,21 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.*
 import io.ktor.server.request.*
-import io.ktor.server.routing.Route
-import io.ktor.server.routing.RouteSelector
-import io.ktor.server.routing.RouteSelectorEvaluation
-import io.ktor.server.routing.RoutingResolveContext
+import io.ktor.server.routing.*
 import io.ktor.server.util.*
-import io.ktor.util.pipeline.PipelineContext
-import kotlinx.serialization.*
-import kotlinx.serialization.descriptors.*
-import kotlinx.serialization.encoding.*
-import java.net.*
-import java.time.*
-import java.time.temporal.*
-import java.util.*
+import io.ktor.util.pipeline.*
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import tech.libeufin.bank.auth.username
+import tech.libeufin.bank.db.AccountDAO.AccountCreationResult
+import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
-import tech.libeufin.bank.db.*
-import tech.libeufin.bank.db.AccountDAO.*
-import tech.libeufin.bank.auth.*
+import java.util.*
 
 fun ApplicationCall.expectParameter(name: String) =
     parameters[name] ?: throw badRequest(
@@ -108,7 +106,7 @@ fun ApplicationCall.longParameter(name: String): Long {
  * It returns false in case of problems, true otherwise.
  */
 suspend fun createAdminAccount(db: Database, cfg: BankConfig, pw: String? = null): AccountCreationResult {
-    var pwStr = pw;
+    var pwStr = pw
     if (pwStr == null) {
         val pwBuf = ByteArray(32)
         Random().nextBytes(pwBuf)

@@ -23,20 +23,21 @@
 
 package tech.libeufin.nexus.ebics
 
-import io.ktor.client.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import tech.libeufin.ebics.*
+import tech.libeufin.ebics.ebics_h004.EbicsKeyManagementResponse
+import tech.libeufin.ebics.ebics_h004.EbicsNpkdRequest
+import tech.libeufin.ebics.ebics_h004.EbicsRequest
+import tech.libeufin.ebics.ebics_h004.EbicsUnsecuredRequest
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig
-import tech.libeufin.ebics.*
-import tech.libeufin.ebics.ebics_h004.*
-import tech.libeufin.ebics.ebics_h005.Ebics3Request
+import java.io.InputStream
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.Instant
 import java.time.ZoneId
 import java.util.*
-import java.io.InputStream
 import javax.xml.datatype.DatatypeFactory
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-nexus-ebics2")

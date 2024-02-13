@@ -18,14 +18,12 @@
  */
 package tech.libeufin.bank
 
-import tech.libeufin.common.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import tech.libeufin.common.DatabaseConfig
-import java.nio.file.*
-import kotlin.io.path.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import tech.libeufin.common.*
+import java.nio.file.Path
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 
@@ -89,11 +87,11 @@ fun TalerConfig.loadServerConfig(): ServerConfig {
 
 fun TalerConfig.loadBankConfig(): BankConfig {
     val regionalCurrency = requireString("libeufin-bank", "currency")
-    var fiatCurrency: String? = null;
+    var fiatCurrency: String? = null
     var fiatCurrencySpec: CurrencySpecification? = null
-    val allowConversion = lookupBoolean("libeufin-bank", "allow_conversion") ?: false;
+    val allowConversion = lookupBoolean("libeufin-bank", "allow_conversion") ?: false
     if (allowConversion) {
-        fiatCurrency = requireString("libeufin-bank", "fiat_currency");
+        fiatCurrency = requireString("libeufin-bank", "fiat_currency")
         fiatCurrencySpec = currencySpecificationFor(fiatCurrency) 
     }
     val tanChannels = buildMap {

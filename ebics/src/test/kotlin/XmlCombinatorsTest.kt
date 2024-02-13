@@ -20,7 +20,7 @@
 import org.junit.Test
 import tech.libeufin.ebics.XmlBuilder
 import tech.libeufin.ebics.constructXml
-import kotlin.test.*
+import kotlin.test.assertEquals
 
 class XmlCombinatorsTest {
 

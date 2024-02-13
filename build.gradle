@@ -1,7 +1,5 @@
 // This file is in the public domain.
 
-import org.apache.tools.ant.filters.ReplaceTokens
-
 plugins {
     id("org.jetbrains.kotlin.jvm") version "1.9.22"
     id("org.jetbrains.dokka") version "1.9.10"

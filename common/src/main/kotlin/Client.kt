@@ -19,11 +19,12 @@
 
 package tech.libeufin.common
 
-import io.ktor.http.*
-import kotlinx.serialization.json.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import java.io.ByteArrayOutputStream
+import io.ktor.http.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlin.test.assertEquals
 
 /* ----- Json DSL ----- */
@@ -37,8 +38,8 @@ inline fun obj(from: JsonObject = JsonObject(emptyMap()), builderAction: JsonBui
 class JsonBuilder(from: JsonObject) {
     val content: MutableMap<String, JsonElement> = from.toMutableMap()
 
-    infix inline fun <reified T> String.to(v: T) {
-        val json = Json.encodeToJsonElement(kotlinx.serialization.serializer<T>(), v);
+    inline infix fun <reified T> String.to(v: T) {
+        val json = Json.encodeToJsonElement(kotlinx.serialization.serializer<T>(), v)
         content[this] = json
     }
 }
@@ -46,7 +47,7 @@ class JsonBuilder(from: JsonObject) {
 /* ----- Json body helper ----- */
 
 inline fun <reified B> HttpRequestBuilder.json(b: B) {
-    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b);
+    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b)
     contentType(ContentType.Application.Json)
     setBody(json)
 }
@@ -58,10 +59,10 @@ inline fun HttpRequestBuilder.json(
     json(obj(from, builderAction))
 }
 
-inline suspend fun <reified B> HttpResponse.json(): B =
+suspend inline fun <reified B> HttpResponse.json(): B =
     Json.decodeFromString(kotlinx.serialization.serializer<B>(), bodyAsText())
 
-inline suspend fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
+suspend inline fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
     assertEquals(HttpStatusCode.OK, status)
     val body = json<B>()
     lambda(body)

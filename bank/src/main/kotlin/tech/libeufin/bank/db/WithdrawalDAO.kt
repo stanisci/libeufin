@@ -19,14 +19,14 @@
 
 package tech.libeufin.bank.db
 
-import java.util.UUID
-import java.time.Instant
-import java.time.Duration
-import java.util.concurrent.TimeUnit
-import tech.libeufin.common.*
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import tech.libeufin.bank.*
+import tech.libeufin.common.*
+import java.time.Instant
+import java.util.*
 
 /** Data access logic for withdrawal operations */
 class WithdrawalDAO(private val db: Database) {
@@ -213,7 +213,7 @@ class WithdrawalDAO(private val db: Database) {
                     // Initial loading
                     val init = load()
                     // Long polling if there is no operation or its not confirmed
-                    if (init?.run { status(this) == params.old_state } ?: true) {
+                    if (init?.run { status(this) == params.old_state } != false) {
                         polling.join()
                         load()
                     } else {

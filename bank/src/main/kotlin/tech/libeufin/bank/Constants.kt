@@ -18,23 +18,23 @@
  */
 package tech.libeufin.bank
 
-import tech.libeufin.common.*
+import tech.libeufin.common.ConfigSource
 import java.time.Duration
 
 // Config
 val BANK_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-bank", "libeufin-bank")
 
 // TAN
-const val TAN_RETRY_COUNTER: Int = 3;
+const val TAN_RETRY_COUNTER: Int = 3
 val TAN_VALIDITY_PERIOD: Duration = Duration.ofHours(1)
 val TAN_RETRANSMISSION_PERIOD: Duration = Duration.ofMinutes(1)
 
 // Token
-val TOKEN_DEFAULT_DURATION: java.time.Duration = Duration.ofDays(1L)
+val TOKEN_DEFAULT_DURATION: Duration = Duration.ofDays(1L)
 
 // Account
 val RESERVED_ACCOUNTS = setOf("admin", "bank") 
-const val IBAN_ALLOCATION_RETRY_COUNTER: Int = 5;
+const val IBAN_ALLOCATION_RETRY_COUNTER: Int = 5
 
 // Security
 const val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB

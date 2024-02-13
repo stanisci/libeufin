@@ -26,12 +26,17 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.util.pipeline.PipelineContext
+import io.ktor.util.pipeline.*
+import tech.libeufin.bank.auth.auth
+import tech.libeufin.bank.auth.authAdmin
+import tech.libeufin.bank.auth.username
+import tech.libeufin.bank.db.Database
+import tech.libeufin.bank.db.ExchangeDAO
+import tech.libeufin.bank.db.ExchangeDAO.AddIncomingResult
+import tech.libeufin.bank.db.ExchangeDAO.TransferResult
+import tech.libeufin.common.BankPaytoCtx
+import tech.libeufin.common.TalerErrorCode
 import java.time.Instant
-import tech.libeufin.common.*
-import tech.libeufin.bank.db.*
-import tech.libeufin.bank.db.ExchangeDAO.*
-import tech.libeufin.bank.auth.*
 
 
 fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
@@ -94,8 +99,8 @@ fun Routing.wireGatewayApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
                 )
 
-            val items = db.exchange.dbLambda(params, bankAccount.bankAccountId, ctx.payto);
-        
+            val items = db.exchange.dbLambda(params, bankAccount.bankAccountId, ctx.payto)
+
             if (items.isEmpty()) {
                 call.respond(HttpStatusCode.NoContent)
             } else {

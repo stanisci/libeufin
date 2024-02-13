@@ -19,11 +19,14 @@
 
 package tech.libeufin.common
 
-import kotlinx.serialization.*
-import kotlinx.serialization.descriptors.*
-import kotlinx.serialization.encoding.*
-import kotlinx.serialization.json.*
 import io.ktor.http.*
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import java.net.URI
 
 sealed class CommonError(msg: String): Exception(msg) {
@@ -45,7 +48,7 @@ class TalerAmount {
     }
     constructor(encoded: String) {
         val match = PATTERN.matchEntire(encoded) ?: 
-            throw CommonError.AmountFormat("Invalid amount format");
+            throw CommonError.AmountFormat("Invalid amount format")
         val (currency, value, frac) = match.destructured
         this.currency = currency
         this.value = value.toLongOrNull() ?: 
@@ -97,8 +100,8 @@ class TalerAmount {
 
     companion object {
         const val FRACTION_BASE = 100000000
-        const val MAX_VALUE = 4503599627370496L; // 2^52
-        private val PATTERN = Regex("([A-Z]{1,11}):([0-9]+)(?:\\.([0-9]{1,8}))?");
+        const val MAX_VALUE = 4503599627370496L // 2^52
+        private val PATTERN = Regex("([A-Z]{1,11}):([0-9]+)(?:\\.([0-9]{1,8}))?")
     }
 }
 
@@ -107,7 +110,7 @@ value class IBAN private constructor(val value: String) {
     override fun toString(): String = value
 
     companion object {
-        private val SEPARATOR = Regex("[\\ \\-]");
+        private val SEPARATOR = Regex("[\\ \\-]")
 
         fun parse(raw: String): IBAN {
             val iban: String = raw.uppercase().replace(SEPARATOR, "")
@@ -120,7 +123,7 @@ value class IBAN private constructor(val value: String) {
                 }
             }
             val str = builder.toString()
-            val mod = str.toBigInteger().mod(97.toBigInteger()).toInt();
+            val mod = str.toBigInteger().mod(97.toBigInteger()).toInt()
             if (mod != 1) throw CommonError.Payto("Iban malformed, modulo is $mod expected 1")
             return IBAN(iban)
         }
@@ -179,7 +182,7 @@ sealed class Payto {
         }
 
         override fun deserialize(decoder: Decoder): Payto {
-            return Payto.parse(decoder.decodeString())
+            return parse(decoder.decodeString())
         }
     }
 
@@ -192,7 +195,7 @@ sealed class Payto {
             }
             if (parsed.scheme != "payto") throw CommonError.Payto("expect a payto URI got '${parsed.scheme}'")
 
-            val params = (parsed.query ?: "").parseUrlEncodedParameters();
+            val params = (parsed.query ?: "").parseUrlEncodedParameters()
             val amount = params["amount"]?.run { TalerAmount(this) }
             val message = params["message"]
             val receiverName = params["receiver-name"]
@@ -264,13 +267,13 @@ class IbanPayto internal constructor(
         }
 
         override fun deserialize(decoder: Decoder): IbanPayto {
-            return Payto.parse(decoder.decodeString()).expectIban()
+            return parse(decoder.decodeString()).expectIban()
         }
     }
 
     companion object {
         fun rand(): IbanPayto {
-            return Payto.parse("payto://iban/SANDBOXX/${IBAN.rand()}").expectIban()
+            return parse("payto://iban/SANDBOXX/${IBAN.rand()}").expectIban()
         }
     }
 }
@@ -287,7 +290,7 @@ class XTalerBankPayto internal constructor(
 
     companion object {
         fun forUsername(username: String): XTalerBankPayto {
-            return Payto.parse("payto://x-taler-bank/hostname/$username").expectXTalerBank()
+            return parse("payto://x-taler-bank/hostname/$username").expectXTalerBank()
         }
     }
 }

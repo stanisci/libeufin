@@ -21,10 +21,9 @@ package tech.libeufin.bank.db
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import tech.libeufin.common.*
-import java.time.*
-import java.sql.Types
 import tech.libeufin.bank.*
+import tech.libeufin.common.*
+import java.time.Instant
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-tx-dao")
 
@@ -50,7 +49,7 @@ class TransactionDAO(private val db: Database) {
         timestamp: Instant,
         is2fa: Boolean
     ): BankTransactionResult = db.serializable { conn ->
-        val now = timestamp.toDbMicros() ?: throw faultyTimestampByBank();
+        val now = timestamp.toDbMicros() ?: throw faultyTimestampByBank()
         conn.transaction {
             val stmt = conn.prepareStatement("""
                 SELECT 

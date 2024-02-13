@@ -21,12 +21,12 @@ import junit.framework.TestCase.assertEquals
 import org.apache.xml.security.binding.xmldsig.SignatureType
 import org.junit.Test
 import org.w3c.dom.Element
+import tech.libeufin.common.CryptoUtil
+import tech.libeufin.ebics.XMLUtil
 import tech.libeufin.ebics.ebics_h004.*
 import tech.libeufin.ebics.ebics_hev.HEVResponse
 import tech.libeufin.ebics.ebics_hev.SystemReturnCodeType
 import tech.libeufin.ebics.ebics_s001.SignatureTypes
-import tech.libeufin.common.CryptoUtil
-import tech.libeufin.ebics.XMLUtil
 import javax.xml.datatype.DatatypeFactory
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue

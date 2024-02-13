@@ -17,20 +17,18 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import io.ktor.client.plugins.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import org.junit.Test
+import tech.libeufin.bank.createAdminAccount
+import tech.libeufin.bank.db.AccountDAO.AccountCreationResult
+import tech.libeufin.common.oneOrNull
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
-import kotlin.test.*
-import kotlinx.coroutines.*
-import org.junit.Test
-import tech.libeufin.bank.*
-import tech.libeufin.bank.db.AccountDAO.*
-import tech.libeufin.common.*
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class DatabaseTest {
     

@@ -20,10 +20,10 @@ package tech.libeufin.nexus
 
 import tech.libeufin.common.*
 import tech.libeufin.ebics.*
+import java.io.InputStream
 import java.net.URLEncoder
 import java.time.*
 import java.time.format.*
-import java.io.InputStream
 
 
 /**
@@ -151,7 +151,7 @@ fun parseCustomerAck(xml: InputStream): List<CustomerAck> {
         one("CstmrPmtStsRpt").map("OrgnlPmtInfAndSts") {
             val actionType = one("OrgnlPmtInfId").enum<HacAction>()
             one("StsRsnInf") {
-                var timestamp: Instant? = null;
+                var timestamp: Instant? = null
                 var orderId: String? = null
                 one("Orgtr").one("Id").one("OrgId").each("Othr") {
                     val value = one("Id")
@@ -331,7 +331,7 @@ private fun notificationForEachTx(
     destructXml(xml, "Document") {
         opt("BkToCstmrDbtCdtNtfctn")?.each("Ntfctn") {
             each("Ntry") {
-                if (opt("RvslInd")?.bool() ?: false) {
+                if (opt("RvslInd")?.bool() == true) {
                     logger.warn("Skip reversal transaction")
                 } else {
                     one("Sts") {

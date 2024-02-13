@@ -18,20 +18,18 @@
  */
 
 import org.apache.xml.security.binding.xmldsig.SignatureType
+import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.Assert.*
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
+import tech.libeufin.common.CryptoUtil
+import tech.libeufin.common.decodeBase64
+import tech.libeufin.ebics.XMLUtil
+import tech.libeufin.ebics.XMLUtil.Companion.signEbicsResponse
 import tech.libeufin.ebics.ebics_h004.EbicsKeyManagementResponse
 import tech.libeufin.ebics.ebics_h004.EbicsResponse
 import tech.libeufin.ebics.ebics_h004.EbicsTypes
 import tech.libeufin.ebics.ebics_h004.HTDResponseOrderData
-import tech.libeufin.common.*
-import tech.libeufin.ebics.XMLUtil
 import java.security.KeyPairGenerator
-import java.util.*
 import javax.xml.transform.stream.StreamSource
-import tech.libeufin.ebics.XMLUtil.Companion.signEbicsResponse
 
 class XmlUtilTest {
 

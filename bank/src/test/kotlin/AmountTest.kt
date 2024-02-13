@@ -17,16 +17,14 @@
  * <http://www.gnu.org/licenses/>
  */
 
+import org.junit.Test
+import tech.libeufin.bank.DecimalNumber
+import tech.libeufin.bank.db.TransactionDAO.BankTransactionResult
+import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalCreationResult
+import tech.libeufin.common.*
 import java.time.Instant
 import java.util.*
-import kotlin.test.*
-import org.junit.Test
-import org.postgresql.jdbc.PgConnection
-import tech.libeufin.bank.*
-import tech.libeufin.bank.db.*
-import tech.libeufin.bank.db.TransactionDAO.*
-import tech.libeufin.bank.db.WithdrawalDAO.*
-import tech.libeufin.common.*
+import kotlin.test.assertEquals
 
 class AmountTest {
     // Test amount computation in database

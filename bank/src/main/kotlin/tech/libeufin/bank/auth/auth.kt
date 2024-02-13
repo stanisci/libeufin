@@ -21,20 +21,20 @@ package tech.libeufin.bank.auth
 
 import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.routing.Route
-import io.ktor.server.response.header
-import io.ktor.util.AttributeKey
-import io.ktor.util.pipeline.PipelineContext
-import java.time.Instant
-import tech.libeufin.bank.db.AccountDAO.*
-import tech.libeufin.bank.db.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import io.ktor.util.*
+import io.ktor.util.pipeline.*
 import tech.libeufin.bank.*
+import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
+import java.time.Instant
 
 /** Used to store if the currenly authenticated user is admin */
-private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin");
+private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin")
+
 /** Used to store used auth token */
-private val AUTH_TOKEN = AttributeKey<ByteArray>("auth_token");
+private val AUTH_TOKEN = AttributeKey<ByteArray>("auth_token")
 
 /** Get username of the request account */
 val ApplicationCall.username: String get() = expectParameter("USERNAME")
@@ -89,7 +89,7 @@ fun Route.auth(db: Database, scope: TokenScope, allowAdmin: Boolean = false, req
         if (requireAdmin && authLogin != "admin") {
             throw unauthorized("Only administrator allowed")
         } else {
-            val hasRight = authLogin == username || (allowAdmin && authLogin == "admin");
+            val hasRight = authLogin == username || (allowAdmin && authLogin == "admin")
             if (!hasRight) {
                 throw unauthorized("Customer $authLogin have no right on $username account")
             }

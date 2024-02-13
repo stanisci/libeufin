@@ -19,15 +19,14 @@
 
 package tech.libeufin.ebics
 
-import com.sun.xml.txw2.output.IndentingXMLStreamWriter
-import org.w3c.dom.Document
 import org.w3c.dom.Element
+import java.io.InputStream
 import java.io.StringWriter
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import javax.xml.stream.XMLOutputFactory
 import javax.xml.stream.XMLStreamWriter
-import java.io.InputStream
-import java.time.format.*
-import java.time.*
 
 class XmlBuilder(private val w: XMLStreamWriter) {
     fun el(path: String, lambda: XmlBuilder.() -> Unit = {}) {
@@ -35,7 +34,7 @@ class XmlBuilder(private val w: XMLStreamWriter) {
             w.writeStartElement(it)
         }
         lambda()
-        path.splitToSequence('/').forEach { 
+        path.splitToSequence('/').forEach {
             w.writeEndElement()
         }
     }
@@ -129,7 +128,7 @@ class XmlDestructor internal constructor(private val el: Element) {
     fun bool(): Boolean = el.textContent.toBoolean()
     fun date(): LocalDate = LocalDate.parse(text(), DateTimeFormatter.ISO_DATE)
     fun dateTime(): LocalDateTime = LocalDateTime.parse(text(), DateTimeFormatter.ISO_DATE_TIME)
-    inline fun <reified T : kotlin.Enum<T>> enum(): T = java.lang.Enum.valueOf(T::class.java, text())
+    inline fun <reified T : Enum<T>> enum(): T = java.lang.Enum.valueOf(T::class.java, text())
 
     fun attr(index: String): String = el.getAttribute(index)
 }

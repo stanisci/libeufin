@@ -23,11 +23,12 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import java.util.*
-import tech.libeufin.common.*
-import tech.libeufin.bank.auth.*
-import tech.libeufin.bank.db.ConversionDAO.*
-import tech.libeufin.bank.db.*
+import tech.libeufin.bank.auth.authAdmin
+import tech.libeufin.bank.db.ConversionDAO
+import tech.libeufin.bank.db.ConversionDAO.ConversionResult
+import tech.libeufin.bank.db.Database
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.TalerErrorCode
 
 fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
     get("/conversion-info/config") {
@@ -108,7 +109,7 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
             for (fiatAmount in sequenceOf(req.cashout_fee, req.cashout_tiny_amount, req.cashin_min_amount)) {
                 ctx.checkFiatCurrency(fiatAmount)
             }
-            db.conversion.updateConfig(req);
+            db.conversion.updateConfig(req)
             call.respond(HttpStatusCode.NoContent)
         }
     }

@@ -17,22 +17,17 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import io.ktor.client.plugins.*
 import io.ktor.client.request.*
-import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.http.content.*
-import io.ktor.server.engine.*
-import io.ktor.server.testing.*
-import kotlin.test.*
-import kotlinx.coroutines.*
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
 import org.junit.Test
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
+import tech.libeufin.common.TalerErrorCode
+import tech.libeufin.common.deflate
+import tech.libeufin.common.json
+import tech.libeufin.common.obj
 
 inline fun <reified B> HttpRequestBuilder.jsonDeflate(b: B) {
-    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b);
+    val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b)
     contentType(ContentType.Application.Json)
     headers.set(HttpHeaders.ContentEncoding, "deflate")
     setBody(json.toByteArray().inputStream().deflate().readBytes())
