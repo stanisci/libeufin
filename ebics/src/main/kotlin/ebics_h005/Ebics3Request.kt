@@ -390,7 +390,7 @@ class Ebics3Request {
                 body = Body().apply {
                     transferReceipt = TransferReceipt().apply {
                         authenticate = true
-                        receiptCode = if (success) 1 else 0
+                        receiptCode = if (success) 0 else 1
                     }
                 }
             }

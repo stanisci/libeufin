@@ -78,11 +78,12 @@ data class FetchContext(
  *         length is zero.  It returns null, if the bank assigned an
  *         error to the EBICS transaction.
  */
-private suspend inline fun downloadHelper(
+private suspend fun <T> downloadHelper(
     ctx: FetchContext,
     lastExecutionTime: Instant? = null,
-    doc: SupportedDocument
-): ByteArray {
+    doc: SupportedDocument,
+    processing: (ByteArray) -> T
+): T? {
     val isEbics3 = doc != SupportedDocument.PAIN_002_LOGS
     val initXml = if (isEbics3) {
         createEbics3DownloadInitialization(
@@ -101,14 +102,14 @@ private suspend inline fun downloadHelper(
             ebics2Req.orderParams
         )
     }
-    return doEbicsDownload(
+    return ebicsDownload(
         ctx.httpClient,
         ctx.cfg,
         ctx.clientKeys,
         ctx.bankKeys,
         initXml,
         isEbics3,
-        tolerateEmptyResult = true
+        processing
     )
 }
 
@@ -363,13 +364,14 @@ private suspend fun fetchDocuments(
             }
             val doc = doc.doc()
             // downloading the content
-            val content = downloadHelper(ctx, lastExecutionTime, doc)
-            if (!content.isEmpty()) {
-                ctx.fileLogger.logFetch(
-                    content,
-                    doc == SupportedDocument.PAIN_002_LOGS
-                )
-                ingestDocuments(db, ctx.cfg.currency, content, doc)
+            downloadHelper(ctx, lastExecutionTime, doc) { content ->
+                if (!content.isEmpty()) {
+                    ctx.fileLogger.logFetch(
+                        content,
+                        doc == SupportedDocument.PAIN_002_LOGS
+                    )
+                    ingestDocuments(db, ctx.cfg.currency, content, doc)
+                }
             }
             true
         } catch (e: Exception) {

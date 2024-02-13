@@ -230,14 +230,8 @@ fun generateKeysPdf(
  *
  * @param clientKeys client keys, used to sign the request.
  * @param bankKeys bank keys, used to decrypt and validate the response.
- * @param xmlBody raw EBICS request in XML.
- * @param withEbics3 true in case the communication is EBICS 3, false otherwise.
- * @param tolerateEbicsReturnCode EBICS technical return code that may be accepted
- *                                instead of EBICS_OK.  That is the case of EBICS_DOWNLOAD_POSTPROCESS_DONE
- *                                along download receipt phases.
- * @param tolerateBankReturnCode Business return code that may be accepted instead of
- *                               EBICS_OK.  Typically, EBICS_NO_DOWNLOAD_DATA_AVAILABLE is tolerated
- *                               when asking for new incoming payments.
+ * @param xmlReq raw EBICS request in XML.
+ * @param isEbics3 true in case the communication is EBICS 3, false 
  * @return [EbicsResponseContent] or throws [EbicsSideException]
  */
 suspend fun postEbics(
@@ -274,8 +268,9 @@ private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
             ebicsResponseContent.bankReturnCode == EbicsReturnCode.EBICS_OK
 
 /**
- * Collects all the steps of an EBICS download transaction.  Namely,
- * it conducts: init -> transfer -> receipt phases.
+ * Perform an EBICS download transaction.
+ * 
+ * It conducts init -> transfer -> processing -> receipt phases.
  *
  * @param client HTTP client for POSTing to the bank.
  * @param cfg configuration handle.
@@ -283,32 +278,27 @@ private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
  * @param bankKeys bank EBICS public keys.
  * @param reqXml raw EBICS XML request of the init phase.
  * @param isEbics3 true for EBICS 3, false otherwise.
- * @param tolerateEmptyResult true if the EC EBICS_NO_DOWNLOAD_DATA_AVAILABLE
- *        should be tolerated as the bank-technical error, false otherwise.
- * @return the bank response as an uncompressed [ByteArray], or null if one
- *         error took place.  Definition of error: any EBICS- or bank-technical
- *         EC pairs where at least one is not EBICS_OK, or if tolerateEmptyResult
- *         is true, the bank-technical EC EBICS_NO_DOWNLOAD_DATA_AVAILABLE is allowed
- *         other than EBICS_OK.  If the request tolerates an empty download content,
- *         then the empty array is returned.  The function may throw [EbicsAdditionalErrors].
+ * @param processing processing lambda receiving EBICS files as bytes or empty bytes if nothing to download.
+ * @return T if the transaction was successful and null if the transaction was empty. If the failure is at the EBICS 
+ *         level EbicsSideException is thrown else ités the expection of the processing lambda.
  */
-suspend fun doEbicsDownload(
+suspend fun <T> ebicsDownload(
     client: HttpClient,
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     reqXml: ByteArray,
     isEbics3: Boolean,
-    tolerateEmptyResult: Boolean = false
-): ByteArray {
+    processing: (ByteArray) -> T
+): T {
     val initResp = postEbics(client, cfg, bankKeys, reqXml, isEbics3)
     logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${initResp.technicalReturnCode}, ${initResp.bankReturnCode}")
     if (initResp.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
         throw Exception("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
     }
-    if (initResp.bankReturnCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE && tolerateEmptyResult) {
+    if (initResp.bankReturnCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
         logger.debug("Download content is empty")
-        return ByteArray(0)
+        return processing(ByteArray(0))
     }
     if (initResp.bankReturnCode != EbicsReturnCode.EBICS_OK) {
         throw Exception("Download init phase has bank-technical error: ${initResp.bankReturnCode}")
@@ -363,8 +353,12 @@ suspend fun doEbicsDownload(
         dataEncryptionInfo,
         ebicsChunks
     )
+    // Process payload
+    val res = runCatching {
+        processing(payloadBytes)
+    }
     // payload reconstructed, receipt to the bank.
-    val success = true
+    val success = res.isSuccess
     val receiptXml = if (isEbics3)
         createEbics3DownloadReceiptPhase(cfg, clientKeys, tId, success)
     else createEbics25DownloadReceiptPhase(cfg, clientKeys, tId, success)
@@ -378,7 +372,7 @@ suspend fun doEbicsDownload(
         isEbics3
     )
     // Receipt didn't throw, can now return the payload.
-    return payloadBytes
+    return res.getOrThrow()
 }
 
 /**

@@ -53,6 +53,12 @@ fun ask(question: String): String? {
     return readlnOrNull()
 }
 
+fun CliktCommandTestResult.result() {
+    if (statusCode != 0) {
+        print("\u001b[;31mERROR:\n$output\u001b[0m")
+    }
+}
+
 fun CliktCommandTestResult.assertOk(msg: String? = null) {
     println("$output")
     assertEquals(0, statusCode, msg)
@@ -130,27 +136,27 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                 })
                 put("recover", suspend {
                     step("Recover old transactions")
-                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01 notification").assertOk()
+                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01 notification").result()
                 })
                 put("fetch", suspend {
                     step("Fetch all documents")
-                    nexusCmd.test("ebics-fetch $ebicsFlags").assertOk()
+                    nexusCmd.test("ebics-fetch $ebicsFlags").result()
                 })
                 put("ack", suspend {
                     step("Fetch CustomerAcknowledgement")
-                    nexusCmd.test("ebics-fetch $ebicsFlags acknowledgement").assertOk()
+                    nexusCmd.test("ebics-fetch $ebicsFlags acknowledgement").result()
                 })
                 put("status", suspend {
                     step("Fetch CustomerPaymentStatusReport")
-                    nexusCmd.test("ebics-fetch $ebicsFlags status").assertOk()
+                    nexusCmd.test("ebics-fetch $ebicsFlags status").result()
                 })
                 put("notification", suspend {
                     step("Fetch BankToCustomerDebitCreditNotification")
-                    nexusCmd.test("ebics-fetch $ebicsFlags notification").assertOk()
+                    nexusCmd.test("ebics-fetch $ebicsFlags notification").result()
                 })
                 put("submit", suspend {
                     step("Submit pending transactions")
-                    nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
+                    nexusCmd.test("ebics-submit $ebicsFlags").result()
                 })
                 if (kind.test) {
                     put("reset-keys", suspend {

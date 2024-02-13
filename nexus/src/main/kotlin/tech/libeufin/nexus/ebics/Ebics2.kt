@@ -41,59 +41,6 @@ import javax.xml.datatype.DatatypeFactory
 private val logger: Logger = LoggerFactory.getLogger("libeufin-nexus-ebics2")
 
 /**
- * Convenience function to download via EBICS with a
- * customer message type.
- *
- * @param messageType EBICS 2.x message type.  Defaults
- *        to HTD, to get general information about the EBICS
- *        subscriber.
- * @param cfg configuration handle
- * @param clientKeys client EBICS keys.
- * @param bankKeys bank EBICS keys.
- * @param client HTTP client handle.
- * @return raw XML response, or null upon errors.
- */
-suspend fun doEbicsCustomDownload(
-    messageType: String = "HTD",
-    cfg: EbicsSetupConfig,
-    clientKeys: ClientPrivateKeysFile,
-    bankKeys: BankPublicKeysFile,
-    client: HttpClient
-): ByteArray {
-    val xmlReq = createEbics25DownloadInit(cfg, clientKeys, bankKeys, messageType)
-    return doEbicsDownload(client, cfg, clientKeys, bankKeys, xmlReq, false)
-}
-
-/**
- * Request EBICS (2.x) HTD to the bank.  This message type
- * gets the list of bank accounts that are owned by the EBICS
- * client.
- *
- * @param cfg configuration handle
- * @param client client EBICS keys.
- * @param bankKeys bank EBICS keys.
- * @param client HTTP client handle.
- * @return internal representation of the HTD response, or
- *         null in case of errors.
- */
-suspend fun fetchBankAccounts(
-    cfg: EbicsSetupConfig,
-    clientKeys: ClientPrivateKeysFile,
-    bankKeys: BankPublicKeysFile,
-    client: HttpClient
-): HTDResponseOrderData? {
-    val xmlReq = createEbics25DownloadInit(cfg, clientKeys, bankKeys, "HTD")
-    val bytesResp = doEbicsDownload(client, cfg, clientKeys, bankKeys, xmlReq, false)
-    return try {
-        logger.debug("Fetched accounts: $bytesResp")
-        XMLUtil.convertBytesToJaxb<HTDResponseOrderData>(bytesResp).value
-    } catch (e: Exception) {
-        logger.error("Could not parse the HTD payload, detail: ${e.message}")
-        return null
-    }
-}
-
-/**
  * Creates a EBICS 2.5 download init. message.  So far only used
  * to fetch the PostFinance bank accounts.
  */
