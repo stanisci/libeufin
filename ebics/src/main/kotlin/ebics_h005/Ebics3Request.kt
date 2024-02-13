@@ -368,8 +368,9 @@ class Ebics3Request {
     companion object {
 
         fun createForDownloadReceiptPhase(
-            transactionId: String?,
-            hostId: String
+            transactionId: String,
+            hostId: String,
+            success: Boolean
         ): Ebics3Request {
             return Ebics3Request().apply {
                 header = Header().apply {
@@ -389,7 +390,7 @@ class Ebics3Request {
                 body = Body().apply {
                     transferReceipt = TransferReceipt().apply {
                         authenticate = true
-                        receiptCode = 0 // always true at this point.
+                        receiptCode = if (success) 1 else 0
                     }
                 }
             }

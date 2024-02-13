@@ -35,7 +35,7 @@ class Ebics {
     @Test
     fun iniMessage() = conf { config -> 
         val msg = generateIniMessage(config, clientKeys)
-        val ini = XMLUtil.convertStringToJaxb<EbicsUnsecuredRequest>(msg) // ensures is valid
+        val ini = XMLUtil.convertBytesToJaxb<EbicsUnsecuredRequest>(msg) // ensures is valid
         assertEquals(ini.value.header.static.orderDetails.orderType, "INI") // ensures is INI
     }
 
@@ -43,7 +43,7 @@ class Ebics {
     @Test
     fun hiaMessage() = conf { config -> 
         val msg = generateHiaMessage(config, clientKeys)
-        val ini = XMLUtil.convertStringToJaxb<EbicsUnsecuredRequest>(msg) // ensures is valid
+        val ini = XMLUtil.convertBytesToJaxb<EbicsUnsecuredRequest>(msg) // ensures is valid
         assertEquals(ini.value.header.static.orderDetails.orderType, "HIA") // ensures is HIA
     }
 
@@ -51,7 +51,7 @@ class Ebics {
     @Test
     fun hpbMessage() = conf { config -> 
         val msg = generateHpbMessage(config, clientKeys)
-        val ini = XMLUtil.convertStringToJaxb<EbicsUnsecuredRequest>(msg) // ensures is valid
+        val ini = XMLUtil.convertBytesToJaxb<EbicsUnsecuredRequest>(msg) // ensures is valid
         assertEquals(ini.value.header.static.orderDetails.orderType, "HPB") // ensures is HPB
     }
     // POSTs an EBICS message to the mock bank.  Tests
@@ -68,9 +68,19 @@ class Ebics {
         val clientOk = getMockedClient {
             respondOk("Not EBICS anyway.")
         }
-        assertNull(client404.postToBank("http://ignored.example.com/", "ignored"))
-        assertNull(clientNoResponse.postToBank("http://ignored.example.com/", "ignored"))
-        assertNotNull(clientOk.postToBank("http://ignored.example.com/", "ignored"))
+        runCatching {
+            client404.postToBank("http://ignored.example.com/", "ignored".toByteArray())
+        }.run {
+            val exp = exceptionOrNull()!!
+            assertEquals(exp.message, "Invalid response status: 404 Not Found")
+        }
+        runCatching {
+            clientNoResponse.postToBank("http://ignored.example.com/", "ignored".toByteArray())
+        }.run {
+            val exp = exceptionOrNull()!!
+            assertEquals(exp.message, "Network issue.")
+        }
+        clientOk.postToBank("http://ignored.example.com/", "ignored".toByteArray())
     }
 
     // Tests that internal repr. of keys lead to valid PDF.

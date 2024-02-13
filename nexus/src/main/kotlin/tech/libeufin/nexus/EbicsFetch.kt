@@ -101,26 +101,15 @@ private suspend inline fun downloadHelper(
             ebics2Req.orderParams
         )
     }
-    logger.trace(initXml)
-    try {
-        return doEbicsDownload(
-            ctx.httpClient,
-            ctx.cfg,
-            ctx.clientKeys,
-            ctx.bankKeys,
-            initXml,
-            isEbics3,
-            tolerateEmptyResult = true
-        )
-    } catch (e: EbicsSideException) {
-        logger.error(e.message)
-        /**
-         * Failing regardless of the error being at the client or at the
-         * bank side.  A client with an unreliable bank is not useful, hence
-         * failing here.
-         */
-        throw e
-    }
+    return doEbicsDownload(
+        ctx.httpClient,
+        ctx.cfg,
+        ctx.clientKeys,
+        ctx.bankKeys,
+        initXml,
+        isEbics3,
+        tolerateEmptyResult = true
+    )
 }
 
 /**
@@ -282,7 +271,7 @@ private fun ingestDocument(
             val acks = parseCustomerAck(xml)
             for (ack in acks) {
                 when (ack.actionType) {
-                    HacAction.FILE_DOWNLOAD -> logger.trace("$ack")
+                    HacAction.FILE_DOWNLOAD -> logger.debug("$ack")
                     HacAction.ORDER_HAC_FINAL_POS -> {
                         // TODO update pending transaction status
                         logger.debug("$ack")

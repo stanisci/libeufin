@@ -302,7 +302,7 @@ class EbicsOrderUtilTest {
                     </Permission>
                 </UserInfo>
             </HTDResponseOrderData>
-        """.trimIndent()
-        XMLUtil.convertStringToJaxb<HTDResponseOrderData>(orderDataXml);
+        """.trimIndent().toByteArray()
+        XMLUtil.convertBytesToJaxb<HTDResponseOrderData>(orderDataXml);
     }
 }

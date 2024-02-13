@@ -126,33 +126,19 @@ fun decryptAndDecompressPayload(
  * POSTs the EBICS message to the bank.
  *
  * @param URL where the bank serves EBICS requests.
- * @param msg EBICS message as raw string.
- * @return the raw bank response, if the request made it to the
- *         EBICS handler, or null otherwise.
+ * @param msg EBICS message as raw bytes.
+ * @return the raw bank response.
  */
-suspend fun HttpClient.postToBank(bankUrl: String, msg: String): String? {
-    logger.debug("POSTing EBICS to: $bankUrl")
-    val resp: HttpResponse = try {
-        this.post(urlString = bankUrl) {
-            expectSuccess = false // avoids exceptions on non-2xx statuses.
-            contentType(ContentType.Text.Xml)
-            setBody(msg)
-        }
+suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray): ByteArray {
+    logger.debug("POSTing EBICS to '$bankUrl'")
+    val res = post(urlString = bankUrl) {
+        contentType(ContentType.Text.Xml)
+        setBody(msg)
     }
-    catch (e: Exception) {
-        // hard error (network issue, invalid URL, ..)
-        logger.error("Could not POST to bank at: $bankUrl, detail: ${e.message}")
-        return null
+    if (res.status != HttpStatusCode.OK) {
+        throw Exception("Invalid response status: ${res.status}")
     }
-    // Bank was found, but the EBICS request wasn't served.
-    // Note: EBICS errors get _still_ 200 OK, so here the error
-    // _should_ not be related to EBICS.  404 for a wrong URL
-    // is one example.
-    if (resp.status != HttpStatusCode.OK) {
-        logger.error("Bank was found at $bankUrl, but EBICS wasn't served.  Response status: ${resp.status}, body: ${resp.bodyAsText()}")
-        return null
-    }
-    return resp.bodyAsText()
+    return res.readBytes() // TODO input stream
 }
 
 /**
@@ -258,14 +244,18 @@ suspend fun postEbics(
     client: HttpClient,
     cfg: EbicsSetupConfig,
     bankKeys: BankPublicKeysFile,
-    xmlReq: String,
+    xmlReq: ByteArray,
     isEbics3: Boolean
 ): EbicsResponseContent {
-    val respXml = client.postToBank(cfg.hostBaseUrl, xmlReq)
-        ?: throw EbicsSideException(
+    val respXml = try {
+        client.postToBank(cfg.hostBaseUrl, xmlReq)
+    } catch (e: Exception) {
+        throw EbicsSideException(
             "POSTing to ${cfg.hostBaseUrl} failed",
-            sideEc = EbicsSideError.HTTP_POST_FAILED
+            sideEc = EbicsSideError.HTTP_POST_FAILED,
+            e
         )
+    }
     return parseAndValidateEbicsResponse(
         bankKeys,
         respXml,
@@ -307,7 +297,7 @@ suspend fun doEbicsDownload(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
-    reqXml: String,
+    reqXml: ByteArray,
     isEbics3: Boolean,
     tolerateEmptyResult: Boolean = false
 ): ByteArray {
@@ -374,9 +364,10 @@ suspend fun doEbicsDownload(
         ebicsChunks
     )
     // payload reconstructed, receipt to the bank.
+    val success = true
     val receiptXml = if (isEbics3)
-        createEbics3DownloadReceiptPhase(cfg, clientKeys, tId)
-    else createEbics25DownloadReceiptPhase(cfg, clientKeys, tId)
+        createEbics3DownloadReceiptPhase(cfg, clientKeys, tId, success)
+    else createEbics25DownloadReceiptPhase(cfg, clientKeys, tId, success)
 
     // Sending the receipt to the bank.
     postEbics(
@@ -419,8 +410,9 @@ enum class EbicsSideError {
  */
 class EbicsSideException(
     msg: String,
-    val sideEc: EbicsSideError
-) : Exception(msg)
+    val sideEc: EbicsSideError,
+    cause: Exception? = null
+) : Exception(msg, cause)
 
 /**
  * Parses the bank response from the raw XML and verifies
@@ -433,11 +425,11 @@ class EbicsSideException(
  */
 fun parseAndValidateEbicsResponse(
     bankKeys: BankPublicKeysFile,
-    responseStr: String,
+    resp: ByteArray,
     withEbics3: Boolean
 ): EbicsResponseContent {
     val responseDocument = try {
-        XMLUtil.parseStringIntoDom(responseStr)
+        XMLUtil.parseBytesIntoDom(resp)
     } catch (e: Exception) {
         throw EbicsSideException(
             "Bank response apparently invalid",
@@ -455,8 +447,8 @@ fun parseAndValidateEbicsResponse(
         )
     }
     if (withEbics3)
-        return ebics3toInternalRepr(responseStr)
-    return ebics25toInternalRepr(responseStr)
+        return ebics3toInternalRepr(resp)
+    return ebics25toInternalRepr(resp)
 }
 
 /**
@@ -567,7 +559,6 @@ suspend fun doEbicsUpload(
     bankKeys: BankPublicKeysFile,
     orderService: Ebics3Request.OrderDetails.Service,
     payload: ByteArray,
-    extraLog: Boolean = false
 ): EbicsResponseContent {
     val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload, isEbics3 = true)
     val initXml = createEbics3RequestForUploadInitialization(
@@ -577,13 +568,12 @@ suspend fun doEbicsUpload(
         clientKeys,
         orderService
     )
-    if (extraLog) logger.debug(initXml)
     val initResp = postEbics( // may throw EbicsEarlyException
-            client,
-            cfg,
-            bankKeys,
-            initXml,
-            isEbics3 = true
+        client,
+        cfg,
+        bankKeys,
+        initXml,
+        isEbics3 = true
     )
     if (!areCodesOk(initResp)) throw EbicsUploadException(
         "EBICS upload init failed",

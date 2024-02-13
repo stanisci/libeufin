@@ -310,7 +310,7 @@ class HpbResponseData(
 
 fun parseEbicsHpbOrder(orderDataRaw: ByteArray): HpbResponseData {
     val resp = try {
-        XMLUtil.convertStringToJaxb<HPBResponseOrderData>(orderDataRaw.toString(Charsets.UTF_8))
+        XMLUtil.convertBytesToJaxb<HPBResponseOrderData>(orderDataRaw)
     } catch (e: Exception) {
         throw EbicsProtocolError(HttpStatusCode.InternalServerError, "Invalid XML (as HPB response) received from bank")
     }
@@ -331,10 +331,10 @@ fun parseEbicsHpbOrder(orderDataRaw: ByteArray): HpbResponseData {
     )
 }
 
-fun ebics3toInternalRepr(response: String): EbicsResponseContent {
+fun ebics3toInternalRepr(response: ByteArray): EbicsResponseContent {
     // logger.debug("Converting bank resp to internal repr.: $response")
     val resp: JAXBElement<Ebics3Response> = try {
-        XMLUtil.convertStringToJaxb(response)
+        XMLUtil.convertBytesToJaxb(response)
     } catch (e: Exception) {
         throw EbicsProtocolError(
             HttpStatusCode.InternalServerError,
@@ -368,9 +368,9 @@ fun ebics3toInternalRepr(response: String): EbicsResponseContent {
     )
 }
 
-fun ebics25toInternalRepr(response: String): EbicsResponseContent {
+fun ebics25toInternalRepr(response: ByteArray): EbicsResponseContent {
     val resp: JAXBElement<EbicsResponse> = try {
-        XMLUtil.convertStringToJaxb(response)
+        XMLUtil.convertBytesToJaxb(response)
     } catch (e: Exception) {
         throw EbicsProtocolError(
             HttpStatusCode.InternalServerError,

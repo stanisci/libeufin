@@ -84,10 +84,9 @@ suspend fun fetchBankAccounts(
 ): HTDResponseOrderData? {
     val xmlReq = createEbics25DownloadInit(cfg, clientKeys, bankKeys, "HTD")
     val bytesResp = doEbicsDownload(client, cfg, clientKeys, bankKeys, xmlReq, false)
-    val xmlResp = bytesResp.toString(Charsets.UTF_8)
     return try {
         logger.debug("Fetched accounts: $bytesResp")
-        XMLUtil.convertStringToJaxb<HTDResponseOrderData>(xmlResp).value
+        XMLUtil.convertBytesToJaxb<HTDResponseOrderData>(bytesResp).value
     } catch (e: Exception) {
         logger.error("Could not parse the HTD payload, detail: ${e.message}")
         return null
@@ -104,7 +103,7 @@ fun createEbics25DownloadInit(
     bankKeys: BankPublicKeysFile,
     orderType: String,
     orderParams: EbicsOrderParams = EbicsStandardOrderParams()
-): String {
+): ByteArray {
     val nonce = getNonce(128)
     val req = EbicsRequest.createForDownloadInitializationPhase(
         cfg.ebicsUserId,
@@ -127,7 +126,7 @@ fun createEbics25DownloadInit(
         clientKeys.authentication_private_key,
         withEbics3 = false
     )
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -137,16 +136,19 @@ fun createEbics25DownloadInit(
  * @param clientKeys user EBICS private keys.
  * @param transactionId transaction ID of the EBICS communication that
  *        should receive this receipt.
+ * @param success was the download sucessfully processed
  * @return receipt request in XML.
  */
 fun createEbics25DownloadReceiptPhase(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
-    transactionId: String
-): String {
+    transactionId: String,
+    success: Boolean
+): ByteArray {
     val req = EbicsRequest.createForDownloadReceiptPhase(
         transactionId,
-        cfg.ebicsHostId
+        cfg.ebicsHostId,
+        success
     )
     val doc = XMLUtil.convertJaxbToDocument(req)
     XMLUtil.signEbicsDocument(
@@ -154,7 +156,7 @@ fun createEbics25DownloadReceiptPhase(
         clientKeys.authentication_private_key,
         withEbics3 = false
     )
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -173,7 +175,7 @@ fun createEbics25DownloadTransferPhase(
     segNumber: Int,
     totalSegments: Int,
     transactionId: String
-): String {
+): ByteArray {
     val req = EbicsRequest.createForDownloadTransferPhase(
         hostID = cfg.ebicsHostId,
         segmentNumber = segNumber,
@@ -186,7 +188,7 @@ fun createEbics25DownloadTransferPhase(
         clientKeys.authentication_private_key,
         withEbics3 = false
     )
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -202,10 +204,10 @@ fun createEbics25DownloadTransferPhase(
  */
 fun parseKeysMgmtResponse(
     clientEncryptionKey: RSAPrivateCrtKey,
-    xml: String
+    xml: ByteArray
 ): EbicsKeyManagementResponseContent? {
     val jaxb = try {
-        XMLUtil.convertStringToJaxb<EbicsKeyManagementResponse>(xml)
+        XMLUtil.convertBytesToJaxb<EbicsKeyManagementResponse>(xml)
     } catch (e: Exception) {
         tech.libeufin.nexus.logger.error("Could not parse the raw response from bank into JAXB.")
         return null
@@ -238,7 +240,7 @@ fun parseKeysMgmtResponse(
  * @param clientKeys set of all the client keys.
  * @return the raw EBICS INI message.
  */
-fun generateIniMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile): String {
+fun generateIniMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile): ByteArray {
     val iniRequest = EbicsUnsecuredRequest.createIni(
         cfg.ebicsHostId,
         cfg.ebicsUserId,
@@ -246,7 +248,7 @@ fun generateIniMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
         clientKeys.signature_private_key
     )
     val doc = XMLUtil.convertJaxbToDocument(iniRequest)
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -257,7 +259,7 @@ fun generateIniMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
  * @param clientKeys set of all the client keys.
  * @return the raw EBICS HIA message.
  */
-fun generateHiaMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile): String {
+fun generateHiaMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile): ByteArray {
     val hiaRequest = EbicsUnsecuredRequest.createHia(
         cfg.ebicsHostId,
         cfg.ebicsUserId,
@@ -266,7 +268,7 @@ fun generateHiaMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
         clientKeys.encryption_private_key
     )
     val doc = XMLUtil.convertJaxbToDocument(hiaRequest)
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -276,7 +278,7 @@ fun generateHiaMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
  * @param clientKeys set of all the client keys.
  * @return the raw EBICS HPB message.
  */
-fun generateHpbMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile): String {
+fun generateHpbMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile): ByteArray {
     val hpbRequest = EbicsNpkdRequest.createRequest(
         cfg.ebicsHostId,
         cfg.ebicsPartnerId,
@@ -286,7 +288,7 @@ fun generateHpbMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
     )
     val doc = XMLUtil.convertJaxbToDocument(hpbRequest)
     XMLUtil.signEbicsDocument(doc, clientKeys.authentication_private_key)
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**

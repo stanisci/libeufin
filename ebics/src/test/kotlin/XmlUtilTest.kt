@@ -37,8 +37,7 @@ class XmlUtilTest {
 
     @Test
     fun deserializeConsecutiveLists() {
-
-        val tmp = XMLUtil.convertStringToJaxb<HTDResponseOrderData>("""
+        val tmp = XMLUtil.convertBytesToJaxb<HTDResponseOrderData>("""
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
             <HTDResponseOrderData xmlns="urn:org:ebics:H004">
               <PartnerInfo>
@@ -81,7 +80,7 @@ class XmlUtilTest {
                   <OrderTypes>C54 C53 C52 CCC</OrderTypes>
                 </Permission>
               </UserInfo>
-            </HTDResponseOrderData>""".trimIndent()
+            </HTDResponseOrderData>""".trimIndent().toByteArray()
         )
 
         println(tmp.value.partnerInfo.orderInfoList[0].description)
@@ -90,7 +89,7 @@ class XmlUtilTest {
     @Test
     fun exceptionOnConversion() {
         try {
-            XMLUtil.convertStringToJaxb<EbicsKeyManagementResponse>("<malformed xml>")
+            XMLUtil.convertBytesToJaxb<EbicsKeyManagementResponse>("<malformed xml>".toByteArray())
         } catch (e: javax.xml.bind.UnmarshalException) {
             // just ensuring this is the exception
             println("caught")
@@ -115,12 +114,12 @@ class XmlUtilTest {
 
     @Test
     fun basicSigningTest() {
-        val doc = XMLUtil.parseStringIntoDom("""
+        val doc = XMLUtil.parseBytesIntoDom("""
             <myMessage xmlns:ebics="urn:org:ebics:H004">
                 <ebics:AuthSignature />
                 <foo authenticate="true">Hello World</foo>
             </myMessage>
-        """.trimIndent())
+        """.trimIndent().toByteArray())
         val kpg = KeyPairGenerator.getInstance("RSA")
         kpg.initialize(2048)
         val pair = kpg.genKeyPair()
@@ -155,10 +154,9 @@ class XmlUtilTest {
         }
 
         val signature = signEbicsResponse(response, pair.private)
-        val signatureJaxb = XMLUtil.convertStringToJaxb<EbicsResponse>(signature)
+        val signatureJaxb = XMLUtil.convertBytesToJaxb<EbicsResponse>(signature)
 
         assertTrue(
-
             XMLUtil.verifyEbicsDocument(
                 XMLUtil.convertJaxbToDocument(signatureJaxb.value),
                 pair.public
@@ -168,13 +166,13 @@ class XmlUtilTest {
 
     @Test
     fun multiAuthSigningTest() {
-        val doc = XMLUtil.parseStringIntoDom("""
+        val doc = XMLUtil.parseBytesIntoDom("""
             <myMessage xmlns:ebics="urn:org:ebics:H004">
                 <ebics:AuthSignature />
                 <foo authenticate="true">Hello World</foo>
                 <bar authenticate="true">Another one!</bar>
             </myMessage>
-        """.trimIndent())
+        """.trimIndent().toByteArray())
         val kpg = KeyPairGenerator.getInstance("RSA")
         kpg.initialize(2048)
         val pair = kpg.genKeyPair()
@@ -185,8 +183,8 @@ class XmlUtilTest {
     @Test
     fun testRefSignature() {
         val classLoader = ClassLoader.getSystemClassLoader()
-        val docText = classLoader.getResourceAsStream("signature1/doc.xml")!!.readAllBytes().toString(Charsets.UTF_8)
-        val doc = XMLUtil.parseStringIntoDom(docText)
+        val docText = classLoader.getResourceAsStream("signature1/doc.xml")!!.readAllBytes()
+        val doc = XMLUtil.parseBytesIntoDom(docText)
         val keyText = classLoader.getResourceAsStream("signature1/public_key.txt")!!.readAllBytes()
         val keyBytes = Base64.getDecoder().decode(keyText)
         val key = CryptoUtil.loadRsaPublicKey(keyBytes)

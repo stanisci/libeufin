@@ -156,9 +156,10 @@ suspend fun doKeysRequestAndUpdateState(
         KeysOrderType.HIA -> generateHiaMessage(cfg, privs)
         KeysOrderType.HPB -> generateHpbMessage(cfg, privs)
     }
-    val xml = client.postToBank(cfg.hostBaseUrl, req)
-    if (xml == null) {
-        throw Exception("Could not POST the ${orderType.name} message to the bank")
+    val xml = try {
+        client.postToBank(cfg.hostBaseUrl, req)
+    } catch (e: Exception) {
+        throw Exception("Could not POST the ${orderType.name} message to the bank at '${cfg.hostBaseUrl}'", e)
     }
     val ebics = parseKeysMgmtResponse(privs.encryption_private_key, xml)
     if (ebics == null) {

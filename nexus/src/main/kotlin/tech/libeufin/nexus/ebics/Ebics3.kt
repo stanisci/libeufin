@@ -41,16 +41,19 @@ import javax.xml.datatype.DatatypeFactory
  * @param clientKeys subscriber private keys.
  * @param transactionId EBICS transaction ID as assigned by the
  *        bank to any successful transaction.
+ * @param success was the download sucessfully processed
  * @return the raw XML of the EBICS request.
  */
 fun createEbics3DownloadReceiptPhase(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
-    transactionId: String
-): String {
+    transactionId: String,
+    success: Boolean
+): ByteArray {
     val req = Ebics3Request.createForDownloadReceiptPhase(
         transactionId,
-        cfg.ebicsHostId
+        cfg.ebicsHostId,
+        success
     )
     val doc = XMLUtil.convertJaxbToDocument(req)
     XMLUtil.signEbicsDocument(
@@ -58,7 +61,7 @@ fun createEbics3DownloadReceiptPhase(
         clientKeys.authentication_private_key,
         withEbics3 = true
     )
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -78,7 +81,7 @@ fun createEbics3DownloadTransferPhase(
     howManySegments: Int,
     segmentNumber: Int,
     transactionId: String
-): String {
+): ByteArray {
     val req = Ebics3Request.createForDownloadTransferPhase(
         cfg.ebicsHostId,
         transactionId,
@@ -91,7 +94,7 @@ fun createEbics3DownloadTransferPhase(
         clientKeys.authentication_private_key,
         withEbics3 = true
     )
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -108,7 +111,7 @@ fun createEbics3DownloadInitialization(
     bankkeys: BankPublicKeysFile,
     clientKeys: ClientPrivateKeysFile,
     orderParams: Ebics3Request.OrderDetails.BTDOrderParams
-): String {
+): ByteArray {
     val nonce = getNonce(128)
     val req = Ebics3Request.createForDownloadInitializationPhase(
         cfg.ebicsUserId,
@@ -129,7 +132,7 @@ fun createEbics3DownloadInitialization(
         clientKeys.authentication_private_key,
         withEbics3 = true
     )
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -149,7 +152,7 @@ fun createEbics3RequestForUploadInitialization(
     bankkeys: BankPublicKeysFile,
     clientKeys: ClientPrivateKeysFile,
     orderService: Ebics3Request.OrderDetails.Service
-): String {
+): ByteArray {
     val nonce = getNonce(128)
     val req = Ebics3Request.createForUploadInitializationPhase(
         preparedUploadData.transactionKey,
@@ -174,7 +177,7 @@ fun createEbics3RequestForUploadInitialization(
         clientKeys.authentication_private_key,
         withEbics3 = true
     )
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -193,7 +196,7 @@ fun createEbics3RequestForUploadTransferPhase(
     clientKeys: ClientPrivateKeysFile,
     transactionId: String,
     uploadData: PreparedUploadData
-): String {
+): ByteArray {
     val chunkIndex = 1 // only 1-chunk communication currently supported.
     val req = Ebics3Request.createForUploadTransferPhase(
         cfg.ebicsHostId,
@@ -207,7 +210,7 @@ fun createEbics3RequestForUploadTransferPhase(
         clientKeys.authentication_private_key,
         withEbics3 = true
     )
-    return XMLUtil.convertDomToString(doc)
+    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**
@@ -230,8 +233,7 @@ suspend fun submitPain001(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankkeys: BankPublicKeysFile,
-    httpClient: HttpClient,
-    ebicsExtraLog: Boolean = false
+    httpClient: HttpClient
 ) {
     val orderService: Ebics3Request.OrderDetails.Service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "MCT"
@@ -248,7 +250,6 @@ suspend fun submitPain001(
         bankkeys,
         orderService,
         pain001xml.toByteArray(Charsets.UTF_8),
-        ebicsExtraLog
     )
     logger.debug("Payment submitted, report text is: ${maybeUploaded.reportText}," +
             " EBICS technical code is: ${maybeUploaded.technicalReturnCode}," +
