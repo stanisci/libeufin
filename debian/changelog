@@ -1,3 +1,15 @@
+libeufin (0.9.4~dev.21) unstable; urgency=low
+
+  * Package git tag v0.9.4-dev.21
+
+ -- Florian Dold <dold@taler.net>  Fri, 16 Feb 2024 00:43:38 +0100
+
+libeufin (0.9.4~dev.20) unstable; urgency=low
+
+  * Package git tag v0.9.4-dev.20
+
+ -- Florian Dold <dold@taler.net>  Wed, 14 Feb 2024 10:22:09 +0100
+
 libeufin (0.9.4~dev.18) unstable; urgency=low
 
   * Package git tag v0.9.4-dev.18
