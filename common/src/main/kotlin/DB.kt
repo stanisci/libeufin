@@ -58,7 +58,6 @@ fun getJdbcConnectionFromPg(pgConn: String): String {
         return pgConn
     }
     if (!pgConn.startsWith("postgresql://") && !pgConn.startsWith("postgres://")) {
-        logger.info("Not a Postgres connection string: $pgConn")
         throw Exception("Not a Postgres connection string: $pgConn")
     }
     var maybeUnixSocket = false
@@ -110,7 +109,7 @@ data class DatabaseConfig(
 
 fun pgDataSource(dbConfig: String): PGSimpleDataSource {
     val jdbcConnStr = getJdbcConnectionFromPg(dbConfig)
-    logger.info("connecting to database via JDBC string '$jdbcConnStr'")
+    logger.debug("connecting to database via JDBC string '$jdbcConnStr'")
     val pgSource = PGSimpleDataSource()
     pgSource.setUrl(jdbcConnStr)
     pgSource.prepareThreshold = 1
@@ -244,13 +243,13 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
             checkStmt.setString(1, patchName)
             val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Exception("unable to query patches")
             if (patchCount >= 1) {
-                logger.info("patch $patchName already applied")
+                logger.debug("patch $patchName already applied")
                 continue
             }
 
             val path = Path("${cfg.sqlDir}/$sqlFilePrefix-$numStr.sql")
             if (!path.exists()) {
-                logger.info("path $path doesn't exist anymore, stopping")
+                logger.debug("path $path doesn't exist anymore, stopping")
                 break
             }
             logger.info("applying patch $path")
@@ -259,7 +258,7 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
         }
         val sqlProcedures = Path("${cfg.sqlDir}/$sqlFilePrefix-procedures.sql")
         if (!sqlProcedures.exists()) {
-            logger.info("no procedures.sql for the SQL collection: $sqlFilePrefix")
+            logger.warn("no procedures.sql for the SQL collection: $sqlFilePrefix")
             return@transaction
         }
         logger.info("run procedure.sql")

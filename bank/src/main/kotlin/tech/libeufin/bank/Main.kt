@@ -308,6 +308,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
                     when (serverCfg) {
                         is ServerConfig.Tcp -> {
                             port = serverCfg.port
+                            host = serverCfg.addr
                         }
                         is ServerConfig.Unix ->
                             throw Exception("Can only serve libeufin-bank via TCP")
@@ -317,13 +318,6 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
             }
             val local = embeddedServer(Netty, env)
             engine = local
-            when (serverCfg) {
-                is ServerConfig.Tcp -> {
-                    logger.info("Server listening on http://localhost:${serverCfg.port}")
-                }
-                is ServerConfig.Unix ->
-                    throw Exception("Can only serve libeufin-bank via TCP")
-            }
             local.start(wait = true)
         }
     }

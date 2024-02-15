@@ -65,7 +65,7 @@ data class ConversionRate (
 
 sealed interface ServerConfig {
     data class Unix(val path: String, val mode: Int): ServerConfig
-    data class Tcp(val port: Int): ServerConfig
+    data class Tcp(val addr: String, val port: Int): ServerConfig
 }
 
 fun talerConfig(configPath: Path?): TalerConfig = BANK_CONFIG_SOURCE.fromFile(configPath)
@@ -79,7 +79,7 @@ fun TalerConfig.loadDbConfig(): DatabaseConfig  {
 
 fun TalerConfig.loadServerConfig(): ServerConfig {
     return when (val method = requireString("libeufin-bank", "serve")) {
-        "tcp" -> ServerConfig.Tcp(requireNumber("libeufin-bank", "port"))
+        "tcp" -> ServerConfig.Tcp(requireString("libeufin-bank", "address"), requireNumber("libeufin-bank", "port"))
         "unix" -> ServerConfig.Unix(requireString("libeufin-bank", "unixpath"), requireNumber("libeufin-bank", "unixpath_mode"))
         else -> throw TalerConfigError.invalid("server method", "libeufin-bank", "serve", "expected 'tcp' or 'unix' got '$method'")
     }
