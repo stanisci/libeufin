@@ -55,6 +55,7 @@ import org.slf4j.event.Level
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
+import java.net.InetAddress
 import java.sql.SQLException
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
@@ -304,15 +305,17 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
             }
             
             val env = applicationEngineEnvironment {
-                connector {
-                    when (serverCfg) {
-                        is ServerConfig.Tcp -> {
-                            port = serverCfg.port
-                            host = serverCfg.addr
+                when (serverCfg) {
+                    is ServerConfig.Tcp -> {
+                        for (addr in InetAddress.getAllByName(serverCfg.addr)) {
+                            connector {
+                                port = serverCfg.port
+                                host = addr.hostAddress
+                            }
                         }
-                        is ServerConfig.Unix ->
-                            throw Exception("Can only serve libeufin-bank via TCP")
                     }
+                    is ServerConfig.Unix ->
+                        throw Exception("Can only serve libeufin-bank via TCP")
                 }
                 module { corebankWebApp(db, ctx) }
             }

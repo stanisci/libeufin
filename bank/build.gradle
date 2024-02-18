@@ -47,7 +47,6 @@ dependencies {
 application {
     mainClass = "tech.libeufin.bank.MainKt"
     applicationName = "libeufin-bank"
-    applicationDefaultJvmArgs = ['-Djava.net.preferIPv6Addresses=true']
 }
 
 shadowJar {
