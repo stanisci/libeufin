@@ -129,4 +129,5 @@ testbench: install-nobuild-bank-files install-nobuild-nexus-files
 .PHONY: doc
 doc:
 	./gradlew dokkaHtmlMultiModule
-	open build/dokka/htmlMultiModule/index.html
+	echo "Open build/dokka/htmlMultiModule/index.html"
+
