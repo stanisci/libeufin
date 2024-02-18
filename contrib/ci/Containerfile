@@ -10,16 +10,13 @@ RUN apt-get update -yqq && \
                    make \
                    git \
                    python3-distutils \
-		   curl \
-                   wget \
                    po-debconf \
                    build-essential \
                    debhelper-compat \
                    devscripts \
 		   git-buildpackage \
                    postgresql \
-                   sudo \
-                   jq
+                   sudo
 
 # Note: not sure if we need curl/wget/jq at all!
 
