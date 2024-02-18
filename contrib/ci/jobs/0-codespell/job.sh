@@ -8,13 +8,15 @@ ABOUT-NLS
 configure
 config.guess
 configure~
-*/debian/upstream/*
+*/debian/*
 */debian/.debhelper/*
 */doc/prebuilt/*
 */.git/*
 */contrib/ci/*
 */contrib/wallet-core/*
 */build/*
+*/*.xsd
+*/*.xml
 EOF
 );
 
