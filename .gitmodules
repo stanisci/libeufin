@@ -1,12 +1,12 @@
 [submodule "build-system/taler-build-scripts"]
 	path = build-system/taler-build-scripts
-	url = https://git.taler.net/build-common
+	url = https://git.taler.net/build-common.git
 [submodule "parsing-tests/samples"]
 	path = parsing-tests/samples
-	url = https://git.taler.net/libeufin-tests
+	url = https://git.taler.net/libeufin-tests.git
 [submodule "contrib/wallet-core"]
 	path = contrib/wallet-core
-	url = https://git.taler.net/wallet-core
+	url = https://git.taler.net/wallet-core.git
 	branch = prebuilt
 [submodule "doc/prebuilt"]
 	path = doc/prebuilt
