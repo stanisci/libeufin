@@ -1,0 +1,15 @@
+# List of "words" that codespell should ignore in our sources.
+#
+# Note: The word sensitivity depends on how the to-be-ignored word is
+#  spelled in codespell_lib/data/dictionary.txt.  F.e. if there is a word
+# 'foo' and you add 'Foo' _here_, codespell will continue to complain
+#  about 'Foo'.
+#
+ifset
+bu
+fIDN
+ECT
+complet
+ges
+UE
+Te

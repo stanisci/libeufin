@@ -1,0 +1,28 @@
+FROM docker.io/library/debian:bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update -yqq && \
+    apt-get install -yqq \
+		   unzip \
+		   openjdk-21-jdk \
+		   openjdk-21-jdk-headless \
+                   make \
+                   git \
+                   python3 \
+		   curl \
+                   wget \
+                   po-debconf \
+                   build-essential \
+                   debhelper-compat \
+                   devscripts \
+		   git-buildpackage \
+                   postgresql \
+                   sudo \
+                   jq
+
+# RUN pip3 install --break-system-packages requests click poetry uwsgi htmlark
+
+WORKDIR /workdir
+
+CMD ["bash", "/workdir/ci/ci.sh"]
