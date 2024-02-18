@@ -13,6 +13,8 @@ configure~
 */doc/prebuilt/*
 */.git/*
 */contrib/ci/*
+*/contrib/wallet-core/*
+*/build/*
 EOF
 );
 
