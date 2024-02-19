@@ -44,7 +44,7 @@ data class BankConfig(
     val fiatCurrency: String?,
     val fiatCurrencySpec: CurrencySpecification?,
     val spaPath: Path?,
-    val tanChannels: Map<TanChannel, Path>,
+    val tanChannels: Map<TanChannel, Pair<Path, Map<String, String>>>,
     val payto: BankPaytoCtx,
     val wireMethod: WireMethod
 )
@@ -97,7 +97,13 @@ fun TalerConfig.loadBankConfig(): BankConfig {
     val tanChannels = buildMap {
         for (channel in TanChannel.entries) {
             lookupPath("libeufin-bank", "tan_$channel")?.let {
-                put(channel, it)
+                val variables = lookupString("libeufin-bank", "tan_${channel}_env")?.let { env ->
+                    env.split(' ').map { variable -> 
+                        variable.splitOnce("=") ?:
+                            throw TalerConfigError.invalid("environment variables", "libeufin-bank", "tan_${channel}_env", "expected NAME=VALUE got '$variable'")
+                    }.toMap()
+                } ?: mapOf()
+                put(channel, Pair(it, variables))
             }
         }
     }

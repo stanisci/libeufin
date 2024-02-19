@@ -662,17 +662,29 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                 )
                 is TanSendResult.Success -> {
                     res.tanCode?.run {
-                        val tanScript = ctx.tanChannels.get(res.tanChannel) 
+                        val (tanScript, tanEnv) = ctx.tanChannels.get(res.tanChannel) 
                             ?: throw unsupportedTanChannel(res.tanChannel)
                         val exitValue = withContext(Dispatchers.IO) {
-                            val process = ProcessBuilder(tanScript.toString(), res.tanInfo).start()
+                            val builder = ProcessBuilder(tanScript.toString(), res.tanInfo)
+                            builder.redirectErrorStream(true)
+                            for ((name, value) in tanEnv) {
+                                builder.environment()[name] = value
+                            }
+                            val process = builder.start()
                             try {
                                 process.outputWriter().use { it.write(res.tanCode) }
                                 process.onExit().await()
                             } catch (e: Exception) {
                                 process.destroy()
                             }
-                            process.exitValue()
+                            val exitValue =  process.exitValue()
+                            if (exitValue != 0) {
+                                val out = process.getInputStream().reader().readText() 
+                                if (out.isNotEmpty()) {
+                                    logger.error("TAN ${res.tanChannel} - ${tanScript}: $out")
+                                }
+                            }
+                            exitValue
                         }
                         if (exitValue != 0) {
                             throw libeufinError(
