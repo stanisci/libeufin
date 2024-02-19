@@ -12,9 +12,10 @@ configure~
 */debian/.debhelper/*
 */doc/prebuilt/*
 */.git/*
+*/.gradle/*
 */contrib/ci/*
 */contrib/wallet-core/*
-*/contrib/frontend/*
+*/frontend/*
 */build/*
 */*.xsd
 */*.xml
