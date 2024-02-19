@@ -79,7 +79,7 @@ fun TalerConfig.loadDbConfig(): DatabaseConfig  {
 
 fun TalerConfig.loadServerConfig(): ServerConfig {
     return when (val method = requireString("libeufin-bank", "serve")) {
-        "tcp" -> ServerConfig.Tcp(requireString("libeufin-bank", "address"), requireNumber("libeufin-bank", "port"))
+        "tcp" -> ServerConfig.Tcp(lookupString("libeufin-bank", "address") ?: requireString("libeufin-bank", "bind_to"), requireNumber("libeufin-bank", "port"))
         "unix" -> ServerConfig.Unix(requireString("libeufin-bank", "unixpath"), requireNumber("libeufin-bank", "unixpath_mode"))
         else -> throw TalerConfigError.invalid("server method", "libeufin-bank", "serve", "expected 'tcp' or 'unix' got '$method'")
     }
