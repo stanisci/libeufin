@@ -11,7 +11,7 @@ make -j install
 sudo -u postgres /usr/lib/postgresql/15/bin/postgres -D /etc/postgresql/15/main -h localhost -p 5432 &
 sleep 10
 sudo -u postgres createuser -p 5432 root
-#sudo -u postgres createdb -p 5432 -O root synccheck
+sudo -u postgres createdb -p 5432 -O root libeufincheck
 
 check_command()
 {

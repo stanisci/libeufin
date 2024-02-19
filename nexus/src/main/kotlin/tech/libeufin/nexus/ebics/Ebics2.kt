@@ -85,7 +85,7 @@ fun createEbics25DownloadInit(
  * @param clientKeys user EBICS private keys.
  * @param transactionId transaction ID of the EBICS communication that
  *        should receive this receipt.
- * @param success was the download sucessfully processed
+ * @param success was the download successfully processed
  * @return receipt request in XML.
  */
 fun createEbics25DownloadReceiptPhase(

@@ -399,7 +399,7 @@ suspend inline fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B)
     val params = PageParams.extract(call.request.url.parameters)
 
     // testing the size is like expected.
-    assertEquals(size, history.size, "bad history lenght: $history")
+    assertEquals(size, history.size, "bad history length: $history")
     if (params.delta < 0) {
         // testing that the first id is at most the 'start' query param.
         assert(history[0] <= params.start) { "bad history start: $params $history" }
@@ -482,13 +482,13 @@ fun HttpRequestBuilder.pwAuth(username: String? = null) {
 
 /* ----- Random data generation ----- */
 
-fun randBytes(lenght: Int): ByteArray {
-    val bytes = ByteArray(lenght)
+fun randBytes(length: Int): ByteArray {
+    val bytes = ByteArray(length)
     Random.nextBytes(bytes)
     return bytes
 }
 
-fun randBase32Crockford(lenght: Int) = Base32Crockford.encode(randBytes(lenght))
+fun randBase32Crockford(length: Int) = Base32Crockford.encode(randBytes(length))
 
 fun randHashCode(): HashCode = HashCode(randBase32Crockford(64))
 fun randShortHashCode(): ShortHashCode = ShortHashCode(randBase32Crockford(32))

@@ -151,7 +151,7 @@ class DatabaseTest {
             // Code successfully sent and still valid
             markSent(this, now)
             assertNull(send(this, "new-code", now))
-            // Code is still valid but shoud be resent
+            // Code is still valid but should be resent
             assertEquals("good-code", send(this, "new-code", retransmit))
             // Good code fail because expired
             assertEquals(Triple(false, false, true), cTry(this, "good-code", expired))

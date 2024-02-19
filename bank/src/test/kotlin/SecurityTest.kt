@@ -58,7 +58,7 @@ class SecurityTest {
             })
         }.assertBadRequest()
 
-        // Check uknown encoding
+        // Check unknown encoding
         client.postA("/accounts/merchant/transactions") {
             headers.set(HttpHeaders.ContentEncoding, "unknown")
             json(valid_req)

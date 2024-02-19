@@ -44,10 +44,10 @@ class CoreBankConfigTest {
     fun monitor() = bankSetup { _ -> 
         authRoutine(HttpMethod.Get, "/monitor", requireAdmin = true)
         // Check OK
-        client.get("/monitor?timeframe=day&wich=25") {
+        client.get("/monitor?timeframe=day&which=25") {
             pwAuth("admin")
         }.assertOk()
-        client.get("/monitor?timeframe=day=wich=25") {
+        client.get("/monitor?timeframe=day=which=25") {
             pwAuth("admin")
         }.assertBadRequest()
     }
@@ -352,7 +352,7 @@ class CoreBankAccountsApiTest {
         }
         assertBalance("admin", "-KUDOS:10000")
         
-        // Check unsufficient fund
+        // Check insufficient fund
         client.post("/accounts") {
             pwAuth("admin")
             json(req) {
@@ -419,7 +419,7 @@ class CoreBankAccountsApiTest {
         tx("customer", "KUDOS:1", "john")
         client.deleteA("/accounts/john")
             .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
-        // Sucessful deletion
+        // Successful deletion
         tx("john", "KUDOS:1", "customer")
         // TODO remove with gc
         db.conn { conn ->
@@ -931,7 +931,7 @@ class CoreBankTransactionsApiTest {
         }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
         assertBalance("merchant", "-KUDOS:6")
         assertBalance("customer", "+KUDOS:6")
-        // Send throught debt
+        // Send through debt
         tx("customer", "KUDOS:10", "merchant")
         assertBalance("merchant", "+KUDOS:4")
         assertBalance("customer", "-KUDOS:4")

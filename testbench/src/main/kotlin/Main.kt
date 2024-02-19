@@ -34,8 +34,8 @@ import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import io.ktor.client.request.*
 
-fun randBytes(lenght: Int): ByteArray {
-    val bytes = ByteArray(lenght)
+fun randBytes(length: Int): ByteArray {
+    val bytes = ByteArray(length)
     kotlin.random.Random.nextBytes(bytes)
     return bytes
 }
@@ -103,7 +103,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         """)
         val cfg = loadConfig(conf)
 
-        // Check if paltform is known
+        // Check if platform is known
         val kind = when (cfg.requireString("nexus-ebics", "host_base_url")) {
             "https://isotest.postfinance.ch/ebicsweb/ebicsweb" -> 
                 Kind("PostFinance IsoTest", "https://isotest.postfinance.ch/corporates/user/settings/ebics")

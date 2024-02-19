@@ -255,7 +255,7 @@ private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
  * @param isEbics3 true for EBICS 3, false otherwise.
  * @param processing processing lambda receiving EBICS files as a byte stream if the transaction was not empty.
  * @return T if the transaction was successful. If the failure is at the EBICS 
- *         level EbicsSideException is thrown else ités the expection of the processing lambda.
+ *         level EbicsSideException is thrown else ités the exception of the processing lambda.
  */
 suspend fun ebicsDownload(
     client: HttpClient,

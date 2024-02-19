@@ -773,7 +773,7 @@ new_creditor_balance taler_amount;
 will_debtor_have_debt BOOLEAN;
 will_creditor_have_debt BOOLEAN;
 BEGIN
--- Retreive debtor info
+-- Retrieve debtor info
 SELECT
   has_debt,
   (balance).val, (balance).frac,
@@ -790,7 +790,7 @@ SELECT
 IF NOT FOUND THEN
   RAISE EXCEPTION 'fuck debtor';
 END IF;
--- Retreive creditor info
+-- Retrieve creditor info
 SELECT
   has_debt,
   (balance).val, (balance).frac,
@@ -1161,7 +1161,7 @@ LANGUAGE plpgsql as $$
 DECLARE
 account_id INT8;
 BEGIN
--- Retreive account id
+-- Retrieve account id
 SELECT customer_id INTO account_id FROM customers WHERE login = in_login;
 -- Create challenge
 INSERT INTO tan_challenges (
@@ -1208,7 +1208,7 @@ account_id INT8;
 expired BOOLEAN;
 retransmit BOOLEAN;
 BEGIN
--- Retreive account id
+-- Retrieve account id
 SELECT customer_id, tan_channel, CASE tan_channel
     WHEN 'sms'   THEN phone
     WHEN 'email' THEN email
@@ -1273,7 +1273,7 @@ LANGUAGE plpgsql as $$
 DECLARE
 account_id INT8;
 BEGIN
--- Retreive account id
+-- Retrieve account id
 SELECT customer_id INTO account_id FROM customers WHERE login = in_login;
 -- Check challenge
 UPDATE tan_challenges SET 
@@ -1478,7 +1478,7 @@ BEGIN
   END IF;
 END $$;
 COMMENT ON FUNCTION conversion_apply_ratio
-  IS 'Apply a ratio to an amount rouding the result to a tiny amount following a rounding mode. It raises an exception when the resulting .val is larger than 2^52';
+  IS 'Apply a ratio to an amount rounding the result to a tiny amount following a rounding mode. It raises an exception when the resulting .val is larger than 2^52';
 
 CREATE FUNCTION conversion_revert_ratio(
    IN amount taler_amount

@@ -219,7 +219,7 @@ class AccountDAO(private val db: Database) {
         data object Success: AccountPatchResult
     }
 
-    /** Change account [login] informations */
+    /** Change account [login] information */
     suspend fun reconfig(
         login: String,
         name: String?,

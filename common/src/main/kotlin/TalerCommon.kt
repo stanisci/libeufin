@@ -61,7 +61,7 @@ class TalerAmount {
             var tmp = frac.toIntOrNull() ?: 
                 throw CommonError.AmountFormat("Invalid fractional value")
             if (tmp > FRACTION_BASE) 
-                throw CommonError.AmountFormat("Fractional calue specified in amount is too large")
+                throw CommonError.AmountFormat("Fractional value specified in amount is too large")
             repeat(8 - frac.length) {
                 tmp *= 10
             }
@@ -295,7 +295,7 @@ class XTalerBankPayto internal constructor(
     }
 }
 
-/** Context specific data nescessary to create a bank payto URI from a canonical payto URI */
+/** Context specific data necessary to create a bank payto URI from a canonical payto URI */
 data class BankPaytoCtx(
     val bic: String? = null,
     val hostname: String? = null

@@ -504,7 +504,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
      *        This value then gets specified as the MsgId of pain.001,
      *        and it gets associated by the bank to the booked entries
      *        in camt.05x reports.
-     * @retrun the initiated payment row ID, or null if not found.  NOTE:
+     * @return the initiated payment row ID, or null if not found.  NOTE:
      *         null gets returned even when the initiated payment exists,
      *         *but* it was NOT flagged as submitted.
      */

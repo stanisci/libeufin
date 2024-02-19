@@ -168,7 +168,7 @@ IF FOUND THEN
 END IF;
 END$$;
 COMMENT ON FUNCTION bounce_incoming
-  IS 'Bounce an incoming transaction, initiate a bouce outgoing transaction with a deterministic ID';
+  IS 'Bounce an incoming transaction, initiate a bounce outgoing transaction with a deterministic ID';
 
 CREATE FUNCTION register_incoming_and_bounce(
   IN in_amount taler_amount

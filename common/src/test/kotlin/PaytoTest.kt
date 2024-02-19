@@ -63,13 +63,13 @@ class PaytoTest {
         val full = listOf(
             "payto://iban/BIC/CH9300762011623852957?receiver-name=NotGiven",
             "payto://iban/CH9300762011623852957?receiver-name=Grothoff%20Hans",
-            "payto://iban/CH9300762011623852957?receiver-name=Santa%20Claus",
+            "payto://iban/CH9300762011623852957?receiver-name=Santa",
         )
         for ((i, input) in inputs.withIndex()) {
             val payto = Payto.parse(input).expectIban()
             assertEquals(canonical, payto.canonical)
             assertEquals(bank, payto.bank("Name", ctx))
-            assertEquals(full[i], payto.full("Santa Claus"))
+            assertEquals(full[i], payto.full("Santa"))
             assertEquals(names[i], payto.receiverName)
         }
     }

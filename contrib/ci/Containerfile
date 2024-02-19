@@ -4,21 +4,17 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update -yqq && \
     apt-get install -yqq \
-		   unzip \
-		   openjdk-17-jdk \
-		   openjdk-17-jdk-headless \
+		           unzip \
+		           openjdk-17-jdk-headless \
                    make \
-                   git \
                    python3-distutils \
                    po-debconf \
                    build-essential \
                    debhelper-compat \
                    devscripts \
-		   git-buildpackage \
+		           git-buildpackage \
                    postgresql \
                    sudo
-
-# Note: not sure if we need curl/wget/jq at all!
 
 WORKDIR /workdir
 

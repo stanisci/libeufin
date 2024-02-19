@@ -65,7 +65,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                         while (true) {
                             conn.getNotifications(0) // Block until we receive at least one notification
                                 .forEach {
-                                // Extract informations and dispatch
+                                // Extract information and dispatch
                                 when (it.name) {
                                     "bank_tx" -> {
                                         val (debtor, creditor, debitRow, creditRow) = it.parameter.split(' ', limit = 4).map { it.toLong() }

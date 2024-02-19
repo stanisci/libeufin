@@ -50,8 +50,8 @@ fun HttpResponse.assertNoContent() {
     assertEquals(HttpStatusCode.NoContent, this.status)
 }
 
-fun randBytes(lenght: Int): ByteArray {
-    val bytes = ByteArray(lenght)
+fun randBytes(length: Int): ByteArray {
+    val bytes = ByteArray(length)
     kotlin.random.Random.nextBytes(bytes)
     return bytes
 }
@@ -104,7 +104,7 @@ class IntegrationTest {
         val flags = "-c conf/mini.conf -L DEBUG"
         bankCmd.run("dbinit $flags -r")
         bankCmd.run("passwd admin password $flags")
-        bankCmd.run("dbinit $flags") // Indempotent
+        bankCmd.run("dbinit $flags") // Idempotent
         
         server {
             bankCmd.run("serve $flags")

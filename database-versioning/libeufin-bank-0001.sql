@@ -287,9 +287,9 @@ COMMENT ON COLUMN bank_stats.cashin_fiat_volume
 COMMENT ON COLUMN bank_stats.cashout_count
   IS 'how many cashout operations took place in the timeframe';
 COMMENT ON COLUMN bank_stats.cashout_regional_volume
-  IS 'how much regional currency was payed by the bank to customers in the timeframe';
+  IS 'how much regional currency was paid by the bank to customers in the timeframe';
 COMMENT ON COLUMN bank_stats.cashout_fiat_volume 
-  IS 'how much fiat currency was payed by the bank to customers in the timeframe';
+  IS 'how much fiat currency was paid by the bank to customers in the timeframe';
 
 -- end of: Statistics
 

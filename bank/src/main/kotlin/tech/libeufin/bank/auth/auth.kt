@@ -30,7 +30,7 @@ import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
 import java.time.Instant
 
-/** Used to store if the currenly authenticated user is admin */
+/** Used to store if the currently authenticated user is admin */
 private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin")
 
 /** Used to store used auth token */
@@ -46,7 +46,7 @@ val ApplicationCall.isAdmin: Boolean get() = attributes.getOrNull(AUTH_IS_ADMIN)
 /** Check if current auth account is admin */
 val PipelineContext<Unit, ApplicationCall>.isAdmin: Boolean get() = call.isAdmin
 
-/** Check auth token used for authentification */
+/** Check auth token used for authentication */
 val ApplicationCall.authToken: ByteArray? get() = attributes.getOrNull(AUTH_TOKEN)
 
 /** 

@@ -14,9 +14,11 @@ configure~
 */.git/*
 */contrib/ci/*
 */contrib/wallet-core/*
+*/contrib/frontend/*
 */build/*
 */*.xsd
 */*.xml
+*/ebics/src/test/kotlin/EbicsOrderUtilTest.kt
 EOF
 );
 

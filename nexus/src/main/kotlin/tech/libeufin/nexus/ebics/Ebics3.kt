@@ -41,7 +41,7 @@ import javax.xml.datatype.DatatypeFactory
  * @param clientKeys subscriber private keys.
  * @param transactionId EBICS transaction ID as assigned by the
  *        bank to any successful transaction.
- * @param success was the download sucessfully processed
+ * @param success was the download successfully processed
  * @return the raw XML of the EBICS request.
  */
 fun createEbics3DownloadReceiptPhase(

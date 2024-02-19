@@ -91,6 +91,7 @@ class SignatureDataTest {
             }
         }
 
-        println(XMLUtil.convertJaxbToString(tmp))
+        println(XMLUtil.convertJaxbToBytes(tmp))
+
     }
 }
