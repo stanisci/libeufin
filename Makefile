@@ -4,7 +4,7 @@ include build-system/config.mk
 
 # Default target, must be at the top.
 # Should be changed with care to not break (Debian) packaging.
-all: compile
+all: build
 
 git-archive-all = ./build-system/taler-build-scripts/archive-with-submodules/git_archive_all.py
 git_tag=$(shell git describe --tags)
@@ -28,8 +28,8 @@ lib_dir=$(abs_destdir)$(prefix)/lib
 
 # While the gradle command sounds like it's installing something,
 # it's like a destdir install that only touches the source tree.
-.PHONY: compile
-compile:
+.PHONY: build
+build:
 	./gradlew bank:installShadowDist nexus:installShadowDist
 
 
@@ -51,38 +51,31 @@ deb:
 install-nobuild: install-nobuild-bank install-nobuild-nexus
 
 
-.PHONY: install-nobuild-common
-install-nobuild-common:
+.PHONY: install-nobuild-files
+install-nobuild-files:
 	install -m 644 -D -t $(config_dir) contrib/currencies.conf 
-	install -m 644 -D -t $(sql_dir) database-versioning/versioning.sql 
-	install -D -t $(bin_dir) contrib/libeufin-dbconfig
-
-.PHONY: install-nobuild-bank-files
-install-nobuild-bank-files:
 	install -m 644 -D -t $(config_dir) contrib/bank.conf
-	install -m 644 -D -t $(sql_dir) database-versioning/libeufin-bank*.sql
-	install -m 644 -D -t $(sql_dir) database-versioning/libeufin-conversion*.sql
-
-.PHONY: install-nobuild-nexus-files
-install-nobuild-nexus-files:
 	install -m 644 -D -t $(config_dir) contrib/nexus.conf
+	install -m 644 -D -t $(sql_dir) database-versioning/versioning.sql 
+	install -m 644 -D -t $(sql_dir) database-versioning/libeufin-bank*.sql
 	install -m 644 -D -t $(sql_dir) database-versioning/libeufin-nexus*.sql
+	install -m 644 -D -t $(sql_dir) database-versioning/libeufin-conversion*.sql
+	install -D -t $(bin_dir) contrib/libeufin-dbconfig
+	install -D -t $(bin_dir) contrib/libeufin-tan-*.sh
 
 .PHONY: install-nobuild-bank
-install-nobuild-bank: install-nobuild-common install-nobuild-bank-files
+install-nobuild-bank: install-nobuild-files
 	install -d $(spa_dir)
 	cp contrib/wallet-core/demobank/* $(spa_dir)/
 	install -d $(abs_destdir)$(prefix)
 	install -d $(bin_dir)
 	install -d $(lib_dir)
-	install -D -t $(bin_dir) contrib/libeufin-tan-*.sh
 	install -D -t $(bin_dir) contrib/libeufin-bank-dbinit
 	install -D -t $(bin_dir) bank/build/install/bank-shadow/bin/libeufin-bank
 	install -m=644 -D -t $(lib_dir) bank/build/install/bank-shadow/lib/bank-*.jar
 
 .PHONY: install-nobuild-nexus
-install-nobuild-nexus: install-nobuild-common install-nobuild-nexus-files
-	install -m 644 -D -t $(config_dir) contrib/nexus.conf
+install-nobuild-nexus: install-nobuild-files
 	install -m 644 -D -t $(man_dir)/man1 doc/prebuilt/man/libeufin-nexus.1
 	install -m 644 -D -t $(man_dir)/man5 doc/prebuilt/man/libeufin-nexus.conf.5
 	install -D -t $(bin_dir) contrib/libeufin-nexus-dbinit
@@ -91,7 +84,7 @@ install-nobuild-nexus: install-nobuild-common install-nobuild-nexus-files
 
 .PHONY: install
 install:
-	$(MAKE) compile
+	$(MAKE) build
 	$(MAKE) install-nobuild
 
 .PHONY: assemble
@@ -99,31 +92,31 @@ assemble:
 	./gradlew assemble
 
 .PHONY: check
-check: install-nobuild-bank-files
+check: install-nobuild-files
 	./gradlew check
 
 .PHONY: bank-test
-bank-test: install-nobuild-bank-files
+bank-test: install-nobuild-files
 	./gradlew :bank:test --tests $(test) -i
 
 .PHONY: nexus-test
-nexus-test: install-nobuild-nexus-files
+nexus-test: install-nobuild-files
 	./gradlew :nexus:test --tests $(test) -i
 
 .PHONY: ebics-test
-ebics-test:
+ebics-test: install-nobuild-files
 	./gradlew :ebics:test --tests $(test) -i
 
 .PHONY: common-test
-common-test:
+common-test: install-nobuild-files
 	./gradlew :common:test --tests $(test) -i
 
 .PHONY: testbench-test
-testbench-test: install-nobuild-bank-files install-nobuild-nexus-files
+testbench-test: install-nobuild-files
 	./gradlew :testbench:test --tests $(test) -i
 
 .PHONY: testbench
-testbench: install-nobuild-bank-files install-nobuild-nexus-files
+testbench: install-nobuild-files
 	./gradlew :testbench:run --console=plain --args="$(platform)"
 
 .PHONY: doc

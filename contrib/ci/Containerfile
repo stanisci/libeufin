@@ -1,6 +1,8 @@
 FROM docker.io/library/debian:bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
+# Persistent gradle cache
+ENV GRADLE_USER_HOME=/workdir/.gradle
 
 RUN apt-get update -yqq && \
     apt-get install -yqq \

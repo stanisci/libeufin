@@ -5,8 +5,8 @@ apt-get update
 apt-get upgrade -yqq
 
 ./bootstrap
-./configure --prefix=/usr
-make -j install
+./configure --prefix /usr
+make build
 
 sudo -u postgres /usr/lib/postgresql/15/bin/postgres -D /etc/postgresql/15/main -h localhost -p 5432 &
 sleep 10

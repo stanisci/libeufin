@@ -25,7 +25,9 @@ import kotlin.io.path.*
 class Iso20022Test {
     @Test
     fun logs() {
-        for (platform in Path("test").listDirectoryEntries()) {
+        val root = Path("test")
+        if (!root.exists()) return;
+        for (platform in root.listDirectoryEntries()) {
             for (file in platform.listDirectoryEntries()) {
                 val fetch = file.resolve("fetch")
                 if (file.isDirectory() && fetch.exists()) {

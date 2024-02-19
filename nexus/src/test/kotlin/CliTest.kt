@@ -23,10 +23,7 @@ import tech.libeufin.common.CryptoUtil
 import tech.libeufin.nexus.*
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream
-import kotlin.io.path.Path
-import kotlin.io.path.createDirectories
-import kotlin.io.path.deleteIfExists
-import kotlin.io.path.writeText
+import kotlin.io.path.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -71,10 +68,12 @@ class CliTest {
             nexusCmd.testErr("$cmd -c $conf", "Could not decode client private keys at '$clientKeysPath': Expected start of the object '{', but had 'EOF' instead at path: $\nJSON input: CORRUPTION")
         }
         // Missing permission
-        /*clientKeysPath.toFile().setReadable(false) TODO make this work in CI
-        for (cmd in allCmds) {
-            nexusCmd.testErr("$cmd -c $conf", "Could not read client private keys at '$clientKeysPath': permission denied")
-        }*/
+        clientKeysPath.toFile().setReadable(false)
+        if (!clientKeysPath.isReadable()) { // Skip if root
+            for (cmd in allCmds) {
+                nexusCmd.testErr("$cmd -c $conf", "Could not read client private keys at '$clientKeysPath': permission denied")
+            }
+        }
         // Unfinished client
         persistClientKeys(generateNewKeys(), clientKeysPath)
         for (cmd in cmds) {
@@ -96,10 +95,12 @@ class CliTest {
             nexusCmd.testErr("$cmd -c $conf", "Could not decode bank public keys at '$bankKeysPath': Expected start of the object '{', but had 'EOF' instead at path: $\nJSON input: CORRUPTION")
         }
         // Missing permission
-        /*bankKeysPath.toFile().setReadable(false) TODO make this work in CI
-        for (cmd in allCmds) {
-            nexusCmd.testErr("$cmd -c $conf", "Could not read bank public keys at '$bankKeysPath': permission denied")
-        }*/
+        bankKeysPath.toFile().setReadable(false)
+        if (!bankKeysPath.isReadable()) { // Skip if root
+            for (cmd in allCmds) {
+                nexusCmd.testErr("$cmd -c $conf", "Could not read bank public keys at '$bankKeysPath': permission denied")
+            }
+        }
         // Unfinished bank
         persistBankKeys(BankPublicKeysFile(
             bank_authentication_public_key = CryptoUtil.generateRsaKeyPair(2048).public,
@@ -112,7 +113,9 @@ class CliTest {
 
         // Missing permission
         clientKeysPath.deleteIfExists()
-        /*clientKeysPath.parent!!.toFile().setWritable(false) TODO make this work in CI
-        nexusCmd.testErr("ebics-setup -c $conf", "Could not write client private keys at '$clientKeysPath': permission denied on '${clientKeysPath.parent}'")*/
+        clientKeysPath.parent!!.toFile().setWritable(false)
+        if (!clientKeysPath.parent!!.isWritable()) { // Skip if root
+            nexusCmd.testErr("ebics-setup -c $conf", "Could not write client private keys at '$clientKeysPath': permission denied on '${clientKeysPath.parent}'")
+        }
     }
 }
