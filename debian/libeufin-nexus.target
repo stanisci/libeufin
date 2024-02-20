@@ -1,0 +1,9 @@
+[Unit]
+Description=LibEuFin Nexus
+After=postgres.service network.target
+
+Wants=libeufin-nexus-ebics-fetch.service
+Wants=libeufin-nexus-ebics-submit.service
+
+[Install]
+WantedBy=multi-user.target

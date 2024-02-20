@@ -1,5 +1,7 @@
 [Unit]
 Description=LibEuFin Nexus EBICS fetch service.
+After=postgres.service network.target
+PartOf=libeufin-nexus.target
 
 [Service]
 User=libeufin-nexus

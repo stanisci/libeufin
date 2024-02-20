@@ -1,5 +1,7 @@
 [Unit]
-Description=LibEuFin Bank service.
+Description=LibEuFin Bank Server Service
+After=postgres.service network.target
+PartOf=libeufin-bank.target
 
 [Service]
 User=libeufin-bank

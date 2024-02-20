@@ -1,0 +1,8 @@
+[Unit]
+Description=LibEuFin Bank
+After=postgres.service network.target
+
+Wants=libeufin-bank.service
+
+[Install]
+WantedBy=multi-user.target
