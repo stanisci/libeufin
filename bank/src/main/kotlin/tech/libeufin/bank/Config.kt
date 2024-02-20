@@ -154,7 +154,16 @@ fun String.notEmptyOrNull(): String? = if (isEmpty()) null else this
 fun TalerConfig.currencySpecificationFor(currency: String): CurrencySpecification
     = sections.find {
         it.startsWith("CURRENCY-") && requireBoolean(it, "enabled") && requireString(it, "code") == currency
-    }?.let { loadCurrencySpecification(it) } ?: throw TalerConfigError.generic("missing currency specification for $currency")
+    }?.let { loadCurrencySpecification(it) } ?: run {
+        logger.warn("Missing currency specification for $currency, using sane defaults")
+        CurrencySpecification(
+            name = currency,
+            num_fractional_input_digits = 2,
+            num_fractional_normal_digits = 2,
+            num_fractional_trailing_zero_digits = 2,
+            alt_unit_names = mapOf("0" to currency)
+        )
+    }
 
 private fun TalerConfig.loadCurrencySpecification(section: String): CurrencySpecification {
     return CurrencySpecification(
@@ -165,7 +174,6 @@ private fun TalerConfig.loadCurrencySpecification(section: String): CurrencySpec
         alt_unit_names = Json.decodeFromString(requireString(section, "alt_unit_names"))
     )
 }
-
 private fun TalerConfig.amount(section: String, option: String, currency: String): TalerAmount? {
     val raw = lookupString(section, option) ?: return null
     val amount = try {
