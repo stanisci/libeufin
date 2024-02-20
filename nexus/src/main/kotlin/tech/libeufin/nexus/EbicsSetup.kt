@@ -83,9 +83,10 @@ fun String.spaceEachTwo() =
 private fun askUserToAcceptKeys(bankKeys: BankPublicKeysFile): Boolean {
     val encHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).toHexString()
     val authHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).toHexString()
-    println("The bank has the following keys, type 'yes, accept' to accept them..\n")
+    println("The bank has the following keys:")
     println("Encryption key: ${encHash.spaceEachTwo()}")
     println("Authentication key: ${authHash.spaceEachTwo()}")
+    print("type 'yes, accept' to accept them: ")
     val userResponse: String? = readlnOrNull()
     return userResponse == "yes, accept"
 }

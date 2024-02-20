@@ -97,13 +97,7 @@ fun TalerConfig.loadBankConfig(): BankConfig {
     val tanChannels = buildMap {
         for (channel in TanChannel.entries) {
             lookupPath("libeufin-bank", "tan_$channel")?.let {
-                val variables = lookupString("libeufin-bank", "tan_${channel}_env")?.let { env ->
-                    env.split(' ').map { variable -> 
-                        variable.splitOnce("=") ?:
-                            throw TalerConfigError.invalid("environment variables", "libeufin-bank", "tan_${channel}_env", "expected NAME=VALUE got '$variable'")
-                    }.toMap()
-                } ?: mapOf()
-                put(channel, Pair(it, variables))
+                put(channel, Pair(it, jsonMap("libeufin-bank", "tan_${channel}_env") ?: mapOf()))
             }
         }
     }
@@ -171,9 +165,22 @@ private fun TalerConfig.loadCurrencySpecification(section: String): CurrencySpec
         num_fractional_input_digits = requireNumber(section, "fractional_input_digits"),
         num_fractional_normal_digits = requireNumber(section, "fractional_normal_digits"),
         num_fractional_trailing_zero_digits = requireNumber(section, "fractional_trailing_zero_digits"),
-        alt_unit_names = Json.decodeFromString(requireString(section, "alt_unit_names"))
+        alt_unit_names = requireJsonMap(section, "alt_unit_names")
     )
 }
+
+private fun TalerConfig.jsonMap(section: String, option: String): Map<String, String>? {
+    val raw = lookupString(section, option) ?: return null
+    try {
+        return Json.decodeFromString(raw)
+    } catch (e: Exception) {
+        throw TalerConfigError.invalid("json key/value map", section, option, "'$raw' is malformed")
+    }
+}
+
+private fun TalerConfig.requireJsonMap(section: String, option: String): Map<String, String>
+    = jsonMap(section, option) ?: throw TalerConfigError.missing("json key/value map", section, option)
+
 private fun TalerConfig.amount(section: String, option: String, currency: String): TalerAmount? {
     val raw = lookupString(section, option) ?: return null
     val amount = try {
