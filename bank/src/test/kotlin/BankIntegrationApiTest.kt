@@ -23,10 +23,7 @@ import tech.libeufin.bank.BankAccountCreateWithdrawalResponse
 import tech.libeufin.bank.BankWithdrawalOperationPostResponse
 import tech.libeufin.bank.BankWithdrawalOperationStatus
 import tech.libeufin.bank.WithdrawalStatus
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.TalerErrorCode
-import tech.libeufin.common.json
-import tech.libeufin.common.obj
+import tech.libeufin.common.*
 import java.util.*
 import kotlin.test.assertEquals
 
@@ -72,7 +69,7 @@ class BankIntegrationApiTest {
     // POST /taler-integration/withdrawal-operation/UUID
     @Test
     fun select() = bankSetup { _ ->
-        val reserve_pub = randEddsaPublicKey()
+        val reserve_pub = EddsaPublicKey.rand()
         val req = obj {
             "reserve_pub" to reserve_pub
             "selected_exchange" to exchangePayto.canonical
@@ -110,7 +107,7 @@ class BankIntegrationApiTest {
             // Check already selected
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 json(req) {
-                    "reserve_pub" to randEddsaPublicKey()
+                    "reserve_pub" to EddsaPublicKey.rand()
                 }
             }.assertConflict(TalerErrorCode.BANK_WITHDRAWAL_OPERATION_RESERVE_SELECTION_CONFLICT)
         }   
@@ -127,14 +124,14 @@ class BankIntegrationApiTest {
             // Check unknown account
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 json {
-                    "reserve_pub" to randEddsaPublicKey()
+                    "reserve_pub" to EddsaPublicKey.rand()
                     "selected_exchange" to unknownPayto
                 }
             }.assertConflict(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
             // Check account not exchange
             client.post("/taler-integration/withdrawal-operation/$uuid") {
                 json {
-                    "reserve_pub" to randEddsaPublicKey()
+                    "reserve_pub" to EddsaPublicKey.rand()
                     "selected_exchange" to merchantPayto
                 }
             }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE)

@@ -283,15 +283,6 @@ object CryptoUtil {
         return bundle.encoded
     }
 
-    fun checkValidEddsaPublicKey(enc: String): Boolean {
-        val data = try {
-            Base32Crockford.decode(enc)
-        } catch (e: Exception) {
-            return false
-        }
-        return data.size == 32
-    }
-
     fun hashStringSHA256(input: String): ByteArray {
         return MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
     }

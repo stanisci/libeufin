@@ -206,10 +206,10 @@ suspend fun ApplicationTestBuilder.tx(from: String, amount: String, to: String, 
 suspend fun ApplicationTestBuilder.transfer(amount: String) {
     client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
         json {
-            "request_uid" to randHashCode()
+            "request_uid" to HashCode.rand()
             "amount" to TalerAmount(amount)
             "exchange_base_url" to "http://exchange.example.com/"
-            "wtid" to randShortHashCode()
+            "wtid" to ShortHashCode.rand()
             "credit_account" to merchantPayto
         }
     }.assertOk()
@@ -221,7 +221,7 @@ suspend fun ApplicationTestBuilder.addIncoming(amount: String) {
         pwAuth("admin")
         json {
             "amount" to TalerAmount(amount)
-            "reserve_pub" to randEddsaPublicKey()
+            "reserve_pub" to EddsaPublicKey.rand()
             "debit_account" to merchantPayto
         }
     }.assertOk()
@@ -231,7 +231,7 @@ suspend fun ApplicationTestBuilder.addIncoming(amount: String) {
 suspend fun ApplicationTestBuilder.cashout(amount: String) {
     val res = client.postA("/accounts/customer/cashouts") {
         json {
-            "request_uid" to randShortHashCode()
+            "request_uid" to ShortHashCode.rand()
             "amount_debit" to amount
             "amount_credit" to convert(amount)
         }
@@ -241,7 +241,7 @@ suspend fun ApplicationTestBuilder.cashout(amount: String) {
         fillCashoutInfo("customer")
         client.postA("/accounts/customer/cashouts") {
             json {
-                "request_uid" to randShortHashCode()
+                "request_uid" to ShortHashCode.rand()
                 "amount_debit" to amount
                 "amount_credit" to convert(amount)
             }
@@ -290,7 +290,7 @@ suspend fun ApplicationTestBuilder.fillTanInfo(account: String) {
 suspend fun ApplicationTestBuilder.withdrawalSelect(uuid: String) {
     client.post("/taler-integration/withdrawal-operation/$uuid") {
         json {
-            "reserve_pub" to randEddsaPublicKey()
+            "reserve_pub" to EddsaPublicKey.rand()
             "selected_exchange" to exchangePayto
         }
     }.assertOk()
@@ -482,17 +482,7 @@ fun HttpRequestBuilder.pwAuth(username: String? = null) {
 
 /* ----- Random data generation ----- */
 
-fun randBytes(length: Int): ByteArray {
-    val bytes = ByteArray(length)
-    Random.nextBytes(bytes)
-    return bytes
-}
-
 fun randBase32Crockford(length: Int) = Base32Crockford.encode(randBytes(length))
-
-fun randHashCode(): HashCode = HashCode(randBase32Crockford(64))
-fun randShortHashCode(): ShortHashCode = ShortHashCode(randBase32Crockford(32))
-fun randEddsaPublicKey(): EddsaPublicKey = EddsaPublicKey(randBase32Crockford(32))
 
 fun randIncomingSubject(reservePub: EddsaPublicKey): String {
     return "$reservePub"

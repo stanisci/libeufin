@@ -300,3 +300,122 @@ data class BankPaytoCtx(
     val bic: String? = null,
     val hostname: String? = null
 )
+
+
+/** 32-byte Crockford's Base32 encoded data */
+@Serializable(with = Base32Crockford32B.Serializer::class)
+class Base32Crockford32B {
+    private var encoded: String? = null
+    val raw: ByteArray
+
+    constructor(encoded: String) {
+        val decoded = try {
+            Base32Crockford.decode(encoded) 
+        } catch (e: EncodingException) {
+            null
+        }
+        require(decoded != null && decoded.size == 32) {
+            "expected 32 bytes encoded in Crockford's base32"
+        }
+        this.raw = decoded
+        this.encoded = encoded
+    }
+    constructor(raw: ByteArray) {
+        require(raw.size == 32) {
+            "encoded data should be 32 bytes long"
+        }
+        this.raw = raw
+    }
+
+    fun encoded(): String {
+        encoded = encoded ?: Base32Crockford.encode(raw)
+        return encoded!!
+    }
+
+    override fun toString(): String {
+        return encoded()
+    }
+
+    override fun equals(other: Any?) = (other is Base32Crockford32B) && raw.contentEquals(other.raw)
+
+    internal object Serializer : KSerializer<Base32Crockford32B> {
+        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford32B", PrimitiveKind.STRING)
+    
+        override fun serialize(encoder: Encoder, value: Base32Crockford32B) {
+            encoder.encodeString(value.encoded())
+        }
+    
+        override fun deserialize(decoder: Decoder): Base32Crockford32B {
+            return Base32Crockford32B(decoder.decodeString())
+        }
+    }
+
+    companion object {
+        fun rand(): Base32Crockford32B = Base32Crockford32B(randBytes(32))
+    }
+}
+
+/** 64-byte Crockford's Base32 encoded data */
+@Serializable(with = Base32Crockford64B.Serializer::class)
+class Base32Crockford64B {
+    private var encoded: String? = null
+    val raw: ByteArray
+
+    constructor(encoded: String) {
+        val decoded = try {
+            Base32Crockford.decode(encoded) 
+        } catch (e: EncodingException) {
+            null
+        }
+        
+        require(decoded != null && decoded.size == 64) {
+            "expected 64 bytes encoded in Crockford's base32"
+        }
+        this.raw = decoded
+        this.encoded = encoded
+    }
+    constructor(raw: ByteArray) {
+        require(raw.size == 64) {
+            "encoded data should be 64 bytes long"
+        }
+        this.raw = raw
+    }
+
+    fun encoded(): String {
+        encoded = encoded ?: Base32Crockford.encode(raw)
+        return encoded!!
+    }
+
+    override fun toString(): String {
+        return encoded()
+    }
+
+    override fun equals(other: Any?) = (other is Base32Crockford64B) && raw.contentEquals(other.raw)
+
+    internal object Serializer : KSerializer<Base32Crockford64B> {
+        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford64B", PrimitiveKind.STRING)
+    
+        override fun serialize(encoder: Encoder, value: Base32Crockford64B) {
+            encoder.encodeString(value.encoded())
+        }
+    
+        override fun deserialize(decoder: Decoder): Base32Crockford64B {
+            return Base32Crockford64B(decoder.decodeString())
+        }
+    }
+
+    companion object {
+        fun rand(): Base32Crockford64B = Base32Crockford64B(randBytes(64))
+    }
+}
+
+/** 32-byte hash code */
+typealias ShortHashCode = Base32Crockford32B
+/** 64-byte hash code */
+typealias HashCode = Base32Crockford64B
+/**
+ * EdDSA and ECDHE public keys always point on Curve25519
+ * and represented  using the standard 256 bits Ed25519 compact format,
+ * converted to Crockford Base32.
+ */
+typealias EddsaPublicKey = Base32Crockford32B

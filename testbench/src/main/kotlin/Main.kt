@@ -34,12 +34,6 @@ import java.time.Instant
 import kotlinx.coroutines.runBlocking
 import io.ktor.client.request.*
 
-fun randBytes(length: Int): ByteArray {
-    val bytes = ByteArray(length)
-    kotlin.random.Random.nextBytes(bytes)
-    return bytes
-}
-
 val nexusCmd = LibeufinNexusCommand()
 val client = HttpClient(CIO)
 

@@ -273,7 +273,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
      */
     suspend fun registerTalerableIncoming(
         paymentData: IncomingPayment,
-        reservePub: ByteArray
+        reservePub: EddsaPublicKey
     ): IncomingRegistrationResult = conn { conn ->
         val stmt = conn.prepareStatement("""
             SELECT out_found, out_tx_id
@@ -294,7 +294,7 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.debitPaytoUri)
         stmt.setString(6, paymentData.bankId)
-        stmt.setBytes(7, reservePub)
+        stmt.setBytes(7, reservePub.raw)
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw Exception("Inserting talerable incoming payment gave no outcome")
@@ -348,13 +348,13 @@ class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
      * @param maybeReservePub reserve public key to look up
      * @return true if found, false otherwise
      */
-    suspend fun isReservePubFound(maybeReservePub: ByteArray): Boolean = conn { conn ->
+    suspend fun isReservePubFound(maybeReservePub: EddsaPublicKey): Boolean = conn { conn ->
         val stmt = conn.prepareStatement("""
              SELECT 1
                FROM talerable_incoming_transactions
                WHERE reserve_public_key = ?;
         """)
-        stmt.setBytes(1, maybeReservePub)
+        stmt.setBytes(1, maybeReservePub.raw)
         val res = stmt.executeQuery()
         res.use {
             return@conn it.next()

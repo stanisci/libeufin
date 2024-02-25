@@ -26,9 +26,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import tech.libeufin.common.IbanPayto
-import tech.libeufin.common.Payto
-import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.*
 import java.time.Instant
 
 /**

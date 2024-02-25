@@ -18,69 +18,63 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.*
 import tech.libeufin.nexus.getAmountNoCurrency
-import tech.libeufin.nexus.isReservePub
-import tech.libeufin.nexus.removeSubjectNoise
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
+import kotlin.test.*
 
 class Parsing {
 
     @Test
     fun reservePublicKey() {
-        assertNull(removeSubjectNoise("does not contain any reserve"))
-        // 4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0
-        assertNotNull(removeSubjectNoise("4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"))
+        assertFails { parseIncomingTxMetadata("does not contain any reserve") }
+        
         assertEquals(
-            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
-            removeSubjectNoise(
+            EddsaPublicKey("4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"),
+            parseIncomingTxMetadata(
                 "noise 4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0 noise"
             )
         )
         assertEquals(
-            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
-            removeSubjectNoise(
+            EddsaPublicKey("4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"),
+            parseIncomingTxMetadata(
                 "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0 noise to the right"
             )
         )
         assertEquals(
-            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
-            removeSubjectNoise(
+            EddsaPublicKey("4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"),
+            parseIncomingTxMetadata(
                 "noise to the left 4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"
             )
         )
         assertEquals(
-            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
-            removeSubjectNoise(
+            EddsaPublicKey("4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"),
+            parseIncomingTxMetadata(
                 "    4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0     "
             )
         )
         assertEquals(
-            "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0",
-            removeSubjectNoise("""
+            EddsaPublicKey("4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"),
+            parseIncomingTxMetadata("""
                 noise
                 4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0
                 noise
             """)
         )
         // Got the first char removed.
-        assertNull(removeSubjectNoise("MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"))
+        assertFails { parseIncomingTxMetadata("MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0") }
     }
 
     @Test // Could be moved in a dedicated Amounts.kt test module.
     fun generateCurrencyAgnosticAmount() {
-        assertFailsWith<Exception> {
+        assertFails {
             // Too many fractional digits.
             getAmountNoCurrency(TalerAmount(1, 123456789, "KUDOS"))
         }
-        assertFailsWith<Exception> {
+        assertFails {
             // Nexus doesn't support sub-cents.
             getAmountNoCurrency(TalerAmount(1, 12345678, "KUDOS"))
         }
-        assertFailsWith<Exception> {
+        assertFails {
             // Nexus doesn't support sub-cents.
             getAmountNoCurrency(TalerAmount(0, 1, "KUDOS"))
         }
@@ -92,21 +86,5 @@ class Parsing {
             "0.1",
             getAmountNoCurrency(TalerAmount(0, 10000000, "KUDOS"))
         )
-    }
-
-    // Checks that the input decodes to a 32-bytes value.
-    @Test
-    fun validateReservePub() {
-        val valid = "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"
-        val validBytes = isReservePub(valid)
-        assertNotNull(validBytes)
-        assertEquals(32, validBytes.size)
-        assertNull(isReservePub("noise"))
-        val trimmedInput = valid.dropLast(10)
-        assertNull(isReservePub(trimmedInput))
-        val invalidChar = StringBuilder(valid)
-        invalidChar.setCharAt(10, '*')
-        assertNull(isReservePub(invalidChar.toString()))
-        assertNull(isReservePub(valid.dropLast(1)))
     }
 }

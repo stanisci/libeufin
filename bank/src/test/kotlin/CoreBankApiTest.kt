@@ -942,7 +942,7 @@ class CoreBankTransactionsApiTest {
         assertBalance("exchange", "+KUDOS:0")
         tx("merchant", "KUDOS:1", "exchange", "") // Bounce common to transaction
         tx("merchant", "KUDOS:1", "exchange", "Malformed") // Bounce malformed transaction
-        val reservePub = randEddsaPublicKey()
+        val reservePub = EddsaPublicKey.rand()
         tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reservePub)) // Accept incoming
         tx("merchant", "KUDOS:1", "exchange", randIncomingSubject(reservePub)) // Bounce reserve_pub reuse
         assertBalance("merchant", "-KUDOS:1")
@@ -953,7 +953,7 @@ class CoreBankTransactionsApiTest {
         assertBalance("exchange", "+KUDOS:1")
         tx("exchange", "KUDOS:1", "merchant", "") // Warn common to transaction
         tx("exchange", "KUDOS:1", "merchant", "Malformed") // Warn malformed transaction
-        val wtid = randShortHashCode()
+        val wtid = ShortHashCode.rand()
         val exchange = ExchangeUrl("http://exchange.example.com/")
         tx("exchange", "KUDOS:1", "merchant", randOutgoingSubject(wtid, exchange)) // Accept outgoing
         tx("exchange", "KUDOS:1", "merchant", randOutgoingSubject(wtid, exchange)) // Warn wtid reuse
@@ -1129,7 +1129,7 @@ class CoreBankCashoutApiTest {
         authRoutine(HttpMethod.Post, "/accounts/merchant/cashouts")
 
         val req = obj {
-            "request_uid" to randShortHashCode()
+            "request_uid" to ShortHashCode.rand()
             "amount_debit" to "KUDOS:1"
             "amount_credit" to convert("KUDOS:1")
         }
@@ -1162,7 +1162,7 @@ class CoreBankCashoutApiTest {
         // Check insufficient fund
         client.postA("/accounts/customer/cashouts") {
             json(req) {
-                "request_uid" to randShortHashCode()
+                "request_uid" to ShortHashCode.rand()
                 "amount_debit" to "KUDOS:75"
                 "amount_credit" to convert("KUDOS:75")
             }
@@ -1192,7 +1192,7 @@ class CoreBankCashoutApiTest {
         assertBalance("customer", "-KUDOS:1")
         client.postA("/accounts/customer/cashouts") {
             json(req) {
-                "request_uid" to randShortHashCode()
+                "request_uid" to ShortHashCode.rand()
             }
         }.assertChallenge { _,_->
             assertBalance("customer", "-KUDOS:1")
@@ -1216,7 +1216,7 @@ class CoreBankCashoutApiTest {
 
         // Check confirm
         client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
+            json(req) { "request_uid" to ShortHashCode.rand() }
         }.assertOkJson<CashoutResponse> {
             val id = it.cashout_id
             client.getA("/accounts/customer/cashouts/$id")
@@ -1239,7 +1239,7 @@ class CoreBankCashoutApiTest {
 
         // Check get another user's operation
         client.postA("/accounts/customer/cashouts") {
-            json(req) { "request_uid" to randShortHashCode() }
+            json(req) { "request_uid" to ShortHashCode.rand() }
         }.assertOkJson<CashoutResponse> {
             val id = it.cashout_id
 

@@ -50,12 +50,6 @@ fun HttpResponse.assertNoContent() {
     assertEquals(HttpStatusCode.NoContent, this.status)
 }
 
-fun randBytes(length: Int): ByteArray {
-    val bytes = ByteArray(length)
-    kotlin.random.Random.nextBytes(bytes)
-    return bytes
-}
-
 fun server(lambda: () -> Unit) {
     // Start the HTTP server in another thread
     kotlin.concurrent.thread(isDaemon = true)  {
@@ -148,11 +142,11 @@ class IntegrationTest {
                 it.execSQLUpdate("SET search_path TO libeufin_nexus;")
             }
 
-            val reservePub = randBytes(32)
+            val reservePub = EddsaPublicKey.rand()
             val payment = IncomingPayment(
                 amount = TalerAmount("EUR:10"),
                 debitPaytoUri = userPayTo.toString(),
-                wireTransferSubject = "Error test ${Base32Crockford.encode(reservePub)}",
+                wireTransferSubject = "Error test $reservePub",
                 executionTime = Instant.now(),
                 bankId = "error"
             )
@@ -211,7 +205,7 @@ class IntegrationTest {
             ingestIncomingPayment(db, IncomingPayment(
                 amount = TalerAmount("EUR:10"),
                 debitPaytoUri = userPayTo.toString(),
-                wireTransferSubject = "Success ${Base32Crockford.encode(randBytes(32))}",
+                wireTransferSubject = "Success ${Base32Crockford32B.rand().encoded()}",
                 executionTime = Instant.now(),
                 bankId = "success"
             ))
@@ -278,9 +272,9 @@ class IntegrationTest {
 
             // Cashin
             repeat(3) { i ->
-                val reservePub = randBytes(32)
+                val reservePub = EddsaPublicKey.rand()
                 val amount = TalerAmount("EUR:${20+i}")
-                val subject = "cashin test $i: ${Base32Crockford.encode(reservePub)}"
+                val subject = "cashin test $i: $reservePub"
                 nexusCmd.run("testing fake-incoming $flags --subject \"$subject\" --amount $amount $userPayTo")
                 val converted = client.get("http://0.0.0.0:8080/conversion-info/cashin-rate?amount_debit=EUR:${20 + i}")
                     .assertOkJson<ConversionResponse>().amount_credit
@@ -296,20 +290,20 @@ class IntegrationTest {
                 }.assertOkJson<IncomingHistory> {
                     val tx = it.incoming_transactions.first()
                     assertEquals(converted, tx.amount)
-                    assert(reservePub.contentEquals(tx.reserve_pub.raw))
+                    assertEquals(reservePub, tx.reserve_pub)
                 }
             }
 
             // Cashout
             repeat(3) { i ->  
-                val requestUid = randBytes(32)
+                val requestUid = ShortHashCode.rand()
                 val amount = TalerAmount("KUDOS:${10+i}")
                 val convert = client.get("http://0.0.0.0:8080/conversion-info/cashout-rate?amount_debit=$amount")
                     .assertOkJson<ConversionResponse>().amount_credit
                 client.post("http://0.0.0.0:8080/accounts/customer/cashouts") {
                     basicAuth("customer", "password")
                     json {
-                        "request_uid" to ShortHashCode(requestUid)
+                        "request_uid" to requestUid
                         "amount_debit" to amount
                         "amount_credit" to convert
                     }

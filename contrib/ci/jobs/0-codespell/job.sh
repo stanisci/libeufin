@@ -20,6 +20,7 @@ configure~
 */*.xsd
 */*.xml
 */ebics/src/test/kotlin/EbicsOrderUtilTest.kt
+*/common/src/main/kotlin/TalerErrorCode.kt
 EOF
 );
 

@@ -43,7 +43,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
-import kotlin.random.Random
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-api")
 
@@ -96,7 +95,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
                         TalerErrorCode.GENERIC_TOKEN_PERMISSION_INSUFFICIENT
                     )
             }
-            val tokenBytes = ByteArray(32).apply { Random.nextBytes(this) }
+            val token = Base32Crockford32B.rand()
             val tokenDuration: Duration = req.duration?.d_us ?: TOKEN_DEFAULT_DURATION
 
             val creationTime = Instant.now()
@@ -114,7 +113,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
                 }
             if (!db.token.create(
                 login = username,
-                content = tokenBytes,
+                content = token.raw,
                 creationTime = creationTime,
                 expirationTime = expirationTimestamp,
                 scope = req.scope,
@@ -124,7 +123,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
             }
             call.respond(
                 TokenSuccessResponse(
-                    access_token = Base32Crockford.encode(tokenBytes),
+                    access_token = token.encoded(),
                     expiration = TalerProtocolTimestamp(t_s = expirationTimestamp)
                 )
             )
@@ -677,9 +676,13 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                             } catch (e: Exception) {
                                 process.destroy()
                             }
-                            val exitValue =  process.exitValue()
+                            val exitValue = process.exitValue()
                             if (exitValue != 0) {
-                                val out = process.getInputStream().reader().readText() 
+                                val out = runCatching {
+                                    process.getInputStream().use {
+                                        reader().readText()
+                                    }
+                                }.getOrDefault("")
                                 if (out.isNotEmpty()) {
                                     logger.error("TAN ${res.tanChannel} - ${tanScript}: $out")
                                 }

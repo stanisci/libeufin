@@ -21,9 +21,7 @@ import io.ktor.http.*
 import org.junit.Test
 import tech.libeufin.bank.IncomingHistory
 import tech.libeufin.bank.OutgoingHistory
-import tech.libeufin.common.TalerErrorCode
-import tech.libeufin.common.json
-import tech.libeufin.common.obj
+import tech.libeufin.common.*
 
 class WireGatewayApiTest {
     // GET /accounts/{USERNAME}/taler-wire-gateway/config
@@ -38,10 +36,10 @@ class WireGatewayApiTest {
     @Test
     fun transfer() = bankSetup { _ -> 
         val valid_req = obj {
-            "request_uid" to randHashCode()
+            "request_uid" to HashCode.rand()
             "amount" to "KUDOS:55"
             "exchange_base_url" to "http://exchange.example.com/"
-            "wtid" to randShortHashCode()
+            "wtid" to ShortHashCode.rand()
             "credit_account" to merchantPayto.canonical
         }
 
@@ -66,7 +64,7 @@ class WireGatewayApiTest {
         // Trigger conflict due to reused request_uid
         client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
             json(valid_req) { 
-                "wtid" to randShortHashCode()
+                "wtid" to ShortHashCode.rand()
                 "exchange_base_url" to "http://different-exchange.example.com/"
             }
         }.assertConflict(TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED)
@@ -81,8 +79,8 @@ class WireGatewayApiTest {
         // Unknown account
         client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
             json(valid_req) { 
-                "request_uid" to randHashCode()
-                "wtid" to randShortHashCode()
+                "request_uid" to HashCode.rand()
+                "wtid" to ShortHashCode.rand()
                 "credit_account" to unknownPayto
             }
         }.assertConflict(TalerErrorCode.BANK_UNKNOWN_CREDITOR)
@@ -90,8 +88,8 @@ class WireGatewayApiTest {
         // Same account
         client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
             json(valid_req) { 
-                "request_uid" to randHashCode()
-                "wtid" to randShortHashCode()
+                "request_uid" to HashCode.rand()
+                "wtid" to ShortHashCode.rand()
                 "credit_account" to exchangePayto
             }
         }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
@@ -106,7 +104,7 @@ class WireGatewayApiTest {
         // Bad BASE32 len wtid
         client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
             json(valid_req) { 
-                "wtid" to randBase32Crockford(31)
+                "wtid" to  randBase32Crockford(31)
             }
         }.assertBadRequest()
 
@@ -143,7 +141,7 @@ class WireGatewayApiTest {
                 },
                 { 
                     // Transactions using raw bank transaction logic
-                    tx("merchant", "KUDOS:10", "exchange", "history test with ${randShortHashCode()} reserve pub")
+                    tx("merchant", "KUDOS:10", "exchange", "history test with ${ShortHashCode.rand()} reserve pub")
                 },
                 {
                     // Transaction using withdraw logic
@@ -183,7 +181,7 @@ class WireGatewayApiTest {
             ignored = listOf(
                 { 
                     // gnore manual incoming transaction
-                    tx("exchange", "KUDOS:10", "merchant", "${randShortHashCode()} http://exchange.example.com/")
+                    tx("exchange", "KUDOS:10", "merchant", "${ShortHashCode.rand()} http://exchange.example.com/")
                 },
                 {
                     // Ignore malformed incoming transaction
@@ -202,7 +200,7 @@ class WireGatewayApiTest {
     fun addIncoming() = bankSetup { _ -> 
         val valid_req = obj {
             "amount" to "KUDOS:44"
-            "reserve_pub" to randEddsaPublicKey()
+            "reserve_pub" to EddsaPublicKey.rand()
             "debit_account" to merchantPayto.canonical
         }
 
@@ -232,7 +230,7 @@ class WireGatewayApiTest {
         // Unknown account
         client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             json(valid_req) { 
-                "reserve_pub" to randEddsaPublicKey()
+                "reserve_pub" to EddsaPublicKey.rand()
                 "debit_account" to unknownPayto
             }
         }.assertConflict(TalerErrorCode.BANK_UNKNOWN_DEBTOR)
@@ -240,7 +238,7 @@ class WireGatewayApiTest {
         // Same account
         client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
             json(valid_req) { 
-                "reserve_pub" to randEddsaPublicKey()
+                "reserve_pub" to EddsaPublicKey.rand()
                 "debit_account" to exchangePayto
             }
         }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)

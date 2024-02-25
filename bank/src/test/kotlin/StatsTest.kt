@@ -22,10 +22,7 @@ import org.junit.Test
 import tech.libeufin.bank.MonitorResponse
 import tech.libeufin.bank.MonitorWithConversion
 import tech.libeufin.bank.Timeframe
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.executeQueryCheck
-import tech.libeufin.common.oneOrNull
-import tech.libeufin.common.toDbMicros
+import tech.libeufin.common.*
 import java.time.Instant
 import java.time.LocalDateTime
 import kotlin.test.assertEquals
@@ -41,7 +38,7 @@ class StatsTest {
             db.conn { conn ->
                 val stmt = conn.prepareStatement("SELECT 0 FROM cashin(?, ?, (?, ?)::taler_amount, ?)")
                 stmt.setLong(1, Instant.now().toDbMicros()!!)
-                stmt.setBytes(2, randShortHashCode().raw)
+                stmt.setBytes(2, ShortHashCode.rand().raw)
                 val amount = TalerAmount(amount)
                 stmt.setLong(3, amount.value)
                 stmt.setInt(4, amount.frac)

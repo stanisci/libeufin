@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -38,123 +38,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
-
-/** 32-byte Crockford's Base32 encoded data */
-@Serializable(with = Base32Crockford32B.Serializer::class)
-class Base32Crockford32B {
-    private var encoded: String? = null
-    val raw: ByteArray
-
-    constructor(encoded: String) {
-        val decoded = try {
-            Base32Crockford.decode(encoded) 
-        } catch (e: EncodingException) {
-            null
-        }
-        
-        require(decoded != null) {
-            "Data should be encoded using Crockford's Base32"
-        }
-        require(decoded.size == 32) {
-            "Encoded data should be 32 bytes long"
-        }
-        this.raw = decoded
-        this.encoded = encoded
-    }
-    constructor(raw: ByteArray) {
-        require(raw.size == 32) {
-            "Encoded data should be 32 bytes long"
-        }
-        this.raw = raw
-    }
-
-    fun encoded(): String {
-        encoded = encoded ?: Base32Crockford.encode(raw)
-        return encoded!!
-    }
-
-    override fun toString(): String {
-        return encoded()
-    }
-
-    override fun equals(other: Any?) = (other is Base32Crockford32B) && raw.contentEquals(other.raw)
-
-    internal object Serializer : KSerializer<Base32Crockford32B> {
-        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford32B", PrimitiveKind.STRING)
-    
-        override fun serialize(encoder: Encoder, value: Base32Crockford32B) {
-            encoder.encodeString(value.encoded())
-        }
-    
-        override fun deserialize(decoder: Decoder): Base32Crockford32B {
-            return Base32Crockford32B(decoder.decodeString())
-        }
-    }
-}
-
-/** 64-byte Crockford's Base32 encoded data */
-@Serializable(with = Base32Crockford64B.Serializer::class)
-class Base32Crockford64B {
-    private var encoded: String? = null
-    val raw: ByteArray
-
-    constructor(encoded: String) {
-        val decoded = try {
-            Base32Crockford.decode(encoded) 
-        } catch (e: EncodingException) {
-            null
-        }
-        
-        require(decoded != null) {
-            "Data should be encoded using Crockford's Base32"
-        }
-        require(decoded.size == 64) {
-            "Encoded data should be 32 bytes long"
-        }
-        this.raw = decoded
-        this.encoded = encoded
-    }
-    constructor(raw: ByteArray) {
-        require(raw.size == 64) {
-            "Encoded data should be 32 bytes long"
-        }
-        this.raw = raw
-    }
-
-    fun encoded(): String {
-        encoded = encoded ?: Base32Crockford.encode(raw)
-        return encoded!!
-    }
-
-    override fun toString(): String {
-        return encoded()
-    }
-
-    override fun equals(other: Any?) = (other is Base32Crockford64B) && raw.contentEquals(other.raw)
-
-    internal object Serializer : KSerializer<Base32Crockford64B> {
-        override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("Base32Crockford64B", PrimitiveKind.STRING)
-    
-        override fun serialize(encoder: Encoder, value: Base32Crockford64B) {
-            encoder.encodeString(value.encoded())
-        }
-    
-        override fun deserialize(decoder: Decoder): Base32Crockford64B {
-            return Base32Crockford64B(decoder.decodeString())
-        }
-    }
-}
-
-/** 32-byte hash code */
-typealias ShortHashCode = Base32Crockford32B
-/** 64-byte hash code */
-typealias HashCode = Base32Crockford64B
-/**
- * EdDSA and ECDHE public keys always point on Curve25519
- * and represented  using the standard 256 bits Ed25519 compact format,
- * converted to Crockford Base32.
- */
-typealias EddsaPublicKey = Base32Crockford32B
 
 /** Timestamp containing the number of seconds since epoch */
 @Serializable

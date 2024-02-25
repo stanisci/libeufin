@@ -130,64 +130,6 @@ private fun makeTalerFrac(bankFrac: String): Int {
 }
 
 /**
- * Converts valid reserve pubs to its binary representation.
- *
- * @param maybeReservePub input.
- * @return [ByteArray] or null if not valid.
- */
-fun isReservePub(maybeReservePub: String): ByteArray? {
-    if (maybeReservePub.length != 52) {
-        logger.error("Not a reserve pub, length (${maybeReservePub.length}) is not 52")
-        return null
-    }
-    val dec = try {
-        Base32Crockford.decode(maybeReservePub)
-    } catch (e: EncodingException) {
-        logger.error("Not a reserve pub: $maybeReservePub")
-        return null
-    }
-    logger.debug("Reserve how many bytes: ${dec.size}")
-    // this check would only be effective after #7980
-    if (dec.size != 32) {
-        logger.error("Not a reserve pub, wrong length: ${dec.size}")
-        return null
-    }
-    return dec
-}
-
-/**
- * Extract the part of the subject that might represent a
- * valid Taler reserve public key.  That addresses some bank
- * policies of adding extra information around the payment
- * subject.
- *
- * @param subject raw subject as read from the bank.
- */
-fun removeSubjectNoise(subject: String): String? {
-    val re = "\\b[a-z0-9A-Z]{52}\\b".toRegex()
-    val result = re.find(subject.replace("[\n]+".toRegex(), "")) ?: return null
-    return result.value
-}
-
-/**
- * Checks the two conditions that may invalidate one incoming
- * payment: subject validity and availability.
- *
- * @param payment incoming payment whose subject is to be checked.
- * @return [ByteArray] as the reserve public key, or null if the
- *         payment cannot lead to a Taler withdrawal.
- */
-private suspend fun getTalerReservePub(
-    payment: IncomingPayment
-): ByteArray? {
-    // Removing noise around the potential reserve public key.
-    val maybeReservePub = removeSubjectNoise(payment.wireTransferSubject) ?: return null
-    // Checking validity first.
-    val dec = isReservePub(maybeReservePub) ?: return null
-    return dec
-}
-
-/**
  * Ingests an outgoing payment. It links it to the initiated
  * outgoing transaction that originated it.
  *
@@ -209,6 +151,8 @@ suspend fun ingestOutgoingPayment(
     }
 }
 
+private val PATTERN = Regex("[a-z0-9A-Z]{52}")
+
 /**
  * Ingests an incoming payment.  Stores the payment into valid talerable ones
  * or bounces it, according to the subject.
@@ -221,26 +165,28 @@ suspend fun ingestIncomingPayment(
     db: Database,
     payment: IncomingPayment
 ) {
-    val reservePub = getTalerReservePub(payment)
-    if (reservePub == null) {
-        val result = db.registerMalformedIncoming(
-            payment,
-            payment.amount, 
-            Instant.now()
-        )
-        if (result.new) {
-            logger.info("$payment bounced in '${result.bounceId}'")
-        } else {
-            logger.debug("IN '${payment.bankId}' already seen and bounced in '${result.bounceId}'")
+    runCatching { parseIncomingTxMetadata(payment.wireTransferSubject) }.fold(
+        onSuccess = { reservePub -> 
+            val result = db.registerTalerableIncoming(payment, reservePub)
+            if (result.new) {
+                logger.info("$payment")
+            } else {
+                logger.debug("IN '${payment.bankId}' already seen")
+            }
+        },
+        onFailure = { e ->
+            val result = db.registerMalformedIncoming(
+                payment,
+                payment.amount, 
+                Instant.now()
+            )
+            if (result.new) {
+                logger.info("$payment bounced in '${result.bounceId}': ${e.message}")
+            } else {
+                logger.debug("IN '${payment.bankId}' already seen and bounced in '${result.bounceId}': ${e.message}")
+            }
         }
-    } else {
-        val result = db.registerTalerableIncoming(payment, reservePub)
-        if (result.new) {
-            logger.info("$payment")
-        } else {
-            logger.debug("IN '${payment.bankId}' already seen")
-        }
-    }
+    )
 }
 
 private fun ingestDocument(

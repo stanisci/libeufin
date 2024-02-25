@@ -18,7 +18,7 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.*
 import tech.libeufin.nexus.DatabaseSubmissionState
 import tech.libeufin.nexus.InitiatedPayment
 import tech.libeufin.nexus.PaymentInitiationOutcome
@@ -116,8 +116,7 @@ class IncomingPaymentsTest {
     // Tests the creation of a talerable incoming payment.
     @Test
     fun talerable() = setup { db, _ ->  
-        val reservePub = ByteArray(32)
-        Random.nextBytes(reservePub)
+        val reservePub = EddsaPublicKey.rand()
 
         val inc = genInPay("reserve-pub")
         // Checking the reserve is not found.

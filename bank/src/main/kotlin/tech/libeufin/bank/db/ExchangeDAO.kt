@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -20,10 +20,7 @@
 package tech.libeufin.bank.db
 
 import tech.libeufin.bank.*
-import tech.libeufin.common.BankPaytoCtx
-import tech.libeufin.common.getAmount
-import tech.libeufin.common.getBankPayto
-import tech.libeufin.common.toDbMicros
+import tech.libeufin.common.*
 import java.time.Instant
 
 /** Data access logic for exchange specific logic */

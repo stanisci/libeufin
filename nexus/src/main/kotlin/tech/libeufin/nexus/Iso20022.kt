@@ -275,7 +275,7 @@ fun parseTxNotif(
             "CRDT" -> {
                 val bankId: String = one("Refs").one("AcctSvcrRef").text()
                 // Obtaining payment subject. 
-                val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString()
+                val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
                 if (subject == null) {
                     logger.debug("Skip notification '$bankId', missing subject")
                     return@notificationForEachTx

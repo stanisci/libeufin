@@ -142,14 +142,6 @@ class CryptoUtilTest {
     }
 
     @Test
-    fun checkEddsaPublicKey() {
-        val givenEnc = "XZH3P6NF9DSG3BH0C082X38N2RVK1RV2H24KF76028QBKDM24BCG"
-        val non32bytes = "N2RVK1RV2H24KF76028QBKDM24BCG"
-        assertTrue(CryptoUtil.checkValidEddsaPublicKey(givenEnc))
-        assertFalse(CryptoUtil.checkValidEddsaPublicKey(non32bytes))
-    }
-
-    @Test
     fun base32Test() {
         val validKey = "4MZT6RS3RVB3B0E2RDMYW0YRA3Y0VPHYV0CYDE6XBB0YMPFXCEG0"
         val enc = validKey

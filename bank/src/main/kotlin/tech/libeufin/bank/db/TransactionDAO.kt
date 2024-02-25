@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -94,23 +94,25 @@ class TransactionDAO(private val db: Database) {
                         if (exchangeCreditor && exchangeDebtor) {
                             logger.warn("exchange account $exchangeDebtor sent a manual transaction to exchange account $exchangeCreditor, this should never happens and is not bounced to prevent bouncing loop, may fail in the future")
                         } else if (exchangeCreditor) {
-                            val reservePub = parseIncomingTxMetadata(subject)
-                            val bounceCause = if (reservePub != null) {
-                                val registered = conn.prepareStatement("CALL register_incoming(?, ?)").run {
-                                    setBytes(1, reservePub.raw)
-                                    setLong(2, creditRowId)
-                                    executeProcedureViolation()
+                            val bounceCause = runCatching { parseIncomingTxMetadata(subject) }.fold(
+                                onSuccess = { reservePub -> 
+                                    val registered = conn.prepareStatement("CALL register_incoming(?, ?)").run {
+                                        setBytes(1, reservePub.raw)
+                                        setLong(2, creditRowId)
+                                        executeProcedureViolation()
+                                    }
+                                    if (!registered) {
+                                        logger.warn("exchange account $creditAccountId received an incoming taler transaction $creditRowId with an already used reserve public key")
+                                        "reserve public key reuse"
+                                    } else {
+                                        null
+                                    }
+                                },
+                                onFailure = { e ->
+                                    logger.warn("exchange account $creditAccountId received a manual transaction $creditRowId with malformed metadata: ${e.message}")
+                                    "malformed metadata: ${e.message}"
                                 }
-                                if (!registered) {
-                                    logger.warn("exchange account $creditAccountId received an incoming taler transaction $creditRowId with an already used reserve public key")
-                                    "reserve public key reuse"
-                                } else {
-                                    null
-                                }
-                            } else {
-                                logger.warn("exchange account $creditAccountId received a manual transaction $creditRowId with malformed metadata")
-                                "malformed metadata"
-                            }
+                            )
                             if (bounceCause != null) {
                                 // No error can happens because an opposite transaction already took place in the same transaction
                                 conn.prepareStatement("""
