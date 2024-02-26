@@ -348,7 +348,8 @@ data class AccountMinimalData(
     val balance: Balance,
     val debit_threshold: TalerAmount,
     val is_public: Boolean,
-    val is_taler_exchange: Boolean
+    val is_taler_exchange: Boolean,
+    val row_id: Long
 )
 
 /**
@@ -651,6 +652,7 @@ data class PublicAccount(
     val payto_uri: String,
     val balance: Balance,
     val is_taler_exchange: Boolean,
+    val row_id: Long
 )
 
 /**

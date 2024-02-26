@@ -500,12 +500,13 @@ class AccountDAO(private val db: Database) {
               (balance).frac AS balance_frac,
               has_debt,
               internal_payto_uri,
-              c.login,
+              login,
               is_taler_exchange,
-              name
-              FROM bank_accounts JOIN customers AS c
-                ON owning_customer_id = c.customer_id
-                WHERE is_public=true AND c.login LIKE ? AND
+              name,
+              bank_account_id
+              FROM bank_accounts JOIN customers
+                ON owning_customer_id = customer_id 
+              WHERE is_public=true AND name LIKE ? AND
             """,
             {
                 setString(1, params.loginFilter)
@@ -514,6 +515,7 @@ class AccountDAO(private val db: Database) {
         ) {
             PublicAccount(
                 username = it.getString("login"),
+                row_id = it.getLong("bank_account_id"),
                 payto_uri = it.getBankPayto("internal_payto_uri", "name", ctx),
                 balance = Balance(
                     amount = it.getAmount("balance", db.bankCurrency),
@@ -536,16 +538,17 @@ class AccountDAO(private val db: Database) {
             SELECT
             login,
             name,
-            (b.balance).val AS balance_val,
-            (b.balance).frac AS balance_frac,
-            (b).has_debt AS balance_has_debt,
+            (balance).val AS balance_val,
+            (balance).frac AS balance_frac,
+            has_debt AS balance_has_debt,
             (max_debt).val as max_debt_val,
             (max_debt).frac as max_debt_frac
             ,is_public
             ,is_taler_exchange
             ,internal_payto_uri
-            FROM customers JOIN bank_accounts AS b
-              ON customer_id = b.owning_customer_id
+            ,bank_account_id
+            FROM bank_accounts JOIN customers
+              ON owning_customer_id = customer_id 
             WHERE name LIKE ? AND
             """,
             {
@@ -555,6 +558,7 @@ class AccountDAO(private val db: Database) {
         ) {
             AccountMinimalData(
                 username = it.getString("login"),
+                row_id = it.getLong("bank_account_id"),
                 name = it.getString("name"),
                 balance = Balance(
                     amount = it.getAmount("balance", db.bankCurrency),
