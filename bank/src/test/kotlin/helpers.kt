@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -189,7 +189,6 @@ suspend fun ApplicationTestBuilder.tanInfo(account: String): Pair<TanChannel?, S
         TanChannel.sms -> res.contact_data!!.phone.get()
         TanChannel.email -> res.contact_data!!.email.get()
         null -> null
-        else -> null
     })
 }
 
@@ -304,7 +303,7 @@ suspend fun ApplicationTestBuilder.convert(amount: String): TalerAmount {
 suspend fun tanCode(info: String): String? {
     try {
         val file = Path("/tmp/tan-$info.txt")
-        val code = file.readText()
+        val code = file.readText().split(" ", limit=2).first()
         file.deleteExisting()
         return code
     } catch (e: Exception) {

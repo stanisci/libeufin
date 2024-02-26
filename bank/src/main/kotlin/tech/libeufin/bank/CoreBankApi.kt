@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -663,6 +663,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                     res.tanCode?.run {
                         val (tanScript, tanEnv) = ctx.tanChannels.get(res.tanChannel) 
                             ?: throw unsupportedTanChannel(res.tanChannel)
+                        val msg = "${res.tanCode} is your bank verification code"
                         val exitValue = withContext(Dispatchers.IO) {
                             val builder = ProcessBuilder(tanScript.toString(), res.tanInfo)
                             builder.redirectErrorStream(true)
@@ -671,7 +672,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                             }
                             val process = builder.start()
                             try {
-                                process.outputWriter().use { it.write(res.tanCode) }
+                                process.outputWriter().use { it.write(msg) }
                                 process.onExit().await()
                             } catch (e: Exception) {
                                 process.destroy()
