@@ -1,3 +1,9 @@
+libeufin (0.9.4~dev.29) unstable; urgency=low
+
+  * Package v0.9.4-dev.29
+
+ -- Florian Dold <dold@taler.net>  Tue, 27 Feb 2024 16:33:25 +0100
+
 libeufin (0.9.4~dev.28) unstable; urgency=low
 
   * Package v0.9.4-dev.28
