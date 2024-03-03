@@ -317,7 +317,10 @@ suspend fun tanCode(info: String): String? {
 
 suspend fun HttpResponse.assertStatus(status: HttpStatusCode, err: TalerErrorCode?): HttpResponse {
     assertEquals(status, this.status, "$err")
-    if (err != null) assertErr(err)
+    if (err != null) {
+        val body = json<TalerError>()
+        assertEquals(err.code, body.code)
+    }
     return this
 }
 suspend fun HttpResponse.assertOk(): HttpResponse
@@ -326,25 +329,18 @@ suspend fun HttpResponse.assertNoContent(): HttpResponse
     = assertStatus(HttpStatusCode.NoContent, null)
 suspend fun HttpResponse.assertAccepted(): HttpResponse 
     = assertStatus(HttpStatusCode.Accepted, null)
-suspend fun HttpResponse.assertNotFound(err: TalerErrorCode?): HttpResponse 
+suspend fun HttpResponse.assertNotFound(err: TalerErrorCode): HttpResponse 
     = assertStatus(HttpStatusCode.NotFound, err)
-suspend fun HttpResponse.assertUnauthorized(): HttpResponse 
-    = assertStatus(HttpStatusCode.Unauthorized, null)
-suspend fun HttpResponse.assertConflict(err: TalerErrorCode?): HttpResponse 
+suspend fun HttpResponse.assertUnauthorized(err: TalerErrorCode = TalerErrorCode.GENERIC_UNAUTHORIZED): HttpResponse 
+    = assertStatus(HttpStatusCode.Unauthorized, err)
+suspend fun HttpResponse.assertConflict(err: TalerErrorCode): HttpResponse 
     = assertStatus(HttpStatusCode.Conflict, err)
-suspend fun HttpResponse.assertBadRequest(err: TalerErrorCode? = null): HttpResponse 
+suspend fun HttpResponse.assertBadRequest(err: TalerErrorCode = TalerErrorCode.GENERIC_JSON_INVALID): HttpResponse 
     = assertStatus(HttpStatusCode.BadRequest, err)
-suspend fun HttpResponse.assertForbidden(err: TalerErrorCode? = null): HttpResponse 
+suspend fun HttpResponse.assertForbidden(err: TalerErrorCode): HttpResponse 
     = assertStatus(HttpStatusCode.Forbidden, err)
-suspend fun HttpResponse.assertNotImplemented(err: TalerErrorCode? = null): HttpResponse 
+suspend fun HttpResponse.assertNotImplemented(err: TalerErrorCode = TalerErrorCode.END): HttpResponse 
     = assertStatus(HttpStatusCode.NotImplemented, err)
-
-
-suspend fun HttpResponse.assertErr(code: TalerErrorCode): HttpResponse {
-    val err = json<TalerError>()
-    assertEquals(code.code, err.code)
-    return this
-}
 
 suspend fun HttpResponse.maybeChallenge(): HttpResponse {
     return if (this.status == HttpStatusCode.Accepted) {

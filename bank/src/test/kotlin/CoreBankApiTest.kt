@@ -49,7 +49,7 @@ class CoreBankConfigTest {
         }.assertOk()
         client.get("/monitor?timeframe=day=which=25") {
             pwAuth("admin")
-        }.assertBadRequest()
+        }.assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
     }
 }
 
@@ -219,7 +219,7 @@ class CoreBankAccountsApiTest {
         }.let { req ->
             client.post("/accounts") {
                 json(req)
-            }.assertErr(TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT)
+            }.assertConflict(TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT)
             client.post("/accounts") {
                 json(req)
                 pwAuth("admin")
@@ -238,7 +238,7 @@ class CoreBankAccountsApiTest {
         }.let { req ->
             client.post("/accounts") {
                 json(req)
-            }.assertErr(TalerErrorCode.BANK_NON_ADMIN_SET_TAN_CHANNEL)
+            }.assertConflict(TalerErrorCode.BANK_NON_ADMIN_SET_TAN_CHANNEL)
             client.post("/accounts") {
                 json(req)
                 pwAuth("admin")
@@ -255,7 +255,7 @@ class CoreBankAccountsApiTest {
                     "name" to "Bat"
                     "tan_channel" to channel
                 }
-            }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
+            }.assertConflict(TalerErrorCode.BANK_MISSING_TAN_INFO)
         }
 
         // Reserved account
@@ -488,7 +488,7 @@ class CoreBankAccountsApiTest {
         for (channel in listOf("sms", "email")) {
             client.patchA("/accounts/merchant") {
                 json { "tan_channel" to channel }
-            }.assertErr(TalerErrorCode.BANK_MISSING_TAN_INFO)
+            }.assertConflict(TalerErrorCode.BANK_MISSING_TAN_INFO)
         }
 
         // Successful attempt now
@@ -520,7 +520,7 @@ class CoreBankAccountsApiTest {
         client.patch("/accounts/merchant") {
             pwAuth("admin")
             json(req) { "debit_threshold" to "EUR:100" }
-        }.assertBadRequest()
+        }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
 
         // Check patch
         client.getA("/accounts/merchant").assertOkJson<AccountData> { obj ->

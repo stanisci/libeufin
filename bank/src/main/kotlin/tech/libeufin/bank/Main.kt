@@ -157,6 +157,20 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
         })
     }
     install(StatusPages) {
+        status(HttpStatusCode.NotFound) { call, status ->
+            call.err(
+                status,
+                "There is no endpoint defined for the URL provided by the client. Check if you used the correct URL and/or file a report with the developers of the client software.",
+                TalerErrorCode.GENERIC_ENDPOINT_UNKNOWN
+            )
+        }
+        status(HttpStatusCode.MethodNotAllowed) { call, status ->
+            call.err(
+                status,
+                "The HTTP method used is invalid for this endpoint. This is likely a bug in the client implementation. Check if you are using the latest available version and/or file a report with the developers.",
+                TalerErrorCode.GENERIC_METHOD_INVALID
+            )
+        }
         exception<Exception> { call, cause ->
             logger.debug("request failed", cause)
             when (cause) {
