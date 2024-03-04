@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.002.001.10" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:iso:std:iso:20022:tech:xsd:pain.002.001.10 pain.002.001.10.xsd">
+	<CstmrPmtStsRpt>
+		<GrpHdr>
+			<MsgId>20180326375204011685776</MsgId>
+			<CreDtTm>2022-05-02T14:40:00</CreDtTm>
+			<InitgPty>
+				<Id>
+					<OrgId>
+						<AnyBIC>POFICHBE</AnyBIC>
+					</OrgId>
+				</Id>
+			</InitgPty>
+		</GrpHdr>
+		<OrgnlGrpInfAndSts>
+			<OrgnlMsgId>MsgId-005</OrgnlMsgId>
+			<OrgnlMsgNmId>pain.001.001.09.ch.03</OrgnlMsgNmId>
+			<GrpSts>RJCT</GrpSts>
+			<StsRsnInf>
+				<Rsn>
+					<Cd>AM10</Cd>
+				</Rsn>
+				<AddtlInf>904114;ControlSum fehlerhaft</AddtlInf>
+			</StsRsnInf>
+		</OrgnlGrpInfAndSts>
+	</CstmrPmtStsRpt>
+</Document>

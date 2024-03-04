@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.002.001.10" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:iso:std:iso:20022:tech:xsd:pain.002.001.10 pain.002.001.10.xsd">
+	<CstmrPmtStsRpt>
+		<GrpHdr>
+			<MsgId>204691ACFC/071125/023362</MsgId>
+			<CreDtTm>2022-05-02T05:11:25Z</CreDtTm>
+			<InitgPty>
+				<Id>
+					<OrgId>
+						<AnyBIC>POFICHBE</AnyBIC>
+					</OrgId>
+				</Id>
+			</InitgPty>
+		</GrpHdr>
+		<OrgnlGrpInfAndSts>
+			<OrgnlMsgId>MSG-02-QRR-SCOR</OrgnlMsgId>
+			<OrgnlMsgNmId>pain.001.001.09.ch.03</OrgnlMsgNmId>
+		</OrgnlGrpInfAndSts>
+		<OrgnlPmtInfAndSts>
+			<OrgnlPmtInfId>PMTINF-02</OrgnlPmtInfId>
+			<PmtInfSts>RJCT</PmtInfSts>
+			<StsRsnInf>
+				<Rsn>
+					<Cd>AC01</Cd>
+				</Rsn>
+				<AddtlInf>0999;CH7280005000088877766 Lastkonto unbekannt</AddtlInf>
+			</StsRsnInf>
+		</OrgnlPmtInfAndSts>
+	</CstmrPmtStsRpt>
+</Document>

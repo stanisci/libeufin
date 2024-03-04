@@ -24,6 +24,22 @@ import kotlin.io.path.*
 
 class Iso20022Test {
     @Test
+    fun sample() {
+        for (sample in Path("sample").listDirectoryEntries()) {
+            val content = Files.newInputStream(sample)
+            val name = sample.toString()
+            println(name)
+            if (name.contains("HAC")) {
+                parseCustomerAck(content)
+            } else if (name.contains("pain.002")) {
+                parseCustomerPaymentStatusReport(content)
+            } else {
+                parseTxNotif(content, "CHF", mutableListOf(), mutableListOf())
+            }
+        }
+    }
+
+    @Test
     fun logs() {
         val root = Path("test")
         if (!root.exists()) return;
