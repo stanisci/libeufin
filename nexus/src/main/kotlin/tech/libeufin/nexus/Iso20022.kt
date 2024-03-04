@@ -129,14 +129,18 @@ data class CustomerAck(
     val code: ExternalStatusReasonCode?,
     val timestamp: Instant
 ) {
-    override fun toString(): String {
-        var str = "${timestamp.fmtDateTime()}"
-        if (orderId != null) str += " ${orderId}"
-        str += " ${actionType}"
+    fun msg(): String {
+        var str = "${actionType}"
         if (code != null) str += " ${code.isoCode}"
         str += " - '${actionType.description}'"
         if (code != null) str += " '${code.description}'"
         return str
+    }
+
+    override fun toString(): String {
+        var str = "${timestamp.fmtDateTime()}"
+        if (orderId != null) str += " ${orderId}"
+        return str + " ${msg()}"
     }
 }
 

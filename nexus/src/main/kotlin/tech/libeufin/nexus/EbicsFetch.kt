@@ -230,6 +230,17 @@ private fun ingestDocument(
         SupportedDocument.PAIN_002_LOGS -> {
             val acks = parseCustomerAck(xml)
             for (ack in acks) {
+                val msg = if (ack.orderId != null) {
+                    if (ack.code != null) {
+                        val msg = ack.msg()
+                        db.mem[ack.orderId] = msg
+                        msg
+                    } else {
+                        db.mem[ack.orderId] 
+                    }
+                } else {
+                    null
+                }
                 when (ack.actionType) {
                     HacAction.FILE_DOWNLOAD -> logger.debug("$ack")
                     HacAction.ORDER_HAC_FINAL_POS -> {
@@ -240,7 +251,7 @@ private fun ingestDocument(
                     HacAction.ORDER_HAC_FINAL_NEG -> {
                         // TODO update pending transaction status
                         logger.debug("$ack")
-                        logger.warn("Order '${ack.orderId}' was refused at ${ack.timestamp.fmtDateTime()}")
+                        logger.warn("Order '${ack.orderId}' was refused at ${ack.timestamp.fmtDateTime()}: $msg")
                     }
                     else -> {
                         // TODO update pending transaction status

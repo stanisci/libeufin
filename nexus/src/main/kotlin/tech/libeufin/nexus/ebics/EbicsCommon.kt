@@ -225,11 +225,30 @@ suspend fun postEbics(
             e
         )
     }
-    return parseAndValidateEbicsResponse(
-        bankKeys,
-        respXml,
+
+    // Parses the bank response from the raw XML and verifies
+    // the bank signature.
+    val doc = try {
+        XMLUtil.parseIntoDom(respXml)
+    } catch (e: Exception) {
+        throw EbicsSideException(
+            "Bank response apparently invalid",
+            sideEc = EbicsSideError.BANK_RESPONSE_IS_INVALID
+        )
+    }
+    if (!XMLUtil.verifyEbicsDocument(
+        doc,
+        bankKeys.bank_authentication_public_key,
         isEbics3
-    )
+    )) {
+        throw EbicsSideException(
+            "Bank signature did not verify",
+            sideEc = EbicsSideError.BANK_SIGNATURE_DIDNT_VERIFY
+        )
+    }
+    if (isEbics3)
+        return ebics3toInternalRepr(doc)
+    return ebics25toInternalRepr(doc)
 }
 
 /**
@@ -384,43 +403,6 @@ class EbicsSideException(
 ) : Exception(msg, cause)
 
 /**
- * Parses the bank response from the raw XML and verifies
- * the bank signature.
- *
- * @param bankKeys provides the bank auth pub, to verify the signature.
- * @param responseStr raw XML response from the bank
- * @param withEbics3 true if the communication is EBICS 3, false otherwise.
- * @return [EbicsResponseContent] or throw [EbicsSideException]
- */
-fun parseAndValidateEbicsResponse(
-    bankKeys: BankPublicKeysFile,
-    resp: InputStream,
-    withEbics3: Boolean
-): EbicsResponseContent {
-    val doc = try {
-        XMLUtil.parseIntoDom(resp)
-    } catch (e: Exception) {
-        throw EbicsSideException(
-            "Bank response apparently invalid",
-            sideEc = EbicsSideError.BANK_RESPONSE_IS_INVALID
-        )
-    }
-    if (!XMLUtil.verifyEbicsDocument(
-        doc,
-        bankKeys.bank_authentication_public_key,
-        withEbics3
-    )) {
-        throw EbicsSideException(
-            "Bank signature did not verify",
-            sideEc = EbicsSideError.BANK_SIGNATURE_DIDNT_VERIFY
-        )
-    }
-    if (withEbics3)
-        return ebics3toInternalRepr(doc)
-    return ebics25toInternalRepr(doc)
-}
-
-/**
  * Signs and the encrypts the data to send via EBICS.
  *
  * @param cfg configuration handle.
@@ -527,6 +509,7 @@ suspend fun doEbicsUpload(
     orderService: Ebics3Request.OrderDetails.Service,
     payload: ByteArray,
 ): EbicsResponseContent {
+    // TODO use a lambda and pass the order detail there for atomicity ?
     val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload, isEbics3 = true)
     val initXml = createEbics3RequestForUploadInitialization(
         cfg,

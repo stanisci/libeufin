@@ -169,6 +169,9 @@ private fun PreparedStatement.maybeUpdate(): Boolean {
  */
 class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
 
+    // Temporary in memory database to store EBICS order status until we modify the schema to actually store it in the database
+    var mem: MutableMap<String, String> = mutableMapOf()
+
     // OUTGOING PAYMENTS METHODS
 
     /**

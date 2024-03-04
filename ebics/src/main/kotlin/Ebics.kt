@@ -287,6 +287,7 @@ enum class EbicsReturnCode(val errorCode: String) {
 
 data class EbicsResponseContent(
     val transactionID: String?,
+    val orderID: String?,
     val dataEncryptionInfo: DataEncryptionInfo?,
     val orderDataEncChunk: String?,
     val technicalReturnCode: EbicsReturnCode,
@@ -362,6 +363,7 @@ fun ebics3toInternalRepr(response: Document): EbicsResponseContent {
 
     return EbicsResponseContent(
         transactionID = resp.value.header._static.transactionID,
+        orderID = resp.value.header.mutable.orderID,
         bankReturnCode = bankReturnCode,
         technicalReturnCode = techReturnCode,
         reportText = reportText,
@@ -398,6 +400,7 @@ fun ebics25toInternalRepr(response: Document): EbicsResponseContent {
 
     return EbicsResponseContent(
         transactionID = resp.value.header._static.transactionID,
+        orderID = resp.value.header.mutable.orderID,
         bankReturnCode = bankReturnCode,
         technicalReturnCode = techReturnCode,
         reportText = reportText,

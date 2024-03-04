@@ -234,7 +234,7 @@ suspend fun submitPain001(
     clientKeys: ClientPrivateKeysFile,
     bankkeys: BankPublicKeysFile,
     httpClient: HttpClient
-) {
+): String {
     val orderService: Ebics3Request.OrderDetails.Service = Ebics3Request.OrderDetails.Service().apply {
         serviceName = "MCT"
         scope = "CH"
@@ -255,6 +255,7 @@ suspend fun submitPain001(
             " EBICS technical code is: ${maybeUploaded.technicalReturnCode}," +
             " bank technical return code is: ${maybeUploaded.bankReturnCode}"
     )
+    return maybeUploaded.orderID!!
 }
 
 /**

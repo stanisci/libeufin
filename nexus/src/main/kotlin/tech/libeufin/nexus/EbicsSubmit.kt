@@ -91,7 +91,7 @@ class NexusSubmitException(
 private suspend fun submitInitiatedPayment(
     ctx: SubmissionContext,
     payment: InitiatedPayment
-) { 
+): String { 
     val creditAccount = try {
         val payto = Payto.parse(payment.creditPaytoUri).expectIban()
         IbanAccountMetadata(
@@ -114,7 +114,7 @@ private suspend fun submitInitiatedPayment(
     )
     ctx.fileLogger.logSubmit(xml)
     try {
-        submitPain001(
+        return submitPain001(
             xml,
             ctx.cfg,
             ctx.clientPrivateKeysFile,
@@ -166,7 +166,8 @@ private fun submitBatch(
         db.initiatedPaymentsSubmittableGet(ctx.cfg.currency).forEach {
             logger.debug("Submitting payment initiation with row ID: ${it.id}")
             val submissionState = try {
-                submitInitiatedPayment(ctx, it)
+                val orderId = submitInitiatedPayment(ctx, it)
+                db.mem[orderId] = "Init"
                 DatabaseSubmissionState.success
             } catch (e: NexusSubmitException) {
                 logger.error(e.message)
