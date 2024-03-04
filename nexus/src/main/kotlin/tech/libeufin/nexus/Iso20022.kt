@@ -25,7 +25,6 @@ import java.net.URLEncoder
 import java.time.*
 import java.time.format.*
 
-
 /**
  * Collects details to define the pain.001 namespace
  * XML attributes.
@@ -247,6 +246,17 @@ fun parseCustomerPaymentStatusReport(xml: InputStream): PaymentStatus {
     }
 }
 
+sealed interface TxNotification {
+    data class Incoming(val payment: IncomingPayment): TxNotification
+    data class Outgoing(val payment: OutgoingPayment): TxNotification
+    data class Reversal(val reversal: OutgoingReversal): TxNotification
+}
+
+data class OutgoingReversal(
+    val bankId: String,
+    val reason: String?
+)
+
 /**
  * Searches payments in a camt.054 (Detailavisierung) document.
  *
@@ -258,10 +268,9 @@ fun parseCustomerPaymentStatusReport(xml: InputStream): PaymentStatus {
 fun parseTxNotif(
     notifXml: InputStream,
     acceptedCurrency: String,
-    incoming: MutableList<IncomingPayment>,
-    outgoing: MutableList<OutgoingPayment>
+    notifications: MutableList<TxNotification>,
 ) {
-    notificationForEachTx(notifXml) { bookDate ->
+    notificationForEachTx(notifXml) { bookDate, reversal, info ->
         val kind = one("CdtDbtInd").text()
         val amount: TalerAmount = one("Amt") {
             val currency = attr("Ccy")
@@ -270,6 +279,19 @@ fun parseTxNotif(
              */
             if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
             TalerAmount("$currency:${text()}")
+        }
+        if (reversal) {
+            require("CRDT" == kind)
+            val msgId = one("Refs").opt("MsgId")?.text()
+            if (msgId == null) {
+                logger.debug("Unsupported reversal without message id")
+            } else {
+                notifications.add(TxNotification.Reversal(OutgoingReversal(
+                    bankId = msgId,
+                    reason = info
+                )))
+            }
+            return@notificationForEachTx
         }
         when (kind) {
             "CRDT" -> {
@@ -293,7 +315,7 @@ fun parseTxNotif(
                         debtorPayto.append("?receiver-name=$urlEncName")
                     }
                 }
-                incoming.add(
+                notifications.add(TxNotification.Incoming(
                     IncomingPayment(
                         amount = amount,
                         bankId = bankId,
@@ -301,17 +323,17 @@ fun parseTxNotif(
                         executionTime = bookDate,
                         wireTransferSubject = subject.toString()
                     )
-                )
+                ))
             }
             "DBIT" -> {
                 val messageId = one("Refs").one("MsgId").text()
-                outgoing.add(
+                notifications.add(TxNotification.Outgoing(
                     OutgoingPayment(
                         amount = amount,
                         messageId = messageId,
                         executionTime = bookDate
                     )
-                )
+                ))
             }
             else -> throw Exception("Unknown transaction notification kind '$kind'")
         }        
@@ -326,28 +348,26 @@ fun parseTxNotif(
  */
 private fun notificationForEachTx(
     xml: InputStream,
-    directionLambda: XmlDestructor.(Instant) -> Unit
+    directionLambda: XmlDestructor.(Instant, Boolean, String?) -> Unit
 ) {
     destructXml(xml, "Document") {
         opt("BkToCstmrDbtCdtNtfctn")?.each("Ntfctn") {
             each("Ntry") {
-                if (opt("RvslInd")?.bool() == true) {
-                    logger.warn("Skip reversal transaction")
-                } else {
-                    one("Sts") {
-                        if (text() != "BOOK") {
-                            one("Cd") {
-                                if (text() != "BOOK")
-                                    throw Exception("Found non booked transaction, " +
-                                            "stop parsing.  Status was: ${text()}"
-                                    )
-                            }
+                val reversal = opt("RvslInd")?.bool() ?: false
+                val info = opt("AddtlNtryInf")?.text()
+                one("Sts") {
+                    if (text() != "BOOK") {
+                        one("Cd") {
+                            if (text() != "BOOK")
+                                throw Exception("Found non booked transaction, " +
+                                        "stop parsing.  Status was: ${text()}"
+                                )
                         }
                     }
-                    val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
-                    one("NtryDtls").each("TxDtls") {
-                        directionLambda(this, bookDate)
-                    }
+                }
+                val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
+                one("NtryDtls").each("TxDtls") {
+                    directionLambda(this, bookDate, reversal, info)
                 }
             }
         }

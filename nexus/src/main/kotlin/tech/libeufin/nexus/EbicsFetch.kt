@@ -147,7 +147,7 @@ suspend fun ingestOutgoingPayment(
         else 
             logger.warn("$payment recovered")
     } else {
-        logger.debug("OUT '${payment.messageId}' already seen")
+        logger.debug("$payment already seen")
     }
 }
 
@@ -158,7 +158,6 @@ private val PATTERN = Regex("[a-z0-9A-Z]{52}")
  * or bounces it, according to the subject.
  *
  * @param db database handle.
- * @param currency fiat currency of the watched bank account.
  * @param payment payment to (maybe) ingest.
  */
 suspend fun ingestIncomingPayment(
@@ -171,7 +170,7 @@ suspend fun ingestIncomingPayment(
             if (result.new) {
                 logger.info("$payment")
             } else {
-                logger.debug("IN '${payment.bankId}' already seen")
+                logger.debug("$payment already seen")
             }
         },
         onFailure = { e ->
@@ -183,10 +182,24 @@ suspend fun ingestIncomingPayment(
             if (result.new) {
                 logger.info("$payment bounced in '${result.bounceId}': ${e.message}")
             } else {
-                logger.debug("IN '${payment.bankId}' already seen and bounced in '${result.bounceId}': ${e.message}")
+                logger.debug("$payment already seen and bounced in '${result.bounceId}': ${e.message}")
             }
         }
     )
+}
+
+/**
+ * Ingests an outgoing payment bounce.
+ *
+ * @param db database handle.
+ * @param reversal reversal ingest.
+ */
+suspend fun ingestReversal(
+    db: Database,
+    reversal: OutgoingReversal
+) {
+    logger.warn("BOUNCE '${reversal.bankId}': ${reversal.reason}")
+    // TODO store in db=
 }
 
 private fun ingestDocument(
@@ -198,16 +211,16 @@ private fun ingestDocument(
     when (whichDocument) {
         SupportedDocument.CAMT_054 -> {
             try {
-                val incomingPayments = mutableListOf<IncomingPayment>()
-                val outgoingPayments = mutableListOf<OutgoingPayment>()
-                parseTxNotif(xml, currency, incomingPayments, outgoingPayments)
+                val notifications = mutableListOf<TxNotification>()
+                parseTxNotif(xml, currency, notifications)
 
                 runBlocking {
-                    incomingPayments.forEach {
-                        ingestIncomingPayment(db, it)
-                    }
-                    outgoingPayments.forEach {
-                        ingestOutgoingPayment(db, it)
+                    notifications.forEach {
+                        when (it) {
+                            is TxNotification.Incoming -> ingestIncomingPayment(db, it.payment)
+                            is TxNotification.Outgoing -> ingestOutgoingPayment(db, it.payment)
+                            is TxNotification.Reversal -> ingestReversal(db, it.reversal)
+                        }
                     }
                 }
             } catch (e: Exception) {

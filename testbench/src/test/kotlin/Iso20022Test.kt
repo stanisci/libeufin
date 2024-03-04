@@ -34,7 +34,7 @@ class Iso20022Test {
             } else if (name.contains("pain.002")) {
                 parseCustomerPaymentStatusReport(content)
             } else {
-                parseTxNotif(content, "CHF", mutableListOf(), mutableListOf())
+                parseTxNotif(content, "CHF", mutableListOf())
             }
         }
     }
@@ -56,7 +56,7 @@ class Iso20022Test {
                         } else if (name.contains("pain.002")) {
                             parseCustomerPaymentStatusReport(content)
                         } else {
-                            parseTxNotif(content, "CHF", mutableListOf(), mutableListOf())
+                            parseTxNotif(content, "CHF", mutableListOf())
                         }
                     }
                 }
