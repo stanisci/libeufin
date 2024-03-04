@@ -16,7 +16,7 @@ compileTestKotlin.kotlinOptions.jvmTarget = "17"
 sourceSets.main.java.srcDirs = ["src/main/kotlin"]
 
 dependencies {
-    implementation("ch.qos.logback:logback-classic:1.4.14")
+    implementation("ch.qos.logback:logback-classic:1.5.3")
     // Crypto
     implementation("org.bouncycastle:bcprov-jdk18on:1.77")
     // Database helper
