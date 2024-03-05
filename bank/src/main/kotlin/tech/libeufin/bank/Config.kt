@@ -31,6 +31,7 @@ private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
  * Application the parsed configuration.
  */
 data class BankConfig(
+    val name: String,
     val regionalCurrency: String,
     val regionalCurrencySpec: CurrencySpecification,
     val allowRegistration: Boolean,
@@ -124,8 +125,9 @@ fun TalerConfig.loadBankConfig(): BankConfig {
         }
     }
     return BankConfig(
+        name = lookupString("libeufin-bank", "name") ?: "Taler Bank",
         regionalCurrency = regionalCurrency,
-        regionalCurrencySpec =  currencySpecificationFor(regionalCurrency),
+        regionalCurrencySpec = currencySpecificationFor(regionalCurrency),
         allowRegistration = lookupBoolean("libeufin-bank", "allow_registration") ?: false,
         allowAccountDeletion = lookupBoolean("libeufin-bank", "allow_account_deletion") ?: false,
         allowEditName = lookupBoolean("libeufin-bank", "allow_edit_name") ?: false,

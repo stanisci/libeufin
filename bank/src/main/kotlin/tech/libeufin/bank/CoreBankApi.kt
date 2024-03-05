@@ -50,6 +50,7 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
     get("/config") {
         call.respond(
             Config(
+                bank_name = ctx.name,
                 currency = ctx.regionalCurrency,
                 currency_specification = ctx.regionalCurrencySpec,
                 allow_conversion = ctx.allowConversion,
@@ -663,7 +664,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                     res.tanCode?.run {
                         val (tanScript, tanEnv) = ctx.tanChannels.get(res.tanChannel) 
                             ?: throw unsupportedTanChannel(res.tanChannel)
-                        val msg = "${res.tanCode} is your bank verification code"
+                        val msg = "${res.tanCode} is your ${ctx.name} verification code"
                         val exitValue = withContext(Dispatchers.IO) {
                             val builder = ProcessBuilder(tanScript.toString(), res.tanInfo)
                             builder.redirectErrorStream(true)

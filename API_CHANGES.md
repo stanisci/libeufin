@@ -36,6 +36,7 @@ This files contains all the API changes for the current release:
 - GET /config: new wire_type field for the bank supported payment target type
 - GET /accounts: add row_id field
 - GET /public-accounts: add row_id field
+- GET /config: new bank_name field for the bank name
 
 ## bank cli
 

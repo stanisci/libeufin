@@ -40,7 +40,7 @@ const val IBAN_ALLOCATION_RETRY_COUNTER: Int = 5
 const val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB
 
 // API version  
-const val COREBANK_API_VERSION: String = "4:2:0"
+const val COREBANK_API_VERSION: String = "4:3:0"
 const val CONVERSION_API_VERSION: String = "0:0:0"
 const val INTEGRATION_API_VERSION: String = "2:0:2"
 const val WIRE_GATEWAY_API_VERSION: String = "0:2:0"
