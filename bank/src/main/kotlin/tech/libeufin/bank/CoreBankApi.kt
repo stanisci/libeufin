@@ -664,7 +664,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                     res.tanCode?.run {
                         val (tanScript, tanEnv) = ctx.tanChannels.get(res.tanChannel) 
                             ?: throw unsupportedTanChannel(res.tanChannel)
-                        val msg = "${res.tanCode} is your ${ctx.name} verification code"
+                        val msg = "T-${res.tanCode} is your ${ctx.name} verification code"
                         val exitValue = withContext(Dispatchers.IO) {
                             val builder = ProcessBuilder(tanScript.toString(), res.tanInfo)
                             builder.redirectErrorStream(true)
@@ -710,10 +710,11 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
         post("/accounts/{USERNAME}/challenge/{CHALLENGE_ID}/confirm") {
             val id = call.longParameter("CHALLENGE_ID")
             val req = call.receive<ChallengeSolve>()
+            val code = req.tan.removePrefix("T-")
             val res = db.tan.solve(
                 id = id,
                 login = username,
-                code = req.tan,
+                code = code,
                 now = Instant.now()
             )
             when (res) {
