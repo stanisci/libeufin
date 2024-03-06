@@ -19,18 +19,21 @@
 package tech.libeufin.nexus.ebics
 
 import io.ktor.client.*
-import tech.libeufin.ebics.PreparedUploadData
-import tech.libeufin.ebics.XMLUtil
+import tech.libeufin.ebics.*
+import tech.libeufin.common.*
+import tech.libeufin.common.crypto.*
 import tech.libeufin.ebics.ebics_h005.Ebics3Request
-import tech.libeufin.ebics.getNonce
-import tech.libeufin.ebics.getXmlDate
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig
 import tech.libeufin.nexus.logger
 import java.math.BigInteger
-import java.time.Instant
+import java.time.*
+import java.time.format.*
 import java.util.*
+import java.io.File
+import org.w3c.dom.*
+import javax.xml.datatype.XMLGregorianCalendar
 import javax.xml.datatype.DatatypeFactory
 
 /**
@@ -97,7 +100,6 @@ fun createEbics3DownloadTransferPhase(
     return XMLUtil.convertDomToBytes(doc)
 }
 
-
 /**
  * Creates the EBICS 3 document for the init phase of a download
  * transaction.
@@ -109,58 +111,83 @@ fun createEbics3DownloadTransferPhase(
  */
 fun createEbics3DownloadInitialization(
     cfg: EbicsSetupConfig,
-    bankkeys: BankPublicKeysFile,
+    bankKeys: BankPublicKeysFile,
     clientKeys: ClientPrivateKeysFile,
     whichDoc: SupportedDocument,
     startDate: Instant? = null,
     endDate: Instant? = null
 ): ByteArray {
     val nonce = getNonce(128)
-    val req = Ebics3Request.createForDownloadInitializationPhase(
-        cfg.ebicsUserId,
-        cfg.ebicsPartnerId,
-        cfg.ebicsHostId,
-        nonce,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
-        bankAuthPub = bankkeys.bank_authentication_public_key,
-        bankEncPub = bankkeys.bank_encryption_public_key,
-        myOrderParams = if (whichDoc == SupportedDocument.PAIN_002_LOGS) null else Ebics3Request.OrderDetails.BTDOrderParams().apply {
-            service = Ebics3Request.OrderDetails.Service().apply {
-                serviceName = when(whichDoc) {
-                    SupportedDocument.PAIN_002 -> "PSR"
-                    SupportedDocument.CAMT_052 -> "STM"
-                    SupportedDocument.CAMT_053 -> "EOP"
-                    SupportedDocument.CAMT_054 -> "REP"
-                    SupportedDocument.PAIN_002_LOGS -> "HAC"
-                }
-                scope = "CH"
-                container = Ebics3Request.OrderDetails.Service.Container().apply {
-                    containerType = "ZIP"
-                }
-                messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-                    val (msg_value, msg_version) = when(whichDoc) {
-                        SupportedDocument.PAIN_002 -> Pair("pain.002", "10")
-                        SupportedDocument.CAMT_052 -> Pair("pain.052", "08")
-                        SupportedDocument.CAMT_053 -> Pair("pain.053", "08")
-                        SupportedDocument.CAMT_054 -> Pair("camt.054", "08")
-                        SupportedDocument.PAIN_002_LOGS -> throw Exception("HAC (--only-logs) not available in EBICS 3")
+    val timestamp = DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
+    val doc = XmlBuilder.toDom("ebicsRequest", "urn:org:ebics:H005") {
+        attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H005")
+        attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+        attr("http://www.w3.org/2000/xmlns/", "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
+        attr("http://www.w3.org/2001/XMLSchema-instance", "xsi:schemaLocation", "urn:org:ebics:H005 ebics_request_H005.xsd")
+        attr("Version", "H005")
+        attr("Revision", "1")
+        el("header") {
+            attr("authenticate", "true")
+            el("static") {
+                el("HostID", cfg.ebicsHostId)
+                el("Nonce", nonce.toHexString())
+                el("Timestamp", timestamp.toXMLFormat() )
+                el("PartnerID", cfg.ebicsPartnerId)
+                el("UserID", cfg.ebicsUserId)
+                el("OrderDetails") {
+                    if (whichDoc == SupportedDocument.PAIN_002_LOGS) {
+                        el("AdminOrderType", "HAC")
+                    } else {
+                        el("AdminOrderType", "BTD")
+                        el("BTDOrderParams") {
+                            el("Service") {
+                                el("ServiceName", when(whichDoc) {
+                                    SupportedDocument.PAIN_002 -> "PSR"
+                                    SupportedDocument.CAMT_052 -> "STM"
+                                    SupportedDocument.CAMT_053 -> "EOP"
+                                    SupportedDocument.CAMT_054 -> "REP"
+                                    SupportedDocument.PAIN_002_LOGS -> "HAC"
+                                })
+                                val (msg_value, msg_version) = when(whichDoc) {
+                                    SupportedDocument.PAIN_002 -> Pair("pain.002", "10")
+                                    SupportedDocument.CAMT_052 -> Pair("pain.052", "08")
+                                    SupportedDocument.CAMT_053 -> Pair("pain.053", "08")
+                                    SupportedDocument.CAMT_054 -> Pair("camt.054", "08")
+                                    SupportedDocument.PAIN_002_LOGS -> throw Exception("HAC (--only-logs) not available in EBICS 3")
+                                }
+                                el("Scope", "CH")
+                                el("Container") {
+                                    attr("containerType", "ZIP")
+                                }
+                                el("MsgName") {
+                                    attr("version", msg_version)
+                                    text(msg_value)
+                                }
+                            }
+                        }
                     }
-                    value = msg_value
-                    version = msg_version
                 }
+                el("BankPubKeyDigests") {
+                    el("Authentication") {
+                        attr("Version", "X002")
+                        attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                        text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).encodeBase64())
+                    }
+                    el("Encryption") {
+                        attr("Version", "E002")
+                        attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                        text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
+                    }
+                }
+                el("SecurityMedium", "0000")
             }
-            if (startDate != null) {
-                Ebics3Request.DateRange().apply {
-                    start = getXmlDate(startDate)
-                    end = getXmlDate(endDate ?: Instant.now())
-                }
+            el("mutable") {
+                el("TransactionPhase", "Initialisation")
             }
         }
-    )
-    val doc = XMLUtil.convertJaxbToDocument(
-        req,
-        withSchemaLocation = "urn:org:ebics:H005 ebics_request_H005.xsd"
-    )
+        el("AuthSignature")
+        el("body")
+    }
     XMLUtil.signEbicsDocument(
         doc,
         clientKeys.authentication_private_key,

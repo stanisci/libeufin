@@ -19,17 +19,62 @@
 
 package tech.libeufin.ebics
 
-import org.w3c.dom.Element
+import org.w3c.dom.*
 import java.io.InputStream
 import java.io.StringWriter
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import javax.xml.parsers.*
 import javax.xml.stream.XMLOutputFactory
 import javax.xml.stream.XMLStreamWriter
 
-class XmlBuilder(private val w: XMLStreamWriter) {
-    fun el(path: String, lambda: XmlBuilder.() -> Unit = {}) {
+interface XmlBuilder {
+    fun el(path: String, lambda: XmlBuilder.() -> Unit = {})
+    fun el(path: String, content: String) {
+        el(path) {
+            text(content)
+        }
+    }
+    fun attr(namespace: String, name: String, value: String)
+    fun attr(name: String, value: String)
+    fun text(content: String)
+
+    companion object {
+        fun toString(root: String, f: XmlBuilder.() -> Unit): String {
+            val factory = XMLOutputFactory.newFactory()
+            val stream = StringWriter()
+            var writer = factory.createXMLStreamWriter(stream)
+            /**
+             * NOTE: commenting out because it wasn't obvious how to output the
+             * "standalone = 'yes' directive".  Manual forge was therefore preferred.
+             */
+            stream.write("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
+            XmlStreamBuilder(writer).el(root) {
+                this.f()
+            }
+            writer.writeEndDocument()
+            return stream.buffer.toString()
+        }
+
+        fun toDom(root: String, schema: String?, f: XmlBuilder.() -> Unit): Document {
+            val factory = DocumentBuilderFactory.newInstance();
+            factory.isNamespaceAware = true
+            val builder = factory.newDocumentBuilder();
+            val doc = builder.newDocument();
+            doc.setXmlVersion("1.0")
+            doc.setXmlStandalone(true)
+            val root = doc.createElementNS(schema, root)
+            doc.appendChild(root);
+            XmlDOMBuilder(doc, schema, root).f()
+            doc.normalize()
+            return doc
+        }
+    }
+}
+
+private class XmlStreamBuilder(private val w: XMLStreamWriter): XmlBuilder {
+    override fun el(path: String, lambda: XmlBuilder.() -> Unit) {
         path.splitToSequence('/').forEach { 
             w.writeStartElement(it)
         }
@@ -39,35 +84,42 @@ class XmlBuilder(private val w: XMLStreamWriter) {
         }
     }
 
-    fun el(path: String, content: String) {
-        el(path) {
-            text(content)
-        }
+    override fun attr(namespace: String, name: String, value: String) {
+        w.writeAttribute(namespace, name, value)
     }
 
-    fun attr(name: String, value: String) {
+    override fun attr(name: String, value: String) {
         w.writeAttribute(name, value)
     }
 
-    fun text(content: String) {
+    override fun text(content: String) {
         w.writeCharacters(content)
     }
 }
 
-fun constructXml(root: String, f: XmlBuilder.() -> Unit): String {
-    val factory = XMLOutputFactory.newFactory()
-    val stream = StringWriter()
-    var writer = factory.createXMLStreamWriter(stream)
-    /**
-     * NOTE: commenting out because it wasn't obvious how to output the
-     * "standalone = 'yes' directive".  Manual forge was therefore preferred.
-     */
-    stream.write("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
-    XmlBuilder(writer).el(root) {
-        this.f()
+private class XmlDOMBuilder(private val doc: Document, private val schema: String?, private var node: Element): XmlBuilder {
+    override fun el(path: String, lambda: XmlBuilder.() -> Unit) {
+        val current = node
+        path.splitToSequence('/').forEach {
+            val new = doc.createElementNS(schema, it)
+            node.appendChild(new)
+            node = new
+        }
+        lambda()
+        node = current
     }
-    writer.writeEndDocument()
-    return stream.buffer.toString()
+
+    override fun attr(namespace: String, name: String, value: String) {
+        node.setAttributeNS(namespace, name, value)
+    }
+
+    override fun attr(name: String, value: String) {
+        node.setAttribute(name, value)
+    }
+
+    override fun text(content: String) {
+        node.appendChild(doc.createTextNode(content));
+    }
 }
 
 class DestructionError(m: String) : Exception(m)

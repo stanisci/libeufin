@@ -158,10 +158,9 @@ class XMLUtil private constructor() {
      */
     private class EbicsSigUriDereferencer : URIDereferencer {
         override fun dereference(myRef: URIReference?, myCtx: XMLCryptoContext?): Data {
-            val ebicsXpathExpr = "//*[@authenticate='true']"
             if (myRef !is DOMURIReference)
                 throw Exception("invalid type")
-            if (myRef.uri != "#xpointer($ebicsXpathExpr)")
+            if (myRef.uri != "#xpointer(//*[@authenticate='true'])")
                 throw Exception("invalid EBICS XML signature URI: '${myRef.uri}'")
             val xp: XPath = XPathFactory.newInstance().newXPath()
             val nodeSet = xp.compile("//*[@authenticate='true']/descendant-or-self::node()").evaluate(
@@ -341,15 +340,10 @@ class XMLUtil private constructor() {
         }
 
         fun convertDomToBytes(document: Document): ByteArray {
-            /* Make Transformer.  */
-            val tf = TransformerFactory.newInstance()
-            val t = tf.newTransformer()
-
-            /* Make bytes writer.  */
             val w = ByteArrayOutputStream()
-
-            /* Extract string.  */
-            t.transform(DOMSource(document), StreamResult(w))
+            val transformer = TransformerFactory.newInstance().newTransformer()
+            transformer.setOutputProperty(OutputKeys.STANDALONE, "yes")
+            transformer.transform(DOMSource(document), StreamResult(w))
             return w.toByteArray()
         }
 
@@ -409,24 +403,9 @@ class XMLUtil private constructor() {
             signingPriv: PrivateKey,
             withEbics3: Boolean = false
         ) {
-            val xpath = XPathFactory.newInstance().newXPath()
-            xpath.namespaceContext = object : NamespaceContext {
-                override fun getNamespaceURI(p0: String?): String {
-                    return when (p0) {
-                        "ebics" -> if (withEbics3) "urn:org:ebics:H005" else "urn:org:ebics:H004"
-                        else -> throw IllegalArgumentException()
-                    }
-                }
-
-                override fun getPrefix(p0: String?): String {
-                    throw UnsupportedOperationException()
-                }
-
-                override fun getPrefixes(p0: String?): MutableIterator<String> {
-                    throw UnsupportedOperationException()
-                }
-            }
-            val authSigNode = xpath.compile("/*[1]/ebics:AuthSignature").evaluate(doc, XPathConstants.NODE)
+            val ns = if (withEbics3) "urn:org:ebics:H005" else "urn:org:ebics:H004"
+            val authSigNode = XPathFactory.newInstance().newXPath()
+                .evaluate("/*[1]/$ns:AuthSignature", doc, XPathConstants.NODE)
             if (authSigNode !is Node)
                 throw java.lang.Exception("no AuthSignature")
             val fac = XMLSignatureFactory.getInstance("DOM")
@@ -461,25 +440,10 @@ class XMLUtil private constructor() {
             signingPub: PublicKey,
             withEbics3: Boolean = false
         ): Boolean {
-            val xpath = XPathFactory.newInstance().newXPath()
-            xpath.namespaceContext = object : NamespaceContext {
-                override fun getNamespaceURI(p0: String?): String {
-                    return when (p0) {
-                        "ebics" -> if (withEbics3) "urn:org:ebics:H005" else "urn:org:ebics:H004"
-                        else -> throw IllegalArgumentException()
-                    }
-                }
-
-                override fun getPrefix(p0: String?): String {
-                    throw UnsupportedOperationException()
-                }
-
-                override fun getPrefixes(p0: String?): MutableIterator<String> {
-                    throw UnsupportedOperationException()
-                }
-            }
             val doc2: Document = doc.cloneNode(true) as Document
-            val authSigNode = xpath.compile("/*[1]/ebics:AuthSignature").evaluate(doc2, XPathConstants.NODE)
+            val ns = if (withEbics3) "urn:org:ebics:H005" else "urn:org:ebics:H004"
+            val authSigNode = XPathFactory.newInstance().newXPath()
+                .evaluate("/*[1]/$ns:AuthSignature", doc2, XPathConstants.NODE)
             if (authSigNode !is Node)
                 throw java.lang.Exception("no AuthSignature")
             val sigEl = doc2.createElementNS("http://www.w3.org/2000/09/xmldsig#", "ds:Signature")

@@ -19,49 +19,58 @@
 
 import org.junit.Test
 import tech.libeufin.ebics.XmlBuilder
-import tech.libeufin.ebics.constructXml
+import tech.libeufin.ebics.XMLUtil
 import kotlin.test.assertEquals
 
 class XmlCombinatorsTest {
+    fun testBuilder(expected: String, root: String, builder: XmlBuilder.() -> Unit) {
+        val toString = XmlBuilder.toString(root, builder)
+        val toDom = XmlBuilder.toDom(root, null, builder)
+        assertEquals(expected, toString)
+        assertEquals(expected, XMLUtil.convertDomToBytes(toDom).toString(Charsets.UTF_8))
+    }
 
     @Test
     fun testWithModularity() {
         fun module(base: XmlBuilder) {
             base.el("module")
         }
-        val s = constructXml("root") {
+        testBuilder(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><root><module/></root>",
+            "root"
+        ) {
             module(this)
         }
-        println(s)
-        assertEquals("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><root><module/></root>", s)
     }
 
     @Test
     fun testWithIterable() {
-        val s = constructXml("iterable") {
+        testBuilder(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><iterable><endOfDocument><e1><e11>111</e11></e1><e2><e22>222</e22></e2><e3><e33>333</e33></e3><e4><e44>444</e44></e4><e5><e55>555</e55></e5><e6><e66>666</e66></e6><e7><e77>777</e77></e7><e8><e88>888</e88></e8><e9><e99>999</e99></e9><e10><e1010>101010</e1010></e10></endOfDocument></iterable>", 
+            "iterable"
+        ) {
             el("endOfDocument") {
                 for (i in 1..10)
-                    el("$i/$i$i", "$i$i$i")
+                    el("e$i/e$i$i", "$i$i$i")
             }
         }
-        println(s)
-        assertEquals("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><iterable><endOfDocument><1><11>111</11></1><2><22>222</22></2><3><33>333</33></3><4><44>444</44></4><5><55>555</55></5><6><66>666</66></6><7><77>777</77></7><8><88>888</88></8><9><99>999</99></9><10><1010>101010</1010></10></endOfDocument></iterable>", s)
     }
 
     @Test
     fun testBasicXmlBuilding() {
-        val s = constructXml("ebics:ebicsRequest") {
+        testBuilder(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><ebicsRequest version=\"H004\"><a><b><c attribute-of=\"c\"><d><e><f nested=\"true\"><g><h/></g></f></e></d></c></b></a><one_more/></ebicsRequest>",
+            "ebicsRequest"
+        ) {
             attr("version", "H004")
             el("a/b/c") {
                 attr("attribute-of", "c")
-                el("//d/e/f//") {
+                el("d/e/f") {
                     attr("nested", "true")
-                    el("g/h/")
+                    el("g/h")
                 }
             }
-            el("one more")
+            el("one_more")
         }
-        println(s)
-        assertEquals("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><ebics:ebicsRequest version=\"H004\"><a><b><c attribute-of=\"c\"><><><d><e><f><>< nested=\"true\"><g><h></></h></g></></></f></e></d></></></c></b></a><one more/></ebics:ebicsRequest>", s)
     }
 }

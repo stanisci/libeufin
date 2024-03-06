@@ -83,7 +83,7 @@ fun createPain001(
     )
     val zonedTimestamp = ZonedDateTime.ofInstant(initiationTimestamp, ZoneId.of("UTC"))
     val amountWithoutCurrency: String = getAmountNoCurrency(amount)
-    return constructXml("Document") {
+    return XmlBuilder.toString("Document") {
         attr("xmlns", namespace.fullNamespace)
         attr("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
         attr("xsi:schemaLocation", "${namespace.fullNamespace} ${namespace.xsdFilename}")
