@@ -404,7 +404,7 @@ class Ebics3Request {
             date: XMLGregorianCalendar,
             bankEncPub: RSAPublicKey,
             bankAuthPub: RSAPublicKey,
-            myOrderParams: OrderDetails.BTDOrderParams
+            myOrderParams: OrderDetails.BTDOrderParams?
         ): Ebics3Request {
             return Ebics3Request().apply {
                 version = "H005"
@@ -421,7 +421,7 @@ class Ebics3Request {
                         timestamp = date
                         partnerID = partnerId
                         orderDetails = OrderDetails().apply {
-                            this.adminOrderType = "BTD"
+                            this.adminOrderType = if (myOrderParams == null) "HAC" else "BTD"
                             this.btdOrderParams = myOrderParams
                         }
                         bankPubKeyDigests = BankPubKeyDigests().apply {

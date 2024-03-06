@@ -84,31 +84,19 @@ private suspend fun downloadHelper(
     doc: SupportedDocument,
     processing: (InputStream) -> Unit
 ) {
-    val isEbics3 = doc != SupportedDocument.PAIN_002_LOGS
-    val initXml = if (isEbics3) {
-        createEbics3DownloadInitialization(
-            ctx.cfg,
-            ctx.bankKeys,
-            ctx.clientKeys,
-            doc,
-            lastExecutionTime
-        )
-    } else {
-        createEbics25DownloadInit(
-            ctx.cfg,
-            ctx.clientKeys,
-            ctx.bankKeys,
-            doc,
-            lastExecutionTime
-        )
-    }
+    val initXml = createEbics3DownloadInitialization(
+        ctx.cfg,
+        ctx.bankKeys,
+        ctx.clientKeys,
+        doc,
+        lastExecutionTime
+    )
     return ebicsDownload(
         ctx.httpClient,
         ctx.cfg,
         ctx.clientKeys,
         ctx.bankKeys,
         initXml,
-        isEbics3,
         processing
     )
 }

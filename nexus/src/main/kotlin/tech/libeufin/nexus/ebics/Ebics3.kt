@@ -124,14 +124,14 @@ fun createEbics3DownloadInitialization(
         DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
         bankAuthPub = bankkeys.bank_authentication_public_key,
         bankEncPub = bankkeys.bank_encryption_public_key,
-        myOrderParams = Ebics3Request.OrderDetails.BTDOrderParams().apply {
+        myOrderParams = if (whichDoc == SupportedDocument.PAIN_002_LOGS) null else Ebics3Request.OrderDetails.BTDOrderParams().apply {
             service = Ebics3Request.OrderDetails.Service().apply {
                 serviceName = when(whichDoc) {
                     SupportedDocument.PAIN_002 -> "PSR"
                     SupportedDocument.CAMT_052 -> "STM"
                     SupportedDocument.CAMT_053 -> "EOP"
                     SupportedDocument.CAMT_054 -> "REP"
-                    SupportedDocument.PAIN_002_LOGS -> throw Exception("HAC (--only-logs) not available in EBICS 3")
+                    SupportedDocument.PAIN_002_LOGS -> "HAC"
                 }
                 scope = "CH"
                 container = Ebics3Request.OrderDetails.Service.Container().apply {

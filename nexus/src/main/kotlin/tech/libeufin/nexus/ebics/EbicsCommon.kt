@@ -113,6 +113,7 @@ suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray): InputStream 
         setBody(msg)
     }
     if (res.status != HttpStatusCode.OK) {
+        println(res.bodyAsText())
         throw Exception("Invalid response status: ${res.status}")
     }
     return res.bodyAsChannel().toInputStream()
@@ -273,7 +274,6 @@ private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
  * @param clientKeys client EBICS private keys.
  * @param bankKeys bank EBICS public keys.
  * @param reqXml raw EBICS XML request of the init phase.
- * @param isEbics3 true for EBICS 3, false otherwise.
  * @param processing processing lambda receiving EBICS files as a byte stream if the transaction was not empty.
  * @return T if the transaction was successful. If the failure is at the EBICS 
  *         level EbicsSideException is thrown else ités the exception of the processing lambda.
@@ -284,7 +284,6 @@ suspend fun ebicsDownload(
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     reqXml: ByteArray,
-    isEbics3: Boolean,
     processing: (InputStream) -> Unit
 ) = coroutineScope {
     val scope = this
@@ -293,7 +292,7 @@ suspend fun ebicsDownload(
     // error loop until the pending transaction timeout.
     // TODO find a way to cancel the pending transaction ?
     withContext(NonCancellable) { 
-        val initResp = postEbics(client, cfg, bankKeys, reqXml, isEbics3) 
+        val initResp = postEbics(client, cfg, bankKeys, reqXml, true) 
         logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${initResp.technicalReturnCode}, ${initResp.bankReturnCode}")
         if (initResp.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
             throw Exception("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
@@ -332,11 +331,9 @@ suspend fun ebicsDownload(
         for (x in 2 .. howManySegments) {
             if (!scope.isActive) break
             // request segment number x.
-            val transReq = if (isEbics3)
-                createEbics3DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
-            else createEbics25DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
+            val transReq = createEbics3DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
 
-            val transResp = postEbics(client, cfg, bankKeys, transReq, isEbics3)
+            val transResp = postEbics(client, cfg, bankKeys, transReq, true)
             if (!areCodesOk(transResp)) {
                 throw EbicsSideException(
                     "EBICS transfer segment #$x failed.",
@@ -350,9 +347,7 @@ suspend fun ebicsDownload(
             ebicsChunks.add(chunk)
         }
         suspend fun receipt(success: Boolean) {
-            val receiptXml = if (isEbics3)
-                createEbics3DownloadReceiptPhase(cfg, clientKeys, tId, success)
-            else createEbics25DownloadReceiptPhase(cfg, clientKeys, tId, success)
+            val receiptXml = createEbics3DownloadReceiptPhase(cfg, clientKeys, tId, success)
 
             // Sending the receipt to the bank.
             postEbics(
@@ -360,7 +355,7 @@ suspend fun ebicsDownload(
                 cfg,
                 bankKeys,
                 receiptXml,
-                isEbics3
+                true
             )
         }
         if (scope.isActive) {
@@ -433,33 +428,17 @@ fun prepareUploadPayload(
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     payload: ByteArray,
-    isEbics3: Boolean
 ): PreparedUploadData {
-    val encryptionResult: CryptoUtil.EncryptionResult = if (isEbics3) {
-        val innerSignedEbicsXml = signOrderEbics3( // A006 signature.
-            payload,
-            clientKeys.signature_private_key,
-            cfg.ebicsPartnerId,
-            cfg.ebicsUserId
-        )
-        val userSignatureDataEncrypted = CryptoUtil.encryptEbicsE002(
-            EbicsOrderUtil.encodeOrderDataXml(innerSignedEbicsXml),
-            bankKeys.bank_encryption_public_key
-        )
-        userSignatureDataEncrypted
-    } else {
-        val innerSignedEbicsXml = signOrder( // A006 signature.
-            payload,
-            clientKeys.signature_private_key,
-            cfg.ebicsPartnerId,
-            cfg.ebicsUserId
-        )
-        val userSignatureDataEncrypted = CryptoUtil.encryptEbicsE002(
-            EbicsOrderUtil.encodeOrderDataXml(innerSignedEbicsXml),
-            bankKeys.bank_encryption_public_key
-        )
-        userSignatureDataEncrypted
-    }
+    val innerSignedEbicsXml = signOrderEbics3( // A006 signature.
+        payload,
+        clientKeys.signature_private_key,
+        cfg.ebicsPartnerId,
+        cfg.ebicsUserId
+    )
+    val encryptionResult = CryptoUtil.encryptEbicsE002(
+        EbicsOrderUtil.encodeOrderDataXml(innerSignedEbicsXml),
+        bankKeys.bank_encryption_public_key
+    )
     val plainTransactionKey = encryptionResult.plainTransactionKey
         ?: throw Exception("Could not generate the transaction key, cannot encrypt the payload!")
     // Then only E002 symmetric (with ephemeral key) encrypt.
@@ -526,7 +505,7 @@ suspend fun doEbicsUpload(
     payload: ByteArray,
 ): EbicsResponseContent = withContext(NonCancellable) {
     // TODO use a lambda and pass the order detail there for atomicity ?
-    val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload, isEbics3 = true)
+    val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload)
     val initXml = createEbics3RequestForUploadInitialization(
         cfg,
         preparedPayload,
