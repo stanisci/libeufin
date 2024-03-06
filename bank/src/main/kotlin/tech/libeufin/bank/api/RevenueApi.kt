@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,12 +16,13 @@
  * License along with LibEuFin; see the file COPYING.  If not, see
  * <http://www.gnu.org/licenses/>
  */
-package tech.libeufin.bank
+package tech.libeufin.bank.api
 
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import tech.libeufin.bank.*
 import tech.libeufin.bank.auth.auth
 import tech.libeufin.bank.db.Database
 

@@ -16,7 +16,7 @@
  * License along with LibEuFin; see the file COPYING.  If not, see
  * <http://www.gnu.org/licenses/>
  */
-package tech.libeufin.bank
+package tech.libeufin.bank.api
 
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -39,6 +39,7 @@ import tech.libeufin.bank.db.TransactionDAO.BankTransactionResult
 import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalConfirmationResult
 import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalCreationResult
 import tech.libeufin.common.*
+import tech.libeufin.bank.*
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -434,7 +435,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
             }
         }
         get("/accounts/{USERNAME}/transactions/{T_ID}") {
-            val tId = call.longParameter("T_ID")
+            val tId = call.longPath("T_ID")
             val tx = db.transaction.get(tId, username, ctx.payto) ?: throw notFound(
                     "Bank transaction '$tId' not found",
                     TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
@@ -510,7 +511,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             }
         }
         post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
-            val id = call.uuidParameter("withdrawal_id")
+            val id = call.uuidPath("withdrawal_id")
             val challenge = call.checkChallenge(db, Operation.withdrawal)
             when (db.withdrawal.confirm(username, id, Instant.now(), challenge != null)) {
                 WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
@@ -540,7 +541,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
             }
         }
         post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/abort") {
-            val opId = call.uuidParameter("withdrawal_id")
+            val opId = call.uuidPath("withdrawal_id")
             when (db.withdrawal.abort(opId)) {
                 AbortResult.UnknownOperation -> throw notFound(
                     "Withdrawal operation $opId not found",
@@ -555,7 +556,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         }
     }
     get("/withdrawals/{withdrawal_id}") {
-        val uuid = call.uuidParameter("withdrawal_id")
+        val uuid = call.uuidPath("withdrawal_id")
         val params = StatusParams.extract(call.request.queryParameters)
         val op = db.withdrawal.pollInfo(uuid, params) ?: throw notFound(
             "Withdrawal operation '$uuid' not found", 
@@ -613,7 +614,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
     }
     auth(db, TokenScope.readonly) {
         get("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}") {
-            val id = call.longParameter("CASHOUT_ID")
+            val id = call.longPath("CASHOUT_ID")
             val cashout = db.cashout.get(id, username) ?: throw notFound(
                 "Cashout operation $id not found", 
                 TalerErrorCode.BANK_TRANSACTION_NOT_FOUND
@@ -646,7 +647,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
 private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
     auth(db, TokenScope.readwrite) {
         post("/accounts/{USERNAME}/challenge/{CHALLENGE_ID}") {
-            val id = call.longParameter("CHALLENGE_ID")
+            val id = call.longPath("CHALLENGE_ID")
             val res = db.tan.send(
                 id = id,
                 login = username,
@@ -708,7 +709,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
             }
         }
         post("/accounts/{USERNAME}/challenge/{CHALLENGE_ID}/confirm") {
-            val id = call.longParameter("CHALLENGE_ID")
+            val id = call.longPath("CHALLENGE_ID")
             val req = call.receive<ChallengeSolve>()
             val code = req.tan.removePrefix("T-")
             val res = db.tan.solve(

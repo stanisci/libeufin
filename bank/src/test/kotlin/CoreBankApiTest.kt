@@ -1021,7 +1021,7 @@ class CoreBankWithdrawalApiTest {
         statusRoutine<WithdrawalPublicInfo>("/withdrawals") { it.status }
 
         // Check bad UUID
-        client.get("/withdrawals/chocolate").assertBadRequest()
+        client.get("/withdrawals/chocolate").assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
 
         // Check unknown
         client.get("/withdrawals/${UUID.randomUUID()}")
@@ -1098,7 +1098,8 @@ class CoreBankWithdrawalApiTest {
         }
 
         // Check bad UUID
-        client.postA("/accounts/merchant/withdrawals/chocolate/confirm").assertBadRequest()
+        client.postA("/accounts/merchant/withdrawals/chocolate/confirm")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
 
         // Check unknown
         client.postA("/accounts/merchant/withdrawals/${UUID.randomUUID()}/confirm")
@@ -1231,7 +1232,7 @@ class CoreBankCashoutApiTest {
 
         // Check bad UUID
         client.getA("/accounts/customer/cashouts/chocolate")
-            .assertBadRequest()
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
 
         // Check unknown
         client.getA("/accounts/customer/cashouts/42")

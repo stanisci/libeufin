@@ -25,17 +25,30 @@ import tech.libeufin.common.TalerErrorCode
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
+import java.util.UUID
 
 fun Parameters.expect(name: String): String 
     = get(name) ?: throw badRequest("Missing '$name' parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)
 fun Parameters.int(name: String): Int? 
-    = get(name)?.run { toIntOrNull() ?: throw badRequest("Param 'which' not a number", TalerErrorCode.GENERIC_PARAMETER_MALFORMED) }
+    = get(name)?.run { toIntOrNull() ?: throw badRequest("Param '$name' not a number", TalerErrorCode.GENERIC_PARAMETER_MALFORMED) }
 fun Parameters.expectInt(name: String): Int 
     = int(name) ?: throw badRequest("Missing '$name' number parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)
 fun Parameters.long(name: String): Long? 
-    = get(name)?.run { toLongOrNull() ?: throw badRequest("Param 'which' not a number", TalerErrorCode.GENERIC_PARAMETER_MALFORMED) }
+    = get(name)?.run { toLongOrNull() ?: throw badRequest("Param '$name' not a number", TalerErrorCode.GENERIC_PARAMETER_MALFORMED) }
 fun Parameters.expectLong(name: String): Long 
     = long(name) ?: throw badRequest("Missing '$name' number parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)
+fun Parameters.uuid(name: String): UUID? {
+    return get(name)?.run {
+        try {
+            UUID.fromString(this)
+        } catch (e: Exception) {
+            println("$this $e")
+            throw badRequest("Param '$name' not an UUID", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+        }
+    } 
+}
+fun Parameters.expectUuid(name: String): UUID 
+    = uuid(name) ?: throw badRequest("Missing '$name' UUID parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)
 fun Parameters.amount(name: String): TalerAmount? 
     = get(name)?.run { 
         try {

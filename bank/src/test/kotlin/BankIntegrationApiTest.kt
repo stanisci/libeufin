@@ -63,7 +63,7 @@ class BankIntegrationApiTest {
         
         // Check bad UUID
         client.get("/taler-integration/withdrawal-operation/chocolate")
-            .assertBadRequest()
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
     }
 
     // POST /taler-integration/withdrawal-operation/UUID
@@ -78,7 +78,7 @@ class BankIntegrationApiTest {
         // Check bad UUID
         client.post("/taler-integration/withdrawal-operation/chocolate") {
             json(req)
-        }.assertBadRequest()
+        }.assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
 
         // Check unknown
         client.post("/taler-integration/withdrawal-operation/${UUID.randomUUID()}") {
@@ -180,7 +180,8 @@ class BankIntegrationApiTest {
         }
 
         // Check bad UUID
-        client.postA("/taler-integration/withdrawal-operation/chocolate/abort").assertBadRequest()
+        client.postA("/taler-integration/withdrawal-operation/chocolate/abort")
+            .assertBadRequest(TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
 
         // Check unknown
         client.postA("/taler-integration/withdrawal-operation/${UUID.randomUUID()}/abort")

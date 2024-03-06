@@ -19,13 +19,14 @@
 
 /* This file contains the Taler Integration API endpoints,
 * that are typically requested by wallets.  */
-package tech.libeufin.bank
+package tech.libeufin.bank.api
 
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import tech.libeufin.bank.*
 import tech.libeufin.bank.db.AbortResult
 import tech.libeufin.bank.db.Database
 import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalSelectionResult
@@ -41,7 +42,7 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
 
     // Note: wopid acts as an authentication token.
     get("/taler-integration/withdrawal-operation/{wopid}") {
-        val uuid = call.uuidParameter("wopid")
+        val uuid = call.uuidPath("wopid")
         val params = StatusParams.extract(call.request.queryParameters)
         val op = db.withdrawal.pollStatus(uuid, params, ctx.wireMethod) ?: throw notFound(
             "Withdrawal operation '$uuid' not found", 
@@ -53,7 +54,7 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
         ))
     }
     post("/taler-integration/withdrawal-operation/{wopid}") {
-        val uuid = call.uuidParameter("wopid")
+        val uuid = call.uuidPath("wopid")
         val req = call.receive<BankWithdrawalOperationPostRequest>()
 
         val res = db.withdrawal.setDetails(
@@ -90,7 +91,7 @@ fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
         }
     }
     post("/taler-integration/withdrawal-operation/{wopid}/abort") {
-        val uuid = call.uuidParameter("wopid")
+        val uuid = call.uuidPath("wopid")
         when (db.withdrawal.abort(uuid)) {
             AbortResult.UnknownOperation -> throw notFound(
                 "Withdrawal operation '$uuid' not found",

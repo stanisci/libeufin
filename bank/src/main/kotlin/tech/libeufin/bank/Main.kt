@@ -62,6 +62,7 @@ import java.util.zip.Inflater
 import kotlin.io.path.Path
 import kotlin.io.path.exists
 import kotlin.io.path.readText
+import tech.libeufin.bank.api.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 // Dirty local variable to stop the server in test TODO remove this ugly hack

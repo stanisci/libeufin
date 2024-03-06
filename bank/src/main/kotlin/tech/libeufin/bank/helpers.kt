@@ -39,11 +39,23 @@ import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
 import java.util.*
 
-fun ApplicationCall.expectParameter(name: String) =
-    parameters[name] ?: throw badRequest(
-        "Missing '$name' param", 
-        TalerErrorCode.GENERIC_PARAMETER_MISSING
-    )
+fun ApplicationCall.uuidPath(name: String): UUID {
+    val value = parameters[name]!!
+    try {
+        return UUID.fromString(value)
+    } catch (e: Exception) {
+        throw badRequest("UUID uri component malformed: ${e.message}", TalerErrorCode.GENERIC_PARAMETER_MALFORMED) // TODO better error ?
+    }
+}
+
+fun ApplicationCall.longPath(name: String): Long {
+    val value = parameters[name]!!
+    try {
+        return value.toLong()
+    } catch (e: Exception) {
+        throw badRequest("Long uri component malformed: ${e.message}", TalerErrorCode.GENERIC_PARAMETER_MALFORMED) // TODO better error ?
+    }
+}
 
 /** Retrieve the bank account info for the selected username*/
 suspend fun ApplicationCall.bankInfo(db: Database, ctx: BankPaytoCtx): BankInfo
@@ -80,22 +92,6 @@ fun ApplicationRequest.withdrawConfirmUrl(id: UUID) = url {
         appendPathSegments(it)
     }
     appendEncodedPathSegments("webui", "#", "operation", id.toString())
-}
-
-fun ApplicationCall.uuidParameter(name: String): UUID {
-    try {
-        return UUID.fromString(expectParameter(name))
-    } catch (e: Exception) {
-        throw badRequest("UUID uri component malformed: ${e.message}")
-    }
-}
-
-fun ApplicationCall.longParameter(name: String): Long {
-    try {
-        return expectParameter(name).toLong()
-    } catch (e: Exception) {
-        throw badRequest("Long uri component malformed: ${e.message}")
-    }
 }
 
 /**

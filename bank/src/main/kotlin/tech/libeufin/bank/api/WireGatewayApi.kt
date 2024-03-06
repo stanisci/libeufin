@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -19,7 +19,7 @@
 
 // This file contains the Taler Wire Gateway API handlers.
 
-package tech.libeufin.bank
+package tech.libeufin.bank.api
 
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -27,6 +27,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.util.pipeline.*
+import tech.libeufin.bank.*
 import tech.libeufin.bank.auth.auth
 import tech.libeufin.bank.auth.authAdmin
 import tech.libeufin.bank.auth.username

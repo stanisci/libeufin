@@ -38,7 +38,7 @@ private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin")
 private val AUTH_TOKEN = AttributeKey<ByteArray>("auth_token")
 
 /** Get username of the request account */
-val ApplicationCall.username: String get() = expectParameter("USERNAME")
+val ApplicationCall.username: String get() = parameters.expect("USERNAME")
 /** Get username of the request account */
 val PipelineContext<Unit, ApplicationCall>.username: String get() = call.username
 
