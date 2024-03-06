@@ -55,6 +55,7 @@ import java.security.interfaces.RSAPrivateCrtKey
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
+import kotlinx.coroutines.*
 
 /**
  * Available EBICS versions.
@@ -285,89 +286,103 @@ suspend fun ebicsDownload(
     reqXml: ByteArray,
     isEbics3: Boolean,
     processing: (InputStream) -> Unit
-) {
-    val initResp = postEbics(client, cfg, bankKeys, reqXml, isEbics3)
-    logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${initResp.technicalReturnCode}, ${initResp.bankReturnCode}")
-    if (initResp.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
-        throw Exception("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
-    }
-    if (initResp.bankReturnCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
-        logger.debug("Download content is empty")
-        return
-    }
-    if (initResp.bankReturnCode != EbicsReturnCode.EBICS_OK) {
-        throw Exception("Download init phase has bank-technical error: ${initResp.bankReturnCode}")
-    }
-    val tId = initResp.transactionID
-        ?: throw EbicsSideException(
-            "EBICS download init phase did not return a transaction ID, cannot do the transfer phase.",
-            sideEc = EbicsSideError.EBICS_UPLOAD_TRANSACTION_ID_MISSING
-        )
-    logger.debug("EBICS download transaction passed the init phase, got ID: $tId")
-    val howManySegments = initResp.numSegments
-    if (howManySegments == null) {
-        throw Exception("Init response lacks the quantity of segments, failing.")
-    }
-    val ebicsChunks = mutableListOf<String>()
-    // Getting the chunk(s)
-    val firstDataChunk = initResp.orderDataEncChunk
-        ?: throw EbicsSideException(
-            "OrderData element not found, despite non empty payload, failing.",
-            sideEc = EbicsSideError.ORDER_DATA_ELEMENT_NOT_FOUND
-        )
-    val dataEncryptionInfo = initResp.dataEncryptionInfo ?: run {
-        throw EbicsSideException(
-            "EncryptionInfo element not found, despite non empty payload, failing.",
-            sideEc = EbicsSideError.ENCRYPTION_INFO_ELEMENT_NOT_FOUND
-        )
-    }
-    ebicsChunks.add(firstDataChunk)
-    // proceed with the transfer phase.
-    for (x in 2 .. howManySegments) {
-        // request segment number x.
-        val transReq = if (isEbics3)
-            createEbics3DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
-        else createEbics25DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
-
-        val transResp = postEbics(client, cfg, bankKeys, transReq, isEbics3)
-        if (!areCodesOk(transResp)) {
+) = coroutineScope {
+    val scope = this
+    // We need to run the logic in a non-cancelable context because we need to send 
+    // a receipt for each open download transaction, otherwise we'll be stuck in an 
+    // error loop until the pending transaction timeout.
+    // TODO find a way to cancel the pending transaction ?
+    withContext(NonCancellable) { 
+        val initResp = postEbics(client, cfg, bankKeys, reqXml, isEbics3) 
+        logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${initResp.technicalReturnCode}, ${initResp.bankReturnCode}")
+        if (initResp.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
+            throw Exception("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
+        }
+        if (initResp.bankReturnCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
+            logger.debug("Download content is empty")
+            return@withContext
+        } else if (initResp.bankReturnCode != EbicsReturnCode.EBICS_OK) {
+            throw Exception("Download init phase has bank-technical error: ${initResp.bankReturnCode}")
+        }
+        val tId = initResp.transactionID
+            ?: throw EbicsSideException(
+                "EBICS download init phase did not return a transaction ID, cannot do the transfer phase.",
+                sideEc = EbicsSideError.EBICS_UPLOAD_TRANSACTION_ID_MISSING
+            )
+        logger.debug("EBICS download transaction passed the init phase, got ID: $tId")
+        val howManySegments = initResp.numSegments
+        if (howManySegments == null) {
+            throw Exception("Init response lacks the quantity of segments, failing.")
+        }
+        val ebicsChunks = mutableListOf<String>()
+        // Getting the chunk(s)
+        val firstDataChunk = initResp.orderDataEncChunk
+            ?: throw EbicsSideException(
+                "OrderData element not found, despite non empty payload, failing.",
+                sideEc = EbicsSideError.ORDER_DATA_ELEMENT_NOT_FOUND
+            )
+        val dataEncryptionInfo = initResp.dataEncryptionInfo ?: run {
             throw EbicsSideException(
-                "EBICS transfer segment #$x failed.",
-                sideEc = EbicsSideError.TRANSFER_SEGMENT_FAILED
+                "EncryptionInfo element not found, despite non empty payload, failing.",
+                sideEc = EbicsSideError.ENCRYPTION_INFO_ELEMENT_NOT_FOUND
             )
         }
-        val chunk = transResp.orderDataEncChunk
-        if (chunk == null) {
-            throw Exception("EBICS transfer phase lacks chunk #$x, failing.")
-        }
-        ebicsChunks.add(chunk)
-    }
-    // all chunks gotten, shaping a meaningful response now.
-    val payloadBytes = decryptAndDecompressPayload(
-        clientKeys.encryption_private_key,
-        dataEncryptionInfo,
-        ebicsChunks
-    )
-    // Process payload
-    val res = runCatching {
-        processing(payloadBytes)
-    }
-    // payload reconstructed, receipt to the bank.
-    val success = res.isSuccess
-    val receiptXml = if (isEbics3)
-        createEbics3DownloadReceiptPhase(cfg, clientKeys, tId, success)
-    else createEbics25DownloadReceiptPhase(cfg, clientKeys, tId, success)
+        ebicsChunks.add(firstDataChunk)
+        // proceed with the transfer phase.
+        for (x in 2 .. howManySegments) {
+            if (!scope.isActive) break
+            // request segment number x.
+            val transReq = if (isEbics3)
+                createEbics3DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
+            else createEbics25DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
 
-    // Sending the receipt to the bank.
-    postEbics(
-        client,
-        cfg,
-        bankKeys,
-        receiptXml,
-        isEbics3
-    )
-    // Receipt didn't throw, can now return the payload.
-    return res.getOrThrow()
+            val transResp = postEbics(client, cfg, bankKeys, transReq, isEbics3)
+            if (!areCodesOk(transResp)) {
+                throw EbicsSideException(
+                    "EBICS transfer segment #$x failed.",
+                    sideEc = EbicsSideError.TRANSFER_SEGMENT_FAILED
+                )
+            }
+            val chunk = transResp.orderDataEncChunk
+            if (chunk == null) {
+                throw Exception("EBICS transfer phase lacks chunk #$x, failing.")
+            }
+            ebicsChunks.add(chunk)
+        }
+        suspend fun receipt(success: Boolean) {
+            val receiptXml = if (isEbics3)
+                createEbics3DownloadReceiptPhase(cfg, clientKeys, tId, success)
+            else createEbics25DownloadReceiptPhase(cfg, clientKeys, tId, success)
+
+            // Sending the receipt to the bank.
+            postEbics(
+                client,
+                cfg,
+                bankKeys,
+                receiptXml,
+                isEbics3
+            )
+        }
+        if (scope.isActive) {
+            // all chunks gotten, shaping a meaningful response now.
+            val payloadBytes = decryptAndDecompressPayload(
+                clientKeys.encryption_private_key,
+                dataEncryptionInfo,
+                ebicsChunks
+            )
+            // Process payload
+            val res = runCatching {
+                processing(payloadBytes)
+            }
+            receipt(res.isSuccess)
+
+            res.getOrThrow()
+        } else {
+            receipt(false)
+            throw CancellationException()
+        }
+    }
+    Unit
 }
 
 /**
@@ -509,7 +524,7 @@ suspend fun doEbicsUpload(
     bankKeys: BankPublicKeysFile,
     orderService: Ebics3Request.OrderDetails.Service,
     payload: ByteArray,
-): EbicsResponseContent {
+): EbicsResponseContent = withContext(NonCancellable) {
     // TODO use a lambda and pass the order detail there for atomicity ?
     val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload, isEbics3 = true)
     val initXml = createEbics3RequestForUploadInitialization(
@@ -558,5 +573,5 @@ suspend fun doEbicsUpload(
         bankErrorCode = initResp.bankReturnCode
     )
     // EBICS- and bank-technical codes were both EBICS_OK, success!
-    return transferResp
+    transferResp
 }

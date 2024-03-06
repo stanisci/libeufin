@@ -33,6 +33,7 @@ import com.github.ajalt.clikt.parameters.types.path
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
+import kotlinx.coroutines.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
@@ -48,13 +49,22 @@ fun Throwable.fmtLog(logger: Logger) {
     logger.debug("{}", this)
 }
 
-fun cliCmd(logger: Logger, level: Level, lambda: () -> Unit) {
+fun cliCmd(logger: Logger, level: Level, lambda: suspend () -> Unit) {
     // Set root log level
     val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
     root.level = ch.qos.logback.classic.Level.convertAnSLF4JLevel(level)
     // Run cli command catching all errors
     try {
-        lambda()
+        runBlocking {
+            val job = launch {
+                lambda()
+            }
+            Runtime.getRuntime().addShutdownHook(object : Thread() {
+                override fun run() = runBlocking{
+                    job.cancelAndJoin()
+                }
+            })
+        }
     } catch (e: Throwable) {
         e.fmtLog(logger)
         throw ProgramResult(1)

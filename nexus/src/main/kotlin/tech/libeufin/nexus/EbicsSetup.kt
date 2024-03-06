@@ -23,7 +23,6 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.groups.*
 import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.client.*
-import kotlinx.coroutines.runBlocking
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
 import tech.libeufin.ebics.*
@@ -234,29 +233,26 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysFilename)
         val httpClient = HttpClient()
         // Privs exist.  Upload their pubs
-        runBlocking {
-            val keysNotSub = !clientKeys.submitted_ini
-            if ((!clientKeys.submitted_ini) || forceKeysResubmission)
-                doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.INI)
-            // Eject PDF if the keys were submitted for the first time, or the user asked.
-            if (keysNotSub || generateRegistrationPdf) makePdf(clientKeys, cfg)
-            if ((!clientKeys.submitted_hia) || forceKeysResubmission)
-                doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.HIA)
-        }
+        val keysNotSub = !clientKeys.submitted_ini
+        if ((!clientKeys.submitted_ini) || forceKeysResubmission)
+            doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.INI)
+        // Eject PDF if the keys were submitted for the first time, or the user asked.
+        if (keysNotSub || generateRegistrationPdf) makePdf(clientKeys, cfg)
+        if ((!clientKeys.submitted_hia) || forceKeysResubmission)
+            doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.HIA)
+        
         // Checking if the bank keys exist on disk.
         var bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
         if (bankKeys == null) {
-            runBlocking {
-                try {
-                    doKeysRequestAndUpdateState(
-                        cfg,
-                        clientKeys,
-                        httpClient,
-                        KeysOrderType.HPB
-                    )
-                } catch (e: Exception) {
-                    throw Exception("Could not download bank keys. Send client keys (and/or related PDF document with --generate-registration-pdf) to the bank", e)
-                }
+            try {
+                doKeysRequestAndUpdateState(
+                    cfg,
+                    clientKeys,
+                    httpClient,
+                    KeysOrderType.HPB
+                )
+            } catch (e: Exception) {
+                throw Exception("Could not download bank keys. Send client keys (and/or related PDF document with --generate-registration-pdf) to the bank", e)
             }
             logger.info("Bank keys stored at ${cfg.bankPublicKeysFilename}")
             bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)!!

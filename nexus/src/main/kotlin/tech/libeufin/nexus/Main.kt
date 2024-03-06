@@ -251,18 +251,16 @@ class InitiatePayment: CliktCommand("Initiate an outgoing payment") {
         }
 
         Database(dbCfg.dbConnStr).use { db ->
-            runBlocking {
-                db.initiatedPaymentCreate(
-                    InitiatedPayment(
-                        id = -1,
-                        amount = amount,
-                        wireTransferSubject = subject,
-                        creditPaytoUri = payto.toString(),
-                        initiationTime = Instant.now(),
-                        requestUid = requestUid
-                    )
+            db.initiatedPaymentCreate(
+                InitiatedPayment(
+                    id = -1,
+                    amount = amount,
+                    wireTransferSubject = subject,
+                    creditPaytoUri = payto.toString(),
+                    initiationTime = Instant.now(),
+                    requestUid = requestUid
                 )
-            }
+            )
         }
     }
 }
@@ -299,17 +297,15 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
         }
 
         Database(dbCfg.dbConnStr).use { db ->
-            runBlocking {
-                ingestIncomingPayment(db, 
-                    IncomingPayment(
-                        amount = amount,
-                        debitPaytoUri = payto.toString(),
-                        wireTransferSubject = subject,
-                        executionTime = Instant.now(),
-                        bankId = bankId
-                    )
+            ingestIncomingPayment(db, 
+                IncomingPayment(
+                    amount = amount,
+                    debitPaytoUri = payto.toString(),
+                    wireTransferSubject = subject,
+                    executionTime = Instant.now(),
+                    bankId = bankId
                 )
-            }
+            )
         }
     }
 }

@@ -242,14 +242,12 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
                     frequency
                 }
             }
-            runBlocking {
-                do {
-                    // TODO error handling
-                    submitBatch(ctx, db)
-                    // TODO take submitBatch taken time in the delay
-                    delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
-                } while (frequency != null)
-            }
+            do {
+                // TODO error handling
+                submitBatch(ctx, db)
+                // TODO take submitBatch taken time in the delay
+                delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
+            } while (frequency != null)
         }
     }
 }

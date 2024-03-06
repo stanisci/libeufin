@@ -444,10 +444,8 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
                     LocalDate.parse(pinnedStartVal).atStartOfDay(ZoneId.of("UTC")).toInstant()
                 } else null
                 ctx.pinnedStart = pinnedStartArg
-                runBlocking {
-                    if (!fetchDocuments(db, ctx, docs)) {
-                        throw Exception("Failed to fetch documents")
-                    }
+                if (!fetchDocuments(db, ctx, docs)) {
+                    throw Exception("Failed to fetch documents")
                 }
             } else {
                 val configValue = cfg.config.requireString("nexus-fetch", "frequency")
@@ -460,12 +458,10 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
                 } else {
                     cfgFrequency
                 }
-                runBlocking {
-                    do {
-                        fetchDocuments(db, ctx, docs)
-                        delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
-                    } while (frequency != null)
-                }
+                do {
+                    fetchDocuments(db, ctx, docs)
+                    delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
+                } while (frequency != null)
             }
         }
     }

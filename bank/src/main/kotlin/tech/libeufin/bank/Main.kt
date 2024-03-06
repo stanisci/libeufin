@@ -45,7 +45,6 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.*
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import org.postgresql.util.PSQLState
@@ -262,23 +261,21 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
         val cfg = config.loadDbConfig()
         val ctx = config.loadBankConfig()
         Database(cfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db -> 
-            runBlocking {
-                db.conn { conn ->
-                    if (requestReset) {
-                        resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
-                    }
-                    initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
+            db.conn { conn ->
+                if (requestReset) {
+                    resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
                 }
-                // Create admin account if missing
-                val res = createAdminAccount(db, ctx) // logs provided by the helper
-                when (res) {
-                    AccountCreationResult.BonusBalanceInsufficient -> {}
-                    AccountCreationResult.LoginReuse -> {}
-                    AccountCreationResult.PayToReuse -> 
-                        throw Exception("Failed to create admin's account")
-                    AccountCreationResult.Success ->
-                        logger.info("Admin's account created")
-                }
+                initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
+            }
+            // Create admin account if missing
+            val res = createAdminAccount(db, ctx) // logs provided by the helper
+            when (res) {
+                AccountCreationResult.BonusBalanceInsufficient -> {}
+                AccountCreationResult.LoginReuse -> {}
+                AccountCreationResult.PayToReuse -> 
+                    throw Exception("Failed to create admin's account")
+                AccountCreationResult.Success ->
+                    logger.info("Admin's account created")
             }
         }
     }
@@ -293,30 +290,28 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val dbCfg = cfg.loadDbConfig()
         val serverCfg = cfg.loadServerConfig()
         Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
-            runBlocking {
-                if (ctx.allowConversion) {
-                    logger.info("Ensure exchange account exists")
-                    val info = db.account.bankInfo("exchange", ctx.payto)
-                    if (info == null) {
-                        throw Exception("Exchange account missing: an exchange account named 'exchange' is required for conversion to be enabled")
-                    } else if (!info.isTalerExchange) {
-                        throw Exception("Account is not an exchange: an exchange account named 'exchange' is required for conversion to be enabled")
-                    }
-                    logger.info("Ensure conversion is enabled")
-                    val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
-                    if (!sqlProcedures.exists()) {
-                        throw Exception("Missing libeufin-conversion-setup.sql file")
-                    }
-                    db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
-                } else {
-                    logger.info("Ensure conversion is disabled")
-                    val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-drop.sql")
-                    if (!sqlProcedures.exists()) {
-                        throw Exception("Missing libeufin-conversion-drop.sql file")
-                    }
-                    db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
-                    // Remove conversion info from the database ?
+            if (ctx.allowConversion) {
+                logger.info("Ensure exchange account exists")
+                val info = db.account.bankInfo("exchange", ctx.payto)
+                if (info == null) {
+                    throw Exception("Exchange account missing: an exchange account named 'exchange' is required for conversion to be enabled")
+                } else if (!info.isTalerExchange) {
+                    throw Exception("Account is not an exchange: an exchange account named 'exchange' is required for conversion to be enabled")
                 }
+                logger.info("Ensure conversion is enabled")
+                val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
+                if (!sqlProcedures.exists()) {
+                    throw Exception("Missing libeufin-conversion-setup.sql file")
+                }
+                db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
+            } else {
+                logger.info("Ensure conversion is disabled")
+                val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-drop.sql")
+                if (!sqlProcedures.exists()) {
+                    throw Exception("Missing libeufin-conversion-drop.sql file")
+                }
+                db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
+                // Remove conversion info from the database ?
             }
             
             val env = applicationEngineEnvironment {
@@ -354,16 +349,14 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
         Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
-            runBlocking {
-                val res = db.account.reconfigPassword(username, password, null, true)
-                when (res) {
-                    AccountPatchAuthResult.UnknownAccount ->
-                        throw Exception("Password change for '$username' account failed: unknown account")
-                    AccountPatchAuthResult.OldPasswordMismatch,
-                        AccountPatchAuthResult.TanRequired -> { /* Can never happen */ }
-                    AccountPatchAuthResult.Success ->
-                        logger.info("Password change for '$username' account succeeded")
-                }
+            val res = db.account.reconfigPassword(username, password, null, true)
+            when (res) {
+                AccountPatchAuthResult.UnknownAccount ->
+                    throw Exception("Password change for '$username' account failed: unknown account")
+                AccountPatchAuthResult.OldPasswordMismatch,
+                    AccountPatchAuthResult.TanRequired -> { /* Can never happen */ }
+                AccountPatchAuthResult.Success ->
+                    logger.info("Password change for '$username' account succeeded")
             }
         }
     }
@@ -400,33 +393,31 @@ class EditAccount : CliktCommand(
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
         Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
-            runBlocking {
-                val req = AccountReconfiguration(
-                    name = name,
-                    is_taler_exchange = exchange,
-                    is_public = is_public,
-                    contact_data = ChallengeContactData(
-                        // PATCH semantic, if not given do not change, if empty remove
-                        email = if (email == null) Option.None else Option.Some(if (email != "") email else null),
-                        phone = if (phone == null) Option.None else Option.Some(if (phone != "") phone else null), 
-                    ),
-                    cashout_payto_uri = Option.Some(cashout_payto_uri),
-                    debit_threshold = debit_threshold
-                )
-                when (patchAccount(db, ctx, req, username, true, true)) {
-                    AccountPatchResult.Success -> 
-                        logger.info("Account '$username' edited")
-                    AccountPatchResult.UnknownAccount -> 
-                        throw Exception("Account '$username' not found")
-                    AccountPatchResult.MissingTanInfo -> 
-                        throw Exception("missing info for tan channel ${req.tan_channel.get()}")
-                    AccountPatchResult.NonAdminName,
-                        AccountPatchResult.NonAdminCashout,
-                        AccountPatchResult.NonAdminDebtLimit,
-                        is AccountPatchResult.TanRequired  -> {
-                            // Unreachable as we edit account as admin
-                        }
-                }
+            val req = AccountReconfiguration(
+                name = name,
+                is_taler_exchange = exchange,
+                is_public = is_public,
+                contact_data = ChallengeContactData(
+                    // PATCH semantic, if not given do not change, if empty remove
+                    email = if (email == null) Option.None else Option.Some(if (email != "") email else null),
+                    phone = if (phone == null) Option.None else Option.Some(if (phone != "") phone else null), 
+                ),
+                cashout_payto_uri = Option.Some(cashout_payto_uri),
+                debit_threshold = debit_threshold
+            )
+            when (patchAccount(db, ctx, req, username, true, true)) {
+                AccountPatchResult.Success -> 
+                    logger.info("Account '$username' edited")
+                AccountPatchResult.UnknownAccount -> 
+                    throw Exception("Account '$username' not found")
+                AccountPatchResult.MissingTanInfo -> 
+                    throw Exception("missing info for tan channel ${req.tan_channel.get()}")
+                AccountPatchResult.NonAdminName,
+                    AccountPatchResult.NonAdminCashout,
+                    AccountPatchResult.NonAdminDebtLimit,
+                    is AccountPatchResult.TanRequired  -> {
+                        // Unreachable as we edit account as admin
+                    }
             }
         }
     }
@@ -479,37 +470,35 @@ class CreateAccount : CliktCommand(
         val dbCfg = cfg.loadDbConfig()
 
         Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
-            runBlocking {
-                val req = json ?: options?.run {
-                    RegisterAccountRequest(
-                        username = username,
-                        password = password,
-                        name = name,
-                        is_public = is_public,
-                        is_taler_exchange = exchange,
-                        contact_data = ChallengeContactData(
-                            email = Option.Some(email),
-                            phone = Option.Some(phone), 
-                        ),
-                        cashout_payto_uri = cashout_payto_uri,
-                        payto_uri = payto_uri,
-                        debit_threshold = debit_threshold
-                    ) 
+            val req = json ?: options?.run {
+                RegisterAccountRequest(
+                    username = username,
+                    password = password,
+                    name = name,
+                    is_public = is_public,
+                    is_taler_exchange = exchange,
+                    contact_data = ChallengeContactData(
+                        email = Option.Some(email),
+                        phone = Option.Some(phone), 
+                    ),
+                    cashout_payto_uri = cashout_payto_uri,
+                    payto_uri = payto_uri,
+                    debit_threshold = debit_threshold
+                ) 
+            }
+            req?.let {
+                val (result, internalPayto) = createAccount(db, ctx, req, true)
+                when (result) {
+                    AccountCreationResult.BonusBalanceInsufficient ->
+                        throw Exception("Insufficient admin funds to grant bonus")
+                    AccountCreationResult.LoginReuse ->
+                        throw Exception("Account username reuse '${req.username}'")
+                    AccountCreationResult.PayToReuse ->
+                        throw Exception("Bank internalPayToUri reuse '$internalPayto'")
+                    AccountCreationResult.Success ->
+                        logger.info("Account '${req.username}' created")
                 }
-                req?.let {
-                    val (result, internalPayto) = createAccount(db, ctx, req, true)
-                    when (result) {
-                        AccountCreationResult.BonusBalanceInsufficient ->
-                            throw Exception("Insufficient admin funds to grant bonus")
-                        AccountCreationResult.LoginReuse ->
-                            throw Exception("Account username reuse '${req.username}'")
-                        AccountCreationResult.PayToReuse ->
-                            throw Exception("Bank internalPayToUri reuse '$internalPayto'")
-                        AccountCreationResult.Success ->
-                            logger.info("Account '${req.username}' created")
-                    }
-                    println(internalPayto)
-                }
+                println(internalPayto)
             }
         }
     }
