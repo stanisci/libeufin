@@ -90,16 +90,16 @@ private suspend fun downloadHelper(
             ctx.cfg,
             ctx.bankKeys,
             ctx.clientKeys,
-            prepEbics3Document(doc, lastExecutionTime)
+            doc,
+            lastExecutionTime
         )
     } else {
-        val ebics2Req = prepEbics2Document(doc, lastExecutionTime)
         createEbics25DownloadInit(
             ctx.cfg,
             ctx.clientKeys,
             ctx.bankKeys,
-            ebics2Req.messageType,
-            ebics2Req.orderParams
+            doc,
+            lastExecutionTime
         )
     }
     return ebicsDownload(

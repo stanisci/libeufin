@@ -50,9 +50,17 @@ fun createEbics25DownloadInit(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
-    orderType: String,
-    orderParams: EbicsOrderParams = EbicsStandardOrderParams()
+    whichDoc: SupportedDocument,
+    startDate: Instant? = null,
+    endDate: Instant? = null,
 ): ByteArray {
+    val orderType = when(whichDoc) {
+        SupportedDocument.PAIN_002 -> "Z01"
+        SupportedDocument.CAMT_052 -> "Z52"
+        SupportedDocument.CAMT_053 -> "Z53"
+        SupportedDocument.CAMT_054 -> "Z54"
+        SupportedDocument.PAIN_002_LOGS -> "HAC"
+    }
     val nonce = getNonce(128)
     val req = EbicsRequest.createForDownloadInitializationPhase(
         cfg.ebicsUserId,
@@ -67,7 +75,15 @@ fun createEbics25DownloadInit(
         bankKeys.bank_encryption_public_key,
         bankKeys.bank_authentication_public_key,
         orderType,
-        makeOrderParams(orderParams)
+        EbicsRequest.StandardOrderParams().apply {
+            if (startDate != null) {
+                val r = EbicsDateRange(startDate, endDate ?: Instant.now())
+                dateRange = EbicsRequest.DateRange().apply {
+                    start = getXmlDate(r.start)
+                    end = getXmlDate(r.end)
+                }
+            }
+        }
     )
     val doc = XMLUtil.convertJaxbToDocument(req)
     XMLUtil.signEbicsDocument(
@@ -240,140 +256,3 @@ fun generateHpbMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
     XMLUtil.signEbicsDocument(doc, clientKeys.authentication_private_key)
     return XMLUtil.convertDomToBytes(doc)
 }
-
-/**
- * Collects message type and date range of an EBICS 2 request.
- */
-data class Ebics2Request(
-    val messageType: String,
-    val orderParams: EbicsOrderParams
-)
-
-/**
- * Prepares an EBICS 2 request to get pain.002 acknowledgements
- * about submitted pain.001 documents.
- *
- * @param startDate earliest timestamp of the returned document(s).  If
- *        null, it defaults to download the unseen documents.
- * @param endDate latest timestamp of the returned document(s).  If
- *        null, it defaults to the current time.
- * @return [Ebics2Request] object to be first converted in XML and
- *         then be passed to the EBICS downloader.
- */
-private fun prepAckRequest2(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics2Request {
-    val maybeDateRange = if (startDate != null) EbicsDateRange(startDate, endDate ?: Instant.now()) else null
-    return Ebics2Request(
-        messageType = "Z01",
-        orderParams = EbicsStandardOrderParams(dateRange = maybeDateRange)
-    )
-}
-
-/**
- * Prepares an EBICS 2 request to get intraday camt.052 reports.
- *
- * @param startDate earliest timestamp of the returned document(s).  If
- *        null, it defaults to download the unseen documents.
- * @param endDate latest timestamp of the returned document(s).  If
- *        null, it defaults to the current time.
- * @return [Ebics2Request] object to be first converted in XML and
- *         then be passed to the EBICS downloader.
- */
-private fun prepReportRequest2(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics2Request {
-    val maybeDateRange = if (startDate != null) EbicsDateRange(startDate, endDate ?: Instant.now()) else null
-    return Ebics2Request(
-        messageType = "Z52",
-        orderParams = EbicsStandardOrderParams(dateRange = maybeDateRange)
-    )
-}
-
-/**
- * Prepares an EBICS 2 request to get daily camt.053 statements.
- *
- * @param startDate earliest timestamp of the returned document(s).  If
- *        null, it defaults to download the unseen documents.
- * @param endDate latest timestamp of the returned document(s).  If
- *        null, it defaults to the current time.
- * @return [Ebics2Request] object to be first converted in XML and
- *         then be passed to the EBICS downloader.
- */
-private fun prepStatementRequest2(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics2Request {
-    val maybeDateRange = if (startDate != null) EbicsDateRange(startDate, endDate ?: Instant.now()) else null
-    return Ebics2Request(
-        messageType = "Z53",
-        orderParams = EbicsStandardOrderParams(dateRange = maybeDateRange)
-    )
-}
-
-/**
- * Prepares an EBICS 2 request to get camt.054 notifications.
- *
- * @param startDate earliest timestamp of the returned document(s).  If
- *        null, it defaults to download the unseen documents.
- * @param endDate latest timestamp of the returned document(s).  If
- *        null, it defaults to the current time.
- * @return [Ebics2Request] object to be first converted in XML and
- *         then be passed to the EBICS downloader.
- */
-private fun prepNotificationRequest2(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics2Request {
-    val maybeDateRange = if (startDate != null) EbicsDateRange(startDate, endDate ?: Instant.now()) else null
-    return Ebics2Request(
-        messageType = "Z54", // ZS2 is the non-appendix type
-        orderParams = EbicsStandardOrderParams(dateRange = maybeDateRange)
-    )
-}
-
-/**
- * Prepares an EBICS 2 request to get logs from the bank about any
- * uploaded or downloaded document.
- *
- * @param startDate earliest timestamp of the returned document(s).  If
- *        null, it defaults to download the unseen documents.
- * @param endDate latest timestamp of the returned document(s).  If
- *        null, it defaults to the current time.
- * @return [Ebics2Request] object to be first converted in XML and
- *         then be passed to the EBICS downloader.
- */
-private fun prepLogsRequest2(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics2Request {
-    val maybeDateRange = if (startDate != null) EbicsDateRange(startDate, endDate ?: Instant.now()) else null
-    return Ebics2Request(
-        messageType = "HAC",
-        orderParams = EbicsStandardOrderParams(dateRange = maybeDateRange)
-    )
-}
-
-/**
- * Abstracts EBICS 2 request creation of a download init phase.
- *
- * @param whichDoc type of wanted document.
- * @param startDate earliest timestamp of the document(s) to download.
- *                  If null, it gets the unseen documents.  If defined,
- *                  the latest timestamp defaults to the current time.
- * @return [Ebics2Request] to be converted to XML string and passed to
- *         the EBICS downloader.
- */
-fun prepEbics2Document(
-    whichDoc: SupportedDocument,
-    startDate: Instant? = null
-): Ebics2Request =
-    when(whichDoc) {
-        SupportedDocument.PAIN_002 -> prepAckRequest2(startDate)
-        SupportedDocument.CAMT_052 -> prepReportRequest2(startDate)
-        SupportedDocument.CAMT_053 -> prepStatementRequest2(startDate)
-        SupportedDocument.CAMT_054 -> prepNotificationRequest2(startDate)
-        SupportedDocument.PAIN_002_LOGS -> prepLogsRequest2(startDate)
-    }

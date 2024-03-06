@@ -123,33 +123,6 @@ fun getXmlDate(d: ZonedDateTime): XMLGregorianCalendar {
         )
 }
 
-fun makeOrderParams(orderParams: EbicsOrderParams): EbicsRequest.OrderParams {
-    return when (orderParams) {
-        is EbicsStandardOrderParams -> {
-            EbicsRequest.StandardOrderParams().apply {
-                val r = orderParams.dateRange
-                if (r != null) {
-                    this.dateRange = EbicsRequest.DateRange().apply {
-                        this.start = getXmlDate(r.start)
-                        this.end = getXmlDate(r.end)
-                    }
-                }
-            }
-        }
-        is EbicsGenericOrderParams -> {
-            EbicsRequest.GenericOrderParams().apply {
-                this.parameterList = orderParams.params.map { entry ->
-                    EbicsTypes.Parameter().apply {
-                        this.name = entry.key
-                        this.value = entry.value
-                        this.type = "string"
-                    }
-                }
-            }
-        }
-    }
-}
-
 fun signOrder(
     orderBlob: ByteArray,
     signKey: RSAPrivateCrtKey,

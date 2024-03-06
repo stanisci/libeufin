@@ -97,6 +97,7 @@ fun createEbics3DownloadTransferPhase(
     return XMLUtil.convertDomToBytes(doc)
 }
 
+
 /**
  * Creates the EBICS 3 document for the init phase of a download
  * transaction.
@@ -110,7 +111,9 @@ fun createEbics3DownloadInitialization(
     cfg: EbicsSetupConfig,
     bankkeys: BankPublicKeysFile,
     clientKeys: ClientPrivateKeysFile,
-    orderParams: Ebics3Request.OrderDetails.BTDOrderParams
+    whichDoc: SupportedDocument,
+    startDate: Instant? = null,
+    endDate: Instant? = null
 ): ByteArray {
     val nonce = getNonce(128)
     val req = Ebics3Request.createForDownloadInitializationPhase(
@@ -121,7 +124,38 @@ fun createEbics3DownloadInitialization(
         DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
         bankAuthPub = bankkeys.bank_authentication_public_key,
         bankEncPub = bankkeys.bank_encryption_public_key,
-        myOrderParams = orderParams
+        myOrderParams = Ebics3Request.OrderDetails.BTDOrderParams().apply {
+            service = Ebics3Request.OrderDetails.Service().apply {
+                serviceName = when(whichDoc) {
+                    SupportedDocument.PAIN_002 -> "PSR"
+                    SupportedDocument.CAMT_052 -> "STM"
+                    SupportedDocument.CAMT_053 -> "EOP"
+                    SupportedDocument.CAMT_054 -> "REP"
+                    SupportedDocument.PAIN_002_LOGS -> throw Exception("HAC (--only-logs) not available in EBICS 3")
+                }
+                scope = "CH"
+                container = Ebics3Request.OrderDetails.Service.Container().apply {
+                    containerType = "ZIP"
+                }
+                messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
+                    val (msg_value, msg_version) = when(whichDoc) {
+                        SupportedDocument.PAIN_002 -> Pair("pain.002", "10")
+                        SupportedDocument.CAMT_052 -> Pair("pain.052", "08")
+                        SupportedDocument.CAMT_053 -> Pair("pain.053", "08")
+                        SupportedDocument.CAMT_054 -> Pair("camt.054", "08")
+                        SupportedDocument.PAIN_002_LOGS -> throw Exception("HAC (--only-logs) not available in EBICS 3")
+                    }
+                    value = msg_value
+                    version = msg_version
+                }
+            }
+            if (startDate != null) {
+                Ebics3Request.DateRange().apply {
+                    start = getXmlDate(startDate)
+                    end = getXmlDate(endDate ?: Instant.now())
+                }
+            }
+        }
     )
     val doc = XMLUtil.convertJaxbToDocument(
         req,
@@ -257,187 +291,3 @@ suspend fun submitPain001(
     )
     return maybeUploaded.orderID!!
 }
-
-/**
- * Crafts a date range object, when the caller needs a time range.
- *
- * @param startDate inclusive starting date for the returned banking events.
- * @param endDate inclusive ending date for the returned banking events.
- * @return [Ebics3Request.DateRange]
- */
-private fun getEbics3DateRange(
-    startDate: Instant,
-    endDate: Instant
-): Ebics3Request.DateRange {
-    return Ebics3Request.DateRange().apply {
-        start = getXmlDate(startDate)
-        end = getXmlDate(endDate)
-    }
-}
-
-/**
- * Prepares the request for a camt.054 notification from the bank,
- * via EBICS 3.
- * Notifications inform the subscriber that some new events occurred
- * on their account.  One main difference with reports/statements is
- * that notifications - according to the ISO20022 documentation - do
- * NOT contain any balance.
- *
- * @param startDate inclusive starting date for the returned notification(s).
- * @param endDate inclusive ending date for the returned notification(s).  NOTE:
- *        if startDate is NOT null and endDate IS null, endDate gets defaulted
- *        to the current UTC time.
- * @param isAppendix if true, the responded camt.054 will be an appendix of
- *        another camt.053 document, not therefore strictly acting as a notification.
- *        For example, camt.053 may omit wire transfer subjects and its related
- *        camt.054 appendix would instead contain those.
- *
- * @return [Ebics3Request.OrderDetails.BTOrderParams]
- */
-fun prepNotificationRequest3(
-    startDate: Instant? = null,
-    endDate: Instant? = null,
-    isAppendix: Boolean
-): Ebics3Request.OrderDetails.BTDOrderParams {
-    val service = Ebics3Request.OrderDetails.Service().apply {
-        serviceName = "REP"
-        scope = "CH"
-        container = Ebics3Request.OrderDetails.Service.Container().apply {
-            containerType = "ZIP"
-        }
-        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-            value = "camt.054"
-            version = "08"
-        }
-        if (!isAppendix)
-            serviceOption = "XDCI"
-    }
-    return Ebics3Request.OrderDetails.BTDOrderParams().apply {
-        this.service = service
-        this.dateRange = if (startDate != null)
-            getEbics3DateRange(startDate, endDate ?: Instant.now())
-        else null
-    }
-}
-
-/**
- * Prepares the request for a pain.002 acknowledgement from the bank, via
- * EBICS 3.
- *
- * @param startDate inclusive starting date for the returned acknowledgements.
- * @param endDate inclusive ending date for the returned acknowledgements.  NOTE:
- *        if startDate is NOT null and endDate IS null, endDate gets defaulted
- *        to the current UTC time.
- *
- * @return [Ebics3Request.OrderDetails.BTOrderParams]
- */
-fun prepAckRequest3(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics3Request.OrderDetails.BTDOrderParams {
-    val service = Ebics3Request.OrderDetails.Service().apply {
-        serviceName = "PSR"
-        scope = "CH"
-        container = Ebics3Request.OrderDetails.Service.Container().apply {
-            containerType = "ZIP"
-        }
-        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-            value = "pain.002"
-            version = "10"
-        }
-    }
-    return Ebics3Request.OrderDetails.BTDOrderParams().apply {
-        this.service = service
-        this.dateRange = if (startDate != null)
-            getEbics3DateRange(startDate, endDate ?: Instant.now())
-        else null
-    }
-}
-
-/**
- * Prepares the request for (a) camt.053/statement(s) via EBICS 3.
- *
- * @param startDate inclusive starting date for the returned banking events.
- * @param endDate inclusive ending date for the returned banking events.  NOTE:
- *        if startDate is NOT null and endDate IS null, endDate gets defaulted
- *        to the current UTC time.
- *
- * @return [Ebics3Request.OrderDetails.BTOrderParams]
- */
-fun prepStatementRequest3(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics3Request.OrderDetails.BTDOrderParams {
-    val service = Ebics3Request.OrderDetails.Service().apply {
-        serviceName = "EOP"
-        scope = "CH"
-        container = Ebics3Request.OrderDetails.Service.Container().apply {
-            containerType = "ZIP"
-        }
-        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-            value = "camt.053"
-            version = "08"
-        }
-    }
-    return Ebics3Request.OrderDetails.BTDOrderParams().apply {
-        this.service = service
-        this.dateRange = if (startDate != null)
-            getEbics3DateRange(startDate, endDate ?: Instant.now())
-        else null
-    }
-}
-
-/**
- * Prepares the request for camt.052/intraday records via EBICS 3.
- *
- * @param startDate inclusive starting date for the returned banking events.
- * @param endDate inclusive ending date for the returned banking events.  NOTE:
- *        if startDate is NOT null and endDate IS null, endDate gets defaulted
- *        to the current UTC time.
- *
- * @return [Ebics3Request.OrderDetails.BTOrderParams]
- */
-fun prepReportRequest3(
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): Ebics3Request.OrderDetails.BTDOrderParams {
-    val service = Ebics3Request.OrderDetails.Service().apply {
-        serviceName = "STM"
-        scope = "CH"
-        container = Ebics3Request.OrderDetails.Service.Container().apply {
-            containerType = "ZIP"
-        }
-        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-            value = "camt.052"
-            version = "08"
-        }
-    }
-    return Ebics3Request.OrderDetails.BTDOrderParams().apply {
-        this.service = service
-        this.dateRange = if (startDate != null)
-            getEbics3DateRange(startDate, endDate ?: Instant.now())
-        else null
-    }
-}
-
-/**
- * Abstracts EBICS 3 request creation of a download init phase.
- *
- * @param whichDoc type of wanted document.
- * @param startDate earliest timestamp of the document(s) to download.
- *                  If null, it gets the unseen documents.  If defined,
- *                  the latest timestamp defaults to the current time.
- * @return [Ebics2Request] to be converted to XML string and passed to
- *         the EBICS downloader.
- */
-fun prepEbics3Document(
-    whichDoc: SupportedDocument,
-    startDate: Instant? = null
-): Ebics3Request.OrderDetails.BTDOrderParams =
-    when(whichDoc) {
-        SupportedDocument.PAIN_002 -> prepAckRequest3(startDate)
-        SupportedDocument.CAMT_052 -> prepReportRequest3(startDate)
-        SupportedDocument.CAMT_053 -> prepStatementRequest3(startDate)
-        SupportedDocument.CAMT_054 -> prepNotificationRequest3(startDate, isAppendix = true)
-        SupportedDocument.PAIN_002_LOGS -> throw Exception("HAC (--only-logs) not available in EBICS 3")
-    }
