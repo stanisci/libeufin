@@ -318,7 +318,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
         requireAdmin = !ctx.allowAccountDeletion
     ) {
         delete("/accounts/{USERNAME}") {
-            val challenge = call.challenge(db, Operation.account_delete)
+            val challenge = call.checkChallenge(db, Operation.account_delete)
 
             // Not deleting reserved names.
             if (RESERVED_ACCOUNTS.contains(username))
@@ -511,7 +511,7 @@ private fun Routing.coreBankWithdrawalApi(db: Database, ctx: BankConfig) {
         }
         post("/accounts/{USERNAME}/withdrawals/{withdrawal_id}/confirm") {
             val id = call.uuidParameter("withdrawal_id")
-            val challenge = call.challenge(db, Operation.withdrawal)
+            val challenge = call.checkChallenge(db, Operation.withdrawal)
             when (db.withdrawal.confirm(username, id, Instant.now(), challenge != null)) {
                 WithdrawalConfirmationResult.UnknownOperation -> throw notFound(
                     "Withdrawal operation $id not found",

@@ -17,7 +17,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.common
+package tech.libeufin.common.crypto
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.io.ByteArrayOutputStream
@@ -32,11 +32,13 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.PBEParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import tech.libeufin.common.*
 
 /**
  * Helpers for dealing with cryptographic operations in EBICS / LibEuFin.
  */
 object CryptoUtil {
+    // TODO split common and ebics crypto
 
     /**
      * RSA key pair.
@@ -285,33 +287,5 @@ object CryptoUtil {
 
     fun hashStringSHA256(input: String): ByteArray {
         return MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
-    }
-
-    fun hashpw(pw: String): String {
-        val saltBytes = ByteArray(8)
-        SecureRandom().nextBytes(saltBytes)
-        val salt = bytesToBase64(saltBytes)
-        val pwh = bytesToBase64(hashStringSHA256("$salt|$pw"))
-        return "sha256-salted\$$salt\$$pwh"
-    }
-
-    fun checkpw(pw: String, storedPwHash: String): Boolean {
-        val components = storedPwHash.split('$')
-        when (val algo = components[0]) {
-            "sha256" -> {  // Support legacy unsalted passwords
-                if (components.size != 2) throw Exception("bad password hash")
-                val hash = components[1]
-                val pwh = bytesToBase64(hashStringSHA256(pw))
-                return pwh == hash
-            }
-            "sha256-salted" -> {
-                if (components.size != 3) throw Exception("bad password hash")
-                val salt = components[1]
-                val hash = components[2]
-                val pwh = bytesToBase64(hashStringSHA256("$salt|$pw"))
-                return pwh == hash
-            }
-            else -> throw Exception("unsupported hash algo: '$algo'")
-        }
     }
 }

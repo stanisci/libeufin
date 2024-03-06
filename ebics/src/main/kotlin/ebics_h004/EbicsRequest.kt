@@ -1,7 +1,7 @@
 package tech.libeufin.ebics.ebics_h004
 
 import org.apache.xml.security.binding.xmldsig.SignatureType
-import tech.libeufin.common.CryptoUtil
+import tech.libeufin.common.crypto.CryptoUtil
 import java.math.BigInteger
 import java.security.interfaces.RSAPublicKey
 import java.util.*

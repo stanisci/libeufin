@@ -18,7 +18,7 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.CryptoUtil
+import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.nexus.*
 import kotlin.io.path.Path
 import kotlin.io.path.deleteIfExists

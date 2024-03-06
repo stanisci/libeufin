@@ -19,7 +19,7 @@
 
 import org.junit.Test
 import tech.libeufin.common.Base32Crockford
-import tech.libeufin.common.CryptoUtil
+import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.JSON
 import kotlin.test.assertEquals

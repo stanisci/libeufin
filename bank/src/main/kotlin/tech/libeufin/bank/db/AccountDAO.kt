@@ -21,6 +21,7 @@ package tech.libeufin.bank.db
 
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
+import tech.libeufin.common.crypto.*
 import java.time.Instant
 
 /** Data access logic for accounts */
@@ -78,7 +79,7 @@ class AccountDAO(private val db: Database) {
                 setString(9, tanChannel?.name)
                 setString(10, login)
                 oneOrNull { 
-                    CryptoUtil.checkpw(password, it.getString(1)) && it.getBoolean(2)
+                    PwCrypto.checkpw(password, it.getString(1)) && it.getBoolean(2)
                 } 
             }
             
@@ -118,7 +119,7 @@ class AccountDAO(private val db: Database) {
                 """
                 ).run {
                     setString(1, login)
-                    setString(2, CryptoUtil.hashpw(password))
+                    setString(2, PwCrypto.hashpw(password))
                     setString(3, name)
                     setString(4, email)
                     setString(5, phone)
@@ -392,13 +393,13 @@ class AccountDAO(private val db: Database) {
             }
             if (tanRequired) {
                 AccountPatchAuthResult.TanRequired
-            } else if (oldPw != null && !CryptoUtil.checkpw(oldPw, currentPwh)) {
+            } else if (oldPw != null && !PwCrypto.checkpw(oldPw, currentPwh)) {
                 AccountPatchAuthResult.OldPasswordMismatch
             } else {
                 val stmt = conn.prepareStatement("""
                     UPDATE customers SET password_hash=? where login=?
                 """)
-                stmt.setString(1, CryptoUtil.hashpw(newPw))
+                stmt.setString(1, PwCrypto.hashpw(newPw))
                 stmt.setString(2, login)
                 stmt.executeUpdateCheck()
                 AccountPatchAuthResult.Success

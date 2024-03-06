@@ -21,7 +21,7 @@ import junit.framework.TestCase.assertEquals
 import org.apache.xml.security.binding.xmldsig.SignatureType
 import org.junit.Test
 import org.w3c.dom.Element
-import tech.libeufin.common.CryptoUtil
+import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.ebics.XMLUtil
 import tech.libeufin.ebics.ebics_h004.*
 import tech.libeufin.ebics.ebics_hev.HEVResponse

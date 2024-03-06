@@ -20,7 +20,7 @@
 import org.apache.xml.security.binding.xmldsig.SignatureType
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import tech.libeufin.common.CryptoUtil
+import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.common.decodeBase64
 import tech.libeufin.ebics.XMLUtil
 import tech.libeufin.ebics.XMLUtil.Companion.signEbicsResponse

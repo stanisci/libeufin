@@ -28,6 +28,7 @@ import io.ktor.util.pipeline.*
 import tech.libeufin.bank.*
 import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
+import tech.libeufin.common.crypto.*
 import java.time.Instant
 
 /** Used to store if the currently authenticated user is admin */
@@ -134,13 +135,13 @@ private suspend fun ApplicationCall.authenticateBankRequest(db: Database, requir
  * Returns the authenticated customer login
  */
 private suspend fun doBasicAuth(db: Database, encoded: String): String {
-    val decoded = String(base64ToBytes(encoded), Charsets.UTF_8)
+    val decoded = String(encoded.decodeBase64(), Charsets.UTF_8)
     val (login, plainPassword) = decoded.splitOnce(":") ?: throw badRequest(
         "Malformed Basic auth credentials found in the Authorization header",
         TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )
     val hash = db.account.passwordHash(login) ?: throw unauthorized("Unknown account")
-    if (!CryptoUtil.checkpw(plainPassword, hash)) throw unauthorized("Bad password")
+    if (!PwCrypto.checkpw(plainPassword, hash)) throw unauthorized("Bad password")
     return login
 }
 

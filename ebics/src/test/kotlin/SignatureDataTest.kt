@@ -19,7 +19,7 @@
 
 import org.apache.xml.security.binding.xmldsig.SignatureType
 import org.junit.Test
-import tech.libeufin.common.CryptoUtil
+import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.ebics.XMLUtil
 import tech.libeufin.ebics.ebics_h004.EbicsRequest
 import tech.libeufin.ebics.ebics_h004.EbicsTypes

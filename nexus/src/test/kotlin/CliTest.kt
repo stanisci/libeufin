@@ -19,7 +19,7 @@
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.testing.test
-import tech.libeufin.common.CryptoUtil
+import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.nexus.*
 import java.io.ByteArrayOutputStream
 import java.io.PrintStream

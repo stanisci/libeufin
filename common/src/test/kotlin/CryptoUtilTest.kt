@@ -21,6 +21,7 @@ import org.junit.Ignore
 import org.junit.Test
 import kotlin.io.path.*
 import tech.libeufin.common.*
+import tech.libeufin.common.crypto.*
 import java.security.KeyPairGenerator
 import java.security.interfaces.RSAPrivateCrtKey
 import java.util.*
@@ -202,7 +203,7 @@ class CryptoUtilTest {
 
     @Test
     fun passwordHashing() {
-        val x = CryptoUtil.hashpw("myinsecurepw")
-        assertTrue(CryptoUtil.checkpw("myinsecurepw", x))
+        val x = PwCrypto.hashpw("myinsecurepw")
+        assertTrue(PwCrypto.checkpw("myinsecurepw", x))
     }
 }

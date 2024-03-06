@@ -26,7 +26,7 @@ package tech.libeufin.ebics
 
 import io.ktor.http.*
 import org.w3c.dom.Document
-import tech.libeufin.common.CryptoUtil
+import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.ebics.ebics_h004.EbicsRequest
 import tech.libeufin.ebics.ebics_h004.EbicsResponse
 import tech.libeufin.ebics.ebics_h004.EbicsTypes

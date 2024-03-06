@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Stanisci and Dold.
+ * Copyright (C) 2023-2024 Stanisci and Dold.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -30,7 +30,13 @@ import java.security.SecureRandom
 import java.text.DecimalFormat
 import java.time.Instant
 
-
+/**
+ * Generate a TAN challenge for an [op] request with [body] and 
+ * respond to the HTTP request with a TAN challenge.
+ * 
+ * If [channel] and [info] are present, they will be used 
+ * to send the TAN code, otherwise defaults will be used.
+ */
 suspend inline fun <reified B> ApplicationCall.respondChallenge(
     db: Database, 
     op: Operation, 
@@ -57,6 +63,10 @@ suspend inline fun <reified B> ApplicationCall.respondChallenge(
     )
 }
 
+/**
+ * Retrieve a confirmed challenge and its body for [op] from the database
+ * if the challenge header is defined, otherwise extract the HTTP body.
+ */
 suspend inline fun <reified B> ApplicationCall.receiveChallenge(
     db: Database,
     op: Operation
@@ -70,7 +80,10 @@ suspend inline fun <reified B> ApplicationCall.receiveChallenge(
     }
 }
 
-suspend fun ApplicationCall.challenge(
+/**
+ * Retrieve a confirmed challenge body for [op] if the challenge header is defined
+ */
+suspend fun ApplicationCall.checkChallenge(
     db: Database,
     op: Operation
 ): Challenge? {
@@ -86,6 +99,7 @@ object Tan {
     private val CODE_FORMAT = DecimalFormat("00000000")
     private val SECURE_RNG = SecureRandom()
 
+    /** Generate a secure random TAN code */
     fun genCode(): String {
         val rand = SECURE_RNG.nextInt(100000000)
         val code = CODE_FORMAT.format(rand)

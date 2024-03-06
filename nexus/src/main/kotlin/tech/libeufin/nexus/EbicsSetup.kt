@@ -25,6 +25,7 @@ import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.client.*
 import kotlinx.coroutines.runBlocking
 import tech.libeufin.common.*
+import tech.libeufin.common.crypto.*
 import tech.libeufin.ebics.*
 import tech.libeufin.nexus.ebics.*
 import java.nio.file.*

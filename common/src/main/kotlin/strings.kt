@@ -52,12 +52,13 @@ fun decodeHexString(hexString: String): ByteArray {
     return bytes
 }
 
-fun bytesToBase64(bytes: ByteArray): String {
-    return Base64.getEncoder().encodeToString(bytes)
+
+fun ByteArray.encodeBase64(): String {
+    return Base64.getEncoder().encodeToString(this)
 }
 
-fun base64ToBytes(encoding: String): ByteArray {
-    return Base64.getDecoder().decode(encoding)
+fun String.decodeBase64(): ByteArray {
+    return Base64.getDecoder().decode(this)
 }
 
 // used mostly in RSA math, never as amount.
