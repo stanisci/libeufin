@@ -46,7 +46,6 @@ import io.ktor.utils.io.jvm.javaio.*
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
 import tech.libeufin.ebics.*
-import tech.libeufin.ebics.ebics_h005.Ebics3Request
 import tech.libeufin.nexus.*
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -507,13 +506,13 @@ suspend fun doEbicsUpload(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
-    orderService: Ebics3Request.OrderDetails.Service,
+    service: Ebics3Service,
     payload: ByteArray,
 ): EbicsResponseContent = withContext(NonCancellable) {
     val impl = Ebics3Impl(cfg, bankKeys, clientKeys)
     // TODO use a lambda and pass the order detail there for atomicity ?
     val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload)
-    val initXml = impl.uploadInitialization(preparedPayload)
+    val initXml = impl.uploadInitialization(service, preparedPayload)
     val initResp = postEbics( // may throw EbicsEarlyException
         client,
         cfg,

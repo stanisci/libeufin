@@ -22,7 +22,6 @@ import io.ktor.client.*
 import tech.libeufin.ebics.*
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
-import tech.libeufin.ebics.ebics_h005.Ebics3Request
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig
@@ -44,6 +43,19 @@ import javax.xml.datatype.DatatypeFactory
 
 fun Instant.xmlDate(): String = DateTimeFormatter.ISO_DATE.withZone(ZoneId.of("UTC")).format(this)
 fun Instant.xmlDateTime(): String = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneId.of("UTC")).format(this)
+
+data class Ebics3Service(
+    val name: String,
+    val scope: String,
+    val messageName: String,
+    val messageVersion: String,
+    val container: String?
+)
+
+data class Ebics3Order(
+    val type: String,
+    val service: Ebics3Service
+)
 
 class Ebics3Impl(
     private val cfg: EbicsSetupConfig, 
@@ -69,7 +81,7 @@ class Ebics3Impl(
         return XMLUtil.convertDomToBytes(doc)
     }
 
-    fun uploadInitialization(preparedUploadData: PreparedUploadData): ByteArray {
+    fun uploadInitialization(service: Ebics3Service, preparedUploadData: PreparedUploadData): ByteArray {
         val nonce = getNonce(128)
         return signedRequest {
             el("header") {
@@ -86,11 +98,11 @@ class Ebics3Impl(
                         el("AdminOrderType", "BTU")
                         el("BTUOrderParams") {
                             el("Service") {
-                                el("ServiceName", "MCT")
-                                el("Scope", "CH")
+                                el("ServiceName", service.name)
+                                el("Scope", service.scope)
                                 el("MsgName") {
-                                    attr("version", "09")
-                                    text("pain.001")
+                                    attr("version", service.messageVersion)
+                                    text(service.messageName)
                                 }
                             }
                             el("SignatureFlag", "true")
@@ -314,20 +326,19 @@ suspend fun submitPain001(
     bankkeys: BankPublicKeysFile,
     httpClient: HttpClient
 ): String {
-    val orderService: Ebics3Request.OrderDetails.Service = Ebics3Request.OrderDetails.Service().apply {
-        serviceName = "MCT"
-        scope = "CH"
-        messageName = Ebics3Request.OrderDetails.Service.MessageName().apply {
-            value = "pain.001"
-            version = "09"
-        }
-    }
+    val service = Ebics3Service(
+        name = "MCT",
+        scope = "CH",
+        messageName = "pain.001",
+        messageVersion = "09",
+        container = null
+    )
     val maybeUploaded = doEbicsUpload(
         httpClient,
         cfg,
         clientKeys,
         bankkeys,
-        orderService,
+        service,
         pain001xml.toByteArray(Charsets.UTF_8),
     )
     logger.debug("Payment submitted, report text is: ${maybeUploaded.reportText}," +

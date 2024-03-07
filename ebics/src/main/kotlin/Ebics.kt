@@ -27,11 +27,11 @@ package tech.libeufin.ebics
 import io.ktor.http.*
 import org.w3c.dom.Document
 import tech.libeufin.common.crypto.CryptoUtil
+import tech.libeufin.common.*
 import tech.libeufin.ebics.ebics_h004.EbicsRequest
 import tech.libeufin.ebics.ebics_h004.EbicsResponse
 import tech.libeufin.ebics.ebics_h004.EbicsTypes
 import tech.libeufin.ebics.ebics_h004.HPBResponseOrderData
-import tech.libeufin.ebics.ebics_h005.Ebics3Response
 import tech.libeufin.ebics.ebics_s001.UserSignatureData
 import java.io.InputStream
 import java.security.SecureRandom
@@ -310,41 +310,53 @@ fun parseEbicsHpbOrder(orderDataRaw: InputStream): HpbResponseData {
 }
 
 fun ebics3toInternalRepr(response: Document): EbicsResponseContent {
-    // logger.debug("Converting bank resp to internal repr.: $response")
-    val resp: JAXBElement<Ebics3Response> = try {
-        XMLUtil.convertDomToJaxb(response)
-    } catch (e: Exception) {
-        throw EbicsProtocolError(
-            HttpStatusCode.InternalServerError,
-            "Could not transform string-response from bank into JAXB"
+    // TODO better ebics response type
+    return XmlDestructor.fromDoc(response, "ebicsResponse") {
+        var transactionID: String? = null
+        var numSegments: Int? = null
+        lateinit var technicalReturnCode: EbicsReturnCode
+        lateinit var bankReturnCode: EbicsReturnCode
+        lateinit var reportText: String
+        var orderID: String? = null
+        var segmentNumber: Int? = null
+        var orderDataEncChunk: String? = null
+        var dataEncryptionInfo: DataEncryptionInfo? = null
+        one("header") {
+            one("static") {
+                transactionID = opt("TransactionID")?.text()
+                numSegments = opt("NumSegments")?.text()?.toInt()
+            }
+            one("mutable") {
+                segmentNumber = opt("SegmentNumber")?.text()?.toInt()
+                orderID = opt("OrderID")?.text()
+                technicalReturnCode = EbicsReturnCode.lookup(one("ReturnCode").text())
+                reportText = one("ReportText").text()
+            }
+        }
+        one("body") {
+            opt("DataTransfer") {
+                orderDataEncChunk = one("OrderData").text()
+                dataEncryptionInfo = opt("DataEncryptionInfo") {
+                    DataEncryptionInfo(
+                        one("TransactionKey").text().decodeBase64(),
+                        one("EncryptionPubKeyDigest").text().decodeBase64()
+                    )
+                }
+            }
+            bankReturnCode = EbicsReturnCode.lookup(one("ReturnCode").text())
+        }
+        EbicsResponseContent(
+            transactionID = transactionID,
+            orderID = orderID,
+            bankReturnCode = bankReturnCode,
+            technicalReturnCode = technicalReturnCode,
+            reportText = reportText,
+            orderDataEncChunk = orderDataEncChunk,
+            dataEncryptionInfo = dataEncryptionInfo,
+            numSegments = numSegments,
+            segmentNumber = segmentNumber
         )
     }
-    val bankReturnCodeStr = resp.value.body.returnCode.value
-    val bankReturnCode = EbicsReturnCode.lookup(bankReturnCodeStr)
-
-    val techReturnCodeStr = resp.value.header.mutable.returnCode
-    val techReturnCode = EbicsReturnCode.lookup(techReturnCodeStr)
-
-    val reportText = resp.value.header.mutable.reportText
-
-    val daeXml = resp.value.body.dataTransfer?.dataEncryptionInfo
-    val dataEncryptionInfo = if (daeXml == null) {
-        null
-    } else {
-        DataEncryptionInfo(daeXml.transactionKey, daeXml.encryptionPubKeyDigest.value)
-    }
-
-    return EbicsResponseContent(
-        transactionID = resp.value.header._static.transactionID,
-        orderID = resp.value.header.mutable.orderID,
-        bankReturnCode = bankReturnCode,
-        technicalReturnCode = techReturnCode,
-        reportText = reportText,
-        orderDataEncChunk = resp.value.body.dataTransfer?.orderData?.value,
-        dataEncryptionInfo = dataEncryptionInfo,
-        numSegments = resp.value.header._static.numSegments?.toInt(),
-        segmentNumber = resp.value.header.mutable.segmentNumber?.value?.toInt()
-    )
 }
 
 fun ebics25toInternalRepr(response: Document): EbicsResponseContent {

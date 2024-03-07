@@ -183,13 +183,22 @@ class XmlDestructor internal constructor(private val el: Element) {
     inline fun <reified T : Enum<T>> enum(): T = java.lang.Enum.valueOf(T::class.java, text())
 
     fun attr(index: String): String = el.getAttribute(index)
+
+    companion object {
+        fun <T> fromStream(xml: InputStream, root: String, f: XmlDestructor.() -> T): T {
+            val doc = XMLUtil.parseIntoDom(xml)
+            return fromDoc(doc, root, f)
+        }
+
+        fun <T> fromDoc(doc: Document, root: String, f: XmlDestructor.() -> T): T {
+            if (doc.documentElement.tagName != root) {
+                throw DestructionError("expected root '$root' got '${doc.documentElement.tagName}'")
+            }
+            val destr = XmlDestructor(doc.documentElement)
+            return f(destr)
+        }
+    }
 }
 
-fun <T> destructXml(xml: InputStream, root: String, f: XmlDestructor.() -> T): T {
-    val doc = XMLUtil.parseIntoDom(xml)
-    if (doc.documentElement.tagName != root) {
-        throw DestructionError("expected root '$root' got '${doc.documentElement.tagName}'")
-    }
-    val destr = XmlDestructor(doc.documentElement)
-    return f(destr)
-}
+fun <T> destructXml(xml: InputStream, root: String, f: XmlDestructor.() -> T): T 
+    = XmlDestructor.fromStream(xml, root, f)

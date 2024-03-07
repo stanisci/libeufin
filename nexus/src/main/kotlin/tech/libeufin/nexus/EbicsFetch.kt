@@ -28,7 +28,6 @@ import io.ktor.client.plugins.*
 import kotlinx.coroutines.*
 import tech.libeufin.common.*
 import tech.libeufin.ebics.*
-import tech.libeufin.ebics.ebics_h005.Ebics3Request
 import tech.libeufin.nexus.ebics.*
 import java.io.IOException
 import java.io.InputStream
