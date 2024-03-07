@@ -215,8 +215,7 @@ suspend fun postEbics(
     client: HttpClient,
     cfg: EbicsSetupConfig,
     bankKeys: BankPublicKeysFile,
-    xmlReq: ByteArray,
-    isEbics3: Boolean
+    xmlReq: ByteArray
 ): EbicsResponseContent {
     val respXml = try {
         client.postToBank(cfg.hostBaseUrl, xmlReq)
@@ -241,16 +240,15 @@ suspend fun postEbics(
     if (!XMLUtil.verifyEbicsDocument(
         doc,
         bankKeys.bank_authentication_public_key,
-        isEbics3
+        true
     )) {
         throw EbicsSideException(
             "Bank signature did not verify",
             sideEc = EbicsSideError.BANK_SIGNATURE_DIDNT_VERIFY
         )
     }
-    if (isEbics3)
-        return ebics3toInternalRepr(doc)
-    return ebics25toInternalRepr(doc)
+    
+    return ebics3toInternalRepr(doc)
 }
 
 /**
@@ -296,7 +294,7 @@ suspend fun ebicsDownload(
     // error loop until the pending transaction timeout.
     // TODO find a way to cancel the pending transaction ?
     withContext(NonCancellable) { 
-        val initResp = postEbics(client, cfg, bankKeys, reqXml, true) 
+        val initResp = postEbics(client, cfg, bankKeys, reqXml) 
         logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${initResp.technicalReturnCode}, ${initResp.bankReturnCode}")
         if (initResp.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
             throw Exception("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
@@ -337,7 +335,7 @@ suspend fun ebicsDownload(
             // request segment number x.
             val transReq = impl.downloadTransfer(x, howManySegments, tId)
 
-            val transResp = postEbics(client, cfg, bankKeys, transReq, true)
+            val transResp = postEbics(client, cfg, bankKeys, transReq)
             if (!areCodesOk(transResp)) {
                 throw EbicsSideException(
                     "EBICS transfer segment #$x failed.",
@@ -358,8 +356,7 @@ suspend fun ebicsDownload(
                 client,
                 cfg,
                 bankKeys,
-                receiptXml,
-                true
+                receiptXml
             )
         }
         if (scope.isActive) {
@@ -440,7 +437,7 @@ fun prepareUploadPayload(
         cfg.ebicsUserId
     )
     val encryptionResult = CryptoUtil.encryptEbicsE002(
-        EbicsOrderUtil.encodeOrderDataXml(innerSignedEbicsXml),
+        innerSignedEbicsXml.inputStream().deflate().readAllBytes(),
         bankKeys.bank_encryption_public_key
     )
     val plainTransactionKey = encryptionResult.plainTransactionKey
@@ -517,8 +514,7 @@ suspend fun doEbicsUpload(
         client,
         cfg,
         bankKeys,
-        initXml,
-        isEbics3 = true
+        initXml
     )
     if (!areCodesOk(initResp)) throw EbicsUploadException(
         "EBICS upload init failed",
@@ -537,8 +533,7 @@ suspend fun doEbicsUpload(
         client,
         cfg,
         bankKeys,
-        transferXml,
-        isEbics3 = true
+        transferXml
     )
     logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${transferResp.technicalReturnCode}, ${transferResp.bankReturnCode}")
     if (!areCodesOk(transferResp)) throw EbicsUploadException(

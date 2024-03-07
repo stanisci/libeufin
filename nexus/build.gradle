@@ -24,9 +24,6 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":ebics"))
 
-    // XML parsing/binding and encryption
-    implementation("jakarta.xml.bind:jakarta.xml.bind-api:2.3.3")
-
     // Command line parsing
     implementation("com.github.ajalt.clikt:clikt:$clikt_version")
     implementation("org.postgresql:postgresql:$postgres_version")

@@ -27,10 +27,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.common.*
 import tech.libeufin.ebics.*
-import tech.libeufin.ebics.ebics_h004.EbicsKeyManagementResponse
-import tech.libeufin.ebics.ebics_h004.EbicsNpkdRequest
-import tech.libeufin.ebics.ebics_h004.EbicsRequest
-import tech.libeufin.ebics.ebics_h004.EbicsUnsecuredRequest
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig

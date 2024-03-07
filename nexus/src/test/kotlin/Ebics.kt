@@ -21,36 +21,12 @@ import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import org.junit.Test
 import tech.libeufin.ebics.XMLUtil
-import tech.libeufin.ebics.ebics_h004.EbicsUnsecuredRequest
 import tech.libeufin.nexus.ebics.*
 import kotlin.io.path.Path
 import kotlin.io.path.writeBytes
 import kotlin.test.assertEquals
 
 class Ebics {
-    // Checks XML is valid and INI.
-    @Test
-    fun iniMessage() = conf { config -> 
-        val msg = generateIniMessage(config, clientKeys)
-        val ini = XMLUtil.convertToJaxb<EbicsUnsecuredRequest>(msg.inputStream()) // ensures is valid
-        assertEquals(ini.value.header.static.orderDetails.orderType, "INI") // ensures is INI
-    }
-
-    // Checks XML is valid and HIA.
-    @Test
-    fun hiaMessage() = conf { config -> 
-        val msg = generateHiaMessage(config, clientKeys)
-        val ini = XMLUtil.convertToJaxb<EbicsUnsecuredRequest>(msg.inputStream()) // ensures is valid
-        assertEquals(ini.value.header.static.orderDetails.orderType, "HIA") // ensures is HIA
-    }
-
-    // Checks XML is valid and HPB.
-    @Test
-    fun hpbMessage() = conf { config -> 
-        val msg = generateHpbMessage(config, clientKeys)
-        val ini = XMLUtil.convertToJaxb<EbicsUnsecuredRequest>(msg.inputStream()) // ensures is valid
-        assertEquals(ini.value.header.static.orderDetails.orderType, "HPB") // ensures is HPB
-    }
     // POSTs an EBICS message to the mock bank.  Tests
     // the main branches: unreachable bank, non-200 status
     // code, and 200.

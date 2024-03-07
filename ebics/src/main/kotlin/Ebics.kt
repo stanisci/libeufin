@@ -28,11 +28,6 @@ import io.ktor.http.*
 import org.w3c.dom.Document
 import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.common.*
-import tech.libeufin.ebics.ebics_h004.EbicsRequest
-import tech.libeufin.ebics.ebics_h004.EbicsResponse
-import tech.libeufin.ebics.ebics_h004.EbicsTypes
-import tech.libeufin.ebics.ebics_h004.HPBResponseOrderData
-import tech.libeufin.ebics.ebics_s001.UserSignatureData
 import java.io.InputStream
 import java.security.SecureRandom
 import java.security.interfaces.RSAPrivateCrtKey
@@ -40,7 +35,6 @@ import java.security.interfaces.RSAPublicKey
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import javax.xml.bind.JAXBElement
 import javax.xml.datatype.DatatypeFactory
 import javax.xml.datatype.XMLGregorianCalendar
 
@@ -56,45 +50,6 @@ data class EbicsProtocolError(
     val ebicsTechnicalCode: EbicsReturnCode? = null
 ) : Exception(reason)
 
-data class EbicsDateRange(
-    val start: Instant,
-    val end: Instant
-)
-
-sealed interface EbicsOrderParams
-data class EbicsStandardOrderParams(
-    val dateRange: EbicsDateRange? = null
-) : EbicsOrderParams
-
-data class EbicsGenericOrderParams(
-    val params: Map<String, String> = mapOf()
-) : EbicsOrderParams
-
-enum class EbicsInitState {
-    SENT, NOT_SENT, UNKNOWN
-}
-
-/**
- * This class is a mere container that keeps data found
- * in the database and that is further needed to sign / verify
- * / make messages.  And not all the values are needed all
- * the time.
- */
-data class EbicsClientSubscriberDetails(
-    val partnerId: String,
-    val userId: String,
-    var bankAuthPub: RSAPublicKey?,
-    var bankEncPub: RSAPublicKey?,
-    val ebicsUrl: String,
-    val hostId: String,
-    val customerEncPriv: RSAPrivateCrtKey,
-    val customerAuthPriv: RSAPrivateCrtKey,
-    val customerSignPriv: RSAPrivateCrtKey,
-    val ebicsIniState: EbicsInitState,
-    val ebicsHiaState: EbicsInitState,
-    var dialect: String? = null
-)
-
 /**
  * @param size in bits
  */
@@ -103,70 +58,6 @@ fun getNonce(size: Int): ByteArray {
     val ret = ByteArray(size / 8)
     sr.nextBytes(ret)
     return ret
-}
-
-fun getXmlDate(i: Instant): XMLGregorianCalendar {
-    val zonedTimestamp = ZonedDateTime.ofInstant(i, ZoneId.of("UTC"))
-    return getXmlDate(zonedTimestamp)
-}
-fun getXmlDate(d: ZonedDateTime): XMLGregorianCalendar {
-    return DatatypeFactory.newInstance()
-        .newXMLGregorianCalendar(
-            d.year,
-            d.monthValue,
-            d.dayOfMonth,
-            0,
-            0,
-            0,
-            0,
-            d.offset.totalSeconds / 60
-        )
-}
-
-fun signOrder(
-    orderBlob: ByteArray,
-    signKey: RSAPrivateCrtKey,
-    partnerId: String,
-    userId: String
-): UserSignatureData {
-    val ES_signature = CryptoUtil.signEbicsA006(
-        CryptoUtil.digestEbicsOrderA006(orderBlob),
-        signKey
-    )
-    val userSignatureData = UserSignatureData().apply {
-        orderSignatureList = listOf(
-            UserSignatureData.OrderSignatureData().apply {
-                signatureVersion = "A006"
-                signatureValue = ES_signature
-                partnerID = partnerId
-                userID = userId
-            }
-        )
-    }
-    return userSignatureData
-}
-
-fun signOrderEbics3(
-    orderBlob: ByteArray,
-    signKey: RSAPrivateCrtKey,
-    partnerId: String,
-    userId: String
-): tech.libeufin.ebics.ebics_s002.UserSignatureDataEbics3 {
-    val ES_signature = CryptoUtil.signEbicsA006(
-        CryptoUtil.digestEbicsOrderA006(orderBlob),
-        signKey
-    )
-    val userSignatureData = tech.libeufin.ebics.ebics_s002.UserSignatureDataEbics3().apply {
-        orderSignatureList = listOf(
-            tech.libeufin.ebics.ebics_s002.UserSignatureDataEbics3.OrderSignatureData().apply {
-                signatureVersion = "A006"
-                signatureValue = ES_signature
-                partnerID = partnerId
-                userID = userId
-            }
-        )
-    }
-    return userSignatureData
 }
 
 data class PreparedUploadData(
@@ -259,6 +150,27 @@ enum class EbicsReturnCode(val errorCode: String) {
     }
 }
 
+
+fun signOrderEbics3(
+    orderBlob: ByteArray,
+    signKey: RSAPrivateCrtKey,
+    partnerId: String,
+    userId: String
+): ByteArray {
+    return XmlBuilder.toString("UserSignatureData") {
+        attr("xmlns", "http://www.ebics.org/S002")
+        el("OrderSignatureData") {
+            el("SignatureVersion", "A006")
+            el("SignatureValue", CryptoUtil.signEbicsA006(
+                CryptoUtil.digestEbicsOrderA006(orderBlob),
+                signKey
+            ).encodeBase64())
+            el("PartnerID", partnerId)
+            el("UserID", userId)
+        }
+    }.toByteArray()
+}
+
 data class EbicsResponseContent(
     val transactionID: String?,
     val orderID: String?,
@@ -287,28 +199,6 @@ class HpbResponseData(
     val authenticationVersion: String
 )
 
-fun parseEbicsHpbOrder(orderDataRaw: InputStream): HpbResponseData {
-    val resp = try {
-        XMLUtil.convertToJaxb<HPBResponseOrderData>(orderDataRaw)
-    } catch (e: Exception) {
-        throw EbicsProtocolError(HttpStatusCode.InternalServerError, "Invalid XML (as HPB response) received from bank")
-    }
-    val encPubKey = CryptoUtil.loadRsaPublicKeyFromComponents(
-        resp.value.encryptionPubKeyInfo.pubKeyValue.rsaKeyValue.modulus,
-        resp.value.encryptionPubKeyInfo.pubKeyValue.rsaKeyValue.exponent
-    )
-    val authPubKey = CryptoUtil.loadRsaPublicKeyFromComponents(
-        resp.value.authenticationPubKeyInfo.pubKeyValue.rsaKeyValue.modulus,
-        resp.value.authenticationPubKeyInfo.pubKeyValue.rsaKeyValue.exponent
-    )
-    return HpbResponseData(
-        hostID = resp.value.hostID,
-        encryptionPubKey = encPubKey,
-        encryptionVersion = resp.value.encryptionPubKeyInfo.encryptionVersion,
-        authenticationPubKey = authPubKey,
-        authenticationVersion = resp.value.authenticationPubKeyInfo.authenticationVersion
-    )
-}
 
 fun ebics3toInternalRepr(response: Document): EbicsResponseContent {
     // TODO better ebics response type
@@ -360,65 +250,38 @@ fun ebics3toInternalRepr(response: Document): EbicsResponseContent {
     }
 }
 
-fun ebics25toInternalRepr(response: Document): EbicsResponseContent {
-    val resp: JAXBElement<EbicsResponse> = try {
-        XMLUtil.convertDomToJaxb(response)
-    } catch (e: Exception) {
-        throw EbicsProtocolError(
-            HttpStatusCode.InternalServerError,
-            "Could not transform string-response from bank into JAXB"
+fun parseEbicsHpbOrder(orderDataRaw: InputStream): HpbResponseData {
+    return XmlDestructor.fromStream(orderDataRaw, "HPBResponseOrderData") {
+        val (authenticationPubKey, authenticationVersion) = one("AuthenticationPubKeyInfo") {
+            Pair(
+                one("PubKeyValue").one("RSAKeyValue") {
+                    CryptoUtil.loadRsaPublicKeyFromComponents(
+                        one("Modulus").text().decodeBase64(),
+                        one("Exponent").text().decodeBase64(),
+                    )
+                },
+                one("AuthenticationVersion").text()
+            )
+        }
+        val (encryptionPubKey, encryptionVersion) = one("EncryptionPubKeyInfo") {
+            Pair(
+                one("PubKeyValue").one("RSAKeyValue") {
+                    CryptoUtil.loadRsaPublicKeyFromComponents(
+                        one("Modulus").text().decodeBase64(),
+                        one("Exponent").text().decodeBase64(),
+                    )
+                },
+                one("EncryptionVersion").text()
+            )
+
+        }
+        val hostID: String = one("HostID").text()
+        HpbResponseData(
+            hostID = hostID,
+            encryptionPubKey = encryptionPubKey,
+            encryptionVersion = encryptionVersion,
+            authenticationPubKey = authenticationPubKey,
+            authenticationVersion = authenticationVersion
         )
     }
-    val bankReturnCodeStr = resp.value.body.returnCode.value
-    val bankReturnCode = EbicsReturnCode.lookup(bankReturnCodeStr)
-
-    val techReturnCodeStr = resp.value.header.mutable.returnCode
-    val techReturnCode = EbicsReturnCode.lookup(techReturnCodeStr)
-
-    val reportText = resp.value.header.mutable.reportText
-
-    val daeXml = resp.value.body.dataTransfer?.dataEncryptionInfo
-    val dataEncryptionInfo = if (daeXml == null) {
-        null
-    } else {
-        DataEncryptionInfo(daeXml.transactionKey, daeXml.encryptionPubKeyDigest.value)
-    }
-
-    return EbicsResponseContent(
-        transactionID = resp.value.header._static.transactionID,
-        orderID = resp.value.header.mutable.orderID,
-        bankReturnCode = bankReturnCode,
-        technicalReturnCode = techReturnCode,
-        reportText = reportText,
-        orderDataEncChunk = resp.value.body.dataTransfer?.orderData?.value,
-        dataEncryptionInfo = dataEncryptionInfo,
-        numSegments = resp.value.header._static.numSegments?.toInt(),
-        segmentNumber = resp.value.header.mutable.segmentNumber?.value?.toInt()
-    )
 }
-
-/**
- * Get the private key that matches the given public key digest.
- */
-fun getDecryptionKey(subscriberDetails: EbicsClientSubscriberDetails, pubDigest: ByteArray): RSAPrivateCrtKey {
-    val authPub = CryptoUtil.getRsaPublicFromPrivate(subscriberDetails.customerAuthPriv)
-    val encPub = CryptoUtil.getRsaPublicFromPrivate(subscriberDetails.customerEncPriv)
-    val authPubDigest = CryptoUtil.getEbicsPublicKeyHash(authPub)
-    val encPubDigest = CryptoUtil.getEbicsPublicKeyHash(encPub)
-    if (pubDigest.contentEquals(authPubDigest)) {
-        return subscriberDetails.customerAuthPriv
-    }
-    if (pubDigest.contentEquals(encPubDigest)) {
-        return subscriberDetails.customerEncPriv
-    }
-    throw EbicsProtocolError(HttpStatusCode.NotFound, "Could not find customer's public key")
-}
-
-data class EbicsVersionSpec(
-    val protocol: String,
-    val version: String
-)
-
-data class EbicsHevDetails(
-    val versions: List<EbicsVersionSpec>
-)
