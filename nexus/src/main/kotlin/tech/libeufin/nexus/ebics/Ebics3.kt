@@ -69,6 +69,104 @@ class Ebics3Impl(
         return XMLUtil.convertDomToBytes(doc)
     }
 
+    fun uploadInitialization(preparedUploadData: PreparedUploadData): ByteArray {
+        val nonce = getNonce(128)
+        return signedRequest {
+            el("header") {
+                attr("authenticate", "true")
+                el("static") {
+                    el("HostID", cfg.ebicsHostId)
+                    el("Nonce", nonce.toHexString())
+                    el("Timestamp", Instant.now().xmlDateTime())
+                    el("PartnerID", cfg.ebicsPartnerId)
+                    el("UserID", cfg.ebicsUserId)
+                    // SystemID
+                    // Product
+                    el("OrderDetails") {
+                        el("AdminOrderType", "BTU")
+                        el("BTUOrderParams") {
+                            el("Service") {
+                                el("ServiceName", "MCT")
+                                el("Scope", "CH")
+                                el("MsgName") {
+                                    attr("version", "09")
+                                    text("pain.001")
+                                }
+                            }
+                            el("SignatureFlag", "true")
+                        }
+                    }
+                    el("BankPubKeyDigests") {
+                        el("Authentication") {
+                            attr("Version", "X002")
+                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).encodeBase64())
+                        }
+                        el("Encryption") {
+                            attr("Version", "E002")
+                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
+                        }
+                        // Signature
+                    }
+                    el("SecurityMedium", "0000")
+                    el("NumSegments", "1") // TODO test upload of many segment
+                    
+                }
+                el("mutable") {
+                    el("TransactionPhase", "Initialisation")
+                }
+            }
+            el("AuthSignature")
+            el("body") {
+                el("DataTransfer") {
+                    el("DataEncryptionInfo") {
+                        attr("authenticate", "true")
+                        el("EncryptionPubKeyDigest") {
+                            attr("Version", "E002")
+                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
+                        }
+                        el("TransactionKey", preparedUploadData.transactionKey.encodeBase64())
+                    }
+                    el("SignatureData") {
+                        attr("authenticate", "true")
+                        text(preparedUploadData.userSignatureDataEncrypted.encodeBase64())
+                    }
+                    el("DataDigest") {
+                        attr("SignatureVersion", "A006")
+                        text(preparedUploadData.dataDigest.encodeBase64())
+                    }
+                }
+            }
+        }
+    }
+
+    fun uploadTransfer(
+        transactionId: String,
+        uploadData: PreparedUploadData
+    ): ByteArray {
+        val chunkIndex = 1 // TODO test upload of many segment
+        return signedRequest {
+            el("header") {
+                attr("authenticate", "true")
+                el("static") {
+                    el("HostID", cfg.ebicsHostId)
+                    el("TransactionID", transactionId)
+                }
+                el("mutable") {
+                    el("TransactionPhase", "Transfer")
+                    el("SegmentNumber") {
+                        attr("lastSegment", "true")
+                        text(chunkIndex.toString())
+                    }
+                }
+            }
+            el("AuthSignature")
+            el("body/DataTransfer/OrderData", uploadData.encryptedPayloadChunks[chunkIndex - 1])
+        }
+    }
+
     fun downloadInitialization(whichDoc: SupportedDocument, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
         val nonce = getNonce(128)
         return signedRequest {
@@ -193,84 +291,7 @@ class Ebics3Impl(
     }
 }
 
-/**
- * Creates the EBICS 3 document for the init phase of an upload
- * transaction.
- *
- * @param cfg configuration handle.
- * @param preparedUploadData business payload to send.
- * @param bankkeys bank public keys.
- * @param clientKeys client private keys.
- * @param orderService EBICS 3 document defining the request type
- * @return raw XML of the EBICS 3 init phase.
- */
-fun createEbics3RequestForUploadInitialization(
-    cfg: EbicsSetupConfig,
-    preparedUploadData: PreparedUploadData,
-    bankkeys: BankPublicKeysFile,
-    clientKeys: ClientPrivateKeysFile,
-    orderService: Ebics3Request.OrderDetails.Service
-): ByteArray {
-    val nonce = getNonce(128)
-    val req = Ebics3Request.createForUploadInitializationPhase(
-        preparedUploadData.transactionKey,
-        preparedUploadData.userSignatureDataEncrypted,
-        preparedUploadData.dataDigest,
-        cfg.ebicsHostId,
-        nonce,
-        cfg.ebicsPartnerId,
-        cfg.ebicsUserId,
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar()),
-        bankkeys.bank_authentication_public_key,
-        bankkeys.bank_encryption_public_key,
-        BigInteger.ONE,
-        orderService
-    )
-    val doc = XMLUtil.convertJaxbToDocument(
-        req,
-        withSchemaLocation = "urn:org:ebics:H005 ebics_request_H005.xsd"
-    )
-    XMLUtil.signEbicsDocument(
-        doc,
-        clientKeys.authentication_private_key,
-        withEbics3 = true
-    )
-    return XMLUtil.convertDomToBytes(doc)
-}
-
-/**
- * Crafts one EBICS 3 request for the upload transfer phase.  Currently
- * only 1-chunk payloads are supported.
- *
- * @param cfg configuration handle.
- * @param clientKeys client private keys.
- * @param transactionId EBICS transaction ID obtained from an init phase.
- * @param uploadData business content to upload.
- *
- * @return raw XML document.
- */
-fun createEbics3RequestForUploadTransferPhase(
-    cfg: EbicsSetupConfig,
-    clientKeys: ClientPrivateKeysFile,
-    transactionId: String,
-    uploadData: PreparedUploadData
-): ByteArray {
-    val chunkIndex = 1 // only 1-chunk communication currently supported.
-    val req = Ebics3Request.createForUploadTransferPhase(
-        cfg.ebicsHostId,
-        transactionId,
-        BigInteger.valueOf(chunkIndex.toLong()),
-        uploadData.encryptedPayloadChunks[chunkIndex - 1]
-    )
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    XMLUtil.signEbicsDocument(
-        doc,
-        clientKeys.authentication_private_key,
-        withEbics3 = true
-    )
-    return XMLUtil.convertDomToBytes(doc)
-}
-
+// TODO this function should not be here
 /**
  * Collects all the steps to prepare the submission of a pain.001
  * document to the bank, and finally send it.  Indirectly throws

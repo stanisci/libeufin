@@ -170,7 +170,7 @@ private fun submitBatch(
                 db.mem[orderId] = "Init"
                 DatabaseSubmissionState.success
             } catch (e: NexusSubmitException) {
-                logger.error(e.message)
+                e.fmtLog(logger)
                 when (e.stage) {
                     /**
                      * Permanent failure: the pain.001 was invalid.  For example a Payto

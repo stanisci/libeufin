@@ -448,6 +448,7 @@ fun prepareUploadPayload(
         ?: throw Exception("Could not generate the transaction key, cannot encrypt the payload!")
     // Then only E002 symmetric (with ephemeral key) encrypt.
     val compressedInnerPayload = payload.inputStream().deflate().readAllBytes()
+    // TODO stream
     val encryptedPayload = CryptoUtil.encryptEbicsE002withTransactionKey(
         compressedInnerPayload,
         bankKeys.bank_encryption_public_key,
@@ -509,15 +510,10 @@ suspend fun doEbicsUpload(
     orderService: Ebics3Request.OrderDetails.Service,
     payload: ByteArray,
 ): EbicsResponseContent = withContext(NonCancellable) {
+    val impl = Ebics3Impl(cfg, bankKeys, clientKeys)
     // TODO use a lambda and pass the order detail there for atomicity ?
     val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload)
-    val initXml = createEbics3RequestForUploadInitialization(
-        cfg,
-        preparedPayload,
-        bankKeys,
-        clientKeys,
-        orderService
-    )
+    val initXml = impl.uploadInitialization(preparedPayload)
     val initResp = postEbics( // may throw EbicsEarlyException
         client,
         cfg,
@@ -537,12 +533,7 @@ suspend fun doEbicsUpload(
             "EBICS upload init phase did not return a transaction ID, cannot do the transfer phase.",
             sideEc = EbicsSideError.EBICS_UPLOAD_TRANSACTION_ID_MISSING
         )
-    val transferXml = createEbics3RequestForUploadTransferPhase(
-        cfg,
-        clientKeys,
-        tId,
-        preparedPayload
-    )
+    val transferXml = impl.uploadTransfer(tId, preparedPayload)
     val transferResp = postEbics(
         client,
         cfg,
@@ -550,6 +541,7 @@ suspend fun doEbicsUpload(
         transferXml,
         isEbics3 = true
     )
+    logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${transferResp.technicalReturnCode}, ${transferResp.bankReturnCode}")
     if (!areCodesOk(transferResp)) throw EbicsUploadException(
         "EBICS upload transfer failed",
         phase = EbicsPhase.transmission,
