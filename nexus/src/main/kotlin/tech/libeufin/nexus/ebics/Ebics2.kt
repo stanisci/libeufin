@@ -25,17 +25,18 @@ package tech.libeufin.nexus.ebics
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.common.*
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig
 import java.io.InputStream
-import java.security.interfaces.RSAPrivateCrtKey
 import java.time.Instant
 import java.time.ZoneId
 import java.util.*
 import javax.xml.datatype.DatatypeFactory
+import java.security.interfaces.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-nexus-ebics2")
 
@@ -220,4 +221,48 @@ fun generateHpbMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
     }
     XMLUtil.signEbicsDocument(doc, clientKeys.authentication_private_key)
     return XMLUtil.convertDomToBytes(doc)
+}
+
+class HpbResponseData(
+    val hostID: String,
+    val encryptionPubKey: RSAPublicKey,
+    val encryptionVersion: String,
+    val authenticationPubKey: RSAPublicKey,
+    val authenticationVersion: String
+)
+
+fun parseEbicsHpbOrder(orderDataRaw: InputStream): HpbResponseData {
+    return XmlDestructor.fromStream(orderDataRaw, "HPBResponseOrderData") {
+        val (authenticationPubKey, authenticationVersion) = one("AuthenticationPubKeyInfo") {
+            Pair(
+                one("PubKeyValue").one("RSAKeyValue") {
+                    CryptoUtil.loadRsaPublicKeyFromComponents(
+                        one("Modulus").text().decodeBase64(),
+                        one("Exponent").text().decodeBase64(),
+                    )
+                },
+                one("AuthenticationVersion").text()
+            )
+        }
+        val (encryptionPubKey, encryptionVersion) = one("EncryptionPubKeyInfo") {
+            Pair(
+                one("PubKeyValue").one("RSAKeyValue") {
+                    CryptoUtil.loadRsaPublicKeyFromComponents(
+                        one("Modulus").text().decodeBase64(),
+                        one("Exponent").text().decodeBase64(),
+                    )
+                },
+                one("EncryptionVersion").text()
+            )
+
+        }
+        val hostID: String = one("HostID").text()
+        HpbResponseData(
+            hostID = hostID,
+            encryptionPubKey = encryptionPubKey,
+            encryptionVersion = encryptionVersion,
+            authenticationPubKey = authenticationPubKey,
+            authenticationVersion = authenticationVersion
+        )
+    }
 }

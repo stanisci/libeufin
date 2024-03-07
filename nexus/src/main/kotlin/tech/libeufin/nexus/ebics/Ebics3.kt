@@ -30,12 +30,8 @@ import java.io.File
 import org.w3c.dom.*
 import javax.xml.datatype.XMLGregorianCalendar
 import javax.xml.datatype.DatatypeFactory
+import java.security.interfaces.*
 
-
-//fun String.toDate(): LocalDate = LocalDate.parse(this, DateTimeFormatter.ISO_DATE)
-//fun String.toDateTime(): LocalDateTime = LocalDateTime.parse(this, DateTimeFormatter.ISO_DATE_TIME)
-//fun String.toYearMonth(): YearMonth = YearMonth.parse(this, DateTimeFormatter.ISO_DATE)
-//fun String.toYear(): Year = Year.parse(this, DateTimeFormatter.ISO_DATE)
 
 fun Instant.xmlDate(): String = DateTimeFormatter.ISO_DATE.withZone(ZoneId.of("UTC")).format(this)
 fun Instant.xmlDateTime(): String = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneId.of("UTC")).format(this)
@@ -48,8 +44,7 @@ data class Ebics3Service(
     val container: String?
 )
 
-
-  
+// TODO WIP
 fun iniRequest(
     cfg: EbicsSetupConfig, 
     clientKeys: ClientPrivateKeysFile
@@ -337,47 +332,73 @@ class Ebics3Impl(
     }
 }
 
-// TODO this function should not be here
-/**
- * Collects all the steps to prepare the submission of a pain.001
- * document to the bank, and finally send it.  Indirectly throws
- * [EbicsSideException] or [EbicsUploadException].  The first means
- * that the bank sent an invalid response or signature, the second
- * that a proper EBICS or business error took place.  The caller must
- * catch those exceptions and decide the retry policy.
- *
- * @param pain001xml pain.001 document in XML.  The caller should
- *                   ensure its validity.
- * @param cfg configuration handle.
- * @param clientKeys client private keys.
- * @param bankkeys bank public keys.
- * @param httpClient HTTP client to connect to the bank.
- */
-suspend fun submitPain001(
-    pain001xml: String,
-    cfg: EbicsSetupConfig,
-    clientKeys: ClientPrivateKeysFile,
-    bankkeys: BankPublicKeysFile,
-    httpClient: HttpClient
-): String {
-    val service = Ebics3Service(
-        name = "MCT",
-        scope = "CH",
-        messageName = "pain.001",
-        messageVersion = "09",
-        container = null
-    )
-    val maybeUploaded = doEbicsUpload(
-        httpClient,
-        cfg,
-        clientKeys,
-        bankkeys,
-        service,
-        pain001xml.toByteArray(Charsets.UTF_8),
-    )
-    logger.debug("Payment submitted, report text is: ${maybeUploaded.reportText}," +
-            " EBICS technical code is: ${maybeUploaded.technicalReturnCode}," +
-            " bank technical return code is: ${maybeUploaded.bankReturnCode}"
-    )
-    return maybeUploaded.orderID!!
+fun signOrderEbics3(
+    orderBlob: ByteArray,
+    signKey: RSAPrivateCrtKey,
+    partnerId: String,
+    userId: String
+): ByteArray {
+    return XmlBuilder.toString("UserSignatureData") {
+        attr("xmlns", "http://www.ebics.org/S002")
+        el("OrderSignatureData") {
+            el("SignatureVersion", "A006")
+            el("SignatureValue", CryptoUtil.signEbicsA006(
+                CryptoUtil.digestEbicsOrderA006(orderBlob),
+                signKey
+            ).encodeBase64())
+            el("PartnerID", partnerId)
+            el("UserID", userId)
+        }
+    }.toByteArray()
+}
+
+
+fun parseEbics3Response(response: Document): EbicsResponseContent {
+    // TODO better ebics response type
+    return XmlDestructor.fromDoc(response, "ebicsResponse") {
+        var transactionID: String? = null
+        var numSegments: Int? = null
+        lateinit var technicalReturnCode: EbicsReturnCode
+        lateinit var bankReturnCode: EbicsReturnCode
+        lateinit var reportText: String
+        var orderID: String? = null
+        var segmentNumber: Int? = null
+        var orderDataEncChunk: String? = null
+        var dataEncryptionInfo: DataEncryptionInfo? = null
+        one("header") {
+            one("static") {
+                transactionID = opt("TransactionID")?.text()
+                numSegments = opt("NumSegments")?.text()?.toInt()
+            }
+            one("mutable") {
+                segmentNumber = opt("SegmentNumber")?.text()?.toInt()
+                orderID = opt("OrderID")?.text()
+                technicalReturnCode = EbicsReturnCode.lookup(one("ReturnCode").text())
+                reportText = one("ReportText").text()
+            }
+        }
+        one("body") {
+            opt("DataTransfer") {
+                orderDataEncChunk = one("OrderData").text()
+                dataEncryptionInfo = opt("DataEncryptionInfo") {
+                    DataEncryptionInfo(
+                        one("TransactionKey").text().decodeBase64(),
+                        one("EncryptionPubKeyDigest").text().decodeBase64()
+                    )
+                }
+            }
+            bankReturnCode = EbicsReturnCode.lookup(one("ReturnCode").text())
+        }
+        EbicsResponseContent(
+            transactionID = transactionID,
+            orderID = orderID,
+            bankReturnCode = bankReturnCode,
+            technicalReturnCode = technicalReturnCode,
+            reportText = reportText,
+            orderDataEncChunk = orderDataEncChunk,
+            dataEncryptionInfo = dataEncryptionInfo,
+            numSegments = numSegments,
+            segmentNumber = segmentNumber
+        )
+    }
 }

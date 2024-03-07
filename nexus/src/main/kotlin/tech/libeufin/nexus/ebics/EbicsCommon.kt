@@ -54,6 +54,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
 import kotlinx.coroutines.*
+import java.security.SecureRandom
 
 /**
  * Available EBICS versions.
@@ -247,7 +248,7 @@ suspend fun postEbics(
         )
     }
     
-    return ebics3toInternalRepr(doc)
+    return parseEbics3Response(doc)
 }
 
 /**
@@ -543,4 +544,180 @@ suspend fun doEbicsUpload(
     )
     // EBICS- and bank-technical codes were both EBICS_OK, success!
     transferResp
+}
+
+
+data class EbicsProtocolError(
+    val httpStatusCode: HttpStatusCode,
+    val reason: String,
+    /**
+     * This class is also used when Nexus finds itself
+     * in an inconsistent state, without interacting with the
+     * bank.  In this case, the EBICS code below can be left
+     * null.
+     */
+    val ebicsTechnicalCode: EbicsReturnCode? = null
+) : Exception(reason)
+
+/**
+ * @param size in bits
+ */
+fun getNonce(size: Int): ByteArray {
+    val sr = SecureRandom()
+    val ret = ByteArray(size / 8)
+    sr.nextBytes(ret)
+    return ret
+}
+
+data class PreparedUploadData(
+    val transactionKey: ByteArray,
+    val userSignatureDataEncrypted: ByteArray,
+    val dataDigest: ByteArray,
+    val encryptedPayloadChunks: List<String>
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as PreparedUploadData
+
+        if (!transactionKey.contentEquals(other.transactionKey)) return false
+        if (!userSignatureDataEncrypted.contentEquals(other.userSignatureDataEncrypted)) return false
+        if (encryptedPayloadChunks != other.encryptedPayloadChunks) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = transactionKey.contentHashCode()
+        result = 31 * result + userSignatureDataEncrypted.contentHashCode()
+        result = 31 * result + encryptedPayloadChunks.hashCode()
+        return result
+    }
+}
+
+data class DataEncryptionInfo(
+    val transactionKey: ByteArray,
+    val bankPubDigest: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as DataEncryptionInfo
+
+        if (!transactionKey.contentEquals(other.transactionKey)) return false
+        if (!bankPubDigest.contentEquals(other.bankPubDigest)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = transactionKey.contentHashCode()
+        result = 31 * result + bankPubDigest.contentHashCode()
+        return result
+    }
+}
+
+
+// TODO import missing using a script
+@Suppress("SpellCheckingInspection")
+enum class EbicsReturnCode(val errorCode: String) {
+    EBICS_OK("000000"),
+    EBICS_DOWNLOAD_POSTPROCESS_DONE("011000"),
+    EBICS_DOWNLOAD_POSTPROCESS_SKIPPED("011001"),
+    EBICS_TX_SEGMENT_NUMBER_UNDERRUN("011101"),
+    EBICS_AUTHENTICATION_FAILED("061001"),
+    EBICS_INVALID_REQUEST("061002"),
+    EBICS_INTERNAL_ERROR("061099"),
+    EBICS_TX_RECOVERY_SYNC("061101"),
+    EBICS_AUTHORISATION_ORDER_IDENTIFIER_FAILED("090003"),
+    EBICS_INVALID_ORDER_DATA_FORMAT("090004"),
+    EBICS_NO_DOWNLOAD_DATA_AVAILABLE("090005"),
+    EBICS_INVALID_USER_OR_USER_STATE("091002"),
+    EBICS_USER_UNKNOWN("091003"),
+    EBICS_EBICS_INVALID_USER_STATE("091004"),
+    EBICS_INVALID_ORDER_IDENTIFIER("091005"),
+    EBICS_UNSUPPORTED_ORDER_TYPE("091006"),
+    EBICS_INVALID_XML("091010"),
+    EBICS_TX_MESSAGE_REPLAY("091103"),
+    EBICS_PROCESSING_ERROR("091116"),
+    EBICS_ACCOUNT_AUTHORISATION_FAILED("091302"),
+    EBICS_AMOUNT_CHECK_FAILED("091303");
+
+    companion object {
+        fun lookup(errorCode: String): EbicsReturnCode {
+            for (x in entries) {
+                if (x.errorCode == errorCode) {
+                    return x
+                }
+            }
+            throw Exception(
+                "Unknown EBICS status code: $errorCode"
+            )
+        }
+    }
+}
+
+data class EbicsResponseContent(
+    val transactionID: String?,
+    val orderID: String?,
+    val dataEncryptionInfo: DataEncryptionInfo?,
+    val orderDataEncChunk: String?,
+    val technicalReturnCode: EbicsReturnCode,
+    val bankReturnCode: EbicsReturnCode,
+    val reportText: String,
+    val segmentNumber: Int?,
+    // Only present in init phase
+    val numSegments: Int?
+)
+
+data class EbicsKeyManagementResponseContent(
+    val technicalReturnCode: EbicsReturnCode,
+    val bankReturnCode: EbicsReturnCode?,
+    val orderData: ByteArray?
+)
+
+/**
+ * Collects all the steps to prepare the submission of a pain.001
+ * document to the bank, and finally send it.  Indirectly throws
+ * [EbicsSideException] or [EbicsUploadException].  The first means
+ * that the bank sent an invalid response or signature, the second
+ * that a proper EBICS or business error took place.  The caller must
+ * catch those exceptions and decide the retry policy.
+ *
+ * @param pain001xml pain.001 document in XML.  The caller should
+ *                   ensure its validity.
+ * @param cfg configuration handle.
+ * @param clientKeys client private keys.
+ * @param bankkeys bank public keys.
+ * @param httpClient HTTP client to connect to the bank.
+ */
+suspend fun submitPain001(
+    pain001xml: String,
+    cfg: EbicsSetupConfig,
+    clientKeys: ClientPrivateKeysFile,
+    bankkeys: BankPublicKeysFile,
+    httpClient: HttpClient
+): String {
+    val service = Ebics3Service(
+        name = "MCT",
+        scope = "CH",
+        messageName = "pain.001",
+        messageVersion = "09",
+        container = null
+    )
+    val maybeUploaded = doEbicsUpload(
+        httpClient,
+        cfg,
+        clientKeys,
+        bankkeys,
+        service,
+        pain001xml.toByteArray(Charsets.UTF_8),
+    )
+    logger.debug("Payment submitted, report text is: ${maybeUploaded.reportText}," +
+            " EBICS technical code is: ${maybeUploaded.technicalReturnCode}," +
+            " bank technical return code is: ${maybeUploaded.bankReturnCode}"
+    )
+    return maybeUploaded.orderID!!
 }
