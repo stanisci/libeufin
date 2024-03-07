@@ -23,6 +23,7 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.groups.*
 import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.client.*
+import io.ktor.client.plugins.*
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
 import tech.libeufin.ebics.*
@@ -231,7 +232,12 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         val cfg = extractEbicsConfig(common.config)
         // Config is sane.  Go (maybe) making the private keys.
         val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysFilename)
-        val httpClient = HttpClient()
+        val httpClient =  HttpClient {
+            install(HttpTimeout) {
+                // It can take a lot of time for the bank to generate documents
+                socketTimeoutMillis = 5 * 60 * 1000
+            }
+        }
         // Privs exist.  Upload their pubs
         val keysNotSub = !clientKeys.submitted_ini
         if ((!clientKeys.submitted_ini) || forceKeysResubmission)

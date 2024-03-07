@@ -25,6 +25,7 @@ package tech.libeufin.nexus.ebics
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import tech.libeufin.common.*
 import tech.libeufin.ebics.*
 import tech.libeufin.ebics.ebics_h004.EbicsKeyManagementResponse
 import tech.libeufin.ebics.ebics_h004.EbicsNpkdRequest
@@ -57,32 +58,54 @@ fun parseKeysMgmtResponse(
     clientEncryptionKey: RSAPrivateCrtKey,
     xml: InputStream
 ): EbicsKeyManagementResponseContent? {
-    // TODO throw instead of null
-    val jaxb = try {
-        XMLUtil.convertToJaxb<EbicsKeyManagementResponse>(xml)
-    } catch (e: Exception) {
-        tech.libeufin.nexus.logger.error("Could not parse the raw response from bank into JAXB.")
-        return null
-    }
-    var payload: ByteArray? = null
-    jaxb.value.body.dataTransfer?.dataEncryptionInfo.apply {
-        // non-null indicates that an encrypted payload should be found.
-        if (this != null) {
-            val encOrderData = jaxb.value.body.dataTransfer?.orderData?.value
-            if (encOrderData == null) {
-                tech.libeufin.nexus.logger.error("Despite a non-null DataEncryptionInfo, OrderData could not be found, can't decrypt any payload!")
-                return null
+    return XmlDestructor.fromStream(xml, "ebicsKeyManagementResponse") {
+        lateinit var technicalReturnCode: EbicsReturnCode
+        lateinit var bankReturnCode: EbicsReturnCode
+        lateinit var reportText: String
+        var payload: ByteArray? = null
+        one("header") {
+            one("mutable") {
+                technicalReturnCode = EbicsReturnCode.lookup(one("ReturnCode").text())
+                reportText = one("ReportText").text()
             }
-            payload = decryptAndDecompressPayload(
-                clientEncryptionKey,
-                DataEncryptionInfo(this.transactionKey, this.encryptionPubKeyDigest.value),
-                listOf(encOrderData)
-            ).readBytes()
+        }
+        one("body") {
+            bankReturnCode = EbicsReturnCode.lookup(one("ReturnCode").text())
+            payload = opt("DataTransfer") {
+                val descriptionInfo = one("DataEncryptionInfo") {
+                    DataEncryptionInfo(
+                        one("TransactionKey").text().decodeBase64(),
+                        one("EncryptionPubKeyDigest").text().decodeBase64()
+                    )
+                }
+                decryptAndDecompressPayload(
+                    clientEncryptionKey,
+                    descriptionInfo,
+                    listOf(one("OrderData").text())
+                ).readBytes()
+            }
+        }
+        EbicsKeyManagementResponseContent(technicalReturnCode, bankReturnCode, payload)
+    }
+}
+
+private fun XmlBuilder.RSAKeyXml(key: RSAPrivateCrtKey) {
+    el("ns2:PubKeyValue") {
+        el("ds:RSAKeyValue") {
+            el("ds:Modulus", key.modulus.toByteArray().encodeBase64())
+            el("ds:Exponent", key.publicExponent.toByteArray().encodeBase64())
         }
     }
-    val bankReturnCode = EbicsReturnCode.lookup(jaxb.value.body.returnCode.value) // business error
-    val ebicsReturnCode = EbicsReturnCode.lookup(jaxb.value.header.mutable.returnCode) // ebics error
-    return EbicsKeyManagementResponseContent(ebicsReturnCode, bankReturnCode, payload)
+}
+
+private fun XMLOrderData(cfg: EbicsSetupConfig, name: String, schema: String, build: XmlBuilder.() -> Unit): String {
+    return XmlBuilder.toString(name) {
+        attr("xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+        attr("xmlns:ns2", schema)
+        build()
+        el("ns2:PartnerID", cfg.ebicsPartnerId)
+        el("ns2:UserID", cfg.ebicsUserId)
+    }.toByteArray().inputStream().deflate().readAllBytes().encodeBase64() // TODO opti
 }
 
 /**
@@ -93,13 +116,33 @@ fun parseKeysMgmtResponse(
  * @return the raw EBICS INI message.
  */
 fun generateIniMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile): ByteArray {
-    val iniRequest = EbicsUnsecuredRequest.createIni(
-        cfg.ebicsHostId,
-        cfg.ebicsUserId,
-        cfg.ebicsPartnerId,
-        clientKeys.signature_private_key
-    )
-    val doc = XMLUtil.convertJaxbToDocument(iniRequest)
+    val inner = XMLOrderData(cfg, "ns2:SignaturePubKeyOrderData", "http://www.ebics.org/S001") {
+        el("ns2:SignaturePubKeyInfo") {
+            RSAKeyXml(clientKeys.signature_private_key)
+            el("ns2:SignatureVersion", "A006")
+        }
+    }
+    val doc = XmlBuilder.toDom("ebicsUnsecuredRequest", "urn:org:ebics:H004") {
+        attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H004")
+        attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+        attr("Version", "H004")
+        attr("Revision", "1")
+        el("header") {
+            attr("authenticate", "true")
+            el("static") {
+                el("HostID", cfg.ebicsHostId)
+                el("PartnerID", cfg.ebicsPartnerId)
+                el("UserID", cfg.ebicsUserId)
+                el("OrderDetails") {
+                    el("OrderType", "INI")
+                    el("OrderAttribute", "DZNNN")
+                }
+                el("SecurityMedium", "0200")
+            }
+            el("mutable")
+        }
+        el("body/DataTransfer/OrderData", inner)
+    }
     return XMLUtil.convertDomToBytes(doc)
 }
 
@@ -112,14 +155,37 @@ fun generateIniMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
  * @return the raw EBICS HIA message.
  */
 fun generateHiaMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile): ByteArray {
-    val hiaRequest = EbicsUnsecuredRequest.createHia(
-        cfg.ebicsHostId,
-        cfg.ebicsUserId,
-        cfg.ebicsPartnerId,
-        clientKeys.authentication_private_key,
-        clientKeys.encryption_private_key
-    )
-    val doc = XMLUtil.convertJaxbToDocument(hiaRequest)
+    val inner = XMLOrderData(cfg, "ns2:HIARequestOrderData", "urn:org:ebics:H004") {
+        el("ns2:AuthenticationPubKeyInfo") {
+            RSAKeyXml(clientKeys.authentication_private_key)
+            el("ns2:AuthenticationVersion", "X002")
+        }
+        el("ns2:EncryptionPubKeyInfo") {
+            RSAKeyXml(clientKeys.encryption_private_key)
+            el("ns2:EncryptionVersion", "E002")
+        }
+    }
+    val doc = XmlBuilder.toDom("ebicsUnsecuredRequest", "urn:org:ebics:H004") {
+        attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H004")
+        attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+        attr("Version", "H004")
+        attr("Revision", "1")
+        el("header") {
+            attr("authenticate", "true")
+            el("static") {
+                el("HostID", cfg.ebicsHostId)
+                el("PartnerID", cfg.ebicsPartnerId)
+                el("UserID", cfg.ebicsUserId)
+                el("OrderDetails") {
+                    el("OrderType", "HIA")
+                    el("OrderAttribute", "DZNNN")
+                }
+                el("SecurityMedium", "0200")
+            }
+            el("mutable")
+        }
+        el("body/DataTransfer/OrderData", inner)
+    }
     return XMLUtil.convertDomToBytes(doc)
 }
 
@@ -131,14 +197,31 @@ fun generateHiaMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
  * @return the raw EBICS HPB message.
  */
 fun generateHpbMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile): ByteArray {
-    val hpbRequest = EbicsNpkdRequest.createRequest(
-        cfg.ebicsHostId,
-        cfg.ebicsPartnerId,
-        cfg.ebicsUserId,
-        getNonce(128),
-        DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
-    )
-    val doc = XMLUtil.convertJaxbToDocument(hpbRequest)
+    val nonce = getNonce(128)
+    val doc = XmlBuilder.toDom("ebicsNoPubKeyDigestsRequest", "urn:org:ebics:H004") {
+        attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H004")
+        attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+        attr("Version", "H004")
+        attr("Revision", "1")
+        el("header") {
+            attr("authenticate", "true")
+            el("static") {
+                el("HostID", cfg.ebicsHostId)
+                el("Nonce", nonce.toHexString())
+                el("Timestamp", Instant.now().xmlDateTime())
+                el("PartnerID", cfg.ebicsPartnerId)
+                el("UserID", cfg.ebicsUserId)
+                el("OrderDetails") {
+                    el("OrderType", "HPB")
+                    el("OrderAttribute", "DZHNN")
+                }
+                el("SecurityMedium", "0000")
+            }
+            el("mutable")
+        }
+        el("AuthSignature")
+        el("body")
+    }
     XMLUtil.signEbicsDocument(doc, clientKeys.authentication_private_key)
     return XMLUtil.convertDomToBytes(doc)
 }

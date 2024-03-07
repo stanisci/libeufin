@@ -52,6 +52,51 @@ data class Ebics3Service(
     val container: String?
 )
 
+
+  
+fun iniRequest(
+    cfg: EbicsSetupConfig, 
+    clientKeys: ClientPrivateKeysFile
+): ByteArray {
+    val temp = XmlBuilder.toString("ns2:SignaturePubKeyOrderData") {
+        attr("xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+        attr("xmlns:ns2", "http://www.ebics.org/S001")
+        el("ns2:SignaturePubKeyInfo") {
+            el("ns2:PubKeyValue") {
+                el("ds:RSAKeyValue") {
+                    el("ds:Modulus", clientKeys.signature_private_key.modulus.toByteArray().encodeBase64())
+                    el("ds:Exponent", clientKeys.signature_private_key.publicExponent.toByteArray().encodeBase64())
+                }
+            }
+            el("ns2:SignatureVersion", "A006")
+        }
+        el("ns2:PartnerID", cfg.ebicsPartnerId)
+        el("ns2:UserID", cfg.ebicsUserId)
+    }
+    // TODO in ebics:H005 we MUST use x509 certificates ...
+    println(temp)
+    val inner = temp.toByteArray().inputStream().deflate().readAllBytes().encodeBase64()
+    val doc = XmlBuilder.toDom("ebicsUnsecuredRequest", "urn:org:ebics:H005") {
+        attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H005")
+        attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+        attr("Version", "H005")
+        attr("Revision", "1")
+        el("header") {
+            attr("authenticate", "true")
+            el("static") {
+                el("HostID", cfg.ebicsHostId)
+                el("PartnerID", cfg.ebicsPartnerId)
+                el("UserID", cfg.ebicsUserId)
+                el("OrderDetails/AdminOrderType", "INI")
+                el("SecurityMedium", "0200")
+            }
+            el("mutable")
+        }
+        el("body/DataTransfer/OrderData", inner)
+    }
+    return XMLUtil.convertDomToBytes(doc)
+}
+
 class Ebics3Impl(
     private val cfg: EbicsSetupConfig, 
     private val bankKeys: BankPublicKeysFile,
@@ -62,8 +107,6 @@ class Ebics3Impl(
         val doc = XmlBuilder.toDom("ebicsRequest", "urn:org:ebics:H005") {
             attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H005")
             attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
-            attr("http://www.w3.org/2000/xmlns/", "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
-            attr("http://www.w3.org/2001/XMLSchema-instance", "xsi:schemaLocation", "urn:org:ebics:H005 ebics_request_H005.xsd")
             attr("Version", "H005")
             attr("Revision", "1")
             lambda()
@@ -182,7 +225,7 @@ class Ebics3Impl(
             SupportedDocument.CAMT_054 -> Pair("BTD", Ebics3Service("REP", "CH", "camt.054", "08", "ZIP"))
             SupportedDocument.PAIN_002_LOGS -> Pair("HAC", null)
         }
-        return downloadInitialization(orderType, service)
+        return downloadInitialization(orderType, service, startDate, endDate)
     }
 
     fun downloadInitialization(orderType: String, service: Ebics3Service? = null, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
