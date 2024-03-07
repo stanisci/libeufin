@@ -52,11 +52,6 @@ data class Ebics3Service(
     val container: String?
 )
 
-data class Ebics3Order(
-    val type: String,
-    val service: Ebics3Service
-)
-
 class Ebics3Impl(
     private val cfg: EbicsSetupConfig, 
     private val bankKeys: BankPublicKeysFile,
@@ -179,7 +174,18 @@ class Ebics3Impl(
         }
     }
 
-    fun downloadInitialization(whichDoc: SupportedDocument, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
+    fun downloadInitializationDoc(whichDoc: SupportedDocument, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
+        val (orderType, service) = when (whichDoc) {
+            SupportedDocument.PAIN_002 -> Pair("BTD", Ebics3Service("PSR", "CH", "pain.002", "10", "ZIP"))
+            SupportedDocument.CAMT_052 -> Pair("BTD", Ebics3Service("STM", "CH", "camt.052", "08", "ZIP"))
+            SupportedDocument.CAMT_053 -> Pair("BTD", Ebics3Service("EOP", "CH", "camt.053", "08", "ZIP"))
+            SupportedDocument.CAMT_054 -> Pair("BTD", Ebics3Service("REP", "CH", "camt.054", "08", "ZIP"))
+            SupportedDocument.PAIN_002_LOGS -> Pair("HAC", null)
+        }
+        return downloadInitialization(orderType, service)
+    }
+
+    fun downloadInitialization(orderType: String, service: Ebics3Service? = null, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
         val nonce = getNonce(128)
         return signedRequest {
             el("header") {
@@ -193,33 +199,22 @@ class Ebics3Impl(
                     // SystemID
                     // Product
                     el("OrderDetails") {
-                        if (whichDoc == SupportedDocument.PAIN_002_LOGS) {
-                            el("AdminOrderType", "HAC")
-                        } else {
-                            el("AdminOrderType", "BTD")
+                        el("AdminOrderType", orderType)
+                        if (orderType == "BTD") {
                             el("BTDOrderParams") {
-                                el("Service") {
-                                    el("ServiceName", when (whichDoc) {
-                                        SupportedDocument.PAIN_002 -> "PSR"
-                                        SupportedDocument.CAMT_052 -> "STM"
-                                        SupportedDocument.CAMT_053 -> "EOP"
-                                        SupportedDocument.CAMT_054 -> "REP"
-                                        SupportedDocument.PAIN_002_LOGS -> throw Exception("Unreachable")
-                                    })
-                                    val (msg_value, msg_version) = when (whichDoc) {
-                                        SupportedDocument.PAIN_002 -> Pair("pain.002", "10")
-                                        SupportedDocument.CAMT_052 -> Pair("pain.052", "08")
-                                        SupportedDocument.CAMT_053 -> Pair("pain.053", "08")
-                                        SupportedDocument.CAMT_054 -> Pair("camt.054", "08")
-                                        SupportedDocument.PAIN_002_LOGS -> throw Exception("Unreachable")
-                                    }
-                                    el("Scope", "CH")
-                                    el("Container") {
-                                        attr("containerType", "ZIP")
-                                    }
-                                    el("MsgName") {
-                                        attr("version", msg_version)
-                                        text(msg_value)
+                                if (service != null) {
+                                    el("Service") {
+                                        el("ServiceName", service.name)
+                                        el("Scope", service.scope)
+                                        if (service.container != null) {
+                                            el("Container") {
+                                                attr("containerType", service.container)
+                                            }
+                                        }
+                                        el("MsgName") {
+                                            attr("version", service.messageVersion)
+                                            text(service.messageName)
+                                        }
                                     }
                                 }
                                 if (startDate != null) {

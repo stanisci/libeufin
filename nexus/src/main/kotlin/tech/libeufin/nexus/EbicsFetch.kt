@@ -87,7 +87,7 @@ private suspend fun downloadHelper(
         ctx.cfg,
         ctx.bankKeys,
         ctx.clientKeys
-    ).downloadInitialization(doc, lastExecutionTime)
+    ).downloadInitializationDoc(doc, lastExecutionTime)
     return ebicsDownload(
         ctx.httpClient,
         ctx.cfg,
