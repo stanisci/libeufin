@@ -84,13 +84,11 @@ private suspend fun downloadHelper(
     doc: SupportedDocument,
     processing: (InputStream) -> Unit
 ) {
-    val initXml = createEbics3DownloadInitialization(
+    val initXml = Ebics3Impl(
         ctx.cfg,
         ctx.bankKeys,
-        ctx.clientKeys,
-        doc,
-        lastExecutionTime
-    )
+        ctx.clientKeys
+    ).downloadInitialization(doc, lastExecutionTime)
     return ebicsDownload(
         ctx.httpClient,
         ctx.cfg,

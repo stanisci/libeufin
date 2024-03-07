@@ -36,164 +36,161 @@ import org.w3c.dom.*
 import javax.xml.datatype.XMLGregorianCalendar
 import javax.xml.datatype.DatatypeFactory
 
-/**
- * Crafts an EBICS request for the receipt phase of a download
- * transaction.
- *
- * @param cfg config handle
- * @param clientKeys subscriber private keys.
- * @param transactionId EBICS transaction ID as assigned by the
- *        bank to any successful transaction.
- * @param success was the download successfully processed
- * @return the raw XML of the EBICS request.
- */
-fun createEbics3DownloadReceiptPhase(
-    cfg: EbicsSetupConfig,
-    clientKeys: ClientPrivateKeysFile,
-    transactionId: String,
-    success: Boolean
-): ByteArray {
-    val req = Ebics3Request.createForDownloadReceiptPhase(
-        transactionId,
-        cfg.ebicsHostId,
-        success
-    )
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    XMLUtil.signEbicsDocument(
-        doc,
-        clientKeys.authentication_private_key,
-        withEbics3 = true
-    )
-    return XMLUtil.convertDomToBytes(doc)
-}
 
-/**
- * Crafts an EBICS download request for the transfer phase.
- *
- * @param cfg config handle
- * @param clientKeys subscriber private keys
- * @param transactionId EBICS transaction ID.  That came from the
- *        bank after the initialization phase ended successfully.
- * @param segmentNumber which (payload's) segment number this requests wants.
- * @param howManySegments total number of segments that the payload is split to.
- * @return the raw XML EBICS request.
- */
-fun createEbics3DownloadTransferPhase(
-    cfg: EbicsSetupConfig,
-    clientKeys: ClientPrivateKeysFile,
-    howManySegments: Int,
-    segmentNumber: Int,
-    transactionId: String
-): ByteArray {
-    val req = Ebics3Request.createForDownloadTransferPhase(
-        cfg.ebicsHostId,
-        transactionId,
-        segmentNumber,
-        howManySegments
-    )
-    val doc = XMLUtil.convertJaxbToDocument(req)
-    XMLUtil.signEbicsDocument(
-        doc,
-        clientKeys.authentication_private_key,
-        withEbics3 = true
-    )
-    return XMLUtil.convertDomToBytes(doc)
-}
+//fun String.toDate(): LocalDate = LocalDate.parse(this, DateTimeFormatter.ISO_DATE)
+//fun String.toDateTime(): LocalDateTime = LocalDateTime.parse(this, DateTimeFormatter.ISO_DATE_TIME)
+//fun String.toYearMonth(): YearMonth = YearMonth.parse(this, DateTimeFormatter.ISO_DATE)
+//fun String.toYear(): Year = Year.parse(this, DateTimeFormatter.ISO_DATE)
 
-/**
- * Creates the EBICS 3 document for the init phase of a download
- * transaction.
- *
- * @param cfg configuration handle.
- * @param bankkeys bank public keys.
- * @param clientKeys client private keys.
- * @param orderService EBICS 3 document defining the request type
- */
-fun createEbics3DownloadInitialization(
-    cfg: EbicsSetupConfig,
-    bankKeys: BankPublicKeysFile,
-    clientKeys: ClientPrivateKeysFile,
-    whichDoc: SupportedDocument,
-    startDate: Instant? = null,
-    endDate: Instant? = null
-): ByteArray {
-    val nonce = getNonce(128)
-    val timestamp = DatatypeFactory.newInstance().newXMLGregorianCalendar(GregorianCalendar())
-    val doc = XmlBuilder.toDom("ebicsRequest", "urn:org:ebics:H005") {
-        attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H005")
-        attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
-        attr("http://www.w3.org/2000/xmlns/", "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
-        attr("http://www.w3.org/2001/XMLSchema-instance", "xsi:schemaLocation", "urn:org:ebics:H005 ebics_request_H005.xsd")
-        attr("Version", "H005")
-        attr("Revision", "1")
-        el("header") {
-            attr("authenticate", "true")
-            el("static") {
-                el("HostID", cfg.ebicsHostId)
-                el("Nonce", nonce.toHexString())
-                el("Timestamp", timestamp.toXMLFormat() )
-                el("PartnerID", cfg.ebicsPartnerId)
-                el("UserID", cfg.ebicsUserId)
-                el("OrderDetails") {
-                    if (whichDoc == SupportedDocument.PAIN_002_LOGS) {
-                        el("AdminOrderType", "HAC")
-                    } else {
-                        el("AdminOrderType", "BTD")
-                        el("BTDOrderParams") {
-                            el("Service") {
-                                el("ServiceName", when(whichDoc) {
-                                    SupportedDocument.PAIN_002 -> "PSR"
-                                    SupportedDocument.CAMT_052 -> "STM"
-                                    SupportedDocument.CAMT_053 -> "EOP"
-                                    SupportedDocument.CAMT_054 -> "REP"
-                                    SupportedDocument.PAIN_002_LOGS -> "HAC"
-                                })
-                                val (msg_value, msg_version) = when(whichDoc) {
-                                    SupportedDocument.PAIN_002 -> Pair("pain.002", "10")
-                                    SupportedDocument.CAMT_052 -> Pair("pain.052", "08")
-                                    SupportedDocument.CAMT_053 -> Pair("pain.053", "08")
-                                    SupportedDocument.CAMT_054 -> Pair("camt.054", "08")
-                                    SupportedDocument.PAIN_002_LOGS -> throw Exception("HAC (--only-logs) not available in EBICS 3")
+fun Instant.xmlDate(): String = DateTimeFormatter.ISO_DATE.withZone(ZoneId.of("UTC")).format(this)
+fun Instant.xmlDateTime(): String = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneId.of("UTC")).format(this)
+
+class Ebics3Impl(
+    private val cfg: EbicsSetupConfig, 
+    private val bankKeys: BankPublicKeysFile,
+    private val clientKeys: ClientPrivateKeysFile
+) {
+
+    private fun signedRequest(lambda: XmlBuilder.() -> Unit): ByteArray  {
+        val doc = XmlBuilder.toDom("ebicsRequest", "urn:org:ebics:H005") {
+            attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H005")
+            attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+            attr("http://www.w3.org/2000/xmlns/", "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
+            attr("http://www.w3.org/2001/XMLSchema-instance", "xsi:schemaLocation", "urn:org:ebics:H005 ebics_request_H005.xsd")
+            attr("Version", "H005")
+            attr("Revision", "1")
+            lambda()
+        }
+        XMLUtil.signEbicsDocument(
+            doc,
+            clientKeys.authentication_private_key,
+            withEbics3 = true
+        )
+        return XMLUtil.convertDomToBytes(doc)
+    }
+
+    fun downloadInitialization(whichDoc: SupportedDocument, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
+        val nonce = getNonce(128)
+        return signedRequest {
+            el("header") {
+                attr("authenticate", "true")
+                el("static") {
+                    el("HostID", cfg.ebicsHostId)
+                    el("Nonce", nonce.toHexString())
+                    el("Timestamp", Instant.now().xmlDateTime())
+                    el("PartnerID", cfg.ebicsPartnerId)
+                    el("UserID", cfg.ebicsUserId)
+                    // SystemID
+                    // Product
+                    el("OrderDetails") {
+                        if (whichDoc == SupportedDocument.PAIN_002_LOGS) {
+                            el("AdminOrderType", "HAC")
+                        } else {
+                            el("AdminOrderType", "BTD")
+                            el("BTDOrderParams") {
+                                el("Service") {
+                                    el("ServiceName", when (whichDoc) {
+                                        SupportedDocument.PAIN_002 -> "PSR"
+                                        SupportedDocument.CAMT_052 -> "STM"
+                                        SupportedDocument.CAMT_053 -> "EOP"
+                                        SupportedDocument.CAMT_054 -> "REP"
+                                        SupportedDocument.PAIN_002_LOGS -> throw Exception("Unreachable")
+                                    })
+                                    val (msg_value, msg_version) = when (whichDoc) {
+                                        SupportedDocument.PAIN_002 -> Pair("pain.002", "10")
+                                        SupportedDocument.CAMT_052 -> Pair("pain.052", "08")
+                                        SupportedDocument.CAMT_053 -> Pair("pain.053", "08")
+                                        SupportedDocument.CAMT_054 -> Pair("camt.054", "08")
+                                        SupportedDocument.PAIN_002_LOGS -> throw Exception("Unreachable")
+                                    }
+                                    el("Scope", "CH")
+                                    el("Container") {
+                                        attr("containerType", "ZIP")
+                                    }
+                                    el("MsgName") {
+                                        attr("version", msg_version)
+                                        text(msg_value)
+                                    }
                                 }
-                                el("Scope", "CH")
-                                el("Container") {
-                                    attr("containerType", "ZIP")
-                                }
-                                el("MsgName") {
-                                    attr("version", msg_version)
-                                    text(msg_value)
+                                if (startDate != null) {
+                                    el("DateRange") {
+                                        el("Start", startDate.xmlDate())
+                                        el("End", (endDate ?: Instant.now()).xmlDate())
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                el("BankPubKeyDigests") {
-                    el("Authentication") {
-                        attr("Version", "X002")
-                        attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
-                        text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).encodeBase64())
+                    el("BankPubKeyDigests") {
+                        el("Authentication") {
+                            attr("Version", "X002")
+                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).encodeBase64())
+                        }
+                        el("Encryption") {
+                            attr("Version", "E002")
+                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
+                        }
+                        // Signature
                     }
-                    el("Encryption") {
-                        attr("Version", "E002")
-                        attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
-                        text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
-                    }
+                    el("SecurityMedium", "0000")
                 }
-                el("SecurityMedium", "0000")
+                el("mutable") {
+                    el("TransactionPhase", "Initialisation")
+                }
             }
-            el("mutable") {
-                el("TransactionPhase", "Initialisation")
+            el("AuthSignature")
+            el("body")
+        }
+    }
+
+    fun downloadTransfer(
+        howManySegments: Int,
+        segmentNumber: Int,
+        transactionId: String
+    ): ByteArray {
+        return signedRequest {
+            el("header") {
+                attr("authenticate", "true")
+                el("static") {
+                    el("HostID", cfg.ebicsHostId)
+                    el("TransactionID", transactionId)
+                }
+                el("mutable") {
+                    el("TransactionPhase", "Transfer")
+                    el("SegmentNumber") {
+                        attr("lastSegment", if (howManySegments == segmentNumber) "true" else "false")
+                    }
+                }
+            }
+            el("AuthSignature")
+            el("body")
+        }
+    }
+
+    fun downloadReceipt(
+        transactionId: String,
+        success: Boolean
+    ): ByteArray {
+        return signedRequest {
+            el("header") {
+                attr("authenticate", "true")
+                el("static") {
+                    el("HostID", cfg.ebicsHostId)
+                    el("TransactionID", transactionId)
+                }
+                el("mutable") {
+                    el("TransactionPhase", "Receipt")
+                }
+            }
+            el("AuthSignature")
+            el("body/TransferReceipt") {
+                attr("authenticate", "true")
+                el("ReceiptCode", if (success) "0" else "1")
             }
         }
-        el("AuthSignature")
-        el("body")
     }
-    XMLUtil.signEbicsDocument(
-        doc,
-        clientKeys.authentication_private_key,
-        withEbics3 = true
-    )
-    return XMLUtil.convertDomToBytes(doc)
 }
 
 /**

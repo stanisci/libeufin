@@ -286,6 +286,11 @@ suspend fun ebicsDownload(
     reqXml: ByteArray,
     processing: (InputStream) -> Unit
 ) = coroutineScope {
+    val impl = Ebics3Impl(
+        cfg,
+        bankKeys,
+        clientKeys
+    )
     val scope = this
     // We need to run the logic in a non-cancelable context because we need to send 
     // a receipt for each open download transaction, otherwise we'll be stuck in an 
@@ -331,7 +336,7 @@ suspend fun ebicsDownload(
         for (x in 2 .. howManySegments) {
             if (!scope.isActive) break
             // request segment number x.
-            val transReq = createEbics3DownloadTransferPhase(cfg, clientKeys, x, howManySegments, tId)
+            val transReq = impl.downloadTransfer(x, howManySegments, tId)
 
             val transResp = postEbics(client, cfg, bankKeys, transReq, true)
             if (!areCodesOk(transResp)) {
@@ -347,7 +352,7 @@ suspend fun ebicsDownload(
             ebicsChunks.add(chunk)
         }
         suspend fun receipt(success: Boolean) {
-            val receiptXml = createEbics3DownloadReceiptPhase(cfg, clientKeys, tId, success)
+            val receiptXml = impl.downloadReceipt(tId, success)
 
             // Sending the receipt to the bank.
             postEbics(
