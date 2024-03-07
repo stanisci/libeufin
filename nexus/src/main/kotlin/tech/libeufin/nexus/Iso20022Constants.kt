@@ -17,7 +17,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.ebics
+package tech.libeufin.nexus
 
 enum class HacAction(val description: String) {
 	FILE_UPLOAD("File submitted to the bank"),

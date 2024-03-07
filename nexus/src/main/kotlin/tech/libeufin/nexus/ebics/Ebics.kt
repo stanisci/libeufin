@@ -22,12 +22,13 @@
  * used to implement both an EBICS server and EBICS client.
  */
 
-package tech.libeufin.ebics
+package tech.libeufin.nexus.ebics
 
 import io.ktor.http.*
 import org.w3c.dom.Document
 import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.common.*
+import tech.libeufin.nexus.*
 import java.io.InputStream
 import java.security.SecureRandom
 import java.security.interfaces.RSAPrivateCrtKey

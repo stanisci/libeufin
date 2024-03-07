@@ -19,7 +19,6 @@
 package tech.libeufin.nexus
 
 import tech.libeufin.common.*
-import tech.libeufin.ebics.*
 import java.io.InputStream
 import java.net.URLEncoder
 import java.time.*

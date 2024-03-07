@@ -19,7 +19,7 @@
 
 // THIS FILE IS GENERATED, DO NOT EDIT
 
-package tech.libeufin.ebics
+package tech.libeufin.nexus
 
 enum class ExternalStatusReasonCode(val isoCode: String, val description: String) {
 	AB01("AbortedClearingTimeout", "Clearing process aborted due to timeout."),

@@ -45,7 +45,6 @@ import io.ktor.http.*
 import io.ktor.utils.io.jvm.javaio.*
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
-import tech.libeufin.ebics.*
 import tech.libeufin.nexus.*
 import java.io.ByteArrayOutputStream
 import java.io.InputStream

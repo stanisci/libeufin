@@ -21,7 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.common.decodeBase64
-import tech.libeufin.ebics.XMLUtil
+import tech.libeufin.nexus.XMLUtil
 import java.security.KeyPairGenerator
 import javax.xml.transform.stream.StreamSource
 

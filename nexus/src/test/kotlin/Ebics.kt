@@ -20,7 +20,7 @@
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import org.junit.Test
-import tech.libeufin.ebics.XMLUtil
+import tech.libeufin.nexus.*
 import tech.libeufin.nexus.ebics.*
 import kotlin.io.path.Path
 import kotlin.io.path.writeBytes

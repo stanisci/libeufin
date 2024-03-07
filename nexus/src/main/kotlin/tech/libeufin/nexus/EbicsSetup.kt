@@ -26,7 +26,6 @@ import io.ktor.client.*
 import io.ktor.client.plugins.*
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
-import tech.libeufin.ebics.*
 import tech.libeufin.nexus.ebics.*
 import java.nio.file.*
 import java.time.Instant

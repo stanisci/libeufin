@@ -58,7 +58,7 @@ def iso20022codegen():
 
 // THIS FILE IS GENERATED, DO NOT EDIT
 
-package tech.libeufin.ebics
+package tech.libeufin.nexus
 
 {extractCodeSet("ExternalStatusReason1Code", "ExternalStatusReasonCode")}
 
@@ -66,7 +66,7 @@ package tech.libeufin.ebics
 
 {extractCodeSet("ExternalPaymentTransactionStatus1Code", "ExternalPaymentTransactionStatusCode")}
 """
-    with open("src/main/kotlin/Iso20022CodeSets.kt", "w") as file1:
+    with open("src/main/kotlin/tech/libeufin/nexus/Iso20022CodeSets.kt", "w") as file1:
         file1.write(kt)
 
 iso20022codegen()

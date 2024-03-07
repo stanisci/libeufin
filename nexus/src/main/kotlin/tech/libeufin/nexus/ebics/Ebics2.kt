@@ -26,7 +26,7 @@ package tech.libeufin.nexus.ebics
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.common.*
-import tech.libeufin.ebics.*
+import tech.libeufin.nexus.*
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
 import tech.libeufin.nexus.EbicsSetupConfig

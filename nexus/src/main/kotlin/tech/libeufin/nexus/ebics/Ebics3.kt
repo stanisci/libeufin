@@ -19,13 +19,9 @@
 package tech.libeufin.nexus.ebics
 
 import io.ktor.client.*
-import tech.libeufin.ebics.*
+import tech.libeufin.nexus.*
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
-import tech.libeufin.nexus.BankPublicKeysFile
-import tech.libeufin.nexus.ClientPrivateKeysFile
-import tech.libeufin.nexus.EbicsSetupConfig
-import tech.libeufin.nexus.logger
 import java.math.BigInteger
 import java.time.*
 import java.time.format.*

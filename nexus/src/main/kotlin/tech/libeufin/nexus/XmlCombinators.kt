@@ -17,7 +17,7 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.ebics
+package tech.libeufin.nexus
 
 import org.w3c.dom.*
 import java.io.InputStream
