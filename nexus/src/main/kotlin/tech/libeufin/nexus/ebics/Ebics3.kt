@@ -331,7 +331,7 @@ class Ebics3BTS(
     }
 
     companion object {
-        fun parseResponse(doc: Document): EbicsResponse {
+        fun parseResponse(doc: Document): EbicsResponse<BTSResponse> {
             return XmlDestructor.fromDoc(doc, "ebicsResponse") {
                 var transactionID: String? = null
                 var numSegments: Int? = null
@@ -367,7 +367,7 @@ class Ebics3BTS(
                 EbicsResponse(
                     bankCode = bankCode,
                     technicalCode = technicalCode,
-                    content = EbicsResponseContent(
+                    content = BTSResponse(
                         transactionID = transactionID,
                         orderID = orderID,
                         payloadChunk = payloadChunk,
@@ -381,26 +381,7 @@ class Ebics3BTS(
     }
 }
 
-
-data class EbicsResponse(
-    val technicalCode: EbicsReturnCode,
-    val bankCode: EbicsReturnCode,
-    private val content: EbicsResponseContent
-) {
-    /** Checks that return codes are both EBICS_OK or throw an exception */
-    fun okOrFail(phase: String): EbicsResponseContent {
-        logger.debug("$phase return codes: $technicalCode & $bankCode")
-        require(technicalCode.kind() != EbicsReturnCode.Kind.Error) {
-            "$phase has technical error: $technicalCode"
-        }
-        require(bankCode.kind() != EbicsReturnCode.Kind.Error) {
-            "$phase has bank error: $bankCode"
-        }
-        return content
-    }
-}
-
-data class EbicsResponseContent(
+data class BTSResponse(
     val transactionID: String?,
     val orderID: String?,
     val dataEncryptionInfo: DataEncryptionInfo?,

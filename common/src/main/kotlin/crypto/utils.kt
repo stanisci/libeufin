@@ -78,6 +78,22 @@ object CryptoUtil {
     }
 
     /**
+     * Load an RSA public key from its components.
+     *
+     * @param exponent
+     * @param modulus
+     * @return key
+     */
+    fun loadRsaPublicKeyFromComponents(modulus: ByteArray, exponent: ByteArray): RSAPublicKey {
+        val modulusBigInt = BigInteger(1, modulus)
+        val exponentBigInt = BigInteger(1, exponent)
+
+        val keyFactory = KeyFactory.getInstance("RSA")
+        val tmp = RSAPublicKeySpec(modulusBigInt, exponentBigInt)
+        return keyFactory.generatePublic(tmp) as RSAPublicKey
+    }
+
+    /**
      * Load an RSA public key from its binary X509 encoding.
      */
     fun getRsaPublicFromPrivate(rsaPrivateCrtKey: RSAPrivateCrtKey): RSAPublicKey {
@@ -104,22 +120,6 @@ object CryptoUtil {
         if (pub !is RSAPublicKey)
             throw Exception("key generation failed")
         return RsaCrtKeyPair(priv, pub)
-    }
-
-    /**
-     * Load an RSA public key from its components.
-     *
-     * @param exponent
-     * @param modulus
-     * @return key
-     */
-    fun loadRsaPublicKeyFromComponents(modulus: ByteArray, exponent: ByteArray): RSAPublicKey {
-        val modulusBigInt = BigInteger(1, modulus)
-        val exponentBigInt = BigInteger(1, exponent)
-
-        val keyFactory = KeyFactory.getInstance("RSA")
-        val tmp = RSAPublicKeySpec(modulusBigInt, exponentBigInt)
-        return keyFactory.generatePublic(tmp) as RSAPublicKey
     }
 
     /**

@@ -130,23 +130,12 @@ suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray): Document {
         throw EbicsError.Transport("failed read bank response", e)
     }
 }
-
-/**
- * POSTs raw EBICS XML to the bank and checks the two return codes:
- * EBICS- and bank-technical.
- *
- * @param clientKeys client keys, used to sign the request.
- * @param bankKeys bank keys, used to decrypt and validate the response.
- * @param xmlReq raw EBICS request in XML.
- * @param isEbics3 true in case the communication is EBICS 3, false 
- * @return [EbicsResponseContent] or throws [EbicsSideException]
- */
-suspend fun postEbics(
+suspend fun postBTS(
     client: HttpClient,
     cfg: EbicsSetupConfig,
     bankKeys: BankPublicKeysFile,
     xmlReq: ByteArray
-): EbicsResponse {
+): EbicsResponse<BTSResponse> {
     val doc = client.postToBank(cfg.hostBaseUrl, xmlReq)
     if (!XMLUtil.verifyEbicsDocument(
         doc,
@@ -193,7 +182,7 @@ suspend fun ebicsDownload(
     // TODO find a way to cancel the pending transaction ?
     withContext(NonCancellable) {
         // Init phase
-        val initResp = postEbics(client, cfg, bankKeys, reqXml)
+        val initResp = postBTS(client, cfg, bankKeys, reqXml)
         if (initResp.bankCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
            logger.debug("Download content is empty")
            return@withContext
@@ -216,12 +205,8 @@ suspend fun ebicsDownload(
     
         /** Send download receipt */
         suspend fun receipt(success: Boolean) {
-            postEbics(
-                client,
-                cfg,
-                bankKeys,
-                impl.downloadReceipt(tId, success)
-            ).okOrFail("Download receipt phase")
+            val xml = impl.downloadReceipt(tId, success)
+            postBTS(client, cfg, bankKeys, xml).okOrFail("Download receipt phase")
         }
         /** Throw if parent scope have been canceled */
         suspend fun checkCancellation() {
@@ -238,7 +223,7 @@ suspend fun ebicsDownload(
         for (x in 2 .. howManySegments) {
             checkCancellation()
             val transReq = impl.downloadTransfer(x, howManySegments, tId)
-            val transResp = postEbics(client, cfg, bankKeys, transReq).okOrFail("Download transfer phase")
+            val transResp = postBTS(client, cfg, bankKeys, transReq).okOrFail("Download transfer phase")
             val chunk = requireNotNull(transResp.payloadChunk) {
                 "Download transfer phase: missing encrypted chunk"
             }
@@ -349,14 +334,14 @@ suspend fun doEbicsUpload(
     
     // Init phase
     val initXml = impl.uploadInitialization(service, preparedPayload)
-    val initResp = postEbics(client, cfg, bankKeys, initXml).okOrFail("Upload init phase")
+    val initResp = postBTS(client, cfg, bankKeys, initXml).okOrFail("Upload init phase")
     val tId = requireNotNull(initResp.transactionID) {
         "Upload init phase: missing transaction ID"
     }
 
     // Transfer phase
     val transferXml = impl.uploadTransfer(tId, preparedPayload)
-    val transferResp = postEbics(client, cfg, bankKeys, transferXml).okOrFail("Upload transfer phase")
+    val transferResp = postBTS(client, cfg, bankKeys, transferXml).okOrFail("Upload transfer phase")
     val orderId = requireNotNull(transferResp.orderID) {
         "Upload transfer phase: missing order ID"
     }
@@ -422,6 +407,24 @@ suspend fun submitPain001(
         service,
         pain001xml,
     )
+}
+
+class EbicsResponse<T>(
+    val technicalCode: EbicsReturnCode,
+    val bankCode: EbicsReturnCode,
+    private val content: T
+) {
+    /** Checks that return codes are both EBICS_OK or throw an exception */
+    fun okOrFail(phase: String): T {
+        logger.debug("$phase return codes: $technicalCode & $bankCode")
+        require(technicalCode.kind() != EbicsReturnCode.Kind.Error) {
+            "$phase has technical error: $technicalCode"
+        }
+        require(bankCode.kind() != EbicsReturnCode.Kind.Error) {
+            "$phase has bank error: $bankCode"
+        }
+        return content
+    }
 }
 
 // TODO import missing using a script
