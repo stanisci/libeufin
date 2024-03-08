@@ -118,7 +118,19 @@ suspend fun doKeysRequestAndUpdateState(
     }
     val xml = client.postToBank(cfg.hostBaseUrl, req)
     val resp = Ebics3KeyMng.parseResponse(xml, privs.encryption_private_key)
-    // TODO better error messages for expected errros
+    
+    when (orderType) {
+        KeysOrderType.INI, KeysOrderType.HIA -> {
+            if (resp.technicalCode == EbicsReturnCode.EBICS_INVALID_USER_OR_USER_STATE) {
+                throw Exception("$orderType status code ${resp.technicalCode}: either your IDs are incorrect, or you already have keys registered with this bank")
+            }
+        }
+        KeysOrderType.HPB -> {
+            if (resp.technicalCode == EbicsReturnCode.EBICS_AUTHENTICATION_FAILED) {
+                throw Exception("$orderType status code ${resp.technicalCode}: could not download bank keys, send client keys (and/or related PDF document with --generate-registration-pdf) to the bank")
+            }
+        }
+    }
     
     val orderData = resp.okOrFail("${orderType.name}")
     when (orderType) {
@@ -220,16 +232,12 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         // Checking if the bank keys exist on disk.
         var bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
         if (bankKeys == null) {
-            try {
-                doKeysRequestAndUpdateState(
-                    cfg,
-                    clientKeys,
-                    httpClient,
-                    KeysOrderType.HPB
-                )
-            } catch (e: Exception) {
-                throw Exception("Could not download bank keys. Send client keys (and/or related PDF document with --generate-registration-pdf) to the bank", e)
-            }
+            doKeysRequestAndUpdateState(
+                cfg,
+                clientKeys,
+                httpClient,
+                KeysOrderType.HPB
+            )
             logger.info("Bank keys stored at ${cfg.bankPublicKeysFilename}")
             bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)!!
         }
