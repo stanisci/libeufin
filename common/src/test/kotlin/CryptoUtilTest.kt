@@ -66,7 +66,7 @@ class CryptoUtilTest {
     fun testEbicsE002() {
         val data = "Hello, World!".toByteArray()
         val keyPair = CryptoUtil.generateRsaKeyPair(1024)
-        val enc = CryptoUtil.encryptEbicsE002(data, keyPair.public)
+        val enc = CryptoUtil.encryptEbicsE002(data.inputStream(), keyPair.public)
         val dec = CryptoUtil.decryptEbicsE002(enc, keyPair.private)
         assertTrue(data.contentEquals(dec))
     }
@@ -86,7 +86,7 @@ class CryptoUtilTest {
 
         /* encrypt with original key */
         val data = "Hello, World!".toByteArray(Charsets.UTF_8)
-        val secret = CryptoUtil.encryptEbicsE002(data, keyPair.public)
+        val secret = CryptoUtil.encryptEbicsE002(data.inputStream(), keyPair.public)
 
         /* encrypt and decrypt private key */
         val encPriv = CryptoUtil.encryptKey(keyPair.private.encoded, "secret")
@@ -103,7 +103,7 @@ class CryptoUtilTest {
 
     @Test
     fun testEbicsPublicKeyHashing() {
-        val exponentStr = "01 00 01"
+        val exponentStr = "01 00 01".replace(" ", "")
         val moduloStr = """
             EB BD B8 E3 73 45 60 06 44 A1 AD 6A 25 33 65 F5
             9C EB E5 93 E0 51 72 77 90 6B F0 58 A8 89 EB 00
@@ -121,7 +121,7 @@ class CryptoUtilTest {
             D5 BE 0D 0E F8 E7 E0 A9 C3 10 51 A1 3E A4 4F 67
             5E 75 8C 9D E6 FE 27 B6 3C CF 61 9B 31 D4 D0 22
             B9 2E 4C AF 5F D6 4B 1F F0 4D 06 5F 68 EB 0B 71
-        """.trimIndent()
+        """.trimIndent().replace(" ", "").replace("\n", "")
         val expectedHashStr = """
             72 71 D5 83 B4 24 A6 DA 0B 7B 22 24 3B E2 B8 8C
             6E A6 0F 9F 76 11 FD 18 BE 2C E8 8B 21 03 A9 41
@@ -129,17 +129,17 @@ class CryptoUtilTest {
 
         val expectedHash = expectedHashStr.replace(" ", "").replace("\n", "").toByteArray(Charsets.UTF_8)
 
-        val pub = CryptoUtil.loadRsaPublicKeyFromComponents(decodeHexString(moduloStr), decodeHexString(exponentStr))
+        val pub = CryptoUtil.loadRsaPublicKeyFromComponents(moduloStr.decodeUpHex(), exponentStr.decodeUpHex())
 
-        println("echoed pub exp: ${pub.publicExponent.toUnsignedHexString()}")
-        println("echoed pub mod: ${pub.modulus.toUnsignedHexString()}")
+        println("echoed pub exp: ${pub.publicExponent.encodeHex()}")
+        println("echoed pub mod: ${pub.modulus.encodeHex()}")
 
         val pubHash = CryptoUtil.getEbicsPublicKeyHash(pub)
 
-        println("our pubHash: ${pubHash.toHexString()}")
+        println("our pubHash: ${pubHash.encodeUpHex()}")
         println("expected pubHash: ${expectedHash.toString(Charsets.UTF_8)}")
 
-        assertEquals(expectedHash.toString(Charsets.UTF_8), pubHash.toHexString())
+        assertEquals(expectedHash.toString(Charsets.UTF_8), pubHash.encodeUpHex())
     }
 
     @Test

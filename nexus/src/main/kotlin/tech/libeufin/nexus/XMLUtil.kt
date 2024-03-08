@@ -96,22 +96,6 @@ object XMLUtil {
         return w.toByteArray()
     }
 
-    /**
-     * Convert a node to a string without the XML declaration or
-     * indentation.
-     */
-    fun convertNodeToString(node: Node): String {
-        /* Make Transformer.  */
-        val tf = TransformerFactory.newInstance()
-        val t = tf.newTransformer()
-        t.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes")
-        /* Make string writer.  */
-        val sw = StringWriter()
-        /* Extract string.  */
-        t.transform(DOMSource(node), StreamResult(sw))
-        return sw.toString()
-    }
-
     /** Parse [xml] into a XML DOM */
     fun parseIntoDom(xml: InputStream): Document {
         val factory = DocumentBuilderFactory.newInstance().apply {
@@ -189,21 +173,5 @@ object XMLUtil {
         val valResult = sig.validate(dvc)
         sig.signedInfo.references[0].validate(dvc)
         return valResult
-    }
-
-    fun getNodeFromXpath(doc: Document, query: String): Node {
-        val xpath = XPathFactory.newInstance().newXPath()
-        val ret = xpath.evaluate(query, doc, XPathConstants.NODE)
-            ?: throw EbicsProtocolError(HttpStatusCode.NotFound, "Unsuccessful XPath query string: $query")
-        return ret as Node
-    }
-
-    fun getStringFromXpath(doc: Document, query: String): String {
-        val xpath = XPathFactory.newInstance().newXPath()
-        val ret = xpath.evaluate(query, doc, XPathConstants.STRING) as String
-        if (ret.isEmpty()) {
-            throw EbicsProtocolError(HttpStatusCode.NotFound, "Unsuccessful XPath query string: $query")
-        }
-        return ret
     }
 }

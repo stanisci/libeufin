@@ -32,11 +32,6 @@
 
 package tech.libeufin.nexus.ebics
 
-import com.itextpdf.kernel.pdf.PdfDocument
-import com.itextpdf.kernel.pdf.PdfWriter
-import com.itextpdf.layout.Document
-import com.itextpdf.layout.element.AreaBreak
-import com.itextpdf.layout.element.Paragraph
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -55,6 +50,8 @@ import java.time.format.DateTimeFormatter
 import java.util.*
 import kotlinx.coroutines.*
 import java.security.SecureRandom
+import org.w3c.dom.Document
+import org.xml.sax.SAXException
 
 /**
  * Available EBICS versions.
@@ -98,6 +95,13 @@ fun decryptAndDecompressPayload(
             )
         }.inflate()
 
+sealed class EbicsError(msg: String, cause: Throwable? = null): Exception(msg, cause) {
+    /** Http and network errors */
+    class Transport(msg: String, cause: Throwable? = null): EbicsError(msg, cause)
+    /** EBICS protocol & XML format error */
+    class Protocol(msg: String, cause: Throwable? = null): EbicsError(msg, cause)
+}
+
 /**
  * POSTs the EBICS message to the bank.
  *
@@ -105,100 +109,26 @@ fun decryptAndDecompressPayload(
  * @param msg EBICS message as raw bytes.
  * @return the raw bank response.
  */
-suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray): InputStream {
-    logger.debug("POSTing EBICS to '$bankUrl'")
-    val res = post(urlString = bankUrl) {
-        contentType(ContentType.Text.Xml)
-        setBody(msg)
-    }
-    if (res.status != HttpStatusCode.OK) {
-        println(res.bodyAsText())
-        throw Exception("Invalid response status: ${res.status}")
-    }
-    return res.bodyAsChannel().toInputStream()
-}
-
-/**
- * Generate the PDF document with all the client public keys
- * to be sent on paper to the bank.
- */
-fun generateKeysPdf(
-    clientKeys: ClientPrivateKeysFile,
-    cfg: EbicsSetupConfig
-): ByteArray {
-    val po = ByteArrayOutputStream()
-    val pdfWriter = PdfWriter(po)
-    val pdfDoc = PdfDocument(pdfWriter)
-    val date = LocalDateTime.now()
-    val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-
-    fun formatHex(ba: ByteArray): String {
-        var out = ""
-        for (i in ba.indices) {
-            val b = ba[i]
-            if (i > 0 && i % 16 == 0) {
-                out += "\n"
-            }
-            out += java.lang.String.format("%02X", b)
-            out += " "
+suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray): Document {
+    val res = try {
+        post(urlString = bankUrl) {
+            contentType(ContentType.Text.Xml)
+            setBody(msg)
         }
-        return out
+    } catch (e: Exception) {
+        throw EbicsError.Transport("failed to contact bank", e)
     }
-
-    fun writeCommon(doc: Document) {
-        doc.add(
-            Paragraph(
-                """
-            Datum: $dateStr
-            Host-ID: ${cfg.ebicsHostId}
-            User-ID: ${cfg.ebicsUserId}
-            Partner-ID: ${cfg.ebicsPartnerId}
-            ES version: A006
-        """.trimIndent()
-            )
-        )
+    
+    if (res.status != HttpStatusCode.OK) {
+        throw EbicsError.Transport("bank HTTP error: ${res.status}")
     }
-
-    fun writeKey(doc: Document, priv: RSAPrivateCrtKey) {
-        val pub = CryptoUtil.getRsaPublicFromPrivate(priv)
-        val hash = CryptoUtil.getEbicsPublicKeyHash(pub)
-        doc.add(Paragraph("Exponent:\n${formatHex(pub.publicExponent.toByteArray())}"))
-        doc.add(Paragraph("Modulus:\n${formatHex(pub.modulus.toByteArray())}"))
-        doc.add(Paragraph("SHA-256 hash:\n${formatHex(hash)}"))
+    try {
+        return XMLUtil.parseIntoDom(res.bodyAsChannel().toInputStream())
+    } catch (e: SAXException) {
+        throw EbicsError.Protocol("invalid XML bank reponse", e)
+    } catch (e: Exception) {
+        throw EbicsError.Transport("failed read bank response", e)
     }
-
-    fun writeSigLine(doc: Document) {
-        doc.add(Paragraph("Ort / Datum: ________________"))
-        doc.add(Paragraph("Firma / Name: ________________"))
-        doc.add(Paragraph("Unterschrift: ________________"))
-    }
-
-    Document(pdfDoc).use {
-        it.add(Paragraph("Signaturschlüssel").setFontSize(24f))
-        writeCommon(it)
-        it.add(Paragraph("Öffentlicher Schlüssel (Public key for the electronic signature)"))
-        writeKey(it, clientKeys.signature_private_key)
-        it.add(Paragraph("\n"))
-        writeSigLine(it)
-        it.add(AreaBreak())
-
-        it.add(Paragraph("Authentifikationsschlüssel").setFontSize(24f))
-        writeCommon(it)
-        it.add(Paragraph("Öffentlicher Schlüssel (Public key for the identification and authentication signature)"))
-        writeKey(it, clientKeys.authentication_private_key)
-        it.add(Paragraph("\n"))
-        writeSigLine(it)
-        it.add(AreaBreak())
-
-        it.add(Paragraph("Verschlüsselungsschlüssel").setFontSize(24f))
-        writeCommon(it)
-        it.add(Paragraph("Öffentlicher Schlüssel (Public encryption key)"))
-        writeKey(it, clientKeys.encryption_private_key)
-        it.add(Paragraph("\n"))
-        writeSigLine(it)
-    }
-    pdfWriter.flush()
-    return po.toByteArray()
 }
 
 /**
@@ -216,50 +146,21 @@ suspend fun postEbics(
     cfg: EbicsSetupConfig,
     bankKeys: BankPublicKeysFile,
     xmlReq: ByteArray
-): EbicsResponseContent {
-    val respXml = try {
-        client.postToBank(cfg.hostBaseUrl, xmlReq)
-    } catch (e: Exception) {
-        throw EbicsSideException(
-            "POSTing to ${cfg.hostBaseUrl} failed",
-            sideEc = EbicsSideError.HTTP_POST_FAILED,
-            e
-        )
-    }
-
-    // Parses the bank response from the raw XML and verifies
-    // the bank signature.
-    val doc = try {
-        XMLUtil.parseIntoDom(respXml)
-    } catch (e: Exception) {
-        throw EbicsSideException(
-            "Bank response apparently invalid",
-            sideEc = EbicsSideError.BANK_RESPONSE_IS_INVALID
-        )
-    }
+): EbicsResponse {
+    val doc = client.postToBank(cfg.hostBaseUrl, xmlReq)
     if (!XMLUtil.verifyEbicsDocument(
         doc,
         bankKeys.bank_authentication_public_key,
         true
     )) {
-        throw EbicsSideException(
-            "Bank signature did not verify",
-            sideEc = EbicsSideError.BANK_SIGNATURE_DIDNT_VERIFY
-        )
+        throw EbicsError.Protocol("bank signature did not verify")
     }
-    
-    return parseEbics3Response(doc)
+    try {
+        return Ebics3BTS.parseResponse(doc)
+    } catch (e: Exception) {
+        throw EbicsError.Protocol("invalid ebics response", e)
+    }
 }
-
-/**
- * Checks that EBICS- and bank-technical return codes are both EBICS_OK.
- *
- * @param ebicsResponseContent valid response gotten from the bank.
- * @return true only if both codes are EBICS_OK.
- */
-private fun areCodesOk(ebicsResponseContent: EbicsResponseContent) =
-    ebicsResponseContent.technicalReturnCode == EbicsReturnCode.EBICS_OK &&
-            ebicsResponseContent.bankReturnCode == EbicsReturnCode.EBICS_OK
 
 /**
  * Perform an EBICS download transaction.
@@ -283,136 +184,94 @@ suspend fun ebicsDownload(
     reqXml: ByteArray,
     processing: (InputStream) -> Unit
 ) = coroutineScope {
-    val impl = Ebics3Impl(
-        cfg,
-        bankKeys,
-        clientKeys
-    )
-    val scope = this
+    val impl = Ebics3BTS(cfg, bankKeys, clientKeys)
+    val parentScope = this
+    
     // We need to run the logic in a non-cancelable context because we need to send 
     // a receipt for each open download transaction, otherwise we'll be stuck in an 
     // error loop until the pending transaction timeout.
     // TODO find a way to cancel the pending transaction ?
-    withContext(NonCancellable) { 
-        val initResp = postEbics(client, cfg, bankKeys, reqXml) 
-        logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${initResp.technicalReturnCode}, ${initResp.bankReturnCode}")
-        if (initResp.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
-            throw Exception("Download init phase has EBICS-technical error: ${initResp.technicalReturnCode}")
+    withContext(NonCancellable) {
+        // Init phase
+        val initResp = postEbics(client, cfg, bankKeys, reqXml)
+        if (initResp.bankCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
+           logger.debug("Download content is empty")
+           return@withContext
         }
-        if (initResp.bankReturnCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
-            logger.debug("Download content is empty")
-            return@withContext
-        } else if (initResp.bankReturnCode != EbicsReturnCode.EBICS_OK) {
-            throw Exception("Download init phase has bank-technical error: ${initResp.bankReturnCode}")
+        val initContent = initResp.okOrFail("Download init phase")
+        val tId = requireNotNull(initContent.transactionID) {
+            "Download init phase: missing transaction ID"
         }
-        val tId = initResp.transactionID
-            ?: throw EbicsSideException(
-                "EBICS download init phase did not return a transaction ID, cannot do the transfer phase.",
-                sideEc = EbicsSideError.EBICS_UPLOAD_TRANSACTION_ID_MISSING
-            )
-        logger.debug("EBICS download transaction passed the init phase, got ID: $tId")
-        val howManySegments = initResp.numSegments
-        if (howManySegments == null) {
-            throw Exception("Init response lacks the quantity of segments, failing.")
+        val howManySegments = requireNotNull(initContent.numSegments) {
+            "Download init phase: missing num segments"
         }
-        val ebicsChunks = mutableListOf<String>()
-        // Getting the chunk(s)
-        val firstDataChunk = initResp.orderDataEncChunk
-            ?: throw EbicsSideException(
-                "OrderData element not found, despite non empty payload, failing.",
-                sideEc = EbicsSideError.ORDER_DATA_ELEMENT_NOT_FOUND
-            )
-        val dataEncryptionInfo = initResp.dataEncryptionInfo ?: run {
-            throw EbicsSideException(
-                "EncryptionInfo element not found, despite non empty payload, failing.",
-                sideEc = EbicsSideError.ENCRYPTION_INFO_ELEMENT_NOT_FOUND
-            )
+        val firstDataChunk = requireNotNull(initContent.payloadChunk) {
+            "Download init phase: missing OrderData"
         }
-        ebicsChunks.add(firstDataChunk)
-        // proceed with the transfer phase.
-        for (x in 2 .. howManySegments) {
-            if (!scope.isActive) break
-            // request segment number x.
-            val transReq = impl.downloadTransfer(x, howManySegments, tId)
+        val dataEncryptionInfo = requireNotNull(initContent.dataEncryptionInfo) {
+            "Download init phase: missing EncryptionInfo"
+        }
 
-            val transResp = postEbics(client, cfg, bankKeys, transReq)
-            if (!areCodesOk(transResp)) {
-                throw EbicsSideException(
-                    "EBICS transfer segment #$x failed.",
-                    sideEc = EbicsSideError.TRANSFER_SEGMENT_FAILED
-                )
-            }
-            val chunk = transResp.orderDataEncChunk
-            if (chunk == null) {
-                throw Exception("EBICS transfer phase lacks chunk #$x, failing.")
-            }
-            ebicsChunks.add(chunk)
-        }
+        logger.debug("Download init phase for transaction '$tId'")
+    
+        /** Send download receipt */
         suspend fun receipt(success: Boolean) {
-            val receiptXml = impl.downloadReceipt(tId, success)
-
-            // Sending the receipt to the bank.
             postEbics(
                 client,
                 cfg,
                 bankKeys,
-                receiptXml
-            )
+                impl.downloadReceipt(tId, success)
+            ).okOrFail("Download receipt phase")
         }
-        if (scope.isActive) {
-            // all chunks gotten, shaping a meaningful response now.
-            val payloadBytes = decryptAndDecompressPayload(
+        /** Throw if parent scope have been canceled */
+        suspend fun checkCancellation() {
+            if (!parentScope.isActive) {
+                // First send a proper EBICS transaction failure
+                receipt(false)
+                // Send throw cancelation exception
+                throw CancellationException()
+            }
+        }
+
+        // Transfer phase
+        val ebicsChunks = mutableListOf(firstDataChunk)
+        for (x in 2 .. howManySegments) {
+            checkCancellation()
+            val transReq = impl.downloadTransfer(x, howManySegments, tId)
+            val transResp = postEbics(client, cfg, bankKeys, transReq).okOrFail("Download transfer phase")
+            val chunk = requireNotNull(transResp.payloadChunk) {
+                "Download transfer phase: missing encrypted chunk"
+            }
+            ebicsChunks.add(chunk)
+        }
+
+        checkCancellation()
+
+        // Decompress encrypted chunks
+        val payloadBytes = try {
+            decryptAndDecompressPayload(
                 clientKeys.encryption_private_key,
                 dataEncryptionInfo,
                 ebicsChunks
             )
-            // Process payload
-            val res = runCatching {
-                processing(payloadBytes)
-            }
-            receipt(res.isSuccess)
-
-            res.getOrThrow()
-        } else {
-            receipt(false)
-            throw CancellationException()
+        } catch (e: Exception) {
+            throw EbicsError.Protocol("invalid chunks", e)
         }
+
+        checkCancellation()
+
+        // Run business logic
+        val res = runCatching {
+            processing(payloadBytes)
+        }
+
+        // First send a proper EBICS transaction receipt
+        receipt(res.isSuccess)
+        // Then throw business logic exception if any
+        res.getOrThrow()
     }
     Unit
 }
-
-/**
- * These errors affect an EBICS transaction regardless
- * of the standard error codes.
- */
-enum class EbicsSideError {
-    BANK_SIGNATURE_DIDNT_VERIFY,
-    BANK_RESPONSE_IS_INVALID,
-    ENCRYPTION_INFO_ELEMENT_NOT_FOUND,
-    ORDER_DATA_ELEMENT_NOT_FOUND,
-    TRANSFER_SEGMENT_FAILED,
-    /**
-     * This might indicate that the EBICS transaction had errors.
-     */
-    EBICS_UPLOAD_TRANSACTION_ID_MISSING,
-    /**
-     * May be caused by a connection issue OR the HTTP response
-     * code was not 200 OK.  Both cases should lead to retry as
-     * they are fixable or transient.
-     */
-    HTTP_POST_FAILED
-}
-
-/**
- * Those errors happen before getting to validate the bank response
- * and successfully verify its signature.  They bring therefore NO
- * business meaning and may be retried.
- */
-class EbicsSideException(
-    msg: String,
-    val sideEc: EbicsSideError,
-    cause: Exception? = null
-) : Exception(msg, cause)
 
 /**
  * Signs and the encrypts the data to send via EBICS.
@@ -430,27 +289,31 @@ fun prepareUploadPayload(
     bankKeys: BankPublicKeysFile,
     payload: ByteArray,
 ): PreparedUploadData {
-    val innerSignedEbicsXml = signOrderEbics3( // A006 signature.
-        payload,
-        clientKeys.signature_private_key,
-        cfg.ebicsPartnerId,
-        cfg.ebicsUserId
-    )
+    val innerSignedEbicsXml = XmlBuilder.toBytes("UserSignatureData") {
+        attr("xmlns", "http://www.ebics.org/S002")
+        el("OrderSignatureData") {
+            el("SignatureVersion", "A006")
+            el("SignatureValue", CryptoUtil.signEbicsA006(
+                CryptoUtil.digestEbicsOrderA006(payload),
+                clientKeys.signature_private_key,
+            ).encodeBase64())
+            el("PartnerID", cfg.ebicsPartnerId)
+            el("UserID", cfg.ebicsUserId)
+        }
+    }
     val encryptionResult = CryptoUtil.encryptEbicsE002(
-        innerSignedEbicsXml.inputStream().deflate().readAllBytes(),
+        innerSignedEbicsXml.inputStream().deflate(),
         bankKeys.bank_encryption_public_key
     )
-    val plainTransactionKey = encryptionResult.plainTransactionKey
-        ?: throw Exception("Could not generate the transaction key, cannot encrypt the payload!")
     // Then only E002 symmetric (with ephemeral key) encrypt.
-    val compressedInnerPayload = payload.inputStream().deflate().readAllBytes()
+    val compressedInnerPayload = payload.inputStream().deflate()
     // TODO stream
     val encryptedPayload = CryptoUtil.encryptEbicsE002withTransactionKey(
         compressedInnerPayload,
         bankKeys.bank_encryption_public_key,
-        plainTransactionKey
+        encryptionResult.plainTransactionKey
     )
-    val encodedEncryptedPayload = Base64.getEncoder().encodeToString(encryptedPayload.encryptedData)
+    val encodedEncryptedPayload = encryptedPayload.encryptedData.encodeBase64()
 
     return PreparedUploadData(
         encryptionResult.encryptedTransactionKey, // ephemeral key
@@ -459,32 +322,6 @@ fun prepareUploadPayload(
         listOf(encodedEncryptedPayload) // actual payload E002 encrypted.
     )
 }
-
-/**
- * Possible states of an EBICS transaction.
- */
-enum class EbicsPhase {
-    initialization,
-    transmission,
-    receipt
-}
-
-/**
- * Witnesses a failure in an EBICS communication.  That
- * implies that the bank response and its signature were
- * both valid.
- */
-class EbicsUploadException(
-    msg: String,
-    val phase: EbicsPhase,
-    val ebicsErrorCode: EbicsReturnCode,
-    /**
-     * If the error was EBICS-technical, then we might not
-     * even have interest on the business error code, therefore
-     * the value below may be null.
-     */
-    val bankErrorCode: EbicsReturnCode? = null
-) : Exception(msg)
 
 /**
  * Collects all the steps of an EBICS 3 upload transaction.
@@ -505,59 +342,26 @@ suspend fun doEbicsUpload(
     bankKeys: BankPublicKeysFile,
     service: Ebics3Service,
     payload: ByteArray,
-): EbicsResponseContent = withContext(NonCancellable) {
-    val impl = Ebics3Impl(cfg, bankKeys, clientKeys)
+): String = withContext(NonCancellable) {
+    val impl = Ebics3BTS(cfg, bankKeys, clientKeys)
     // TODO use a lambda and pass the order detail there for atomicity ?
     val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload)
+    
+    // Init phase
     val initXml = impl.uploadInitialization(service, preparedPayload)
-    val initResp = postEbics( // may throw EbicsEarlyException
-        client,
-        cfg,
-        bankKeys,
-        initXml
-    )
-    if (!areCodesOk(initResp)) throw EbicsUploadException(
-        "EBICS upload init failed",
-        phase = EbicsPhase.initialization,
-        ebicsErrorCode = initResp.technicalReturnCode,
-        bankErrorCode = initResp.bankReturnCode
-    )
-    // Init phase OK, proceeding with the transfer phase.
-    val tId = initResp.transactionID
-        ?: throw EbicsSideException(
-            "EBICS upload init phase did not return a transaction ID, cannot do the transfer phase.",
-            sideEc = EbicsSideError.EBICS_UPLOAD_TRANSACTION_ID_MISSING
-        )
+    val initResp = postEbics(client, cfg, bankKeys, initXml).okOrFail("Upload init phase")
+    val tId = requireNotNull(initResp.transactionID) {
+        "Upload init phase: missing transaction ID"
+    }
+
+    // Transfer phase
     val transferXml = impl.uploadTransfer(tId, preparedPayload)
-    val transferResp = postEbics(
-        client,
-        cfg,
-        bankKeys,
-        transferXml
-    )
-    logger.debug("Download init phase done.  EBICS- and bank-technical codes are: ${transferResp.technicalReturnCode}, ${transferResp.bankReturnCode}")
-    if (!areCodesOk(transferResp)) throw EbicsUploadException(
-        "EBICS upload transfer failed",
-        phase = EbicsPhase.transmission,
-        ebicsErrorCode = initResp.technicalReturnCode,
-        bankErrorCode = initResp.bankReturnCode
-    )
-    // EBICS- and bank-technical codes were both EBICS_OK, success!
-    transferResp
+    val transferResp = postEbics(client, cfg, bankKeys, transferXml).okOrFail("Upload transfer phase")
+    val orderId = requireNotNull(transferResp.orderID) {
+        "Upload transfer phase: missing order ID"
+    }
+    orderId
 }
-
-
-data class EbicsProtocolError(
-    val httpStatusCode: HttpStatusCode,
-    val reason: String,
-    /**
-     * This class is also used when Nexus finds itself
-     * in an inconsistent state, without interacting with the
-     * bank.  In this case, the EBICS code below can be left
-     * null.
-     */
-    val ebicsTechnicalCode: EbicsReturnCode? = null
-) : Exception(reason)
 
 /**
  * @param size in bits
@@ -569,113 +373,16 @@ fun getNonce(size: Int): ByteArray {
     return ret
 }
 
-data class PreparedUploadData(
+class PreparedUploadData(
     val transactionKey: ByteArray,
     val userSignatureDataEncrypted: ByteArray,
     val dataDigest: ByteArray,
     val encryptedPayloadChunks: List<String>
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as PreparedUploadData
-
-        if (!transactionKey.contentEquals(other.transactionKey)) return false
-        if (!userSignatureDataEncrypted.contentEquals(other.userSignatureDataEncrypted)) return false
-        if (encryptedPayloadChunks != other.encryptedPayloadChunks) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = transactionKey.contentHashCode()
-        result = 31 * result + userSignatureDataEncrypted.contentHashCode()
-        result = 31 * result + encryptedPayloadChunks.hashCode()
-        return result
-    }
-}
-
-data class DataEncryptionInfo(
-    val transactionKey: ByteArray,
-    val bankPubDigest: ByteArray
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as DataEncryptionInfo
-
-        if (!transactionKey.contentEquals(other.transactionKey)) return false
-        if (!bankPubDigest.contentEquals(other.bankPubDigest)) return false
-
-        return true
-    }
-
-    override fun hashCode(): Int {
-        var result = transactionKey.contentHashCode()
-        result = 31 * result + bankPubDigest.contentHashCode()
-        return result
-    }
-}
-
-
-// TODO import missing using a script
-@Suppress("SpellCheckingInspection")
-enum class EbicsReturnCode(val errorCode: String) {
-    EBICS_OK("000000"),
-    EBICS_DOWNLOAD_POSTPROCESS_DONE("011000"),
-    EBICS_DOWNLOAD_POSTPROCESS_SKIPPED("011001"),
-    EBICS_TX_SEGMENT_NUMBER_UNDERRUN("011101"),
-    EBICS_AUTHENTICATION_FAILED("061001"),
-    EBICS_INVALID_REQUEST("061002"),
-    EBICS_INTERNAL_ERROR("061099"),
-    EBICS_TX_RECOVERY_SYNC("061101"),
-    EBICS_AUTHORISATION_ORDER_IDENTIFIER_FAILED("090003"),
-    EBICS_INVALID_ORDER_DATA_FORMAT("090004"),
-    EBICS_NO_DOWNLOAD_DATA_AVAILABLE("090005"),
-    EBICS_INVALID_USER_OR_USER_STATE("091002"),
-    EBICS_USER_UNKNOWN("091003"),
-    EBICS_EBICS_INVALID_USER_STATE("091004"),
-    EBICS_INVALID_ORDER_IDENTIFIER("091005"),
-    EBICS_UNSUPPORTED_ORDER_TYPE("091006"),
-    EBICS_INVALID_XML("091010"),
-    EBICS_TX_MESSAGE_REPLAY("091103"),
-    EBICS_PROCESSING_ERROR("091116"),
-    EBICS_ACCOUNT_AUTHORISATION_FAILED("091302"),
-    EBICS_AMOUNT_CHECK_FAILED("091303");
-
-    companion object {
-        fun lookup(errorCode: String): EbicsReturnCode {
-            for (x in entries) {
-                if (x.errorCode == errorCode) {
-                    return x
-                }
-            }
-            throw Exception(
-                "Unknown EBICS status code: $errorCode"
-            )
-        }
-    }
-}
-
-data class EbicsResponseContent(
-    val transactionID: String?,
-    val orderID: String?,
-    val dataEncryptionInfo: DataEncryptionInfo?,
-    val orderDataEncChunk: String?,
-    val technicalReturnCode: EbicsReturnCode,
-    val bankReturnCode: EbicsReturnCode,
-    val reportText: String,
-    val segmentNumber: Int?,
-    // Only present in init phase
-    val numSegments: Int?
 )
 
-data class EbicsKeyManagementResponseContent(
-    val technicalReturnCode: EbicsReturnCode,
-    val bankReturnCode: EbicsReturnCode?,
-    val orderData: ByteArray?
+class DataEncryptionInfo(
+    val transactionKey: ByteArray,
+    val bankPubDigest: ByteArray
 )
 
 /**
@@ -694,7 +401,7 @@ data class EbicsKeyManagementResponseContent(
  * @param httpClient HTTP client to connect to the bank.
  */
 suspend fun submitPain001(
-    pain001xml: String,
+    pain001xml: ByteArray,
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankkeys: BankPublicKeysFile,
@@ -707,17 +414,69 @@ suspend fun submitPain001(
         messageVersion = "09",
         container = null
     )
-    val maybeUploaded = doEbicsUpload(
+    return doEbicsUpload(
         httpClient,
         cfg,
         clientKeys,
         bankkeys,
         service,
-        pain001xml.toByteArray(Charsets.UTF_8),
+        pain001xml,
     )
-    logger.debug("Payment submitted, report text is: ${maybeUploaded.reportText}," +
-            " EBICS technical code is: ${maybeUploaded.technicalReturnCode}," +
-            " bank technical return code is: ${maybeUploaded.bankReturnCode}"
-    )
-    return maybeUploaded.orderID!!
+}
+
+// TODO import missing using a script
+@Suppress("SpellCheckingInspection")
+enum class EbicsReturnCode(val code: String) {
+    EBICS_OK("000000"),
+    EBICS_DOWNLOAD_POSTPROCESS_DONE("011000"),
+    EBICS_DOWNLOAD_POSTPROCESS_SKIPPED("011001"),
+    EBICS_TX_SEGMENT_NUMBER_UNDERRUN("011101"),
+    EBICS_AUTHENTICATION_FAILED("061001"),
+    EBICS_INVALID_REQUEST("061002"),
+    EBICS_INTERNAL_ERROR("061099"),
+    EBICS_TX_RECOVERY_SYNC("061101"),
+    EBICS_AUTHORISATION_ORDER_IDENTIFIER_FAILED("090003"),
+    EBICS_INVALID_ORDER_DATA_FORMAT("090004"),
+    EBICS_NO_DOWNLOAD_DATA_AVAILABLE("090005"),
+    EBICS_INVALID_USER_OR_USER_STATE("091002"),
+    EBICS_USER_UNKNOWN("091003"),
+    EBICS_EBICS_INVALID_USER_STATE("091004"),
+    EBICS_INVALID_ORDER_IDENTIFIER("091005"),
+    EBICS_UNSUPPORTED_ORDER_TYPE("091006"),
+    EBICS_INVALID_XML("091010"),
+    EBICS_TX_MESSAGE_REPLAY("091103"),
+    EBICS_INVALID_REQUEST_CONTENT("091113"),
+    EBICS_PROCESSING_ERROR("091116"),
+    EBICS_ACCOUNT_AUTHORISATION_FAILED("091302"),
+    EBICS_AMOUNT_CHECK_FAILED("091303");
+
+    enum class Kind {
+        Information,
+        Note,
+        Warning,
+        Error
+    }
+
+    fun kind(): Kind {
+        return when (val errorClass = code.substring(0..1)) {
+            "00" -> Kind.Information
+            "01" -> Kind.Note
+            "03" -> Kind.Warning
+            "06", "09" -> Kind.Error
+            else -> throw Exception("Unknown EBICS status code error class: $errorClass")
+        }
+    }
+
+    companion object {
+        fun lookup(code: String): EbicsReturnCode {
+            for (x in entries) {
+                if (x.code == code) {
+                    return x
+                }
+            }
+            throw Exception(
+                "Unknown EBICS status code: $code"
+            )
+        }
+    }
 }

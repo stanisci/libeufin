@@ -49,14 +49,14 @@ fun iniRequest(
     cfg: EbicsSetupConfig, 
     clientKeys: ClientPrivateKeysFile
 ): ByteArray {
-    val temp = XmlBuilder.toString("ns2:SignaturePubKeyOrderData") {
+    val temp = XmlBuilder.toBytes("ns2:SignaturePubKeyOrderData") {
         attr("xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
         attr("xmlns:ns2", "http://www.ebics.org/S001")
         el("ns2:SignaturePubKeyInfo") {
             el("ns2:PubKeyValue") {
                 el("ds:RSAKeyValue") {
-                    el("ds:Modulus", clientKeys.signature_private_key.modulus.toByteArray().encodeBase64())
-                    el("ds:Exponent", clientKeys.signature_private_key.publicExponent.toByteArray().encodeBase64())
+                    el("ds:Modulus", clientKeys.signature_private_key.modulus.encodeBase64())
+                    el("ds:Exponent", clientKeys.signature_private_key.publicExponent.encodeBase64())
                 }
             }
             el("ns2:SignatureVersion", "A006")
@@ -66,7 +66,7 @@ fun iniRequest(
     }
     // TODO in ebics:H005 we MUST use x509 certificates ...
     println(temp)
-    val inner = temp.toByteArray().inputStream().deflate().readAllBytes().encodeBase64()
+    val inner = temp.inputStream().deflate().encodeBase64()
     val doc = XmlBuilder.toDom("ebicsUnsecuredRequest", "urn:org:ebics:H005") {
         attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H005")
         attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
@@ -88,27 +88,27 @@ fun iniRequest(
     return XMLUtil.convertDomToBytes(doc)
 }
 
-class Ebics3Impl(
+/** EBICS 3 protocol for business transactions */
+class Ebics3BTS(
     private val cfg: EbicsSetupConfig, 
     private val bankKeys: BankPublicKeysFile,
     private val clientKeys: ClientPrivateKeysFile
 ) {
 
-    private fun signedRequest(lambda: XmlBuilder.() -> Unit): ByteArray  {
-        val doc = XmlBuilder.toDom("ebicsRequest", "urn:org:ebics:H005") {
-            attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H005")
-            attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
-            attr("Version", "H005")
-            attr("Revision", "1")
-            lambda()
+    /* ----- Ergonomic entrypoints ----- */
+
+    fun downloadInitializationDoc(whichDoc: SupportedDocument, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
+        val (orderType, service) = when (whichDoc) {
+            SupportedDocument.PAIN_002 -> Pair("BTD", Ebics3Service("PSR", "CH", "pain.002", "10", "ZIP"))
+            SupportedDocument.CAMT_052 -> Pair("BTD", Ebics3Service("STM", "CH", "camt.052", "08", "ZIP"))
+            SupportedDocument.CAMT_053 -> Pair("BTD", Ebics3Service("EOP", "CH", "camt.053", "08", "ZIP"))
+            SupportedDocument.CAMT_054 -> Pair("BTD", Ebics3Service("REP", "CH", "camt.054", "08", "ZIP"))
+            SupportedDocument.PAIN_002_LOGS -> Pair("HAC", null)
         }
-        XMLUtil.signEbicsDocument(
-            doc,
-            clientKeys.authentication_private_key,
-            withEbics3 = true
-        )
-        return XMLUtil.convertDomToBytes(doc)
+        return downloadInitialization(orderType, service, startDate, endDate)
     }
+
+    /* ----- Upload ----- */
 
     fun uploadInitialization(service: Ebics3Service, preparedUploadData: PreparedUploadData): ByteArray {
         val nonce = getNonce(128)
@@ -117,7 +117,7 @@ class Ebics3Impl(
                 attr("authenticate", "true")
                 el("static") {
                     el("HostID", cfg.ebicsHostId)
-                    el("Nonce", nonce.toHexString())
+                    el("Nonce", nonce.encodeUpHex())
                     el("Timestamp", Instant.now().xmlDateTime())
                     el("PartnerID", cfg.ebicsPartnerId)
                     el("UserID", cfg.ebicsUserId)
@@ -137,20 +137,7 @@ class Ebics3Impl(
                             el("SignatureFlag", "true")
                         }
                     }
-                    el("BankPubKeyDigests") {
-                        el("Authentication") {
-                            attr("Version", "X002")
-                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
-                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).encodeBase64())
-                        }
-                        el("Encryption") {
-                            attr("Version", "E002")
-                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
-                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
-                        }
-                        // Signature
-                    }
-                    el("SecurityMedium", "0000")
+                    bankDigest()
                     el("NumSegments", "1") // TODO test upload of many segment
                     
                 }
@@ -208,16 +195,7 @@ class Ebics3Impl(
         }
     }
 
-    fun downloadInitializationDoc(whichDoc: SupportedDocument, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
-        val (orderType, service) = when (whichDoc) {
-            SupportedDocument.PAIN_002 -> Pair("BTD", Ebics3Service("PSR", "CH", "pain.002", "10", "ZIP"))
-            SupportedDocument.CAMT_052 -> Pair("BTD", Ebics3Service("STM", "CH", "camt.052", "08", "ZIP"))
-            SupportedDocument.CAMT_053 -> Pair("BTD", Ebics3Service("EOP", "CH", "camt.053", "08", "ZIP"))
-            SupportedDocument.CAMT_054 -> Pair("BTD", Ebics3Service("REP", "CH", "camt.054", "08", "ZIP"))
-            SupportedDocument.PAIN_002_LOGS -> Pair("HAC", null)
-        }
-        return downloadInitialization(orderType, service, startDate, endDate)
-    }
+    /* ----- Download ----- */
 
     fun downloadInitialization(orderType: String, service: Ebics3Service? = null, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
         val nonce = getNonce(128)
@@ -226,7 +204,7 @@ class Ebics3Impl(
                 attr("authenticate", "true")
                 el("static") {
                     el("HostID", cfg.ebicsHostId)
-                    el("Nonce", nonce.toHexString())
+                    el("Nonce", nonce.encodeHex())
                     el("Timestamp", Instant.now().xmlDateTime())
                     el("PartnerID", cfg.ebicsPartnerId)
                     el("UserID", cfg.ebicsUserId)
@@ -260,24 +238,9 @@ class Ebics3Impl(
                             }
                         }
                     }
-                    el("BankPubKeyDigests") {
-                        el("Authentication") {
-                            attr("Version", "X002")
-                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
-                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).encodeBase64())
-                        }
-                        el("Encryption") {
-                            attr("Version", "E002")
-                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
-                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
-                        }
-                        // Signature
-                    }
-                    el("SecurityMedium", "0000")
+                    bankDigest()
                 }
-                el("mutable") {
-                    el("TransactionPhase", "Initialisation")
-                }
+                el("mutable/TransactionPhase", "Initialisation")
             }
             el("AuthSignature")
             el("body")
@@ -330,75 +293,118 @@ class Ebics3Impl(
             }
         }
     }
-}
 
-fun signOrderEbics3(
-    orderBlob: ByteArray,
-    signKey: RSAPrivateCrtKey,
-    partnerId: String,
-    userId: String
-): ByteArray {
-    return XmlBuilder.toString("UserSignatureData") {
-        attr("xmlns", "http://www.ebics.org/S002")
-        el("OrderSignatureData") {
-            el("SignatureVersion", "A006")
-            el("SignatureValue", CryptoUtil.signEbicsA006(
-                CryptoUtil.digestEbicsOrderA006(orderBlob),
-                signKey
-            ).encodeBase64())
-            el("PartnerID", partnerId)
-            el("UserID", userId)
-        }
-    }.toByteArray()
-}
+    /* ----- Helpers ----- */
 
-
-fun parseEbics3Response(response: Document): EbicsResponseContent {
-    // TODO better ebics response type
-    return XmlDestructor.fromDoc(response, "ebicsResponse") {
-        var transactionID: String? = null
-        var numSegments: Int? = null
-        lateinit var technicalReturnCode: EbicsReturnCode
-        lateinit var bankReturnCode: EbicsReturnCode
-        lateinit var reportText: String
-        var orderID: String? = null
-        var segmentNumber: Int? = null
-        var orderDataEncChunk: String? = null
-        var dataEncryptionInfo: DataEncryptionInfo? = null
-        one("header") {
-            one("static") {
-                transactionID = opt("TransactionID")?.text()
-                numSegments = opt("NumSegments")?.text()?.toInt()
-            }
-            one("mutable") {
-                segmentNumber = opt("SegmentNumber")?.text()?.toInt()
-                orderID = opt("OrderID")?.text()
-                technicalReturnCode = EbicsReturnCode.lookup(one("ReturnCode").text())
-                reportText = one("ReportText").text()
-            }
+    /** Generate a signed H005 ebicsRequest */
+    private fun signedRequest(lambda: XmlBuilder.() -> Unit): ByteArray  {
+        val doc = XmlBuilder.toDom("ebicsRequest", "urn:org:ebics:H005") {
+            attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H005")
+            attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+            attr("Version", "H005")
+            attr("Revision", "1")
+            lambda()
         }
-        one("body") {
-            opt("DataTransfer") {
-                orderDataEncChunk = one("OrderData").text()
-                dataEncryptionInfo = opt("DataEncryptionInfo") {
-                    DataEncryptionInfo(
-                        one("TransactionKey").text().decodeBase64(),
-                        one("EncryptionPubKeyDigest").text().decodeBase64()
-                    )
-                }
-            }
-            bankReturnCode = EbicsReturnCode.lookup(one("ReturnCode").text())
-        }
-        EbicsResponseContent(
-            transactionID = transactionID,
-            orderID = orderID,
-            bankReturnCode = bankReturnCode,
-            technicalReturnCode = technicalReturnCode,
-            reportText = reportText,
-            orderDataEncChunk = orderDataEncChunk,
-            dataEncryptionInfo = dataEncryptionInfo,
-            numSegments = numSegments,
-            segmentNumber = segmentNumber
+        XMLUtil.signEbicsDocument(
+            doc,
+            clientKeys.authentication_private_key,
+            withEbics3 = true
         )
+        return XMLUtil.convertDomToBytes(doc)
+    }
+
+    private fun XmlBuilder.bankDigest() {
+        el("BankPubKeyDigests") {
+            el("Authentication") {
+                attr("Version", "X002")
+                attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).encodeBase64())
+            }
+            el("Encryption") {
+                attr("Version", "E002")
+                attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
+            }
+            // Signature
+        }
+        el("SecurityMedium", "0000")
+    }
+
+    companion object {
+        fun parseResponse(doc: Document): EbicsResponse {
+            return XmlDestructor.fromDoc(doc, "ebicsResponse") {
+                var transactionID: String? = null
+                var numSegments: Int? = null
+                lateinit var technicalCode: EbicsReturnCode
+                lateinit var bankCode: EbicsReturnCode
+                var orderID: String? = null
+                var segmentNumber: Int? = null
+                var payloadChunk: String? = null
+                var dataEncryptionInfo: DataEncryptionInfo? = null
+                one("header") {
+                    one("static") {
+                        transactionID = opt("TransactionID")?.text()
+                        numSegments = opt("NumSegments")?.text()?.toInt()
+                    }
+                    one("mutable") {
+                        segmentNumber = opt("SegmentNumber")?.text()?.toInt()
+                        orderID = opt("OrderID")?.text()
+                        technicalCode = EbicsReturnCode.lookup(one("ReturnCode").text())
+                    }
+                }
+                one("body") {
+                    opt("DataTransfer") {
+                        payloadChunk = one("OrderData").text()
+                        dataEncryptionInfo = opt("DataEncryptionInfo") {
+                            DataEncryptionInfo(
+                                one("TransactionKey").text().decodeBase64(),
+                                one("EncryptionPubKeyDigest").text().decodeBase64()
+                            )
+                        }
+                    }
+                    bankCode = EbicsReturnCode.lookup(one("ReturnCode").text())
+                }
+                EbicsResponse(
+                    bankCode = bankCode,
+                    technicalCode = technicalCode,
+                    content = EbicsResponseContent(
+                        transactionID = transactionID,
+                        orderID = orderID,
+                        payloadChunk = payloadChunk,
+                        dataEncryptionInfo = dataEncryptionInfo,
+                        numSegments = numSegments,
+                        segmentNumber = segmentNumber
+                    )
+                )
+            }
+        }
     }
 }
+
+
+data class EbicsResponse(
+    val technicalCode: EbicsReturnCode,
+    val bankCode: EbicsReturnCode,
+    private val content: EbicsResponseContent
+) {
+    /** Checks that return codes are both EBICS_OK or throw an exception */
+    fun okOrFail(phase: String): EbicsResponseContent {
+        logger.debug("$phase return codes: $technicalCode & $bankCode")
+        require(technicalCode.kind() != EbicsReturnCode.Kind.Error) {
+            "$phase has technical error: $technicalCode"
+        }
+        require(bankCode.kind() != EbicsReturnCode.Kind.Error) {
+            "$phase has bank error: $bankCode"
+        }
+        return content
+    }
+}
+
+data class EbicsResponseContent(
+    val transactionID: String?,
+    val orderID: String?,
+    val dataEncryptionInfo: DataEncryptionInfo?,
+    val payloadChunk: String?,
+    val segmentNumber: Int?,
+    val numSegments: Int?
+)

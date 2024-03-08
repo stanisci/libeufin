@@ -41,7 +41,7 @@ interface XmlBuilder {
     fun text(content: String)
 
     companion object {
-        fun toString(root: String, f: XmlBuilder.() -> Unit): String {
+        fun toBytes(root: String, f: XmlBuilder.() -> Unit): ByteArray {
             val factory = XMLOutputFactory.newFactory()
             val stream = StringWriter()
             var writer = factory.createXMLStreamWriter(stream)
@@ -54,7 +54,7 @@ interface XmlBuilder {
                 this.f()
             }
             writer.writeEndDocument()
-            return stream.buffer.toString()
+            return stream.buffer.toString().toByteArray()
         }
 
         fun toDom(root: String, schema: String?, f: XmlBuilder.() -> Unit): Document {

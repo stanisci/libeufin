@@ -82,7 +82,7 @@ private suspend fun downloadHelper(
     doc: SupportedDocument,
     processing: (InputStream) -> Unit
 ) {
-    val initXml = Ebics3Impl(
+    val initXml = Ebics3BTS(
         ctx.cfg,
         ctx.bankKeys,
         ctx.clientKeys

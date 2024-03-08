@@ -24,36 +24,40 @@ import tech.libeufin.nexus.*
 import tech.libeufin.nexus.ebics.*
 import kotlin.io.path.Path
 import kotlin.io.path.writeBytes
-import kotlin.test.assertEquals
+import kotlin.test.*
 
-class Ebics {
+class EbicsTest {
     // POSTs an EBICS message to the mock bank.  Tests
     // the main branches: unreachable bank, non-200 status
     // code, and 200.
     @Test
-    fun postMessage() = conf { config -> 
-        val client404 = getMockedClient {
-            respondError(HttpStatusCode.NotFound)
-        }
-        val clientNoResponse = getMockedClient {
-            throw Exception("Network issue.")
-        }
-        val clientOk = getMockedClient {
-            respondOk("Not EBICS anyway.")
-        }
-        runCatching {
-            client404.postToBank("http://ignored.example.com/", "ignored".toByteArray())
+    fun postMessage() = conf { config ->
+        assertFailsWith<EbicsError.Transport> {
+            getMockedClient {
+                respondError(HttpStatusCode.NotFound)
+            }.postToBank("http://ignored.example.com/", ByteArray(0))
         }.run {
-            val exp = exceptionOrNull()!!
-            assertEquals(exp.message, "Invalid response status: 404 Not Found")
+            assertEquals("bank HTTP error: 404 Not Found", message)
         }
-        runCatching {
-            clientNoResponse.postToBank("http://ignored.example.com/", "ignored".toByteArray())
+        assertFailsWith<EbicsError.Transport> {
+            getMockedClient {
+                throw Exception("Simulate failure")
+            }.postToBank("http://ignored.example.com/", ByteArray(0))
         }.run {
-            val exp = exceptionOrNull()!!
-            assertEquals(exp.message, "Network issue.")
+            assertEquals("failed to contact bank", message)
+            assertEquals("Simulate failure", cause!!.message)
         }
-        clientOk.postToBank("http://ignored.example.com/", "ignored".toByteArray())
+        assertFailsWith<EbicsError.Protocol> {
+            getMockedClient {
+                respondOk("<ebics broken></ebics>")
+            }.postToBank("http://ignored.example.com/", ByteArray(0))
+        }.run {
+            assertEquals("invalid XML bank reponse", message)
+            assertEquals("Attribute name \"broken\" associated with an element type \"ebics\" must be followed by the ' = ' character.", cause!!.message)
+        }
+        getMockedClient {
+            respondOk("<ebics></ebics>")
+        }.postToBank("http://ignored.example.com/", ByteArray(0))
     }
 
     // Tests that internal repr. of keys lead to valid PDF.

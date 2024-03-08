@@ -81,8 +81,8 @@ fun String.spaceEachTwo() =
  * @return true if the user accepted, false otherwise.
  */
 private fun askUserToAcceptKeys(bankKeys: BankPublicKeysFile): Boolean {
-    val encHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).toHexString()
-    val authHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).toHexString()
+    val encHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeUpHex()
+    val authHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).encodeUpHex()
     println("The bank has the following keys:")
     println("Encryption key: ${encHash.spaceEachTwo()}")
     println("Authentication key: ${authHash.spaceEachTwo()}")
@@ -158,9 +158,6 @@ suspend fun doKeysRequestAndUpdateState(
         throw Exception("Could not POST the ${orderType.name} message to the bank at '${cfg.hostBaseUrl}'", e)
     }
     val ebics = parseKeysMgmtResponse(privs.encryption_private_key, xml)
-    if (ebics == null) {
-        throw Exception("Could not get any EBICS from the bank ${orderType.name} response ($xml).")
-    }
     if (ebics.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
         throw Exception("EBICS ${orderType.name} failed with code: ${ebics.technicalReturnCode}")
     }

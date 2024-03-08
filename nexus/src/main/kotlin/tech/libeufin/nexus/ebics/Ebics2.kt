@@ -25,6 +25,7 @@ package tech.libeufin.nexus.ebics
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.w3c.dom.Document
 import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.common.*
 import tech.libeufin.nexus.*
@@ -53,9 +54,9 @@ private val logger: Logger = LoggerFactory.getLogger("libeufin-nexus-ebics2")
  */
 fun parseKeysMgmtResponse(
     clientEncryptionKey: RSAPrivateCrtKey,
-    xml: InputStream
-): EbicsKeyManagementResponseContent? {
-    return XmlDestructor.fromStream(xml, "ebicsKeyManagementResponse") {
+    xml: Document
+): EbicsKeyManagementResponseContent {
+    return XmlDestructor.fromDoc(xml, "ebicsKeyManagementResponse") {
         lateinit var technicalReturnCode: EbicsReturnCode
         lateinit var bankReturnCode: EbicsReturnCode
         lateinit var reportText: String
@@ -89,20 +90,20 @@ fun parseKeysMgmtResponse(
 private fun XmlBuilder.RSAKeyXml(key: RSAPrivateCrtKey) {
     el("ns2:PubKeyValue") {
         el("ds:RSAKeyValue") {
-            el("ds:Modulus", key.modulus.toByteArray().encodeBase64())
-            el("ds:Exponent", key.publicExponent.toByteArray().encodeBase64())
+            el("ds:Modulus", key.modulus.encodeBase64())
+            el("ds:Exponent", key.publicExponent.encodeBase64())
         }
     }
 }
 
 private fun XMLOrderData(cfg: EbicsSetupConfig, name: String, schema: String, build: XmlBuilder.() -> Unit): String {
-    return XmlBuilder.toString(name) {
+    return XmlBuilder.toBytes(name) {
         attr("xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
         attr("xmlns:ns2", schema)
         build()
         el("ns2:PartnerID", cfg.ebicsPartnerId)
         el("ns2:UserID", cfg.ebicsUserId)
-    }.toByteArray().inputStream().deflate().readAllBytes().encodeBase64() // TODO opti
+    }.inputStream().deflate().encodeBase64()
 }
 
 /**
@@ -204,7 +205,7 @@ fun generateHpbMessage(cfg: EbicsSetupConfig, clientKeys: ClientPrivateKeysFile)
             attr("authenticate", "true")
             el("static") {
                 el("HostID", cfg.ebicsHostId)
-                el("Nonce", nonce.toHexString())
+                el("Nonce", nonce.encodeUpHex())
                 el("Timestamp", Instant.now().xmlDateTime())
                 el("PartnerID", cfg.ebicsPartnerId)
                 el("UserID", cfg.ebicsUserId)
@@ -266,3 +267,9 @@ fun parseEbicsHpbOrder(orderDataRaw: InputStream): HpbResponseData {
         )
     }
 }
+
+data class EbicsKeyManagementResponseContent(
+    val technicalReturnCode: EbicsReturnCode,
+    val bankReturnCode: EbicsReturnCode?,
+    val orderData: ByteArray?
+)

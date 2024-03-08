@@ -19,12 +19,48 @@
 
 package tech.libeufin.common
 
-import java.io.FilterInputStream
-import java.io.InputStream
+import java.math.BigInteger
 import java.util.*
 import java.util.zip.DeflaterInputStream
 import java.util.zip.InflaterInputStream
 import java.util.zip.ZipInputStream
+import java.io.FilterInputStream
+import java.io.InputStream
+import java.io.ByteArrayOutputStream
+
+fun getQueryParam(uriQueryString: String, param: String): String? {
+    // TODO replace with ktor API ?
+    uriQueryString.split('&').forEach {
+        val kv = it.split('=')
+        if (kv[0] == param)
+            return kv[1]
+    }
+    return null
+}
+
+/* ----- String ----- */
+
+fun String.decodeBase64(): ByteArray = Base64.getDecoder().decode(this)
+fun String.decodeUpHex(): ByteArray = HexFormat.of().withUpperCase().parseHex(this)
+
+fun String.splitOnce(pat: String): Pair<String, String>? {
+    val split = split(pat, limit=2)
+    if (split.size != 2) return null
+    return Pair(split[0], split[1])
+}
+
+/* ----- BigInteger -----*/
+
+fun BigInteger.encodeHex(): String = this.toByteArray().encodeHex()
+fun BigInteger.encodeBase64(): String = this.toByteArray().encodeBase64()
+
+/* ----- ByteArray ----- */
+
+fun ByteArray.encodeHex(): String = HexFormat.of().formatHex(this)
+fun ByteArray.encodeUpHex(): String = HexFormat.of().withUpperCase().formatHex(this)
+fun ByteArray.encodeBase64(): String = Base64.getEncoder().encodeToString(this)
+
+/* ----- InputStream ----- */
 
 /** Unzip an input stream and run [lambda] over each entry */
 fun InputStream.unzipEach(lambda: (String, InputStream) -> Unit) {
@@ -45,6 +81,15 @@ fun InputStream.unzipEach(lambda: (String, InputStream) -> Unit) {
 /** Decode a base64 an input stream */
 fun InputStream.decodeBase64(): InputStream 
     = Base64.getDecoder().wrap(this)
+
+/** Decode a base64 an input stream */
+fun InputStream.encodeBase64(): String {
+    val w = ByteArrayOutputStream()
+    val encoded = Base64.getEncoder().wrap(w)
+    transferTo(encoded)
+    encoded.close()
+    return w.toString(Charsets.UTF_8)
+}
 
 /** Deflate an input stream */
 fun InputStream.deflate(): DeflaterInputStream 
