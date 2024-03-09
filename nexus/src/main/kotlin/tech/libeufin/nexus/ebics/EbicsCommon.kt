@@ -78,15 +78,14 @@ enum class SupportedDocument {
  *                            one actually used to encrypt the payload.
  * @param encryptionInfo details related to the encrypted payload.
  * @param chunks the several chunks that constitute the whole encrypted payload.
- * @return the plain payload.  Errors throw, so the caller must handle those.
+ * @return the plain payload.
  */
 fun decryptAndDecompressPayload(
     clientEncryptionKey: RSAPrivateCrtKey,
     encryptionInfo: DataEncryptionInfo,
-    chunks: List<String>
+    chunks: List<ByteArray>
 ): InputStream =
-    SequenceInputStream(Collections.enumeration(chunks.map { it.toByteArray().inputStream() })) // Aggregate
-        .decodeBase64()
+    SequenceInputStream(Collections.enumeration(chunks.map { it.inputStream() })) // Aggregate
         .run {
             CryptoUtil.decryptEbicsE002(
                 encryptionInfo.transactionKey,
@@ -233,7 +232,7 @@ suspend fun ebicsDownload(
         checkCancellation()
 
         // Decompress encrypted chunks
-        val payloadBytes = try {
+        val payloadStream = try {
             decryptAndDecompressPayload(
                 clientKeys.encryption_private_key,
                 dataEncryptionInfo,
@@ -247,7 +246,7 @@ suspend fun ebicsDownload(
 
         // Run business logic
         val res = runCatching {
-            processing(payloadBytes)
+            processing(payloadStream)
         }
 
         // First send a proper EBICS transaction receipt

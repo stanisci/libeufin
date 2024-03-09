@@ -339,7 +339,7 @@ class Ebics3BTS(
                 lateinit var bankCode: EbicsReturnCode
                 var orderID: String? = null
                 var segmentNumber: Int? = null
-                var payloadChunk: String? = null
+                var payloadChunk: ByteArray? = null
                 var dataEncryptionInfo: DataEncryptionInfo? = null
                 one("header") {
                     one("static") {
@@ -354,7 +354,7 @@ class Ebics3BTS(
                 }
                 one("body") {
                     opt("DataTransfer") {
-                        payloadChunk = one("OrderData").text()
+                        payloadChunk = one("OrderData").text().decodeBase64()
                         dataEncryptionInfo = opt("DataEncryptionInfo") {
                             DataEncryptionInfo(
                                 one("TransactionKey").text().decodeBase64(),
@@ -385,7 +385,7 @@ data class BTSResponse(
     val transactionID: String?,
     val orderID: String?,
     val dataEncryptionInfo: DataEncryptionInfo?,
-    val payloadChunk: String?,
+    val payloadChunk: ByteArray?,
     val segmentNumber: Int?,
     val numSegments: Int?
 )

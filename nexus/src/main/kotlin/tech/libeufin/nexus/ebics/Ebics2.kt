@@ -160,11 +160,11 @@ class Ebics3KeyMng(
     }
 
     companion object {
-        fun parseResponse(doc: Document, clientEncryptionKey: RSAPrivateCrtKey): EbicsResponse<ByteArray?> {
+        fun parseResponse(doc: Document, clientEncryptionKey: RSAPrivateCrtKey): EbicsResponse<InputStream?> {
             return XmlDestructor.fromDoc(doc, "ebicsKeyManagementResponse") {
                 lateinit var technicalCode: EbicsReturnCode
                 lateinit var bankCode: EbicsReturnCode
-                var payload: ByteArray? = null
+                var payload: InputStream? = null
                 one("header") {
                     one("mutable") {
                         technicalCode = EbicsReturnCode.lookup(one("ReturnCode").text())
@@ -179,11 +179,12 @@ class Ebics3KeyMng(
                                 one("EncryptionPubKeyDigest").text().decodeBase64()
                             )
                         }
+                        val chunk = one("OrderData").text().decodeBase64()
                         decryptAndDecompressPayload(
                             clientEncryptionKey,
                             descriptionInfo,
-                            listOf(one("OrderData").text())
-                        ).readBytes()
+                            listOf(chunk)
+                        )
                     }
                 }
                 EbicsResponse(
@@ -194,8 +195,8 @@ class Ebics3KeyMng(
             }
         }
 
-        fun parseHpbOrder(data: ByteArray): Pair<RSAPublicKey, RSAPublicKey> {
-            return XmlDestructor.fromStream(data.inputStream(), "HPBResponseOrderData") {
+        fun parseHpbOrder(data: InputStream): Pair<RSAPublicKey, RSAPublicKey> {
+            return XmlDestructor.fromStream(data, "HPBResponseOrderData") {
                 val authPub = one("AuthenticationPubKeyInfo").one("PubKeyValue").one("RSAKeyValue") {
                     CryptoUtil.loadRsaPublicKeyFromComponents(
                         one("Modulus").text().decodeBase64(),
