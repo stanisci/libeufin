@@ -36,14 +36,6 @@ import java.security.interfaces.*
 fun Instant.xmlDate(): String = DateTimeFormatter.ISO_DATE.withZone(ZoneId.of("UTC")).format(this)
 fun Instant.xmlDateTime(): String = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneId.of("UTC")).format(this)
 
-data class Ebics3Service(
-    val name: String,
-    val scope: String,
-    val messageName: String,
-    val messageVersion: String,
-    val container: String?
-)
-
 // TODO WIP
 fun iniRequest(
     cfg: EbicsSetupConfig, 
@@ -94,110 +86,9 @@ class Ebics3BTS(
     private val bankKeys: BankPublicKeysFile,
     private val clientKeys: ClientPrivateKeysFile
 ) {
-
-    /* ----- Ergonomic entrypoints ----- */
-
-    fun downloadInitializationDoc(whichDoc: SupportedDocument, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
-        val (orderType, service) = when (whichDoc) {
-            SupportedDocument.PAIN_002 -> Pair("BTD", Ebics3Service("PSR", "CH", "pain.002", "10", "ZIP"))
-            SupportedDocument.CAMT_052 -> Pair("BTD", Ebics3Service("STM", "CH", "camt.052", "08", "ZIP"))
-            SupportedDocument.CAMT_053 -> Pair("BTD", Ebics3Service("EOP", "CH", "camt.053", "08", "ZIP"))
-            SupportedDocument.CAMT_054 -> Pair("BTD", Ebics3Service("REP", "CH", "camt.054", "08", "ZIP"))
-            SupportedDocument.PAIN_002_LOGS -> Pair("HAC", null)
-        }
-        return downloadInitialization(orderType, service, startDate, endDate)
-    }
-
-    /* ----- Upload ----- */
-
-    fun uploadInitialization(service: Ebics3Service, preparedUploadData: PreparedUploadData): ByteArray {
-        val nonce = getNonce(128)
-        return signedRequest {
-            el("header") {
-                attr("authenticate", "true")
-                el("static") {
-                    el("HostID", cfg.ebicsHostId)
-                    el("Nonce", nonce.encodeUpHex())
-                    el("Timestamp", Instant.now().xmlDateTime())
-                    el("PartnerID", cfg.ebicsPartnerId)
-                    el("UserID", cfg.ebicsUserId)
-                    // SystemID
-                    // Product
-                    el("OrderDetails") {
-                        el("AdminOrderType", "BTU")
-                        el("BTUOrderParams") {
-                            el("Service") {
-                                el("ServiceName", service.name)
-                                el("Scope", service.scope)
-                                el("MsgName") {
-                                    attr("version", service.messageVersion)
-                                    text(service.messageName)
-                                }
-                            }
-                            el("SignatureFlag", "true")
-                        }
-                    }
-                    bankDigest()
-                    el("NumSegments", "1") // TODO test upload of many segment
-                    
-                }
-                el("mutable") {
-                    el("TransactionPhase", "Initialisation")
-                }
-            }
-            el("AuthSignature")
-            el("body") {
-                el("DataTransfer") {
-                    el("DataEncryptionInfo") {
-                        attr("authenticate", "true")
-                        el("EncryptionPubKeyDigest") {
-                            attr("Version", "E002")
-                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
-                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
-                        }
-                        el("TransactionKey", preparedUploadData.transactionKey.encodeBase64())
-                    }
-                    el("SignatureData") {
-                        attr("authenticate", "true")
-                        text(preparedUploadData.userSignatureDataEncrypted.encodeBase64())
-                    }
-                    el("DataDigest") {
-                        attr("SignatureVersion", "A006")
-                        text(preparedUploadData.dataDigest.encodeBase64())
-                    }
-                }
-            }
-        }
-    }
-
-    fun uploadTransfer(
-        transactionId: String,
-        uploadData: PreparedUploadData
-    ): ByteArray {
-        val chunkIndex = 1 // TODO test upload of many segment
-        return signedRequest {
-            el("header") {
-                attr("authenticate", "true")
-                el("static") {
-                    el("HostID", cfg.ebicsHostId)
-                    el("TransactionID", transactionId)
-                }
-                el("mutable") {
-                    el("TransactionPhase", "Transfer")
-                    el("SegmentNumber") {
-                        attr("lastSegment", "true")
-                        text(chunkIndex.toString())
-                    }
-                }
-            }
-            el("AuthSignature")
-            el("body/DataTransfer/OrderData", uploadData.encryptedPayloadChunks[chunkIndex - 1])
-        }
-    }
-
     /* ----- Download ----- */
 
-    fun downloadInitialization(orderType: String, service: Ebics3Service? = null, startDate: Instant? = null, endDate: Instant? = null): ByteArray {
+    fun downloadInitialization(orderType: String, service: Ebics3Service?, startDate: Instant?, endDate: Instant?): ByteArray {
         val nonce = getNonce(128)
         return signedRequest {
             el("header") {
@@ -291,6 +182,93 @@ class Ebics3BTS(
                 attr("authenticate", "true")
                 el("ReceiptCode", if (success) "0" else "1")
             }
+        }
+    }
+
+    /* ----- Upload ----- */
+
+    fun uploadInitialization(service: Ebics3Service, preparedUploadData: PreparedUploadData): ByteArray {
+        val nonce = getNonce(128)
+        return signedRequest {
+            el("header") {
+                attr("authenticate", "true")
+                el("static") {
+                    el("HostID", cfg.ebicsHostId)
+                    el("Nonce", nonce.encodeUpHex())
+                    el("Timestamp", Instant.now().xmlDateTime())
+                    el("PartnerID", cfg.ebicsPartnerId)
+                    el("UserID", cfg.ebicsUserId)
+                    // SystemID
+                    // Product
+                    el("OrderDetails") {
+                        el("AdminOrderType", "BTU")
+                        el("BTUOrderParams") {
+                            el("Service") {
+                                el("ServiceName", service.name)
+                                el("Scope", service.scope)
+                                el("MsgName") {
+                                    attr("version", service.messageVersion)
+                                    text(service.messageName)
+                                }
+                            }
+                            el("SignatureFlag", "true")
+                        }
+                    }
+                    bankDigest()
+                    el("NumSegments", "1") // TODO test upload of many segment
+                    
+                }
+                el("mutable") {
+                    el("TransactionPhase", "Initialisation")
+                }
+            }
+            el("AuthSignature")
+            el("body") {
+                el("DataTransfer") {
+                    el("DataEncryptionInfo") {
+                        attr("authenticate", "true")
+                        el("EncryptionPubKeyDigest") {
+                            attr("Version", "E002")
+                            attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
+                            text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
+                        }
+                        el("TransactionKey", preparedUploadData.transactionKey.encodeBase64())
+                    }
+                    el("SignatureData") {
+                        attr("authenticate", "true")
+                        text(preparedUploadData.userSignatureDataEncrypted.encodeBase64())
+                    }
+                    el("DataDigest") {
+                        attr("SignatureVersion", "A006")
+                        text(preparedUploadData.dataDigest.encodeBase64())
+                    }
+                }
+            }
+        }
+    }
+
+    fun uploadTransfer(
+        transactionId: String,
+        uploadData: PreparedUploadData
+    ): ByteArray {
+        val chunkIndex = 1 // TODO test upload of many segment
+        return signedRequest {
+            el("header") {
+                attr("authenticate", "true")
+                el("static") {
+                    el("HostID", cfg.ebicsHostId)
+                    el("TransactionID", transactionId)
+                }
+                el("mutable") {
+                    el("TransactionPhase", "Transfer")
+                    el("SegmentNumber") {
+                        attr("lastSegment", "true")
+                        text(chunkIndex.toString())
+                    }
+                }
+            }
+            el("AuthSignature")
+            el("body/DataTransfer/OrderData", uploadData.encryptedPayloadChunks[chunkIndex - 1])
         }
     }
 

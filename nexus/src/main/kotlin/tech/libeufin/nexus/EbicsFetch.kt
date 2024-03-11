@@ -65,39 +65,6 @@ data class FetchContext(
 )
 
 /**
- * Downloads content via EBICS, according to the order params passed
- * by the caller.
- *
- * @param T [Ebics2Request] for EBICS 2 or [Ebics3Request.OrderDetails.BTOrderParams] for EBICS 3
- * @param ctx [FetchContext]
- * @param req contains the instructions for the download, namely
- *            which document is going to be downloaded from the bank.
- * @return the [ByteArray] payload.  On an empty response, the array
- *         length is zero.  It returns null, if the bank assigned an
- *         error to the EBICS transaction.
- */
-private suspend fun downloadHelper(
-    ctx: FetchContext,
-    lastExecutionTime: Instant? = null,
-    doc: SupportedDocument,
-    processing: (InputStream) -> Unit
-) {
-    val initXml = Ebics3BTS(
-        ctx.cfg,
-        ctx.bankKeys,
-        ctx.clientKeys
-    ).downloadInitializationDoc(doc, lastExecutionTime)
-    return ebicsDownload(
-        ctx.httpClient,
-        ctx.cfg,
-        ctx.clientKeys,
-        ctx.bankKeys,
-        initXml,
-        processing
-    )
-}
-
-/**
  * Converts the 2-digits fraction value as given by the bank
  * (postfinance dialect), to the Taler 8-digit value (db representation).
  *
@@ -316,9 +283,19 @@ private suspend fun fetchDocuments(
             } else {
                 logger.info("Fetching '${doc.fullDescription()}' from timestamp: $lastExecutionTime")
             }
-            val doc = doc.doc()
             // downloading the content
-            downloadHelper(ctx, lastExecutionTime, doc) { stream ->
+            val doc = doc.doc()
+            val (orderType, service) = downloadDocService(doc)
+            ebicsDownload(
+                ctx.httpClient,
+                ctx.cfg,
+                ctx.clientKeys,
+                ctx.bankKeys,
+                orderType,
+                service,
+                lastExecutionTime,
+                null
+            ) { stream ->
                 val loggedStream = ctx.fileLogger.logFetch(
                     stream,
                     doc == SupportedDocument.PAIN_002_LOGS

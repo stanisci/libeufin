@@ -48,6 +48,7 @@ import java.security.interfaces.RSAPrivateCrtKey
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
+import java.time.Instant
 import kotlinx.coroutines.*
 import java.security.SecureRandom
 import org.w3c.dom.Document
@@ -169,8 +170,11 @@ suspend fun ebicsDownload(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
-    reqXml: ByteArray,
-    processing: (InputStream) -> Unit
+    orderType: String,
+    service: Ebics3Service?,
+    startDate: Instant?, 
+    endDate: Instant?,
+    processing: (InputStream) -> Unit,
 ) = coroutineScope {
     val impl = Ebics3BTS(cfg, bankKeys, clientKeys)
     val parentScope = this
@@ -181,7 +185,8 @@ suspend fun ebicsDownload(
     // TODO find a way to cancel the pending transaction ?
     withContext(NonCancellable) {
         // Init phase
-        val initResp = postBTS(client, cfg, bankKeys, reqXml)
+        val initReq = impl.downloadInitialization(orderType, service, startDate, endDate)
+        val initResp = postBTS(client, cfg, bankKeys, initReq)
         if (initResp.bankCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
            logger.debug("Download content is empty")
            return@withContext
