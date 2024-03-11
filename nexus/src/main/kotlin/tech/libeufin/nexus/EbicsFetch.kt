@@ -285,14 +285,13 @@ private suspend fun fetchDocuments(
             }
             // downloading the content
             val doc = doc.doc()
-            val (orderType, service) = downloadDocService(doc)
+            val order = downloadDocService(doc, doc == SupportedDocument.PAIN_002_LOGS)
             ebicsDownload(
                 ctx.httpClient,
                 ctx.cfg,
                 ctx.clientKeys,
                 ctx.bankKeys,
-                orderType,
-                service,
+                order,
                 lastExecutionTime,
                 null
             ) { stream ->

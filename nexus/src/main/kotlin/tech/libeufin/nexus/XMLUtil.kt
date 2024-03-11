@@ -113,11 +113,10 @@ object XMLUtil {
     fun signEbicsDocument(
         doc: Document,
         signingPriv: PrivateKey,
-        withEbics3: Boolean = false
+        schema: String
     ) {
-        val ns = if (withEbics3) "urn:org:ebics:H005" else "urn:org:ebics:H004"
         val authSigNode = XPathFactory.newInstance().newXPath()
-            .evaluate("/*[1]/$ns:AuthSignature", doc, XPathConstants.NODE)
+            .evaluate("/*[1]/urn:org:ebics:$schema:AuthSignature", doc, XPathConstants.NODE)
         if (authSigNode !is Node)
             throw java.lang.Exception("no AuthSignature")
         val fac = XMLSignatureFactory.getInstance("DOM")
@@ -150,12 +149,11 @@ object XMLUtil {
     fun verifyEbicsDocument(
         doc: Document,
         signingPub: PublicKey,
-        withEbics3: Boolean = false
+        schema: String
     ): Boolean {
         val doc2: Document = doc.cloneNode(true) as Document
-        val ns = if (withEbics3) "urn:org:ebics:H005" else "urn:org:ebics:H004"
         val authSigNode = XPathFactory.newInstance().newXPath()
-            .evaluate("/*[1]/$ns:AuthSignature", doc2, XPathConstants.NODE)
+            .evaluate("/*[1]/urn:org:ebics:$schema:AuthSignature", doc2, XPathConstants.NODE)
         if (authSigNode !is Node)
             throw java.lang.Exception("no AuthSignature")
         val sigEl = doc2.createElementNS("http://www.w3.org/2000/09/xmldsig#", "ds:Signature")

@@ -109,45 +109,45 @@ sealed class EbicsError(msg: String, cause: Throwable? = null): Exception(msg, c
  * @param msg EBICS message as raw bytes.
  * @return the raw bank response.
  */
-suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray): Document {
+suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray, phase: String): Document {
     val res = try {
         post(urlString = bankUrl) {
             contentType(ContentType.Text.Xml)
             setBody(msg)
         }
     } catch (e: Exception) {
-        throw EbicsError.Transport("failed to contact bank", e)
+        throw EbicsError.Transport("$phase: failed to contact bank", e)
     }
     
     if (res.status != HttpStatusCode.OK) {
-        throw EbicsError.Transport("bank HTTP error: ${res.status}")
+        throw EbicsError.Transport("$phase: bank HTTP error: ${res.status}")
     }
     try {
         return XMLUtil.parseIntoDom(res.bodyAsChannel().toInputStream())
     } catch (e: SAXException) {
-        throw EbicsError.Protocol("invalid XML bank reponse", e)
+        throw EbicsError.Protocol("$phase: invalid XML bank reponse", e)
     } catch (e: Exception) {
-        throw EbicsError.Transport("failed read bank response", e)
+        throw EbicsError.Transport("$phase: failed read bank response", e)
     }
 }
-suspend fun postBTS(
+
+suspend fun EbicsBTS.postBTS(
     client: HttpClient,
-    cfg: EbicsSetupConfig,
-    bankKeys: BankPublicKeysFile,
-    xmlReq: ByteArray
+    xmlReq: ByteArray,
+    phase: String,
 ): EbicsResponse<BTSResponse> {
-    val doc = client.postToBank(cfg.hostBaseUrl, xmlReq)
+    val doc = client.postToBank(cfg.hostBaseUrl, xmlReq, phase)
     if (!XMLUtil.verifyEbicsDocument(
         doc,
         bankKeys.bank_authentication_public_key,
-        true
+        order.schema
     )) {
-        throw EbicsError.Protocol("bank signature did not verify")
+        throw EbicsError.Protocol("$phase: bank signature did not verify")
     }
     try {
-        return Ebics3BTS.parseResponse(doc)
+        return EbicsBTS.parseResponse(doc)
     } catch (e: Exception) {
-        throw EbicsError.Protocol("invalid ebics response", e)
+        throw EbicsError.Protocol("$phase: invalid ebics response", e)
     }
 }
 
@@ -170,13 +170,12 @@ suspend fun ebicsDownload(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
-    orderType: String,
-    service: Ebics3Service?,
+    order: EbicsOrder,
     startDate: Instant?, 
     endDate: Instant?,
     processing: (InputStream) -> Unit,
 ) = coroutineScope {
-    val impl = Ebics3BTS(cfg, bankKeys, clientKeys)
+    val impl = EbicsBTS(cfg, bankKeys, clientKeys, order)
     val parentScope = this
     
     // We need to run the logic in a non-cancelable context because we need to send 
@@ -185,8 +184,8 @@ suspend fun ebicsDownload(
     // TODO find a way to cancel the pending transaction ?
     withContext(NonCancellable) {
         // Init phase
-        val initReq = impl.downloadInitialization(orderType, service, startDate, endDate)
-        val initResp = postBTS(client, cfg, bankKeys, initReq)
+        val initReq = impl.downloadInitialization(startDate, endDate)
+        val initResp = impl.postBTS(client, initReq, "Download init phase")
         if (initResp.bankCode == EbicsReturnCode.EBICS_NO_DOWNLOAD_DATA_AVAILABLE) {
            logger.debug("Download content is empty")
            return@withContext
@@ -210,7 +209,7 @@ suspend fun ebicsDownload(
         /** Send download receipt */
         suspend fun receipt(success: Boolean) {
             val xml = impl.downloadReceipt(tId, success)
-            postBTS(client, cfg, bankKeys, xml).okOrFail("Download receipt phase")
+            impl.postBTS(client, xml, "Download receipt phase").okOrFail("Download receipt phase")
         }
         /** Throw if parent scope have been canceled */
         suspend fun checkCancellation() {
@@ -227,7 +226,7 @@ suspend fun ebicsDownload(
         for (x in 2 .. howManySegments) {
             checkCancellation()
             val transReq = impl.downloadTransfer(x, howManySegments, tId)
-            val transResp = postBTS(client, cfg, bankKeys, transReq).okOrFail("Download transfer phase")
+            val transResp = impl.postBTS(client, transReq, "Download transfer phase").okOrFail("Download transfer phase")
             val chunk = requireNotNull(transResp.payloadChunk) {
                 "Download transfer phase: missing encrypted chunk"
             }
@@ -329,23 +328,23 @@ suspend fun doEbicsUpload(
     cfg: EbicsSetupConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
-    service: Ebics3Service,
+    order: EbicsOrder,
     payload: ByteArray,
 ): String = withContext(NonCancellable) {
-    val impl = Ebics3BTS(cfg, bankKeys, clientKeys)
+    val impl = EbicsBTS(cfg, bankKeys, clientKeys, order)
     // TODO use a lambda and pass the order detail there for atomicity ?
     val preparedPayload = prepareUploadPayload(cfg, clientKeys, bankKeys, payload)
     
     // Init phase
-    val initXml = impl.uploadInitialization(service, preparedPayload)
-    val initResp = postBTS(client, cfg, bankKeys, initXml).okOrFail("Upload init phase")
+    val initXml = impl.uploadInitialization(preparedPayload)
+    val initResp = impl.postBTS(client, initXml, "Upload init phase").okOrFail("Upload init phase")
     val tId = requireNotNull(initResp.transactionID) {
         "Upload init phase: missing transaction ID"
     }
 
     // Transfer phase
     val transferXml = impl.uploadTransfer(tId, preparedPayload)
-    val transferResp = postBTS(client, cfg, bankKeys, transferXml).okOrFail("Upload transfer phase")
+    val transferResp = impl.postBTS(client, transferXml, "Upload transfer phase").okOrFail("Upload transfer phase")
     val orderId = requireNotNull(transferResp.orderID) {
         "Upload transfer phase: missing order ID"
     }
@@ -373,45 +372,6 @@ class DataEncryptionInfo(
     val transactionKey: ByteArray,
     val bankPubDigest: ByteArray
 )
-
-/**
- * Collects all the steps to prepare the submission of a pain.001
- * document to the bank, and finally send it.  Indirectly throws
- * [EbicsSideException] or [EbicsUploadException].  The first means
- * that the bank sent an invalid response or signature, the second
- * that a proper EBICS or business error took place.  The caller must
- * catch those exceptions and decide the retry policy.
- *
- * @param pain001xml pain.001 document in XML.  The caller should
- *                   ensure its validity.
- * @param cfg configuration handle.
- * @param clientKeys client private keys.
- * @param bankkeys bank public keys.
- * @param httpClient HTTP client to connect to the bank.
- */
-suspend fun submitPain001(
-    pain001xml: ByteArray,
-    cfg: EbicsSetupConfig,
-    clientKeys: ClientPrivateKeysFile,
-    bankkeys: BankPublicKeysFile,
-    httpClient: HttpClient
-): String {
-    val service = Ebics3Service(
-        name = "MCT",
-        scope = "CH",
-        messageName = "pain.001",
-        messageVersion = "09",
-        container = null
-    )
-    return doEbicsUpload(
-        httpClient,
-        cfg,
-        clientKeys,
-        bankkeys,
-        service,
-        pain001xml,
-    )
-}
 
 class EbicsResponse<T>(
     val technicalCode: EbicsReturnCode,

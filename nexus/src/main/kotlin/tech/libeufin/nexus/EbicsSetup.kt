@@ -116,7 +116,7 @@ suspend fun doKeysRequestAndUpdateState(
         KeysOrderType.HIA -> impl.HIA()
         KeysOrderType.HPB -> impl.HPB()
     }
-    val xml = client.postToBank(cfg.hostBaseUrl, req)
+    val xml = client.postToBank(cfg.hostBaseUrl, req, "$orderType")
     val resp = Ebics3KeyMng.parseResponse(xml, privs.encryption_private_key)
     
     when (orderType) {

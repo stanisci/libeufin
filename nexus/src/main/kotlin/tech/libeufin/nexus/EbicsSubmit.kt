@@ -25,7 +25,7 @@ import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.client.*
 import kotlinx.coroutines.*
 import tech.libeufin.common.*
-import tech.libeufin.nexus.ebics.submitPain001
+import tech.libeufin.nexus.ebics.*
 import java.time.*
 import java.util.*
 
@@ -85,12 +85,13 @@ private suspend fun submitInitiatedPayment(
         wireTransferSubject = payment.wireTransferSubject
     )
     ctx.fileLogger.logSubmit(xml)
-    return submitPain001(
-        xml,
+    return doEbicsUpload(
+        ctx.httpClient,
         ctx.cfg,
         ctx.clientPrivateKeysFile,
         ctx.bankPublicKeysFile,
-        ctx.httpClient
+        uploadPaymentService(),
+        xml
     )
 }
 

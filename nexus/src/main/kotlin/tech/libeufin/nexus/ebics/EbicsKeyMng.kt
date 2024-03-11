@@ -17,10 +17,6 @@
  * <http://www.gnu.org/licenses/>
  */
 
-/**
- * This file contains helpers to construct EBICS 2.x requests.
- */
-
 package tech.libeufin.nexus.ebics
 
 import org.w3c.dom.Document
@@ -37,7 +33,7 @@ import java.util.*
 import javax.xml.datatype.DatatypeFactory
 import java.security.interfaces.*
 
-/** Ebics 3 protocol for  */
+/** EBICS protocol for key management */
 class Ebics3KeyMng(
     private val cfg: EbicsSetupConfig,
     private val clientKeys: ClientPrivateKeysFile
@@ -134,7 +130,7 @@ class Ebics3KeyMng(
             el("AuthSignature")
             el("body")
         }
-        XMLUtil.signEbicsDocument(doc, clientKeys.authentication_private_key)
+        XMLUtil.signEbicsDocument(doc, clientKeys.authentication_private_key, "H004")
         return XMLUtil.convertDomToBytes(doc)
     }
 
