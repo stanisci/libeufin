@@ -45,11 +45,7 @@ class Ebics3KeyMng(
                 el("ns2:SignatureVersion", "A006")
             }
         }
-        val doc = XmlBuilder.toDom("ebicsUnsecuredRequest", "urn:org:ebics:H004") {
-            attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H004")
-            attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
-            attr("Version", "H004")
-            attr("Revision", "1")
+        val doc = request("ebicsUnsecuredRequest") {
             el("header") {
                 attr("authenticate", "true")
                 el("static") {
@@ -80,11 +76,7 @@ class Ebics3KeyMng(
                 el("ns2:EncryptionVersion", "E002")
             }
         }
-        val doc = XmlBuilder.toDom("ebicsUnsecuredRequest", "urn:org:ebics:H004") {
-            attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H004")
-            attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
-            attr("Version", "H004")
-            attr("Revision", "1")
+        val doc = request("ebicsUnsecuredRequest") {
             el("header") {
                 attr("authenticate", "true")
                 el("static") {
@@ -106,11 +98,7 @@ class Ebics3KeyMng(
 
     fun HPB(): ByteArray {
         val nonce = getNonce(128)
-        val doc = XmlBuilder.toDom("ebicsNoPubKeyDigestsRequest", "urn:org:ebics:H004") {
-            attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H004")
-            attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
-            attr("Version", "H004")
-            attr("Revision", "1")
+        val doc = request("ebicsNoPubKeyDigestsRequest") {
             el("header") {
                 attr("authenticate", "true")
                 el("static") {
@@ -135,6 +123,16 @@ class Ebics3KeyMng(
     }
 
     /* ----- Helpers ----- */
+
+    private fun request(name: String, build: XmlBuilder.() -> Unit): Document {
+        return XmlBuilder.toDom(name, "urn:org:ebics:H004") {
+            attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H004")
+            attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
+            attr("Version", "H004")
+            attr("Revision", "1")
+            build()
+        }
+    }
 
     private fun XmlBuilder.RSAKeyXml(key: RSAPrivateCrtKey) {
         el("ns2:PubKeyValue") {

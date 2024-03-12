@@ -39,9 +39,9 @@ class XmlUtilTest {
         kpg.initialize(2048)
         val pair = kpg.genKeyPair()
         val otherPair = kpg.genKeyPair()
-        XMLUtil.signEbicsDocument(doc, pair.private)
-        kotlin.test.assertTrue(XMLUtil.verifyEbicsDocument(doc, pair.public))
-        kotlin.test.assertFalse(XMLUtil.verifyEbicsDocument(doc, otherPair.public))
+        XMLUtil.signEbicsDocument(doc, pair.private, "H004")
+        kotlin.test.assertTrue(XMLUtil.verifyEbicsDocument(doc, pair.public, "H004"))
+        kotlin.test.assertFalse(XMLUtil.verifyEbicsDocument(doc, otherPair.public, "H004"))
     }
 
     @Test
@@ -56,8 +56,8 @@ class XmlUtilTest {
         val kpg = KeyPairGenerator.getInstance("RSA")
         kpg.initialize(2048)
         val pair = kpg.genKeyPair()
-        XMLUtil.signEbicsDocument(doc, pair.private)
-        kotlin.test.assertTrue(XMLUtil.verifyEbicsDocument(doc, pair.public))
+        XMLUtil.signEbicsDocument(doc, pair.private, "H004")
+        kotlin.test.assertTrue(XMLUtil.verifyEbicsDocument(doc, pair.public, "H004"))
     }
 
     @Test
@@ -68,6 +68,6 @@ class XmlUtilTest {
         val keyStream = classLoader.getResourceAsStream("signature1/public_key.txt")
         val keyBytes = keyStream.decodeBase64().readAllBytes()
         val key = CryptoUtil.loadRsaPublicKey(keyBytes)
-        assertTrue(XMLUtil.verifyEbicsDocument(doc, key))
+        assertTrue(XMLUtil.verifyEbicsDocument(doc, key, "H004"))
     }
 }

@@ -35,29 +35,29 @@ class EbicsTest {
         assertFailsWith<EbicsError.Transport> {
             getMockedClient {
                 respondError(HttpStatusCode.NotFound)
-            }.postToBank("http://ignored.example.com/", ByteArray(0))
+            }.postToBank("http://ignored.example.com/", ByteArray(0), "Test")
         }.run {
-            assertEquals("bank HTTP error: 404 Not Found", message)
+            assertEquals("Test: bank HTTP error: 404 Not Found", message)
         }
         assertFailsWith<EbicsError.Transport> {
             getMockedClient {
                 throw Exception("Simulate failure")
-            }.postToBank("http://ignored.example.com/", ByteArray(0))
+            }.postToBank("http://ignored.example.com/", ByteArray(0), "Test")
         }.run {
-            assertEquals("failed to contact bank", message)
+            assertEquals("Test: failed to contact bank", message)
             assertEquals("Simulate failure", cause!!.message)
         }
         assertFailsWith<EbicsError.Protocol> {
             getMockedClient {
                 respondOk("<ebics broken></ebics>")
-            }.postToBank("http://ignored.example.com/", ByteArray(0))
+            }.postToBank("http://ignored.example.com/", ByteArray(0), "Test")
         }.run {
-            assertEquals("invalid XML bank reponse", message)
+            assertEquals("Test: invalid XML bank reponse", message)
             assertEquals("Attribute name \"broken\" associated with an element type \"ebics\" must be followed by the ' = ' character.", cause!!.message)
         }
         getMockedClient {
             respondOk("<ebics></ebics>")
-        }.postToBank("http://ignored.example.com/", ByteArray(0))
+        }.postToBank("http://ignored.example.com/", ByteArray(0), "Test")
     }
 
     // Tests that internal repr. of keys lead to valid PDF.
