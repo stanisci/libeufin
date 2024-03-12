@@ -162,85 +162,60 @@ class PaymentInitiationsTest {
         db.initiated.reversal("PAY5", "status reversal")
     }
 
-    // Tests creation, unique constraint violation handling, and
-    // retrieving only one non-submitted payment.
     @Test
-    fun paymentInitiation() = setup { db, _ -> 
-        val beEmpty = db.initiated.submittableGet("KUDOS") // expect no records.
-        assertEquals(beEmpty.size, 0)
-        val initPay = InitiatedPayment(
-            id = -1,
-            amount = TalerAmount(44, 0, "KUDOS"),
-            creditPaytoUri = "payto://iban/CH9300762011623852957?receiver-name=Test",
-            wireTransferSubject = "test",
-            requestUid = "unique",
-            initiationTime = Instant.now()
-        )
-        assertEquals(db.initiated.create(initPay), PaymentInitiationResult.SUCCESS)
-        assertEquals(db.initiated.create(initPay), PaymentInitiationResult.REQUEST_UID_REUSE)
-        val haveOne = db.initiated.submittableGet("KUDOS")
-        assertTrue("Size ${haveOne.size} instead of 1") {
-            haveOne.size == 1
-                    && haveOne.first().id == 1L
-                    && haveOne.first().requestUid == "unique"
+    fun submittable() = setup { db, _ -> 
+        for (i in 0..5) {
+            assertEquals(
+                PaymentInitiationResult.SUCCESS,
+                db.initiated.create(genInitPay(requestUid = "PAY$i"))
+            )
         }
-    }
-
-    /**
-     * The SQL that gets submittable payments checks multiple
-     * statuses from them.  Checking it here.
-     */
-    @Test
-    fun submittablePayments() = setup { db, _ -> 
-        val beEmpty = db.initiated.submittableGet("KUDOS")
-        assertEquals(0, beEmpty.size)
         assertEquals(
-            db.initiated.create(genInitPay(requestUid = "first")),
-            PaymentInitiationResult.SUCCESS
-        )
-        assertEquals(
-            db.initiated.create(genInitPay(requestUid = "second")),
-            PaymentInitiationResult.SUCCESS
-        )
-        assertEquals(
-            db.initiated.create(genInitPay(requestUid = "third")),
-            PaymentInitiationResult.SUCCESS
+            listOf("PAY0", "PAY1", "PAY2", "PAY3", "PAY4", "PAY5"),
+            db.initiated.submittable("KUDOS").map { it.requestUid }
         )
 
-        // Setting the first as "transient_failure", must be found.
-        db.initiated.submissionSuccess(1, Instant.now(), "Failure")
-        // Setting the second as "success", must not be found.
-        db.initiated.submissionSuccess(2, Instant.now(), "ORDER1234")
-        val expectTwo = db.initiated.submittableGet("KUDOS")
-        // the third initiation keeps the default "unsubmitted"
-        // state, must be found.  Total 2.
-        assertEquals(1, expectTwo.size)
-    }
+        // Check submitted not submitable
+        db.initiated.submissionSuccess(1, Instant.now(), "ORDER1")
+        assertEquals(
+            listOf("PAY1", "PAY2", "PAY3", "PAY4", "PAY5"),
+            db.initiated.submittable("KUDOS").map { it.requestUid }
+        )
 
-    // Tests how the fetch method gets the list of
-    // multiple unsubmitted payment initiations.
-    @Test
-    fun paymentInitiationsMultiple() = setup { db, _ -> 
-        assertEquals(db.initiated.create(genInitPay("#1", "unique1")), PaymentInitiationResult.SUCCESS)
-        assertEquals(db.initiated.create(genInitPay("#2", "unique2")), PaymentInitiationResult.SUCCESS)
-        assertEquals(db.initiated.create(genInitPay("#3", "unique3")), PaymentInitiationResult.SUCCESS)
-        assertEquals(db.initiated.create(genInitPay("#4", "unique4")), PaymentInitiationResult.SUCCESS)
+        // Check transient failure submitable last
+        db.initiated.submissionFailure(2, Instant.now(), "Failure")
+        assertEquals(
+            listOf("PAY2", "PAY3", "PAY4", "PAY5", "PAY1"),
+            db.initiated.submittable("KUDOS").map { it.requestUid }
+        )
 
-        // Marking one as submitted, hence not expecting it in the results.
-        db.conn { conn ->
-            conn.execSQLUpdate("""
-                UPDATE initiated_outgoing_transactions
-                    SET submitted='success'
-                    WHERE initiated_outgoing_transaction_id=3;
-            """.trimIndent())
-        }
+        // Check persistent failure not submitable
+        db.initiated.bankFailure("PAY3", "status failure")
+        assertEquals(
+            listOf("PAY2", "PAY4", "PAY5", "PAY1"),
+            db.initiated.submittable("KUDOS").map { it.requestUid }
+        )
+        db.initiated.reversal("PAY4", "status reversal")
+        assertEquals(
+            listOf("PAY2", "PAY5", "PAY1"),
+            db.initiated.submittable("KUDOS").map { it.requestUid }
+        )
 
-        // Expecting all the payments BUT the #3 in the result.
-        db.initiated.submittableGet("KUDOS").apply {
-            assertEquals(3, this.size)
-            assertEquals("#1", this[0].wireTransferSubject)
-            assertEquals("#2", this[1].wireTransferSubject)
-            assertEquals("#4", this[2].wireTransferSubject)
-        }
+        // Check rotation
+        db.initiated.submissionFailure(3, Instant.now(), "Failure")
+        assertEquals(
+            listOf("PAY5", "PAY1", "PAY2"),
+            db.initiated.submittable("KUDOS").map { it.requestUid }
+        )
+        db.initiated.submissionFailure(6, Instant.now(), "Failure")
+        assertEquals(
+            listOf("PAY1", "PAY2", "PAY5"),
+            db.initiated.submittable("KUDOS").map { it.requestUid }
+        )
+        db.initiated.submissionFailure(2, Instant.now(), "Failure")
+        assertEquals(
+            listOf("PAY2", "PAY5", "PAY1"),
+            db.initiated.submittable("KUDOS").map { it.requestUid }
+        )
     }
 }

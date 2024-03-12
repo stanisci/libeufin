@@ -110,7 +110,7 @@ private suspend fun submitBatch(
     ctx: SubmissionContext,
     db: Database,
 ) {
-    db.initiated.submittableGet(ctx.cfg.currency).forEach {
+    db.initiated.submittable(ctx.cfg.currency).forEach {
         logger.debug("Submitting payment '${it.requestUid}'")
         runCatching { submitInitiatedPayment(ctx, it) }.fold(
             onSuccess = { orderId -> 
@@ -119,7 +119,7 @@ private suspend fun submitBatch(
             },
             onFailure = { e ->
                 db.initiated.submissionFailure(it.id, Instant.now(), e.message)
-                logger.warn("Payment '${it.requestUid}' submission failure: ${e.message}")
+                logger.error("Payment '${it.requestUid}' submission failure: ${e.fmt()}")
                 throw e
             }
         )
@@ -175,7 +175,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
                 try {
                     submitBatch(ctx, db)
                 } catch (e: Exception) {
-                    throw Exception("Failed to submit payments", e)
+                    throw Exception("Failed to submit payments")
                 }
                 // TODO take submitBatch taken time in the delay
                 delay(((frequency?.inSeconds ?: 0) * 1000).toLong())

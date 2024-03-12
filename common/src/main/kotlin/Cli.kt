@@ -37,7 +37,7 @@ import kotlinx.coroutines.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
-fun Throwable.fmtLog(logger: Logger) {
+fun Throwable.fmt(): String{
     var msg = StringBuilder(message ?: this::class.simpleName)
     var cause = cause
     while (cause != null) {
@@ -45,7 +45,11 @@ fun Throwable.fmtLog(logger: Logger) {
         msg.append(cause.message ?: cause::class.simpleName)
         cause = cause.cause
     }
-    logger.error(msg.toString())
+    return msg.toString()
+}
+
+fun Throwable.fmtLog(logger: Logger) {
+    logger.error(this.fmt())
     logger.trace("", this)
 }
 

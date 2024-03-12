@@ -103,7 +103,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
                             }
                         }
                     } catch (e: Exception) {
-                        logger.warn("$e")
+                        e.fmtLog(logger)
                         delay(backoff.next())
                     }
                 }

@@ -22,6 +22,7 @@ package tech.libeufin.nexus.db
 import tech.libeufin.nexus.*
 import tech.libeufin.common.*
 import java.time.Instant
+import java.sql.ResultSet
 
 /** Data access logic for initiated outgoing payments */
 class InitiatedDAO(private val db: Database) {
@@ -169,28 +170,15 @@ class InitiatedDAO(private val db: Database) {
         stmt.execute()
     }
 
-    // TODO WIP
-    suspend fun submittableGet(currency: String): List<InitiatedPayment> = db.conn { conn ->
-        val stmt = conn.prepareStatement("""
-            SELECT
-              initiated_outgoing_transaction_id
-             ,(amount).val as amount_val
-             ,(amount).frac as amount_frac
-             ,wire_transfer_subject
-             ,credit_payto_uri
-             ,initiation_time
-             ,request_uid
-             FROM initiated_outgoing_transactions
-             WHERE (submitted='unsubmitted' OR submitted='transient_failure')
-               AND ((amount).val != 0 OR (amount).frac != 0);
-        """)
-        stmt.all {
+    /** List every initiated payment pending submission in ther order they should be submitted */
+    suspend fun submittable(currency: String): List<InitiatedPayment> = db.conn { conn ->
+        fun extract(it: ResultSet): InitiatedPayment {
             val rowId = it.getLong("initiated_outgoing_transaction_id")
             val initiationTime = it.getLong("initiation_time").microsToJavaInstant()
             if (initiationTime == null) { // nexus fault
                 throw Exception("Found invalid timestamp at initiated payment with ID: $rowId")
             }
-            InitiatedPayment(
+            return InitiatedPayment(
                 id = it.getLong("initiated_outgoing_transaction_id"),
                 amount = it.getAmount("amount", currency),
                 creditPaytoUri = it.getString("credit_payto_uri"),
@@ -199,5 +187,31 @@ class InitiatedDAO(private val db: Database) {
                 requestUid = it.getString("request_uid")
             )
         }
+        val selectPart = """
+            SELECT
+                initiated_outgoing_transaction_id
+                ,(amount).val as amount_val
+                ,(amount).frac as amount_frac
+                ,wire_transfer_subject
+                ,credit_payto_uri
+                ,initiation_time
+                ,request_uid
+            FROM initiated_outgoing_transactions
+        """
+        // We want to maximize the number of successfully submitted transactions in the event 
+        // of a malformed transaction or a persistent error classified as transient. We send 
+        // the unsubmitted transactions first, starting with the oldest by creation time.
+        // This is the happy  path, giving every transaction a chance while being fair on the
+        // basis of creation date. 
+        // Then we retry the failed transaction, starting with the oldest by submission time.
+        // This the bad path retrying each failed transaction applying a rotation based on 
+        // resubmission time.
+        val unsubmitted = conn.prepareStatement(
+            "$selectPart WHERE submitted='unsubmitted' ORDER BY initiation_time"
+        ).all(::extract)
+        val failed = conn.prepareStatement(
+            "$selectPart WHERE submitted='transient_failure' ORDER BY last_submission_time"
+        ).all(::extract)
+        unsubmitted + failed
     }
 }

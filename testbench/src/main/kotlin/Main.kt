@@ -47,20 +47,14 @@ fun ask(question: String): String? {
     return readlnOrNull()
 }
 
-fun CliktCommandTestResult.result() {
-    if (statusCode != 0) {
-        print("\u001b[;31mERROR:\n$output\u001b[0m")
+fun CliktCommand.run(arg: String): Boolean {
+    val res = this.test(arg)
+    if (res.statusCode != 0) {
+        println("\u001b[;31mERROR ${res.statusCode}\u001b[0m")
+    } else {
+        println("\u001b[;32mOK\u001b[0m")
     }
-}
-
-fun CliktCommandTestResult.assertOk(msg: String? = null) {
-    println("$output")
-    assertEquals(0, statusCode, msg)
-}
-
-fun CliktCommandTestResult.assertErr(msg: String? = null) {
-    println("$output")
-    assertEquals(1, statusCode, msg)
+    return res.statusCode == 0
 }
 
 data class Kind(val name: String, val settings: String?) {
@@ -121,36 +115,29 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         runBlocking {
             step("Init ${kind.name}")
 
-            nexusCmd.test("dbinit $flags").assertOk()
+            assert(nexusCmd.run("dbinit $flags"))
 
             val cmds = buildMap<String, suspend () -> Unit> {
-                put("reset-db", suspend {
-                    nexusCmd.test("dbinit -r $flags").assertOk()
-                })
-                put("recover", suspend {
-                    step("Recover old transactions")
-                    nexusCmd.test("ebics-fetch $ebicsFlags --pinned-start 2022-01-01 notification").result()
-                })
-                put("fetch", suspend {
-                    step("Fetch all documents")
-                    nexusCmd.test("ebics-fetch $ebicsFlags").result()
-                })
-                put("ack", suspend {
-                    step("Fetch CustomerAcknowledgement")
-                    nexusCmd.test("ebics-fetch $ebicsFlags acknowledgement").result()
-                })
-                put("status", suspend {
-                    step("Fetch CustomerPaymentStatusReport")
-                    nexusCmd.test("ebics-fetch $ebicsFlags status").result()
-                })
-                put("notification", suspend {
-                    step("Fetch BankToCustomerDebitCreditNotification")
-                    nexusCmd.test("ebics-fetch $ebicsFlags notification").result()
-                })
-                put("submit", suspend {
-                    step("Submit pending transactions")
-                    nexusCmd.test("ebics-submit $ebicsFlags").result()
-                })
+                fun put(name: String, args: String) {
+                    put(name, suspend {
+                        nexusCmd.run(args)
+                        Unit
+                    })
+                }
+                fun put(name: String, step: String, args: String) {
+                    put(name, suspend {
+                        step(step)
+                        nexusCmd.run(args)
+                        Unit
+                    })
+                }
+                put("reset-db", "dbinit -r $flags")
+                put("recover", "Recover old transactions", "ebics-fetch $ebicsFlags --pinned-start 2022-01-01 notification")
+                put("fetch", "Fetch all documents", "ebics-fetch $ebicsFlags")
+                put("ack", "Fetch CustomerAcknowledgement", "ebics-fetch $ebicsFlags acknowledgement")
+                put("status", "Fetch CustomerPaymentStatusReport", "ebics-fetch $ebicsFlags status")
+                put("notification", "Fetch BankToCustomerDebitCreditNotification", "ebics-fetch $ebicsFlags notification")
+                put("submit", "Submit pending transactions", "ebics-submit $ebicsFlags")
                 if (kind.test) {
                     put("reset-keys", suspend {
                         clientKeysPath.deleteIfExists()
@@ -159,46 +146,59 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     })
                     put("tx", suspend {
                         step("Submit one transaction")
-                        nexusCmd.test("initiate-payment $flags \"$payto&amount=CHF:42&message=single%20transaction%20test\"").assertOk()
-                        nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
+                        nexusCmd.run("initiate-payment $flags \"$payto&amount=CHF:42&message=single%20transaction%20test\"")
+                        nexusCmd.run("ebics-submit $ebicsFlags")
+                        Unit
                     })
                     put("txs", suspend {
                         step("Submit many transaction")
                         repeat(4) {
-                            nexusCmd.test("initiate-payment $flags --amount=CHF:${100L+it} --subject \"multi transaction test $it\" \"$payto\"").assertOk()
+                            nexusCmd.run("initiate-payment $flags --amount=CHF:${100L+it} --subject \"multi transaction test $it\" \"$payto\"")
                         }
-                        nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
+                        nexusCmd.run("ebics-submit $ebicsFlags")
+                        Unit
                     })
                 } else {
                     put("tx", suspend {
                         step("Submit new transaction")
                         // TODO interactive payment editor
-                        nexusCmd.test("initiate-payment $flags \"$payto&amount=CHF:1.1&message=single%20transaction%20test\"").assertOk()
-                        nexusCmd.test("ebics-submit $ebicsFlags").assertOk()
+                        nexusCmd.run("initiate-payment $flags \"$payto&amount=CHF:1.1&message=single%20transaction%20test\"")
+                        nexusCmd.run("ebics-submit $ebicsFlags")
+                        Unit
                     })
                 }
             }
 
             while (true) {
-                var hasClientKeys = clientKeysPath.exists()
-                var hasBankKeys = bankKeysPath.exists()
-
-                if (!hasClientKeys) {
-                    if (kind.test) {
-                        step("Test INI order")
-                        ask("Got to ${kind.settings} and click on 'Reset EBICS user'.\nPress Enter when done>")
-                        nexusCmd.test("ebics-setup $flags")
-                            .assertErr("ebics-setup should failed the first time")
-                        ask("Got to ${kind.settings} and click on 'Activate EBICS user'.\nPress Enter when done>")
-                    } else {
+                // EBICS setup
+                while (true) {
+                    var clientKeys = loadClientKeys(clientKeysPath)
+                    var bankKeys = loadBankKeys(bankKeysPath)
+                    if (!kind.test && clientKeys == null) {
                         throw Exception("Clients keys are required to run netzbon tests")
+                    } else if (clientKeys == null || !clientKeys.submitted_ini) {
+                        step("Run INI and HIA order")
+                    } else if (!clientKeys.submitted_hia) {
+                        step("Run HIA order")
+                    } else if (bankKeys == null || !bankKeys.accepted) {
+                        step("Run HPB order")
+                        if (kind.test)
+                            ask("Got to ${kind.settings} and click on 'Activate EBICS user'.\nPress Enter when done>")
+                    } else {
+                        break
                     }
-                } 
-    
-                if (!hasBankKeys) {
-                    step("Test HIA order")
-                    nexusCmd.test("ebics-setup --auto-accept-keys $flags")
-                        .assertOk("ebics-setup should succeed the second time")
+                    if (!nexusCmd.run("ebics-setup --auto-accept-keys $flags")) {
+                        clientKeys = loadClientKeys(clientKeysPath)
+                        if (kind.test) {
+                            if (clientKeys == null || !clientKeys.submitted_ini || !clientKeys.submitted_hia) {
+                                ask("Got to ${kind.settings} and click on 'Reset EBICS user'.\nPress Enter when done>")
+                            } else {
+                                ask("Got to ${kind.settings} and click on 'Activate EBICS user'.\nPress Enter when done>")
+                            }
+                        } else {
+                            ask("Activate your keys at your bank.\nPress Enter when done>")
+                        }
+                    }
                 }
 
                 val arg = ask("testbench> ")!!.trim()

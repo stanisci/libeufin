@@ -132,9 +132,9 @@ suspend fun ingestIncomingPayment(
                 Instant.now()
             )
             if (result.new) {
-                logger.info("$payment bounced in '${result.bounceId}': ${e.message}")
+                logger.info("$payment bounced in '${result.bounceId}': ${e.fmt()}")
             } else {
-                logger.debug("$payment already seen and bounced in '${result.bounceId}': ${e.message}")
+                logger.debug("$payment already seen and bounced in '${result.bounceId}': ${e.fmt()}")
             }
         }
     )
@@ -154,7 +154,7 @@ private suspend fun ingestDocument(
                         is TxNotification.Incoming -> ingestIncomingPayment(db, it.payment)
                         is TxNotification.Outgoing -> ingestOutgoingPayment(db, it.payment)
                         is TxNotification.Reversal -> {
-                            logger.warn("BOUNCE '${it.msgId}': ${it.reason}")
+                            logger.error("BOUNCE '${it.msgId}': ${it.reason}")
                             db.initiated.reversal(it.msgId, "Payment bounced: ${it.reason}")
                         }
                     }
@@ -176,7 +176,7 @@ private suspend fun ingestDocument(
                     HacAction.ORDER_HAC_FINAL_NEG -> {
                         logger.debug("$ack")
                         db.initiated.logFailure(ack.orderId!!)?.let { (requestUID, msg) ->
-                            logger.warn("Payment '$requestUID' refused at ${ack.timestamp.fmtDateTime()}${if (msg != null) ": $msg" else ""}")
+                            logger.error("Payment '$requestUID' refused at ${ack.timestamp.fmtDateTime()}${if (msg != null) ": $msg" else ""}")
                         }
                     }
                     else -> {
@@ -194,7 +194,7 @@ private suspend fun ingestDocument(
             logger.debug("$status")
             if (status.paymentCode == ExternalPaymentGroupStatusCode.RJCT) {
                 db.initiated.bankFailure(status.msgId, msg)
-                logger.warn("Transaction '${status.msgId}' was rejected : $msg")
+                logger.error("Transaction '${status.msgId}' was rejected : $msg")
             } else {
                 db.initiated.bankMessage(status.msgId, msg)
             }
