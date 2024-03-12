@@ -33,8 +33,10 @@ import javax.xml.datatype.DatatypeFactory
 import java.security.interfaces.*
 
 
-fun Instant.xmlDate(): String = DateTimeFormatter.ISO_DATE.withZone(ZoneId.of("UTC")).format(this)
-fun Instant.xmlDateTime(): String = DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneId.of("UTC")).format(this)
+fun Instant.xmlDate(): String = 
+    DateTimeFormatter.ISO_DATE.withZone(ZoneId.of("UTC")).format(this)
+fun Instant.xmlDateTime(): String = 
+    DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneId.of("UTC")).format(this)
 
 /** EBICS protocol for business transactions */
 class EbicsBTS(

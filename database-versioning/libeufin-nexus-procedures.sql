@@ -75,6 +75,7 @@ ELSE
     SET 
       outgoing_transaction_id = out_tx_id
       ,submitted = 'success'
+      ,failure_message = null
     WHERE request_uid = in_message_id
     RETURNING true INTO out_initiated;
 END IF;

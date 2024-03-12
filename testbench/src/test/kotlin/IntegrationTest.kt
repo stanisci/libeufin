@@ -20,7 +20,7 @@
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.nexus.*
-import tech.libeufin.nexus.Database as NexusDb
+import tech.libeufin.nexus.db.Database as NexusDb
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.common.*
 import java.time.Instant
@@ -185,7 +185,7 @@ class IntegrationTest {
             }.assertNoContent()
             
             assertException("ERROR: cashin failed: admin balance insufficient") {
-                db.registerTalerableIncoming(payment, reservePub)
+                db.payment.registerTalerableIncoming(payment, reservePub)
             }
 
             // Allow admin debt

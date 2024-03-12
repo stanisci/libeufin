@@ -143,11 +143,7 @@ data class CustomerAck(
     }
 }
 
-/**
- * Extract logs from a pain.002 HAC document.
- *
- * @param xml pain.002 input document
- */
+/** Parse HAC pain.002 XML file */
 fun parseCustomerAck(xml: InputStream): List<CustomerAck> {
     return destructXml(xml, "Document") {
         one("CstmrPmtStsRpt").map("OrgnlPmtInfAndSts") {
@@ -192,19 +188,21 @@ data class PaymentStatus(
 
     fun description(): String = txCode?.description ?: paymentCode.description
 
-    override fun toString(): String {
+    fun msg(): String {
         return if (reasons.isEmpty()) {
-            "'${id()}' ${code()} '${description()}'"
+            "${code()} '${description()}'"
         } else if (reasons.size == 1) {
-            "'${id()}' ${code()} ${reasons[0].code.isoCode} - '${description()}' '${reasons[0].code.description}'"
+            "${code()} ${reasons[0].code.isoCode} - '${description()}' '${reasons[0].code.description}'"
         } else {
-            var str = "'${id()}' ${code()} '${description()}' - "
+            var str = "${code()} '${description()}' - "
             for (reason in reasons) {
-                str += "${reason.code.isoCode} '${reason.code.description}'"
+                str += "${reason.code.isoCode} '${reason.code.description}' "
             }
             str
         }
     }
+
+    override fun toString(): String = "${id()} ${msg()}"
 }
 
 data class Reason (
@@ -212,11 +210,7 @@ data class Reason (
     val information: String
 )
 
-/**
- * Extract payment status from a pain.002 document.
- *
- * @param xml pain.002 input document
- */
+/** Parse pain.002 XML file */
 fun parseCustomerPaymentStatusReport(xml: InputStream): PaymentStatus {
     fun XmlDestructor.reasons(): List<Reason> {
         return map("StsRsnInf") {
@@ -252,28 +246,74 @@ fun parseCustomerPaymentStatusReport(xml: InputStream): PaymentStatus {
 sealed interface TxNotification {
     data class Incoming(val payment: IncomingPayment): TxNotification
     data class Outgoing(val payment: OutgoingPayment): TxNotification
-    data class Reversal(val reversal: OutgoingReversal): TxNotification
+    data class Reversal(
+        val msgId: String,
+        val reason: String?
+    ): TxNotification
 }
 
-data class OutgoingReversal(
-    val bankId: String,
-    val reason: String?
-)
+/** ISO20022 incoming payment */
+data class IncomingPayment(
+    val amount: TalerAmount,
+    val wireTransferSubject: String,
+    val debitPaytoUri: String,
+    val executionTime: Instant,
+    /** ISO20022 AccountServicerReference */
+    val bankId: String
+)  {
+    override fun toString(): String {
+        return "IN ${executionTime.fmtDate()} $amount '$bankId' debitor=$debitPaytoUri subject=$wireTransferSubject"
+    }
+}
 
-/**
- * Searches payments in a camt.054 (Detailavisierung) document.
- *
- * @param notifXml camt.054 input document
- * @param acceptedCurrency currency accepted by Nexus
- * @param incoming list of incoming payments
- * @param outgoing list of outgoing payments
- */
+/** ISO20022 outgoing payment */
+data class OutgoingPayment(
+    val amount: TalerAmount,
+    val executionTime: Instant,
+    /** ISO20022 MessageIdentification */
+    val messageId: String,
+    val creditPaytoUri: String? = null, // not showing in camt.054
+    val wireTransferSubject: String? = null // not showing in camt.054
+) {
+    override fun toString(): String {
+        return "OUT ${executionTime.fmtDate()} $amount '$messageId' creditor=$creditPaytoUri subject=$wireTransferSubject"
+    }
+}
+
+/** Parse camt.054 XML file */
 fun parseTxNotif(
     notifXml: InputStream,
-    acceptedCurrency: String,
-    notifications: MutableList<TxNotification>,
-) {
-    notificationForEachTx(notifXml) { bookDate, reversal, info ->
+    acceptedCurrency: String
+): List<TxNotification> {
+    fun notificationForEachTx(
+        directionLambda: XmlDestructor.(Instant, Boolean, String?) -> Unit
+    ) {
+        destructXml(notifXml, "Document") {
+            opt("BkToCstmrDbtCdtNtfctn")?.each("Ntfctn") {
+                each("Ntry") {
+                    val reversal = opt("RvslInd")?.bool() ?: false
+                    val info = opt("AddtlNtryInf")?.text()
+                    one("Sts") {
+                        if (text() != "BOOK") {
+                            one("Cd") {
+                                if (text() != "BOOK")
+                                    throw Exception("Found non booked transaction, " +
+                                            "stop parsing.  Status was: ${text()}"
+                                    )
+                            }
+                        }
+                    }
+                    val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
+                    one("NtryDtls").each("TxDtls") {
+                        directionLambda(this, bookDate, reversal, info)
+                    }
+                }
+            }
+        }
+    }
+
+    val notifications = mutableListOf<TxNotification>()
+    notificationForEachTx { bookDate, reversal, info ->
         val kind = one("CdtDbtInd").text()
         val amount: TalerAmount = one("Amt") {
             val currency = attr("Ccy")
@@ -289,10 +329,10 @@ fun parseTxNotif(
             if (msgId == null) {
                 logger.debug("Unsupported reversal without message id")
             } else {
-                notifications.add(TxNotification.Reversal(OutgoingReversal(
-                    bankId = msgId,
+                notifications.add(TxNotification.Reversal(
+                    msgId = msgId,
                     reason = info
-                )))
+                ))
             }
             return@notificationForEachTx
         }
@@ -341,38 +381,5 @@ fun parseTxNotif(
             else -> throw Exception("Unknown transaction notification kind '$kind'")
         }        
     }
-}
-
-/**
- * Navigates the camt.054 (Detailavisierung) until its leaves, where
- * then it invokes the related parser, according to the payment direction.
- *
- * @param xml the input document.
- */
-private fun notificationForEachTx(
-    xml: InputStream,
-    directionLambda: XmlDestructor.(Instant, Boolean, String?) -> Unit
-) {
-    destructXml(xml, "Document") {
-        opt("BkToCstmrDbtCdtNtfctn")?.each("Ntfctn") {
-            each("Ntry") {
-                val reversal = opt("RvslInd")?.bool() ?: false
-                val info = opt("AddtlNtryInf")?.text()
-                one("Sts") {
-                    if (text() != "BOOK") {
-                        one("Cd") {
-                            if (text() != "BOOK")
-                                throw Exception("Found non booked transaction, " +
-                                        "stop parsing.  Status was: ${text()}"
-                                )
-                        }
-                    }
-                }
-                val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
-                one("NtryDtls").each("TxDtls") {
-                    directionLambda(this, bookDate, reversal, info)
-                }
-            }
-        }
-    }
+    return notifications
 }

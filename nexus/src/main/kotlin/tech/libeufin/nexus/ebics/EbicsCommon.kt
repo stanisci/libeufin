@@ -173,7 +173,7 @@ suspend fun ebicsDownload(
     order: EbicsOrder,
     startDate: Instant?, 
     endDate: Instant?,
-    processing: (InputStream) -> Unit,
+    processing: suspend (InputStream) -> Unit,
 ) = coroutineScope {
     val impl = EbicsBTS(cfg, bankKeys, clientKeys, order)
     val parentScope = this

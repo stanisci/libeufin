@@ -26,6 +26,7 @@ import tech.libeufin.common.fromFile
 import tech.libeufin.common.initializeDatabaseTables
 import tech.libeufin.common.resetDatabaseTables
 import tech.libeufin.nexus.*
+import tech.libeufin.nexus.db.*
 import java.time.Instant
 import kotlin.io.path.Path
 

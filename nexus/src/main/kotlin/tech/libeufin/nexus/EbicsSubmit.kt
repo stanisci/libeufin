@@ -26,6 +26,7 @@ import io.ktor.client.*
 import kotlinx.coroutines.*
 import tech.libeufin.common.*
 import tech.libeufin.nexus.ebics.*
+import tech.libeufin.nexus.db.*
 import java.time.*
 import java.util.*
 
@@ -109,19 +110,19 @@ private suspend fun submitBatch(
     ctx: SubmissionContext,
     db: Database,
 ) {
-    logger.debug("Running submit at: ${Instant.now()}")
-    db.initiatedPaymentsSubmittableGet(ctx.cfg.currency).forEach {
-        logger.debug("Submitting payment initiation with row ID: ${it.id}")
-        val submissionState = try {
-            val orderId = submitInitiatedPayment(ctx, it)
-            db.mem[orderId] = "Init"
-            DatabaseSubmissionState.success
-        } catch (e: Exception) {
-            e.fmtLog(logger)
-            DatabaseSubmissionState.transient_failure
-            // TODO 
-        }
-        db.initiatedPaymentSetSubmittedState(it.id, submissionState)
+    db.initiated.submittableGet(ctx.cfg.currency).forEach {
+        logger.debug("Submitting payment '${it.requestUid}'")
+        runCatching { submitInitiatedPayment(ctx, it) }.fold(
+            onSuccess = { orderId -> 
+                db.initiated.submissionSuccess(it.id, Instant.now(), orderId)
+                logger.info("Payment '${it.requestUid}' submitted")
+            },
+            onFailure = { e ->
+                db.initiated.submissionFailure(it.id, Instant.now(), e.message)
+                logger.warn("Payment '${it.requestUid}' submission failure: ${e.message}")
+                throw e
+            }
+        )
     }
 }
 
@@ -171,8 +172,11 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
                 }
             }
             do {
-                // TODO error handling
-                submitBatch(ctx, db)
+                try {
+                    submitBatch(ctx, db)
+                } catch (e: Exception) {
+                    throw Exception("Failed to submit payments", e)
+                }
                 // TODO take submitBatch taken time in the delay
                 delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
             } while (frequency != null)

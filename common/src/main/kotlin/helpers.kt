@@ -63,7 +63,7 @@ fun ByteArray.encodeBase64(): String = Base64.getEncoder().encodeToString(this)
 /* ----- InputStream ----- */
 
 /** Unzip an input stream and run [lambda] over each entry */
-fun InputStream.unzipEach(lambda: (String, InputStream) -> Unit) {
+inline fun InputStream.unzipEach(lambda: (String, InputStream) -> Unit) {
     ZipInputStream(this).use { zip ->
         while (true) {
             val entry = zip.getNextEntry()

@@ -139,10 +139,12 @@ fun <R> PgConnection.transaction(lambda: (PgConnection) -> R): R {
 
 fun <T> PreparedStatement.oneOrNull(lambda: (ResultSet) -> T): T? {
     executeQuery().use {
-        if (!it.next()) return null
-        return lambda(it)
+        return if (it.next()) lambda(it) else null
     }
 }
+
+fun <T> PreparedStatement.one(lambda: (ResultSet) -> T): T =
+    requireNotNull(oneOrNull(lambda)) { "Missing result to database query" }
 
 fun <T> PreparedStatement.all(lambda: (ResultSet) -> T): List<T> {
     executeQuery().use {

@@ -37,8 +37,11 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.common.*
 import tech.libeufin.nexus.ebics.*
+import tech.libeufin.nexus.db.*
 import java.nio.file.Path
-import java.time.Instant
+import java.util.*
+import java.time.*
+import java.time.format.*
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
 internal val logger: Logger = LoggerFactory.getLogger("libeufin-nexus")
@@ -126,6 +129,11 @@ fun checkFrequency(foundInConfig: String): Int {
     return frequencySeconds
 }
 
+fun Instant.fmtDate(): String = 
+    DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneId.of("UTC")).format(this)
+
+fun Instant.fmtDateTime(): String =
+    DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(ZoneId.of("UTC")).format(this)
 
 /**
  * Keeps all the options of the ebics-setup subcommand.  The
@@ -251,7 +259,7 @@ class InitiatePayment: CliktCommand("Initiate an outgoing payment") {
         }
 
         Database(dbCfg.dbConnStr).use { db ->
-            db.initiatedPaymentCreate(
+            db.initiated.create(
                 InitiatedPayment(
                     id = -1,
                     amount = amount,
