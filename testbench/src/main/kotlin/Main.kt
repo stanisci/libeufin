@@ -121,8 +121,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         runBlocking {
             step("Init ${kind.name}")
 
-            if (ask("Reset DB ? y/n>") == "y") nexusCmd.test("dbinit -r $flags").assertOk()
-            else nexusCmd.test("dbinit $flags").assertOk()
+            nexusCmd.test("dbinit $flags").assertOk()
 
             val cmds = buildMap<String, suspend () -> Unit> {
                 put("reset-db", suspend {

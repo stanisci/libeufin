@@ -27,8 +27,6 @@ import io.ktor.client.*
 import io.ktor.client.plugins.*
 import kotlinx.coroutines.*
 import tech.libeufin.common.*
-import tech.libeufin.ebics.*
-import tech.libeufin.ebics.ebics_h005.Ebics3Request
 import tech.libeufin.nexus.ebics.*
 import java.io.IOException
 import java.io.InputStream
@@ -65,53 +63,6 @@ data class FetchContext(
     var pinnedStart: Instant?,
     val fileLogger: FileLogger
 )
-
-/**
- * Downloads content via EBICS, according to the order params passed
- * by the caller.
- *
- * @param T [Ebics2Request] for EBICS 2 or [Ebics3Request.OrderDetails.BTOrderParams] for EBICS 3
- * @param ctx [FetchContext]
- * @param req contains the instructions for the download, namely
- *            which document is going to be downloaded from the bank.
- * @return the [ByteArray] payload.  On an empty response, the array
- *         length is zero.  It returns null, if the bank assigned an
- *         error to the EBICS transaction.
- */
-private suspend fun downloadHelper(
-    ctx: FetchContext,
-    lastExecutionTime: Instant? = null,
-    doc: SupportedDocument,
-    processing: (InputStream) -> Unit
-) {
-    val isEbics3 = doc != SupportedDocument.PAIN_002_LOGS
-    val initXml = if (isEbics3) {
-        createEbics3DownloadInitialization(
-            ctx.cfg,
-            ctx.bankKeys,
-            ctx.clientKeys,
-            prepEbics3Document(doc, lastExecutionTime)
-        )
-    } else {
-        val ebics2Req = prepEbics2Document(doc, lastExecutionTime)
-        createEbics25DownloadInit(
-            ctx.cfg,
-            ctx.clientKeys,
-            ctx.bankKeys,
-            ebics2Req.messageType,
-            ebics2Req.orderParams
-        )
-    }
-    return ebicsDownload(
-        ctx.httpClient,
-        ctx.cfg,
-        ctx.clientKeys,
-        ctx.bankKeys,
-        initXml,
-        isEbics3,
-        processing
-    )
-}
 
 /**
  * Converts the 2-digits fraction value as given by the bank
@@ -322,7 +273,7 @@ private fun ingestDocuments(
 private suspend fun fetchDocuments(
     db: Database,
     ctx: FetchContext,
-    docs: List<Document>
+    docs: List<EbicsDocument>
 ): Boolean {
     val lastExecutionTime: Instant? = ctx.pinnedStart
     return docs.all { doc ->
@@ -332,9 +283,18 @@ private suspend fun fetchDocuments(
             } else {
                 logger.info("Fetching '${doc.fullDescription()}' from timestamp: $lastExecutionTime")
             }
-            val doc = doc.doc()
             // downloading the content
-            downloadHelper(ctx, lastExecutionTime, doc) { stream ->
+            val doc = doc.doc()
+            val order = downloadDocService(doc, doc == SupportedDocument.PAIN_002_LOGS)
+            ebicsDownload(
+                ctx.httpClient,
+                ctx.cfg,
+                ctx.clientKeys,
+                ctx.bankKeys,
+                order,
+                lastExecutionTime,
+                null
+            ) { stream ->
                 val loggedStream = ctx.fileLogger.logFetch(
                     stream,
                     doc == SupportedDocument.PAIN_002_LOGS
@@ -349,7 +309,7 @@ private suspend fun fetchDocuments(
     }
 }
 
-enum class Document {
+enum class EbicsDocument {
     /// EBICS acknowledgement - CustomerAcknowledgement HAC pain.002
     acknowledgement,
     /// Payment status - CustomerPaymentStatusReport pain.002
@@ -394,10 +354,10 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
         help = "This flag fetches only once from the bank and returns, " +
                 "ignoring the 'frequency' configuration value"
     ).flag(default = false)
-    private val documents: Set<Document> by argument(
+    private val documents: Set<EbicsDocument> by argument(
         help = "Which documents should be fetched? If none are specified, all supported documents will be fetched",
-        helpTags = Document.entries.map { Pair(it.name, it.shortDescription()) }.toMap()
-    ).enum<Document>().multiple().unique()
+        helpTags = EbicsDocument.entries.map { Pair(it.name, it.shortDescription()) }.toMap()
+    ).enum<EbicsDocument>().multiple().unique()
     private val pinnedStart by option(
         help = "Constant YYYY-MM-DD date for the earliest document" +
                 " to download (only consumed in --transient mode).  The" +
@@ -434,7 +394,7 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
                 null,
                 FileLogger(ebicsLog)
             )
-            val docs = if (documents.isEmpty()) Document.entries else documents.toList()
+            val docs = if (documents.isEmpty()) EbicsDocument.entries else documents.toList()
             if (transient) {
                 logger.info("Transient mode: fetching once and returning.")
                 val pinnedStartVal = pinnedStart

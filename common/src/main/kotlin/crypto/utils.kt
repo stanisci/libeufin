@@ -50,10 +50,7 @@ object CryptoUtil {
         val encryptedTransactionKey: ByteArray,
         val pubKeyDigest: ByteArray,
         val encryptedData: ByteArray,
-        /**
-         * This key needs to be reused between different upload phases.
-         */
-        val plainTransactionKey: SecretKey? = null
+        val plainTransactionKey: SecretKey
     )
 
     private val bouncyCastleProvider = BouncyCastleProvider()
@@ -78,6 +75,22 @@ object CryptoUtil {
         if (pub !is RSAPublicKey)
             throw Exception("wrong encoding")
         return pub
+    }
+
+    /**
+     * Load an RSA public key from its components.
+     *
+     * @param exponent
+     * @param modulus
+     * @return key
+     */
+    fun loadRsaPublicKeyFromComponents(modulus: ByteArray, exponent: ByteArray): RSAPublicKey {
+        val modulusBigInt = BigInteger(1, modulus)
+        val exponentBigInt = BigInteger(1, exponent)
+
+        val keyFactory = KeyFactory.getInstance("RSA")
+        val tmp = RSAPublicKeySpec(modulusBigInt, exponentBigInt)
+        return keyFactory.generatePublic(tmp) as RSAPublicKey
     }
 
     /**
@@ -110,35 +123,18 @@ object CryptoUtil {
     }
 
     /**
-     * Load an RSA public key from its components.
-     *
-     * @param exponent
-     * @param modulus
-     * @return key
-     */
-    fun loadRsaPublicKeyFromComponents(modulus: ByteArray, exponent: ByteArray): RSAPublicKey {
-        val modulusBigInt = BigInteger(1, modulus)
-        val exponentBigInt = BigInteger(1, exponent)
-
-        val keyFactory = KeyFactory.getInstance("RSA")
-        val tmp = RSAPublicKeySpec(modulusBigInt, exponentBigInt)
-        return keyFactory.generatePublic(tmp) as RSAPublicKey
-    }
-
-    /**
      * Hash an RSA public key according to the EBICS standard (EBICS 2.5: 4.4.1.2.3).
      */
     fun getEbicsPublicKeyHash(publicKey: RSAPublicKey): ByteArray {
         val keyBytes = ByteArrayOutputStream()
-        keyBytes.writeBytes(publicKey.publicExponent.toUnsignedHexString().lowercase().trimStart('0').toByteArray())
+        keyBytes.writeBytes(publicKey.publicExponent.encodeHex().trimStart('0').toByteArray())
         keyBytes.write(' '.code)
-        keyBytes.writeBytes(publicKey.modulus.toUnsignedHexString().lowercase().trimStart('0').toByteArray())
-        // println("buffer before hashing: '${keyBytes.toString(Charsets.UTF_8)}'")
+        keyBytes.writeBytes(publicKey.modulus.encodeHex().trimStart('0').toByteArray())
         val digest = MessageDigest.getInstance("SHA-256")
         return digest.digest(keyBytes.toByteArray())
     }
 
-    fun encryptEbicsE002(data: ByteArray, encryptionPublicKey: RSAPublicKey): EncryptionResult {
+    fun encryptEbicsE002(data: InputStream, encryptionPublicKey: RSAPublicKey): EncryptionResult {
         val keygen = KeyGenerator.getInstance("AES", bouncyCastleProvider)
         keygen.init(128)
         val transactionKey = keygen.generateKey()
@@ -152,7 +148,7 @@ object CryptoUtil {
      * Encrypt data according to the EBICS E002 encryption process.
      */
     fun encryptEbicsE002withTransactionKey(
-        data: ByteArray,
+        data: InputStream,
         encryptionPublicKey: RSAPublicKey,
         transactionKey: SecretKey
     ): EncryptionResult {
@@ -162,7 +158,7 @@ object CryptoUtil {
         )
         val ivParameterSpec = IvParameterSpec(ByteArray(16))
         symmetricCipher.init(Cipher.ENCRYPT_MODE, transactionKey, ivParameterSpec)
-        val encryptedData = symmetricCipher.doFinal(data)
+        val encryptedData = CipherInputStream(data, symmetricCipher).readAllBytes()
         val asymmetricCipher = Cipher.getInstance(
             "RSA/None/PKCS1Padding",
             bouncyCastleProvider

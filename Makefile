@@ -103,10 +103,6 @@ bank-test: install-nobuild-files
 nexus-test: install-nobuild-files
 	./gradlew :nexus:test --tests $(test) -i
 
-.PHONY: ebics-test
-ebics-test: install-nobuild-files
-	./gradlew :ebics:test --tests $(test) -i
-
 .PHONY: common-test
 common-test: install-nobuild-files
 	./gradlew :common:test --tests $(test) -i

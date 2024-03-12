@@ -19,7 +19,6 @@
 package tech.libeufin.nexus
 
 import tech.libeufin.common.*
-import tech.libeufin.ebics.*
 import java.io.InputStream
 import java.net.URLEncoder
 import java.time.*
@@ -76,14 +75,14 @@ fun createPain001(
     amount: TalerAmount,
     wireTransferSubject: String,
     creditAccount: IbanAccountMetadata
-): String {
+): ByteArray {
     val namespace = Pain001Namespaces(
         fullNamespace = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09",
         xsdFilename = "pain.001.001.09.ch.03.xsd"
     )
     val zonedTimestamp = ZonedDateTime.ofInstant(initiationTimestamp, ZoneId.of("UTC"))
     val amountWithoutCurrency: String = getAmountNoCurrency(amount)
-    return constructXml("Document") {
+    return XmlBuilder.toBytes("Document") {
         attr("xmlns", namespace.fullNamespace)
         attr("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
         attr("xsi:schemaLocation", "${namespace.fullNamespace} ${namespace.xsdFilename}")

@@ -80,7 +80,7 @@ class FileLogger(path: String?) {
      *
      * @param content EBICS submit content
      */
-    fun logSubmit(content: String) {
+    fun logSubmit(content: ByteArray) {
         if (dir == null) return
 
         // Subdir based on current day.
@@ -90,6 +90,6 @@ class FileLogger(path: String?) {
         // Creating the combined dir.
         val subDir = dir.resolve("${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}").resolve("submit")
         subDir.createDirectories()
-        subDir.resolve("${nowMs}_pain.001.xml").writeText(content)
+        subDir.resolve("${nowMs}_pain.001.xml").writeBytes(content)
     }
 }

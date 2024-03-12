@@ -46,7 +46,7 @@ fun Throwable.fmtLog(logger: Logger) {
         cause = cause.cause
     }
     logger.error(msg.toString())
-    logger.debug("{}", this)
+    logger.trace("", this)
 }
 
 fun cliCmd(logger: Logger, level: Level, lambda: suspend () -> Unit) {

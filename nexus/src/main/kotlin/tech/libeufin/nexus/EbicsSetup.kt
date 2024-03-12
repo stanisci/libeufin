@@ -23,9 +23,9 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.groups.*
 import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.client.*
+import io.ktor.client.plugins.*
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
-import tech.libeufin.ebics.*
 import tech.libeufin.nexus.ebics.*
 import java.nio.file.*
 import java.time.Instant
@@ -81,51 +81,14 @@ fun String.spaceEachTwo() =
  * @return true if the user accepted, false otherwise.
  */
 private fun askUserToAcceptKeys(bankKeys: BankPublicKeysFile): Boolean {
-    val encHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).toHexString()
-    val authHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).toHexString()
+    val encHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeUpHex()
+    val authHash = CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_authentication_public_key).encodeUpHex()
     println("The bank has the following keys:")
     println("Encryption key: ${encHash.spaceEachTwo()}")
     println("Authentication key: ${authHash.spaceEachTwo()}")
     print("type 'yes, accept' to accept them: ")
     val userResponse: String? = readlnOrNull()
     return userResponse == "yes, accept"
-}
-
-/**
- * Parses the HPB response and stores the bank keys as "NOT accepted" to disk.
- *
- * @param cfg used to get the location of the bank keys file.
- * @param bankKeys bank response to the HPB message.
- */
-private fun handleHpbResponse(
-    cfg: EbicsSetupConfig,
-    bankKeys: EbicsKeyManagementResponseContent
-) {
-    val hpbBytes = bankKeys.orderData // silences compiler.
-    if (hpbBytes == null) {
-        throw Exception("HPB content not found in a EBICS response with successful return codes.")
-    }
-    val hpbObj = try {
-        parseEbicsHpbOrder(hpbBytes.inputStream())
-    } catch (e: Exception) {
-        throw Exception("HPB response content seems invalid", e)
-    }
-    val encPub = try {
-        CryptoUtil.loadRsaPublicKey(hpbObj.encryptionPubKey.encoded)
-    } catch (e: Exception) {
-        throw Exception("Could not import bank encryption key from HPB response", e)
-    }
-    val authPub = try {
-        CryptoUtil.loadRsaPublicKey(hpbObj.authenticationPubKey.encoded)
-    } catch (e: Exception) {
-        throw Exception("Could not import bank authentication key from HPB response", e)
-    }
-    val json = BankPublicKeysFile(
-        bank_authentication_public_key = authPub,
-        bank_encryption_public_key = encPub,
-        accepted = false
-    )
-    persistBankKeys(json, cfg.bankPublicKeysFilename)
 }
 
 /**
@@ -147,37 +110,57 @@ suspend fun doKeysRequestAndUpdateState(
     orderType: KeysOrderType
 ) {
     logger.info("Doing key request ${orderType.name}")
+    val impl = Ebics3KeyMng(cfg, privs)
     val req = when(orderType) {
-        KeysOrderType.INI -> generateIniMessage(cfg, privs)
-        KeysOrderType.HIA -> generateHiaMessage(cfg, privs)
-        KeysOrderType.HPB -> generateHpbMessage(cfg, privs)
+        KeysOrderType.INI -> impl.INI()
+        KeysOrderType.HIA -> impl.HIA()
+        KeysOrderType.HPB -> impl.HPB()
     }
-    val xml = try {
-        client.postToBank(cfg.hostBaseUrl, req)
-    } catch (e: Exception) {
-        throw Exception("Could not POST the ${orderType.name} message to the bank at '${cfg.hostBaseUrl}'", e)
+    val xml = client.postToBank(cfg.hostBaseUrl, req, "$orderType")
+    val resp = Ebics3KeyMng.parseResponse(xml, privs.encryption_private_key)
+    
+    when (orderType) {
+        KeysOrderType.INI, KeysOrderType.HIA -> {
+            if (resp.technicalCode == EbicsReturnCode.EBICS_INVALID_USER_OR_USER_STATE) {
+                throw Exception("$orderType status code ${resp.technicalCode}: either your IDs are incorrect, or you already have keys registered with this bank")
+            }
+        }
+        KeysOrderType.HPB -> {
+            if (resp.technicalCode == EbicsReturnCode.EBICS_AUTHENTICATION_FAILED) {
+                throw Exception("$orderType status code ${resp.technicalCode}: could not download bank keys, send client keys (and/or related PDF document with --generate-registration-pdf) to the bank")
+            }
+        }
     }
-    val ebics = parseKeysMgmtResponse(privs.encryption_private_key, xml)
-    if (ebics == null) {
-        throw Exception("Could not get any EBICS from the bank ${orderType.name} response ($xml).")
-    }
-    if (ebics.technicalReturnCode != EbicsReturnCode.EBICS_OK) {
-        throw Exception("EBICS ${orderType.name} failed with code: ${ebics.technicalReturnCode}")
-    }
-    if (ebics.bankReturnCode != EbicsReturnCode.EBICS_OK) {
-        throw Exception("EBICS ${orderType.name} reached the bank, but could not be fulfilled, error code: ${ebics.bankReturnCode}")
-    }
-
+    
+    val orderData = resp.okOrFail("${orderType.name}")
     when (orderType) {
         KeysOrderType.INI -> privs.submitted_ini = true
         KeysOrderType.HIA -> privs.submitted_hia = true
-        KeysOrderType.HPB -> return handleHpbResponse(cfg, ebics)
+        KeysOrderType.HPB -> {
+            val orderData = requireNotNull(orderData) {
+                "HPB: missing order data"
+            }
+            val (authPub, encPub) = Ebics3KeyMng.parseHpbOrder(orderData)
+            val bankKeys = BankPublicKeysFile(
+                bank_authentication_public_key = authPub,
+                bank_encryption_public_key = encPub,
+                accepted = false
+            )
+            try {
+                persistBankKeys(bankKeys, cfg.bankPublicKeysFilename)
+            } catch (e: Exception) {
+                throw Exception("Could not update the ${orderType.name} state on disk", e)
+            }
+        }
     }
-    try {
-        persistClientKeys(privs, cfg.clientPrivateKeysFilename)
-    } catch (e: Exception) {
-        throw Exception("Could not update the ${orderType.name} state on disk", e)
+    if (orderType != KeysOrderType.HPB) {
+        try {
+            persistClientKeys(privs, cfg.clientPrivateKeysFilename)
+        } catch (e: Exception) {
+            throw Exception("Could not update the ${orderType.name} state on disk", e)
+        }
     }
+    
 }
 
 /**
@@ -231,7 +214,12 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         val cfg = extractEbicsConfig(common.config)
         // Config is sane.  Go (maybe) making the private keys.
         val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysFilename)
-        val httpClient = HttpClient()
+        val httpClient =  HttpClient {
+            install(HttpTimeout) {
+                // It can take a lot of time for the bank to generate documents
+                socketTimeoutMillis = 5 * 60 * 1000
+            }
+        }
         // Privs exist.  Upload their pubs
         val keysNotSub = !clientKeys.submitted_ini
         if ((!clientKeys.submitted_ini) || forceKeysResubmission)
@@ -244,16 +232,12 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         // Checking if the bank keys exist on disk.
         var bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
         if (bankKeys == null) {
-            try {
-                doKeysRequestAndUpdateState(
-                    cfg,
-                    clientKeys,
-                    httpClient,
-                    KeysOrderType.HPB
-                )
-            } catch (e: Exception) {
-                throw Exception("Could not download bank keys. Send client keys (and/or related PDF document with --generate-registration-pdf) to the bank", e)
-            }
+            doKeysRequestAndUpdateState(
+                cfg,
+                clientKeys,
+                httpClient,
+                KeysOrderType.HPB
+            )
             logger.info("Bank keys stored at ${cfg.bankPublicKeysFilename}")
             bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)!!
         }
@@ -264,12 +248,12 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
             else bankKeys.accepted = askUserToAcceptKeys(bankKeys)
 
             if (!bankKeys.accepted) {
-                throw Exception("Cannot successfully finish the setup without accepting the bank keys.")
+                throw Exception("Cannot successfully finish the setup without accepting the bank keys")
             }
             try {
                 persistBankKeys(bankKeys, cfg.bankPublicKeysFilename)
             } catch (e: Exception) {
-                throw Exception("Could not set bank keys as accepted on disk.", e)
+                throw Exception("Could not set bank keys as accepted on disk", e)
             }
         }
         

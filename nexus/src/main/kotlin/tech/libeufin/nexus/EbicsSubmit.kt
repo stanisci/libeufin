@@ -25,27 +25,9 @@ import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.client.*
 import kotlinx.coroutines.*
 import tech.libeufin.common.*
-import tech.libeufin.nexus.ebics.EbicsSideError
-import tech.libeufin.nexus.ebics.EbicsSideException
-import tech.libeufin.nexus.ebics.EbicsUploadException
-import tech.libeufin.nexus.ebics.submitPain001
+import tech.libeufin.nexus.ebics.*
 import java.time.*
 import java.util.*
-
-/**
- * Possible stages when an error may occur.  These stages
- * help to decide the retry policy.
- */
-enum class NexusSubmissionStage {
-    pain,
-    ebics,
-    /**
-     * Includes both non-200 responses and network issues.
-     * They are both considered transient (non-200 responses
-     * can be fixed by changing and reloading the configuration).
-     */
-    reachability
-}
 
 /**
  * Groups useful parameters to submit pain.001 via EBICS.
@@ -69,16 +51,6 @@ data class SubmissionContext(
     val bankPublicKeysFile: BankPublicKeysFile,
     val fileLogger: FileLogger
 )
-
-/**
- * Expresses one error that occurred while submitting one pain.001
- * document via EBICS.
- */
-class NexusSubmitException(
-    msg: String? = null,
-    cause: Throwable? = null,
-    val stage: NexusSubmissionStage
-) : Exception(msg, cause)
 
 /**
  * Takes the initiated payment data as it was returned from the
@@ -113,38 +85,14 @@ private suspend fun submitInitiatedPayment(
         wireTransferSubject = payment.wireTransferSubject
     )
     ctx.fileLogger.logSubmit(xml)
-    try {
-        return submitPain001(
-            xml,
-            ctx.cfg,
-            ctx.clientPrivateKeysFile,
-            ctx.bankPublicKeysFile,
-            ctx.httpClient
-        )
-    } catch (early: EbicsSideException) {
-        val errorStage = when (early.sideEc) {
-            EbicsSideError.HTTP_POST_FAILED ->
-                NexusSubmissionStage.reachability // transient error
-            /**
-             * Any other [EbicsSideError] should be treated as permanent,
-             * as they involve invalid signatures or an unexpected response
-             * format.  For this reason, they get the "ebics" stage assigned
-             * below, that will cause the payment as permanently failed and
-             * not to be retried.
-             */
-            else ->
-                NexusSubmissionStage.ebics // permanent error
-        }
-        throw NexusSubmitException(
-            stage = errorStage,
-            cause = early
-        )
-    } catch (permanent: EbicsUploadException) {
-        throw NexusSubmitException(
-            stage = NexusSubmissionStage.ebics,
-            cause = permanent
-        )
-    }
+    return doEbicsUpload(
+        ctx.httpClient,
+        ctx.cfg,
+        ctx.clientPrivateKeysFile,
+        ctx.bankPublicKeysFile,
+        uploadPaymentService(),
+        xml
+    )
 }
 
 /**
@@ -157,43 +105,23 @@ private suspend fun submitInitiatedPayment(
  * @param clientKeys subscriber private keys.
  * @param bankKeys bank public keys.
  */
-private fun submitBatch(
+private suspend fun submitBatch(
     ctx: SubmissionContext,
     db: Database,
 ) {
     logger.debug("Running submit at: ${Instant.now()}")
-    runBlocking {
-        db.initiatedPaymentsSubmittableGet(ctx.cfg.currency).forEach {
-            logger.debug("Submitting payment initiation with row ID: ${it.id}")
-            val submissionState = try {
-                val orderId = submitInitiatedPayment(ctx, it)
-                db.mem[orderId] = "Init"
-                DatabaseSubmissionState.success
-            } catch (e: NexusSubmitException) {
-                logger.error(e.message)
-                when (e.stage) {
-                    /**
-                     * Permanent failure: the pain.001 was invalid.  For example a Payto
-                     * URI was missing the receiver name, or the currency was wrong.  Must
-                     * not be retried.
-                     */
-                    NexusSubmissionStage.pain -> DatabaseSubmissionState.permanent_failure
-                    /**
-                     * Transient failure: HTTP or network failed, either because one party
-                     * was offline / unreachable, or because the bank URL is wrong.  In both
-                     * cases, the initiated payment stored in the database may still be correct,
-                     * therefore we set this error as transient, and it'll be retried.
-                     */
-                    NexusSubmissionStage.reachability -> DatabaseSubmissionState.transient_failure
-                    /**
-                     * As in the pain.001 case, there is a fundamental problem in the document
-                     * being submitted, so it should not be retried.
-                     */
-                    NexusSubmissionStage.ebics -> DatabaseSubmissionState.permanent_failure
-                }
-            }
-            db.initiatedPaymentSetSubmittedState(it.id, submissionState)
+    db.initiatedPaymentsSubmittableGet(ctx.cfg.currency).forEach {
+        logger.debug("Submitting payment initiation with row ID: ${it.id}")
+        val submissionState = try {
+            val orderId = submitInitiatedPayment(ctx, it)
+            db.mem[orderId] = "Init"
+            DatabaseSubmissionState.success
+        } catch (e: Exception) {
+            e.fmtLog(logger)
+            DatabaseSubmissionState.transient_failure
+            // TODO 
         }
+        db.initiatedPaymentSetSubmittedState(it.id, submissionState)
     }
 }
 
