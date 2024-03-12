@@ -52,7 +52,7 @@ class EbicsTest {
                 respondOk("<ebics broken></ebics>")
             }.postToBank("http://ignored.example.com/", ByteArray(0), "Test")
         }.run {
-            assertEquals("Test: invalid XML bank reponse", message)
+            assertEquals("Test: invalid XML bank response", message)
             assertEquals("Attribute name \"broken\" associated with an element type \"ebics\" must be followed by the ' = ' character.", cause!!.message)
         }
         getMockedClient {

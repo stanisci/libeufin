@@ -125,7 +125,7 @@ suspend fun HttpClient.postToBank(bankUrl: String, msg: ByteArray, phase: String
     try {
         return XMLUtil.parseIntoDom(res.bodyAsChannel().toInputStream())
     } catch (e: SAXException) {
-        throw EbicsError.Protocol("$phase: invalid XML bank reponse", e)
+        throw EbicsError.Protocol("$phase: invalid XML bank response", e)
     } catch (e: Exception) {
         throw EbicsError.Transport("$phase: failed read bank response", e)
     }
@@ -216,7 +216,7 @@ suspend fun ebicsDownload(
             if (!parentScope.isActive) {
                 // First send a proper EBICS transaction failure
                 receipt(false)
-                // Send throw cancelation exception
+                // Send throw cancellation exception
                 throw CancellationException()
             }
         }
