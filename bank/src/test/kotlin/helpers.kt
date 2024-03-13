@@ -34,6 +34,7 @@ import kotlin.io.path.readText
 import kotlin.random.Random
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertIs
 
 /* ----- Setup ----- */
 
@@ -79,10 +80,10 @@ fun bankSetup(
     conf: String = "test.conf",    
     lambda: suspend ApplicationTestBuilder.(Database) -> Unit
 ) {
-    setup(conf) { db, ctx -> 
+    setup(conf) { db, cfg -> 
         // Creating the exchange and merchant accounts first.
         val bonus = TalerAmount("KUDOS:0")
-        assertEquals(AccountCreationResult.Success, db.account.create(
+        assertIs<AccountCreationResult.Success>(db.account.create(
             login = "merchant",
             password = "merchant-password",
             name = "Merchant",
@@ -95,9 +96,10 @@ fun bankSetup(
             email = null,
             phone = null,
             cashoutPayto = null,
-            tanChannel = null   
+            tanChannel = null,
+            ctx = cfg.payto  
         ))
-        assertEquals(AccountCreationResult.Success, db.account.create(
+        assertIs<AccountCreationResult.Success>(db.account.create(
             login = "exchange",
             password = "exchange-password",
             name = "Exchange",
@@ -110,9 +112,10 @@ fun bankSetup(
             email = null,
             phone = null,
             cashoutPayto = null,
-            tanChannel = null   
+            tanChannel = null,
+            ctx = cfg.payto   
         ))
-        assertEquals(AccountCreationResult.Success, db.account.create(
+        assertIs<AccountCreationResult.Success>(db.account.create(
             login = "customer",
             password = "customer-password",
             name = "Customer",
@@ -125,15 +128,16 @@ fun bankSetup(
             email = null,
             phone = null,
             cashoutPayto = null,
-            tanChannel = null   
+            tanChannel = null,
+            ctx = cfg.payto
         ))
         // Create admin account
-        assertEquals(AccountCreationResult.Success, createAdminAccount(db, ctx, "admin-password"))
+        assertIs<AccountCreationResult.Success>(createAdminAccount(db, cfg, "admin-password"))
         testApplication {
             application {
-                corebankWebApp(db, ctx)
+                corebankWebApp(db, cfg)
             }
-            if (ctx.allowConversion) {
+            if (cfg.allowConversion) {
                 // Set conversion rates
                 client.post("/conversion-info/conversion-rate") {
                     pwAuth("admin")

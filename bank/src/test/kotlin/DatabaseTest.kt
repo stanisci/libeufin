@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -29,6 +29,7 @@ import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertIs
 
 class DatabaseTest {
     
@@ -36,7 +37,7 @@ class DatabaseTest {
     @Test
     fun createAdmin() = setup { db, ctx ->
         // Create admin account
-        assertEquals(AccountCreationResult.Success, createAdminAccount(db, ctx))
+        assertIs<AccountCreationResult.Success>(createAdminAccount(db, ctx))
         // Checking idempotency
         assertEquals(AccountCreationResult.LoginReuse, createAdminAccount(db, ctx))
     }

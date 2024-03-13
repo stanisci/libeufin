@@ -27,11 +27,11 @@ import java.time.Instant
 /** Data access logic for accounts */
 class AccountDAO(private val db: Database) {
     /** Result status of account creation */
-    enum class AccountCreationResult {
-        Success,
-        LoginReuse,
-        PayToReuse,
-        BonusBalanceInsufficient,
+    sealed interface AccountCreationResult {
+        data class Success(val payto: String): AccountCreationResult
+        data object LoginReuse: AccountCreationResult
+        data object PayToReuse: AccountCreationResult
+        data object BonusBalanceInsufficient: AccountCreationResult
     }
 
     /** Create new account */
@@ -49,7 +49,8 @@ class AccountDAO(private val db: Database) {
         bonus: TalerAmount,
         tanChannel: TanChannel?,
         // Whether to check [internalPaytoUri] for idempotency
-        checkPaytoIdempotent: Boolean
+        checkPaytoIdempotent: Boolean,
+        ctx: BankPaytoCtx
     ): AccountCreationResult = db.serializable { it ->
         val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank()
         it.transaction { conn ->
@@ -62,6 +63,7 @@ class AccountDAO(private val db: Database) {
                     AND is_public=?
                     AND is_taler_exchange=?
                     AND tan_channel IS NOT DISTINCT FROM ?::tan_enum
+                    ,internal_payto_uri, name
                 FROM customers 
                     JOIN bank_accounts
                         ON customer_id=owning_customer_id
@@ -79,13 +81,16 @@ class AccountDAO(private val db: Database) {
                 setString(9, tanChannel?.name)
                 setString(10, login)
                 oneOrNull { 
-                    PwCrypto.checkpw(password, it.getString(1)) && it.getBoolean(2)
+                    Pair(
+                        PwCrypto.checkpw(password, it.getString(1)) && it.getBoolean(2),
+                        it.getBankPayto("internal_payto_uri", "name", ctx)
+                    )
                 } 
             }
             
             if (idempotent != null) {
-                if (idempotent) {
-                    AccountCreationResult.Success
+                if (idempotent.first) {
+                    AccountCreationResult.Success(idempotent.second)
                 } else {
                     AccountCreationResult.LoginReuse
                 }
@@ -165,12 +170,12 @@ class AccountDAO(private val db: Database) {
                                     conn.rollback()
                                     AccountCreationResult.BonusBalanceInsufficient
                                 }
-                                else -> AccountCreationResult.Success
+                                else -> AccountCreationResult.Success(internalPayto.bank(name, ctx))
                             }
                         }
                     }
                 } else {
-                    AccountCreationResult.Success
+                    AccountCreationResult.Success(internalPayto.bank(name, ctx))
                 }
             }
         }

@@ -145,7 +145,7 @@ suspend fun createAccount(
     cfg: BankConfig, 
     req: RegisterAccountRequest, 
     isAdmin: Boolean
-): Pair<AccountCreationResult, String>  {
+): AccountCreationResult  {
     // Prohibit reserved usernames:
     if (RESERVED_ACCOUNTS.contains(req.username))
         throw conflict(
@@ -209,14 +209,15 @@ suspend fun createAccount(
                     bonus = if (!req.is_taler_exchange) cfg.registrationBonus 
                             else TalerAmount(0, 0, cfg.regionalCurrency),
                     tanChannel = req.tan_channel,
-                    checkPaytoIdempotent = req.payto_uri != null
+                    checkPaytoIdempotent = req.payto_uri != null,
+                    ctx = cfg.payto
                 )
                 // Retry with new IBAN
                 if (res == AccountCreationResult.PayToReuse && retry > 0) {
                     retry--
                     continue
                 }
-                return Pair(res, internalPayto.bank(req.name, cfg.payto))
+                return res
             }
         }
         WireMethod.X_TALER_BANK -> {
@@ -229,7 +230,7 @@ suspend fun createAccount(
          
             val internalPayto = XTalerBankPayto.forUsername(req.username)
         
-            val res = db.account.create(
+            return db.account.create(
                 login = req.username,
                 name = req.name,
                 email = req.contact_data?.email?.get(),
@@ -243,9 +244,9 @@ suspend fun createAccount(
                 bonus = if (!req.is_taler_exchange) cfg.registrationBonus 
                         else TalerAmount(0, 0, cfg.regionalCurrency),
                 tanChannel = req.tan_channel,
-                checkPaytoIdempotent = req.payto_uri != null
+                checkPaytoIdempotent = req.payto_uri != null,
+                ctx = cfg.payto
             )
-            return Pair(res, internalPayto.bank(req.name, cfg.payto))
         }
     }
 }
@@ -294,7 +295,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     authAdmin(db, TokenScope.readwrite, !ctx.allowRegistration) {
         post("/accounts") {
             val req = call.receive<RegisterAccountRequest>()
-            val (result, internalPayto) = createAccount(db, ctx, req, isAdmin)
+            val result = createAccount(db, ctx, req, isAdmin)
             when (result) {
                 AccountCreationResult.BonusBalanceInsufficient -> throw conflict(
                     "Insufficient admin funds to grant bonus",
@@ -305,10 +306,10 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                     TalerErrorCode.BANK_REGISTER_USERNAME_REUSE
                 )
                 AccountCreationResult.PayToReuse -> throw conflict(
-                    "Bank internalPayToUri reuse '$internalPayto'",
+                    "Bank internalPayToUri reuse",
                     TalerErrorCode.BANK_REGISTER_PAYTO_URI_REUSE
                 )
-                AccountCreationResult.Success -> call.respond(RegisterAccountResponse(internalPayto))
+                is AccountCreationResult.Success -> call.respond(RegisterAccountResponse(result.payto))
             }
         }
     }

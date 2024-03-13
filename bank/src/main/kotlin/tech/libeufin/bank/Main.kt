@@ -274,7 +274,7 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
                 AccountCreationResult.LoginReuse -> {}
                 AccountCreationResult.PayToReuse -> 
                     throw Exception("Failed to create admin's account")
-                AccountCreationResult.Success ->
+                is AccountCreationResult.Success ->
                     logger.info("Admin's account created")
             }
         }
@@ -487,18 +487,19 @@ class CreateAccount : CliktCommand(
                 ) 
             }
             req?.let {
-                val (result, internalPayto) = createAccount(db, ctx, req, true)
+                val result = createAccount(db, ctx, req, true)
                 when (result) {
                     AccountCreationResult.BonusBalanceInsufficient ->
                         throw Exception("Insufficient admin funds to grant bonus")
                     AccountCreationResult.LoginReuse ->
                         throw Exception("Account username reuse '${req.username}'")
                     AccountCreationResult.PayToReuse ->
-                        throw Exception("Bank internalPayToUri reuse '$internalPayto'")
-                    AccountCreationResult.Success ->
+                        throw Exception("Bank internalPayToUri reuse")
+                    is AccountCreationResult.Success -> {
                         logger.info("Account '${req.username}' created")
+                        println(result.payto)
+                    }
                 }
-                println(internalPayto)
             }
         }
     }
