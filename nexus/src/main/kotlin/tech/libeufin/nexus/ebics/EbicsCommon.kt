@@ -301,13 +301,14 @@ fun prepareUploadPayload(
         bankKeys.bank_encryption_public_key,
         encryptionResult.plainTransactionKey
     )
-    val encodedEncryptedPayload = encryptedPayload.encryptedData.encodeBase64()
+    val segment = encryptedPayload.encryptedData.encodeBase64()
+    // Split 1MB segment when we have payloads that big
 
     return PreparedUploadData(
         encryptionResult.encryptedTransactionKey, // ephemeral key
         encryptionResult.encryptedData, // bank-pub-encrypted A006 signature.
         CryptoUtil.digestEbicsOrderA006(payload), // used by EBICS 3
-        listOf(encodedEncryptedPayload) // actual payload E002 encrypted.
+        listOf(segment) // actual payload E002 encrypted.
     )
 }
 
@@ -341,12 +342,14 @@ suspend fun doEbicsUpload(
     val tId = requireNotNull(initResp.transactionID) {
         "Upload init phase: missing transaction ID"
     }
+    val orderId = requireNotNull(initResp.orderID) {
+        "Upload init phase: missing order ID"
+    }
 
     // Transfer phase
-    val transferXml = impl.uploadTransfer(tId, preparedPayload)
-    val transferResp = impl.postBTS(client, transferXml, "Upload transfer phase").okOrFail("Upload transfer phase")
-    val orderId = requireNotNull(transferResp.orderID) {
-        "Upload transfer phase: missing order ID"
+    for (i in 1..preparedPayload.segments.size) {
+        val transferXml = impl.uploadTransfer(tId, preparedPayload, i)
+        val transferResp = impl.postBTS(client, transferXml, "Upload transfer phase").okOrFail("Upload transfer phase")
     }
     orderId
 }
@@ -365,7 +368,7 @@ class PreparedUploadData(
     val transactionKey: ByteArray,
     val userSignatureDataEncrypted: ByteArray,
     val dataDigest: ByteArray,
-    val encryptedPayloadChunks: List<String>
+    val segments: List<String>
 )
 
 class DataEncryptionInfo(
@@ -412,6 +415,7 @@ enum class EbicsReturnCode(val code: String) {
     EBICS_UNSUPPORTED_ORDER_TYPE("091006"),
     EBICS_INVALID_XML("091010"),
     EBICS_TX_MESSAGE_REPLAY("091103"),
+    EBICS_TX_SEGMENT_NUMBER_EXCEEDED("091104"), 
     EBICS_INVALID_REQUEST_CONTENT("091113"),
     EBICS_PROCESSING_ERROR("091116"),
     EBICS_ACCOUNT_AUTHORISATION_FAILED("091302"),

@@ -112,7 +112,7 @@ class EbicsBTS(
     }
 
     fun downloadTransfer(
-        howManySegments: Int,
+        nbSegment: Int,
         segmentNumber: Int,
         transactionId: String
     ): ByteArray {
@@ -126,7 +126,8 @@ class EbicsBTS(
                 el("mutable") {
                     el("TransactionPhase", "Transfer")
                     el("SegmentNumber") {
-                        attr("lastSegment", if (howManySegments == segmentNumber) "true" else "false")
+                        attr("lastSegment", if (nbSegment == segmentNumber) "true" else "false")
+                        text(segmentNumber.toString())
                     }
                 }
             }
@@ -160,7 +161,7 @@ class EbicsBTS(
 
     /* ----- Upload ----- */
 
-    fun uploadInitialization(preparedUploadData: PreparedUploadData): ByteArray {
+    fun uploadInitialization(uploadData: PreparedUploadData): ByteArray {
         val nonce = getNonce(128)
         return signedRequest {
             el("header") {
@@ -195,7 +196,7 @@ class EbicsBTS(
                         }
                     }
                     bankDigest()
-                    el("NumSegments", "1") // TODO test upload of many segment
+                    el("NumSegments", uploadData.segments.size.toString())
                     
                 }
                 el("mutable") {
@@ -212,15 +213,15 @@ class EbicsBTS(
                             attr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
                             text(CryptoUtil.getEbicsPublicKeyHash(bankKeys.bank_encryption_public_key).encodeBase64())
                         }
-                        el("TransactionKey", preparedUploadData.transactionKey.encodeBase64())
+                        el("TransactionKey", uploadData.transactionKey.encodeBase64())
                     }
                     el("SignatureData") {
                         attr("authenticate", "true")
-                        text(preparedUploadData.userSignatureDataEncrypted.encodeBase64())
+                        text(uploadData.userSignatureDataEncrypted.encodeBase64())
                     }
                     el("DataDigest") {
                         attr("SignatureVersion", "A006")
-                        text(preparedUploadData.dataDigest.encodeBase64())
+                        text(uploadData.dataDigest.encodeBase64())
                     }
                 }
             }
@@ -229,9 +230,9 @@ class EbicsBTS(
 
     fun uploadTransfer(
         transactionId: String,
-        uploadData: PreparedUploadData
+        uploadData: PreparedUploadData,
+        segmentNumber: Int
     ): ByteArray {
-        val chunkIndex = 1 // TODO test upload of many segment
         return signedRequest {
             el("header") {
                 attr("authenticate", "true")
@@ -242,13 +243,13 @@ class EbicsBTS(
                 el("mutable") {
                     el("TransactionPhase", "Transfer")
                     el("SegmentNumber") {
-                        attr("lastSegment", "true")
-                        text(chunkIndex.toString())
+                        attr("lastSegment", if (uploadData.segments.size == segmentNumber) "true" else "false")
+                        text(segmentNumber.toString())
                     }
                 }
             }
             el("AuthSignature")
-            el("body/DataTransfer/OrderData", uploadData.encryptedPayloadChunks[chunkIndex - 1])
+            el("body/DataTransfer/OrderData", uploadData.segments[segmentNumber-1])
         }
     }
 
