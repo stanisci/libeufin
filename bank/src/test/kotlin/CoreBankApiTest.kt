@@ -174,7 +174,9 @@ class CoreBankAccountsApiTest {
             // Check idempotency
             client.post("/accounts") {
                 json(req)
-            }.assertOk()
+            }.assertOkJson<RegisterAccountResponse> {
+                assertEquals(payto, it.internal_payto_uri)
+            }
             // Check idempotency with payto
             client.post("/accounts") {
                 json(req) {
@@ -208,8 +210,9 @@ class CoreBankAccountsApiTest {
         // Testing idempotency
         client.post("/accounts") {
             json(req)
-        }.assertOk()
-
+        }.assertOkJson<RegisterAccountResponse> {
+            assertEquals(payto.full("Jane"), it.internal_payto_uri)
+        }
         // Check admin only debit_threshold
         obj {
             "username" to "bat"
@@ -851,6 +854,28 @@ class CoreBankTransactionsApiTest {
                 assertEquals(TalerAmount("KUDOS:0.3"), tx.amount)
             }
         }
+
+        // Check idempotency
+        ShortHashCode.rand().let { requestUid ->
+            val id = client.postA("/accounts/merchant/transactions") {
+                json(valid_req) {
+                    "request_uid" to requestUid
+                }
+            }.assertOkJson<TransactionCreateResponse>().row_id
+            client.postA("/accounts/merchant/transactions") {
+                json(valid_req) {
+                    "request_uid" to requestUid
+                }
+            }.assertOkJson<TransactionCreateResponse> {
+                assertEquals(id, it.row_id)
+            }
+            client.postA("/accounts/merchant/transactions") {
+                json(valid_req) {
+                    "request_uid" to requestUid
+                    "amount" to "KUDOS:42"
+                }
+            }.assertConflict(TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED)
+        }
         
         // Check amount in payto_uri
         client.postA("/accounts/merchant/transactions") {
@@ -975,6 +1000,31 @@ class CoreBankTransactionsApiTest {
             assertBalance("merchant", "+KUDOS:2")
             assertBalance("customer", "+KUDOS:1")
         }
+
+        // Check 2fa idempotency
+        val req = obj {
+            "payto_uri" to "$customerPayto?message=tan+check&amount=KUDOS:1"
+            "request_uid" to ShortHashCode.rand()
+        }
+        val id = client.postA("/accounts/merchant/transactions") {
+            json(req)
+        }.assertChallenge { _,_->
+            assertBalance("merchant", "+KUDOS:2")
+            assertBalance("customer", "+KUDOS:1")
+        }.assertOkJson <TransactionCreateResponse> { 
+            assertBalance("merchant", "+KUDOS:1")
+            assertBalance("customer", "+KUDOS:2")
+        }.row_id
+        client.postA("/accounts/merchant/transactions") {
+            json(req)
+        }.assertOkJson<TransactionCreateResponse> {
+            assertEquals(id, it.row_id)
+        }
+        client.postA("/accounts/merchant/transactions") {
+            json(req) {
+                "payto_uri" to "$customerPayto?message=tan+chec2k&amount=KUDOS:1"
+            }
+        }.assertConflict(TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED)
     }
 }
 
@@ -1122,7 +1172,6 @@ class CoreBankWithdrawalApiTest {
     }
 }
 
-
 class CoreBankCashoutApiTest {
     // POST /accounts/{USERNAME}/cashouts
     @Test
@@ -1143,9 +1192,16 @@ class CoreBankCashoutApiTest {
         fillCashoutInfo("customer")
 
         // Check OK
+        val id = client.postA("/accounts/customer/cashouts") {
+            json(req) 
+        }.assertOkJson<CashoutResponse>().cashout_id
+
+        // Check idempotent
         client.postA("/accounts/customer/cashouts") {
             json(req) 
-        }.assertOkJson<CashoutResponse>()
+        }.assertOkJson<CashoutResponse> {
+            assertEquals(id, it.cashout_id)
+        }
 
         // Trigger conflict due to reused request_uid
         client.postA("/accounts/customer/cashouts") {

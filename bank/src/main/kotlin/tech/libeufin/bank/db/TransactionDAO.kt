@@ -38,6 +38,7 @@ class TransactionDAO(private val db: Database) {
         data object BothPartySame: BankTransactionResult
         data object BalanceInsufficient: BankTransactionResult
         data object TanRequired: BankTransactionResult
+        data object RequestUidReuse: BankTransactionResult
     }
 
     /** Create a new transaction */
@@ -47,7 +48,8 @@ class TransactionDAO(private val db: Database) {
         subject: String,
         amount: TalerAmount,
         timestamp: Instant,
-        is2fa: Boolean
+        is2fa: Boolean,
+        requestUid: ShortHashCode?,
     ): BankTransactionResult = db.serializable { conn ->
         val now = timestamp.toDbMicros() ?: throw faultyTimestampByBank()
         conn.transaction {
@@ -57,6 +59,7 @@ class TransactionDAO(private val db: Database) {
                     ,out_debtor_not_found
                     ,out_same_account
                     ,out_balance_insufficient
+                    ,out_request_uid_reuse
                     ,out_tan_required
                     ,out_credit_bank_account_id
                     ,out_debit_bank_account_id
@@ -65,7 +68,8 @@ class TransactionDAO(private val db: Database) {
                     ,out_creditor_is_exchange 
                     ,out_debtor_is_exchange
                     ,out_creditor_admin
-                FROM bank_transaction(?,?,?,(?,?)::taler_amount,?,?)
+                    ,out_idempotent
+                FROM bank_transaction(?,?,?,(?,?)::taler_amount,?,?,?)
             """
             )
             stmt.setString(1, creditAccountPayto.canonical)
@@ -75,6 +79,7 @@ class TransactionDAO(private val db: Database) {
             stmt.setInt(5, amount.frac)
             stmt.setLong(6, now)
             stmt.setBoolean(7, is2fa)
+            stmt.setBytes(8, requestUid?.raw)
             stmt.executeQuery().use {
                 when {
                     !it.next() -> throw internalServerError("Bank transaction didn't properly return")
@@ -83,6 +88,8 @@ class TransactionDAO(private val db: Database) {
                     it.getBoolean("out_same_account") -> BankTransactionResult.BothPartySame
                     it.getBoolean("out_balance_insufficient") -> BankTransactionResult.BalanceInsufficient
                     it.getBoolean("out_creditor_admin") -> BankTransactionResult.AdminCreditor
+                    it.getBoolean("out_request_uid_reuse") -> BankTransactionResult.RequestUidReuse
+                    it.getBoolean("out_idempotent") -> BankTransactionResult.Success(it.getLong("out_debit_row_id"))
                     it.getBoolean("out_tan_required") -> BankTransactionResult.TanRequired
                     else -> {
                         val creditAccountId = it.getLong("out_credit_bank_account_id")

@@ -459,6 +459,7 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
                 subject = subject,
                 amount = amount,
                 timestamp = Instant.now(),
+                requestUid = req.request_uid,
                 is2fa = challenge != null
             )
             when (res) {
@@ -478,6 +479,10 @@ private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
                 BankTransactionResult.BalanceInsufficient -> throw conflict(
                     "Insufficient funds",
                     TalerErrorCode.BANK_UNALLOWED_DEBIT
+                )
+                BankTransactionResult.RequestUidReuse -> throw conflict(
+                    "request_uid used already",
+                    TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED
                 )
                 is BankTransactionResult.Success -> call.respond(TransactionCreateResponse(res.id))
             }

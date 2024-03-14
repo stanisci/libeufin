@@ -443,6 +443,7 @@ CREATE FUNCTION bank_transaction(
   IN in_amount taler_amount,
   IN in_timestamp INT8,
   IN in_is_tan BOOLEAN,
+  IN in_request_uid BYTEA,
   -- Error status
   OUT out_creditor_not_found BOOLEAN,
   OUT out_debtor_not_found BOOLEAN,
@@ -450,13 +451,15 @@ CREATE FUNCTION bank_transaction(
   OUT out_balance_insufficient BOOLEAN,
   OUT out_creditor_admin BOOLEAN,
   OUT out_tan_required BOOLEAN,
+  OUT out_request_uid_reuse BOOLEAN,
   -- Success return
   OUT out_credit_bank_account_id INT8,
   OUT out_debit_bank_account_id INT8,
   OUT out_credit_row_id INT8,
   OUT out_debit_row_id INT8,
   OUT out_creditor_is_exchange BOOLEAN,
-  OUT out_debtor_is_exchange BOOLEAN
+  OUT out_debtor_is_exchange BOOLEAN,
+  OUT out_idempotent BOOLEAN
 )
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -466,24 +469,37 @@ SELECT bank_account_id, is_taler_exchange, login='admin'
   FROM bank_accounts
     JOIN customers ON customer_id=owning_customer_id
   WHERE internal_payto_uri = in_credit_account_payto;
-IF NOT FOUND THEN
-  out_creditor_not_found=TRUE;
-  RETURN;
-ELSIF out_creditor_admin THEN
+IF NOT FOUND OR out_creditor_admin THEN
+  out_creditor_not_found=NOT FOUND;
   RETURN;
 END IF;
--- Find debit bank account id and check it's a different account
+-- Find debit bank account ID and check it's a different account and if 2FA is required
 SELECT bank_account_id, is_taler_exchange, out_credit_bank_account_id=bank_account_id, NOT in_is_tan AND tan_channel IS NOT NULL
   INTO out_debit_bank_account_id, out_debtor_is_exchange, out_same_account, out_tan_required
   FROM bank_accounts 
     JOIN customers ON customer_id=owning_customer_id
   WHERE login = in_debit_account_username;
-IF NOT FOUND THEN
-  out_debtor_not_found=TRUE;
-  RETURN;
-ELSIF out_same_account OR out_tan_required THEN
+IF NOT FOUND OR out_same_account THEN
+  out_debtor_not_found=NOT FOUND;
   RETURN;
 END IF;
+-- Check for idempotence and conflict
+IF in_request_uid IS NOT NULL THEN
+  SELECT (amount != in_amount
+      OR subject != in_subject 
+      OR bank_account_id != out_debit_bank_account_id), bank_transaction
+    INTO out_request_uid_reuse, out_debit_row_id
+    FROM bank_transaction_operations
+      JOIN bank_account_transactions ON bank_transaction = bank_transaction_id
+    WHERE request_uid = in_request_uid;
+  IF found OR out_tan_required THEN
+    out_idempotent = found AND NOT out_request_uid_reuse;
+    RETURN;
+  END IF;
+ELSIF out_tan_required THEN
+  RETURN;
+END IF;
+
 -- Perform bank transfer
 SELECT
   transfer.out_balance_insufficient,
@@ -503,6 +519,11 @@ SELECT
     NULL,
     NULL
   ) as transfer;
+-- Store operation
+IF in_request_uid IS NOT NULL THEN
+  INSERT INTO bank_transaction_operations (request_uid, bank_transaction)  
+    VALUES (in_request_uid, out_debit_row_id);
+END IF;
 END $$;
 COMMENT ON FUNCTION bank_transaction IS 'Create a bank transaction';
 

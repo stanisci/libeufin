@@ -380,7 +380,8 @@ data class AccountData(
 @Serializable
 data class TransactionCreateRequest(
     val payto_uri: Payto,
-    val amount: TalerAmount?
+    val amount: TalerAmount?,
+    val request_uid: ShortHashCode?
 )
 
 @Serializable
