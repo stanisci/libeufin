@@ -170,7 +170,7 @@ class InitiatedDAO(private val db: Database) {
         stmt.execute()
     }
 
-    /** List every initiated payment pending submission in ther order they should be submitted */
+    /** List every initiated payment pending submission in the order they should be submitted */
     suspend fun submittable(currency: String): List<InitiatedPayment> = db.conn { conn ->
         fun extract(it: ResultSet): InitiatedPayment {
             val rowId = it.getLong("initiated_outgoing_transaction_id")
