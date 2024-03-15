@@ -119,15 +119,10 @@ class IntegrationTest {
 
         suspend fun checkCount(db: NexusDb, nbIncoming: Int, nbBounce: Int, nbTalerable: Int) {
             db.conn { conn ->
-                conn.prepareStatement("SELECT count(*) FROM incoming_transactions").oneOrNull {
-                    assertEquals(nbIncoming, it.getInt(1))
-                }
-                conn.prepareStatement("SELECT count(*) FROM bounced_transactions").oneOrNull {
-                    assertEquals(nbBounce, it.getInt(1))
-                }
-                conn.prepareStatement("SELECT count(*) FROM talerable_incoming_transactions").oneOrNull {
-                    assertEquals(nbTalerable, it.getInt(1))
-                }
+                val cIncoming = conn.prepareStatement("SELECT count(*) FROM incoming_transactions").one { it.getInt(1) }
+                val cBounce = conn.prepareStatement("SELECT count(*) FROM bounced_transactions").one { it.getInt(1) }
+                val cTalerable = conn.prepareStatement("SELECT count(*) FROM talerable_incoming_transactions").one { it.getInt(1) }
+                assertEquals(Triple(nbIncoming, nbBounce, nbTalerable), Triple(cIncoming, cBounce, cTalerable))
             }
         }
 
@@ -202,18 +197,22 @@ class IntegrationTest {
             }.assertNoContent()
 
             // Check success
-            ingestIncomingPayment(db, IncomingPayment(
+            val valid_payment = IncomingPayment(
                 amount = TalerAmount("EUR:10"),
                 debitPaytoUri = userPayTo.toString(),
                 wireTransferSubject = "Success ${Base32Crockford32B.rand().encoded()}",
                 executionTime = Instant.now(),
                 bankId = "success"
-            ))
+            )
+            ingestIncomingPayment(db, valid_payment)
             checkCount(db, 2, 1, 1)
             client.get("http://0.0.0.0:8080/accounts/exchange/transactions") {
                 basicAuth("exchange", "password")
             }.assertOkJson<BankAccountTransactionsResponse>()
 
+            // Check idempotency
+            ingestIncomingPayment(db, valid_payment)
+            checkCount(db, 2, 1, 1)
             // TODO check double insert cashin with different subject
         }
     }

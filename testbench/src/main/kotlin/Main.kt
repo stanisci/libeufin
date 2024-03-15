@@ -132,7 +132,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     })
                 }
                 put("reset-db", "dbinit -r $flags")
-                put("recover", "Recover old transactions", "ebics-fetch $ebicsFlags --pinned-start 2022-01-01 notification")
+                put("recover", "Recover old transactions", "ebics-fetch $ebicsFlags --pinned-start 2024-01-01 notification")
                 put("fetch", "Fetch all documents", "ebics-fetch $ebicsFlags")
                 put("ack", "Fetch CustomerAcknowledgement", "ebics-fetch $ebicsFlags acknowledgement")
                 put("status", "Fetch CustomerPaymentStatusReport", "ebics-fetch $ebicsFlags status")

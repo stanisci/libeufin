@@ -216,13 +216,16 @@ SELECT reg.out_found, reg.out_tx_id
   INTO out_found, out_tx_id;
 
 -- Register as talerable bounce
-INSERT INTO talerable_incoming_transactions (
-  incoming_transaction_id
-  ,reserve_public_key
-) VALUES (
-  out_tx_id
-  ,in_reserve_public_key
-) ON CONFLICT (incoming_transaction_id) DO NOTHING;
+IF NOT EXISTS(SELECT 1 FROM talerable_incoming_transactions WHERE incoming_transaction_id = out_tx_id) THEN
+  -- We cannot use ON CONFLICT here because conversion use a trigger before insertion that isn't idempotent
+  INSERT INTO talerable_incoming_transactions (
+    incoming_transaction_id
+    ,reserve_public_key
+  ) VALUES (
+    out_tx_id
+    ,in_reserve_public_key
+  );
+END IF;
 END $$;
 COMMENT ON FUNCTION register_incoming_and_talerable IS '
 Creates one row in the incoming transactions table and one row
