@@ -1,11 +1,16 @@
 BEGIN;
 
--- NOTE: The following unregistration would affect the
--- legacy database schema too.  That's acceptable as the
--- legacy schema is being removed.
-SELECT _v.unregister_patch('libeufin-bank-0001');
-SELECT _v.unregister_patch('libeufin-bank-0002');
-SELECT _v.unregister_patch('libeufin-bank-0003');
+DO
+$do$
+DECLARE
+    patch text;
+BEGIN
+    for patch in SELECT patch_name FROM _v.patches WHERE patch_name LIKE 'libeufin_bank_%' loop 
+        PERFORM _v.unregister_patch(patch);
+    end loop;
+END
+$do$;
+
 DROP SCHEMA libeufin_bank CASCADE;
 
 COMMIT;

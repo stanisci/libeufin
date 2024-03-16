@@ -189,7 +189,7 @@ class WithdrawalDAO(private val db: Database) {
             FROM taler_withdrawal_operations
                 JOIN bank_accounts ON wallet_bank_account=bank_account_id
                 JOIN customers ON customer_id=owning_customer_id
-            WHERE withdrawal_uuid=?
+            WHERE withdrawal_uuid=? AND deleted_at IS NULL
         """)
         stmt.setObject(1, uuid)
         stmt.oneOrNull { it.getString(1) }
@@ -250,7 +250,7 @@ class WithdrawalDAO(private val db: Database) {
                     FROM taler_withdrawal_operations
                         JOIN bank_accounts ON wallet_bank_account=bank_account_id
                         JOIN customers ON customer_id=owning_customer_id
-                    WHERE withdrawal_uuid=?
+                    WHERE withdrawal_uuid=? AND deleted_at IS NULL
                 """)
                 stmt.setObject(1, uuid)
                 stmt.oneOrNull {

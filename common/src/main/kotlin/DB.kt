@@ -276,9 +276,7 @@ fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: 
         SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='_v') AND
             EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='${sqlFilePrefix.replace("-", "_")}')
         """
-    ).oneOrNull {
-        it.getBoolean(1)
-    }!!
+    ).one{ it.getBoolean(1) }
     if (!isInitialized) {
         logger.info("versioning schema not present, not running drop sql")
         return

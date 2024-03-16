@@ -194,15 +194,17 @@ class AccountDAO(private val db: Database) {
         login: String, 
         is2fa: Boolean
     ): AccountDeletionResult = db.serializable { conn ->
+        val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank()
         val stmt = conn.prepareStatement("""
             SELECT
               out_not_found,
               out_balance_not_zero,
               out_tan_required
-              FROM account_delete(?,?);
+              FROM account_delete(?,?,?)
         """)
         stmt.setString(1, login)
-        stmt.setBoolean(2, is2fa)
+        stmt.setLong(2, now)
+        stmt.setBoolean(3, is2fa)
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw internalServerError("Deletion returned nothing.")
@@ -265,7 +267,7 @@ class AccountDAO(private val db: Database) {
             FROM customers
                 JOIN bank_accounts 
                 ON customer_id=owning_customer_id
-            WHERE login=?
+            WHERE login=? AND deleted_at IS NULL
         """).run {
             setString(1, login)
             oneOrNull {
@@ -388,7 +390,8 @@ class AccountDAO(private val db: Database) {
     ): AccountPatchAuthResult = db.serializable {
         it.transaction { conn ->
             val (currentPwh, tanRequired) = conn.prepareStatement("""
-                SELECT password_hash, (NOT ? AND tan_channel IS NOT NULL) FROM customers WHERE login=?
+                SELECT password_hash, (NOT ? AND tan_channel IS NOT NULL) 
+                FROM customers WHERE login=? AND deleted_at IS NULL
             """).run {
                 setBoolean(1, is2fa)
                 setString(2, login)
@@ -415,7 +418,7 @@ class AccountDAO(private val db: Database) {
     /** Get password hash of account [login] */
     suspend fun passwordHash(login: String): String? = db.conn { conn ->
         val stmt = conn.prepareStatement("""
-            SELECT password_hash FROM customers WHERE login=?
+            SELECT password_hash FROM customers WHERE login=? AND deleted_at IS NULL
         """)
         stmt.setString(1, login)
         stmt.oneOrNull { 
@@ -432,9 +435,8 @@ class AccountDAO(private val db: Database) {
              ,name
              ,is_taler_exchange
             FROM bank_accounts
-                JOIN customers 
-                ON customer_id=owning_customer_id
-                WHERE login=?
+                JOIN customers ON customer_id=owning_customer_id
+            WHERE login=? AND deleted_at IS NULL
         """)
         stmt.setString(1, login)
         stmt.oneOrNull {
@@ -466,7 +468,7 @@ class AccountDAO(private val db: Database) {
             FROM customers 
                 JOIN bank_accounts
                     ON customer_id=owning_customer_id
-            WHERE login=?
+            WHERE login=? AND deleted_at IS NULL
         """)
         stmt.setString(1, login)
         stmt.oneOrNull {
@@ -512,7 +514,7 @@ class AccountDAO(private val db: Database) {
               bank_account_id
               FROM bank_accounts JOIN customers
                 ON owning_customer_id = customer_id 
-              WHERE is_public=true AND name LIKE ? AND
+              WHERE is_public=true AND name LIKE ? AND deleted_at IS NULL AND
             """,
             {
                 setString(1, params.loginFilter)
@@ -555,7 +557,7 @@ class AccountDAO(private val db: Database) {
             ,bank_account_id
             FROM bank_accounts JOIN customers
               ON owning_customer_id = customer_id 
-            WHERE name LIKE ? AND
+            WHERE name LIKE ? AND deleted_at IS NULL AND
             """,
             {
                 setString(1, params.loginFilter)

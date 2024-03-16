@@ -24,5 +24,11 @@ CREATE TABLE bank_transaction_operations
     REFERENCES bank_account_transactions(bank_transaction_id)
       ON DELETE CASCADE
   );
+COMMENT ON TABLE bank_transaction_operations
+  IS 'Operation table for idempotent bank transactions.';
+
+ALTER TABLE customers ADD deleted_at INT8;
+COMMENT ON COLUMN customers.deleted_at
+  IS 'Indicates a deletion request, we keep the account in the database until all its transactions have been deleted for compliance.';
 
 COMMIT;

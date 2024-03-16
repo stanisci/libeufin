@@ -1,7 +1,15 @@
 BEGIN;
 
-SELECT _v.unregister_patch('libeufin-nexus-0001');
-SELECT _v.unregister_patch('libeufin-nexus-0002');
+DO
+$do$
+DECLARE
+    patch text;
+BEGIN
+    for patch in SELECT patch_name FROM _v.patches WHERE patch_name LIKE 'libeufin_nexus_%' loop 
+        PERFORM _v.unregister_patch(patch);
+    end loop;
+END
+$do$;
 DROP SCHEMA libeufin_nexus CASCADE;
 
 COMMIT;

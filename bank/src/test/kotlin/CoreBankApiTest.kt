@@ -137,8 +137,7 @@ class CoreBankTokenApiTest {
     @Test
     fun delete() = bankSetup { _ -> 
         // TODO test restricted
-        val token = client.post("/accounts/merchant/token") {
-            pwAuth("merchant")
+        val token = client.postA("/accounts/merchant/token") {
             json { "scope" to "readonly" }
         }.assertOkJson<TokenSuccessResponse>().access_token
         // Check OK
@@ -151,9 +150,7 @@ class CoreBankTokenApiTest {
         }.assertUnauthorized()
 
         // Checking merchant can still be served by basic auth, after token deletion.
-        client.get("/accounts/merchant") {
-            pwAuth("merchant")
-        }.assertOk()
+        client.getA("/accounts/merchant").assertOk()
     }
 }
 
@@ -424,19 +421,6 @@ class CoreBankAccountsApiTest {
             .assertConflict(TalerErrorCode.BANK_ACCOUNT_BALANCE_NOT_ZERO)
         // Successful deletion
         tx("john", "KUDOS:1", "customer")
-        // TODO remove with gc
-        db.conn { conn ->
-            val id = conn.prepareStatement("SELECT bank_account_id FROM bank_accounts JOIN customers ON customer_id=owning_customer_id WHERE login = ?").run {
-                setString(1, "john")
-                oneOrNull {
-                    it.getLong(1)
-                }!!
-            }
-            conn.prepareStatement("DELETE FROM bank_account_transactions WHERE bank_account_id=?").run {
-                setLong(1, id)
-                execute()
-            }
-        }
         client.deleteA("/accounts/john")
             .assertChallenge()
             .assertNoContent()
@@ -513,7 +497,6 @@ class CoreBankAccountsApiTest {
             json(req)
         }.assertNoContent()
 
-        
         checkAdminOnly(
             obj(req) { "debit_threshold" to "KUDOS:100" },
             TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT

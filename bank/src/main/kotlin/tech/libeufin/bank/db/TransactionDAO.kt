@@ -165,7 +165,7 @@ class TransactionDAO(private val db: Database) {
             FROM bank_account_transactions
                 JOIN bank_accounts ON bank_account_transactions.bank_account_id=bank_accounts.bank_account_id
                 JOIN customers ON customer_id=owning_customer_id 
-	        WHERE bank_transaction_id=? AND login=?
+	        WHERE bank_transaction_id=? AND login=? AND deleted_at IS NULL
         """)
         stmt.setLong(1, rowId)
         stmt.setString(2, login)

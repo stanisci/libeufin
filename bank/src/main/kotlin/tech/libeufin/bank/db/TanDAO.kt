@@ -163,7 +163,7 @@ class TanDAO(private val db: Database) {
             SELECT body, tan_challenges.tan_channel, tan_info
             FROM tan_challenges
                 JOIN customers ON customer=customer_id
-            WHERE challenge_id=? AND op=?::op_enum AND login=?
+            WHERE challenge_id=? AND op=?::op_enum AND login=? AND deleted_at IS NULL
         """)
         stmt.setLong(1, id)
         stmt.setString(2, op.name)

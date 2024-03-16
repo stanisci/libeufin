@@ -142,6 +142,7 @@ COMMENT ON FUNCTION account_balance_is_sufficient IS 'Check if an account have e
 
 CREATE FUNCTION account_delete(
   IN in_login TEXT,
+  IN in_now INT8,
   IN in_is_tan BOOLEAN,
   OUT out_not_found BOOLEAN,
   OUT out_balance_not_zero BOOLEAN,
@@ -150,45 +151,26 @@ CREATE FUNCTION account_delete(
 LANGUAGE plpgsql AS $$
 DECLARE
 my_customer_id INT8;
-my_balance_val INT8;
-my_balance_frac INT4;
 BEGIN
--- check if login exists and if 2FA is required
-SELECT customer_id, (NOT in_is_tan AND tan_channel IS NOT NULL) 
-  INTO my_customer_id, out_tan_required
-  FROM customers
-  WHERE login = in_login;
-IF NOT FOUND THEN
-  out_not_found=TRUE;
-  RETURN;
-END IF;
-
--- get the balance
-SELECT
-  (balance).val as balance_val,
-  (balance).frac as balance_frac
-  INTO
-    my_balance_val,
-    my_balance_frac
-  FROM bank_accounts
-  WHERE owning_customer_id = my_customer_id;
-IF NOT FOUND THEN
-  RAISE EXCEPTION 'Invariant failed: customer lacks bank account';
-END IF;
-
--- check that balance is zero.
-IF my_balance_val != 0 OR my_balance_frac != 0 THEN
-  out_balance_not_zero=TRUE;
-  RETURN;
-END IF;
-
--- check tan required
-IF out_tan_required THEN
+-- check if account exists, has zero balance and if 2FA is required
+SELECT 
+   customer_id
+  ,(NOT in_is_tan AND tan_channel IS NOT NULL)
+  ,((balance).val != 0 OR (balance).frac != 0)
+  INTO 
+     my_customer_id
+    ,out_tan_required
+    ,out_balance_not_zero
+  FROM customers 
+    JOIN bank_accounts ON owning_customer_id = customer_id
+  WHERE login = in_login AND deleted_at IS NULL;
+IF NOT FOUND OR out_balance_not_zero OR out_tan_required THEN
+  out_not_found=NOT FOUND;
   RETURN;
 END IF;
 
 -- actual deletion
-DELETE FROM customers WHERE login = in_login;
+UPDATE customers SET deleted_at = in_now WHERE customer_id = my_customer_id;
 END $$;
 COMMENT ON FUNCTION account_delete IS 'Deletes an account if the balance is zero';
 
@@ -310,11 +292,9 @@ SELECT
   FROM bank_accounts 
       JOIN customers 
         ON customer_id=owning_customer_id
-  WHERE login = in_username;
-IF NOT FOUND THEN
-  out_debtor_not_found=TRUE;
-  RETURN;
-ELSIF out_debtor_not_exchange THEN
+  WHERE login = in_username AND deleted_at IS NULL;
+IF NOT FOUND OR out_debtor_not_exchange THEN
+  out_debtor_not_found=NOT FOUND;
   RETURN;
 END IF;
 -- Find receiver bank account id
@@ -323,10 +303,8 @@ SELECT
   INTO receiver_bank_account_id, out_both_exchanges
   FROM bank_accounts
   WHERE internal_payto_uri = in_credit_account_payto;
-IF NOT FOUND THEN
-  out_creditor_not_found=TRUE;
-  RETURN;
-ELSIF out_both_exchanges THEN
+IF NOT FOUND OR out_both_exchanges THEN
+  out_creditor_not_found=NOT FOUND;
   RETURN;
 END IF;
 -- Perform bank transfer
@@ -392,11 +370,9 @@ SELECT
   FROM bank_accounts 
       JOIN customers 
         ON customer_id=owning_customer_id
-  WHERE login = in_username;
-IF NOT FOUND THEN
-  out_creditor_not_found=TRUE;
-  RETURN;
-ELSIF out_creditor_not_exchange THEN
+  WHERE login = in_username AND deleted_at IS NULL;
+IF NOT FOUND OR out_creditor_not_exchange THEN
+  out_creditor_not_found=NOT FOUND;
   RETURN;
 END IF;
 -- Find sender bank account id
@@ -405,10 +381,8 @@ SELECT
   INTO sender_bank_account_id, out_both_exchanges
   FROM bank_accounts
   WHERE internal_payto_uri = in_debit_account_payto;
-IF NOT FOUND THEN
-  out_debtor_not_found=TRUE;
-  RETURN;
-ELSIF out_both_exchanges THEN
+IF NOT FOUND OR out_both_exchanges THEN
+  out_debtor_not_found=NOT FOUND;
   RETURN;
 END IF;
 -- Perform bank transfer
@@ -468,7 +442,7 @@ SELECT bank_account_id, is_taler_exchange, login='admin'
   INTO out_credit_bank_account_id, out_creditor_is_exchange, out_creditor_admin
   FROM bank_accounts
     JOIN customers ON customer_id=owning_customer_id
-  WHERE internal_payto_uri = in_credit_account_payto;
+  WHERE internal_payto_uri = in_credit_account_payto AND deleted_at IS NULL;
 IF NOT FOUND OR out_creditor_admin THEN
   out_creditor_not_found=NOT FOUND;
   RETURN;
@@ -478,7 +452,7 @@ SELECT bank_account_id, is_taler_exchange, out_credit_bank_account_id=bank_accou
   INTO out_debit_bank_account_id, out_debtor_is_exchange, out_same_account, out_tan_required
   FROM bank_accounts 
     JOIN customers ON customer_id=owning_customer_id
-  WHERE login = in_debit_account_username;
+  WHERE login = in_debit_account_username AND deleted_at IS NULL;
 IF NOT FOUND OR out_same_account THEN
   out_debtor_not_found=NOT FOUND;
   RETURN;
@@ -546,11 +520,9 @@ SELECT bank_account_id, is_taler_exchange
   INTO account_id, out_account_is_exchange
   FROM bank_accounts
   JOIN customers ON bank_accounts.owning_customer_id = customers.customer_id
-  WHERE login=in_account_username;
-IF NOT FOUND THEN
-  out_account_not_found=TRUE;
-  RETURN;
-ELSIF out_account_is_exchange THEN
+  WHERE login=in_account_username AND deleted_at IS NULL;
+IF NOT FOUND OR out_account_is_exchange THEN
+  out_account_not_found=NOT FOUND;
   RETURN;
 END IF;
 
@@ -598,10 +570,8 @@ SELECT
   INTO not_selected, out_status, out_already_selected
   FROM taler_withdrawal_operations
   WHERE withdrawal_uuid=in_withdrawal_uuid;
-IF NOT FOUND THEN
-  out_no_op=TRUE;
-  RETURN;
-ELSIF out_already_selected THEN
+IF NOT FOUND OR out_already_selected THEN
+  out_no_op=NOT FOUND;
   RETURN;
 END IF;
 
@@ -619,10 +589,8 @@ IF not_selected THEN
     INTO out_account_is_not_exchange
     FROM bank_accounts
     WHERE internal_payto_uri=in_selected_exchange_payto;
-  IF NOT FOUND THEN
-    out_account_not_found=TRUE;
-    RETURN;
-  ELSIF out_account_is_not_exchange THEN
+  IF NOT FOUND OR out_account_is_not_exchange THEN
+    out_account_not_found=NOT FOUND;
     RETURN;
   END IF;
 
@@ -649,10 +617,8 @@ UPDATE taler_withdrawal_operations
   WHERE withdrawal_uuid=in_withdrawal_uuid
   RETURNING confirmation_done
   INTO out_already_confirmed;
-IF NOT FOUND THEN
-  out_no_op=TRUE;
-  RETURN;
-ELSIF out_already_confirmed THEN
+IF NOT FOUND OR out_already_confirmed THEN
+  out_no_op=NOT FOUND;
   RETURN;
 END IF;
 
@@ -705,27 +671,20 @@ SELECT
   FROM taler_withdrawal_operations
     JOIN bank_accounts ON wallet_bank_account=bank_account_id
     JOIN customers ON owning_customer_id=customer_id
-  WHERE withdrawal_uuid=in_withdrawal_uuid AND login=in_login;
-IF NOT FOUND THEN
-  out_no_op=TRUE;
-  RETURN;
-ELSIF already_confirmed OR out_aborted OR out_not_selected THEN
+  WHERE withdrawal_uuid=in_withdrawal_uuid AND login=in_login AND deleted_at IS NULL;
+IF NOT FOUND OR already_confirmed OR out_aborted OR out_not_selected THEN
+  out_no_op=NOT FOUND;
   RETURN;
 END IF;
 
--- sending the funds to the exchange, but needs first its bank account row ID
+-- Check exchange account then 2faa
 SELECT
   bank_account_id
   INTO exchange_bank_account_id
   FROM bank_accounts
   WHERE internal_payto_uri = selected_exchange_payto_local;
-IF NOT FOUND THEN
-  out_exchange_not_found=TRUE;
-  RETURN;
-END IF;
-
--- Check 2FA
-IF out_tan_required THEN
+IF NOT FOUND OR out_tan_required THEN
+  out_exchange_not_found=NOT FOUND;
   RETURN;
 END IF;
 
@@ -1183,7 +1142,7 @@ DECLARE
 account_id INT8;
 BEGIN
 -- Retrieve account id
-SELECT customer_id INTO account_id FROM customers WHERE login = in_login;
+SELECT customer_id INTO account_id FROM customers WHERE login = in_login AND deleted_at IS NULL;
 -- Create challenge
 INSERT INTO tan_challenges (
   body,
@@ -1235,7 +1194,7 @@ SELECT customer_id, tan_channel, CASE tan_channel
     WHEN 'email' THEN email
   END
 INTO account_id, out_tan_channel, out_tan_info
-FROM customers WHERE login = in_login;
+FROM customers WHERE login = in_login AND deleted_at IS NULL;
 
 -- Recover expiration date
 SELECT 
@@ -1295,7 +1254,7 @@ DECLARE
 account_id INT8;
 BEGIN
 -- Retrieve account id
-SELECT customer_id INTO account_id FROM customers WHERE login = in_login;
+SELECT customer_id INTO account_id FROM customers WHERE login = in_login AND deleted_at IS NULL;
 -- Check challenge
 UPDATE tan_challenges SET 
   confirmation_date = CASE 
@@ -1309,10 +1268,8 @@ RETURNING
   retry_counter <= 0 AND confirmation_date IS NULL,
   in_now_date >= expiration_date AND confirmation_date IS NULL
 INTO out_ok, out_no_retry, out_expired;
-IF NOT FOUND THEN
-  out_no_op = true;
-  RETURN;
-ELSIF NOT out_ok OR out_no_retry OR out_expired THEN
+IF NOT FOUND OR NOT out_ok OR out_no_retry OR out_expired THEN
+  out_no_op = NOT FOUND;
   RETURN;
 END IF;
 

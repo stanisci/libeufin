@@ -40,7 +40,7 @@ class TokenDAO(private val db: Database) {
     ): Boolean = db.serializable { conn ->
         // TODO single query
         val bankCustomer = conn.prepareStatement("""
-            SELECT customer_id FROM customers WHERE login=?
+            SELECT customer_id FROM customers WHERE login=? AND deleted_at IS NULL
         """).run {
             setString(1, login)
             oneOrNull { it.getLong(1) }!!
@@ -75,7 +75,7 @@ class TokenDAO(private val db: Database) {
               is_refreshable
             FROM bearer_tokens
                 JOIN customers ON bank_customer=customer_id
-            WHERE content=?;            
+            WHERE content=? AND deleted_at IS NULL
         """)
         stmt.setBytes(1, token)
         stmt.oneOrNull { 
