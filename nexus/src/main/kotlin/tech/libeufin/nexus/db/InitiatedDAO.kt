@@ -48,10 +48,7 @@ class InitiatedDAO(private val db: Database) {
         stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setString(4, paymentData.creditPaytoUri.toString())
-        val initiationTime = paymentData.initiationTime.toDbMicros() ?: run {
-            throw Exception("Initiation time could not be converted to microseconds for the database.")
-        }
-        stmt.setLong(5, initiationTime)
+        stmt.setLong(5, paymentData.initiationTime.micros())
         stmt.setString(6, paymentData.requestUid)
         if (stmt.executeUpdateViolation())
             return@conn PaymentInitiationResult.SUCCESS
@@ -73,7 +70,7 @@ class InitiatedDAO(private val db: Database) {
                 ,submission_counter = submission_counter + 1
             WHERE initiated_outgoing_transaction_id = ?
         """)
-        stmt.setLong(1, now.toDbMicros()!!)
+        stmt.setLong(1, now.micros())
         stmt.setString(2, orderId)
         stmt.setLong(3, id)
         stmt.execute()
@@ -93,7 +90,7 @@ class InitiatedDAO(private val db: Database) {
                 ,submission_counter = submission_counter + 1
             WHERE initiated_outgoing_transaction_id = ?
         """)
-        stmt.setLong(1, now.toDbMicros()!!)
+        stmt.setLong(1, now.micros())
         stmt.setString(2, msg)
         stmt.setLong(3, id)
         stmt.execute()
@@ -174,10 +171,7 @@ class InitiatedDAO(private val db: Database) {
     suspend fun submittable(currency: String): List<InitiatedPayment> = db.conn { conn ->
         fun extract(it: ResultSet): InitiatedPayment {
             val rowId = it.getLong("initiated_outgoing_transaction_id")
-            val initiationTime = it.getLong("initiation_time").microsToJavaInstant()
-            if (initiationTime == null) { // nexus fault
-                throw Exception("Found invalid timestamp at initiated payment with ID: $rowId")
-            }
+            val initiationTime = it.getLong("initiation_time").asInstant()
             return InitiatedPayment(
                 id = it.getLong("initiated_outgoing_transaction_id"),
                 amount = it.getAmount("amount", currency),

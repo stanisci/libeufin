@@ -52,7 +52,7 @@ class AccountDAO(private val db: Database) {
         checkPaytoIdempotent: Boolean,
         ctx: BankPaytoCtx
     ): AccountCreationResult = db.serializable { it ->
-        val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank()
+        val now = Instant.now().micros()
         it.transaction { conn ->
             val idempotent = conn.prepareStatement("""
                 SELECT password_hash, name=?
@@ -194,7 +194,7 @@ class AccountDAO(private val db: Database) {
         login: String, 
         is2fa: Boolean
     ): AccountDeletionResult = db.serializable { conn ->
-        val now = Instant.now().toDbMicros() ?: throw faultyTimestampByBank()
+        val now = Instant.now().micros()
         val stmt = conn.prepareStatement("""
             SELECT
               out_not_found,

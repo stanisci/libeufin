@@ -23,7 +23,7 @@ import tech.libeufin.bank.Operation
 import tech.libeufin.bank.TanChannel
 import tech.libeufin.bank.internalServerError
 import tech.libeufin.common.oneOrNull
-import tech.libeufin.common.toDbMicros
+import tech.libeufin.common.micros
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.TimeUnit
@@ -46,7 +46,7 @@ class TanDAO(private val db: Database) {
         stmt.setString(1, body)
         stmt.setString(2, op.name)
         stmt.setString(3, code)
-        stmt.setLong(4, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(4, now.micros())
         stmt.setLong(5, TimeUnit.MICROSECONDS.convert(validityPeriod))
         stmt.setInt(6, retryCounter)
         stmt.setString(7, login)
@@ -76,7 +76,7 @@ class TanDAO(private val db: Database) {
         stmt.setLong(1, id)
         stmt.setString(2, login)
         stmt.setString(3, code)
-        stmt.setLong(4, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(4, now.micros())
         stmt.setLong(5, TimeUnit.MICROSECONDS.convert(validityPeriod))
         stmt.setInt(6, retryCounter)
         stmt.executeQuery().use {
@@ -100,7 +100,7 @@ class TanDAO(private val db: Database) {
     ) = db.serializable { conn ->
         val stmt = conn.prepareStatement("SELECT tan_challenge_mark_sent(?,?,?)")
         stmt.setLong(1, id)
-        stmt.setLong(2, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(2, now.micros())
         stmt.setLong(3, TimeUnit.MICROSECONDS.convert(retransmissionPeriod))
         stmt.executeQuery()
     }
@@ -129,7 +129,7 @@ class TanDAO(private val db: Database) {
         stmt.setLong(1, id)
         stmt.setString(2, login)
         stmt.setString(3, code)
-        stmt.setLong(4, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(4, now.micros())
         stmt.executeQuery().use {
             when {
                 !it.next() -> throw internalServerError("TAN try returned nothing")

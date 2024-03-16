@@ -22,9 +22,9 @@ package tech.libeufin.bank.db
 import tech.libeufin.bank.BearerToken
 import tech.libeufin.bank.TokenScope
 import tech.libeufin.common.executeUpdateViolation
-import tech.libeufin.common.microsToJavaInstant
+import tech.libeufin.common.asInstant
 import tech.libeufin.common.oneOrNull
-import tech.libeufin.common.toDbMicros
+import tech.libeufin.common.micros
 import java.time.Instant
 
 /** Data access logic for auth tokens */
@@ -56,8 +56,8 @@ class TokenDAO(private val db: Database) {
             ) VALUES (?, ?, ?, ?::token_scope_enum, ?, ?)
         """)
         stmt.setBytes(1, content)
-        stmt.setLong(2, creationTime.toDbMicros() ?: throw faultyTimestampByBank())
-        stmt.setLong(3, expirationTime.toDbMicros() ?: throw faultyDurationByClient())
+        stmt.setLong(2, creationTime.micros())
+        stmt.setLong(3, expirationTime.micros())
         stmt.setString(4, scope.name)
         stmt.setLong(5, bankCustomer)
         stmt.setBoolean(6, isRefreshable)
@@ -80,8 +80,8 @@ class TokenDAO(private val db: Database) {
         stmt.setBytes(1, token)
         stmt.oneOrNull { 
             BearerToken(
-                creationTime = it.getLong("creation_time").microsToJavaInstant() ?: throw faultyDurationByClient(),
-                expirationTime = it.getLong("expiration_time").microsToJavaInstant() ?: throw faultyDurationByClient(),
+                creationTime = it.getLong("creation_time").asInstant(),
+                expirationTime = it.getLong("expiration_time").asInstant(),
                 login = it.getString("login"),
                 scope = TokenScope.valueOf(it.getString("scope")),
                 isRefreshable = it.getBoolean("is_refreshable")

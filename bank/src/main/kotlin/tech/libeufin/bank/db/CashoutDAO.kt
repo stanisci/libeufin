@@ -66,7 +66,7 @@ class CashoutDAO(private val db: Database) {
         stmt.setLong(5, amountCredit.value)
         stmt.setInt(6, amountCredit.frac)
         stmt.setString(7, subject)
-        stmt.setLong(8, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(8, now.micros())
         stmt.setBoolean(9, is2fa)
         stmt.executeQuery().use {
             when {
@@ -117,7 +117,7 @@ class CashoutDAO(private val db: Database) {
                 creation_time = it.getTalerTimestamp("creation_time"),
                 confirmation_time = when (val timestamp = it.getLong("confirmation_date")) {
                     0L -> null
-                    else -> TalerProtocolTimestamp(timestamp.microsToJavaInstant() ?: throw faultyTimestampByBank())
+                    else -> TalerProtocolTimestamp(timestamp.asInstant())
                 },
                 tan_channel = it.getString("tan_channel")?.run { TanChannel.valueOf(this) },
                 tan_info = it.getString("tan_info"),

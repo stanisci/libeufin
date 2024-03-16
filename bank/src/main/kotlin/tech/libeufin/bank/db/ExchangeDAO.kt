@@ -130,7 +130,7 @@ class ExchangeDAO(private val db: Database) {
         stmt.setString(6, req.exchange_base_url.url)
         stmt.setString(7, req.credit_account.canonical)
         stmt.setString(8, login)
-        stmt.setLong(9, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(9, now.micros())
 
         stmt.executeQuery().use {
             when {
@@ -191,7 +191,7 @@ class ExchangeDAO(private val db: Database) {
         stmt.setInt(4, req.amount.frac)
         stmt.setString(5, req.debit_account.canonical)
         stmt.setString(6, login)
-        stmt.setLong(7, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(7, now.micros())
 
         stmt.executeQuery().use {
             when {

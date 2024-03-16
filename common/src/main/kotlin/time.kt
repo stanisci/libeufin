@@ -26,61 +26,35 @@ import java.time.temporal.ChronoUnit
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-common")
 
-/**
- * Converts the 'this' Instant to the number of nanoseconds
- * since the Epoch.  It returns the result as Long, or null
- * if one arithmetic overflow occurred.
- */
-private fun Instant.toNanos(): Long? {
-    val oneSecNanos = ChronoUnit.SECONDS.duration.toNanos()
-    val nanoBase: Long = this.epochSecond * oneSecNanos
-    if (nanoBase != 0L && nanoBase / this.epochSecond != oneSecNanos) {
-        logger.error("Multiplication overflow: could not convert Instant to nanos.")
-        return null
-    }
-    val res = nanoBase + this.nano
-    if (res < nanoBase) {
-        logger.error("Addition overflow: could not convert Instant to nanos.")
-        return null
-    }
-    return res
-}
-
-/**
- * This function converts an Instant input to the
- * number of microseconds since the Epoch, except that
- * it yields Long.MAX if the Input is Instant.MAX.
- *
- * Takes the name after the way timestamps are designed
- * in the database: micros since Epoch, or Long.MAX for
- * "never".
- *
- * Returns the Long representation of 'this' or null
- * if that would overflow.
- */
-fun Instant.toDbMicros(): Long? {
-    if (this == Instant.MAX)
+/** 
+ * Convert Instant to microseconds since the epoch.
+ * 
+ * Returns Long.MAX_VALUE if instant is Instant.MAX
+ **/
+fun Instant.micros(): Long {
+    if (this == Instant.MAX) 
         return Long.MAX_VALUE
-    val nanos = this.toNanos() ?: run {
-        logger.error("Could not obtain micros to store to database, convenience conversion to nanos overflew.")
-        return null
+    try {
+        val micros = ChronoUnit.MICROS.between(Instant.EPOCH, this)
+        if (micros == Long.MAX_VALUE) throw ArithmeticException()
+        return micros
+    } catch (e: ArithmeticException) {
+        throw Exception("${this} is too big to be converted to micros resolution", e)
     }
-    return nanos / 1000L
 }
 
-/**
- * This helper is typically used to convert a timestamp expressed
- * in microseconds from the DB back to the Web application.  In case
- * of _any_ error, it logs it and returns null.
+/** 
+ * Convert microsecons to Instant.
+ * 
+ * Returns Instant.MAX if microseconds is Long.MAX_VALUE
  */
-fun Long.microsToJavaInstant(): Instant? {
+fun Long.asInstant(): Instant {
     if (this == Long.MAX_VALUE)
         return Instant.MAX
     return try {
         Instant.EPOCH.plus(this, ChronoUnit.MICROS)
-    } catch (e: Exception) {
-        logger.error(e.message)
-        return null
+    } catch (e: ArithmeticException ) {
+        throw Exception("${this} is too big to be converted to Instant", e)
     }
 }
 

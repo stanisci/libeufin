@@ -38,8 +38,7 @@ class PaymentDAO(private val db: Database) {
             SELECT out_tx_id, out_initiated, out_found
             FROM register_outgoing((?,?)::taler_amount,?,?,?,?)
         """)
-        val executionTime = paymentData.executionTime.toDbMicros()
-            ?: throw Exception("Could not convert outgoing payment execution_time to microseconds")
+        val executionTime = paymentData.executionTime.micros()
         stmt.setLong(1, paymentData.amount.value)
         stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
@@ -72,10 +71,8 @@ class PaymentDAO(private val db: Database) {
             SELECT out_found, out_tx_id, out_bounce_id
             FROM register_incoming_and_bounce((?,?)::taler_amount,?,?,?,?,(?,?)::taler_amount,?)
         """)
-        val refundTimestamp = now.toDbMicros()
-            ?: throw Exception("Could not convert refund execution time from Instant.now() to microsends.")
-        val executionTime = paymentData.executionTime.toDbMicros()
-            ?: throw Exception("Could not convert payment execution time from Instant to microseconds.")
+        val refundTimestamp = now.micros()
+        val executionTime = paymentData.executionTime.micros()
         stmt.setLong(1, paymentData.amount.value)
         stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
@@ -109,8 +106,7 @@ class PaymentDAO(private val db: Database) {
             SELECT out_found, out_tx_id
             FROM register_incoming_and_talerable((?,?)::taler_amount,?,?,?,?,?)
         """)
-        val executionTime = paymentData.executionTime.toDbMicros()
-            ?: throw Exception("Could not convert payment execution time from Instant to microseconds.")
+        val executionTime = paymentData.executionTime.micros()
         stmt.setLong(1, paymentData.amount.value)
         stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)

@@ -51,7 +51,7 @@ class TransactionDAO(private val db: Database) {
         is2fa: Boolean,
         requestUid: ShortHashCode?,
     ): BankTransactionResult = db.serializable { conn ->
-        val now = timestamp.toDbMicros() ?: throw faultyTimestampByBank()
+        val now = timestamp.micros()
         conn.transaction {
             val stmt = conn.prepareStatement("""
                 SELECT 

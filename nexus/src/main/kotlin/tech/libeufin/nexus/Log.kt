@@ -58,7 +58,7 @@ class FileLogger(path: String?) {
         // Subdir based on current day.
         val now = Instant.now()
         val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
-        val nowMs = now.toDbMicros()
+        val nowMs = now.micros()
         // Creating the combined dir.
         val subDir = dir.resolve("${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}").resolve("fetch")
         subDir.createDirectories()
@@ -86,7 +86,7 @@ class FileLogger(path: String?) {
         // Subdir based on current day.
         val now = Instant.now()
         val asUtcDate = LocalDate.ofInstant(now, ZoneId.of("UTC"))
-        val nowMs = now.toDbMicros()
+        val nowMs = now.micros()
         // Creating the combined dir.
         val subDir = dir.resolve("${asUtcDate.year}-${asUtcDate.monthValue}-${asUtcDate.dayOfMonth}").resolve("submit")
         subDir.createDirectories()

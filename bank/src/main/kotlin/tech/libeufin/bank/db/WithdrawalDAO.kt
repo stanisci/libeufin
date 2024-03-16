@@ -56,7 +56,7 @@ class WithdrawalDAO(private val db: Database) {
         stmt.setObject(2, uuid)
         stmt.setLong(3, amount.value)
         stmt.setInt(4, amount.frac)
-        stmt.setLong(5, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(5, now.micros())
         stmt.executeQuery().use {
             when {
                 !it.next() ->
@@ -165,7 +165,7 @@ class WithdrawalDAO(private val db: Database) {
         )
         stmt.setString(1, login)
         stmt.setObject(2, uuid)
-        stmt.setLong(3, now.toDbMicros() ?: throw faultyTimestampByBank())
+        stmt.setLong(3, now.micros())
         stmt.setBoolean(4, is2fa)
         stmt.executeQuery().use {
             when {

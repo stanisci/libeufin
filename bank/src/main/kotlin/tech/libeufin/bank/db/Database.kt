@@ -35,25 +35,6 @@ import kotlin.math.abs
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db")
 
-/**
- * This error occurs in case the timestamp took by the bank for some
- * event could not be converted in microseconds.  Note: timestamp are
- * taken via the Instant.now(), then converted to nanos, and then divided
- * by 1000 to obtain the micros.
- *
- * It could be that a legitimate timestamp overflows in the process of
- * being converted to micros - as described above.  In the case of a timestamp,
- * the fault lies to the bank, because legitimate timestamps must (at the
- * time of writing!) go through the conversion to micros.
- *
- * On the other hand (and for the sake of completeness), in the case of a
- * timestamp that was calculated after a client-submitted duration, the overflow
- * lies to the client, because they must have specified a gigantic amount of time
- * that overflew the conversion to micros and should simply have specified "forever".
- */
-internal fun faultyTimestampByBank() = internalServerError("Bank took overflowing timestamp")
-internal fun faultyDurationByClient() = badRequest("Overflowing duration, please specify 'forever' instead.")
-
 class Database(dbConfig: String, internal val bankCurrency: String, internal val fiatCurrency: String?): DbPool(dbConfig, "libeufin_bank") {
     internal val notifWatcher: NotificationWatcher = NotificationWatcher(pgSource)
 
@@ -206,7 +187,5 @@ enum class AbortResult {
 }
 
 fun ResultSet.getTalerTimestamp(name: String): TalerProtocolTimestamp{
-    return TalerProtocolTimestamp(
-        getLong(name).microsToJavaInstant() ?: throw faultyTimestampByBank()
-    )
+    return TalerProtocolTimestamp(getLong(name).asInstant())
 }

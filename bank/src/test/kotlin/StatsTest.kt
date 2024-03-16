@@ -37,7 +37,7 @@ class StatsTest {
         suspend fun cashin(amount: String) {
             db.conn { conn ->
                 val stmt = conn.prepareStatement("SELECT 0 FROM cashin(?, ?, (?, ?)::taler_amount, ?)")
-                stmt.setLong(1, Instant.now().toDbMicros()!!)
+                stmt.setLong(1, Instant.now().micros())
                 stmt.setBytes(2, ShortHashCode.rand().raw)
                 val amount = TalerAmount(amount)
                 stmt.setLong(3, amount.value)
