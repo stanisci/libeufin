@@ -351,7 +351,7 @@ class Base32Crockford32B {
     }
 
     companion object {
-        fun rand(): Base32Crockford32B = Base32Crockford32B(randBytes(32))
+        fun rand(): Base32Crockford32B = Base32Crockford32B(ByteArray(32).rand())
     }
 }
 
@@ -405,7 +405,7 @@ class Base32Crockford64B {
     }
 
     companion object {
-        fun rand(): Base32Crockford64B = Base32Crockford64B(randBytes(64))
+        fun rand(): Base32Crockford64B = Base32Crockford64B(ByteArray(64).rand())
     }
 }
 

@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -46,6 +46,7 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
     val transaction = TransactionDAO(this)
     val token = TokenDAO(this)
     val tan = TanDAO(this)
+    val gc = GcDAO(this)
 
     suspend fun monitor(
         params: MonitorParams

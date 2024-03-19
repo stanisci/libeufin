@@ -27,6 +27,7 @@ import java.util.zip.ZipInputStream
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.ByteArrayOutputStream
+import kotlin.random.Random
 
 fun getQueryParam(uriQueryString: String, param: String): String? {
     // TODO replace with ktor API ?
@@ -56,6 +57,10 @@ fun BigInteger.encodeBase64(): String = this.toByteArray().encodeBase64()
 
 /* ----- ByteArray ----- */
 
+fun ByteArray.rand(): ByteArray {
+    Random.nextBytes(this)
+    return this
+}
 fun ByteArray.encodeHex(): String = HexFormat.of().formatHex(this)
 fun ByteArray.encodeUpHex(): String = HexFormat.of().withUpperCase().formatHex(this)
 fun ByteArray.encodeBase64(): String = Base64.getEncoder().encodeToString(this)

@@ -481,12 +481,6 @@ fun HttpRequestBuilder.pwAuth(username: String? = null) {
 
 /* ----- Random data generation ----- */
 
-fun randBase32Crockford(length: Int) = Base32Crockford.encode(randBytes(length))
-
-fun randIncomingSubject(reservePub: EddsaPublicKey): String {
-    return "$reservePub"
-}
-
-fun randOutgoingSubject(wtid: ShortHashCode, url: ExchangeUrl): String {
-    return "$wtid $url"
-}
+fun randBase32Crockford(length: Int) = Base32Crockford.encode(ByteArray(length).rand())
+fun randIncomingSubject(reservePub: EddsaPublicKey): String = "$reservePub"
+fun randOutgoingSubject(wtid: ShortHashCode, url: ExchangeUrl): String = "$wtid $url"
