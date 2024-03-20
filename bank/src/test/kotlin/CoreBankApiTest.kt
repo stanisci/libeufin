@@ -425,9 +425,80 @@ class CoreBankAccountsApiTest {
             .assertChallenge()
             .assertNoContent()
         // Account no longer exists
+        client.deleteA("/accounts/john").assertUnauthorized()
         client.delete("/accounts/john") {
             pwAuth("admin")
         }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
+    }
+
+
+
+    @Test
+    fun softDelete() = bankSetup { db -> 
+        // Create all kind of operations
+        val token = client.postA("/accounts/customer/token") {
+            json { "scope" to "readonly" }
+        }.assertOkJson<TokenSuccessResponse>().access_token
+        val tx_id = client.postA("/accounts/customer/transactions") {
+            json {
+                "payto_uri" to "$exchangePayto?message=payout"
+                "amount" to "KUDOS:0.3"
+            }
+        }.assertOkJson<TransactionCreateResponse>().row_id
+        val withdrawal_id = client.postA("/accounts/customer/withdrawals") {
+            json { "amount" to "KUDOS:9.0" } 
+        }.assertOkJson<BankAccountCreateWithdrawalResponse>().withdrawal_id
+        fillCashoutInfo("customer")
+        val cashout_id = client.postA("/accounts/customer/cashouts") {
+            json {
+                "request_uid" to ShortHashCode.rand()
+                "amount_debit" to "KUDOS:1"
+                "amount_credit" to convert("KUDOS:1")
+            }
+        }.assertOkJson<CashoutResponse>().cashout_id
+        fillTanInfo("customer")
+        val tan_id = client.postA("/accounts/customer/transactions") {
+            json {
+                "payto_uri" to "$exchangePayto?message=payout"
+                "amount" to "KUDOS:0.3"
+            }
+        }.assertAcceptedJson<TanChallenge>().challenge_id
+
+        // Delete account
+        tx("merchant", "KUDOS:1", "customer")
+        assertBalance("customer", "+KUDOS:0")
+        client.deleteA("/accounts/customer")
+            .assertChallenge()
+            .assertNoContent()
+        
+        // Check account can no longer login
+        client.delete("/accounts/customer/token") {
+            headers["Authorization"] = "Bearer secret-token:$token"
+        }.assertUnauthorized()
+        client.getA("/accounts/customer/transactions/$tx_id").assertUnauthorized()
+        client.getA("/accounts/customer/cashouts/$cashout_id").assertUnauthorized()
+        client.postA("/accounts/customer/withdrawals/$withdrawal_id/confirm").assertUnauthorized()
+
+        // But admin can still see existing operations
+        client.get("/accounts/customer/transactions/$tx_id") {
+            pwAuth("admin")
+        }.assertOkJson<BankAccountTransactionInfo>()
+        client.get("/accounts/customer/cashouts/$cashout_id") {
+            pwAuth("admin")
+        }.assertOkJson<CashoutStatusResponse>()
+        client.get("/withdrawals/$withdrawal_id")
+            .assertOkJson<WithdrawalPublicInfo>()
+
+        // GC
+        db.gc.collect(Instant.now(), Duration.ZERO, Duration.ZERO, Duration.ZERO)
+        client.get("/accounts/customer/transactions/$tx_id") {
+            pwAuth("admin")
+        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        client.get("/accounts/customer/cashouts/$cashout_id") {
+            pwAuth("admin")
+        }.assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
+        client.get("/withdrawals/$withdrawal_id")
+            .assertNotFound(TalerErrorCode.BANK_TRANSACTION_NOT_FOUND)
     }
 
     // Test admin-only account deletion
@@ -686,19 +757,32 @@ class CoreBankAccountsApiTest {
 
     // GET /public-accounts and GET /accounts
     @Test
-    fun list() = bankSetup(conf = "test_no_conversion.conf") { _ -> 
+    fun list() = bankSetup(conf = "test_no_conversion.conf") { db -> 
         authRoutine(HttpMethod.Get, "/accounts", requireAdmin = true)
         // Remove default accounts
-        listOf("merchant", "exchange", "customer").forEach {
+        val defaultAccounts = listOf("merchant", "exchange", "customer")
+        defaultAccounts.forEach {
             client.delete("/accounts/$it") {
                 pwAuth("admin")
             }.assertNoContent()
         }
+        client.get("/accounts") {
+            pwAuth("admin")
+        }.assertOkJson<ListBankAccountsResponse> {
+            for (account in it.accounts) {
+                if (defaultAccounts.contains(account.username)) {
+                    assertEquals(AccountStatus.deleted, account.status)
+                } else {
+                    assertEquals(AccountStatus.active, account.status)
+                }
+            }
+        }
+        db.gc.collect(Instant.now(), Duration.ZERO, Duration.ZERO, Duration.ZERO)
         // Check error when no public accounts
         client.get("/public-accounts").assertNoContent()
         client.get("/accounts") {
             pwAuth("admin")
-        }.assertOk()
+        }.assertOkJson<ListBankAccountsResponse>()
         
         // Gen some public and private accounts
         repeat(5) {
@@ -712,22 +796,18 @@ class CoreBankAccountsApiTest {
             }.assertOk()
         }
         // All public
-        client.get("/public-accounts").run {
-            assertOk()
-            val obj = json<PublicAccountsResponse>()
-            assertEquals(3, obj.public_accounts.size)
-            obj.public_accounts.forEach {
+        client.get("/public-accounts").assertOkJson<PublicAccountsResponse> {
+            assertEquals(3, it.public_accounts.size)
+            it.public_accounts.forEach {
                 assertEquals(0, it.username.toInt() % 2)
             }
         }
         // All accounts
         client.get("/accounts?delta=10"){
             pwAuth("admin")
-        }.run {
-            assertOk()
-            val obj = json<ListBankAccountsResponse>()
-            assertEquals(6, obj.accounts.size)
-            obj.accounts.forEachIndexed { idx, it ->
+        }.assertOkJson<ListBankAccountsResponse> {
+            assertEquals(6, it.accounts.size)
+            it.accounts.forEachIndexed { idx, it ->
                 if (idx == 0) {
                     assertEquals("admin", it.username)
                 } else {
@@ -738,11 +818,9 @@ class CoreBankAccountsApiTest {
         // Filtering
         client.get("/accounts?filter_name=3"){
             pwAuth("admin")
-        }.run {
-            assertOk()
-            val obj = json<ListBankAccountsResponse>()
-            assertEquals(1, obj.accounts.size)
-            assertEquals("3", obj.accounts[0].username)
+        }.assertOkJson<ListBankAccountsResponse> {
+            assertEquals(1, it.accounts.size)
+            assertEquals("3", it.accounts[0].username)
         }
     }
 
@@ -761,7 +839,7 @@ class CoreBankTransactionsApiTest {
     // GET /transactions
     @Test
     fun history() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Get, "/accounts/merchant/transactions")
+        authRoutine(HttpMethod.Get, "/accounts/merchant/transactions", allowAdmin = true)
         historyRoutine<BankAccountTransactionsResponse>(
             url = "/accounts/customer/transactions",
             ids = { it.transactions.map { it.row_id } },
@@ -799,7 +877,7 @@ class CoreBankTransactionsApiTest {
     // GET /transactions/T_ID
     @Test
     fun testById() = bankSetup { _ -> 
-        authRoutine(HttpMethod.Get, "/accounts/merchant/transactions/42")
+        authRoutine(HttpMethod.Get, "/accounts/merchant/transactions/42", allowAdmin = true)
 
         // Create transaction
         tx("merchant", "KUDOS:0.3", "exchange", "tx")
@@ -1043,9 +1121,7 @@ class CoreBankWithdrawalApiTest {
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to amount}
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
-            client.get("/withdrawals/${it.withdrawal_id}") {
-                pwAuth("merchant")
-            }.assertOkJson<WithdrawalPublicInfo> {
+            client.get("/withdrawals/${it.withdrawal_id}").assertOkJson<WithdrawalPublicInfo> {
                 assertEquals(amount, it.amount)
             }
         }
@@ -1069,7 +1145,7 @@ class CoreBankWithdrawalApiTest {
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
-            val uuid = it.taler_withdraw_uri.split("/").last()
+            val uuid = it.withdrawal_id
 
             // Check err
             client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
@@ -1080,7 +1156,7 @@ class CoreBankWithdrawalApiTest {
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
-            val uuid = it.taler_withdraw_uri.split("/").last()
+            val uuid = it.withdrawal_id
             withdrawalSelect(uuid)
 
             // Check OK
@@ -1093,7 +1169,7 @@ class CoreBankWithdrawalApiTest {
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
-            val uuid = it.taler_withdraw_uri.split("/").last()
+            val uuid = it.withdrawal_id
             withdrawalSelect(uuid)
             client.postA("/accounts/merchant/withdrawals/$uuid/abort").assertNoContent()
 
@@ -1106,7 +1182,7 @@ class CoreBankWithdrawalApiTest {
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:5" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
-            val uuid = it.taler_withdraw_uri.split("/").last()
+            val uuid = it.withdrawal_id
             withdrawalSelect(uuid)
 
             // Send too much money
@@ -1122,7 +1198,7 @@ class CoreBankWithdrawalApiTest {
         client.postA("/accounts/customer/withdrawals") {
             json { "amount" to "KUDOS:1" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
-            val uuid = it.taler_withdraw_uri.split("/").last()
+            val uuid = it.withdrawal_id
             withdrawalSelect(uuid)
 
             // Check error
@@ -1144,7 +1220,7 @@ class CoreBankWithdrawalApiTest {
         client.postA("/accounts/merchant/withdrawals") {
             json { "amount" to "KUDOS:1" } 
         }.assertOkJson<BankAccountCreateWithdrawalResponse> {
-            val uuid = it.taler_withdraw_uri.split("/").last()
+            val uuid = it.withdrawal_id
             withdrawalSelect(uuid)
 
             client.postA("/accounts/merchant/withdrawals/$uuid/confirm")
@@ -1244,7 +1320,7 @@ class CoreBankCashoutApiTest {
     // GET /accounts/{USERNAME}/cashouts/{CASHOUT_ID}
     @Test
     fun get() = bankSetup { _ ->
-        authRoutine(HttpMethod.Get, "/accounts/merchant/cashouts/42")
+        authRoutine(HttpMethod.Get, "/accounts/merchant/cashouts/42", allowAdmin = true)
         fillCashoutInfo("customer")
 
         val amountDebit = TalerAmount("KUDOS:1.5")
@@ -1292,7 +1368,7 @@ class CoreBankCashoutApiTest {
     // GET /accounts/{USERNAME}/cashouts
     @Test
     fun history() = bankSetup { _ ->
-        authRoutine(HttpMethod.Get, "/accounts/merchant/cashouts")
+        authRoutine(HttpMethod.Get, "/accounts/merchant/cashouts", allowAdmin = true)
         historyRoutine<Cashouts>(
             url = "/accounts/customer/cashouts",
             ids = { it.cashouts.map { it.cashout_id } },

@@ -55,6 +55,11 @@ enum class WithdrawalStatus {
     confirmed
 }
 
+enum class AccountStatus {
+    active,
+    deleted
+}
+
 enum class RoundingMode {
     zero,
     up,
@@ -350,7 +355,8 @@ data class AccountMinimalData(
     val debit_threshold: TalerAmount,
     val is_public: Boolean,
     val is_taler_exchange: Boolean,
-    val row_id: Long
+    val row_id: Long,
+    val status: AccountStatus
 )
 
 /**
@@ -374,7 +380,8 @@ data class AccountData(
     val cashout_payto_uri: String? = null,
     val tan_channel: TanChannel? = null,
     val is_public: Boolean,
-    val is_taler_exchange: Boolean
+    val is_taler_exchange: Boolean,
+    val status: AccountStatus
 )
 
 @Serializable

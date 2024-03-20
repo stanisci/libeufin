@@ -436,7 +436,7 @@ class AccountDAO(private val db: Database) {
              ,is_taler_exchange
             FROM bank_accounts
                 JOIN customers ON customer_id=owning_customer_id
-            WHERE login=? AND deleted_at IS NULL
+            WHERE login=?
         """)
         stmt.setString(1, login)
         stmt.oneOrNull {
@@ -465,10 +465,14 @@ class AccountDAO(private val db: Database) {
                 ,(max_debt).frac AS max_debt_frac
                 ,is_public
                 ,is_taler_exchange
+                ,CASE 
+                    WHEN deleted_at IS NOT NULL THEN 'deleted'
+                    ELSE 'active'
+                END as status
             FROM customers 
                 JOIN bank_accounts
                     ON customer_id=owning_customer_id
-            WHERE login=? AND deleted_at IS NULL
+            WHERE login=?
         """)
         stmt.setString(1, login)
         stmt.oneOrNull {
@@ -492,7 +496,8 @@ class AccountDAO(private val db: Database) {
                 ),
                 debit_threshold = it.getAmount("max_debt", db.bankCurrency),
                 is_public = it.getBoolean("is_public"),
-                is_taler_exchange = it.getBoolean("is_taler_exchange")
+                is_taler_exchange = it.getBoolean("is_taler_exchange"),
+                status = AccountStatus.valueOf(it.getString("status"))
             )
         }
     }
@@ -555,9 +560,13 @@ class AccountDAO(private val db: Database) {
             ,is_taler_exchange
             ,internal_payto_uri
             ,bank_account_id
+            ,CASE 
+                WHEN deleted_at IS NOT NULL THEN 'deleted'
+                ELSE 'active'
+            END as status
             FROM bank_accounts JOIN customers
               ON owning_customer_id = customer_id 
-            WHERE name LIKE ? AND deleted_at IS NULL AND
+            WHERE name LIKE ? AND
             """,
             {
                 setString(1, params.loginFilter)
@@ -580,6 +589,7 @@ class AccountDAO(private val db: Database) {
                 is_public = it.getBoolean("is_public"),
                 is_taler_exchange = it.getBoolean("is_taler_exchange"),
                 payto_uri = it.getBankPayto("internal_payto_uri", "name", ctx),
+                status = AccountStatus.valueOf(it.getString("status"))
             )
         }
 }

@@ -47,6 +47,8 @@ This files contains all the API changes for the current release:
 - GET /public-accounts: add row_id field
 - GET /config: new bank_name field for the bank name
 - POST /accounts/USERNAME/transactions: new request_uid field for idempotency and new idempotency error
+- GET /accounts: new status field
+- GET /accounts/USERNAME: new status field
 
 ## bank cli
 

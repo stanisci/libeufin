@@ -104,7 +104,7 @@ class CashoutDAO(private val db: Database) {
                 JOIN bank_accounts ON bank_account=bank_account_id
                 JOIN customers ON owning_customer_id=customer_id
                 LEFT JOIN bank_account_transactions ON local_transaction=bank_transaction_id
-            WHERE cashout_id=? AND login=? AND deleted_at IS NULL
+            WHERE cashout_id=? AND login=?
         """)
         stmt.setLong(1, id)
         stmt.setString(2, login)
@@ -134,7 +134,7 @@ class CashoutDAO(private val db: Database) {
             FROM cashout_operations
                 JOIN bank_accounts ON bank_account=bank_account_id
                 JOIN customers ON owning_customer_id=customer_id
-            WHERE deleted_at IS NULL AND
+            WHERE
         """) {
             GlobalCashoutInfo(
                 cashout_id = it.getLong("cashout_id"),
@@ -150,7 +150,7 @@ class CashoutDAO(private val db: Database) {
             FROM cashout_operations
                 JOIN bank_accounts ON bank_account=bank_account_id
                 JOIN customers ON owning_customer_id=customer_id
-            WHERE login = ? AND deleted_at IS NULL AND
+            WHERE login = ? AND
         """, 
             bind = { 
                 setString(1, login)

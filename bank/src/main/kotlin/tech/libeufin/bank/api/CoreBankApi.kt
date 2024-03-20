@@ -422,7 +422,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
 }
 
 private fun Routing.coreBankTransactionsApi(db: Database, ctx: BankConfig) {
-    auth(db, TokenScope.readonly) {
+    auth(db, TokenScope.readonly, allowAdmin = true) {
         get("/accounts/{USERNAME}/transactions") {
             val params = HistoryParams.extract(call.request.queryParameters)
             val bankAccount = call.bankInfo(db, ctx.payto)
@@ -618,7 +618,7 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
             }
         }
     }
-    auth(db, TokenScope.readonly) {
+    auth(db, TokenScope.readonly, allowAdmin = true) {
         get("/accounts/{USERNAME}/cashouts/{CASHOUT_ID}") {
             val id = call.longPath("CASHOUT_ID")
             val cashout = db.cashout.get(id, username) ?: throw notFound(
