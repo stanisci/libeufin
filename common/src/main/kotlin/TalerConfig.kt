@@ -100,7 +100,7 @@ fun ConfigSource.fromFile(file: Path?): TalerConfig {
  * @param configSource information about where to load configuration defaults from
  */
 class TalerConfig internal constructor(
-    val configSource: ConfigSource,
+    val configSource: ConfigSource
 ) {
     private val sectionMap: MutableMap<String, Section> = mutableMapOf()
 

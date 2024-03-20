@@ -32,10 +32,12 @@ import tech.libeufin.nexus.db.*
 import java.io.IOException
 import java.io.InputStream
 import java.time.Instant
+import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.io.*
 import kotlin.io.path.*
+import kotlin.time.toKotlinDuration
 
 /**
  * Necessary data to perform a download.
@@ -389,20 +391,16 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
                     throw Exception("Failed to fetch documents")
                 }
             } else {
-                val configValue = cfg.config.requireString("nexus-fetch", "frequency")
-                val frequencySeconds = checkFrequency(configValue)
-                val cfgFrequency: NexusFrequency = NexusFrequency(frequencySeconds, configValue)
-                logger.debug("Running with a frequency of ${cfgFrequency.fromConfig}")
-                val frequency: NexusFrequency? = if (cfgFrequency.inSeconds == 0) {
+                var frequency: Duration = cfg.config.requireDuration("nexus-fetch", "frequency")
+                val raw = cfg.config.requireString("nexus-fetch", "frequency")
+                logger.debug("Running with a frequency of $raw")
+                if (frequency == Duration.ZERO) {
                     logger.warn("Long-polling not implemented, running therefore in transient mode")
-                    null
-                } else {
-                    cfgFrequency
                 }
                 do {
                     fetchDocuments(db, ctx, docs)
-                    delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
-                } while (frequency != null)
+                    delay(frequency.toKotlinDuration())
+                } while (frequency != Duration.ZERO)
             }
         }
     }

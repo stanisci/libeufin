@@ -29,6 +29,7 @@ import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.db.*
 import java.time.*
 import java.util.*
+import kotlin.time.toKotlinDuration
 
 /**
  * Groups useful parameters to submit pain.001 via EBICS.
@@ -156,20 +157,17 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             fileLogger = FileLogger(ebicsLog)
         )
         Database(dbCfg.dbConnStr).use { db -> 
-            val frequency = if (transient) {
+            val frequency: Duration = if (transient) {
                 logger.info("Transient mode: submitting what found and returning.")
-                null
+                Duration.ZERO
             } else {
-                val configValue = cfg.config.requireString("nexus-submit", "frequency")
-                val frequencySeconds = checkFrequency(configValue)
-                val frequency: NexusFrequency =  NexusFrequency(frequencySeconds, configValue)
-                logger.debug("Running with a frequency of ${frequency.fromConfig}")
-                if (frequency.inSeconds == 0) {
+                var frequency = cfg.config.requireDuration("nexus-submit", "frequency")
+                val raw = cfg.config.requireString("nexus-submit", "frequency")
+                logger.debug("Running with a frequency of $raw")
+                if (frequency == Duration.ZERO) {
                     logger.warn("Long-polling not implemented, running therefore in transient mode")
-                    null
-                } else {
-                    frequency
                 }
+                frequency
             }
             do {
                 try {
@@ -178,8 +176,8 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
                     throw Exception("Failed to submit payments")
                 }
                 // TODO take submitBatch taken time in the delay
-                delay(((frequency?.inSeconds ?: 0) * 1000).toLong())
-            } while (frequency != null)
+                delay(frequency.toKotlinDuration())
+            } while (frequency != Duration.ZERO)
         }
     }
 }
