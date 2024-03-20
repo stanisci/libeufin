@@ -23,24 +23,20 @@ import tech.libeufin.bank.*
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
 import java.time.Instant
-import java.time.ZoneOffset
-import java.time.LocalDateTime
-import java.time.temporal.TemporalAmount
-import java.time.chrono.ChronoLocalDateTime
+import java.time.Duration
 
 /** Data access logic for garbage collection */
 class GcDAO(private val db: Database) {
     /** Run garbage collection  */
     suspend fun collect(
         now: Instant,
-        abortAfter: TemporalAmount,
-        cleanAfter: TemporalAmount,
-        deleteAfter: TemporalAmount
+        abortAfter: Duration,
+        cleanAfter: Duration,
+        deleteAfter: Duration
     ) = db.conn { conn ->
-        val dateTime = LocalDateTime.ofInstant(now, ZoneOffset.UTC)
-        val abortAfterMicro = dateTime.minus(abortAfter).toInstant(ZoneOffset.UTC).micros()
-        val cleanAfterMicro = dateTime.minus(cleanAfter).toInstant(ZoneOffset.UTC).micros()
-        val deleteAfterMicro = dateTime.minus(deleteAfter).toInstant(ZoneOffset.UTC).micros()
+        val abortAfterMicro = now.minus(abortAfter).micros()
+        val cleanAfterMicro = now.minus(cleanAfter).micros()
+        val deleteAfterMicro = now.minus(deleteAfter).micros()
         
         // Abort pending operations
         conn.prepareStatement(

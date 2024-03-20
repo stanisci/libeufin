@@ -58,6 +58,7 @@ import java.net.InetAddress
 import java.sql.SQLException
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
+import java.time.Instant
 import kotlin.io.path.Path
 import kotlin.io.path.exists
 import kotlin.io.path.readText
@@ -505,10 +506,28 @@ class CreateAccount : CliktCommand(
     }
 }
 
+class GC : CliktCommand(
+    "Run garbage collection: abort expired operations and clean expired data",
+    name = "gc"
+) {
+    private val common by CommonOption()
+ 
+    override fun run() = cliCmd(logger, common.log) {
+        val cfg = talerConfig(common.config)
+        val ctx = cfg.loadBankConfig() 
+        val dbCfg = cfg.loadDbConfig()
+
+        Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
+            logger.info("Run garbage collection")
+            db.gc.collect(Instant.now(), ctx.gcAbortAfter, ctx.gcCleanAfter, ctx.gcDeleteAfter)
+        }
+    }
+}
+
 class LibeufinBankCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(ServeBank(), BankDbInit(), CreateAccount(), EditAccount(), ChangePw(), CliConfigCmd(BANK_CONFIG_SOURCE))
+        subcommands(ServeBank(), BankDbInit(), CreateAccount(), EditAccount(), ChangePw(), GC(), CliConfigCmd(BANK_CONFIG_SOURCE))
     }
 
     override fun run() = Unit

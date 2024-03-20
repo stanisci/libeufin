@@ -51,14 +51,12 @@ class GcTest {
 
         // Time calculation
         val abortAfter = Duration.ofMinutes(15)
-        val cleanAfter = Period.ofDays(14)
-        val deleteAfter = Period.ofYears(10)
+        val cleanAfter = Duration.ofDays(14)
+        val deleteAfter = Duration.ofDays(350)
         val now = Instant.now()
-        val dateTime = LocalDateTime.ofInstant(now, ZoneOffset.UTC)
-        val abort = dateTime.minus(abortAfter).toInstant(ZoneOffset.UTC)
-        val clean = dateTime.minus(cleanAfter).toInstant(ZoneOffset.UTC)
-        val delete = dateTime.minus(deleteAfter).toInstant(ZoneOffset.UTC)
-   
+        val abort = now.minus(abortAfter)
+        val clean = now.minus(cleanAfter)
+        val delete = now.minus(deleteAfter)
 
         // Create test accounts
         val payto = IbanPayto.rand()

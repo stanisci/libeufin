@@ -108,6 +108,8 @@ class IntegrationTest {
             // Check bank is running
             client.get("http://0.0.0.0:8080/public-accounts").assertNoContent()
         }
+
+        bankCmd.run("gc $flags")
     }
 
     @Test

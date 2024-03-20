@@ -24,6 +24,8 @@ import org.slf4j.LoggerFactory
 import java.nio.file.AccessDeniedException
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.time.temporal.ChronoUnit
+import java.time.Duration
 import kotlin.io.path.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
@@ -465,4 +467,31 @@ class TalerConfig internal constructor(
 
     fun requirePath(section: String, option: String): Path =
         lookupPath(section, option) ?: throw TalerConfigError.missing("path", section, option)
+
+    fun lookupDuration(section: String, option: String): Duration? {
+        val entry = lookupString(section, option) ?: return null
+        return TIME_AMOUNT_PATTERN.findAll(entry).map { match ->
+            val (rawAmount, unit) = match.destructured
+            val amount = rawAmount.toLongOrNull() ?: throw TalerConfigError.invalid("temporal", section, option, "'$rawAmount' not a valid temporal amount")
+            val value = when (unit) {
+                "us" -> 1
+                "ms" -> 1000
+                "s", "second", "seconds", "\"" -> 1000 * 1000L
+                "m", "min", "minute", "minutes", "'" -> 60 * 1000 * 1000L
+                "h", "hour", "hours" -> 60 * 60 * 1000 * 1000L
+                "d", "day", "days" -> 24 * 60 * 60 * 1000L * 1000L
+                "week", "weeks" ->  7 * 24 * 60 * 60 * 1000L * 1000L
+                "year", "years", "a" -> 31536000000000L
+                else -> throw TalerConfigError.invalid("temporal", section, option, "'$unit' not a valid temporal unit")
+            }
+            Duration.of(amount * value, ChronoUnit.MICROS)
+        }.fold(Duration.ZERO) { a, b -> a.plus(b) }
+    }
+
+    fun requireDuration(section: String, option: String): Duration =
+        lookupDuration(section, option) ?: throw TalerConfigError.missing("temporal", section, option)
+
+    companion object {
+        private val TIME_AMOUNT_PATTERN = Regex("([0-9]+) ?([a-z'\"]+)")
+    }
 }

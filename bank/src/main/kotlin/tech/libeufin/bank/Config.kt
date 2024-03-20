@@ -24,6 +24,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.common.*
 import java.nio.file.Path
+import java.time.Duration
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 
@@ -47,7 +48,10 @@ data class BankConfig(
     val spaPath: Path?,
     val tanChannels: Map<TanChannel, Pair<Path, Map<String, String>>>,
     val payto: BankPaytoCtx,
-    val wireMethod: WireMethod
+    val wireMethod: WireMethod,
+    val gcAbortAfter: Duration,
+    val gcCleanAfter: Duration,
+    val gcDeleteAfter: Duration
 )
 
 @Serializable
@@ -141,7 +145,10 @@ fun TalerConfig.loadBankConfig(): BankConfig {
         fiatCurrencySpec = fiatCurrencySpec,
         tanChannels = tanChannels,
         payto = payto,
-        wireMethod = method
+        wireMethod = method,
+        gcAbortAfter = requireDuration("libeufin-bank", "gc_abort_after"),
+        gcCleanAfter = requireDuration("libeufin-bank", "gc_clean_after"),
+        gcDeleteAfter = requireDuration("libeufin-bank", "gc_delete_after"),
     )
 }
 
