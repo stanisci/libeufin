@@ -1,0 +1,8 @@
+[Unit]
+Description=LibEuFin Bank Garbage Collection Service
+After=postgres.service
+PartOf=libeufin-bank.target
+
+[Service]
+User=libeufin-bank
+ExecStart=/usr/bin/libeufin-bank gc -c /etc/libeufin/libeufin-bank.conf

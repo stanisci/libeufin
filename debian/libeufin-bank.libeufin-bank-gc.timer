@@ -1,0 +1,10 @@
+[Unit]
+Description=Run garbage collection every 15min
+PartOf=libeufin-bank.target
+
+[Timer]
+OnCalendar=*:0/15
+Unit=libeufin-bank-gc.service
+
+[Install]
+WantedBy=multi-user.target
