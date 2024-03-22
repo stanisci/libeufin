@@ -116,10 +116,9 @@ fun pgDataSource(dbConfig: String): PGSimpleDataSource {
     return pgSource
 }
 
-fun PGSimpleDataSource.pgConnection(): PgConnection {
+fun PGSimpleDataSource.pgConnection(schema: String? = null): PgConnection {
     val conn = connection.unwrap(PgConnection::class.java)
-    // FIXME: bring the DB schema to a function argument.
-    conn.execSQLUpdate("SET search_path TO libeufin_bank;")
+    if (schema != null) conn.execSQLUpdate("SET search_path TO $schema")
     return conn
 }
 
@@ -271,22 +270,11 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
 // sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
 fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
     logger.info("reset DB, sqldir ${cfg.sqlDir}")
-    val isInitialized = conn.prepareStatement(
-        """
-        SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='_v') AND
-            EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='${sqlFilePrefix.replace("-", "_")}')
-        """
-    ).one{ it.getBoolean(1) }
-    if (!isInitialized) {
-        logger.info("versioning schema not present, not running drop sql")
-        return
-    }
-
     val sqlDrop = Path("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
     conn.execSQLUpdate(sqlDrop)
 }
 
-abstract class DbPool(cfg: String, schema: String) : java.io.Closeable {
+open class DbPool(cfg: String, schema: String) : java.io.Closeable {
     val pgSource = pgDataSource(cfg)
     private val pool: HikariDataSource
 

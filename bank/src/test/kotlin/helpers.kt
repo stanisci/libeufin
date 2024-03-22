@@ -57,112 +57,107 @@ fun genTmpPayTo(): IbanPayto {
 fun setup(
     conf: String = "test.conf",
     lambda: suspend (Database, BankConfig) -> Unit
-) {
+) = runBlocking {
     val config = talerConfig(Path("conf/$conf"))
     val dbCfg = config.loadDbConfig()
     val ctx = config.loadBankConfig()
     Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use {
-        runBlocking {
-            it.conn { conn ->
-                resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
-                initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
-                resetDatabaseTables(conn, dbCfg, "libeufin-bank")
-                initializeDatabaseTables(conn, dbCfg, "libeufin-bank")
-                val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
-                conn.execSQLUpdate(sqlProcedures.readText())
-            }
-            lambda(it, ctx)
+        it.conn { conn ->
+            resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
+            initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
+            resetDatabaseTables(conn, dbCfg, "libeufin-bank")
+            initializeDatabaseTables(conn, dbCfg, "libeufin-bank")
+            val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
+            conn.execSQLUpdate(sqlProcedures.readText())
         }
+        lambda(it, ctx)
     }
 }
 
 fun bankSetup(
     conf: String = "test.conf",    
     lambda: suspend ApplicationTestBuilder.(Database) -> Unit
-) {
-    setup(conf) { db, cfg -> 
-        // Creating the exchange and merchant accounts first.
-        val bonus = TalerAmount("KUDOS:0")
-        assertIs<AccountCreationResult.Success>(db.account.create(
-            login = "merchant",
-            password = "merchant-password",
-            name = "Merchant",
-            internalPayto = merchantPayto,
-            maxDebt = TalerAmount("KUDOS:10"),
-            isTalerExchange = false,
-            isPublic = false,
-            bonus = bonus,
-            checkPaytoIdempotent = false,
-            email = null,
-            phone = null,
-            cashoutPayto = null,
-            tanChannel = null,
-            ctx = cfg.payto  
-        ))
-        assertIs<AccountCreationResult.Success>(db.account.create(
-            login = "exchange",
-            password = "exchange-password",
-            name = "Exchange",
-            internalPayto = exchangePayto,
-            maxDebt = TalerAmount("KUDOS:10"),
-            isTalerExchange = true,
-            isPublic = false,
-            bonus = bonus,
-            checkPaytoIdempotent = false,
-            email = null,
-            phone = null,
-            cashoutPayto = null,
-            tanChannel = null,
-            ctx = cfg.payto   
-        ))
-        assertIs<AccountCreationResult.Success>(db.account.create(
-            login = "customer",
-            password = "customer-password",
-            name = "Customer",
-            internalPayto = customerPayto,
-            maxDebt = TalerAmount("KUDOS:10"),
-            isTalerExchange = false,
-            isPublic = false,
-            bonus = bonus,
-            checkPaytoIdempotent = false,
-            email = null,
-            phone = null,
-            cashoutPayto = null,
-            tanChannel = null,
-            ctx = cfg.payto
-        ))
-        // Create admin account
-        assertIs<AccountCreationResult.Success>(createAdminAccount(db, cfg, "admin-password"))
-        testApplication {
-            application {
-                corebankWebApp(db, cfg)
-            }
-            if (cfg.allowConversion) {
-                // Set conversion rates
-                client.post("/conversion-info/conversion-rate") {
-                    pwAuth("admin")
-                    json {
-                        "cashin_ratio" to "0.8"
-                        "cashin_fee" to "KUDOS:0.02"
-                        "cashin_tiny_amount" to "KUDOS:0.01"
-                        "cashin_rounding_mode" to "nearest"
-                        "cashin_min_amount" to "EUR:0"
-                        "cashout_ratio" to "1.25"
-                        "cashout_fee" to "EUR:0.003"
-                        "cashout_tiny_amount" to "EUR:0.00000001"
-                        "cashout_rounding_mode" to "zero"
-                        "cashout_min_amount" to "KUDOS:0.1"
-                    }
-                }.assertNoContent()
-            }
-            lambda(db)
+) = setup(conf) { db, cfg -> 
+    // Creating the exchange and merchant accounts first.
+    val bonus = TalerAmount("KUDOS:0")
+    assertIs<AccountCreationResult.Success>(db.account.create(
+        login = "merchant",
+        password = "merchant-password",
+        name = "Merchant",
+        internalPayto = merchantPayto,
+        maxDebt = TalerAmount("KUDOS:10"),
+        isTalerExchange = false,
+        isPublic = false,
+        bonus = bonus,
+        checkPaytoIdempotent = false,
+        email = null,
+        phone = null,
+        cashoutPayto = null,
+        tanChannel = null,
+        ctx = cfg.payto  
+    ))
+    assertIs<AccountCreationResult.Success>(db.account.create(
+        login = "exchange",
+        password = "exchange-password",
+        name = "Exchange",
+        internalPayto = exchangePayto,
+        maxDebt = TalerAmount("KUDOS:10"),
+        isTalerExchange = true,
+        isPublic = false,
+        bonus = bonus,
+        checkPaytoIdempotent = false,
+        email = null,
+        phone = null,
+        cashoutPayto = null,
+        tanChannel = null,
+        ctx = cfg.payto   
+    ))
+    assertIs<AccountCreationResult.Success>(db.account.create(
+        login = "customer",
+        password = "customer-password",
+        name = "Customer",
+        internalPayto = customerPayto,
+        maxDebt = TalerAmount("KUDOS:10"),
+        isTalerExchange = false,
+        isPublic = false,
+        bonus = bonus,
+        checkPaytoIdempotent = false,
+        email = null,
+        phone = null,
+        cashoutPayto = null,
+        tanChannel = null,
+        ctx = cfg.payto
+    ))
+    // Create admin account
+    assertIs<AccountCreationResult.Success>(createAdminAccount(db, cfg, "admin-password"))
+    testApplication {
+        application {
+            corebankWebApp(db, cfg)
         }
+        if (cfg.allowConversion) {
+            // Set conversion rates
+            client.post("/conversion-info/conversion-rate") {
+                pwAuth("admin")
+                json {
+                    "cashin_ratio" to "0.8"
+                    "cashin_fee" to "KUDOS:0.02"
+                    "cashin_tiny_amount" to "KUDOS:0.01"
+                    "cashin_rounding_mode" to "nearest"
+                    "cashin_min_amount" to "EUR:0"
+                    "cashout_ratio" to "1.25"
+                    "cashout_fee" to "EUR:0.003"
+                    "cashout_tiny_amount" to "EUR:0.00000001"
+                    "cashout_rounding_mode" to "zero"
+                    "cashout_min_amount" to "KUDOS:0.1"
+                }
+            }.assertNoContent()
+        }
+        lambda(db)
     }
 }
 
-fun dbSetup(lambda: suspend (Database) -> Unit) {
+fun dbSetup(lambda: suspend (Database) -> Unit) =
     setup { db, _ -> lambda(db) }
-}
 
 /* ----- Common actions ----- */
 

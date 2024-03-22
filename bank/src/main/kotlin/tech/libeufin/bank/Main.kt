@@ -261,13 +261,14 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
         val config = talerConfig(common.config)
         val cfg = config.loadDbConfig()
         val ctx = config.loadBankConfig()
-        Database(cfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db -> 
+        Database(cfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
             db.conn { conn ->
                 if (requestReset) {
                     resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
                 }
                 initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
             }
+            
             // Create admin account if missing
             val res = createAdminAccount(db, ctx) // logs provided by the helper
             when (res) {

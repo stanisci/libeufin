@@ -52,7 +52,7 @@ internal class NotificationWatcher(private val pgSource: PGSimpleDataSource) {
             runBlocking {
                 while (true) {
                     try {
-                        val conn = pgSource.pgConnection()
+                        val conn = pgSource.pgConnection("libeufin_bank")
 
                         // Listen to all notifications channels
                         conn.execSQLUpdate("LISTEN bank_tx")

@@ -21,10 +21,7 @@ import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.client.request.*
 import kotlinx.coroutines.runBlocking
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.fromFile
-import tech.libeufin.common.initializeDatabaseTables
-import tech.libeufin.common.resetDatabaseTables
+import tech.libeufin.common.*
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.db.*
 import java.time.Instant
@@ -33,29 +30,25 @@ import kotlin.io.path.Path
 fun conf(
     conf: String = "test.conf",
     lambda: suspend (EbicsSetupConfig) -> Unit
-) {
+) = runBlocking {
     val config = NEXUS_CONFIG_SOURCE.fromFile(Path("conf/$conf"))
     val ctx = EbicsSetupConfig(config)
-    runBlocking {
-        lambda(ctx)
-    }
+    lambda(ctx) 
 }
 
 fun setup(
     conf: String = "test.conf",
     lambda: suspend (Database, EbicsSetupConfig) -> Unit
-) {
+) = runBlocking {
     val config = NEXUS_CONFIG_SOURCE.fromFile(Path("conf/$conf"))
     val dbCfg = config.dbConfig()
     val ctx = EbicsSetupConfig(config)
-    Database(dbCfg.dbConnStr).use {
-        runBlocking {
-            it.conn { conn ->
-                resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
-                initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
-            }
-            lambda(it, ctx)
+    Database(dbCfg.dbConnStr).use { 
+        it.conn { conn ->
+            resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
+            initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
         }
+        lambda(it, ctx)
     }
 }
 
@@ -64,13 +57,11 @@ val clientKeys = generateNewKeys()
 // Gets an HTTP client whose requests are going to be served by 'handler'.
 fun getMockedClient(
     handler: MockRequestHandleScope.(HttpRequestData) -> HttpResponseData
-): HttpClient {
-    return HttpClient(MockEngine) {
-        followRedirects = false
-        engine {
-            addHandler {
-                    request -> handler(request)
-            }
+): HttpClient = HttpClient(MockEngine) {
+    followRedirects = false
+    engine {
+        addHandler {
+                request -> handler(request)
         }
     }
 }
@@ -79,8 +70,7 @@ fun getMockedClient(
 fun genInitPay(
     subject: String = "init payment",
     requestUid: String = "unique"
-) =
-    InitiatedPayment(
+) = InitiatedPayment(
         id = -1,
         amount = TalerAmount(44, 0, "KUDOS"),
         creditPaytoUri = "payto://iban/CH9300762011623852957?receiver-name=Test",
