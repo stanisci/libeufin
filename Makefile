@@ -66,7 +66,7 @@ install-nobuild-files:
 .PHONY: install-nobuild-bank
 install-nobuild-bank: install-nobuild-files
 	install -d $(spa_dir)
-	cp contrib/wallet-core/demobank/* $(spa_dir)/
+	cp contrib/wallet-core/bank/* $(spa_dir)/
 	install -d $(abs_destdir)$(prefix)
 	install -d $(bin_dir)
 	install -d $(lib_dir)
