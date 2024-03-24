@@ -62,19 +62,35 @@ fun getJdbcConnectionFromPg(pgConn: String): String {
     }
     var maybeUnixSocket = false
     val parsed = URI(pgConn)
-    val hostAsParam: String? = if (parsed.query != null) {
+    var hostAsParam: String? = if (parsed.query != null) {
         getQueryParam(parsed.query, "host")
     } else {
         null
     }
+    var pgHost = System.getenv("PGHOST")
+    if (null == pgHost)
+      pgHost = parsed.host
+    var pgPort = System.getenv("PGPORT")
+    if (null == pgPort) {
+      if (-1 == parsed.port)
+        pgPort = "5432"
+      else
+        pgPort = parsed.port.toString()
+    }
+
     /**
      * In some cases, it is possible to leave the hostname empty
      * and specify it via a query param, therefore a "postgresql:///"-starting
      * connection string does NOT always mean Unix domain socket.
      * https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
      */
-    if (parsed.host == null &&
+    if (pgHost == null &&
         (hostAsParam == null || hostAsParam.startsWith('/'))
+    ) {
+        maybeUnixSocket = true
+    }
+    if (pgHost != null &&
+        (pgHost.startsWith('/'))
     ) {
         maybeUnixSocket = true
     }
@@ -86,7 +102,9 @@ fun getJdbcConnectionFromPg(pgConn: String): String {
             if (maybeUserParam != null) pgUser = maybeUserParam
         }
         // Check whether the Unix domain socket location was given non-standard.
-        val socketLocation = hostAsParam ?: "/var/run/postgresql/.s.PGSQL.5432"
+        if ( (null == hostAsParam) && (null != pgHost) )
+          hostAsParam = pgHost + "/.s.PGSQL." + pgPort
+        val socketLocation = hostAsParam ?: "/var/run/postgresql/.s.PGSQL." + pgPort
         if (!socketLocation.startsWith('/')) {
             throw Exception("PG connection wants Unix domain socket, but non-null host doesn't start with slash")
         }
@@ -99,6 +117,7 @@ fun getJdbcConnectionFromPg(pgConn: String): String {
         // into one that the JDBC driver likes.
         return "jdbc:postgresql://" + pgConn.removePrefix("postgres://")
     }
+    logger.info("connecting to database via JDBC string '$pgConn'")
     return "jdbc:$pgConn"
 }
 
