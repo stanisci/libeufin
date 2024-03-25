@@ -1,8 +1,8 @@
 // This file is in the public domain.
 
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "1.9.22"
-    id("org.jetbrains.dokka") version "1.9.10"
+    id("org.jetbrains.kotlin.jvm") version "1.9.23"
+    id("org.jetbrains.dokka") version "1.9.20"
     id("idea")
     id("java-library")
     id("maven-publish")
@@ -19,11 +19,11 @@ if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)){
 
 allprojects {
     ext {
-        set("kotlin_version", "1.9.22")
+        set("kotlin_version", "1.9.23")
         set("ktor_version", "2.3.9")
         set("clikt_version", "4.2.2")
         set("coroutines_version", "1.8.0")
-        set("postgres_version", "42.7.1")
+        set("postgres_version", "42.7.3")
         set("junixsocket_version", "2.9.0")
     }
 

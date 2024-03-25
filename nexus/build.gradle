@@ -30,7 +30,7 @@ dependencies {
     implementation("io.ktor:ktor-client-apache:$ktor_version")
 
     // PDF generation
-    implementation("com.itextpdf:itext-core:8.0.2")
+    implementation("com.itextpdf:itext-core:8.0.3")
 
     // UNIX domain sockets support (used to connect to PostgreSQL)
     implementation("com.kohlschutter.junixsocket:junixsocket-core:$junixsocket_version")
