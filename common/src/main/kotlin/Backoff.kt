@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -23,8 +23,8 @@ import kotlin.random.Random
 
 /** Infinite exponential backoff with decorrelated jitter */
 class ExpoBackoffDecorr(
-    private val base: Long = 100, // 0.1 second
-    private val max: Long = 5000, // 5 second
+    private val base: Long = 100,  // 0.1 second
+    private val max: Long = 60000, // 60 seconds
     private val factor: Double = 2.0,
 ) {
     private var sleep: Long = base
