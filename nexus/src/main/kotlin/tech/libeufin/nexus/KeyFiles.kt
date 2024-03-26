@@ -58,7 +58,7 @@ object RSAPublicKeySerializer : KSerializer<RSAPublicKey> {
     override fun deserialize(decoder: Decoder): RSAPublicKey {
         val fieldValue = decoder.decodeString()
         val bytes = Base32Crockford.decode(fieldValue)
-        return CryptoUtil.loadRsaPublicKey(bytes)
+        return CryptoUtil.loadRSAPublic(bytes)
     }
 }
 
@@ -76,7 +76,7 @@ object RSAPrivateCrtKeySerializer : KSerializer<RSAPrivateCrtKey> {
     override fun deserialize(decoder: Decoder): RSAPrivateCrtKey {
         val fieldValue = decoder.decodeString()
         val bytes = Base32Crockford.decode(fieldValue)
-        return CryptoUtil.loadRsaPrivateKey(bytes)
+        return CryptoUtil.loadRSAPrivate(bytes)
     }
 }
 

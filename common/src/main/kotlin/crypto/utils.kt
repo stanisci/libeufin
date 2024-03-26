@@ -43,12 +43,8 @@ import javax.crypto.spec.PBEParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import tech.libeufin.common.*
 
-/**
- * Helpers for dealing with cryptographic operations in EBICS / LibEuFin.
- */
+/** Helpers for dealing with cryptographic operations in EBICS / LibEuFin */
 object CryptoUtil {
-    // TODO split common and ebics crypto
-
     /**
      * RSA key pair.
      */
@@ -64,10 +60,8 @@ object CryptoUtil {
 
     private val provider = BouncyCastleProvider()
 
-    /**
-     * Load an RSA private key from its binary PKCS#8 encoding.
-     */
-    fun loadRsaPrivateKey(encodedPrivateKey: ByteArray): RSAPrivateCrtKey {
+    /** Load an RSA private key from its binary PKCS#8 encoding  */
+    fun loadRSAPrivate(encodedPrivateKey: ByteArray): RSAPrivateCrtKey {
         val spec = PKCS8EncodedKeySpec(encodedPrivateKey)
         val priv = KeyFactory.getInstance("RSA").generatePrivate(spec)
         if (priv !is RSAPrivateCrtKey)
@@ -75,10 +69,8 @@ object CryptoUtil {
         return priv
     }
 
-    /**
-     * Load an RSA public key from its binary X509 encoding.
-     */
-    fun loadRsaPublicKey(encodedPublicKey: ByteArray): RSAPublicKey {
+    /** Load an RSA public key from its binary X509 encoding */
+    fun loadRSAPublic(encodedPublicKey: ByteArray): RSAPublicKey {
         val spec = X509EncodedKeySpec(encodedPublicKey)
         val pub = KeyFactory.getInstance("RSA").generatePublic(spec)
         if (pub !is RSAPublicKey)
@@ -86,52 +78,42 @@ object CryptoUtil {
         return pub
     }
 
-    /**
-     * Load an RSA public key from its components.
-     *
-     * @param exponent
-     * @param modulus
-     * @return key
-     */
-    fun loadRsaPublicKeyFromComponents(modulus: ByteArray, exponent: ByteArray): RSAPublicKey {
+    /** Create an RSA public key from its components: [modulus] and [exponent] */
+    fun RSAPublicFromComponents(modulus: ByteArray, exponent: ByteArray): RSAPublicKey {
         val modulusBigInt = BigInteger(1, modulus)
         val exponentBigInt = BigInteger(1, exponent)
-
-        val keyFactory = KeyFactory.getInstance("RSA")
-        val tmp = RSAPublicKeySpec(modulusBigInt, exponentBigInt)
-        return keyFactory.generatePublic(tmp) as RSAPublicKey
+        val spec = RSAPublicKeySpec(modulusBigInt, exponentBigInt)
+        return KeyFactory.getInstance("RSA").generatePublic(spec) as RSAPublicKey
     }
 
-    fun loadRsaPublicKeyFromCertificate(certificate: ByteArray): RSAPublicKey {
-        val cf = CertificateFactory.getInstance("X.509");
-        val c = cf.generateCertificate(certificate.inputStream());
-        return c.getPublicKey() as RSAPublicKey
+    /** Extract an RSA public key from a [raw] X.509 certificate */
+    fun RSAPublicFromCertificate(raw: ByteArray): RSAPublicKey {
+        val certificate = CertificateFactory.getInstance("X.509").generateCertificate(raw.inputStream());
+        return certificate.getPublicKey() as RSAPublicKey
     }
 
-    /**
-     * Load an RSA public key from its binary X509 encoding.
-     */
-    fun getRsaPublicFromPrivate(rsaPrivateCrtKey: RSAPrivateCrtKey): RSAPublicKey {
-        val spec = RSAPublicKeySpec(rsaPrivateCrtKey.modulus, rsaPrivateCrtKey.publicExponent)
-        val pub = KeyFactory.getInstance("RSA").generatePublic(spec)
-        if (pub !is RSAPublicKey)
-            throw Exception("wrong encoding")
-        return pub
+    /** Generate an RSA public key from a [private] one */
+    fun RSAPublicFromPrivate(private: RSAPrivateCrtKey): RSAPublicKey {
+        val spec = RSAPublicKeySpec(private.modulus, private.publicExponent)
+        return KeyFactory.getInstance("RSA").generatePublic(spec) as RSAPublicKey
     }
 
-    fun certificateFromPrivate(rsaPrivateCrtKey: RSAPrivateCrtKey): X509Certificate {
-        val now = System.currentTimeMillis()
+    /** Generate a self-signed X.509 certificate from an RSA [private] key */
+    fun X509CertificateFromRSAPrivate(private: RSAPrivateCrtKey, name: String): X509Certificate {
+        val start = Date()
         val calendar = Calendar.getInstance()
-        calendar.time = Date(now)
-        calendar.add(Calendar.YEAR, 1) // TODO certificate validity
+        calendar.time = start
+        calendar.add(Calendar.YEAR, 1_000)
+        val end = calendar.time
 
+        val name = X500Name("CN=$name")
         val builder = JcaX509v3CertificateBuilder(
-            X500Name("CN=test"),  // TODO certificate CN
-            BigInteger(now.toString()), // TODO certificate serial number
-            Date(now), 
-            calendar.time, 
-            X500Name("CN=test"),
-            getRsaPublicFromPrivate(rsaPrivateCrtKey)
+            name,
+            BigInteger(20, Random()),
+            start,
+            end, 
+            name,
+            RSAPublicFromPrivate(private)
         )
 
         
@@ -148,7 +130,7 @@ object CryptoUtil {
         ))
         builder.addExtension(Extension.basicConstraints, true, BasicConstraints(true))
 
-        val certificate = JcaContentSignerBuilder("SHA256WithRSA").build(rsaPrivateCrtKey)
+        val certificate = JcaContentSignerBuilder("SHA256WithRSA").build(private)
         return JcaX509CertificateConverter()
             .setProvider(provider)
             .getCertificate(builder.build(certificate))

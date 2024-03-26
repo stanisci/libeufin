@@ -111,7 +111,7 @@ class EbicsKeyMng(
 
     private fun XmlBuilder.RSAKeyXml(key: RSAPrivateCrtKey) {
         if (ebics3) {
-            val cert = CryptoUtil.certificateFromPrivate(key)
+            val cert = CryptoUtil.X509CertificateFromRSAPrivate(key, cfg.myIbanAccount.name)
             el("ds:X509Data") {
                 el("ds:X509Certificate", cert.encoded.encodeBase64())
             }
@@ -175,10 +175,10 @@ class EbicsKeyMng(
             fun XmlDestructor.rsaPubKey(): RSAPublicKey {
                 val cert = opt("X509Data")?.one("X509Certificate")?.text()?.decodeBase64()
                 return if (cert != null) {
-                    CryptoUtil.loadRsaPublicKeyFromCertificate(cert)
+                    CryptoUtil.RSAPublicFromCertificate(cert)
                 } else {
                     one("PubKeyValue").one("RSAKeyValue") {
-                        CryptoUtil.loadRsaPublicKeyFromComponents(
+                        CryptoUtil.RSAPublicFromComponents(
                             one("Modulus").text().decodeBase64(),
                             one("Exponent").text().decodeBase64(),
                         )

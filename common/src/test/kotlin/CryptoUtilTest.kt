@@ -35,7 +35,7 @@ class CryptoUtilTest {
     @Test
     fun loadFromModulusAndExponent() {
         val keyPair = CryptoUtil.generateRsaKeyPair(1024)
-        val pub2 = CryptoUtil.loadRsaPublicKeyFromComponents(
+        val pub2 = CryptoUtil.RSAPublicFromComponents(
             keyPair.public.modulus.toByteArray(),
             keyPair.public.publicExponent.toByteArray()
         )
@@ -57,7 +57,7 @@ class CryptoUtilTest {
         val encodedPriv = keyPair.private.encoded
         val encodedPub = keyPair.public.encoded
         val otherKeyPair =
-            CryptoUtil.RsaCrtKeyPair(CryptoUtil.loadRsaPrivateKey(encodedPriv), CryptoUtil.loadRsaPublicKey(encodedPub))
+            CryptoUtil.RsaCrtKeyPair(CryptoUtil.loadRSAPrivate(encodedPriv), CryptoUtil.loadRSAPublic(encodedPub))
         assertEquals(keyPair.private, otherKeyPair.private)
         assertEquals(keyPair.public, otherKeyPair.public)
     }
@@ -129,7 +129,7 @@ class CryptoUtilTest {
 
         val expectedHash = expectedHashStr.replace(" ", "").replace("\n", "").toByteArray(Charsets.UTF_8)
 
-        val pub = CryptoUtil.loadRsaPublicKeyFromComponents(moduloStr.decodeUpHex(), exponentStr.decodeUpHex())
+        val pub = CryptoUtil.RSAPublicFromComponents(moduloStr.decodeUpHex(), exponentStr.decodeUpHex())
 
         println("echoed pub exp: ${pub.publicExponent.encodeHex()}")
         println("echoed pub mod: ${pub.modulus.encodeHex()}")

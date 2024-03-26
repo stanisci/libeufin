@@ -73,7 +73,7 @@ fun generateKeysPdf(
     }
 
     fun writeKey(doc: Document, priv: RSAPrivateCrtKey) {
-        val pub = CryptoUtil.getRsaPublicFromPrivate(priv)
+        val pub = CryptoUtil.RSAPublicFromPrivate(priv)
         val hash = CryptoUtil.getEbicsPublicKeyHash(pub)
         doc.add(Paragraph("Exponent:\n${formatHex(pub.publicExponent.toByteArray())}"))
         doc.add(Paragraph("Modulus:\n${formatHex(pub.modulus.toByteArray())}"))

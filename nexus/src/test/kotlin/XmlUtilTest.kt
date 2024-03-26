@@ -67,7 +67,7 @@ class XmlUtilTest {
         val doc = XMLUtil.parseIntoDom(docText)
         val keyStream = classLoader.getResourceAsStream("signature1/public_key.txt")
         val keyBytes = keyStream.decodeBase64().readAllBytes()
-        val key = CryptoUtil.loadRsaPublicKey(keyBytes)
+        val key = CryptoUtil.loadRSAPublic(keyBytes)
         assertTrue(XMLUtil.verifyEbicsDocument(doc, key, "H004"))
     }
 }
