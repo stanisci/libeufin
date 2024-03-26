@@ -34,15 +34,15 @@ import javax.xml.datatype.DatatypeFactory
 import java.security.interfaces.*
 
 /** EBICS protocol for key management */
-class Ebics3KeyMng(
+class EbicsKeyMng(
     private val cfg: EbicsSetupConfig,
     private val clientKeys: ClientPrivateKeysFile
 ) {
     fun INI(): ByteArray {
-        val inner = XMLOrderData(cfg, "ns2:SignaturePubKeyOrderData", "http://www.ebics.org/S001") {
-            el("ns2:SignaturePubKeyInfo") {
+        val inner = XMLOrderData(cfg, "SignaturePubKeyOrderData", "http://www.ebics.org/S001") {
+            el("SignaturePubKeyInfo") {
                 RSAKeyXml(clientKeys.signature_private_key)
-                el("ns2:SignatureVersion", "A006")
+                el("SignatureVersion", "A006")
             }
         }
         val doc = request("ebicsUnsecuredRequest") {
@@ -66,14 +66,14 @@ class Ebics3KeyMng(
     }
 
     fun HIA(): ByteArray {
-        val inner = XMLOrderData(cfg, "ns2:HIARequestOrderData", "urn:org:ebics:H004") {
-            el("ns2:AuthenticationPubKeyInfo") {
+        val inner = XMLOrderData(cfg, "HIARequestOrderData", "urn:org:ebics:H004") {
+            el("AuthenticationPubKeyInfo") {
                 RSAKeyXml(clientKeys.authentication_private_key)
-                el("ns2:AuthenticationVersion", "X002")
+                el("AuthenticationVersion", "X002")
             }
-            el("ns2:EncryptionPubKeyInfo") {
+            el("EncryptionPubKeyInfo") {
                 RSAKeyXml(clientKeys.encryption_private_key)
-                el("ns2:EncryptionVersion", "E002")
+                el("EncryptionVersion", "E002")
             }
         }
         val doc = request("ebicsUnsecuredRequest") {
@@ -135,7 +135,7 @@ class Ebics3KeyMng(
     }
 
     private fun XmlBuilder.RSAKeyXml(key: RSAPrivateCrtKey) {
-        el("ns2:PubKeyValue") {
+        el("PubKeyValue") {
             el("ds:RSAKeyValue") {
                 el("ds:Modulus", key.modulus.encodeBase64())
                 el("ds:Exponent", key.publicExponent.encodeBase64())
@@ -146,10 +146,10 @@ class Ebics3KeyMng(
     private fun XMLOrderData(cfg: EbicsSetupConfig, name: String, schema: String, build: XmlBuilder.() -> Unit): String {
         return XmlBuilder.toBytes(name) {
             attr("xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
-            attr("xmlns:ns2", schema)
+            attr("xmlns", schema)
             build()
-            el("ns2:PartnerID", cfg.ebicsPartnerId)
-            el("ns2:UserID", cfg.ebicsUserId)
+            el("PartnerID", cfg.ebicsPartnerId)
+            el("UserID", cfg.ebicsUserId)
         }.inputStream().deflate().encodeBase64()
     }
 

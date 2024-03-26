@@ -41,6 +41,10 @@ fun step(name: String) {
     println("\u001b[35m$name\u001b[0m")
 }
 
+fun msg(msg: String) {
+    println("\u001b[33m$msg\u001b[0m")
+}
+
 fun ask(question: String): String? {
     print("\u001b[;1m$question\u001b[0m")
     System.out.flush()
@@ -138,12 +142,14 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                 put("status", "Fetch CustomerPaymentStatusReport", "ebics-fetch $ebicsFlags status")
                 put("notification", "Fetch BankToCustomerDebitCreditNotification", "ebics-fetch $ebicsFlags notification")
                 put("submit", "Submit pending transactions", "ebics-submit $ebicsFlags")
-                if (kind.test) {
-                    put("reset-keys", suspend {
+                put("reset-keys", suspend {
+                    if (kind.test) {
                         clientKeysPath.deleteIfExists()
-                        bankKeysPath.deleteIfExists()
-                        Unit
-                    })
+                    }
+                    bankKeysPath.deleteIfExists()
+                    Unit
+                })
+                if (kind.test) {
                     put("tx", suspend {
                         step("Submit one transaction")
                         nexusCmd.run("initiate-payment $flags \"$payto&amount=CHF:42&message=single%20transaction%20test\"")
@@ -168,41 +174,29 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     })
                 }
             }
-
             while (true) {
-                // EBICS setup
-                while (true) {
-                    var clientKeys = loadClientKeys(clientKeysPath)
-                    var bankKeys = loadBankKeys(bankKeysPath)
-                    if (!kind.test && clientKeys == null) {
-                        throw Exception("Clients keys are required to run netzbon tests")
-                    } else if (clientKeys == null || !clientKeys.submitted_ini) {
-                        step("Run INI and HIA order")
-                    } else if (!clientKeys.submitted_hia) {
-                        step("Run HIA order")
-                    } else if (bankKeys == null || !bankKeys.accepted) {
-                        step("Run HPB order")
-                        if (kind.test)
-                            ask("Got to ${kind.settings} and click on 'Activate EBICS user'.\nPress Enter when done>")
-                    } else {
-                        break
-                    }
+                var clientKeys = loadClientKeys(clientKeysPath)
+                var bankKeys = loadBankKeys(bankKeysPath)
+                if (!kind.test && clientKeys == null) {
+                    throw Exception("Clients keys are required to run netzbon tests")
+                } else if (clientKeys == null || !clientKeys.submitted_ini || !clientKeys.submitted_hia || bankKeys == null || !bankKeys.accepted) {
+                    step("Run EBICS setup")
                     if (!nexusCmd.run("ebics-setup --auto-accept-keys $flags")) {
                         clientKeys = loadClientKeys(clientKeysPath)
                         if (kind.test) {
                             if (clientKeys == null || !clientKeys.submitted_ini || !clientKeys.submitted_hia) {
-                                ask("Got to ${kind.settings} and click on 'Reset EBICS user'.\nPress Enter when done>")
+                                msg("Got to ${kind.settings} and click on 'Reset EBICS user'")
                             } else {
-                                ask("Got to ${kind.settings} and click on 'Activate EBICS user'.\nPress Enter when done>")
+                                msg("Got to ${kind.settings} and click on 'Activate EBICS user'")
                             }
                         } else {
-                            ask("Activate your keys at your bank.\nPress Enter when done>")
+                            msg("Activate your keys at your bank")
                         }
                     }
                 }
-
                 val arg = ask("testbench> ")!!.trim()
                 if (arg == "exit") break
+                if (arg == "") continue
                 val cmd = cmds[arg]
                 if (cmd != null) {
                     cmd()

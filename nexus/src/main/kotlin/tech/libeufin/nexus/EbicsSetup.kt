@@ -110,14 +110,14 @@ suspend fun doKeysRequestAndUpdateState(
     orderType: KeysOrderType
 ) {
     logger.info("Doing key request ${orderType.name}")
-    val impl = Ebics3KeyMng(cfg, privs)
+    val impl = EbicsKeyMng(cfg, privs)
     val req = when(orderType) {
         KeysOrderType.INI -> impl.INI()
         KeysOrderType.HIA -> impl.HIA()
         KeysOrderType.HPB -> impl.HPB()
     }
     val xml = client.postToBank(cfg.hostBaseUrl, req, "$orderType")
-    val resp = Ebics3KeyMng.parseResponse(xml, privs.encryption_private_key)
+    val resp = EbicsKeyMng.parseResponse(xml, privs.encryption_private_key)
     
     when (orderType) {
         KeysOrderType.INI, KeysOrderType.HIA -> {
@@ -140,7 +140,7 @@ suspend fun doKeysRequestAndUpdateState(
             val orderData = requireNotNull(orderData) {
                 "HPB: missing order data"
             }
-            val (authPub, encPub) = Ebics3KeyMng.parseHpbOrder(orderData)
+            val (authPub, encPub) = EbicsKeyMng.parseHpbOrder(orderData)
             val bankKeys = BankPublicKeysFile(
                 bank_authentication_public_key = authPub,
                 bank_encryption_public_key = encPub,
