@@ -32,6 +32,7 @@ import java.time.ZoneId
 import java.util.*
 import javax.xml.datatype.DatatypeFactory
 import java.security.interfaces.*
+import tech.libeufin.nexus.ebics.EbicsKeyMng.Order.*
 
 /** EBICS protocol for key management */
 class EbicsKeyMng(
@@ -40,45 +41,38 @@ class EbicsKeyMng(
     private val ebics3: Boolean
 ) {
     private val schema = if (ebics3) "H005" else "H004"
-    fun INI(): ByteArray {
-        val data = XMLOrderData(cfg, "SignaturePubKeyOrderData", "http://www.ebics.org/S00${if (ebics3) 2 else 1}") {
-            el("SignaturePubKeyInfo") {
-                RSAKeyXml(clientKeys.signature_private_key)
-                el("SignatureVersion", "A006")
-            }
+
+    enum class Order {
+        INI,
+        HIA,
+        HPB
+    }
+
+    fun request(order: Order): ByteArray {
+        val (name, securityMedium, orderAttribute) = when (order) {
+            INI, HIA -> Triple("ebicsUnsecuredRequest", "0200", "DZNNN")
+            HPB -> Triple("ebicsNoPubKeyDigestsRequest", "0000", "DZHNN")
         }
-        return request("ebicsUnsecuredRequest", "INI", "0200", data)
-    }
-
-    fun HIA(): ByteArray {
-        val data = XMLOrderData(cfg, "HIARequestOrderData", "urn:org:ebics:$schema") {
-            el("AuthenticationPubKeyInfo") {
-                RSAKeyXml(clientKeys.authentication_private_key)
-                el("AuthenticationVersion", "X002")
+        val data = when (order) {
+            INI -> XMLOrderData(cfg, "SignaturePubKeyOrderData", "http://www.ebics.org/S00${if (ebics3) 2 else 1}") {
+                el("SignaturePubKeyInfo") {
+                    RSAKeyXml(clientKeys.signature_private_key)
+                    el("SignatureVersion", "A006")
+                }
             }
-            el("EncryptionPubKeyInfo") {
-                RSAKeyXml(clientKeys.encryption_private_key)
-                el("EncryptionVersion", "E002")
+            HIA -> XMLOrderData(cfg, "HIARequestOrderData", "urn:org:ebics:$schema") {
+                el("AuthenticationPubKeyInfo") {
+                    RSAKeyXml(clientKeys.authentication_private_key)
+                    el("AuthenticationVersion", "X002")
+                }
+                el("EncryptionPubKeyInfo") {
+                    RSAKeyXml(clientKeys.encryption_private_key)
+                    el("EncryptionVersion", "E002")
+                }
             }
+            HPB -> null
         }
-        return request("ebicsUnsecuredRequest", "HIA", "0200", data)
-    }
-
-    fun HPB(): ByteArray {
-        val nonce = getNonce(128)
-        return request("ebicsNoPubKeyDigestsRequest", "HPB", "0000", timestamp = Instant.now(), sign = true)
-    }
-
-    /* ----- Helpers ----- */
-
-    private fun request(
-        name: String,
-        order: String,
-        securityMedium: String,
-        data: String? = null,
-        timestamp: Instant? = null,
-        sign: Boolean = false
-    ): ByteArray {
+        val sign = order == HPB
         val doc = XmlBuilder.toDom(name, "urn:org:ebics:$schema") {
             attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:$schema")
             attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
@@ -88,18 +82,18 @@ class EbicsKeyMng(
                 attr("authenticate", "true")
                 el("static") {
                     el("HostID", cfg.ebicsHostId)
-                    if (timestamp != null) {
+                    if (order == HPB) {
                         el("Nonce", getNonce(128).encodeUpHex())
-                        el("Timestamp", timestamp.xmlDateTime())
+                        el("Timestamp", Instant.now().xmlDateTime())
                     }
                     el("PartnerID", cfg.ebicsPartnerId)
                     el("UserID", cfg.ebicsUserId)
                     el("OrderDetails") {
                         if (ebics3) {
-                            el("AdminOrderType", order)
+                            el("AdminOrderType", order.name)
                         } else {
-                            el("OrderType", order)
-                            el("OrderAttribute", if (order == "HPB") "DZHNN" else "DZNNN")
+                            el("OrderType", order.name)
+                            el("OrderAttribute", orderAttribute)
                         }
                     }
                     el("SecurityMedium", securityMedium)

@@ -27,6 +27,7 @@ import io.ktor.client.plugins.*
 import tech.libeufin.common.*
 import tech.libeufin.common.crypto.*
 import tech.libeufin.nexus.ebics.*
+import tech.libeufin.nexus.ebics.EbicsKeyMng.Order.*
 import java.nio.file.*
 import java.time.Instant
 import kotlin.io.path.*
@@ -48,16 +49,6 @@ private fun loadOrGenerateClientKeys(path: Path): ClientPrivateKeysFile {
     persistClientKeys(newKeys, path)
     logger.info("New client private keys created at '$path'")
     return newKeys
-}
-
-/**
- * Expresses the type of keying message that the user wants
- * to send to the bank.
- */
-enum class KeysOrderType {
-    INI,
-    HIA,
-    HPB
 }
 
 /**
@@ -107,36 +98,31 @@ suspend fun doKeysRequestAndUpdateState(
     cfg: EbicsSetupConfig,
     privs: ClientPrivateKeysFile,
     client: HttpClient,
-    orderType: KeysOrderType
+    order: EbicsKeyMng.Order
 ) {
-    logger.info("Doing key request ${orderType.name}")
-    val impl = EbicsKeyMng(cfg, privs, true)
-    val req = when(orderType) {
-        KeysOrderType.INI -> impl.INI()
-        KeysOrderType.HIA -> impl.HIA()
-        KeysOrderType.HPB -> impl.HPB()
-    }
-    val xml = client.postToBank(cfg.hostBaseUrl, req, "$orderType")
+    logger.info("Doing key request $order")
+    val req = EbicsKeyMng(cfg, privs, true).request(order)
+    val xml = client.postToBank(cfg.hostBaseUrl, req, order.name)
     val resp = EbicsKeyMng.parseResponse(xml, privs.encryption_private_key)
     
-    when (orderType) {
-        KeysOrderType.INI, KeysOrderType.HIA -> {
+    when (order) {
+        INI, HIA -> {
             if (resp.technicalCode == EbicsReturnCode.EBICS_INVALID_USER_OR_USER_STATE) {
-                throw Exception("$orderType status code ${resp.technicalCode}: either your IDs are incorrect, or you already have keys registered with this bank")
+                throw Exception("$order status code ${resp.technicalCode}: either your IDs are incorrect, or you already have keys registered with this bank")
             }
         }
-        KeysOrderType.HPB -> {
+        HPB -> {
             if (resp.technicalCode == EbicsReturnCode.EBICS_AUTHENTICATION_FAILED) {
-                throw Exception("$orderType status code ${resp.technicalCode}: could not download bank keys, send client keys (and/or related PDF document with --generate-registration-pdf) to the bank")
+                throw Exception("$order status code ${resp.technicalCode}: could not download bank keys, send client keys (and/or related PDF document with --generate-registration-pdf) to the bank")
             }
         }
     }
     
-    val orderData = resp.okOrFail("${orderType.name}")
-    when (orderType) {
-        KeysOrderType.INI -> privs.submitted_ini = true
-        KeysOrderType.HIA -> privs.submitted_hia = true
-        KeysOrderType.HPB -> {
+    val orderData = resp.okOrFail(order.name)
+    when (order) {
+        INI -> privs.submitted_ini = true
+        HIA -> privs.submitted_hia = true
+        HPB -> {
             val orderData = requireNotNull(orderData) {
                 "HPB: missing order data"
             }
@@ -149,15 +135,15 @@ suspend fun doKeysRequestAndUpdateState(
             try {
                 persistBankKeys(bankKeys, cfg.bankPublicKeysFilename)
             } catch (e: Exception) {
-                throw Exception("Could not update the ${orderType.name} state on disk", e)
+                throw Exception("Could not update the $order state on disk", e)
             }
         }
     }
-    if (orderType != KeysOrderType.HPB) {
+    if (order != HPB) {
         try {
             persistClientKeys(privs, cfg.clientPrivateKeysFilename)
         } catch (e: Exception) {
-            throw Exception("Could not update the ${orderType.name} state on disk", e)
+            throw Exception("Could not update the $order state on disk", e)
         }
     }
     
@@ -214,7 +200,7 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         val cfg = extractEbicsConfig(common.config)
         // Config is sane.  Go (maybe) making the private keys.
         val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysFilename)
-        val httpClient =  HttpClient {
+        val client =  HttpClient {
             install(HttpTimeout) {
                 // It can take a lot of time for the bank to generate documents
                 socketTimeoutMillis = 5 * 60 * 1000
@@ -223,21 +209,16 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         // Privs exist.  Upload their pubs
         val keysNotSub = !clientKeys.submitted_ini
         if ((!clientKeys.submitted_ini) || forceKeysResubmission)
-            doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.INI)
+            doKeysRequestAndUpdateState(cfg, clientKeys, client, INI)
         // Eject PDF if the keys were submitted for the first time, or the user asked.
         if (keysNotSub || generateRegistrationPdf) makePdf(clientKeys, cfg)
         if ((!clientKeys.submitted_hia) || forceKeysResubmission)
-            doKeysRequestAndUpdateState(cfg, clientKeys, httpClient, KeysOrderType.HIA)
+            doKeysRequestAndUpdateState(cfg, clientKeys, client, HIA)
         
         // Checking if the bank keys exist on disk.
         var bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
         if (bankKeys == null) {
-            doKeysRequestAndUpdateState(
-                cfg,
-                clientKeys,
-                httpClient,
-                KeysOrderType.HPB
-            )
+            doKeysRequestAndUpdateState(cfg, clientKeys, client, HPB)
             logger.info("Bank keys stored at ${cfg.bankPublicKeysFilename}")
             bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)!!
         }
