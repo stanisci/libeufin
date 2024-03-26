@@ -36,37 +36,22 @@ import java.security.interfaces.*
 /** EBICS protocol for key management */
 class EbicsKeyMng(
     private val cfg: EbicsSetupConfig,
-    private val clientKeys: ClientPrivateKeysFile
+    private val clientKeys: ClientPrivateKeysFile,
+    private val ebics3: Boolean
 ) {
+    private val schema = if (ebics3) "H005" else "H004"
     fun INI(): ByteArray {
-        val inner = XMLOrderData(cfg, "SignaturePubKeyOrderData", "http://www.ebics.org/S001") {
+        val data = XMLOrderData(cfg, "SignaturePubKeyOrderData", "http://www.ebics.org/S00${if (ebics3) 2 else 1}") {
             el("SignaturePubKeyInfo") {
                 RSAKeyXml(clientKeys.signature_private_key)
                 el("SignatureVersion", "A006")
             }
         }
-        val doc = request("ebicsUnsecuredRequest") {
-            el("header") {
-                attr("authenticate", "true")
-                el("static") {
-                    el("HostID", cfg.ebicsHostId)
-                    el("PartnerID", cfg.ebicsPartnerId)
-                    el("UserID", cfg.ebicsUserId)
-                    el("OrderDetails") {
-                        el("OrderType", "INI")
-                        el("OrderAttribute", "DZNNN")
-                    }
-                    el("SecurityMedium", "0200")
-                }
-                el("mutable")
-            }
-            el("body/DataTransfer/OrderData", inner)
-        }
-        return XMLUtil.convertDomToBytes(doc)
+        return request("ebicsUnsecuredRequest", "INI", "0200", data)
     }
 
     fun HIA(): ByteArray {
-        val inner = XMLOrderData(cfg, "HIARequestOrderData", "urn:org:ebics:H004") {
+        val data = XMLOrderData(cfg, "HIARequestOrderData", "urn:org:ebics:$schema") {
             el("AuthenticationPubKeyInfo") {
                 RSAKeyXml(clientKeys.authentication_private_key)
                 el("AuthenticationVersion", "X002")
@@ -76,69 +61,72 @@ class EbicsKeyMng(
                 el("EncryptionVersion", "E002")
             }
         }
-        val doc = request("ebicsUnsecuredRequest") {
-            el("header") {
-                attr("authenticate", "true")
-                el("static") {
-                    el("HostID", cfg.ebicsHostId)
-                    el("PartnerID", cfg.ebicsPartnerId)
-                    el("UserID", cfg.ebicsUserId)
-                    el("OrderDetails") {
-                        el("OrderType", "HIA")
-                        el("OrderAttribute", "DZNNN")
-                    }
-                    el("SecurityMedium", "0200")
-                }
-                el("mutable")
-            }
-            el("body/DataTransfer/OrderData", inner)
-        }
-        return XMLUtil.convertDomToBytes(doc)
+        return request("ebicsUnsecuredRequest", "HIA", "0200", data)
     }
 
     fun HPB(): ByteArray {
         val nonce = getNonce(128)
-        val doc = request("ebicsNoPubKeyDigestsRequest") {
-            el("header") {
-                attr("authenticate", "true")
-                el("static") {
-                    el("HostID", cfg.ebicsHostId)
-                    el("Nonce", nonce.encodeUpHex())
-                    el("Timestamp", Instant.now().xmlDateTime())
-                    el("PartnerID", cfg.ebicsPartnerId)
-                    el("UserID", cfg.ebicsUserId)
-                    el("OrderDetails") {
-                        el("OrderType", "HPB")
-                        el("OrderAttribute", "DZHNN")
-                    }
-                    el("SecurityMedium", "0000")
-                }
-                el("mutable")
-            }
-            el("AuthSignature")
-            el("body")
-        }
-        XMLUtil.signEbicsDocument(doc, clientKeys.authentication_private_key, "H004")
-        return XMLUtil.convertDomToBytes(doc)
+        return request("ebicsNoPubKeyDigestsRequest", "HPB", "0000", timestamp = Instant.now(), sign = true)
     }
 
     /* ----- Helpers ----- */
 
-    private fun request(name: String, build: XmlBuilder.() -> Unit): Document {
-        return XmlBuilder.toDom(name, "urn:org:ebics:H004") {
-            attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:H004")
+    private fun request(
+        name: String,
+        order: String,
+        securityMedium: String,
+        data: String? = null,
+        timestamp: Instant? = null,
+        sign: Boolean = false
+    ): ByteArray {
+        val doc = XmlBuilder.toDom(name, "urn:org:ebics:$schema") {
+            attr("http://www.w3.org/2000/xmlns/", "xmlns", "urn:org:ebics:$schema")
             attr("http://www.w3.org/2000/xmlns/", "xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
-            attr("Version", "H004")
+            attr("Version", "$schema")
             attr("Revision", "1")
-            build()
+            el("header") {
+                attr("authenticate", "true")
+                el("static") {
+                    el("HostID", cfg.ebicsHostId)
+                    if (timestamp != null) {
+                        el("Nonce", getNonce(128).encodeUpHex())
+                        el("Timestamp", timestamp.xmlDateTime())
+                    }
+                    el("PartnerID", cfg.ebicsPartnerId)
+                    el("UserID", cfg.ebicsUserId)
+                    el("OrderDetails") {
+                        if (ebics3) {
+                            el("AdminOrderType", order)
+                        } else {
+                            el("OrderType", order)
+                            el("OrderAttribute", if (order == "HPB") "DZHNN" else "DZNNN")
+                        }
+                    }
+                    el("SecurityMedium", securityMedium)
+                }
+                el("mutable")
+            }
+            if (sign) el("AuthSignature")
+            el("body") {
+                if (data != null) el("DataTransfer/OrderData", data)
+            }
         }
+        if (sign) XMLUtil.signEbicsDocument(doc, clientKeys.authentication_private_key, schema)
+        return XMLUtil.convertDomToBytes(doc)
     }
 
     private fun XmlBuilder.RSAKeyXml(key: RSAPrivateCrtKey) {
-        el("PubKeyValue") {
-            el("ds:RSAKeyValue") {
-                el("ds:Modulus", key.modulus.encodeBase64())
-                el("ds:Exponent", key.publicExponent.encodeBase64())
+        if (ebics3) {
+            val cert = CryptoUtil.certificateFromPrivate(key)
+            el("ds:X509Data") {
+                el("ds:X509Certificate", cert.encoded.encodeBase64())
+            }
+        } else {
+            el("PubKeyValue") {
+                el("ds:RSAKeyValue") {
+                    el("ds:Modulus", key.modulus.encodeBase64())
+                    el("ds:Exponent", key.publicExponent.encodeBase64())
+                }
             }
         }
     }
@@ -190,18 +178,30 @@ class EbicsKeyMng(
         }
 
         fun parseHpbOrder(data: InputStream): Pair<RSAPublicKey, RSAPublicKey> {
-            return XmlDestructor.fromStream(data, "HPBResponseOrderData") {
-                val authPub = one("AuthenticationPubKeyInfo").one("PubKeyValue").one("RSAKeyValue") {
-                    CryptoUtil.loadRsaPublicKeyFromComponents(
-                        one("Modulus").text().decodeBase64(),
-                        one("Exponent").text().decodeBase64(),
-                    )
+            fun XmlDestructor.rsaPubKey(): RSAPublicKey {
+                val cert = opt("X509Data")?.one("X509Certificate")?.text()?.decodeBase64()
+                return if (cert != null) {
+                    CryptoUtil.loadRsaPublicKeyFromCertificate(cert)
+                } else {
+                    one("PubKeyValue").one("RSAKeyValue") {
+                        CryptoUtil.loadRsaPublicKeyFromComponents(
+                            one("Modulus").text().decodeBase64(),
+                            one("Exponent").text().decodeBase64(),
+                        )
+                    }
+                    
                 }
-                val encPub = one("EncryptionPubKeyInfo").one("PubKeyValue").one("RSAKeyValue") {
-                    CryptoUtil.loadRsaPublicKeyFromComponents(
-                        one("Modulus").text().decodeBase64(),
-                        one("Exponent").text().decodeBase64(),
-                    )
+            }
+            return XmlDestructor.fromStream(data, "HPBResponseOrderData") {
+                val authPub = one("AuthenticationPubKeyInfo") {
+                    val version = one("AuthenticationVersion").text()
+                    require(version == "X002") { "Expected authentication version X002 got unsupported $version" }
+                    rsaPubKey()
+                }
+                val encPub = one("EncryptionPubKeyInfo") {
+                    val version = one("EncryptionVersion").text()
+                    require(version == "E002") { "Expected encryption version E002 got unsupported $version" }
+                    rsaPubKey()
                 }
                 Pair(authPub, encPub)
             }

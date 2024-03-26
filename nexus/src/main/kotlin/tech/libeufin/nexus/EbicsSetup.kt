@@ -110,7 +110,7 @@ suspend fun doKeysRequestAndUpdateState(
     orderType: KeysOrderType
 ) {
     logger.info("Doing key request ${orderType.name}")
-    val impl = EbicsKeyMng(cfg, privs)
+    val impl = EbicsKeyMng(cfg, privs, true)
     val req = when(orderType) {
         KeysOrderType.INI -> impl.INI()
         KeysOrderType.HIA -> impl.HIA()

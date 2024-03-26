@@ -191,8 +191,8 @@ class XmlDestructor internal constructor(private val el: Element) {
         }
 
         fun <T> fromDoc(doc: Document, root: String, f: XmlDestructor.() -> T): T {
-            if (doc.documentElement.tagName != root) {
-                throw DestructionError("expected root '$root' got '${doc.documentElement.tagName}'")
+            if (doc.documentElement.localName != root) {
+                throw DestructionError("expected root '$root' got '${doc.documentElement.localName}'")
             }
             val destr = XmlDestructor(doc.documentElement)
             return f(destr)

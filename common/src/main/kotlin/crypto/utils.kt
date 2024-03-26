@@ -20,12 +20,21 @@
 package tech.libeufin.common.crypto
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
+import org.bouncycastle.operator.ContentSigner
+import org.bouncycastle.cert.jcajce.*
+import org.bouncycastle.asn1.x509.*
+import org.bouncycastle.asn1.x509.Extension
+import org.bouncycastle.asn1.x500.X500Name
+import org.bouncycastle.asn1.ASN1ObjectIdentifier
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.math.BigInteger
+import java.util.*
 import java.security.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
+import java.security.cert.*
 import java.security.spec.*
 import javax.crypto.*
 import javax.crypto.spec.IvParameterSpec
@@ -53,7 +62,7 @@ object CryptoUtil {
         val plainTransactionKey: SecretKey
     )
 
-    private val bouncyCastleProvider = BouncyCastleProvider()
+    private val provider = BouncyCastleProvider()
 
     /**
      * Load an RSA private key from its binary PKCS#8 encoding.
@@ -93,6 +102,12 @@ object CryptoUtil {
         return keyFactory.generatePublic(tmp) as RSAPublicKey
     }
 
+    fun loadRsaPublicKeyFromCertificate(certificate: ByteArray): RSAPublicKey {
+        val cf = CertificateFactory.getInstance("X.509");
+        val c = cf.generateCertificate(certificate.inputStream());
+        return c.getPublicKey() as RSAPublicKey
+    }
+
     /**
      * Load an RSA public key from its binary X509 encoding.
      */
@@ -102,6 +117,42 @@ object CryptoUtil {
         if (pub !is RSAPublicKey)
             throw Exception("wrong encoding")
         return pub
+    }
+
+    fun certificateFromPrivate(rsaPrivateCrtKey: RSAPrivateCrtKey): X509Certificate {
+        val now = System.currentTimeMillis()
+        val calendar = Calendar.getInstance()
+        calendar.time = Date(now)
+        calendar.add(Calendar.YEAR, 1) // TODO certificate validity
+
+        val builder = JcaX509v3CertificateBuilder(
+            X500Name("CN=test"),  // TODO certificate CN
+            BigInteger(now.toString()), // TODO certificate serial number
+            Date(now), 
+            calendar.time, 
+            X500Name("CN=test"),
+            getRsaPublicFromPrivate(rsaPrivateCrtKey)
+        )
+
+        
+        builder.addExtension(Extension.keyUsage, true, KeyUsage(
+            KeyUsage.digitalSignature 
+                or KeyUsage.nonRepudiation
+                or KeyUsage.keyEncipherment
+                or KeyUsage.dataEncipherment
+                or KeyUsage.keyAgreement
+                or KeyUsage.keyCertSign
+                or KeyUsage.cRLSign
+                or KeyUsage.encipherOnly
+                or KeyUsage.decipherOnly
+        ))
+        builder.addExtension(Extension.basicConstraints, true, BasicConstraints(true))
+
+        val certificate = JcaContentSignerBuilder("SHA256WithRSA").build(rsaPrivateCrtKey)
+        return JcaX509CertificateConverter()
+            .setProvider(provider)
+            .getCertificate(builder.build(certificate))
+
     }
 
     /**
@@ -135,7 +186,7 @@ object CryptoUtil {
     }
 
     fun encryptEbicsE002(data: InputStream, encryptionPublicKey: RSAPublicKey): EncryptionResult {
-        val keygen = KeyGenerator.getInstance("AES", bouncyCastleProvider)
+        val keygen = KeyGenerator.getInstance("AES", provider)
         keygen.init(128)
         val transactionKey = keygen.generateKey()
         return encryptEbicsE002withTransactionKey(
@@ -154,14 +205,14 @@ object CryptoUtil {
     ): EncryptionResult {
         val symmetricCipher = Cipher.getInstance(
             "AES/CBC/X9.23Padding",
-            bouncyCastleProvider
+            provider
         )
         val ivParameterSpec = IvParameterSpec(ByteArray(16))
         symmetricCipher.init(Cipher.ENCRYPT_MODE, transactionKey, ivParameterSpec)
         val encryptedData = CipherInputStream(data, symmetricCipher).readAllBytes()
         val asymmetricCipher = Cipher.getInstance(
             "RSA/None/PKCS1Padding",
-            bouncyCastleProvider
+            provider
         )
         asymmetricCipher.init(Cipher.ENCRYPT_MODE, encryptionPublicKey)
         val encryptedTransactionKey = asymmetricCipher.doFinal(transactionKey.encoded)
@@ -189,14 +240,14 @@ object CryptoUtil {
     ): CipherInputStream {
         val asymmetricCipher = Cipher.getInstance(
             "RSA/None/PKCS1Padding",
-            bouncyCastleProvider
+            provider
         )
         asymmetricCipher.init(Cipher.DECRYPT_MODE, privateKey)
         val transactionKeyBytes = asymmetricCipher.doFinal(encryptedTransactionKey)
         val secretKeySpec = SecretKeySpec(transactionKeyBytes, "AES")
         val symmetricCipher = Cipher.getInstance(
             "AES/CBC/X9.23Padding",
-            bouncyCastleProvider
+            provider
         )
         val ivParameterSpec = IvParameterSpec(ByteArray(16))
         symmetricCipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec)
@@ -211,7 +262,7 @@ object CryptoUtil {
      * uses a hash internally.
      */
     fun signEbicsA006(data: ByteArray, privateKey: RSAPrivateCrtKey): ByteArray {
-        val signature = Signature.getInstance("SHA256withRSA/PSS", bouncyCastleProvider)
+        val signature = Signature.getInstance("SHA256withRSA/PSS", provider)
         signature.setParameter(PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1))
         signature.initSign(privateKey)
         signature.update(data)
@@ -219,7 +270,7 @@ object CryptoUtil {
     }
 
     fun verifyEbicsA006(sig: ByteArray, data: ByteArray, publicKey: RSAPublicKey): Boolean {
-        val signature = Signature.getInstance("SHA256withRSA/PSS", bouncyCastleProvider)
+        val signature = Signature.getInstance("SHA256withRSA/PSS", provider)
         signature.setParameter(PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1))
         signature.initVerify(publicKey)
         signature.update(data)
