@@ -37,7 +37,7 @@ import tech.libeufin.common.crypto.*
  */
 fun generateKeysPdf(
     clientKeys: ClientPrivateKeysFile,
-    cfg: EbicsSetupConfig
+    cfg: NexusConfig
 ): ByteArray {
     val po = ByteArrayOutputStream()
     val pdfWriter = PdfWriter(po)

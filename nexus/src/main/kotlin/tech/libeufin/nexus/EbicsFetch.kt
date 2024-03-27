@@ -46,7 +46,7 @@ data class FetchContext(
     /**
      * Config handle.
      */
-    val cfg: EbicsSetupConfig,
+    val cfg: NexusConfig,
     /**
      * HTTP client handle to reach the bank
      */
@@ -359,7 +359,7 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
      * FIXME: reduce code duplication with the submit subcommand.
      */
     override fun run() = cliCmd(logger, common.log) {
-        val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
+        val cfg = extractEbicsConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
 
         Database(dbCfg.dbConnStr).use { db ->

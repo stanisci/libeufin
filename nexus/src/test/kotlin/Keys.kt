@@ -43,8 +43,8 @@ class PublicKeys {
         // artificially creating the keys.
         val fileContent = BankPublicKeysFile(
             accepted = true,
-            bank_authentication_public_key = CryptoUtil.generateRsaKeyPair(2028).public,
-            bank_encryption_public_key = CryptoUtil.generateRsaKeyPair(2028).public
+            bank_authentication_public_key = CryptoUtil.genRSAPublic(2028),
+            bank_encryption_public_key = CryptoUtil.genRSAPublic(2028)
         )
         // storing them on disk.
         persistBankKeys(fileContent, Path("/tmp/nexus-tests-bank-keys.json"))

@@ -28,9 +28,9 @@ class MySerializers {
     // Testing deserialization of RSA private keys.
     @Test
     fun rsaPrivDeserialization() {
-        val s = Base32Crockford.encode(CryptoUtil.generateRsaKeyPair(2048).private.encoded)
-        val a = Base32Crockford.encode(CryptoUtil.generateRsaKeyPair(2048).private.encoded)
-        val e = Base32Crockford.encode(CryptoUtil.generateRsaKeyPair(2048).private.encoded)
+        val s = Base32Crockford.encode(CryptoUtil.genRSAPrivate(2048).encoded)
+        val a = Base32Crockford.encode(CryptoUtil.genRSAPrivate(2048).encoded)
+        val e = Base32Crockford.encode(CryptoUtil.genRSAPrivate(2048).encoded)
         val obj = JSON.decodeFromString<ClientPrivateKeysFile>("""
             {
               "signature_private_key": "$s",
@@ -40,8 +40,8 @@ class MySerializers {
               "submitted_hia": true
             }
         """.trimIndent())
-        assertEquals(obj.signature_private_key, CryptoUtil.loadRsaPrivateKey(Base32Crockford.decode(s)))
-        assertEquals(obj.authentication_private_key, CryptoUtil.loadRsaPrivateKey(Base32Crockford.decode(a)))
-        assertEquals(obj.encryption_private_key, CryptoUtil.loadRsaPrivateKey(Base32Crockford.decode(e)))
+        assertEquals(obj.signature_private_key, CryptoUtil.loadRSAPrivate(Base32Crockford.decode(s)))
+        assertEquals(obj.authentication_private_key, CryptoUtil.loadRSAPrivate(Base32Crockford.decode(a)))
+        assertEquals(obj.encryption_private_key, CryptoUtil.loadRSAPrivate(Base32Crockford.decode(e)))
     }
 }

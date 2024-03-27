@@ -42,7 +42,7 @@ data class SubmissionContext(
     /**
      * Configuration handle.
      */
-    val cfg: EbicsSetupConfig,
+    val cfg: NexusConfig,
     /**
      * Subscriber EBICS private keys.
      */
@@ -83,7 +83,7 @@ private suspend fun submitInitiatedPayment(
         initiationTimestamp = payment.initiationTime,
         amount = payment.amount,
         creditAccount = creditAccount,
-        debitAccount = ctx.cfg.myIbanAccount,
+        debitAccount = ctx.cfg.account,
         wireTransferSubject = payment.wireTransferSubject
     )
     ctx.fileLogger.logSubmit(xml)
@@ -146,7 +146,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
      * FIXME: reduce code duplication with the fetch subcommand.
      */
     override fun run() = cliCmd(logger, common.log) {
-        val cfg: EbicsSetupConfig = extractEbicsConfig(common.config)
+        val cfg = extractEbicsConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
         val (clientKeys, bankKeys) = expectFullKeys(cfg)
         val ctx = SubmissionContext(

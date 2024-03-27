@@ -103,8 +103,8 @@ class CliTest {
         }
         // Unfinished bank
         persistBankKeys(BankPublicKeysFile(
-            bank_authentication_public_key = CryptoUtil.generateRsaKeyPair(2048).public,
-            bank_encryption_public_key = CryptoUtil.generateRsaKeyPair(2048).public,
+            bank_authentication_public_key = CryptoUtil.genRSAPublic(2048),
+            bank_encryption_public_key = CryptoUtil.genRSAPublic(2048),
             accepted = false
         ), bankKeysPath)
         for (cmd in cmds) {

@@ -61,68 +61,37 @@ fun Instant.fmtDate(): String =
 fun Instant.fmtDateTime(): String =
     DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(ZoneId.of("UTC")).format(this)
 
-/**
- * Keeps all the options of the ebics-setup subcommand.  The
- * caller has to handle TalerConfigError if values are missing.
- * If even one of the fields could not be instantiated, then
- * throws TalerConfigError.
- */
-class EbicsSetupConfig(val config: TalerConfig) {
-    // abstracts the section name.
-    private val ebicsSetupRequireString = { option: String ->
-        config.requireString("nexus-ebics", option)
-    }
-    private val ebicsSetupRequirePath = { option: String ->
-        config.requirePath("nexus-ebics", option)
-    }
-    // debug utility to inspect what was loaded.
-    fun _dump() {
-        this.javaClass.declaredFields.forEach {
-            println("cfg obj: ${it.name} -> ${it.get(this)}")
-        }
-    }
-    /**
-     * The bank's currency.
-     */
-    val currency = ebicsSetupRequireString("currency")
-    /**
-     * The bank base URL.
-     */
-    val hostBaseUrl = ebicsSetupRequireString("host_base_url")
-    /**
-     * The bank EBICS host ID.
-     */
-    val ebicsHostId = ebicsSetupRequireString("host_id")
-    /**
-     * EBICS user ID.
-     */
-    val ebicsUserId = ebicsSetupRequireString("user_id")
-    /**
-     * EBICS partner ID.
-     */
-    val ebicsPartnerId = ebicsSetupRequireString("partner_id")
-    /**
-     * Bank account metadata.
-     */
-    val myIbanAccount = IbanAccountMetadata(
-        iban = ebicsSetupRequireString("iban"),
-        bic = ebicsSetupRequireString("bic"),
-        name = ebicsSetupRequireString("name")
+/** Configuration for libeufin-nexus */
+class NexusConfig(val config: TalerConfig) {
+    private fun requireString(option: String): String = config.requireString("nexus-ebics", option)
+    private fun requirePath(option: String): Path = config.requirePath("nexus-ebics", option)
+
+    /** The bank's currency */
+    val currency = requireString("currency")
+    /** The bank base URL */
+    val hostBaseUrl = requireString("host_base_url")
+    /** The bank EBICS host ID */
+    val ebicsHostId = requireString("host_id")
+    /** EBICS user ID */
+    val ebicsUserId = requireString("user_id")
+    /** EBICS partner ID */
+    val ebicsPartnerId = requireString("partner_id")
+    /** Bank account metadata */
+    val account = IbanAccountMetadata(
+        iban = requireString("iban"),
+        bic = requireString("bic"),
+        name = requireString("name")
     )
-    /**
-     * Filename where we store the bank public keys.
-     */
-    val bankPublicKeysFilename = ebicsSetupRequirePath("bank_public_keys_file")
-    /**
-     * Filename where we store our private keys.
-     */
-    val clientPrivateKeysFilename = ebicsSetupRequirePath("client_private_keys_file")
+    /** Path where we store the bank public keys */
+    val bankPublicKeysPath = requirePath("bank_public_keys_file")
+    /** Path where we store our private keys */
+    val clientPrivateKeysPath = requirePath("client_private_keys_file")
     /**
      * A name that identifies the EBICS and ISO20022 flavour
      * that Nexus should honor in the communication with the
      * bank.
      */
-    val bankDialect: String = ebicsSetupRequireString("bank_dialect").run {
+    val bankDialect: String = requireString("bank_dialect").run {
         if (this != "postfinance") throw Exception("Only 'postfinance' dialect is supported.")
         return@run this
     }

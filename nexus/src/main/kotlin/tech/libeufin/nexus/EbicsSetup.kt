@@ -95,7 +95,7 @@ private fun askUserToAcceptKeys(bankKeys: BankPublicKeysFile): Boolean {
  *        the --auto-accept-key CLI flag.
  */
 suspend fun doKeysRequestAndUpdateState(
-    cfg: EbicsSetupConfig,
+    cfg: NexusConfig,
     privs: ClientPrivateKeysFile,
     client: HttpClient,
     order: EbicsKeyMng.Order
@@ -133,7 +133,7 @@ suspend fun doKeysRequestAndUpdateState(
                 accepted = false
             )
             try {
-                persistBankKeys(bankKeys, cfg.bankPublicKeysFilename)
+                persistBankKeys(bankKeys, cfg.bankPublicKeysPath)
             } catch (e: Exception) {
                 throw Exception("Could not update the $order state on disk", e)
             }
@@ -141,7 +141,7 @@ suspend fun doKeysRequestAndUpdateState(
     }
     if (order != HPB) {
         try {
-            persistClientKeys(privs, cfg.clientPrivateKeysFilename)
+            persistClientKeys(privs, cfg.clientPrivateKeysPath)
         } catch (e: Exception) {
             throw Exception("Could not update the $order state on disk", e)
         }
@@ -155,9 +155,9 @@ suspend fun doKeysRequestAndUpdateState(
  * @param configFile location of the configuration entry point.
  * @return internal representation of the configuration.
  */
-fun extractEbicsConfig(configFile: Path?): EbicsSetupConfig {
+fun extractEbicsConfig(configFile: Path?): NexusConfig {
     val config = loadConfig(configFile)
-    return EbicsSetupConfig(config)
+    return NexusConfig(config)
 }
 
 /**
@@ -167,7 +167,7 @@ fun extractEbicsConfig(configFile: Path?): EbicsSetupConfig {
  * @param privs client private keys.
  * @param cfg configuration handle.
  */
-private fun makePdf(privs: ClientPrivateKeysFile, cfg: EbicsSetupConfig) {
+private fun makePdf(privs: ClientPrivateKeysFile, cfg: NexusConfig) {
     val pdf = generateKeysPdf(privs, cfg)
     val path = Path("/tmp/libeufin-nexus-keys-${Instant.now().epochSecond}.pdf")
     try {
@@ -199,7 +199,7 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
     override fun run() = cliCmd(logger, common.log) {
         val cfg = extractEbicsConfig(common.config)
         // Config is sane.  Go (maybe) making the private keys.
-        val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysFilename)
+        val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysPath)
         val client =  HttpClient {
             install(HttpTimeout) {
                 // It can take a lot of time for the bank to generate documents
@@ -216,11 +216,11 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
             doKeysRequestAndUpdateState(cfg, clientKeys, client, HIA)
         
         // Checking if the bank keys exist on disk.
-        var bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
+        var bankKeys = loadBankKeys(cfg.bankPublicKeysPath)
         if (bankKeys == null) {
             doKeysRequestAndUpdateState(cfg, clientKeys, client, HPB)
-            logger.info("Bank keys stored at ${cfg.bankPublicKeysFilename}")
-            bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)!!
+            logger.info("Bank keys stored at ${cfg.bankPublicKeysPath}")
+            bankKeys = loadBankKeys(cfg.bankPublicKeysPath)!!
         }
 
         if (!bankKeys.accepted) {
@@ -232,7 +232,7 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
                 throw Exception("Cannot successfully finish the setup without accepting the bank keys")
             }
             try {
-                persistBankKeys(bankKeys, cfg.bankPublicKeysFilename)
+                persistBankKeys(bankKeys, cfg.bankPublicKeysPath)
             } catch (e: Exception) {
                 throw Exception("Could not set bank keys as accepted on disk", e)
             }

@@ -80,15 +80,17 @@ fun decryptAndDecompressPayload(
     clientEncryptionKey: RSAPrivateCrtKey,
     encryptionInfo: DataEncryptionInfo,
     chunks: List<ByteArray>
-): InputStream =
-    SequenceInputStream(Collections.enumeration(chunks.map { it.inputStream() })) // Aggregate
+): InputStream {
+    val transactionKey = CryptoUtil.decryptEbicsE002Key(clientEncryptionKey, encryptionInfo.transactionKey)
+    return SequenceInputStream(Collections.enumeration(chunks.map { it.inputStream() })) // Aggregate
         .run {
             CryptoUtil.decryptEbicsE002(
-                encryptionInfo.transactionKey,
-                this,
-                clientEncryptionKey
+                transactionKey,
+                this
             )
         }.inflate()
+}
+    
 
 sealed class EbicsError(msg: String, cause: Throwable? = null): Exception(msg, cause) {
     /** Http and network errors */
@@ -162,7 +164,7 @@ suspend fun EbicsBTS.postBTS(
  */
 suspend fun ebicsDownload(
     client: HttpClient,
-    cfg: EbicsSetupConfig,
+    cfg: NexusConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     order: EbicsOrder,
@@ -267,43 +269,43 @@ suspend fun ebicsDownload(
  * @return [PreparedUploadData]
  */
 fun prepareUploadPayload(
-    cfg: EbicsSetupConfig,
+    cfg: NexusConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     payload: ByteArray,
 ): PreparedUploadData {
+    val payloadDigest = CryptoUtil.digestEbicsOrderA006(payload)
     val innerSignedEbicsXml = XmlBuilder.toBytes("UserSignatureData") {
         attr("xmlns", "http://www.ebics.org/S002")
         el("OrderSignatureData") {
             el("SignatureVersion", "A006")
             el("SignatureValue", CryptoUtil.signEbicsA006(
-                CryptoUtil.digestEbicsOrderA006(payload),
+                payloadDigest,
                 clientKeys.signature_private_key,
             ).encodeBase64())
             el("PartnerID", cfg.ebicsPartnerId)
             el("UserID", cfg.ebicsUserId)
         }
     }
-    val encryptionResult = CryptoUtil.encryptEbicsE002(
-        innerSignedEbicsXml.inputStream().deflate(),
-        bankKeys.bank_encryption_public_key
-    )
-    // Then only E002 symmetric (with ephemeral key) encrypt.
-    val compressedInnerPayload = payload.inputStream().deflate()
-    // TODO stream
-    val encryptedPayload = CryptoUtil.encryptEbicsE002withTransactionKey(
-        compressedInnerPayload,
-        bankKeys.bank_encryption_public_key,
-        encryptionResult.plainTransactionKey
-    )
-    val segment = encryptedPayload.encryptedData.encodeBase64()
-    // Split 1MB segment when we have payloads that big
+    // Generate ephemeral transaction key
+    val (transactionKey, encryptedTransactionKey) = CryptoUtil.genEbicsE002Key(bankKeys.bank_encryption_public_key)
+    // Compress and encrypt order signature
+    val orderSignature = CryptoUtil.encryptEbicsE002(
+        transactionKey,
+        innerSignedEbicsXml.inputStream().deflate()
+    ).encodeBase64()
+    // Compress and encrypt payload
+    val segment = CryptoUtil.encryptEbicsE002(
+        transactionKey,
+        payload.inputStream().deflate()
+    ).encodeBase64()
+    // TODO split 1MB segment when we have payloads that big
 
     return PreparedUploadData(
-        encryptionResult.encryptedTransactionKey, // ephemeral key
-        encryptionResult.encryptedData, // bank-pub-encrypted A006 signature.
-        CryptoUtil.digestEbicsOrderA006(payload), // used by EBICS 3
-        listOf(segment) // actual payload E002 encrypted.
+        encryptedTransactionKey,
+        orderSignature,
+        payloadDigest,
+        listOf(segment)
     )
 }
 
@@ -321,7 +323,7 @@ fun prepareUploadPayload(
  */
 suspend fun doEbicsUpload(
     client: HttpClient,
-    cfg: EbicsSetupConfig,
+    cfg: NexusConfig,
     clientKeys: ClientPrivateKeysFile,
     bankKeys: BankPublicKeysFile,
     order: EbicsOrder,
@@ -361,7 +363,7 @@ fun getNonce(size: Int): ByteArray {
 
 class PreparedUploadData(
     val transactionKey: ByteArray,
-    val userSignatureDataEncrypted: ByteArray,
+    val userSignatureDataEncrypted: String,
     val dataDigest: ByteArray,
     val segments: List<String>
 )

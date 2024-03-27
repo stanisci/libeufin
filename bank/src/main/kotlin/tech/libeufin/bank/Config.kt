@@ -28,9 +28,7 @@ import java.time.Duration
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 
-/**
- * Application the parsed configuration.
- */
+/** Configuration for libeufin-bank */
 data class BankConfig(
     val name: String,
     val regionalCurrency: String,

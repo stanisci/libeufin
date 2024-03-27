@@ -111,9 +111,9 @@ data class BankPublicKeysFile(
  */
 fun generateNewKeys(): ClientPrivateKeysFile =
     ClientPrivateKeysFile(
-        authentication_private_key = CryptoUtil.generateRsaKeyPair(2048).private,
-        encryption_private_key = CryptoUtil.generateRsaKeyPair(2048).private,
-        signature_private_key = CryptoUtil.generateRsaKeyPair(2048).private,
+        authentication_private_key = CryptoUtil.genRSAPrivate(2048),
+        encryption_private_key = CryptoUtil.genRSAPrivate(2048),
+        signature_private_key = CryptoUtil.genRSAPrivate(2048),
         submitted_hia = false,
         submitted_ini = false
     )
@@ -202,18 +202,16 @@ fun loadClientKeys(location: Path): ClientPrivateKeysFile? = loadJsonFile(locati
  * @param cfg configuration handle.
  * @return both client and bank keys
  */
-fun expectFullKeys(
-    cfg: EbicsSetupConfig
-): Pair<ClientPrivateKeysFile, BankPublicKeysFile> {
-    val clientKeys = loadClientKeys(cfg.clientPrivateKeysFilename)
+fun expectFullKeys(cfg: NexusConfig): Pair<ClientPrivateKeysFile, BankPublicKeysFile> {
+    val clientKeys = loadClientKeys(cfg.clientPrivateKeysPath)
     if (clientKeys == null) {
-        throw Exception("Missing client private keys file at '${cfg.clientPrivateKeysFilename}', run 'libeufin-nexus ebics-setup' first")
+        throw Exception("Missing client private keys file at '${cfg.clientPrivateKeysPath}', run 'libeufin-nexus ebics-setup' first")
     } else if (!clientKeys.submitted_ini || !clientKeys.submitted_hia) {
         throw Exception("Unsubmitted client private keys, run 'libeufin-nexus ebics-setup' first")
     }
-    val bankKeys = loadBankKeys(cfg.bankPublicKeysFilename)
+    val bankKeys = loadBankKeys(cfg.bankPublicKeysPath)
     if (bankKeys == null) {
-        throw Exception("Missing bank public keys at '${cfg.bankPublicKeysFilename}', run 'libeufin-nexus ebics-setup' first")
+        throw Exception("Missing bank public keys at '${cfg.bankPublicKeysPath}', run 'libeufin-nexus ebics-setup' first")
     } else if (!bankKeys.accepted) {
         throw Exception("Unaccepted bank public keys, run 'libeufin-nexus ebics-setup' until accepting the bank keys")
     }

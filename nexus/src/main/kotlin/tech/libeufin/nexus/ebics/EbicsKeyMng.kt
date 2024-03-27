@@ -25,7 +25,6 @@ import tech.libeufin.common.*
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.BankPublicKeysFile
 import tech.libeufin.nexus.ClientPrivateKeysFile
-import tech.libeufin.nexus.EbicsSetupConfig
 import java.io.InputStream
 import java.time.Instant
 import java.time.ZoneId
@@ -36,7 +35,7 @@ import tech.libeufin.nexus.ebics.EbicsKeyMng.Order.*
 
 /** EBICS protocol for key management */
 class EbicsKeyMng(
-    private val cfg: EbicsSetupConfig,
+    private val cfg: NexusConfig,
     private val clientKeys: ClientPrivateKeysFile,
     private val ebics3: Boolean
 ) {
@@ -54,13 +53,13 @@ class EbicsKeyMng(
             HPB -> Triple("ebicsNoPubKeyDigestsRequest", "0000", "DZHNN")
         }
         val data = when (order) {
-            INI -> XMLOrderData(cfg, "SignaturePubKeyOrderData", "http://www.ebics.org/S00${if (ebics3) 2 else 1}") {
+            INI -> XMLOrderData("SignaturePubKeyOrderData", "http://www.ebics.org/S00${if (ebics3) 2 else 1}") {
                 el("SignaturePubKeyInfo") {
                     RSAKeyXml(clientKeys.signature_private_key)
                     el("SignatureVersion", "A006")
                 }
             }
-            HIA -> XMLOrderData(cfg, "HIARequestOrderData", "urn:org:ebics:$schema") {
+            HIA -> XMLOrderData("HIARequestOrderData", "urn:org:ebics:$schema") {
                 el("AuthenticationPubKeyInfo") {
                     RSAKeyXml(clientKeys.authentication_private_key)
                     el("AuthenticationVersion", "X002")
@@ -111,7 +110,7 @@ class EbicsKeyMng(
 
     private fun XmlBuilder.RSAKeyXml(key: RSAPrivateCrtKey) {
         if (ebics3) {
-            val cert = CryptoUtil.X509CertificateFromRSAPrivate(key, cfg.myIbanAccount.name)
+            val cert = CryptoUtil.X509CertificateFromRSAPrivate(key, cfg.account.name)
             el("ds:X509Data") {
                 el("ds:X509Certificate", cert.encoded.encodeBase64())
             }
@@ -125,7 +124,7 @@ class EbicsKeyMng(
         }
     }
     
-    private fun XMLOrderData(cfg: EbicsSetupConfig, name: String, schema: String, build: XmlBuilder.() -> Unit): String {
+    private fun XMLOrderData(name: String, schema: String, build: XmlBuilder.() -> Unit): String {
         return XmlBuilder.toBytes(name) {
             attr("xmlns:ds", "http://www.w3.org/2000/09/xmldsig#")
             attr("xmlns", schema)

@@ -34,71 +34,38 @@ class CryptoUtilTest {
 
     @Test
     fun loadFromModulusAndExponent() {
-        val keyPair = CryptoUtil.generateRsaKeyPair(1024)
+        val public = CryptoUtil.genRSAPublic(1024)
         val pub2 = CryptoUtil.RSAPublicFromComponents(
-            keyPair.public.modulus.toByteArray(),
-            keyPair.public.publicExponent.toByteArray()
+            public.modulus.toByteArray(),
+            public.publicExponent.toByteArray()
         )
-        assertEquals(keyPair.public, pub2)
-    }
-
-    @Test
-    fun keyGeneration() {
-        val gen: KeyPairGenerator = KeyPairGenerator.getInstance("RSA")
-        gen.initialize(2048)
-        val pair = gen.genKeyPair()
-        println(pair.private)
-        assertTrue(pair.private is RSAPrivateCrtKey)
+        assertEquals(public, pub2)
     }
 
     @Test
     fun testCryptoUtilBasics() {
-        val keyPair = CryptoUtil.generateRsaKeyPair(1024)
-        val encodedPriv = keyPair.private.encoded
-        val encodedPub = keyPair.public.encoded
-        val otherKeyPair =
-            CryptoUtil.RsaCrtKeyPair(CryptoUtil.loadRSAPrivate(encodedPriv), CryptoUtil.loadRSAPublic(encodedPub))
-        assertEquals(keyPair.private, otherKeyPair.private)
-        assertEquals(keyPair.public, otherKeyPair.public)
+        val (private, public) = CryptoUtil.genRSAPair(1024)
+        assertEquals(private, CryptoUtil.loadRSAPrivate(private.encoded))
+        assertEquals(public, CryptoUtil.loadRSAPublic(public.encoded))
     }
 
     @Test
     fun testEbicsE002() {
         val data = "Hello, World!".toByteArray()
-        val keyPair = CryptoUtil.generateRsaKeyPair(1024)
-        val enc = CryptoUtil.encryptEbicsE002(data.inputStream(), keyPair.public)
-        val dec = CryptoUtil.decryptEbicsE002(enc, keyPair.private)
+        val (private, public) = CryptoUtil.genRSAPair(1024)
+        val (txKey, encryptedKey) = CryptoUtil.genEbicsE002Key(public)
+        val enc = CryptoUtil.encryptEbicsE002(txKey, data.inputStream())
+        val txKey2 = CryptoUtil.decryptEbicsE002Key(private, encryptedKey)
+        val dec = CryptoUtil.decryptEbicsE002(txKey2, enc).readBytes()
         assertTrue(data.contentEquals(dec))
     }
 
     @Test
     fun testEbicsA006() {
-        val keyPair = CryptoUtil.generateRsaKeyPair(1024)
+        val (private, public) = CryptoUtil.genRSAPair(1024)
         val data = "Hello, World".toByteArray(Charsets.UTF_8)
-        val sig = CryptoUtil.signEbicsA006(data, keyPair.private)
-        assertTrue(CryptoUtil.verifyEbicsA006(sig, data, keyPair.public))
-    }
-
-    @Test
-    fun testPassphraseEncryption() {
-
-        val keyPair = CryptoUtil.generateRsaKeyPair(1024)
-
-        /* encrypt with original key */
-        val data = "Hello, World!".toByteArray(Charsets.UTF_8)
-        val secret = CryptoUtil.encryptEbicsE002(data.inputStream(), keyPair.public)
-
-        /* encrypt and decrypt private key */
-        val encPriv = CryptoUtil.encryptKey(keyPair.private.encoded, "secret")
-        val plainPriv = CryptoUtil.decryptKey(EncryptedPrivateKeyInfo(encPriv), "secret")
-
-        /* decrypt with decrypted private key */
-        val revealed = CryptoUtil.decryptEbicsE002(secret, plainPriv)
-
-        assertEquals(
-            String(revealed, charset = Charsets.UTF_8),
-            String(data, charset = Charsets.UTF_8)
-        )
+        val sig = CryptoUtil.signEbicsA006(data, private)
+        assertTrue(CryptoUtil.verifyEbicsA006(sig, data, public))
     }
 
     @Test

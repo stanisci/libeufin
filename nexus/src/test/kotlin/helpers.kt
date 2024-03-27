@@ -29,20 +29,20 @@ import kotlin.io.path.Path
 
 fun conf(
     conf: String = "test.conf",
-    lambda: suspend (EbicsSetupConfig) -> Unit
+    lambda: suspend (NexusConfig) -> Unit
 ) = runBlocking {
     val config = NEXUS_CONFIG_SOURCE.fromFile(Path("conf/$conf"))
-    val ctx = EbicsSetupConfig(config)
+    val ctx = NexusConfig(config)
     lambda(ctx) 
 }
 
 fun setup(
     conf: String = "test.conf",
-    lambda: suspend (Database, EbicsSetupConfig) -> Unit
+    lambda: suspend (Database, NexusConfig) -> Unit
 ) = runBlocking {
     val config = NEXUS_CONFIG_SOURCE.fromFile(Path("conf/$conf"))
     val dbCfg = config.dbConfig()
-    val ctx = EbicsSetupConfig(config)
+    val ctx = NexusConfig(config)
     Database(dbCfg.dbConnStr).use { 
         it.conn { conn ->
             resetDatabaseTables(conn, dbCfg, "libeufin-nexus")

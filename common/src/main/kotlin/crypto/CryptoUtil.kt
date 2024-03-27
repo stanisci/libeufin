@@ -45,18 +45,6 @@ import tech.libeufin.common.*
 
 /** Helpers for dealing with cryptographic operations in EBICS / LibEuFin */
 object CryptoUtil {
-    /**
-     * RSA key pair.
-     */
-    data class RsaCrtKeyPair(val private: RSAPrivateCrtKey, val public: RSAPublicKey)
-
-    // FIXME(dold): This abstraction needs to be improved.
-    class EncryptionResult(
-        val encryptedTransactionKey: ByteArray,
-        val pubKeyDigest: ByteArray,
-        val encryptedData: ByteArray,
-        val plainTransactionKey: SecretKey
-    )
 
     private val provider = BouncyCastleProvider()
 
@@ -137,23 +125,17 @@ object CryptoUtil {
 
     }
 
-    /**
-     * Generate a fresh RSA key pair.
-     *
-     * @param nbits size of the modulus in bits
-     */
-    fun generateRsaKeyPair(nbits: Int): RsaCrtKeyPair {
+    /** Generate an RSA key pair of [keysize] */
+    fun genRSAPair(keysize: Int): Pair<RSAPrivateCrtKey, RSAPublicKey> {
         val gen = KeyPairGenerator.getInstance("RSA")
-        gen.initialize(nbits)
+        gen.initialize(keysize)
         val pair = gen.genKeyPair()
-        val priv = pair.private
-        val pub = pair.public
-        if (priv !is RSAPrivateCrtKey)
-            throw Exception("key generation failed")
-        if (pub !is RSAPublicKey)
-            throw Exception("key generation failed")
-        return RsaCrtKeyPair(priv, pub)
+        return Pair(pair.private as RSAPrivateCrtKey, pair.public as RSAPublicKey)
     }
+    /** Generate an RSA private key of [keysize] */
+    fun genRSAPrivate(keysize: Int): RSAPrivateCrtKey = genRSAPair(keysize).first
+    /** Generate an RSA public key of [keysize] */
+    fun genRSAPublic(keysize: Int): RSAPublicKey = genRSAPair(keysize).second
 
     /**
      * Hash an RSA public key according to the EBICS standard (EBICS 2.5: 4.4.1.2.3).
@@ -167,73 +149,61 @@ object CryptoUtil {
         return digest.digest(keyBytes.toByteArray())
     }
 
-    fun encryptEbicsE002(data: InputStream, encryptionPublicKey: RSAPublicKey): EncryptionResult {
+    fun genEbicsE002Key(encryptionPublicKey: RSAPublicKey): Pair<SecretKey, ByteArray> {
+        // Gen transaction key
         val keygen = KeyGenerator.getInstance("AES", provider)
         keygen.init(128)
         val transactionKey = keygen.generateKey()
-        return encryptEbicsE002withTransactionKey(
-            data,
-            encryptionPublicKey,
-            transactionKey
+        // Encrypt transaction keyA
+        val cipher = Cipher.getInstance(
+            "RSA/None/PKCS1Padding",
+            provider
         )
+        cipher.init(Cipher.ENCRYPT_MODE, encryptionPublicKey)
+        val encryptedTransactionKey = cipher.doFinal(transactionKey.encoded)
+        return Pair(transactionKey, encryptedTransactionKey)
     }
+    
     /**
      * Encrypt data according to the EBICS E002 encryption process.
      */
-    fun encryptEbicsE002withTransactionKey(
-        data: InputStream,
-        encryptionPublicKey: RSAPublicKey,
-        transactionKey: SecretKey
-    ): EncryptionResult {
-        val symmetricCipher = Cipher.getInstance(
+    fun encryptEbicsE002(
+        transactionKey: SecretKey,
+        data: InputStream
+    ): CipherInputStream {
+        val cipher = Cipher.getInstance(
             "AES/CBC/X9.23Padding",
             provider
         )
         val ivParameterSpec = IvParameterSpec(ByteArray(16))
-        symmetricCipher.init(Cipher.ENCRYPT_MODE, transactionKey, ivParameterSpec)
-        val encryptedData = CipherInputStream(data, symmetricCipher).readAllBytes()
-        val asymmetricCipher = Cipher.getInstance(
+        cipher.init(Cipher.ENCRYPT_MODE, transactionKey, ivParameterSpec)
+        return CipherInputStream(data, cipher)
+    }
+
+    fun decryptEbicsE002Key(
+        privateKey: RSAPrivateCrtKey,
+        encryptedTransactionKey: ByteArray
+    ): SecretKeySpec {
+        val cipher = Cipher.getInstance(
             "RSA/None/PKCS1Padding",
             provider
         )
-        asymmetricCipher.init(Cipher.ENCRYPT_MODE, encryptionPublicKey)
-        val encryptedTransactionKey = asymmetricCipher.doFinal(transactionKey.encoded)
-        val pubKeyDigest = getEbicsPublicKeyHash(encryptionPublicKey)
-        return EncryptionResult(
-            encryptedTransactionKey,
-            pubKeyDigest,
-            encryptedData,
-            transactionKey
-        )
-    }
-
-    fun decryptEbicsE002(enc: EncryptionResult, privateKey: RSAPrivateCrtKey): ByteArray {
-        return decryptEbicsE002(
-            enc.encryptedTransactionKey,
-            enc.encryptedData.inputStream(),
-            privateKey
-        ).readBytes()
+        cipher.init(Cipher.DECRYPT_MODE, privateKey)
+        val transactionKeyBytes = cipher.doFinal(encryptedTransactionKey)
+        return SecretKeySpec(transactionKeyBytes, "AES")
     }
 
     fun decryptEbicsE002(
-        encryptedTransactionKey: ByteArray,
-        encryptedData: InputStream,
-        privateKey: RSAPrivateCrtKey
+        transactionKey: SecretKeySpec,
+        encryptedData: InputStream
     ): CipherInputStream {
-        val asymmetricCipher = Cipher.getInstance(
-            "RSA/None/PKCS1Padding",
-            provider
-        )
-        asymmetricCipher.init(Cipher.DECRYPT_MODE, privateKey)
-        val transactionKeyBytes = asymmetricCipher.doFinal(encryptedTransactionKey)
-        val secretKeySpec = SecretKeySpec(transactionKeyBytes, "AES")
-        val symmetricCipher = Cipher.getInstance(
+        val cipher = Cipher.getInstance(
             "AES/CBC/X9.23Padding",
             provider
         )
         val ivParameterSpec = IvParameterSpec(ByteArray(16))
-        symmetricCipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec)
-        return CipherInputStream(encryptedData, symmetricCipher)
+        cipher.init(Cipher.DECRYPT_MODE, transactionKey, ivParameterSpec)
+        return CipherInputStream(encryptedData, cipher)
     }
 
     /**
@@ -290,31 +260,6 @@ object CryptoUtil {
         return priv
     }
 
-    fun encryptKey(data: ByteArray, passphrase: String): ByteArray {
-        /* Cipher parameters: salt and hash count */
-        val hashIterations = 30
-        val salt = ByteArray(8)
-        SecureRandom().nextBytes(salt)
-        val pbeParameterSpec = PBEParameterSpec(salt, hashIterations)
-        /* *Other* cipher parameters: symmetric key (from password) */
-        val pbeAlgorithm = "PBEWithSHA1AndDESede"
-        val pbeKeySpec = PBEKeySpec(passphrase.toCharArray())
-        val keyFactory = SecretKeyFactory.getInstance(pbeAlgorithm)
-        val secretKey = keyFactory.generateSecret(pbeKeySpec)
-        /* Make a cipher */
-        val cipher = Cipher.getInstance(pbeAlgorithm)
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey, pbeParameterSpec)
-        /* ready to encrypt now */
-        val cipherText = cipher.doFinal(data)
-        /* Must now bundle a PKCS#8-compatible object, that contains
-         * algorithm, salt and hash count information */
-        val bundleAlgorithmParams = AlgorithmParameters.getInstance(pbeAlgorithm)
-        bundleAlgorithmParams.init(pbeParameterSpec)
-        val bundle = EncryptedPrivateKeyInfo(bundleAlgorithmParams, cipherText)
-        return bundle.encoded
-    }
-
-    fun hashStringSHA256(input: String): ByteArray {
-        return MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
-    }
+    fun hashStringSHA256(input: String): ByteArray =
+        MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
 }

@@ -40,7 +40,7 @@ fun Instant.xmlDateTime(): String =
 
 /** EBICS protocol for business transactions */
 class EbicsBTS(
-    val cfg: EbicsSetupConfig, 
+    val cfg: NexusConfig, 
     val bankKeys: BankPublicKeysFile,
     val clientKeys: ClientPrivateKeysFile,
     val order: EbicsOrder
@@ -217,7 +217,7 @@ class EbicsBTS(
                     }
                     el("SignatureData") {
                         attr("authenticate", "true")
-                        text(uploadData.userSignatureDataEncrypted.encodeBase64())
+                        text(uploadData.userSignatureDataEncrypted)
                     }
                     el("DataDigest") {
                         attr("SignatureVersion", "A006")
