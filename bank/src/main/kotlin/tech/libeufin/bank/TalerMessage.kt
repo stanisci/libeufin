@@ -158,15 +158,15 @@ data class ChallengeContactData(
     val phone: Option<String?> = Option.None
 ) {
     init {
-        if (email.get()?.let { !EMAIL_PATTERN.matches(it) } == true)
+        if (email.get()?.let { !EMAIL_PATTERN.matches(it) } ?: false)
             throw badRequest("email contact data '$email' is malformed")
 
-        if (phone.get()?.let { !PHONE_PATTERN.matches(it) } == true)
+        if (phone.get()?.let { !PHONE_PATTERN.matches(it) } ?: false)
             throw badRequest("phone contact data '$phone' is malformed")
     }
     companion object {
         private val EMAIL_PATTERN = Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}")
-        private val PHONE_PATTERN = Regex("^\\+?[0-9]+$")
+        private val PHONE_PATTERN = Regex("\\+?[0-9]+")
     }
 }
 
@@ -183,7 +183,17 @@ data class RegisterAccountRequest(
     val payto_uri: Payto? = null,
     val debit_threshold: TalerAmount? = null,
     val tan_channel: TanChannel? = null,
-)
+) {
+    init {
+        println(username)
+        if (!USERNAME_REGEX.matches(username))
+            throw badRequest("username '$username' is malformed")
+    }
+
+    companion object {
+        private val USERNAME_REGEX = Regex("[a-zA-Z0-9\\-\\._~]+")
+    }
+}
 
 @Serializable
 data class RegisterAccountResponse(

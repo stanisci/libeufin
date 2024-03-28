@@ -108,7 +108,7 @@ common-test: install-nobuild-files
 	./gradlew :common:test --tests $(test) -i
 
 .PHONY: testbench-test
-testbench-test: install-nobuild-files
+integration-test: install-nobuild-files
 	./gradlew :testbench:test --tests $(test) -i
 
 .PHONY: testbench

@@ -327,6 +327,34 @@ class CoreBankAccountsApiTest {
         client.getA("/accounts/cashout_keep").assertOkJson<AccountData> {
             assertEquals(full, it.cashout_payto_uri)
         }
+
+        // Check input restrictions
+        obj {
+            "username" to "username"
+            "password" to "password"
+            "name" to "Name"
+        }.let { req ->
+            client.post("/accounts") {
+                json(req) { "username" to "bad/username" }
+            }.assertBadRequest()
+            client.post("/accounts") {
+                json(req) { "username" to " spaces " }
+            }.assertBadRequest()
+            client.post("/accounts") {
+                json(req) {
+                    "contact_data" to obj {
+                        "phone" to " +456"
+                    }
+                }
+            }.assertBadRequest()
+            client.post("/accounts") {
+                json(req) {
+                    "contact_data" to obj {
+                        "phone" to " test@mail.com"
+                    }
+                }
+            }.assertBadRequest()
+        }
     }
 
     // Test account created with bonus
