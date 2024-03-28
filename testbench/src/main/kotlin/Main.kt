@@ -53,6 +53,7 @@ fun ask(question: String): String? {
 
 fun CliktCommand.run(arg: String): Boolean {
     val res = this.test(arg)
+    print(res.output)
     if (res.statusCode != 0) {
         println("\u001b[;31mERROR ${res.statusCode}\u001b[0m")
     } else {
@@ -142,6 +143,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                 put("status", "Fetch CustomerPaymentStatusReport", "ebics-fetch $ebicsFlags status")
                 put("notification", "Fetch BankToCustomerDebitCreditNotification", "ebics-fetch $ebicsFlags notification")
                 put("submit", "Submit pending transactions", "ebics-submit $ebicsFlags")
+                put("setup", "Setup", "ebics-setup $flags")
                 put("reset-keys", suspend {
                     if (kind.test) {
                         clientKeysPath.deleteIfExists()

@@ -145,7 +145,7 @@ data class CustomerAck(
 
 /** Parse HAC pain.002 XML file */
 fun parseCustomerAck(xml: InputStream): List<CustomerAck> {
-    return destructXml(xml, "Document") {
+    return XmlDestructor.fromStream(xml, "Document") {
         one("CstmrPmtStsRpt").map("OrgnlPmtInfAndSts") {
             val actionType = one("OrgnlPmtInfId").enum<HacAction>()
             one("StsRsnInf") {
@@ -219,7 +219,7 @@ fun parseCustomerPaymentStatusReport(xml: InputStream): PaymentStatus {
             Reason(code, "")
         }
     }
-    return destructXml(xml, "Document") {
+    return XmlDestructor.fromStream(xml, "Document") {
         // TODO handle batch status
         one("CstmrPmtStsRpt") {
             val (msgId, msgCode, msgReasons) = one("OrgnlGrpInfAndSts") {
@@ -288,7 +288,7 @@ fun parseTxNotif(
     fun notificationForEachTx(
         directionLambda: XmlDestructor.(Instant, Boolean, String?) -> Unit
     ) {
-        destructXml(notifXml, "Document") {
+        XmlDestructor.fromStream(notifXml, "Document") {
             opt("BkToCstmrDbtCdtNtfctn")?.each("Ntfctn") {
                 each("Ntry") {
                     val reversal = opt("RvslInd")?.bool() ?: false

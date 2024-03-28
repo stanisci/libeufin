@@ -258,6 +258,16 @@ suspend fun ebicsDownload(
     Unit
 }
 
+suspend fun HEV(
+    client: HttpClient,
+    cfg: NexusConfig
+): List<VersionNumber> {
+    logger.info("Doing administrative request HEV")
+    val req = EbicsAdministrative.HEV(cfg)
+    val xml = client.postToBank(cfg.hostBaseUrl, req, "HEV")
+    return EbicsAdministrative.parseHEV(xml).okOrFail("HEV")
+}
+
 /**
  * Signs and the encrypts the data to send via EBICS.
  *

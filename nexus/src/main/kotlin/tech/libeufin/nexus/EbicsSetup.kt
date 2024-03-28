@@ -198,14 +198,21 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
      */
     override fun run() = cliCmd(logger, common.log) {
         val cfg = extractEbicsConfig(common.config)
-        // Config is sane.  Go (maybe) making the private keys.
-        val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysPath)
         val client =  HttpClient {
             install(HttpTimeout) {
                 // It can take a lot of time for the bank to generate documents
                 socketTimeoutMillis = 5 * 60 * 1000
             }
         }
+
+        // Check EBICS 3 support
+        val versions = HEV(client, cfg)
+        logger.debug("HEV: $versions")
+        if (!versions.contains(VersionNumber(3.0f, "H005")) && !versions.contains(VersionNumber(3.02f, "H005"))) {
+            throw Exception("EBICS 3 is not supported by your bank")
+        }
+
+        val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysPath)
         // Privs exist.  Upload their pubs
         val keysNotSub = !clientKeys.submitted_ini
         if ((!clientKeys.submitted_ini) || forceKeysResubmission)
@@ -215,7 +222,7 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         if ((!clientKeys.submitted_hia) || forceKeysResubmission)
             doKeysRequestAndUpdateState(cfg, clientKeys, client, HIA)
         
-        // Checking if the bank keys exist on disk.
+        // Checking if the bank keys exist on disk
         var bankKeys = loadBankKeys(cfg.bankPublicKeysPath)
         if (bankKeys == null) {
             doKeysRequestAndUpdateState(cfg, clientKeys, client, HPB)
@@ -236,6 +243,23 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
             } catch (e: Exception) {
                 throw Exception("Could not set bank keys as accepted on disk", e)
             }
+        }
+
+        // Check account information
+        logger.info("Doing administrative request HKD")
+        try {
+            ebicsDownload(client, cfg, clientKeys, bankKeys, EbicsOrder.V3("HKD"), null, null) { stream ->
+                val account = EbicsAdministrative.parseHKD(stream)
+                // TODO parse and check more information
+                if (account.currency != null && account.currency != cfg.currency)
+                    logger.warn("Expected CURRENCY '${cfg.currency}' from config got '${account.currency}' from bank")
+                if (account.iban != null && account.iban != cfg.account.iban)
+                    logger.warn("Expected IBAN '${cfg.account.iban}' from config got '${account.iban}' from bank")
+                if (account.name != null && account.name != cfg.account.name)
+                    logger.warn("Expected NAME '${cfg.account.name}' from config got '${account.name}' from bank")
+            }
+        } catch (e: Exception) {
+            logger.warn("HKD failed: ${e.fmt()}")
         }
         
         println("setup ready")

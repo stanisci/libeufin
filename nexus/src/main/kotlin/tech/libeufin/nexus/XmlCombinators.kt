@@ -199,6 +199,3 @@ class XmlDestructor internal constructor(private val el: Element) {
         }
     }
 }
-
-fun <T> destructXml(xml: InputStream, root: String, f: XmlDestructor.() -> T): T 
-    = XmlDestructor.fromStream(xml, root, f)
