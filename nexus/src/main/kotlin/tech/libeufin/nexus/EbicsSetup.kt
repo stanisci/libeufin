@@ -205,6 +205,9 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
             }
         }
 
+        val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysPath)
+        var bankKeys = loadBankKeys(cfg.bankPublicKeysPath)
+
         // Check EBICS 3 support
         val versions = HEV(client, cfg)
         logger.debug("HEV: $versions")
@@ -212,7 +215,6 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
             throw Exception("EBICS 3 is not supported by your bank")
         }
 
-        val clientKeys = loadOrGenerateClientKeys(cfg.clientPrivateKeysPath)
         // Privs exist.  Upload their pubs
         val keysNotSub = !clientKeys.submitted_ini
         if ((!clientKeys.submitted_ini) || forceKeysResubmission)
@@ -223,7 +225,6 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
             doKeysRequestAndUpdateState(cfg, clientKeys, client, HIA)
         
         // Checking if the bank keys exist on disk
-        var bankKeys = loadBankKeys(cfg.bankPublicKeysPath)
         if (bankKeys == null) {
             doKeysRequestAndUpdateState(cfg, clientKeys, client, HPB)
             logger.info("Bank keys stored at ${cfg.bankPublicKeysPath}")
