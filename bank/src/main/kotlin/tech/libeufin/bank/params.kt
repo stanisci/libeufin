@@ -42,7 +42,6 @@ fun Parameters.uuid(name: String): UUID? {
         try {
             UUID.fromString(this)
         } catch (e: Exception) {
-            println("$this $e")
             throw badRequest("Param '$name' not an UUID", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
         }
     } 

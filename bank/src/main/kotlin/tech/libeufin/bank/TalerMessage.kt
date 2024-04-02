@@ -185,7 +185,6 @@ data class RegisterAccountRequest(
     val tan_channel: TanChannel? = null,
 ) {
     init {
-        println(username)
         if (!USERNAME_REGEX.matches(username))
             throw badRequest("username '$username' is malformed")
     }
