@@ -42,8 +42,10 @@ override_dh_installsystemd:
 	dh_installsystemd -plibeufin-bank --name=libeufin-bank --no-start --no-enable
 	dh_installsystemd -plibeufin-bank --name=libeufin-bank-gc --no-start --no-enable
 	dh_installsystemd -plibeufin-bank --name=libeufin-bank-gc.timer --no-start --no-enable
+	dh_installsystemd -plibeufin-bank --name=libeufin-bank --no-start --no-enable
 	dh_installsystemd -plibeufin-nexus --name=libeufin-nexus-ebics-submit --no-start --no-enable
 	dh_installsystemd -plibeufin-nexus --name=libeufin-nexus-ebics-fetch --no-start --no-enable
+	dh_installsystemd -plibeufin-nexus --name=libeufin-nexus --no-start --no-enable
 	# final invocation to generate daemon reload
 	dh_installsystemd
 
