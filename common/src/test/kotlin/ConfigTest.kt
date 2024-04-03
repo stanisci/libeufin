@@ -18,8 +18,10 @@
  */
 
 import org.junit.Test
+import uk.org.webcompere.systemstubs.SystemStubs.*
 import java.time.Duration
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import kotlin.test.*
 
 class ConfigTest {
@@ -43,5 +45,20 @@ class ConfigTest {
             parseTime("1h10m12s")
         )
         assertEquals(parseTime("1h10m12s"), parseTime("1h10'12\""))
+    }
+
+    @Test
+    fun jdbcParsing() {
+        val user = currentUser()
+        assertFails { jdbcFromPg("test") }
+        assertEquals("jdbc:test", jdbcFromPg("jdbc:test"))
+        assertEquals("jdbc:postgresql://localhost/?user=$user&socketFactory=org.newsclub.net.unix.AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/var/run/postgresql/.s.PGSQL.5432", jdbcFromPg("postgresql:///"))
+        assertEquals("jdbc:postgresql://?host=args%2Dhost&user=arg%23%24User&password=%21%22%23%24%25%26%27%28%29", jdbcFromPg("postgresql://?host=args%2Dhost&user=arg%23%24User&password=%21%22%23%24%25%26%27%28%29"))
+        withEnvironmentVariable("PGPORT", "1234").execute {
+            assertEquals("jdbc:postgresql://localhost/?user=$user&socketFactory=org.newsclub.net.unix.AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/var/run/postgresql/.s.PGSQL.1234", jdbcFromPg("postgresql:///"))
+        }
+        withEnvironmentVariable("PGPORT", "1234").and("PGHOST", "/tmp").execute {
+            assertEquals("jdbc:postgresql://localhost/?user=antoine&socketFactory=org.newsclub.net.unix.AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/tmp/.s.PGSQL.1234", jdbcFromPg("postgresql:///"))
+        }
     }
 }
