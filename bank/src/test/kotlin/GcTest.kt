@@ -25,6 +25,7 @@ import tech.libeufin.bank.db.TransactionDAO.*
 import tech.libeufin.bank.db.CashoutDAO.CashoutCreationResult
 import tech.libeufin.bank.db.ExchangeDAO.TransferResult
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*

@@ -36,6 +36,7 @@ import kotlinx.coroutines.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.db.*
 import java.nio.file.Path

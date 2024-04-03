@@ -21,6 +21,7 @@ package tech.libeufin.bank.db
 
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.time.Instant
 
 /** Data access logic for exchange specific logic */

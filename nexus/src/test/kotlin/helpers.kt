@@ -22,6 +22,7 @@ import io.ktor.client.engine.mock.*
 import io.ktor.client.request.*
 import kotlinx.coroutines.runBlocking
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.db.*
 import java.time.Instant

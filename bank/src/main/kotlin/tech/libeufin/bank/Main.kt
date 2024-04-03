@@ -54,6 +54,7 @@ import org.slf4j.event.Level
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.net.InetAddress
 import java.sql.SQLException
 import java.util.zip.DataFormatException

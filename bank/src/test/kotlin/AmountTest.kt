@@ -22,6 +22,7 @@ import tech.libeufin.bank.DecimalNumber
 import tech.libeufin.bank.db.TransactionDAO.BankTransactionResult
 import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalCreationResult
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.time.Instant
 import java.util.*
 import kotlin.test.assertEquals

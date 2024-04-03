@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.time.Instant
 import java.util.*
 

@@ -23,6 +23,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.time.Instant
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-tx-dao")

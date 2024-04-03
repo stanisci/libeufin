@@ -26,6 +26,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 

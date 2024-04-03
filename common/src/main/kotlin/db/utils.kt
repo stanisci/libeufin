@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2024 Taler Systems S.A.
  *
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,12 +17,9 @@
  * <http://www.gnu.org/licenses/>
  */
 
-package tech.libeufin.common
+package tech.libeufin.common.db
 
-import com.zaxxer.hikari.HikariConfig
-import com.zaxxer.hikari.HikariDataSource
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import tech.libeufin.common.*
 import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.jdbc.PgConnection
 import org.postgresql.util.PSQLState
@@ -34,14 +31,8 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
 import kotlin.io.path.Path
-import kotlin.io.path.exists
-import kotlin.io.path.readText
 
-fun getCurrentUser(): String = System.getProperty("user.name")
-
-private val logger: Logger = LoggerFactory.getLogger("libeufin-db")
-
-// Check GANA (https://docs.gnunet.org/gana/index.html) for numbers allowance.
+internal val logger: Logger = LoggerFactory.getLogger("libeufin-db")
 
 /**
  * This function converts postgresql:// URIs to JDBC URIs.
@@ -228,128 +219,4 @@ fun PgConnection.dynamicUpdate(
         }
         executeUpdate()
     }
-}
-
-/**
- * Only runs versioning.sql if the _v schema is not found.
- *
- * @param conn database connection
- * @param cfg database configuration
- */
-fun maybeApplyV(conn: PgConnection, cfg: DatabaseConfig) {
-    conn.transaction {
-        val checkVSchema = conn.prepareStatement(
-            "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '_v'"
-        )
-        if (!checkVSchema.executeQueryCheck()) {
-            logger.debug("_v schema not found, applying versioning.sql")
-            val sqlVersioning = Path("${cfg.sqlDir}/versioning.sql").readText()
-            conn.execSQLUpdate(sqlVersioning)
-        }
-    }
-}
-
-// sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
-fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
-    logger.info("doing DB initialization, sqldir ${cfg.sqlDir}")
-    maybeApplyV(conn, cfg)
-    conn.transaction {
-        val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
-
-        for (n in 1..9999) {
-            val numStr = n.toString().padStart(4, '0')
-            val patchName = "$sqlFilePrefix-$numStr"
-
-            checkStmt.setString(1, patchName)
-            val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Exception("unable to query patches")
-            if (patchCount >= 1) {
-                logger.debug("patch $patchName already applied")
-                continue
-            }
-
-            val path = Path("${cfg.sqlDir}/$sqlFilePrefix-$numStr.sql")
-            if (!path.exists()) {
-                logger.debug("path $path doesn't exist anymore, stopping")
-                break
-            }
-            logger.info("applying patch $path")
-            val sqlPatchText = path.readText()
-            conn.execSQLUpdate(sqlPatchText)
-        }
-        val sqlProcedures = Path("${cfg.sqlDir}/$sqlFilePrefix-procedures.sql")
-        if (!sqlProcedures.exists()) {
-            logger.warn("no procedures.sql for the SQL collection: $sqlFilePrefix")
-            return@transaction
-        }
-        logger.info("run procedure.sql")
-        conn.execSQLUpdate(sqlProcedures.readText())
-    }
-}
-
-// sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
-fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
-    logger.info("reset DB, sqldir ${cfg.sqlDir}")
-    val sqlDrop = Path("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
-    conn.execSQLUpdate(sqlDrop)
-}
-
-open class DbPool(cfg: String, schema: String) : java.io.Closeable {
-    val pgSource = pgDataSource(cfg)
-    private val pool: HikariDataSource
-
-    init {
-        val config = HikariConfig()
-        config.dataSource = pgSource
-        config.schema = schema
-        config.transactionIsolation = "TRANSACTION_SERIALIZABLE"
-        pool = HikariDataSource(config)
-        pool.connection.use { con ->
-            val meta = con.metaData
-            val majorVersion = meta.databaseMajorVersion
-            val minorVersion = meta.databaseMinorVersion
-            if (majorVersion < MIN_VERSION) {
-                throw Exception("postgres version must be at least $MIN_VERSION.0 got $majorVersion.$minorVersion")
-            }
-        }
-    }
-
-    suspend fun <R> conn(lambda: suspend (PgConnection) -> R): R {
-        // Use a coroutine dispatcher that we can block as JDBC API is blocking
-        return withContext(Dispatchers.IO) {
-            pool.connection.use { lambda(it.unwrap(PgConnection::class.java)) }
-        }
-    }
-
-    suspend fun <R> serializable(lambda: suspend (PgConnection) -> R): R = conn { conn ->
-        repeat(SERIALIZATION_RETRY) {
-            try {
-                return@conn lambda(conn)
-            } catch (e: SQLException) {
-                if (e.sqlState != PSQLState.SERIALIZATION_FAILURE.state)
-                    throw e
-            }
-        }
-        try {
-            return@conn lambda(conn)
-        } catch (e: SQLException) {
-            logger.warn("Serialization failure after $SERIALIZATION_RETRY retry")
-            throw e
-        }
-    }
-
-    override fun close() {
-        pool.close()
-    }
-}
-
-fun ResultSet.getAmount(name: String, currency: String): TalerAmount {
-    return TalerAmount(
-        getLong("${name}_val"),
-        getInt("${name}_frac"),
-        currency
-    )
-}
-
-fun ResultSet.getBankPayto(payto: String, name: String, ctx: BankPaytoCtx): String {
-    return Payto.parse(getString(payto)).bank(getString(name), ctx)
 }

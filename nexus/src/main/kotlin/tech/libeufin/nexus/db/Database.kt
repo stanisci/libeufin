@@ -20,6 +20,7 @@ package tech.libeufin.nexus.db
 
 import org.postgresql.util.PSQLState
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import tech.libeufin.nexus.*
 import java.sql.PreparedStatement
 import java.sql.SQLException

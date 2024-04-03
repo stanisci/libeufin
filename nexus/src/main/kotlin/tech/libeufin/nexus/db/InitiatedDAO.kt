@@ -21,6 +21,7 @@ package tech.libeufin.nexus.db
 
 import tech.libeufin.nexus.*
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.time.Instant
 import java.sql.ResultSet
 

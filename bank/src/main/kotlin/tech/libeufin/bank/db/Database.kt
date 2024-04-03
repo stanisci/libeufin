@@ -28,6 +28,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.Types

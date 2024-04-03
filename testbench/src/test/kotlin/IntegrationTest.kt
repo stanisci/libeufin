@@ -23,6 +23,7 @@ import tech.libeufin.nexus.*
 import tech.libeufin.nexus.db.Database as NexusDb
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.time.Instant
 import java.util.Arrays
 import java.sql.SQLException

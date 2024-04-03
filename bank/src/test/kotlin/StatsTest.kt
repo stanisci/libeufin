@@ -23,6 +23,7 @@ import tech.libeufin.bank.MonitorResponse
 import tech.libeufin.bank.MonitorWithConversion
 import tech.libeufin.bank.Timeframe
 import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.time.Instant
 import java.time.LocalDateTime
 import kotlin.test.assertEquals

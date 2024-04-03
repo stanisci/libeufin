@@ -21,10 +21,9 @@ package tech.libeufin.bank.db
 
 import tech.libeufin.bank.BearerToken
 import tech.libeufin.bank.TokenScope
-import tech.libeufin.common.executeUpdateViolation
 import tech.libeufin.common.asInstant
-import tech.libeufin.common.oneOrNull
 import tech.libeufin.common.micros
+import tech.libeufin.common.db.*
 import java.time.Instant
 
 /** Data access logic for auth tokens */
