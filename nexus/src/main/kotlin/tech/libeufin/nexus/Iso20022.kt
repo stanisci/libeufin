@@ -244,11 +244,11 @@ fun parseCustomerPaymentStatusReport(xml: InputStream): PaymentStatus {
 }
 
 sealed interface TxNotification {
-    data class Incoming(val payment: IncomingPayment): TxNotification
-    data class Outgoing(val payment: OutgoingPayment): TxNotification
+    val executionTime: Instant
     data class Reversal(
         val msgId: String,
-        val reason: String?
+        val reason: String?,
+        override val executionTime: Instant
     ): TxNotification
 }
 
@@ -257,10 +257,10 @@ data class IncomingPayment(
     val amount: TalerAmount,
     val wireTransferSubject: String,
     val debitPaytoUri: String,
-    val executionTime: Instant,
+    override val executionTime: Instant,
     /** ISO20022 AccountServicerReference */
     val bankId: String
-)  {
+): TxNotification {
     override fun toString(): String {
         return "IN ${executionTime.fmtDate()} $amount '$bankId' debitor=$debitPaytoUri subject=$wireTransferSubject"
     }
@@ -269,12 +269,12 @@ data class IncomingPayment(
 /** ISO20022 outgoing payment */
 data class OutgoingPayment(
     val amount: TalerAmount,
-    val executionTime: Instant,
+    override val executionTime: Instant,
     /** ISO20022 MessageIdentification */
     val messageId: String,
     val creditPaytoUri: String? = null, // not showing in camt.054
     val wireTransferSubject: String? = null // not showing in camt.054
-) {
+): TxNotification {
     override fun toString(): String {
         return "OUT ${executionTime.fmtDate()} $amount '$messageId' creditor=$creditPaytoUri subject=$wireTransferSubject"
     }
@@ -331,7 +331,8 @@ fun parseTxNotif(
             } else {
                 notifications.add(TxNotification.Reversal(
                     msgId = msgId,
-                    reason = info
+                    reason = info,
+                    executionTime = bookDate
                 ))
             }
             return@notificationForEachTx
@@ -358,24 +359,20 @@ fun parseTxNotif(
                         debtorPayto.append("?receiver-name=$urlEncName")
                     }
                 }
-                notifications.add(TxNotification.Incoming(
-                    IncomingPayment(
-                        amount = amount,
-                        bankId = bankId,
-                        debitPaytoUri = debtorPayto.toString(),
-                        executionTime = bookDate,
-                        wireTransferSubject = subject.toString()
-                    )
+                notifications.add(IncomingPayment(
+                    amount = amount,
+                    bankId = bankId,
+                    debitPaytoUri = debtorPayto.toString(),
+                    executionTime = bookDate,
+                    wireTransferSubject = subject.toString()
                 ))
             }
             "DBIT" -> {
                 val messageId = one("Refs").one("MsgId").text()
-                notifications.add(TxNotification.Outgoing(
-                    OutgoingPayment(
-                        amount = amount,
-                        messageId = messageId,
-                        executionTime = bookDate
-                    )
+                notifications.add(OutgoingPayment(
+                    amount = amount,
+                    messageId = messageId,
+                    executionTime = bookDate
                 ))
             }
             else -> throw Exception("Unknown transaction notification kind '$kind'")

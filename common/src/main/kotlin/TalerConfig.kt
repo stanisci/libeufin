@@ -24,8 +24,9 @@ import org.slf4j.LoggerFactory
 import java.nio.file.AccessDeniedException
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
+import java.time.*
 import java.time.temporal.ChronoUnit
-import java.time.Duration
+import java.time.format.DateTimeParseException
 import kotlin.io.path.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
@@ -490,6 +491,20 @@ class TalerConfig internal constructor(
 
     fun requireDuration(section: String, option: String): Duration =
         lookupDuration(section, option) ?: throw TalerConfigError.missing("temporal", section, option)
+
+    fun lookupDate(section: String, option: String): Instant? {
+        val raw = lookupString(section, option) ?: return null
+        val date = try {
+            LocalDate.parse(raw)
+        } catch (e: DateTimeParseException ) {
+            throw TalerConfigError.invalid("date", section, option, "'$raw' not a valid date at index ${e.errorIndex}")
+        }
+        return date.atStartOfDay(ZoneId.of("UTC")).toInstant()
+    }
+
+    fun requireDate(section: String, option: String): Instant =
+        lookupDate(section, option) ?: throw TalerConfigError.missing("date", section, option)
+    
 
     companion object {
         private val TIME_AMOUNT_PATTERN = Regex("([0-9]+) ?([a-z'\"]+)")

@@ -62,6 +62,11 @@ fun Instant.fmtDate(): String =
 fun Instant.fmtDateTime(): String =
     DateTimeFormatter.ISO_LOCAL_DATE_TIME.withZone(ZoneId.of("UTC")).format(this)
 
+class NexusFetchConfig(config: TalerConfig) {
+    val frequency = config.requireDuration("nexus-fetch", "frequency")
+    val ignoreBefore = config.lookupDate("nexus-fetch", "ignore_transactions_before")
+}
+
 /** Configuration for libeufin-nexus */
 class NexusConfig(val config: TalerConfig) {
     private fun requireString(option: String): String = config.requireString("nexus-ebics", option)
@@ -96,6 +101,8 @@ class NexusConfig(val config: TalerConfig) {
         if (this != "postfinance") throw Exception("Only 'postfinance' dialect is supported.")
         return@run this
     }
+
+    val fetch = NexusFetchConfig(config)
 }
 
 

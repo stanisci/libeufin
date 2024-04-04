@@ -144,20 +144,24 @@ suspend fun ingestIncomingPayment(
 
 private suspend fun ingestDocument(
     db: Database,
-    currency: String,
+    cfg: NexusConfig,
     xml: InputStream,
     whichDocument: SupportedDocument
 ) {
     when (whichDocument) {
         SupportedDocument.CAMT_054 -> {
             try {
-                parseTxNotif(xml, currency).forEach {
-                    when (it) {
-                        is TxNotification.Incoming -> ingestIncomingPayment(db, it.payment)
-                        is TxNotification.Outgoing -> ingestOutgoingPayment(db, it.payment)
-                        is TxNotification.Reversal -> {
-                            logger.error("BOUNCE '${it.msgId}': ${it.reason}")
-                            db.initiated.reversal(it.msgId, "Payment bounced: ${it.reason}")
+                parseTxNotif(xml, cfg.currency).forEach {
+                    if (cfg.fetch.ignoreBefore != null && it.executionTime < cfg.fetch.ignoreBefore) {
+                        logger.debug("IGNORE $it")
+                    } else {
+                        when (it) {
+                            is IncomingPayment -> ingestIncomingPayment(db, it)
+                            is OutgoingPayment -> ingestOutgoingPayment(db, it)
+                            is TxNotification.Reversal -> {
+                                logger.error("BOUNCE '${it.msgId}': ${it.reason}")
+                                db.initiated.reversal(it.msgId, "Payment bounced: ${it.reason}")
+                            }
                         }
                     }
                 }
@@ -211,7 +215,7 @@ private suspend fun ingestDocument(
 
 private suspend fun ingestDocuments(
     db: Database,
-    currency: String,
+    cfg: NexusConfig,
     content: InputStream,
     whichDocument: SupportedDocument
 ) {
@@ -223,13 +227,13 @@ private suspend fun ingestDocuments(
             try {
                 content.unzipEach { fileName, xmlContent ->
                     logger.trace("parse $fileName")
-                    ingestDocument(db, currency, xmlContent, whichDocument)
+                    ingestDocument(db, cfg, xmlContent, whichDocument)
                 }
             } catch (e: IOException) {
                 throw Exception("Could not open any ZIP archive", e)
             }
         }
-        SupportedDocument.PAIN_002_LOGS -> ingestDocument(db, currency, content, whichDocument)
+        SupportedDocument.PAIN_002_LOGS -> ingestDocument(db, cfg, content, whichDocument)
     }
 }
 
@@ -282,7 +286,7 @@ private suspend fun fetchDocuments(
                     stream,
                     doc == SupportedDocument.PAIN_002_LOGS
                 )
-                ingestDocuments(db, ctx.cfg.currency, loggedStream, doc)
+                ingestDocuments(db, ctx.cfg, loggedStream, doc)
             }
             true
         } catch (e: Exception) {
@@ -391,16 +395,15 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
                     throw Exception("Failed to fetch documents")
                 }
             } else {
-                var frequency: Duration = cfg.config.requireDuration("nexus-fetch", "frequency")
                 val raw = cfg.config.requireString("nexus-fetch", "frequency")
                 logger.debug("Running with a frequency of $raw")
-                if (frequency == Duration.ZERO) {
+                if (cfg.fetch.frequency == Duration.ZERO) {
                     logger.warn("Long-polling not implemented, running therefore in transient mode")
                 }
                 do {
                     fetchDocuments(db, ctx, docs)
-                    delay(frequency.toKotlinDuration())
-                } while (frequency != Duration.ZERO)
+                    delay(cfg.fetch.frequency.toKotlinDuration())
+                } while (cfg.fetch.frequency != Duration.ZERO)
             }
         }
     }
