@@ -62,12 +62,12 @@ fun setup(
     val config = talerConfig(Path("conf/$conf"))
     val dbCfg = config.loadDbConfig()
     val ctx = config.loadBankConfig()
-    Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use {
+    pgDataSource(dbCfg.dbConnStr).run {
+        dbInit(dbCfg, "libeufin-nexus", true)
+        dbInit(dbCfg, "libeufin-bank", true)
+    }
+    Database(dbCfg, ctx.regionalCurrency, ctx.fiatCurrency).use {
         it.conn { conn ->
-            resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
-            initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
-            resetDatabaseTables(conn, dbCfg, "libeufin-bank")
-            initializeDatabaseTables(conn, dbCfg, "libeufin-bank")
             val sqlProcedures = Path("${dbCfg.sqlDir}/libeufin-conversion-setup.sql")
             conn.execSQLUpdate(sqlProcedures.readText())
         }

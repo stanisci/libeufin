@@ -366,7 +366,7 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
         val cfg = extractEbicsConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
 
-        Database(dbCfg.dbConnStr).use { db ->
+        Database(dbCfg).use { db ->
             val (clientKeys, bankKeys) = expectFullKeys(cfg)
             val ctx = FetchContext(
                 cfg,

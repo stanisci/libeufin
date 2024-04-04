@@ -68,10 +68,11 @@ fun server(lambda: () -> Unit) {
    
 }
 
-fun setup(lambda: suspend (NexusDb) -> Unit) {
+fun setup(conf: String, lambda: suspend (NexusDb) -> Unit) {
     try {
         runBlocking {
-            NexusDb("postgresql:///libeufincheck").use {
+            val cfg = loadConfig(Path(conf)).dbConfig()
+            NexusDb(cfg).use {
                 lambda(it)
             }
         }
@@ -105,7 +106,7 @@ class IntegrationTest {
             bankCmd.run("serve $flags")
         }
         
-        setup { _ ->
+        setup("conf/mini.conf") { _ ->
             // Check bank is running
             client.get("http://0.0.0.0:8080/public-accounts").assertNoContent()
         }
@@ -129,7 +130,7 @@ class IntegrationTest {
             }
         }
 
-        setup { db ->
+        setup("conf/integration.conf")  { db ->
             val userPayTo = IbanPayto.rand()
             val fiatPayTo = IbanPayto.rand()
     
@@ -235,7 +236,7 @@ class IntegrationTest {
             bankCmd.run("serve $flags")
         }
         
-        setup { db -> 
+        setup("conf/integration.conf") { db -> 
             val userPayTo = IbanPayto.rand()
             val fiatPayTo = IbanPayto.rand()
 

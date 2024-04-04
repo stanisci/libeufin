@@ -44,11 +44,8 @@ fun setup(
     val config = NEXUS_CONFIG_SOURCE.fromFile(Path("conf/$conf"))
     val dbCfg = config.dbConfig()
     val ctx = NexusConfig(config)
-    Database(dbCfg.dbConnStr).use { 
-        it.conn { conn ->
-            resetDatabaseTables(conn, dbCfg, "libeufin-nexus")
-            initializeDatabaseTables(conn, dbCfg, "libeufin-nexus")
-        }
+    pgDataSource(dbCfg.dbConnStr).dbInit(dbCfg, "libeufin-nexus", true)
+    Database(dbCfg).use {
         lambda(it, ctx)
     }
 }

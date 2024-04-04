@@ -21,6 +21,8 @@ package tech.libeufin.common.db
 
 import tech.libeufin.common.*
 import org.postgresql.jdbc.PgConnection
+import org.postgresql.ds.PGSimpleDataSource
+import java.sql.Connection
 import kotlin.io.path.Path
 import kotlin.io.path.exists
 import kotlin.io.path.readText
@@ -31,7 +33,7 @@ import kotlin.io.path.readText
  * @param conn database connection
  * @param cfg database configuration
  */
-fun maybeApplyV(conn: PgConnection, cfg: DatabaseConfig) {
+private fun maybeApplyV(conn: PgConnection, cfg: DatabaseConfig) {
     conn.transaction {
         val checkVSchema = conn.prepareStatement(
             "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '_v'"
@@ -44,32 +46,35 @@ fun maybeApplyV(conn: PgConnection, cfg: DatabaseConfig) {
     }
 }
 
+private fun migrationsPath(sqlFilePrefix: String): Sequence<String> = sequence {
+    for (n in 1..9999) {
+        val padded = n.toString().padStart(4, '0')
+        yield("$sqlFilePrefix-$padded")
+    }
+}
+
 // sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
-fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
+private fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
     logger.info("doing DB initialization, sqldir ${cfg.sqlDir}")
     maybeApplyV(conn, cfg)
     conn.transaction {
-        val checkStmt = conn.prepareStatement("SELECT count(*) as n FROM _v.patches where patch_name = ?")
+        val checkStmt = conn.prepareStatement("SELECT EXISTS(SELECT FROM _v.patches where patch_name = ?)")
 
-        for (n in 1..9999) {
-            val numStr = n.toString().padStart(4, '0')
-            val patchName = "$sqlFilePrefix-$numStr"
-
+        for (patchName in migrationsPath(sqlFilePrefix)) {
             checkStmt.setString(1, patchName)
-            val patchCount = checkStmt.oneOrNull { it.getInt(1) } ?: throw Exception("unable to query patches")
-            if (patchCount >= 1) {
+            val applied = checkStmt.one { it.getBoolean(1) }
+            if (applied) {
                 logger.debug("patch $patchName already applied")
                 continue
             }
 
-            val path = Path("${cfg.sqlDir}/$sqlFilePrefix-$numStr.sql")
+            val path = Path("${cfg.sqlDir}/$patchName.sql")
             if (!path.exists()) {
                 logger.debug("path $path doesn't exist anymore, stopping")
                 break
             }
             logger.info("applying patch $path")
-            val sqlPatchText = path.readText()
-            conn.execSQLUpdate(sqlPatchText)
+            conn.execSQLUpdate(path.readText())
         }
         val sqlProcedures = Path("${cfg.sqlDir}/$sqlFilePrefix-procedures.sql")
         if (!sqlProcedures.exists()) {
@@ -81,9 +86,32 @@ fun initializeDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePre
     }
 }
 
+internal fun checkMigrations(conn: Connection, cfg: DatabaseConfig, sqlFilePrefix: String) {
+    val checkStmt = conn.prepareStatement("SELECT EXISTS(SELECT FROM _v.patches where patch_name = ?)")
+
+    for (patchName in migrationsPath(sqlFilePrefix)) {
+        checkStmt.setString(1, patchName)
+        val path = Path("${cfg.sqlDir}/$patchName.sql")
+        if (!path.exists()) break
+        val applied = checkStmt.one { it.getBoolean(1) }
+        if (!applied) {
+            throw Exception("patch $patchName not applied, run '$sqlFilePrefix dbinit'")
+        }
+    }
+}
+
 // sqlFilePrefix is, for example, "libeufin-bank" or "libeufin-nexus" (no trailing dash).
-fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
+private fun resetDatabaseTables(conn: PgConnection, cfg: DatabaseConfig, sqlFilePrefix: String) {
     logger.info("reset DB, sqldir ${cfg.sqlDir}")
     val sqlDrop = Path("${cfg.sqlDir}/$sqlFilePrefix-drop.sql").readText()
     conn.execSQLUpdate(sqlDrop)
+}
+
+fun PGSimpleDataSource.dbInit(cfg: DatabaseConfig, sqlFilePrefix: String, reset: Boolean) {
+    pgConnection().use { conn ->
+        if (reset) {
+            resetDatabaseTables(conn, cfg, sqlFilePrefix)
+        }
+        initializeDatabaseTables(conn, cfg, sqlFilePrefix)
+    }
 }

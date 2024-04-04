@@ -156,7 +156,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             httpClient = HttpClient(),
             fileLogger = FileLogger(ebicsLog)
         )
-        Database(dbCfg.dbConnStr).use { db -> 
+        Database(dbCfg).use { db -> 
             val frequency: Duration = if (transient) {
                 logger.info("Transient mode: submitting what found and returning.")
                 Duration.ZERO

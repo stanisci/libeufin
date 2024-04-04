@@ -253,7 +253,7 @@ fun Application.corebankWebApp(db: Database, ctx: BankConfig) {
 
 class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = "dbinit") {
     private val common by CommonOption()
-    private val requestReset by option(
+    private val reset by option(
         "--reset", "-r",
         help = "Reset database (DANGEROUS: All existing data is lost)"
     ).flag()
@@ -262,14 +262,8 @@ class BankDbInit : CliktCommand("Initialize the libeufin-bank database", name = 
         val config = talerConfig(common.config)
         val cfg = config.loadDbConfig()
         val ctx = config.loadBankConfig()
-        Database(cfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
-            db.conn { conn ->
-                if (requestReset) {
-                    resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
-                }
-                initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-bank")
-            }
-            
+        pgDataSource(cfg.dbConnStr).dbInit(cfg, "libeufin-bank", reset)
+        Database(cfg, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
             // Create admin account if missing
             val res = createAdminAccount(db, ctx) // logs provided by the helper
             when (res) {
@@ -292,7 +286,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val ctx = cfg.loadBankConfig()
         val dbCfg = cfg.loadDbConfig()
         val serverCfg = cfg.loadServerConfig()
-        Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
+        Database(dbCfg, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
             if (ctx.allowConversion) {
                 logger.info("Ensure exchange account exists")
                 val info = db.account.bankInfo("exchange", ctx.payto)
@@ -351,7 +345,7 @@ class ChangePw : CliktCommand("Change account password", name = "passwd") {
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
-        Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
+        Database(dbCfg, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
             val res = db.account.reconfigPassword(username, password, null, true)
             when (res) {
                 AccountPatchAuthResult.UnknownAccount ->
@@ -395,7 +389,7 @@ class EditAccount : CliktCommand(
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
-        Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
+        Database(dbCfg, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
             val req = AccountReconfiguration(
                 name = name,
                 is_taler_exchange = exchange,
@@ -472,7 +466,7 @@ class CreateAccount : CliktCommand(
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
 
-        Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
+        Database(dbCfg, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
             val req = json ?: options?.run {
                 RegisterAccountRequest(
                     username = username,
@@ -519,7 +513,7 @@ class GC : CliktCommand(
         val ctx = cfg.loadBankConfig() 
         val dbCfg = cfg.loadDbConfig()
 
-        Database(dbCfg.dbConnStr, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
+        Database(dbCfg, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
             logger.info("Run garbage collection")
             db.gc.collect(Instant.now(), ctx.gcAbortAfter, ctx.gcCleanAfter, ctx.gcDeleteAfter)
         }

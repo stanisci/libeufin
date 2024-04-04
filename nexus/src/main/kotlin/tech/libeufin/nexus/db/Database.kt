@@ -44,7 +44,7 @@ data class InitiatedPayment(
 /**
  * Collects database connection steps and any operation on the Nexus tables.
  */
-class Database(dbConfig: String): DbPool(dbConfig, "libeufin_nexus") {
+class Database(dbConfig: DatabaseConfig): DbPool(dbConfig, "libeufin_nexus") {
     val payment = PaymentDAO(this)
     val initiated = InitiatedDAO(this)
 }

@@ -37,7 +37,7 @@ import kotlin.math.abs
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db")
 
-class Database(dbConfig: String, internal val bankCurrency: String, internal val fiatCurrency: String?): DbPool(dbConfig, "libeufin_bank") {
+class Database(dbConfig: DatabaseConfig, internal val bankCurrency: String, internal val fiatCurrency: String?): DbPool(dbConfig, "libeufin-bank") {
     internal val notifWatcher: NotificationWatcher = NotificationWatcher(pgSource)
 
     val cashout = CashoutDAO(this)

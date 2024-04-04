@@ -28,14 +28,14 @@ import com.zaxxer.hikari.HikariDataSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-open class DbPool(cfg: String, schema: String) : java.io.Closeable {
-    val pgSource = pgDataSource(cfg)
+open class DbPool(cfg: DatabaseConfig, schema: String) : java.io.Closeable {
+    val pgSource = pgDataSource(cfg.dbConnStr)
     private val pool: HikariDataSource
 
     init {
         val config = HikariConfig()
         config.dataSource = pgSource
-        config.schema = schema
+        config.schema = schema.replace("-", "_")
         config.transactionIsolation = "TRANSACTION_SERIALIZABLE"
         pool = HikariDataSource(config)
         pool.connection.use { con ->
@@ -45,6 +45,7 @@ open class DbPool(cfg: String, schema: String) : java.io.Closeable {
             if (majorVersion < MIN_VERSION) {
                 throw Exception("postgres version must be at least $MIN_VERSION.0 got $majorVersion.$minorVersion")
             }
+            checkMigrations(con, cfg, schema)
         }
     }
 

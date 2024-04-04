@@ -32,18 +32,13 @@ import tech.libeufin.common.db.*
  */
 class DbInit : CliktCommand("Initialize the libeufin-nexus database", name = "dbinit") {
     private val common by CommonOption()
-    private val requestReset by option(
+    private val reset by option(
         "--reset", "-r",
         help = "Reset database (DANGEROUS: All existing data is lost)"
     ).flag()
 
     override fun run() = cliCmd(logger, common.log) {
         val cfg = loadConfig(common.config).dbConfig()
-        pgDataSource(cfg.dbConnStr).pgConnection().use { conn ->
-            if (requestReset) {
-                resetDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
-            }
-            initializeDatabaseTables(conn, cfg, sqlFilePrefix = "libeufin-nexus")
-        }
+        pgDataSource(cfg.dbConnStr).dbInit(cfg, "libeufin-nexus", reset)
     }
 }
