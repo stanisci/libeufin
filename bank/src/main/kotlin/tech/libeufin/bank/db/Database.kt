@@ -32,6 +32,7 @@ import tech.libeufin.common.db.*
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.Types
+import java.time.LocalDateTime
 import kotlin.math.abs
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db")
@@ -70,14 +71,10 @@ class Database(dbConfig: String, internal val bankCurrency: String, internal val
                 ,taler_out_count
                 ,(taler_out_volume).val as taler_out_volume_val
                 ,(taler_out_volume).frac as taler_out_volume_frac
-            FROM stats_get_frame(NULL, ?::stat_timeframe_enum, ?)
+            FROM stats_get_frame(?::timestamp, ?::stat_timeframe_enum)
         """)
-        stmt.setString(1, params.timeframe.name)
-        if (params.which != null) {
-            stmt.setInt(2, params.which)
-        } else {
-            stmt.setNull(2, Types.INTEGER)
-        }
+        stmt.setObject(1, params.date)
+        stmt.setString(2, params.timeframe.name)
         stmt.oneOrNull {
             fiatCurrency?.run {
                 MonitorWithConversion(

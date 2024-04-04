@@ -1281,9 +1281,8 @@ END $$;
 COMMENT ON FUNCTION tan_challenge_try IS 'Try to confirm a challenge, return true if the challenge have been confirmed';
 
 CREATE FUNCTION stats_get_frame(
-  IN now TIMESTAMP,
+  IN date TIMESTAMP,
   IN in_timeframe stat_timeframe_enum,
-  IN which INTEGER,
   OUT cashin_count INT8,
   OUT cashin_regional_volume taler_amount,
   OUT cashin_fiat_volume taler_amount,
@@ -1296,19 +1295,8 @@ CREATE FUNCTION stats_get_frame(
   OUT taler_out_volume taler_amount
 )
 LANGUAGE plpgsql AS $$
-DECLARE
-  local_start_time TIMESTAMP;
 BEGIN
-  IF now IS NULL THEN
-    now = timezone('utc', now())::TIMESTAMP;
-  END IF;
-  local_start_time = CASE 
-    WHEN which IS NULL          THEN date_trunc(in_timeframe::text, now)
-    WHEN in_timeframe = 'hour'  THEN date_trunc('day'  , now) + make_interval(hours  => which)
-    WHEN in_timeframe = 'day'   THEN date_trunc('month', now) + make_interval(days   => which-1)
-    WHEN in_timeframe = 'month' THEN date_trunc('year' , now) + make_interval(months => which-1)
-    WHEN in_timeframe = 'year'  THEN make_date(which, 1, 1)::TIMESTAMP
-  END;
+  date = date_trunc(in_timeframe::text, date);
   SELECT 
     s.cashin_count
     ,(s.cashin_regional_volume).val
@@ -1345,7 +1333,7 @@ BEGIN
     ,taler_out_volume.frac
   FROM bank_stats AS s
   WHERE s.timeframe = in_timeframe 
-    AND s.start_time = local_start_time;
+    AND s.start_time = date;
 END $$;
 
 CREATE PROCEDURE stats_register_payment(

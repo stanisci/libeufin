@@ -19,13 +19,13 @@
 
 import io.ktor.client.request.*
 import org.junit.Test
-import tech.libeufin.bank.MonitorResponse
-import tech.libeufin.bank.MonitorWithConversion
-import tech.libeufin.bank.Timeframe
+import tech.libeufin.bank.*
 import tech.libeufin.common.*
 import tech.libeufin.common.db.*
 import java.time.Instant
+import java.time.ZoneOffset
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import kotlin.test.assertEquals
 
 class StatsTest {
@@ -56,9 +56,10 @@ class StatsTest {
             fiatVolume: ((MonitorWithConversion) -> TalerAmount)? = null, 
             fiatAmount: String? = null
         ) {
-            Timeframe.entries.forEach { timestamp -> 
-                client.get("/monitor?timestamp=${timestamp.name}") { pwAuth("admin") }.assertOkJson<MonitorResponse> {
+            Timeframe.entries.forEach { timeframe -> 
+                client.get("/monitor?timestamp=${timeframe.name}") { pwAuth("admin") }.assertOkJson<MonitorResponse> {
                     val resp = it as MonitorWithConversion
+                    println("$resp")
                     assertEquals(count, dbCount(resp))
                     assertEquals(TalerAmount(regionalAmount), regionalVolume(resp))
                     fiatVolume?.run { assertEquals(TalerAmount(fiatAmount!!), this(resp)) }
@@ -131,39 +132,36 @@ class StatsTest {
             }
 
             suspend fun check(
-                now: LocalDateTime,
-                timeframe: Timeframe,
-                which: Int?,
+                params: MonitorParams,
                 count: Long,
                 amount: TalerAmount
             ) {
-                val stmt = conn.prepareStatement("""
-                    SELECT
-                        taler_out_count
-                        ,(taler_out_volume).val as taler_out_volume_val
-                        ,(taler_out_volume).frac as taler_out_volume_frac
-                    FROM stats_get_frame(?::timestamp, ?::stat_timeframe_enum, ?)
-                """)
-                stmt.setObject(1, now)
-                stmt.setString(2, timeframe.name)
-                if (which != null) {
-                    stmt.setInt(3, which)
-                } else {
-                    stmt.setNull(3, java.sql.Types.INTEGER)
-                }
-                stmt.oneOrNull {
-                    val talerOutCount = it.getLong("taler_out_count")
-                    val talerOutVolume = TalerAmount(
-                        value = it.getLong("taler_out_volume_val"),
-                        frac = it.getInt("taler_out_volume_frac"),
-                        currency = "KUDOS"
-                    )
-                    assertEquals(count, talerOutCount, "taler count")
-                    assertEquals(amount, talerOutVolume, "taler volume")
-                }!!
+                val res = db.monitor(params)
+                assertEquals(count, res.talerOutCount, "taler count")
+                assertEquals(amount, res.talerOutVolume, "taler volume")
             }
 
-            val now = LocalDateTime.now()
+            suspend fun checkSimple(
+                now: LocalDateTime,
+                timeframe: Timeframe,
+                count: Long,
+                amount: TalerAmount
+            ) = check(MonitorParams(timeframe, now), count, amount)
+            suspend fun checkWhich(
+                now: LocalDateTime,
+                timeframe: Timeframe,
+                which: Int,
+                count: Long,
+                amount: TalerAmount
+            ) = check(MonitorParams(timeframe, now, which), count, amount)
+            suspend fun checkDate(
+                secs: Long,
+                timeframe: Timeframe,
+                count: Long,
+                amount: TalerAmount
+            ) = check(MonitorParams(timeframe, secs), count, amount)
+
+            val now = LocalDateTime.now(ZoneOffset.UTC)
             val otherHour = now.withHour((now.hour + 1) % 24)
             val otherDay = now.withDayOfMonth((now.dayOfMonth) % 28 + 1)
             val otherMonth = now.withMonth((now.monthValue) % 12 + 1)
@@ -176,26 +174,36 @@ class StatsTest {
             register(otherYear, TalerAmount("KUDOS:50.0"))
 
             // Check with timestamp and truncating
-            check(now, Timeframe.hour, null, 1, TalerAmount("KUDOS:10.0"))
-            check(otherHour, Timeframe.hour, null, 1, TalerAmount("KUDOS:20.0"))
-            check(otherDay, Timeframe.day, null, 1, TalerAmount("KUDOS:35.0"))
-            check(otherMonth, Timeframe.month, null, 1, TalerAmount("KUDOS:40.0"))
-            check(otherYear, Timeframe.year, null, 1, TalerAmount("KUDOS:50.0"))
+            checkSimple(now, Timeframe.hour, 1, TalerAmount("KUDOS:10.0"))
+            checkSimple(otherHour, Timeframe.hour, 1, TalerAmount("KUDOS:20.0"))
+            checkSimple(otherDay, Timeframe.day, 1, TalerAmount("KUDOS:35.0"))
+            checkSimple(otherMonth, Timeframe.month, 1, TalerAmount("KUDOS:40.0"))
+            checkSimple(otherYear, Timeframe.year, 1, TalerAmount("KUDOS:50.0"))
 
             // Check with timestamp and intervals
-            check(now, Timeframe.hour, now.hour, 1, TalerAmount("KUDOS:10.0"))
-            check(now, Timeframe.hour, otherHour.hour, 1, TalerAmount("KUDOS:20.0"))
-            check(now, Timeframe.day, otherDay.dayOfMonth, 1, TalerAmount("KUDOS:35.0"))
-            check(now, Timeframe.month, otherMonth.monthValue, 1, TalerAmount("KUDOS:40.0"))
-            check(now, Timeframe.year, otherYear.year, 1, TalerAmount("KUDOS:50.0"))
+            checkWhich(now, Timeframe.hour, now.hour, 1, TalerAmount("KUDOS:10.0"))
+            checkWhich(now, Timeframe.hour, otherHour.hour, 1, TalerAmount("KUDOS:20.0"))
+            checkWhich(now, Timeframe.day, otherDay.dayOfMonth, 1, TalerAmount("KUDOS:35.0"))
+            checkWhich(now, Timeframe.month, otherMonth.monthValue, 1, TalerAmount("KUDOS:40.0"))
+            checkWhich(now, Timeframe.year, otherYear.year, 1, TalerAmount("KUDOS:50.0"))
+            
+            // Check with date seconds
+            checkDate(now.toEpochSecond(ZoneOffset.UTC), Timeframe.hour, 1, TalerAmount("KUDOS:10.0"))
+            checkDate(otherHour.toEpochSecond(ZoneOffset.UTC), Timeframe.hour, 1, TalerAmount("KUDOS:20.0"))
+            checkDate(otherDay.toEpochSecond(ZoneOffset.UTC), Timeframe.day, 1, TalerAmount("KUDOS:35.0"))
+            checkDate(otherMonth.toEpochSecond(ZoneOffset.UTC), Timeframe.month, 1, TalerAmount("KUDOS:40.0"))
+            checkDate(otherYear.toEpochSecond(ZoneOffset.UTC), Timeframe.year, 1, TalerAmount("KUDOS:50.0"))
 
             // Check timestamp aggregation
-            check(now, Timeframe.day, now.dayOfMonth, 2, TalerAmount("KUDOS:30.0"))
-            check(now, Timeframe.month, now.monthValue, 3, TalerAmount("KUDOS:65.0"))
-            check(now, Timeframe.year, now.year, 4, TalerAmount("KUDOS:105.0"))
-            check(now, Timeframe.day, null, 2, TalerAmount("KUDOS:30.0"))
-            check(now, Timeframe.month, null, 3, TalerAmount("KUDOS:65.0"))
-            check(now, Timeframe.year, null, 4, TalerAmount("KUDOS:105.0")) 
+            checkSimple(now, Timeframe.day, 2, TalerAmount("KUDOS:30.0"))
+            checkSimple(now, Timeframe.month, 3, TalerAmount("KUDOS:65.0"))
+            checkSimple(now, Timeframe.year, 4, TalerAmount("KUDOS:105.0")) 
+            checkWhich(now, Timeframe.day, now.dayOfMonth, 2, TalerAmount("KUDOS:30.0"))
+            checkWhich(now, Timeframe.month, now.monthValue, 3, TalerAmount("KUDOS:65.0"))
+            checkWhich(now, Timeframe.year, now.year, 4, TalerAmount("KUDOS:105.0"))
+            checkDate(now.toEpochSecond(ZoneOffset.UTC), Timeframe.day, 2, TalerAmount("KUDOS:30.0"))
+            checkDate(now.toEpochSecond(ZoneOffset.UTC), Timeframe.month, 3, TalerAmount("KUDOS:65.0"))
+            checkDate(now.toEpochSecond(ZoneOffset.UTC), Timeframe.year, 4, TalerAmount("KUDOS:105.0")) 
         }
     }
 }

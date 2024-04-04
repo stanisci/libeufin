@@ -22,7 +22,8 @@ package tech.libeufin.bank
 import io.ktor.http.*
 import tech.libeufin.common.TalerAmount
 import tech.libeufin.common.TalerErrorCode
-import java.time.OffsetDateTime
+import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
 import java.util.UUID
@@ -59,20 +60,39 @@ fun Parameters.amount(name: String): TalerAmount?
 
 data class MonitorParams(
     val timeframe: Timeframe,
-    val which: Int?
+    val date: LocalDateTime
 ) {
+    constructor(timeframe: Timeframe, now: LocalDateTime, which: Int) : this(
+        timeframe,
+        when (timeframe) {
+            Timeframe.hour -> now.withHour(which)
+            Timeframe.day -> now.withDayOfMonth(which)
+            Timeframe.month -> now.withMonth(which)
+            Timeframe.year -> now.withYear(which)
+        }
+    )
+    constructor(timeframe: Timeframe, secs: Long) : this(
+        timeframe,
+        LocalDateTime.ofInstant(Instant.ofEpochSecond(secs), ZoneOffset.UTC)
+    )
     companion object {
         val names = Timeframe.entries.map { it.name }
         val names_fmt = names.joinToString()
+        
         fun extract(params: Parameters): MonitorParams {
             val raw = params.get("timeframe") ?: "hour"
             if (!names.contains(raw)) {
                 throw badRequest("Param 'timeframe' must be one of $names_fmt", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
             }
             val timeframe = Timeframe.valueOf(raw)
+            val now = LocalDateTime.now(ZoneOffset.UTC)
             val which = params.int("which")
-            if (which != null) {
-                val lastDayOfMonth = OffsetDateTime.now(ZoneOffset.UTC).with(TemporalAdjusters.lastDayOfMonth()).dayOfMonth
+            val dateS = params.long("date_s")
+            if (which != null && dateS != null) {
+                throw badRequest("Cannot use both 'date_s' and deprecated 'which'", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
+            }
+            return if (which != null) {
+                val lastDayOfMonth = now.with(TemporalAdjusters.lastDayOfMonth()).dayOfMonth
                 when {
                     timeframe == Timeframe.hour && (0 > which || which > 23) -> 
                         throw badRequest("For hour timestamp param 'which' must be between 00 to 23", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
@@ -84,8 +104,12 @@ data class MonitorParams(
                         throw badRequest("For year timestamp param 'which' must be between 0001 to 9999", TalerErrorCode.GENERIC_PARAMETER_MALFORMED)
                     else -> {}
                 }
+                MonitorParams(timeframe, now, which)
+            } else if (dateS != null) {
+                MonitorParams(timeframe, dateS)
+            } else {
+                MonitorParams(timeframe, now)
             }
-            return MonitorParams(timeframe, which)
         }
     }
 }
