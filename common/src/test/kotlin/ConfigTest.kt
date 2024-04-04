@@ -58,7 +58,7 @@ class ConfigTest {
             assertEquals("jdbc:postgresql://localhost/?user=$user&socketFactory=org.newsclub.net.unix.AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/var/run/postgresql/.s.PGSQL.1234", jdbcFromPg("postgresql:///"))
         }
         withEnvironmentVariable("PGPORT", "1234").and("PGHOST", "/tmp").execute {
-            assertEquals("jdbc:postgresql://localhost/?user=antoine&socketFactory=org.newsclub.net.unix.AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/tmp/.s.PGSQL.1234", jdbcFromPg("postgresql:///"))
+            assertEquals("jdbc:postgresql://localhost/?user=$user&socketFactory=org.newsclub.net.unix.AFUNIXSocketFactory\$FactoryArg&socketFactoryArg=/tmp/.s.PGSQL.1234", jdbcFromPg("postgresql:///"))
         }
     }
 }
