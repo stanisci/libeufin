@@ -291,6 +291,7 @@ data class BearerToken(
 data class Config(
     val currency: String,
     val currency_specification: CurrencySpecification,
+    val base_url: String?,
     val bank_name: String,
     val allow_conversion: Boolean,
     val allow_registrations: Boolean,

@@ -52,6 +52,7 @@ fun Routing.coreBankApi(db: Database, ctx: BankConfig) {
         call.respond(
             Config(
                 bank_name = ctx.name,
+                base_url = ctx.baseUrl,
                 currency = ctx.regionalCurrency,
                 currency_specification = ctx.regionalCurrencySpec,
                 allow_conversion = ctx.allowConversion,

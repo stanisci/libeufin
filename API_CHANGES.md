@@ -51,6 +51,7 @@ This files contains all the API changes for the current release:
 - GET /accounts: new status field
 - GET /accounts/USERNAME: new status field
 - GET /monitor: new date_s params
+- GET /config: new base_url field for the advertised base URL
 
 ## bank cli
 

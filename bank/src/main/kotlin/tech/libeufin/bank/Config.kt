@@ -32,6 +32,7 @@ private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 /** Configuration for libeufin-bank */
 data class BankConfig(
     val name: String,
+    val baseUrl: String?,
     val regionalCurrency: String,
     val regionalCurrencySpec: CurrencySpecification,
     val allowRegistration: Boolean,
@@ -135,11 +136,12 @@ fun TalerConfig.loadBankConfig(): BankConfig {
         allowAccountDeletion = lookupBoolean("libeufin-bank", "allow_account_deletion") ?: false,
         allowEditName = lookupBoolean("libeufin-bank", "allow_edit_name") ?: false,
         allowEditCashout = lookupBoolean("libeufin-bank", "allow_edit_cashout_payto_uri") ?: false,
+        allowConversion = allowConversion,
         defaultDebtLimit = amount("libeufin-bank", "default_debt_limit", regionalCurrency) ?: TalerAmount(0, 0, regionalCurrency),
         registrationBonus = amount("libeufin-bank", "registration_bonus", regionalCurrency) ?: TalerAmount(0, 0, regionalCurrency),
         suggestedWithdrawalExchange = lookupString("libeufin-bank", "suggested_withdrawal_exchange"),
         spaPath = lookupPath("libeufin-bank", "spa"),
-        allowConversion = allowConversion,
+        baseUrl = lookupString("libeufin-bank", "base_url"),
         fiatCurrency = fiatCurrency,
         fiatCurrencySpec = fiatCurrencySpec,
         tanChannels = tanChannels,
