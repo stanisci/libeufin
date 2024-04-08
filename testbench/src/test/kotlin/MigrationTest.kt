@@ -17,20 +17,12 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import org.junit.Test
-import tech.libeufin.bank.db.TransactionDAO.BankTransactionResult
-import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalCreationResult
-import tech.libeufin.bank.db.*
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
-import tech.libeufin.common.db.*
-import java.time.Instant
-import java.util.*
-import org.postgresql.jdbc.PgConnection
-import kotlin.test.assertEquals
 import kotlinx.coroutines.runBlocking
-import java.nio.file.Path
-import kotlin.io.path.*
+import org.junit.Test
+import tech.libeufin.common.db.pgConnection
+import tech.libeufin.common.db.pgDataSource
+import kotlin.io.path.Path
+import kotlin.io.path.readText
 
 class MigrationTest {
     @Test

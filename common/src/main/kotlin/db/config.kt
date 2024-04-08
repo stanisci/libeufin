@@ -19,19 +19,11 @@
 
 package tech.libeufin.common.db
 
-import tech.libeufin.common.*
+import io.ktor.http.*
 import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.jdbc.PgConnection
-import org.postgresql.util.PSQLState
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
-import io.ktor.http.parseQueryString
 import java.net.URI
 import java.nio.file.Path
-import java.sql.PreparedStatement
-import java.sql.ResultSet
-import java.sql.SQLException
-import kotlin.io.path.Path
 
 fun currentUser(): String = System.getProperty("user.name")
 

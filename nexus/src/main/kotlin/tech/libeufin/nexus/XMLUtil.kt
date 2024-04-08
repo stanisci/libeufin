@@ -19,22 +19,14 @@
 
 package tech.libeufin.nexus
 
-import tech.libeufin.nexus.ebics.*
-import io.ktor.http.*
 import org.w3c.dom.Document
 import org.w3c.dom.Node
 import org.w3c.dom.NodeList
-import org.w3c.dom.ls.LSInput
-import org.w3c.dom.ls.LSResourceResolver
-import org.xml.sax.ErrorHandler
 import org.xml.sax.InputSource
-import org.xml.sax.SAXException
-import org.xml.sax.SAXParseException
-import java.io.*
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.security.PrivateKey
 import java.security.PublicKey
-import java.security.interfaces.RSAPrivateCrtKey
-import javax.xml.XMLConstants
 import javax.xml.crypto.*
 import javax.xml.crypto.dom.DOMURIReference
 import javax.xml.crypto.dsig.*
@@ -42,16 +34,11 @@ import javax.xml.crypto.dsig.dom.DOMSignContext
 import javax.xml.crypto.dsig.dom.DOMValidateContext
 import javax.xml.crypto.dsig.spec.C14NMethodParameterSpec
 import javax.xml.crypto.dsig.spec.TransformParameterSpec
-import javax.xml.namespace.NamespaceContext
 import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.transform.OutputKeys
-import javax.xml.transform.Source
 import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
-import javax.xml.transform.stream.StreamSource
-import javax.xml.validation.SchemaFactory
-import javax.xml.validation.Validator
 import javax.xml.xpath.XPath
 import javax.xml.xpath.XPathConstants
 import javax.xml.xpath.XPathFactory

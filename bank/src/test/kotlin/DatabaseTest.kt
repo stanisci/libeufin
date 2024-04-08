@@ -22,15 +22,14 @@ import kotlinx.coroutines.launch
 import org.junit.Test
 import tech.libeufin.bank.createAdminAccount
 import tech.libeufin.bank.db.AccountDAO.AccountCreationResult
-import tech.libeufin.common.*
-import tech.libeufin.common.db.*
+import tech.libeufin.common.db.oneOrNull
 import java.time.Duration
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class DatabaseTest {
     

@@ -18,8 +18,12 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.*
-import kotlin.test.*
+import tech.libeufin.common.BankPaytoCtx
+import tech.libeufin.common.CommonError
+import tech.libeufin.common.Payto
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class PaytoTest {
     @Test

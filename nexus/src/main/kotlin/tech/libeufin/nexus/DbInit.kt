@@ -22,8 +22,10 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.groups.provideDelegate
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
-import tech.libeufin.common.*
-import tech.libeufin.common.db.*
+import tech.libeufin.common.CommonOption
+import tech.libeufin.common.cliCmd
+import tech.libeufin.common.db.dbInit
+import tech.libeufin.common.db.pgDataSource
 
 /**
  * This subcommand tries to load the SQL files that define

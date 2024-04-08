@@ -19,12 +19,9 @@
 
 package tech.libeufin.bank.db
 
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
-import tech.libeufin.common.db.*
-import tech.libeufin.common.crypto.*
-import java.time.Instant
+import tech.libeufin.common.micros
 import java.time.Duration
+import java.time.Instant
 
 /** Data access logic for garbage collection */
 class GcDAO(private val db: Database) {

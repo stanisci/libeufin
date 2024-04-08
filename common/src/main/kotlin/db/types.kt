@@ -19,7 +19,9 @@
 
 package tech.libeufin.common.db
 
-import tech.libeufin.common.*
+import tech.libeufin.common.BankPaytoCtx
+import tech.libeufin.common.Payto
+import tech.libeufin.common.TalerAmount
 import java.sql.ResultSet
 
 fun ResultSet.getAmount(name: String, currency: String): TalerAmount {

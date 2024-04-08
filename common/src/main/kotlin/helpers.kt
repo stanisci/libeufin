@@ -19,14 +19,14 @@
 
 package tech.libeufin.common
 
+import java.io.ByteArrayOutputStream
+import java.io.FilterInputStream
+import java.io.InputStream
 import java.math.BigInteger
 import java.util.*
 import java.util.zip.DeflaterInputStream
 import java.util.zip.InflaterInputStream
 import java.util.zip.ZipInputStream
-import java.io.FilterInputStream
-import java.io.InputStream
-import java.io.ByteArrayOutputStream
 import kotlin.random.Random
 
 /* ----- String ----- */

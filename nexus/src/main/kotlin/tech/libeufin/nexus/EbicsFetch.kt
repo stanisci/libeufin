@@ -27,12 +27,12 @@ import io.ktor.client.*
 import io.ktor.client.plugins.*
 import kotlinx.coroutines.*
 import tech.libeufin.common.*
-import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.db.*
+import tech.libeufin.nexus.ebics.*
 import java.io.IOException
 import java.io.InputStream
-import java.time.Instant
 import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.io.*
@@ -180,13 +180,13 @@ private suspend fun ingestDocument(
                         }
                     }
                     HacAction.ORDER_HAC_FINAL_NEG -> {
-                        logger.debug("$ack")
+                        logger.debug("{}", ack)
                         db.initiated.logFailure(ack.orderId!!)?.let { (requestUID, msg) ->
                             logger.error("Payment '$requestUID' refused at ${ack.timestamp.fmtDateTime()}${if (msg != null) ": $msg" else ""}")
                         }
                     }
                     else -> {
-                        logger.debug("$ack")
+                        logger.debug("{}", ack)
                         if (ack.orderId != null) {
                             db.initiated.logMessage(ack.orderId, ack.msg())
                         }
@@ -197,7 +197,7 @@ private suspend fun ingestDocument(
         SupportedDocument.PAIN_002 -> {
             val status = parseCustomerPaymentStatusReport(xml)
             val msg = status.msg()
-            logger.debug("$status")
+            logger.debug("{}", status)
             if (status.paymentCode == ExternalPaymentGroupStatusCode.RJCT) {
                 db.initiated.bankFailure(status.msgId, msg)
                 logger.error("Transaction '${status.msgId}' was rejected : $msg")

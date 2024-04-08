@@ -24,12 +24,11 @@ import com.itextpdf.kernel.pdf.PdfWriter
 import com.itextpdf.layout.Document
 import com.itextpdf.layout.element.AreaBreak
 import com.itextpdf.layout.element.Paragraph
+import tech.libeufin.common.crypto.CryptoUtil
+import java.io.ByteArrayOutputStream
 import java.security.interfaces.RSAPrivateCrtKey
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.*
-import java.io.ByteArrayOutputStream
-import tech.libeufin.common.crypto.*
 
 /**
  * Generate the PDF document with all the client public keys

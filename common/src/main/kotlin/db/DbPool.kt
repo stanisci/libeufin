@@ -19,14 +19,15 @@
 
 package tech.libeufin.common.db
 
-import tech.libeufin.common.*
-import org.postgresql.jdbc.PgConnection
-import org.postgresql.util.PSQLState
-import java.sql.SQLException
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.postgresql.jdbc.PgConnection
+import org.postgresql.util.PSQLState
+import tech.libeufin.common.MIN_VERSION
+import tech.libeufin.common.SERIALIZATION_RETRY
+import java.sql.SQLException
 
 open class DbPool(cfg: DatabaseConfig, schema: String) : java.io.Closeable {
     val pgSource = pgDataSource(cfg.dbConnStr)

@@ -27,15 +27,16 @@ import tech.libeufin.bank.*
 import tech.libeufin.bank.db.AccountDAO.AccountCreationResult
 import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
-import tech.libeufin.common.db.*
+import tech.libeufin.common.db.dbInit
+import tech.libeufin.common.db.pgDataSource
 import java.nio.file.NoSuchFileException
 import kotlin.io.path.Path
 import kotlin.io.path.deleteExisting
 import kotlin.io.path.readText
 import kotlin.random.Random
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 
 /* ----- Setup ----- */
 

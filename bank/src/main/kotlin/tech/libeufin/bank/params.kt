@@ -26,7 +26,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.temporal.TemporalAdjusters
-import java.util.UUID
+import java.util.*
 
 fun Parameters.expect(name: String): String 
     = get(name) ?: throw badRequest("Missing '$name' parameter", TalerErrorCode.GENERIC_PARAMETER_MISSING)

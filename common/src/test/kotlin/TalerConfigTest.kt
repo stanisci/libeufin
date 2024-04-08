@@ -18,9 +18,11 @@
  */
 
 import org.junit.Test
+import tech.libeufin.common.ConfigSource
+import tech.libeufin.common.fromFile
+import tech.libeufin.common.fromMem
+import kotlin.io.path.Path
 import kotlin.test.assertEquals
-import tech.libeufin.common.*
-import kotlin.io.path.*
 
 class TalerConfigTest {
 

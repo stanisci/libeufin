@@ -18,8 +18,8 @@
  */
 
 import org.junit.Test
-import tech.libeufin.nexus.XmlBuilder
 import tech.libeufin.nexus.XMLUtil
+import tech.libeufin.nexus.XmlBuilder
 import kotlin.test.assertEquals
 
 class XmlCombinatorsTest {

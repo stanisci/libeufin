@@ -18,14 +18,13 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.*
-import tech.libeufin.nexus.*
-import tech.libeufin.nexus.db.*
-import tech.libeufin.nexus.db.InitiatedDAO.*
-import tech.libeufin.nexus.db.PaymentDAO.*
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.nexus.db.InitiatedDAO.PaymentInitiationResult
 import java.time.Instant
-import kotlin.random.Random
-import kotlin.test.*
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class OutgoingPaymentsTest {
     @Test

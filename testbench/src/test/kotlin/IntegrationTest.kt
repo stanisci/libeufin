@@ -17,28 +17,25 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import org.junit.Test
-import tech.libeufin.bank.*
-import tech.libeufin.nexus.*
-import tech.libeufin.nexus.db.Database as NexusDb
-import tech.libeufin.bank.db.AccountDAO.*
-import tech.libeufin.common.*
-import tech.libeufin.common.db.*
-import java.time.Instant
-import java.util.Arrays
-import java.sql.SQLException
-import kotlinx.coroutines.runBlocking
-import com.github.ajalt.clikt.testing.test
 import com.github.ajalt.clikt.core.CliktCommand
-import org.postgresql.jdbc.PgConnection
-import kotlin.test.*
-import kotlin.io.path.*
+import com.github.ajalt.clikt.testing.test
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
+import kotlinx.coroutines.runBlocking
+import org.junit.Test
+import tech.libeufin.bank.*
+import tech.libeufin.common.*
+import tech.libeufin.common.db.one
+import tech.libeufin.nexus.*
+import java.time.Instant
+import kotlin.io.path.Path
+import kotlin.io.path.readText
+import kotlin.test.assertEquals
+import tech.libeufin.nexus.db.Database as NexusDb
 
 fun CliktCommand.run(cmd: String) {
     val result = test(cmd)

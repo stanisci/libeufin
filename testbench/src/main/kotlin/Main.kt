@@ -19,20 +19,18 @@
 
 package tech.libeufin.testbench
 
-import tech.libeufin.nexus.*
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
-import com.github.ajalt.clikt.core.*
-import com.github.ajalt.clikt.parameters.arguments.*
-import com.github.ajalt.clikt.parameters.types.*
-import com.github.ajalt.clikt.testing.*
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.ProgramResult
+import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.testing.test
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
-import kotlin.test.*
-import kotlin.io.path.*
-import java.time.Instant
 import kotlinx.coroutines.runBlocking
-import io.ktor.client.request.*
+import tech.libeufin.nexus.LibeufinNexusCommand
+import tech.libeufin.nexus.loadBankKeys
+import tech.libeufin.nexus.loadClientKeys
+import tech.libeufin.nexus.loadConfig
+import kotlin.io.path.*
 
 val nexusCmd = LibeufinNexusCommand()
 val client = HttpClient(CIO)

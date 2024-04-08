@@ -23,7 +23,6 @@ import tech.libeufin.common.crypto.CryptoUtil
 import tech.libeufin.common.decodeBase64
 import tech.libeufin.nexus.XMLUtil
 import java.security.KeyPairGenerator
-import javax.xml.transform.stream.StreamSource
 
 class XmlUtilTest {
 

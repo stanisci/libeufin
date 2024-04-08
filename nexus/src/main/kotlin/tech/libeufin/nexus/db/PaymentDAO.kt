@@ -19,9 +19,12 @@
 
 package tech.libeufin.nexus.db
 
-import tech.libeufin.nexus.*
-import tech.libeufin.common.*
-import tech.libeufin.common.db.*
+import tech.libeufin.common.EddsaPublicKey
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.db.one
+import tech.libeufin.common.micros
+import tech.libeufin.nexus.IncomingPayment
+import tech.libeufin.nexus.OutgoingPayment
 import java.time.Instant
 
 /** Data access logic for incoming & outgoing payments */

@@ -21,17 +21,16 @@ package tech.libeufin.nexus.ebics
 
 import org.w3c.dom.Document
 import tech.libeufin.common.crypto.CryptoUtil
-import tech.libeufin.common.*
+import tech.libeufin.common.decodeBase64
+import tech.libeufin.common.deflate
+import tech.libeufin.common.encodeBase64
+import tech.libeufin.common.encodeUpHex
 import tech.libeufin.nexus.*
-import tech.libeufin.nexus.BankPublicKeysFile
-import tech.libeufin.nexus.ClientPrivateKeysFile
-import java.io.InputStream
-import java.time.Instant
-import java.time.ZoneId
-import java.util.*
-import javax.xml.datatype.DatatypeFactory
-import java.security.interfaces.*
 import tech.libeufin.nexus.ebics.EbicsKeyMng.Order.*
+import java.io.InputStream
+import java.security.interfaces.RSAPrivateCrtKey
+import java.security.interfaces.RSAPublicKey
+import java.time.Instant
 
 /** EBICS protocol for key management */
 class EbicsKeyMng(

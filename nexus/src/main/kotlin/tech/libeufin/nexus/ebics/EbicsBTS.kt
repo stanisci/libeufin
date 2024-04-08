@@ -18,19 +18,16 @@
  */
 package tech.libeufin.nexus.ebics
 
-import io.ktor.client.*
+import org.w3c.dom.Document
+import tech.libeufin.common.crypto.CryptoUtil
+import tech.libeufin.common.decodeBase64
+import tech.libeufin.common.encodeBase64
+import tech.libeufin.common.encodeHex
+import tech.libeufin.common.encodeUpHex
 import tech.libeufin.nexus.*
-import tech.libeufin.common.*
-import tech.libeufin.common.crypto.*
-import java.math.BigInteger
-import java.time.*
-import java.time.format.*
-import java.util.*
-import java.io.File
-import org.w3c.dom.*
-import javax.xml.datatype.XMLGregorianCalendar
-import javax.xml.datatype.DatatypeFactory
-import java.security.interfaces.*
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 
 fun Instant.xmlDate(): String = 

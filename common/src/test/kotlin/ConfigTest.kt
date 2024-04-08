@@ -18,10 +18,10 @@
  */
 
 import org.junit.Test
-import uk.org.webcompere.systemstubs.SystemStubs.*
-import java.time.Duration
 import tech.libeufin.common.*
 import tech.libeufin.common.db.*
+import uk.org.webcompere.systemstubs.SystemStubs.*
+import java.time.Duration
 import kotlin.test.*
 
 class ConfigTest {

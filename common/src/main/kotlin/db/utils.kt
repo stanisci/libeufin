@@ -19,18 +19,13 @@
 
 package tech.libeufin.common.db
 
-import tech.libeufin.common.*
-import org.postgresql.ds.PGSimpleDataSource
 import org.postgresql.jdbc.PgConnection
 import org.postgresql.util.PSQLState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.net.URI
-import java.nio.file.Path
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.sql.SQLException
-import kotlin.io.path.Path
 
 internal val logger: Logger = LoggerFactory.getLogger("libeufin-db")
 

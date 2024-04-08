@@ -30,8 +30,6 @@ import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import tech.libeufin.common.Base32Crockford
-import tech.libeufin.common.EncodingException
 import tech.libeufin.common.TalerAmount
 import java.net.URL
 import java.time.Duration

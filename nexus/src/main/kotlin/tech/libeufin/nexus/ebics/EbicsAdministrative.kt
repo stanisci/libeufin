@@ -20,18 +20,10 @@
 package tech.libeufin.nexus.ebics
 
 import org.w3c.dom.Document
-import tech.libeufin.common.crypto.CryptoUtil
-import tech.libeufin.common.*
-import tech.libeufin.nexus.*
-import tech.libeufin.nexus.BankPublicKeysFile
-import tech.libeufin.nexus.ClientPrivateKeysFile
+import tech.libeufin.nexus.NexusConfig
+import tech.libeufin.nexus.XmlBuilder
+import tech.libeufin.nexus.XmlDestructor
 import java.io.InputStream
-import java.time.Instant
-import java.time.ZoneId
-import java.util.*
-import javax.xml.datatype.DatatypeFactory
-import java.security.interfaces.*
-import tech.libeufin.nexus.ebics.EbicsKeyMng.Order.*
 
 data class VersionNumber(val number: Float, val schema: String) {
     override fun toString(): String = "$number:$schema"

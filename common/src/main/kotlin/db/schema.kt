@@ -19,9 +19,8 @@
 
 package tech.libeufin.common.db
 
-import tech.libeufin.common.*
-import org.postgresql.jdbc.PgConnection
 import org.postgresql.ds.PGSimpleDataSource
+import org.postgresql.jdbc.PgConnection
 import java.sql.Connection
 import kotlin.io.path.Path
 import kotlin.io.path.exists

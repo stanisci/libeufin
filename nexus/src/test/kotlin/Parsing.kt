@@ -18,9 +18,12 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.*
+import tech.libeufin.common.EddsaPublicKey
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.parseIncomingTxMetadata
 import tech.libeufin.nexus.getAmountNoCurrency
-import kotlin.test.*
+import kotlin.test.assertEquals
+import kotlin.test.assertFails
 
 class Parsing {
 

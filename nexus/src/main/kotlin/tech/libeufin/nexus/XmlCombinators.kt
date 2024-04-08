@@ -19,13 +19,14 @@
 
 package tech.libeufin.nexus
 
-import org.w3c.dom.*
+import org.w3c.dom.Document
+import org.w3c.dom.Element
 import java.io.InputStream
 import java.io.StringWriter
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import javax.xml.parsers.*
+import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.stream.XMLOutputFactory
 import javax.xml.stream.XMLStreamWriter
 

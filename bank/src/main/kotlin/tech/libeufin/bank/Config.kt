@@ -23,7 +23,7 @@ import kotlinx.serialization.json.Json
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.common.*
-import tech.libeufin.common.db.*
+import tech.libeufin.common.db.DatabaseConfig
 import java.nio.file.Path
 import java.time.Duration
 

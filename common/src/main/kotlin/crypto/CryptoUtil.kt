@@ -19,29 +19,26 @@
 
 package tech.libeufin.common.crypto
 
-import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
-import org.bouncycastle.operator.ContentSigner
-import org.bouncycastle.cert.jcajce.*
+import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.asn1.x509.*
 import org.bouncycastle.asn1.x509.Extension
-import org.bouncycastle.asn1.x500.X500Name
-import org.bouncycastle.asn1.ASN1ObjectIdentifier
+import org.bouncycastle.cert.jcajce.*
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
+import tech.libeufin.common.*
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.math.BigInteger
-import java.util.*
 import java.security.*
+import java.security.cert.*
 import java.security.interfaces.RSAPrivateCrtKey
 import java.security.interfaces.RSAPublicKey
-import java.security.cert.*
 import java.security.spec.*
+import java.util.*
 import javax.crypto.*
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.PBEParameterSpec
 import javax.crypto.spec.SecretKeySpec
-import tech.libeufin.common.*
 
 /** Helpers for dealing with cryptographic operations in EBICS / LibEuFin */
 object CryptoUtil {

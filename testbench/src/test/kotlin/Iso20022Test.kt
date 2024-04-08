@@ -17,10 +17,15 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import tech.libeufin.nexus.*
 import org.junit.Test
-import java.nio.file.*
-import kotlin.io.path.*
+import tech.libeufin.nexus.parseCustomerAck
+import tech.libeufin.nexus.parseCustomerPaymentStatusReport
+import tech.libeufin.nexus.parseTxNotif
+import java.nio.file.Files
+import kotlin.io.path.Path
+import kotlin.io.path.exists
+import kotlin.io.path.isDirectory
+import kotlin.io.path.listDirectoryEntries
 
 class Iso20022Test {
     @Test

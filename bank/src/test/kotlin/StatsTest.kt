@@ -19,13 +19,17 @@
 
 import io.ktor.client.request.*
 import org.junit.Test
-import tech.libeufin.bank.*
-import tech.libeufin.common.*
-import tech.libeufin.common.db.*
+import tech.libeufin.bank.MonitorParams
+import tech.libeufin.bank.MonitorResponse
+import tech.libeufin.bank.MonitorWithConversion
+import tech.libeufin.bank.Timeframe
+import tech.libeufin.common.ShortHashCode
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.db.executeQueryCheck
+import tech.libeufin.common.micros
 import java.time.Instant
-import java.time.ZoneOffset
 import java.time.LocalDateTime
-import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import kotlin.test.assertEquals
 
 class StatsTest {

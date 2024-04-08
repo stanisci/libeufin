@@ -18,15 +18,10 @@
  */
 package tech.libeufin.nexus.db
 
-import org.postgresql.util.PSQLState
-import tech.libeufin.common.*
-import tech.libeufin.common.db.*
-import tech.libeufin.nexus.*
-import java.sql.PreparedStatement
-import java.sql.SQLException
-import java.text.SimpleDateFormat
+import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.db.DatabaseConfig
+import tech.libeufin.common.db.DbPool
 import java.time.Instant
-import java.util.*
 
 /**
  * Minimal set of information to initiate a new payment in

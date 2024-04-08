@@ -17,22 +17,20 @@
  * <http://www.gnu.org/licenses/>
  */
 
+import io.ktor.client.request.*
 import org.junit.Test
-import tech.libeufin.bank.DecimalNumber
-import tech.libeufin.bank.db.TransactionDAO.BankTransactionResult
-import tech.libeufin.bank.db.WithdrawalDAO.*
-import tech.libeufin.bank.db.TransactionDAO.*
+import tech.libeufin.bank.*
 import tech.libeufin.bank.db.CashoutDAO.CashoutCreationResult
 import tech.libeufin.bank.db.ExchangeDAO.TransferResult
+import tech.libeufin.bank.db.TransactionDAO.BankTransactionResult
+import tech.libeufin.bank.db.WithdrawalDAO.*
 import tech.libeufin.common.*
-import tech.libeufin.common.db.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import tech.libeufin.bank.*
-import java.time.*
+import tech.libeufin.common.db.one
+import java.time.Duration
+import java.time.Instant
 import java.util.*
-import kotlin.test.*
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class GcTest {
     @Test

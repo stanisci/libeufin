@@ -27,22 +27,22 @@ package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.arguments.*
-import com.github.ajalt.clikt.parameters.groups.*
-import com.github.ajalt.clikt.parameters.options.*
-import io.ktor.client.*
-import io.ktor.util.*
-import kotlinx.coroutines.*
+import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.arguments.convert
+import com.github.ajalt.clikt.parameters.groups.provideDelegate
+import com.github.ajalt.clikt.parameters.options.convert
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.versionOption
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.common.*
-import tech.libeufin.common.db.*
-import tech.libeufin.nexus.ebics.*
-import tech.libeufin.nexus.db.*
+import tech.libeufin.common.db.DatabaseConfig
+import tech.libeufin.nexus.db.Database
+import tech.libeufin.nexus.db.InitiatedPayment
 import java.nio.file.Path
-import java.util.*
-import java.time.*
-import java.time.format.*
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
 internal val logger: Logger = LoggerFactory.getLogger("libeufin-nexus")

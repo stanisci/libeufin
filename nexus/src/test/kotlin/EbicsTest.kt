@@ -20,11 +20,13 @@
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import org.junit.Test
-import tech.libeufin.nexus.*
-import tech.libeufin.nexus.ebics.*
+import tech.libeufin.nexus.ebics.EbicsError
+import tech.libeufin.nexus.ebics.postToBank
+import tech.libeufin.nexus.generateKeysPdf
 import kotlin.io.path.Path
 import kotlin.io.path.writeBytes
-import kotlin.test.*
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class EbicsTest {
     // POSTs an EBICS message to the mock bank.  Tests

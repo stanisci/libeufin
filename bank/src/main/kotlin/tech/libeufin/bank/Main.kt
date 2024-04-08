@@ -51,19 +51,20 @@ import org.postgresql.util.PSQLState
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
+import tech.libeufin.bank.api.*
 import tech.libeufin.bank.db.AccountDAO.*
 import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
-import tech.libeufin.common.db.*
+import tech.libeufin.common.db.dbInit
+import tech.libeufin.common.db.pgDataSource
 import java.net.InetAddress
 import java.sql.SQLException
+import java.time.Instant
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
-import java.time.Instant
 import kotlin.io.path.Path
 import kotlin.io.path.exists
 import kotlin.io.path.readText
-import tech.libeufin.bank.api.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
 // Dirty local variable to stop the server in test TODO remove this ugly hack

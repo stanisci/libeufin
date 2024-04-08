@@ -25,8 +25,8 @@ import com.github.ajalt.clikt.parameters.options.*
 import io.ktor.client.*
 import kotlinx.coroutines.*
 import tech.libeufin.common.*
-import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.db.*
+import tech.libeufin.nexus.ebics.*
 import java.time.*
 import java.util.*
 import kotlin.time.toKotlinDuration

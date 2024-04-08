@@ -17,11 +17,9 @@
  * <http://www.gnu.org/licenses/>
  */
 
-import java.time.Instant
-import java.util.*
-import kotlin.test.*
 import org.junit.Test
-import tech.libeufin.common.*
+import tech.libeufin.common.TalerAmount
+import kotlin.test.assertEquals
 
 class AmountTest {
     @Test

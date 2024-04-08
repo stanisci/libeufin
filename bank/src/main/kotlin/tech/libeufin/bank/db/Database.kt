@@ -27,12 +27,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.bank.*
-import tech.libeufin.common.*
+import tech.libeufin.common.asInstant
 import tech.libeufin.common.db.*
 import java.sql.PreparedStatement
 import java.sql.ResultSet
-import java.sql.Types
-import java.time.LocalDateTime
 import kotlin.math.abs
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db")
