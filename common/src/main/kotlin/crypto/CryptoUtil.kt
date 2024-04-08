@@ -76,8 +76,8 @@ object CryptoUtil {
 
     /** Extract an RSA public key from a [raw] X.509 certificate */
     fun RSAPublicFromCertificate(raw: ByteArray): RSAPublicKey {
-        val certificate = CertificateFactory.getInstance("X.509").generateCertificate(raw.inputStream());
-        return certificate.getPublicKey() as RSAPublicKey
+        val certificate = CertificateFactory.getInstance("X.509").generateCertificate(raw.inputStream())
+        return certificate.publicKey as RSAPublicKey
     }
 
     /** Generate an RSA public key from a [private] one */

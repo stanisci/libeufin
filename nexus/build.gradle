@@ -27,7 +27,7 @@ dependencies {
     implementation("com.github.ajalt.clikt:clikt:$clikt_version")
     implementation("org.postgresql:postgresql:$postgres_version")
     // Ktor client library
-    implementation("io.ktor:ktor-client-apache:$ktor_version")
+    implementation("io.ktor:ktor-client-cio:$ktor_version")
 
     // PDF generation
     implementation("com.itextpdf:itext-core:8.0.3")

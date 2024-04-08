@@ -255,7 +255,6 @@ suspend fun ebicsDownload(
         // Then throw business logic exception if any
         res.getOrThrow()
     }
-    Unit
 }
 
 suspend fun HEV(

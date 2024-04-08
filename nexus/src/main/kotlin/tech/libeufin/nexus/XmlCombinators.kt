@@ -58,12 +58,12 @@ interface XmlBuilder {
         }
 
         fun toDom(root: String, schema: String?, f: XmlBuilder.() -> Unit): Document {
-            val factory = DocumentBuilderFactory.newInstance();
+            val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
-            val builder = factory.newDocumentBuilder();
-            val doc = builder.newDocument();
-            doc.setXmlVersion("1.0")
-            doc.setXmlStandalone(true)
+            val builder = factory.newDocumentBuilder()
+            val doc = builder.newDocument()
+            doc.xmlVersion = "1.0"
+            doc.xmlStandalone = true
             val root = doc.createElementNS(schema, root)
             doc.appendChild(root);
             XmlDOMBuilder(doc, schema, root).f()

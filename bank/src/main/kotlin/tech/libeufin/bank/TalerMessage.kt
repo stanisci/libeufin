@@ -158,10 +158,10 @@ data class ChallengeContactData(
     val phone: Option<String?> = Option.None
 ) {
     init {
-        if (email.get()?.let { !EMAIL_PATTERN.matches(it) } ?: false)
+        if (email.get()?.let { !EMAIL_PATTERN.matches(it) } == true)
             throw badRequest("email contact data '$email' is malformed")
 
-        if (phone.get()?.let { !PHONE_PATTERN.matches(it) } ?: false)
+        if (phone.get()?.let { !PHONE_PATTERN.matches(it) } == true)
             throw badRequest("phone contact data '$phone' is malformed")
     }
     companion object {

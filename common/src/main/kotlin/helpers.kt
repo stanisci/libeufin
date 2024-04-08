@@ -29,16 +29,6 @@ import java.io.InputStream
 import java.io.ByteArrayOutputStream
 import kotlin.random.Random
 
-fun getQueryParam(uriQueryString: String, param: String): String? {
-    // TODO replace with ktor API ?
-    uriQueryString.split('&').forEach {
-        val kv = it.split('=')
-        if (kv[0] == param)
-            return kv[1]
-    }
-    return null
-}
-
 /* ----- String ----- */
 
 fun String.decodeBase64(): ByteArray = Base64.getDecoder().decode(this)

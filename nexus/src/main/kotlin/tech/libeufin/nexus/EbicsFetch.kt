@@ -360,7 +360,6 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
      * In this current version, it does not implement long polling, instead
      * it runs transient if FREQUENCY is zero.  Transient is also the default
      * mode when no flags are passed to the invocation.
-     * FIXME: reduce code duplication with the submit subcommand.
      */
     override fun run() = cliCmd(logger, common.log) {
         val cfg = extractEbicsConfig(common.config)

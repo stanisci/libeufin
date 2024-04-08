@@ -484,8 +484,7 @@ class CreateAccount : CliktCommand(
                 ) 
             }
             req?.let {
-                val result = createAccount(db, ctx, req, true)
-                when (result) {
+                when (val result = createAccount(db, ctx, req, true)) {
                     AccountCreationResult.BonusBalanceInsufficient ->
                         throw Exception("Insufficient admin funds to grant bonus")
                     AccountCreationResult.LoginReuse ->

@@ -296,8 +296,7 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
     authAdmin(db, TokenScope.readwrite, !ctx.allowRegistration) {
         post("/accounts") {
             val req = call.receive<RegisterAccountRequest>()
-            val result = createAccount(db, ctx, req, isAdmin)
-            when (result) {
+            when (val result = createAccount(db, ctx, req, isAdmin)) {
                 AccountCreationResult.BonusBalanceInsufficient -> throw conflict(
                     "Insufficient admin funds to grant bonus",
                     TalerErrorCode.BANK_UNALLOWED_DEBIT

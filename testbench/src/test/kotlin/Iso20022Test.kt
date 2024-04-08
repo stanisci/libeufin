@@ -42,7 +42,7 @@ class Iso20022Test {
     @Test
     fun logs() {
         val root = Path("test")
-        if (!root.exists()) return;
+        if (!root.exists()) return
         for (platform in root.listDirectoryEntries()) {
             for (file in platform.listDirectoryEntries()) {
                 val fetch = file.resolve("fetch")
