@@ -28,14 +28,13 @@ import tech.libeufin.bank.auth.authAdmin
 import tech.libeufin.bank.db.ConversionDAO
 import tech.libeufin.bank.db.ConversionDAO.ConversionResult
 import tech.libeufin.bank.db.Database
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.TalerErrorCode
+import tech.libeufin.common.*
 
 fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allowConversion) {
     get("/conversion-info/config") {
         val config = db.conversion.getConfig(ctx.regionalCurrency, ctx.fiatCurrency!!)
         if (config == null) {
-            throw libeufinError(
+            throw apiError(
                 HttpStatusCode.NotImplemented, 
                 "conversion rate not configured yet", 
                 TalerErrorCode.END
@@ -62,7 +61,7 @@ fun Routing.conversionApi(db: Database, ctx: BankConfig) = conditional(ctx.allow
                 "$input is too small to be converted",
                 TalerErrorCode.BANK_BAD_CONVERSION
             )
-            is ConversionResult.MissingConfig -> throw libeufinError(
+            is ConversionResult.MissingConfig -> throw apiError(
                 HttpStatusCode.NotImplemented, 
                 "conversion rate not configured yet", 
                 TalerErrorCode.END

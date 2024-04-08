@@ -20,12 +20,8 @@
 package tech.libeufin.bank.db
 
 import tech.libeufin.bank.*
-import tech.libeufin.common.BankPaytoCtx
-import tech.libeufin.common.EddsaPublicKey
-import tech.libeufin.common.ShortHashCode
-import tech.libeufin.common.db.getAmount
-import tech.libeufin.common.db.getBankPayto
-import tech.libeufin.common.micros
+import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.time.Instant
 
 /** Data access logic for exchange specific logic */
@@ -36,7 +32,7 @@ class ExchangeDAO(private val db: Database) {
         exchangeId: Long,
         ctx: BankPaytoCtx
     ): List<IncomingReserveTransaction> 
-        = db.poolHistory(params, exchangeId, NotificationWatcher::listenIncoming,  """
+        = db.poolHistory(params, exchangeId, db::listenIncoming,  """
             SELECT
                 bank_transaction_id
                 ,transaction_date
@@ -65,7 +61,7 @@ class ExchangeDAO(private val db: Database) {
         exchangeId: Long,
         ctx: BankPaytoCtx
     ): List<OutgoingTransaction> 
-        = db.poolHistory(params, exchangeId, NotificationWatcher::listenOutgoing,  """
+        = db.poolHistory(params, exchangeId, db::listenOutgoing,  """
             SELECT
                 bank_transaction_id
                 ,transaction_date

@@ -30,7 +30,7 @@ import tech.libeufin.bank.*
 import tech.libeufin.bank.db.AbortResult
 import tech.libeufin.bank.db.Database
 import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalSelectionResult
-import tech.libeufin.common.TalerErrorCode
+import tech.libeufin.common.*
 
 fun Routing.bankIntegrationApi(db: Database, ctx: BankConfig) {
     get("/taler-integration/config") {

@@ -189,7 +189,7 @@ class TransactionDAO(private val db: Database) {
         accountId: Long,
         ctx: BankPaytoCtx
     ): List<BankAccountTransactionInfo> {
-        return db.poolHistory(params, accountId, NotificationWatcher::listenBank,  """
+        return db.poolHistory(params, accountId, db::listenBank,  """
             SELECT
                 bank_transaction_id
                 ,transaction_date
@@ -221,7 +221,7 @@ class TransactionDAO(private val db: Database) {
         accountId: Long,
         ctx: BankPaytoCtx
     ): List<RevenueIncomingBankTransaction> 
-        = db.poolHistory(params, accountId, NotificationWatcher::listenRevenue, """
+        = db.poolHistory(params, accountId, db::listenRevenue, """
             SELECT
                 bank_transaction_id
                 ,transaction_date

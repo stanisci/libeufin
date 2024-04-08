@@ -23,110 +23,7 @@ import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.util.*
 import kotlinx.serialization.Serializable
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.TalerErrorCode
-
-/**
- * Convenience type to throw errors along the bank activity
- * and that is meant to be caught by Ktor and responded to the
- * client.
- */
-class LibeufinException(
-    // Status code that Ktor will set for the response.
-    val httpStatus: HttpStatusCode,
-    // Error detail object, after Taler API.
-    val talerError: TalerError
-) : Exception(talerError.hint)
-
-/**
- * Error object to respond to the client.  The
- * 'code' field takes values from the GANA gnu-taler-error-code
- * specification.  'hint' is a human-readable description
- * of the error.
- */
-@Serializable
-data class TalerError(
-    @kotlinx.serialization.Transient val err: TalerErrorCode = TalerErrorCode.END,
-    val code: Int,
-    val hint: String? = null,
-    val detail: String? = null
-)
-
-private val LOG_MSG = AttributeKey<String>("log_msg")
-
-fun ApplicationCall.logMsg(): String? = attributes.getOrNull(LOG_MSG)
-
-suspend fun ApplicationCall.err(
-    status: HttpStatusCode,
-    hint: String?,
-    error: TalerErrorCode
-) {
-    err(
-        LibeufinException(
-            httpStatus = status, talerError = TalerError(
-                code = error.code, err = error, hint = hint
-            )
-        )
-    )
-}
-
-suspend fun ApplicationCall.err(
-    err: LibeufinException
-) {
-    attributes.put(LOG_MSG, "${err.talerError.err.name} ${err.talerError.hint}")
-    respond(
-        status = err.httpStatus,
-        message = err.talerError
-    )
-}
-
-
-fun libeufinError(
-    status: HttpStatusCode,
-    hint: String?,
-    error: TalerErrorCode,
-    detail: String? = null
-): LibeufinException = LibeufinException(
-    httpStatus = status, talerError = TalerError(
-        code = error.code, err = error, hint = hint, detail = detail
-    )
-)
-
-/* ----- HTTP error ----- */
-
-fun forbidden(
-    hint: String = "No rights on the resource",
-    error: TalerErrorCode = TalerErrorCode.END
-): LibeufinException = libeufinError(HttpStatusCode.Forbidden, hint, error)
-
-fun unauthorized(
-    hint: String,
-    error: TalerErrorCode = TalerErrorCode.GENERIC_UNAUTHORIZED
-): LibeufinException = libeufinError(HttpStatusCode.Unauthorized, hint, error)
-
-fun internalServerError(hint: String?): LibeufinException 
-    = libeufinError(HttpStatusCode.InternalServerError, hint, TalerErrorCode.GENERIC_INTERNAL_INVARIANT_FAILURE)
-
-fun notFound(
-    hint: String,
-    error: TalerErrorCode
-): LibeufinException = libeufinError(HttpStatusCode.NotFound, hint, error)
-
-fun conflict(
-    hint: String, error: TalerErrorCode
-): LibeufinException = libeufinError(HttpStatusCode.Conflict, hint, error)
-
-fun badRequest(
-    hint: String? = null, 
-    error: TalerErrorCode = TalerErrorCode.GENERIC_JSON_INVALID,
-    detail: String? = null
-): LibeufinException = libeufinError(HttpStatusCode.BadRequest, hint, error, detail)
-
-fun unsupportedMediaType(
-    hint: String, 
-    error: TalerErrorCode = TalerErrorCode.END,
-): LibeufinException = libeufinError(HttpStatusCode.UnsupportedMediaType, hint, error)
-
+import tech.libeufin.common.*
 
 /* ----- Currency checks ----- */
 
@@ -146,21 +43,21 @@ fun BankConfig.checkFiatCurrency(amount: TalerAmount) {
 
 /* ----- Common errors ----- */
 
-fun unknownAccount(id: String): LibeufinException {
+fun unknownAccount(id: String): ApiException {
     return notFound(
         "Account '$id' not found",
         TalerErrorCode.BANK_UNKNOWN_ACCOUNT
     )
 }
 
-fun unknownCreditorAccount(id: String): LibeufinException {
+fun unknownCreditorAccount(id: String): ApiException {
     return conflict(
         "Creditor account '$id' not found",
         TalerErrorCode.BANK_UNKNOWN_CREDITOR
     )
 }
 
-fun unsupportedTanChannel(channel: TanChannel): LibeufinException {
+fun unsupportedTanChannel(channel: TanChannel): ApiException {
     return conflict(
         "Unsupported tan channel $channel",
         TalerErrorCode.BANK_TAN_CHANNEL_NOT_SUPPORTED

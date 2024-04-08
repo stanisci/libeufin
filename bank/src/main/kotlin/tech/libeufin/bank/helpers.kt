@@ -149,7 +149,7 @@ fun Route.intercept(callback: Route.() -> Unit, interceptor: suspend PipelineCon
 fun Route.conditional(implemented: Boolean, callback: Route.() -> Unit): Route =
     intercept(callback) {
         if (!implemented) {
-            throw libeufinError(HttpStatusCode.NotImplemented, "API not implemented", TalerErrorCode.END)
+            throw apiError(HttpStatusCode.NotImplemented, "API not implemented", TalerErrorCode.END)
         }
     }
 

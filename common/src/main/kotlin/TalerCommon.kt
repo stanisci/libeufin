@@ -27,6 +27,7 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import tech.libeufin.common.*
 import java.net.URI
 
 sealed class CommonError(msg: String): Exception(msg) {

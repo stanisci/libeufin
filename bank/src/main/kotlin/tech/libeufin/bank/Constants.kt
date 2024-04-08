@@ -36,9 +36,6 @@ val TOKEN_DEFAULT_DURATION: Duration = Duration.ofDays(1L)
 val RESERVED_ACCOUNTS = setOf("admin", "bank") 
 const val IBAN_ALLOCATION_RETRY_COUNTER: Int = 5
 
-// Security
-const val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB
-
 // API version  
 const val COREBANK_API_VERSION: String = "4:7:0"
 const val CONVERSION_API_VERSION: String = "0:0:0"

@@ -21,3 +21,6 @@ package tech.libeufin.common
 // DB
 const val MIN_VERSION: Int = 14
 const val SERIALIZATION_RETRY: Int = 10
+
+// Security
+const val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB

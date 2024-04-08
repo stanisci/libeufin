@@ -24,12 +24,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import tech.libeufin.bank.*
-import tech.libeufin.common.EddsaPublicKey
-import tech.libeufin.common.Payto
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.db.getAmount
-import tech.libeufin.common.db.oneOrNull
-import tech.libeufin.common.micros
+import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import java.time.Instant
 import java.util.*
 
@@ -207,7 +203,7 @@ class WithdrawalDAO(private val db: Database) {
         load: suspend () -> T?
     ): T? {
         return if (params.polling.poll_ms > 0) {
-            db.notifWatcher.listenWithdrawals(uuid) { flow ->
+            db.listenWithdrawals(uuid) { flow ->
                 coroutineScope {
                     // Start buffering notification before loading transactions to not miss any
                     val polling = launch {

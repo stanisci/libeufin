@@ -27,11 +27,8 @@ import io.ktor.util.*
 import io.ktor.util.pipeline.*
 import tech.libeufin.bank.*
 import tech.libeufin.bank.db.Database
-import tech.libeufin.common.Base32Crockford
-import tech.libeufin.common.TalerErrorCode
+import tech.libeufin.common.*
 import tech.libeufin.common.crypto.PwCrypto
-import tech.libeufin.common.decodeBase64
-import tech.libeufin.common.splitOnce
 import java.time.Instant
 
 /** Used to store if the currently authenticated user is admin */

@@ -699,7 +699,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                             exitValue
                         }
                         if (exitValue != 0) {
-                            throw libeufinError(
+                            throw apiError(
                                 HttpStatusCode.BadGateway,
                                 "Tan channel script failure with exit value $exitValue",
                                 TalerErrorCode.BANK_TAN_CHANNEL_SCRIPT_FAILED
@@ -733,7 +733,7 @@ private fun Routing.coreBankTanApi(db: Database, ctx: BankConfig) {
                     "Incorrect TAN code",
                     TalerErrorCode.BANK_TAN_CHALLENGE_FAILED
                 )
-                TanSolveResult.NoRetry -> throw libeufinError(
+                TanSolveResult.NoRetry -> throw apiError(
                     HttpStatusCode.TooManyRequests,
                     "Too many failed confirmation attempt",
                     TalerErrorCode.BANK_TAN_RATE_LIMITED

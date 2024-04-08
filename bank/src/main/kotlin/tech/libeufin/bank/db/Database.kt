@@ -27,17 +27,17 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.bank.*
-import tech.libeufin.common.asInstant
+import tech.libeufin.common.*
 import tech.libeufin.common.db.*
 import java.sql.PreparedStatement
 import java.sql.ResultSet
-import kotlin.math.abs
+import java.util.concurrent.ConcurrentHashMap
+import java.util.*
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank-db")
 
 class Database(dbConfig: DatabaseConfig, internal val bankCurrency: String, internal val fiatCurrency: String?): DbPool(dbConfig, "libeufin-bank") {
-    internal val notifWatcher: NotificationWatcher = NotificationWatcher(pgSource)
-
+    // DAOs
     val cashout = CashoutDAO(this)
     val withdrawal = WithdrawalDAO(this)
     val exchange = ExchangeDAO(this)
@@ -47,6 +47,67 @@ class Database(dbConfig: DatabaseConfig, internal val bankCurrency: String, inte
     val token = TokenDAO(this)
     val tan = TanDAO(this)
     val gc = GcDAO(this)
+
+    // Transaction flows, the keys are the bank account id
+    private val bankTxFlows = ConcurrentHashMap<Long, CountedSharedFlow<Long>>()
+    private val outgoingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow<Long>>()
+    private val incomingTxFlows = ConcurrentHashMap<Long, CountedSharedFlow<Long>>()
+    private val revenueTxFlows = ConcurrentHashMap<Long, CountedSharedFlow<Long>>()
+    // Withdrawal confirmation flow, the key is the public withdrawal UUID
+    private val withdrawalFlow = ConcurrentHashMap<UUID, CountedSharedFlow<WithdrawalStatus>>()
+ 
+    init {
+        watchNotifications(pgSource, "libeufin_bank", LoggerFactory.getLogger("libeufin-bank-db-watcher"), mapOf(
+            "bank_tx" to {
+                val (debtor, creditor, debitRow, creditRow) = it.split(' ', limit = 4).map { it.toLong() }
+                bankTxFlows[debtor]?.run {
+                    flow.emit(debitRow)
+                }
+                bankTxFlows[creditor]?.run {
+                    flow.emit(creditRow)
+                }
+                revenueTxFlows[creditor]?.run {
+                    flow.emit(creditRow)
+                }
+            },
+            "outgoing_tx" to {
+                val (account, merchant, debitRow, creditRow) = it.split(' ', limit = 4).map { it.toLong() }
+                outgoingTxFlows[account]?.run {
+                    flow.emit(debitRow)
+                }
+            },
+            "incoming_tx" to {
+                val (account, row) = it.split(' ', limit = 2).map { it.toLong() }
+                incomingTxFlows[account]?.run {
+                    flow.emit(row)
+                }
+            },
+            "withdrawal_status" to {
+                val raw = it.split(' ', limit = 2)
+                val uuid = UUID.fromString(raw[0])
+                val status = WithdrawalStatus.valueOf(raw[1])
+                withdrawalFlow[uuid]?.run {
+                    flow.emit(status)
+                }
+            }
+        ))
+    }
+
+    /** Listen for new bank transactions for [account] */
+    suspend fun <R> listenBank(account: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(bankTxFlows, account, lambda)
+    /** Listen for new taler outgoing transactions from [account] */
+    suspend fun <R> listenOutgoing(exchange: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(outgoingTxFlows, exchange, lambda)
+    /** Listen for new taler incoming transactions to [account] */
+    suspend fun <R> listenIncoming(exchange: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(incomingTxFlows, exchange, lambda)
+    /** Listen for new taler outgoing transactions to [account] */
+    suspend fun <R> listenRevenue(merchant: Long, lambda: suspend (Flow<Long>) -> R): R
+        = listen(revenueTxFlows, merchant, lambda)
+    /** Listen for new withdrawal confirmations */
+    suspend fun <R> listenWithdrawals(withdrawal: UUID, lambda: suspend (Flow<WithdrawalStatus>) -> R): R
+        = listen(withdrawalFlow, withdrawal, lambda)
 
     suspend fun monitor(
         params: MonitorParams
@@ -87,92 +148,13 @@ class Database(dbConfig: DatabaseConfig, internal val bankCurrency: String, inte
                     talerOutCount = it.getLong("taler_out_count"),
                     talerOutVolume = it.getAmount("taler_out_volume", bankCurrency),
                 )
-            } ?:  MonitorNoConversion(
+            } ?: MonitorNoConversion(
                 talerInCount = it.getLong("taler_in_count"),
                 talerInVolume = it.getAmount("taler_in_volume", bankCurrency),
                 talerOutCount = it.getLong("taler_out_count"),
                 talerOutVolume = it.getAmount("taler_out_volume", bankCurrency),
             )
         } ?: throw internalServerError("No result from DB procedure stats_get_frame")
-    }
-
-    /** Apply paging logic to a sql query */
-    internal suspend fun <T> page(
-        params: PageParams,
-        idName: String,
-        query: String,
-        bind: PreparedStatement.() -> Int = { 0 },
-        map: (ResultSet) -> T
-    ): List<T> = conn { conn ->
-        val backward = params.delta < 0
-        val pageQuery = """
-            $query
-            $idName ${if (backward) '<' else '>'} ?
-            ORDER BY $idName ${if (backward) "DESC" else "ASC"}
-            LIMIT ?
-        """
-        conn.prepareStatement(pageQuery).run {
-            val pad = bind()
-            setLong(pad + 1, params.start)
-            setInt(pad + 2, abs(params.delta))
-            all { map(it) }
-        }
-    }
-
-    /**
-    * The following function returns the list of transactions, according
-    * to the history parameters and perform long polling when necessary
-    */
-    internal suspend fun <T> poolHistory(
-        params: HistoryParams, 
-        bankAccountId: Long,
-        listen: suspend NotificationWatcher.(Long, suspend (Flow<Long>) -> List<T>) -> List<T>,
-        query: String,
-        accountColumn: String = "bank_account_id",
-        map: (ResultSet) -> T
-    ): List<T> {
-
-        suspend fun load(): List<T> = page(
-            params.page, 
-            "bank_transaction_id", 
-            "$query $accountColumn=? AND", 
-            {
-                setLong(1, bankAccountId)
-                1
-            },
-            map
-        )
-            
-
-        // TODO do we want to handle polling when going backward and there is no transactions yet ?
-        // When going backward there is always at least one transaction or none
-        return if (params.page.delta >= 0 && params.polling.poll_ms > 0) {
-            notifWatcher.(listen)(bankAccountId) { flow ->
-                coroutineScope {
-                    // Start buffering notification before loading transactions to not miss any
-                    val polling = launch {
-                        withTimeoutOrNull(params.polling.poll_ms) {
-                            flow.first { it > params.page.start } // Always forward so >
-                        }
-                    }    
-                    // Initial loading
-                    val init = load()
-                    // Long polling if we found no transactions
-                    if (init.isEmpty()) {
-                        if (polling.join() != null) {
-                            load()
-                        } else {
-                            init
-                        }
-                    } else {
-                        polling.cancel()
-                        init
-                    }
-                }
-            }
-        } else {
-            load()
-        }
     }
 }
 
