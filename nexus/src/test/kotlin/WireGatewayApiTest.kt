@@ -17,21 +17,25 @@
  * <http://www.gnu.org/licenses/>
  */
 
+import io.ktor.client.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.server.testing.*
 import org.junit.Test
 import tech.libeufin.common.*
 
 class WireGatewayApiTest {
     // GET /accounts/{USERNAME}/taler-wire-gateway/config
     @Test
-    fun config() = bankSetup { _ ->
-        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/config")
+    fun config() = serverSetup { _ ->
+        //authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/config")
 
-        client.getA("/accounts/merchant/taler-wire-gateway/config").assertOk()
+        client.get("/taler-wire-gateway/config").assertOk()
     }
 
     // Testing the POST /transfer call from the TWG API.
-    @Test
+    /*@Test
     fun transfer() = bankSetup { _ -> 
         val valid_req = obj {
             "request_uid" to HashCode.rand()
@@ -119,13 +123,13 @@ class WireGatewayApiTest {
                 "request_uid" to randBase32Crockford(65)
             }
         }.assertBadRequest()
-    }
-    
+    }*/
+    /*
     /**
      * Testing the /history/incoming call from the TWG API.
      */
     @Test
-    fun historyIncoming() = bankSetup { 
+    fun historyIncoming() = serverSetup { 
         // Give Foo reasonable debt allowance:
         setMaxDebt("merchant", "KUDOS:1000")
         authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/history/incoming")
@@ -164,7 +168,7 @@ class WireGatewayApiTest {
      * Testing the /history/outgoing call from the TWG API.
      */
     @Test
-    fun historyOutgoing() = bankSetup {
+    fun historyOutgoing() = serverSetup {
         setMaxDebt("exchange", "KUDOS:1000000")
         authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/history/outgoing")
         historyRoutine<OutgoingHistory>(
@@ -191,67 +195,45 @@ class WireGatewayApiTest {
                 }
             )
         )
-    }
+    }*/
 
     // Testing the /admin/add-incoming call from the TWG API.
     @Test
-    fun addIncoming() = bankSetup { _ -> 
+    fun addIncoming() = serverSetup { _ -> 
         val valid_req = obj {
-            "amount" to "KUDOS:44"
+            "amount" to "CHF:44"
             "reserve_pub" to EddsaPublicKey.rand()
-            "debit_account" to merchantPayto.canonical
+            "debit_account" to grothoffPayto
         }
 
-        authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req, requireAdmin = true)
+        //authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/admin/add-incoming", valid_req, requireAdmin = true)
 
-        // Checking exchange debt constraint.
-        client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            json(valid_req)
-        }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
-
-        // Giving debt allowance and checking the OK case.
-        setMaxDebt("merchant", "KUDOS:1000")
-        client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
+        // Check OK
+        client.post("/taler-wire-gateway/admin/add-incoming") {
             json(valid_req)
         }.assertOk()
 
         // Trigger conflict due to reused reserve_pub
-        client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
+        client.post("/taler-wire-gateway/admin/add-incoming") {
             json(valid_req)
         }.assertConflict(TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT)
 
         // Currency mismatch
-        client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
+        client.post("/taler-wire-gateway/admin/add-incoming") {
             json(valid_req) { "amount" to "EUR:33" }
         }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
 
-        // Unknown account
-        client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            json(valid_req) { 
-                "reserve_pub" to EddsaPublicKey.rand()
-                "debit_account" to unknownPayto
-            }
-        }.assertConflict(TalerErrorCode.BANK_UNKNOWN_DEBTOR)
-
-        // Same account
-        client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
-            json(valid_req) { 
-                "reserve_pub" to EddsaPublicKey.rand()
-                "debit_account" to exchangePayto
-            }
-        }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
-
         // Bad BASE32 reserve_pub
-        client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
+        client.post("/taler-wire-gateway/admin/add-incoming") {
             json(valid_req) { 
                 "reserve_pub" to "I love chocolate"
             }
         }.assertBadRequest()
         
         // Bad BASE32 len reserve_pub
-        client.postA("/accounts/exchange/taler-wire-gateway/admin/add-incoming") {
+        client.post("/taler-wire-gateway/admin/add-incoming") {
             json(valid_req) { 
-                "reserve_pub" to randBase32Crockford(31)
+                "reserve_pub" to Base32Crockford.encode(ByteArray(31).rand())
             }
         }.assertBadRequest()
     }

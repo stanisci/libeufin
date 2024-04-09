@@ -20,6 +20,9 @@
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
 import tech.libeufin.common.TalerAmount
 import tech.libeufin.common.db.dbInit
@@ -52,6 +55,20 @@ fun setup(
         lambda(it, ctx)
     }
 }
+
+fun serverSetup(
+    conf: String = "test.conf",
+    lambda: suspend ApplicationTestBuilder.(Database) -> Unit
+) = setup { db, cfg ->
+    testApplication {
+        application {
+            nexusApi(db, cfg)
+        }
+        lambda(db)
+    }
+}
+
+val grothoffPayto = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans"
 
 val clientKeys = generateNewKeys()
 

@@ -37,50 +37,6 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.TimeUnit
 
-/** Timestamp containing the number of seconds since epoch */
-@Serializable
-data class TalerProtocolTimestamp(
-    @Serializable(with = Serializer::class)
-    val t_s: Instant,
-) {
-    companion object {
-        fun fromMicroseconds(uSec: Long): TalerProtocolTimestamp {
-            return TalerProtocolTimestamp(
-                Instant.EPOCH.plus(uSec, ChronoUnit.MICROS)
-            )
-        }
-    }
-
-    internal object Serializer : KSerializer<Instant> {
-        override fun serialize(encoder: Encoder, value: Instant) {
-            if (value == Instant.MAX) {
-                encoder.encodeString("never")
-            } else {
-                encoder.encodeLong(value.epochSecond)
-            }
-            
-        }
-    
-        override fun deserialize(decoder: Decoder): Instant {
-            val jsonInput = decoder as? JsonDecoder ?: error("Can be deserialized only by JSON")
-            val maybeTs = jsonInput.decodeJsonElement().jsonPrimitive
-            if (maybeTs.isString) {
-                if (maybeTs.content != "never") throw badRequest("Only 'never' allowed for t_s as string, but '${maybeTs.content}' was found")
-                return Instant.MAX
-            }
-            val ts: Long = maybeTs.longOrNull
-                ?: throw badRequest("Could not convert t_s '${maybeTs.content}' to a number")
-            when {
-                ts < 0 -> throw badRequest("Negative timestamp not allowed")
-                ts > Instant.MAX.epochSecond -> throw badRequest("Timestamp $ts too big to be represented in Kotlin")
-                else -> return Instant.ofEpochSecond(ts)
-            }
-        }
-    
-        override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
-    }
-}
-
 @Serializable(with = DecimalNumber.Serializer::class)
 class DecimalNumber {
     val value: Long
@@ -179,30 +135,5 @@ data class RelativeTime(
 
     companion object {
         private const val MAX_SAFE_INTEGER = 9007199254740991L // 2^53 - 1
-    }
-}
-
-
-@Serializable(with = ExchangeUrl.Serializer::class)
-class ExchangeUrl {
-    val url: String
-
-    constructor(raw: String) {
-        url = URL(raw).toString()
-    }
-
-    override fun toString(): String = url
-
-    internal object Serializer : KSerializer<ExchangeUrl> {
-        override val descriptor: SerialDescriptor =
-                PrimitiveSerialDescriptor("ExchangeUrl", PrimitiveKind.STRING)
-
-        override fun serialize(encoder: Encoder, value: ExchangeUrl) {
-            encoder.encodeString(value.toString())
-        }
-
-        override fun deserialize(decoder: Decoder): ExchangeUrl {
-            return ExchangeUrl(decoder.decodeString())
-        }
     }
 }

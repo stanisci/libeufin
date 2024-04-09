@@ -24,3 +24,6 @@ const val SERIALIZATION_RETRY: Int = 10
 
 // Security
 const val MAX_BODY_LENGTH: Long = 4 * 1024 // 4kB
+
+// API version
+const val WIRE_GATEWAY_API_VERSION: String = "0:2:0"

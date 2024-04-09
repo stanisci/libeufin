@@ -21,10 +21,7 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.serialization.json.Json
 import org.junit.Test
-import tech.libeufin.common.TalerErrorCode
-import tech.libeufin.common.deflate
-import tech.libeufin.common.json
-import tech.libeufin.common.obj
+import tech.libeufin.common.*
 
 inline fun <reified B> HttpRequestBuilder.jsonDeflate(b: B) {
     val json = Json.encodeToString(kotlinx.serialization.serializer<B>(), b)

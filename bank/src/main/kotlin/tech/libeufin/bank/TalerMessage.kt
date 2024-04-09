@@ -328,14 +328,6 @@ data class TalerIntegrationConfigResponse(
 }
 
 @Serializable
-data class WireGatewayConfig(
-    val currency: String
-) {
-    val name: String = "taler-wire-gateway"
-    val version: String = WIRE_GATEWAY_API_VERSION
-}
-
-@Serializable
 data class RevenueConfig(
     val currency: String
 ) {
@@ -554,70 +546,6 @@ data class ConversionResponse(
     val amount_credit: TalerAmount,
 )
 
-/**
- * Request to an /admin/add-incoming request from
- * the Taler Wire Gateway API.
- */
-@Serializable
-data class AddIncomingRequest(
-    val amount: TalerAmount,
-    val reserve_pub: EddsaPublicKey,
-    val debit_account: Payto
-)
-
-/**
- * Response to /admin/add-incoming
- */
-@Serializable
-data class AddIncomingResponse(
-    val timestamp: TalerProtocolTimestamp,
-    val row_id: Long
-)
-
-/**
- * Response of a TWG /history/incoming call.
- */
-@Serializable
-data class IncomingHistory(
-    val incoming_transactions: List<IncomingReserveTransaction>,
-    val credit_account: String
-)
-
-/**
- * TWG's incoming payment record.
- */
-@Serializable
-data class IncomingReserveTransaction(
-    val type: String = "RESERVE",
-    val row_id: Long, // DB row ID of the payment.
-    val date: TalerProtocolTimestamp,
-    val amount: TalerAmount,
-    val debit_account: String,
-    val reserve_pub: EddsaPublicKey
-)
-
-/**
- * Response of a TWG /history/outgoing call.
- */
-@Serializable
-data class OutgoingHistory(
-    val outgoing_transactions: List<OutgoingTransaction>,
-    val debit_account: String
-)
-
-/**
- * TWG's outgoinf payment record.
- */
-@Serializable
-data class OutgoingTransaction(
-    val row_id: Long, // DB row ID of the payment.
-    val date: TalerProtocolTimestamp,
-    val amount: TalerAmount,
-    val credit_account: String,
-    val wtid: ShortHashCode,
-    val exchange_base_url: String,
-)
-
 @Serializable
 data class RevenueIncomingHistory(
     val incoming_transactions : List<RevenueIncomingBankTransaction>,
@@ -631,27 +559,6 @@ data class RevenueIncomingBankTransaction(
     val amount: TalerAmount,
     val debit_account: String,
     val subject: String
-)
-
-/**
- * TWG's request to pay a merchant.
- */
-@Serializable
-data class TransferRequest(
-    val request_uid: HashCode,
-    val amount: TalerAmount,
-    val exchange_base_url: ExchangeUrl,
-    val wtid: ShortHashCode,
-    val credit_account: Payto
-)
-
-/**
- * TWG's response to merchant payouts
- */
-@Serializable
-data class TransferResponse(
-    val timestamp: TalerProtocolTimestamp,
-    val row_id: Long
 )
 
 /**

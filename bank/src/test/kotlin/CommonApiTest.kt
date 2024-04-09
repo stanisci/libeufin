@@ -20,7 +20,7 @@
 import io.ktor.client.request.*
 import io.ktor.http.*
 import org.junit.Test
-import tech.libeufin.common.TalerErrorCode
+import tech.libeufin.common.*
 
 class CommonApiTest {
     @Test

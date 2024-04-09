@@ -22,9 +22,7 @@ import org.junit.Test
 import tech.libeufin.bank.BankAccountTransactionInfo
 import tech.libeufin.bank.RegisterAccountResponse
 import tech.libeufin.bank.TransactionCreateResponse
-import tech.libeufin.common.IbanPayto
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.json
+import tech.libeufin.common.*
 import kotlin.test.assertEquals
 
 class PaytoTest {

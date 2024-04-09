@@ -96,10 +96,10 @@ class PaymentDAO(private val db: Database) {
     }
 
     /** Incoming payments registration result */
-    data class IncomingRegistrationResult(
-        val id: Long,
-        val new: Boolean
-    )
+    sealed interface IncomingRegistrationResult {
+        data class Success(val id: Long, val new: Boolean): IncomingRegistrationResult
+        data object ReservePubReuse: IncomingRegistrationResult
+    }
 
     /** Register an talerable incoming payment */
     suspend fun registerTalerableIncoming(
@@ -107,7 +107,7 @@ class PaymentDAO(private val db: Database) {
         reservePub: EddsaPublicKey
     ): IncomingRegistrationResult = db.conn { conn ->
         val stmt = conn.prepareStatement("""
-            SELECT out_found, out_tx_id
+            SELECT out_reserve_pub_reuse, out_found, out_tx_id
             FROM register_incoming_and_talerable((?,?)::taler_amount,?,?,?,?,?)
         """)
         val executionTime = paymentData.executionTime.micros()
@@ -119,10 +119,13 @@ class PaymentDAO(private val db: Database) {
         stmt.setString(6, paymentData.bankId)
         stmt.setBytes(7, reservePub.raw)
         stmt.one {
-            IncomingRegistrationResult(
-                it.getLong("out_tx_id"),
-                !it.getBoolean("out_found")
-            )
+            when {
+                it.getBoolean("out_reserve_pub_reuse") -> IncomingRegistrationResult.ReservePubReuse
+                else -> IncomingRegistrationResult.Success(
+                    it.getLong("out_tx_id"),
+                    !it.getBoolean("out_found")
+                )
+            }
         }
     }
 }

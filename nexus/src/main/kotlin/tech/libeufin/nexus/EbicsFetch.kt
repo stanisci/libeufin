@@ -28,6 +28,7 @@ import io.ktor.client.plugins.*
 import kotlinx.coroutines.*
 import tech.libeufin.common.*
 import tech.libeufin.nexus.db.*
+import tech.libeufin.nexus.db.PaymentDAO.*
 import tech.libeufin.nexus.ebics.*
 import java.io.IOException
 import java.io.InputStream
@@ -120,11 +121,16 @@ suspend fun ingestIncomingPayment(
 ) {
     runCatching { parseIncomingTxMetadata(payment.wireTransferSubject) }.fold(
         onSuccess = { reservePub -> 
-            val result = db.payment.registerTalerableIncoming(payment, reservePub)
-            if (result.new) {
-                logger.info("$payment")
-            } else {
-                logger.debug("$payment already seen")
+            val res = db.payment.registerTalerableIncoming(payment, reservePub)
+            when (res) {
+                IncomingRegistrationResult.ReservePubReuse -> throw Error("TODO reserve pub reuse")
+                is IncomingRegistrationResult.Success -> {
+                    if (res.new) {
+                        logger.info("$payment")
+                    } else {
+                        logger.debug("$payment already seen")
+                    }
+                }
             }
         },
         onFailure = { e ->

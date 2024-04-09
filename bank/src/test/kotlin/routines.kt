@@ -27,9 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import tech.libeufin.bank.BankAccountCreateWithdrawalResponse
 import tech.libeufin.bank.WithdrawalStatus
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.TalerErrorCode
-import tech.libeufin.common.json
+import tech.libeufin.common.*
 import kotlin.test.assertEquals
 
 // Test endpoint is correctly authenticated 

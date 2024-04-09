@@ -20,6 +20,7 @@
 import io.ktor.http.*
 import org.junit.Test
 import tech.libeufin.bank.RevenueIncomingHistory
+import tech.libeufin.common.*
 
 class RevenueApiTest {
     // GET /accounts/{USERNAME}/taler-revenue/config

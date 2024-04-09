@@ -21,11 +21,8 @@ import org.junit.Test
 import tech.libeufin.bank.DecimalNumber
 import tech.libeufin.bank.db.TransactionDAO.BankTransactionResult
 import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalCreationResult
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.TalerErrorCode
+import tech.libeufin.common.*
 import tech.libeufin.common.db.oneOrNull
-import tech.libeufin.common.json
-import tech.libeufin.common.obj
 import java.time.Instant
 import java.util.*
 import kotlin.test.assertEquals

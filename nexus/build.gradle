@@ -27,6 +27,7 @@ dependencies {
     implementation("com.github.ajalt.clikt:clikt:$clikt_version")
     implementation("org.postgresql:postgresql:$postgres_version")
     // Ktor client library
+    implementation("io.ktor:ktor-server-core:$ktor_version")
     implementation("io.ktor:ktor-client-cio:$ktor_version")
 
     // PDF generation
@@ -40,6 +41,7 @@ dependencies {
 
     // Unit testing
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlin_version")
+    testImplementation("io.ktor:ktor-server-test-host:$ktor_version")
     testImplementation("io.ktor:ktor-client-mock:$ktor_version")
 }
 

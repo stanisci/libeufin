@@ -194,10 +194,8 @@ class ExchangeDAO(private val db: Database) {
         stmt.setString(6, login)
         stmt.setLong(7, now.micros())
 
-        stmt.executeQuery().use {
+        stmt.one {
             when {
-                !it.next() ->
-                    throw internalServerError("SQL function taler_add_incoming did not return anything.")
                 it.getBoolean("out_creditor_not_found") -> AddIncomingResult.UnknownExchange 
                 it.getBoolean("out_creditor_not_exchange") -> AddIncomingResult.NotAnExchange
                 it.getBoolean("out_debtor_not_found") -> AddIncomingResult.UnknownDebtor

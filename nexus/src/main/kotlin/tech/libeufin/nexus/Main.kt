@@ -33,10 +33,13 @@ import com.github.ajalt.clikt.parameters.groups.provideDelegate
 import com.github.ajalt.clikt.parameters.options.convert
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.versionOption
+import io.ktor.server.application.*
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.libeufin.common.*
+import tech.libeufin.common.api.*
 import tech.libeufin.common.db.DatabaseConfig
+import tech.libeufin.nexus.api.*
 import tech.libeufin.nexus.db.Database
 import tech.libeufin.nexus.db.InitiatedPayment
 import java.nio.file.Path
@@ -105,6 +108,16 @@ class NexusConfig(val config: TalerConfig) {
     val fetch = NexusFetchConfig(config)
 }
 
+fun NexusConfig.checkCurrency(amount: TalerAmount) {
+    if (amount.currency != currency) throw badRequest(
+        "Wrong currency: expected regional $currency got ${amount.currency}",
+        TalerErrorCode.GENERIC_CURRENCY_MISMATCH
+    )
+}
+
+fun Application.nexusApi(db: Database, cfg: NexusConfig) = talerApi(logger) {
+    wireGatewayApi(db, cfg)
+}
 
 /**
  * Abstracts the config loading

@@ -20,8 +20,7 @@
 import io.ktor.client.request.*
 import org.junit.Test
 import tech.libeufin.bank.ConversionResponse
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.TalerErrorCode
+import tech.libeufin.common.*
 import kotlin.test.assertEquals
 
 class ConversionApiTest {

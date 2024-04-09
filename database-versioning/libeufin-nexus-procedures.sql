@@ -205,17 +205,31 @@ CREATE FUNCTION register_incoming_and_talerable(
   ,IN in_debit_payto_uri TEXT
   ,IN in_bank_id TEXT
   ,IN in_reserve_public_key BYTEA
+  -- Error status
+  ,OUT out_reserve_pub_reuse BOOLEAN
+  -- Success return
   ,OUT out_found BOOLEAN
   ,OUT out_tx_id INT8
 )
 LANGUAGE plpgsql AS $$
 BEGIN
+-- Check conflict
+IF EXISTS (
+  SELECT FROM talerable_incoming_transactions 
+  JOIN incoming_transactions ON talerable_incoming_transactions.incoming_transaction_id=incoming_transactions.incoming_transaction_id
+  WHERE reserve_public_key = in_reserve_public_key
+  AND bank_id != in_bank_id
+) THEN
+  out_reserve_pub_reuse = TRUE;
+  RETURN;
+END IF;
+
 -- Register the incoming transaction
 SELECT reg.out_found, reg.out_tx_id
   FROM register_incoming(in_amount, in_wire_transfer_subject, in_execution_time, in_debit_payto_uri, in_bank_id) as reg
   INTO out_found, out_tx_id;
 
--- Register as talerable bounce
+-- Register as talerable
 IF NOT EXISTS(SELECT 1 FROM talerable_incoming_transactions WHERE incoming_transaction_id = out_tx_id) THEN
   -- We cannot use ON CONFLICT here because conversion use a trigger before insertion that isn't idempotent
   INSERT INTO talerable_incoming_transactions (

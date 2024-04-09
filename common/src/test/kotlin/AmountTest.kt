@@ -18,7 +18,7 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.*
 import kotlin.test.assertEquals
 
 class AmountTest {

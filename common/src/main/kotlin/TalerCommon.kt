@@ -27,13 +27,92 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import tech.libeufin.common.*
 import java.net.URI
+import java.net.URL
+import java.time.Duration
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.concurrent.TimeUnit
 
 sealed class CommonError(msg: String): Exception(msg) {
     class AmountFormat(msg: String): CommonError(msg)
     class AmountNumberTooBig(msg: String): CommonError(msg)
     class Payto(msg: String): CommonError(msg)
+}
+
+
+/** Timestamp containing the number of seconds since epoch */
+@Serializable
+data class TalerProtocolTimestamp(
+    @Serializable(with = Serializer::class)
+    val t_s: Instant,
+) {
+    companion object {
+        fun fromMicroseconds(uSec: Long): TalerProtocolTimestamp {
+            return TalerProtocolTimestamp(
+                Instant.EPOCH.plus(uSec, ChronoUnit.MICROS)
+            )
+        }
+    }
+
+    internal object Serializer : KSerializer<Instant> {
+        override fun serialize(encoder: Encoder, value: Instant) {
+            if (value == Instant.MAX) {
+                encoder.encodeString("never")
+            } else {
+                encoder.encodeLong(value.epochSecond)
+            }
+            
+        }
+    
+        override fun deserialize(decoder: Decoder): Instant {
+            val jsonInput = decoder as? JsonDecoder ?: error("Can be deserialized only by JSON")
+            val maybeTs = jsonInput.decodeJsonElement().jsonPrimitive
+            if (maybeTs.isString) {
+                if (maybeTs.content != "never") throw badRequest("Only 'never' allowed for t_s as string, but '${maybeTs.content}' was found")
+                return Instant.MAX
+            }
+            val ts: Long = maybeTs.longOrNull
+                ?: throw badRequest("Could not convert t_s '${maybeTs.content}' to a number")
+            when {
+                ts < 0 -> throw badRequest("Negative timestamp not allowed")
+                ts > Instant.MAX.epochSecond -> throw badRequest("Timestamp $ts too big to be represented in Kotlin")
+                else -> return Instant.ofEpochSecond(ts)
+            }
+        }
+    
+        override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+    }
+}
+
+
+@Serializable(with = ExchangeUrl.Serializer::class)
+class ExchangeUrl {
+    val url: String
+
+    constructor(raw: String) {
+        url = URL(raw).toString()
+    }
+
+    override fun toString(): String = url
+
+    internal object Serializer : KSerializer<ExchangeUrl> {
+        override val descriptor: SerialDescriptor =
+                PrimitiveSerialDescriptor("ExchangeUrl", PrimitiveKind.STRING)
+
+        override fun serialize(encoder: Encoder, value: ExchangeUrl) {
+            encoder.encodeString(value.toString())
+        }
+
+        override fun deserialize(decoder: Decoder): ExchangeUrl {
+            return ExchangeUrl(decoder.decodeString())
+        }
+    }
 }
 
 @Serializable(with = TalerAmount.Serializer::class)

@@ -23,7 +23,7 @@ import kotlinx.serialization.json.Json
 import org.junit.Test
 import tech.libeufin.bank.CreditDebitInfo
 import tech.libeufin.bank.RelativeTime
-import tech.libeufin.bank.TalerProtocolTimestamp
+import tech.libeufin.common.TalerProtocolTimestamp
 import tech.libeufin.common.TalerAmount
 import java.time.Duration
 import java.time.Instant
