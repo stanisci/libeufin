@@ -30,14 +30,18 @@ import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.convert
 import com.github.ajalt.clikt.parameters.groups.provideDelegate
-import com.github.ajalt.clikt.parameters.options.convert
-import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.versionOption
+import com.github.ajalt.clikt.parameters.options.*
+import com.github.ajalt.clikt.parameters.types.path
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.Serializable
+import kotlin.io.path.*
 import io.ktor.server.application.*
 import org.slf4j.Logger
+import org.slf4j.event.Level
 import org.slf4j.LoggerFactory
 import tech.libeufin.common.*
 import tech.libeufin.common.api.*
+import tech.libeufin.common.crypto.*
 import tech.libeufin.common.db.DatabaseConfig
 import tech.libeufin.nexus.api.*
 import tech.libeufin.nexus.db.Database
@@ -46,6 +50,7 @@ import java.nio.file.Path
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import javax.crypto.EncryptedPrivateKeyInfo
 
 val NEXUS_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-nexus", "libeufin-nexus")
 internal val logger: Logger = LoggerFactory.getLogger("libeufin-nexus")
@@ -189,6 +194,103 @@ class InitiatePayment: CliktCommand("Initiate an outgoing payment") {
     }
 }
 
+class ConvertBackup: CliktCommand("Convert an old backup to the new config format") {
+    private val backupPath by argument(
+        "backup",
+        help = "Specifies the backup file"
+    ).path()
+
+    @Serializable
+    data class EbicsKeysBackupJson(
+        val userID: String,
+        val partnerID: String,
+        val hostID: String,
+        val ebicsURL: String,
+        val authBlob: String,
+        val encBlob: String,
+        val sigBlob: String
+    )
+
+    override fun run() = cliCmd(logger, Level.INFO) {
+        val raw = backupPath.readText()
+        val backup = Json.decodeFromString<EbicsKeysBackupJson>(raw)
+
+        val (authBlob, encBlob, sigBlob) = Triple(
+            EncryptedPrivateKeyInfo(backup.authBlob.decodeBase64()),
+            EncryptedPrivateKeyInfo(backup.encBlob.decodeBase64()),
+            EncryptedPrivateKeyInfo(backup.sigBlob.decodeBase64())
+        )
+        lateinit var keys: ClientPrivateKeysFile
+        while (true) {
+            val passphrase = prompt("Enter the backup password", hideInput = true)!!
+            try {
+                val (authKey, encKey, sigKey) = Triple(
+                    CryptoUtil.decryptKey(authBlob, passphrase),
+                    CryptoUtil.decryptKey(encBlob, passphrase),
+                    CryptoUtil.decryptKey(sigBlob, passphrase)
+                )
+                keys = ClientPrivateKeysFile(
+                    signature_private_key = sigKey,
+                    encryption_private_key = encKey,
+                    authentication_private_key = authKey,
+                    submitted_ini = false,
+                    submitted_hia = false
+                )
+                break
+            } catch (e: Exception) {
+                e.fmtLog(logger)
+            }
+        }
+       
+
+        println("# KEYS")
+        println(JSON.encodeToString(kotlinx.serialization.serializer<ClientPrivateKeysFile>(), keys))
+
+        println("# CONFIG")
+        println("""
+[nexus-ebics]
+CURRENCY = CHF
+
+HOST_BASE_URL = ${backup.ebicsURL}
+BANK_DIALECT = postfinance
+
+
+HOST_ID = ${backup.hostID}
+USER_ID = ${backup.userID}
+PARTNER_ID = ${backup.partnerID}
+SYSTEM_ID = 
+
+IBAN = 
+BIC = 
+NAME = 
+""")
+
+        /*val (authKey, encKey, sigKey) = try {
+            Triple(
+                CryptoUtil.decryptKey(
+                    EncryptedPrivateKeyInfo(base64ToBytes(ebicsBackup.authBlob)),
+                    passphrase
+                ),
+                CryptoUtil.decryptKey(
+                    EncryptedPrivateKeyInfo(base64ToBytes(ebicsBackup.encBlob)),
+                    passphrase
+                ),
+                CryptoUtil.decryptKey(
+                    EncryptedPrivateKeyInfo(base64ToBytes(ebicsBackup.sigBlob)),
+                    passphrase
+                )
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            logger.info("Restoring keys failed, probably due to wrong passphrase")
+            throw NexusError(
+                HttpStatusCode.BadRequest,
+                "Bad backup given"
+            )
+        }*/
+    }
+}
+
 class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
     private val common by CommonOption()
     private val amount by option(
@@ -236,7 +338,7 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
 
 class TestingCmd : CliktCommand("Testing helper commands", name = "testing") {
     init {
-        subcommands(FakeIncoming())
+        subcommands(FakeIncoming(), ConvertBackup())
     }
 
     override fun run() = Unit
