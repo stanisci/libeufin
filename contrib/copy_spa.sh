@@ -9,4 +9,4 @@ if ! test -d .git; then
   exit 1
 fi
 
-cp contrib/wallet-core/demobank/* debian/usr/share/libeufin/demobank-ui/
+cp contrib/wallet-core/bank/* debian/usr/share/libeufin/demobank-ui/

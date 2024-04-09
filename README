@@ -74,7 +74,7 @@ User interface
 
 This repository does not ship any UI, rather it downloads
 one from the following project along the "make deb" target:
-https://git.taler.net/wallet-core.git/tree/packages/demobank-ui
+https://git.taler.net/wallet-core.git/tree/packages/bank-ui
 
 This way, the libeufin-bank Debian package provides one
 self-contained solution including Nginx, LibEuFin Bank,
