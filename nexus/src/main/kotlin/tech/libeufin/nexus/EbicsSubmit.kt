@@ -92,7 +92,7 @@ private suspend fun submitInitiatedPayment(
         ctx.cfg,
         ctx.clientPrivateKeysFile,
         ctx.bankPublicKeysFile,
-        uploadPaymentService(),
+        ctx.cfg.dialect.directDebit(),
         xml
     )
 }

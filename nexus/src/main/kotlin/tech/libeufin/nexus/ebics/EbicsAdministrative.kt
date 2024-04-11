@@ -29,10 +29,19 @@ data class VersionNumber(val number: Float, val schema: String) {
     override fun toString(): String = "$number:$schema"
 }
 
-data class AccountInfo(
+data class HKD (
+    val account: AccountInfo,
+    val orders: List<OrderInfo>
+)
+data class AccountInfo (
     val currency: String?,
     val iban: String?,
     val name: String?
+)
+data class OrderInfo (
+    val type: String,
+    val params: String,
+    val description: String,
 )
 
 object EbicsAdministrative {
@@ -59,13 +68,12 @@ object EbicsAdministrative {
         }
     }
 
-    fun parseHKD(stream: InputStream): AccountInfo { 
+    fun parseHKD(stream: InputStream): HKD { 
         return XmlDestructor.fromStream(stream, "HKDResponseOrderData") {
-            var currency: String? = null
-            var iban: String? = null
-            var name: String? = null
             one("PartnerInfo") {
-                name = opt("AddressInfo")?.one("Name")?.text()
+                var currency: String? = null
+                var iban: String? = null
+                val name = opt("AddressInfo")?.one("Name")?.text()
                 opt("AccountInfo") {
                     currency = attr("Currency")
                     each("AccountNumber") {
@@ -74,8 +82,33 @@ object EbicsAdministrative {
                         }
                     }
                 }
+                val orders = map("OrderInfo") {
+                    OrderInfo(
+                        one("AdminOrderType").text(),
+                        opt("Service") {
+                            var params = ""
+                            opt("ServiceName")?.run {
+                                params += " ${text()}"
+                            }
+                            opt("Scope")?.run {
+                                params += " ${text()}"
+                            }
+                            opt("ServiceOption")?.run {
+                                params += " ${text()}"
+                            }
+                            opt("MsgName")?.run {
+                                params += " ${text()}"
+                            }
+                            opt("Container")?.run {
+                                params += " ${attr("containerType")}"
+                            }
+                            params
+                        } ?: "",
+                        one("Description").text()
+                    )
+                }
+                HKD(AccountInfo(currency, iban, name), orders)
             }
-            AccountInfo(currency, iban, name)
         }
     }
 }

@@ -111,6 +111,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         val ebicsFlags = "$flags --transient --debug-ebics test/$platform"
         val clientKeysPath = cfg.requirePath("nexus-ebics", "client_private_keys_file")
         val bankKeysPath = cfg.requirePath("nexus-ebics", "bank_public_keys_file")
+        val currency = cfg.requireString("nexus-ebics", "currency")
 
         // Alternative payto ?
         val payto = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans"
@@ -159,7 +160,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     put("txs", suspend {
                         step("Submit many transaction")
                         repeat(4) {
-                            nexusCmd.run("initiate-payment $flags --amount=CHF:${100L+it} --subject \"multi transaction test $it\" \"$payto\"")
+                            nexusCmd.run("initiate-payment $flags --amount=$currency:${100L+it} --subject \"multi transaction test $it\" \"$payto\"")
                         }
                         nexusCmd.run("ebics-submit $ebicsFlags")
                         Unit
@@ -168,7 +169,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     put("tx", suspend {
                         step("Submit new transaction")
                         // TODO interactive payment editor
-                        nexusCmd.run("initiate-payment $flags \"$payto&amount=CHF:1.1&message=single%20transaction%20test\"")
+                        nexusCmd.run("initiate-payment $flags \"$payto&amount=$currency:1.1&message=single%20transaction%20test\"")
                         nexusCmd.run("ebics-submit $ebicsFlags")
                         Unit
                     })

@@ -75,19 +75,7 @@ class EbicsBTS(
                                 el("AdminOrderType", order.type)
                                 if (order.type == "BTD") {
                                     el("BTDOrderParams") {
-                                        el("Service") {
-                                            el("ServiceName", order.name!!)
-                                            el("Scope", order.scope!!)
-                                            if (order.container != null) {
-                                                el("Container") {
-                                                    attr("containerType", order.container)
-                                                }
-                                            }
-                                            el("MsgName") {
-                                                attr("version", order.messageVersion!!)
-                                                text(order.messageName!!)
-                                            }
-                                        }
+                                        service(order)
                                         if (startDate != null) {
                                             el("DateRange") {
                                                 el("Start", startDate.xmlDate())
@@ -95,6 +83,8 @@ class EbicsBTS(
                                             }
                                         }
                                     }
+                                } else {
+                                    el("StandardOrderParams")
                                 }
                             }
                         }
@@ -179,14 +169,7 @@ class EbicsBTS(
                             is EbicsOrder.V3 -> {
                                 el("AdminOrderType", order.type)
                                 el("BTUOrderParams") {
-                                    el("Service") {
-                                        el("ServiceName", order.name!!)
-                                        el("Scope", order.scope!!)
-                                        el("MsgName") {
-                                            attr("version", order.messageVersion!!)
-                                            text(order.messageName!!)
-                                        }
-                                    }
+                                    service(order)
                                     el("SignatureFlag", "true")
                                 }
                             }
@@ -196,9 +179,7 @@ class EbicsBTS(
                     el("NumSegments", uploadData.segments.size.toString())
                     
                 }
-                el("mutable") {
-                    el("TransactionPhase", "Initialisation")
-                }
+                el("mutable/TransactionPhase", "Initialisation")
             }
             el("AuthSignature")
             el("body") {
@@ -284,6 +265,26 @@ class EbicsBTS(
             // Signature
         }
         el("SecurityMedium", "0000")
+    }
+
+    private fun XmlBuilder.service(order: EbicsOrder.V3) {
+        el("Service") {
+            el("ServiceName", order.name!!)
+            el("Scope", order.scope!!)
+            if (order.option != null) {
+                el("ServiceOption", order.option)
+            }
+            if (order.container != null) {
+                el("Container") {
+                    attr("containerType", order.container)
+                }
+            }
+            el("MsgName") {
+                if (order.messageVersion != null)
+                    attr("version", order.messageVersion)
+                text(order.messageName!!)
+            }
+        }
     }
 
     companion object {

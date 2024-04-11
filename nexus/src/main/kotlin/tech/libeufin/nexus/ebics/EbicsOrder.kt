@@ -32,28 +32,50 @@ sealed class EbicsOrder(val schema: String) {
         val messageName: String? = null,
         val messageVersion: String? = null,
         val container: String? = null,
+        val option: String? = null
     ): EbicsOrder("H005")
 }
 
-fun downloadDocService(doc: SupportedDocument, ebics2: Boolean): EbicsOrder {
-    return if (ebics2) {
-        when (doc) {
-            SupportedDocument.PAIN_002 -> EbicsOrder.V2_5("Z01", "DZHNN")
-            SupportedDocument.CAMT_052 -> EbicsOrder.V2_5("Z52", "DZHNN")
-            SupportedDocument.CAMT_053 -> EbicsOrder.V2_5("Z53", "DZHNN")
-            SupportedDocument.CAMT_054 -> EbicsOrder.V2_5("Z54", "DZHNN")
-            SupportedDocument.PAIN_002_LOGS -> EbicsOrder.V2_5("HAC", "DZHNN")
+enum class Dialect {
+    postfinance,
+    gls;
+
+    fun downloadDoc(doc: SupportedDocument, ebics2: Boolean): EbicsOrder {
+        return when (this) {
+            postfinance -> {
+                // TODO test platform need EBICS2 for HAC, should we use a separate dialect ?
+                if (ebics2 || doc == SupportedDocument.PAIN_002_LOGS) {
+                    when (doc) {
+                        SupportedDocument.PAIN_002 -> EbicsOrder.V2_5("Z01", "DZHNN")
+                        SupportedDocument.CAMT_052 -> EbicsOrder.V2_5("Z52", "DZHNN")
+                        SupportedDocument.CAMT_053 -> EbicsOrder.V2_5("Z53", "DZHNN")
+                        SupportedDocument.CAMT_054 -> EbicsOrder.V2_5("Z54", "DZHNN")
+                        SupportedDocument.PAIN_002_LOGS -> EbicsOrder.V2_5("HAC", "DZHNN")
+                    }
+                } else {
+                    when (doc) {
+                        SupportedDocument.PAIN_002 -> EbicsOrder.V3("BTD", "PSR", "CH", "pain.002", "10", "ZIP")
+                        SupportedDocument.CAMT_052 -> EbicsOrder.V3("BTD", "STM", "CH", "camt.052", "08", "ZIP")
+                        SupportedDocument.CAMT_053 -> EbicsOrder.V3("BTD", "EOP", "CH", "camt.053", "08", "ZIP")
+                        SupportedDocument.CAMT_054 -> EbicsOrder.V3("BTD", "REP", "CH", "camt.054", "08", "ZIP")
+                        SupportedDocument.PAIN_002_LOGS -> EbicsOrder.V3("HAC")
+                    }
+                }
+            }
+            gls -> when (doc) {
+                SupportedDocument.PAIN_002 -> EbicsOrder.V3("BTD", "REP", "DE", "pain.002", null, "ZIP", "SCT")
+                SupportedDocument.CAMT_052 -> EbicsOrder.V3("BTD", "STM", "DE", "camt.052", null, "ZIP")
+                SupportedDocument.CAMT_053 -> EbicsOrder.V3("BTD", "EOP", "DE", "camt.053", null, "ZIP")
+                SupportedDocument.CAMT_054 -> EbicsOrder.V3("BTD", "STM", "DE", "camt.054", null, "ZIP")
+                SupportedDocument.PAIN_002_LOGS -> EbicsOrder.V3("HAC")
+            }
         }
-    } else {
-        when (doc) {
-            SupportedDocument.PAIN_002 -> EbicsOrder.V3("BTD", "PSR", "CH", "pain.002", "10", "ZIP")
-            SupportedDocument.CAMT_052 -> EbicsOrder.V3("BTD", "STM", "CH", "camt.052", "08", "ZIP")
-            SupportedDocument.CAMT_053 -> EbicsOrder.V3("BTD", "EOP", "CH", "camt.053", "08", "ZIP")
-            SupportedDocument.CAMT_054 -> EbicsOrder.V3("BTD", "REP", "CH", "camt.054", "08", "ZIP")
-            SupportedDocument.PAIN_002_LOGS -> EbicsOrder.V3("HAC")
+    }
+
+    fun directDebit(): EbicsOrder {
+        return when (this) {
+            postfinance -> EbicsOrder.V3("BTU", "MCT", "CH", "pain.001", "09")
+            gls -> EbicsOrder.V3("BTU", "SCT", "DE", "pain.001", null, "XML")
         }
     }
 }
-
-fun uploadPaymentService(): EbicsOrder =
-    EbicsOrder.V3("BTU", "MCT", "CH", "pain.001", "09")

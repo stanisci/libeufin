@@ -119,11 +119,23 @@ suspend fun ingestIncomingPayment(
     db: Database,
     payment: IncomingPayment
 ) {
+    suspend fun bounce(msg: String) {
+        val result = db.payment.registerMalformedIncoming(
+            payment,
+            payment.amount, 
+            Instant.now()
+        )
+        if (result.new) {
+            logger.info("$payment bounced in '${result.bounceId}': $msg")
+        } else {
+            logger.debug("$payment already seen and bounced in '${result.bounceId}': $msg")
+        }
+    }
     runCatching { parseIncomingTxMetadata(payment.wireTransferSubject) }.fold(
         onSuccess = { reservePub -> 
             val res = db.payment.registerTalerableIncoming(payment, reservePub)
             when (res) {
-                IncomingRegistrationResult.ReservePubReuse -> throw Error("TODO reserve pub reuse")
+                IncomingRegistrationResult.ReservePubReuse -> bounce("reverse pub reuse")
                 is IncomingRegistrationResult.Success -> {
                     if (res.new) {
                         logger.info("$payment")
@@ -133,18 +145,7 @@ suspend fun ingestIncomingPayment(
                 }
             }
         },
-        onFailure = { e ->
-            val result = db.payment.registerMalformedIncoming(
-                payment,
-                payment.amount, 
-                Instant.now()
-            )
-            if (result.new) {
-                logger.info("$payment bounced in '${result.bounceId}': ${e.fmt()}")
-            } else {
-                logger.debug("$payment already seen and bounced in '${result.bounceId}': ${e.fmt()}")
-            }
-        }
+        onFailure = { e -> bounce(e.fmt())}
     )
 }
 
@@ -278,7 +279,7 @@ private suspend fun fetchDocuments(
             }
             // downloading the content
             val doc = doc.doc()
-            val order = downloadDocService(doc, doc == SupportedDocument.PAIN_002_LOGS)
+            val order = ctx.cfg.dialect.downloadDoc(doc, false)
             ebicsDownload(
                 ctx.httpClient,
                 ctx.cfg,

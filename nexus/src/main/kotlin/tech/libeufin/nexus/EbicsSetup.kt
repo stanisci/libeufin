@@ -250,14 +250,19 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
         logger.info("Doing administrative request HKD")
         try {
             ebicsDownload(client, cfg, clientKeys, bankKeys, EbicsOrder.V3("HKD"), null, null) { stream ->
-                val account = EbicsAdministrative.parseHKD(stream)
+                val hkd = EbicsAdministrative.parseHKD(stream)
+                val account = hkd.account
                 // TODO parse and check more information
                 if (account.currency != null && account.currency != cfg.currency)
-                    logger.warn("Expected CURRENCY '${cfg.currency}' from config got '${account.currency}' from bank")
+                    logger.error("Expected CURRENCY '${cfg.currency}' from config got '${account.currency}' from bank")
                 if (account.iban != null && account.iban != cfg.account.iban)
-                    logger.warn("Expected IBAN '${cfg.account.iban}' from config got '${account.iban}' from bank")
+                    logger.error("Expected IBAN '${cfg.account.iban}' from config got '${account.iban}' from bank")
                 if (account.name != null && account.name != cfg.account.name)
                     logger.warn("Expected NAME '${cfg.account.name}' from config got '${account.name}' from bank")
+
+                for (order in hkd.orders) {
+                    logger.debug("${order.type}${order.params}: ${order.description}")
+                }
             }
         } catch (e: Exception) {
             logger.warn("HKD failed: ${e.fmt()}")
