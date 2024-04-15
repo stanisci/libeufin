@@ -245,3 +245,66 @@ COMMENT ON FUNCTION register_incoming_and_talerable IS '
 Creates one row in the incoming transactions table and one row
 in the talerable transactions table.  The talerable row links the
 incoming one.';
+
+CREATE FUNCTION taler_transfer(
+  IN in_request_uid BYTEA,
+  IN in_wtid BYTEA,
+  IN in_subject TEXT,
+  IN in_amount taler_amount,
+  IN in_exchange_base_url TEXT,
+  IN in_credit_account_payto TEXT,
+  IN in_bank_id TEXT,
+  IN in_timestamp INT8,
+  -- Error status
+  OUT out_request_uid_reuse BOOLEAN,
+  -- Success return
+  OUT out_tx_row_id INT8,
+  OUT out_timestamp INT8
+)
+LANGUAGE plpgsql AS $$
+DECLARE
+  initiated_id INT8;
+BEGIN
+-- Check for idempotence and conflict
+SELECT (amount != in_amount 
+          OR credit_payto_uri != in_credit_account_payto
+          OR exchange_base_url != in_exchange_base_url
+          OR wtid != in_wtid)
+        ,talerable_outgoing_transaction_id, initiation_time
+  INTO out_request_uid_reuse, out_tx_row_id, out_timestamp
+  FROM talerable_outgoing_transactions
+      JOIN initiated_outgoing_transactions
+        ON talerable_outgoing_transactions.initiated_outgoing_transaction_id=initiated_outgoing_transactions.initiated_outgoing_transaction_id 
+  WHERE talerable_outgoing_transactions.request_uid = in_request_uid;
+IF FOUND THEN
+  RETURN;
+END IF;
+-- Initiate bank transfer
+INSERT INTO initiated_outgoing_transactions (
+  amount
+  ,wire_transfer_subject
+  ,credit_payto_uri
+  ,initiation_time
+  ,request_uid
+) VALUES (
+  in_amount
+  ,in_subject
+  ,in_credit_account_payto
+  ,in_timestamp
+  ,in_bank_id
+) RETURNING initiated_outgoing_transaction_id INTO initiated_id;
+-- Register outgoing transaction
+INSERT INTO talerable_outgoing_transactions(
+  initiated_outgoing_transaction_id
+  ,request_uid
+  ,wtid
+  ,exchange_base_url
+) VALUES (
+  initiated_id
+  ,in_request_uid
+  ,in_wtid
+  ,in_exchange_base_url
+) RETURNING talerable_outgoing_transaction_id INTO out_tx_row_id;
+out_timestamp = in_timestamp;
+-- TODO notification
+END $$;

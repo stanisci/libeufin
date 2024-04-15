@@ -52,6 +52,15 @@ fun <T> PreparedStatement.oneOrNull(lambda: (ResultSet) -> T): T? {
 fun <T> PreparedStatement.one(lambda: (ResultSet) -> T): T =
     requireNotNull(oneOrNull(lambda)) { "Missing result to database query" }
 
+fun <T> PreparedStatement.oneUniqueViolation(err: T, lambda: (ResultSet) -> T): T {
+    return try {
+        one(lambda)
+    } catch (e: SQLException) {
+        if (e.sqlState == PSQLState.UNIQUE_VIOLATION.state) return err
+        throw e // rethrowing, not to hide other types of errors.
+    }
+}
+
 fun <T> PreparedStatement.all(lambda: (ResultSet) -> T): List<T> {
     executeQuery().use {
         val ret = mutableListOf<T>()

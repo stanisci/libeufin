@@ -29,6 +29,8 @@ import tech.libeufin.common.*
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.db.*
 import tech.libeufin.nexus.db.PaymentDAO.*
+import tech.libeufin.nexus.db.InitiatedDAO.*
+import tech.libeufin.nexus.db.ExchangeDAO.*
 import java.time.Instant
 
 
@@ -41,30 +43,20 @@ fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) {
     post("/taler-wire-gateway/transfer") {
         val req = call.receive<TransferRequest>()
         cfg.checkCurrency(req.amount)
-        // TODO
-        /*val res = db.exchange.transfer(
-            req = req,
-            login = username,
-            now = Instant.now()
+        val bankId = run {
+            val bytes = ByteArray(16)
+            kotlin.random.Random.nextBytes(bytes)
+            Base32Crockford.encode(bytes)
+        }
+        val res = db.exchange.transfer(
+            req,
+            bankId,
+            Instant.now()
         )
         when (res) {
-            is TransferResult.UnknownExchange -> throw unknownAccount(username)
-            is TransferResult.NotAnExchange -> throw conflict(
-                "$username is not an exchange account.",
-                TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
-            )
-            is TransferResult.UnknownCreditor -> throw unknownCreditorAccount(req.credit_account.canonical)
-            is TransferResult.BothPartyAreExchange -> throw conflict(
-                "Wire transfer attempted with credit and debit party being both exchange account",
-                TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE
-            )
-            is TransferResult.ReserveUidReuse -> throw conflict(
+            TransferResult.RequestUidReuse -> throw conflict(
                 "request_uid used already",
                 TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED
-            )
-            is TransferResult.BalanceInsufficient -> throw conflict(
-                "Insufficient balance for exchange",
-                TalerErrorCode.BANK_UNALLOWED_DEBIT
             )
             is TransferResult.Success -> call.respond(
                 TransferResponse(
@@ -72,7 +64,7 @@ fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) {
                     row_id = res.id
                 )
             )
-        }*/
+        }
     }
     /*suspend fun <T> PipelineContext<Unit, ApplicationCall>.historyEndpoint(
         reduce: (List<T>, String) -> Any, 
@@ -122,7 +114,6 @@ fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) {
                 "reserve_pub used already",
                 TalerErrorCode.BANK_DUPLICATE_RESERVE_PUB_SUBJECT
             )
-            // TODO timestamp when idempotent
             is IncomingRegistrationResult.Success -> call.respond(
                 AddIncomingResponse(
                     timestamp = TalerProtocolTimestamp(timestamp),

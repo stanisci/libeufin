@@ -42,4 +42,5 @@ data class InitiatedPayment(
 class Database(dbConfig: DatabaseConfig): DbPool(dbConfig, "libeufin_nexus") {
     val payment = PaymentDAO(this)
     val initiated = InitiatedDAO(this)
+    val exchange = ExchangeDAO(this)
 }

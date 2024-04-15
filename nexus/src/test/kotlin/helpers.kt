@@ -79,7 +79,7 @@ fun getMockedClient(
     followRedirects = false
     engine {
         addHandler {
-                request -> handler(request)
+            request -> handler(request)
         }
     }
 }

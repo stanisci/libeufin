@@ -164,7 +164,3 @@ enum class AbortResult {
     UnknownOperation,
     AlreadyConfirmed
 }
-
-fun ResultSet.getTalerTimestamp(name: String): TalerProtocolTimestamp{
-    return TalerProtocolTimestamp(getLong(name).asInstant())
-}

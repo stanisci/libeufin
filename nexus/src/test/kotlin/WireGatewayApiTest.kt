@@ -35,36 +35,30 @@ class WireGatewayApiTest {
     }
 
     // Testing the POST /transfer call from the TWG API.
-    /*@Test
-    fun transfer() = bankSetup { _ -> 
+    @Test
+    fun transfer() = serverSetup { _ -> 
         val valid_req = obj {
             "request_uid" to HashCode.rand()
-            "amount" to "KUDOS:55"
+            "amount" to "CHF:55"
             "exchange_base_url" to "http://exchange.example.com/"
             "wtid" to ShortHashCode.rand()
-            "credit_account" to merchantPayto.canonical
+            "credit_account" to grothoffPayto
         }
 
-        authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/transfer", valid_req)
+        //authRoutine(HttpMethod.Post, "/accounts/merchant/taler-wire-gateway/transfer", valid_req)
 
-        // Checking exchange debt constraint.
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
-            json(valid_req)
-        }.assertConflict(TalerErrorCode.BANK_UNALLOWED_DEBIT)
-
-        // Giving debt allowance and checking the OK case.
-        setMaxDebt("exchange", "KUDOS:1000")
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
+        // Check OK
+        client.post("/taler-wire-gateway/transfer") {
             json(valid_req)
         }.assertOk()
 
         // check idempotency
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
+        client.post("/taler-wire-gateway/transfer") {
             json(valid_req)
         }.assertOk()
 
         // Trigger conflict due to reused request_uid
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
+        client.post("/taler-wire-gateway/transfer") {
             json(valid_req) { 
                 "wtid" to ShortHashCode.rand()
                 "exchange_base_url" to "http://different-exchange.example.com/"
@@ -72,58 +66,40 @@ class WireGatewayApiTest {
         }.assertConflict(TalerErrorCode.BANK_TRANSFER_REQUEST_UID_REUSED)
 
         // Currency mismatch
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
+        client.post("/taler-wire-gateway/transfer") {
             json(valid_req) {
                 "amount" to "EUR:33"
             }
         }.assertBadRequest(TalerErrorCode.GENERIC_CURRENCY_MISMATCH)
 
-        // Unknown account
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
-            json(valid_req) { 
-                "request_uid" to HashCode.rand()
-                "wtid" to ShortHashCode.rand()
-                "credit_account" to unknownPayto
-            }
-        }.assertConflict(TalerErrorCode.BANK_UNKNOWN_CREDITOR)
-
-        // Same account
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
-            json(valid_req) { 
-                "request_uid" to HashCode.rand()
-                "wtid" to ShortHashCode.rand()
-                "credit_account" to exchangePayto
-            }
-        }.assertConflict(TalerErrorCode.BANK_ACCOUNT_IS_EXCHANGE)
-
         // Bad BASE32 wtid
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
+        client.post("/taler-wire-gateway/transfer") {
             json(valid_req) { 
                 "wtid" to "I love chocolate"
             }
         }.assertBadRequest()
         
         // Bad BASE32 len wtid
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
+        client.post("/taler-wire-gateway/transfer") {
             json(valid_req) { 
-                "wtid" to  randBase32Crockford(31)
+                "wtid" to Base32Crockford.encode(ByteArray(31).rand())
             }
         }.assertBadRequest()
 
         // Bad BASE32 request_uid
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
+        client.post("/taler-wire-gateway/transfer") {
             json(valid_req) { 
                 "request_uid" to "I love chocolate"
             }
         }.assertBadRequest()
 
         // Bad BASE32 len wtid
-        client.postA("/accounts/exchange/taler-wire-gateway/transfer") {
+        client.post("/taler-wire-gateway/transfer") {
             json(valid_req) { 
-                "request_uid" to randBase32Crockford(65)
+                "request_uid" to Base32Crockford.encode(ByteArray(65).rand())
             }
         }.assertBadRequest()
-    }*/
+    }
     /*
     /**
      * Testing the /history/incoming call from the TWG API.
