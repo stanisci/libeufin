@@ -1,6 +1,7 @@
 plugins {
     id("kotlin")
     id("application")
+    id("org.jetbrains.kotlin.plugin.serialization") version "$kotlin_version"
 }
 
 java {

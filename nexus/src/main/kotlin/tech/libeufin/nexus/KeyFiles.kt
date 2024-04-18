@@ -118,7 +118,7 @@ fun generateNewKeys(): ClientPrivateKeysFile =
         submitted_ini = false
     )
 
-private inline fun <reified T> persistJsonFile(obj: T, path: Path, name: String) {
+inline fun <reified T> persistJsonFile(obj: T, path: Path, name: String) {
     val content = try {
         JSON.encodeToString(obj)
     } catch (e: Exception) {
@@ -158,7 +158,7 @@ fun persistBankKeys(keys: BankPublicKeysFile, location: Path) = persistJsonFile(
 fun persistClientKeys(keys: ClientPrivateKeysFile, location: Path) = persistJsonFile(keys, location, "client private keys")
 
 
-private inline fun <reified T> loadJsonFile(path: Path, name: String): T? {
+inline fun <reified T> loadJsonFile(path: Path, name: String): T? {
     val content = try {
         path.readText()
     } catch (e: Exception) {

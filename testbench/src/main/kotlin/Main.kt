@@ -23,13 +23,17 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.testing.test
+import io.ktor.http.URLBuilder
+import io.ktor.http.takeFrom
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.Serializable
 import tech.libeufin.nexus.LibeufinNexusCommand
 import tech.libeufin.nexus.loadBankKeys
 import tech.libeufin.nexus.loadClientKeys
 import tech.libeufin.nexus.loadConfig
+import tech.libeufin.nexus.loadJsonFile
 import kotlin.io.path.*
 
 val nexusCmd = LibeufinNexusCommand()
@@ -63,6 +67,11 @@ fun CliktCommand.run(arg: String): Boolean {
 data class Kind(val name: String, val settings: String?) {
     val test get() = settings != null
 }
+
+@Serializable
+data class Config(
+    val payto: Map<String, String>
+)
 
 class Cli : CliktCommand("Run integration tests on banks provider") {
     val platform by argument()
@@ -105,6 +114,10 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
             else -> Kind("Unknown", null)
         }
 
+        // Read testbench config 
+        val benchCfg: Config = loadJsonFile(Path("test/config.json"), "testbench config")
+            ?: Config(emptyMap())
+
         // Prepare cmds
         val log = "DEBUG"
         val flags = " -c $conf -L $log"
@@ -113,11 +126,15 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         val bankKeysPath = cfg.requirePath("nexus-ebics", "bank_public_keys_file")
         val currency = cfg.requireString("nexus-ebics", "currency")
 
-        val payto = when (currency) {
-            "CHF" -> "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans"
-            "EUR" -> "payto://iban/GENODEM1GLS/DE76430609674126675300?receiver-name=Grothoff%20Hans"
-            else -> throw Exception("Missing test payto for $currency")
-        }
+        val dummyPaytos = mapOf(
+            "CHF" to "payto://iban/CH4189144589712575493?receiver-name=John%20Smith",
+            "EUR" to "payto://iban/DE54500105177452372744?receiver-name=John%20Smith"
+        )
+        val dummyPayto = dummyPaytos[currency] 
+            ?: throw Exception("Missing dummy payto for $currency")
+        val payto = benchCfg.payto[currency] ?: dummyPayto
+                        ?: throw Exception("Missing test payto for $currency")
+        
         val recoverDoc = when (cfg.requireString("nexus-ebics", "bank_dialect")) {
             "gls" -> "statement"
             else -> "notification"
@@ -175,12 +192,25 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                 } else {
                     put("tx", suspend {
                         step("Submit new transaction")
-                        // TODO interactive payment editor
                         nexusCmd.run("initiate-payment $flags \"$payto&amount=$currency:1.1&message=single%20transaction%20test\"")
                         nexusCmd.run("ebics-submit $ebicsFlags")
                         Unit
                     })
                 }
+                put("tx-bad-name", suspend {
+                    val badPayto = URLBuilder().takeFrom(payto)
+                    badPayto.parameters.set("receiver-name", "John Smith")
+                    step("Submit new transaction with a bad name")
+                    nexusCmd.run("initiate-payment $flags \"$badPayto&amount=$currency:1.1&message=This%20should%20fail%20because%20bad%20name\"")
+                    nexusCmd.run("ebics-submit $ebicsFlags")
+                    Unit
+                })
+                put("tx-dummy", suspend {
+                    step("Submit new transaction to a dummy IBAN")
+                    nexusCmd.run("initiate-payment $flags \"$dummyPayto&amount=$currency:1.1&message=This%20should%20fail%20because%20dummy\"")
+                    nexusCmd.run("ebics-submit $ebicsFlags")
+                    Unit
+                })
             }
             while (true) {
                 var clientKeys = loadClientKeys(clientKeysPath)

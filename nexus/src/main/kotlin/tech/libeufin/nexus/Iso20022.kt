@@ -277,12 +277,12 @@ sealed interface TxNotification {
 
 /** ISO20022 incoming payment */
 data class IncomingPayment(
+    /** ISO20022 AccountServicerReference */
+    val bankId: String,
     val amount: TalerAmount,
     val wireTransferSubject: String,
-    val debitPaytoUri: String,
     override val executionTime: Instant,
-    /** ISO20022 AccountServicerReference */
-    val bankId: String
+    val debitPaytoUri: String
 ): TxNotification {
     override fun toString(): String {
         return "IN ${executionTime.fmtDate()} $amount '$bankId' debitor=$debitPaytoUri subject=\"$wireTransferSubject\""
@@ -291,12 +291,12 @@ data class IncomingPayment(
 
 /** ISO20022 outgoing payment */
 data class OutgoingPayment(
-    val amount: TalerAmount,
-    override val executionTime: Instant,
     /** ISO20022 MessageIdentification */
     val messageId: String,
+    val amount: TalerAmount,
+    val wireTransferSubject: String? = null, // not showing in camt.054
+    override val executionTime: Instant,
     val creditPaytoUri: String? = null, // not showing in camt.054
-    val wireTransferSubject: String? = null // not showing in camt.054
 ): TxNotification {
     override fun toString(): String {
         return "OUT ${executionTime.fmtDate()} $amount '$messageId' creditor=$creditPaytoUri subject=\"$wireTransferSubject\""
@@ -349,6 +349,7 @@ fun parseTx(
             var msgId = opt("Refs")?.opt("MsgId")?.text()
             val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
             var debtorPayto = opt("RltdPties") { payto("Dbtr") }
+            var creditorPayto = opt("RltdPties") { payto("Cdtr") }
             RawTx(
                 kind,
                 bookDate,
@@ -358,7 +359,8 @@ fun parseTx(
                 ref,
                 msgId,
                 subject,
-                debtorPayto
+                debtorPayto,
+                creditorPayto
             )
         }
     }
@@ -388,6 +390,7 @@ fun parseTx(
             var msgId = opt("Refs")?.opt("MsgId")?.text()
             val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
             var debtorPayto = opt("RltdPties") { payto("Dbtr") }
+            var creditorPayto = opt("RltdPties") { payto("Cdtr") }
             RawTx(
                 kind,
                 bookDate,
@@ -397,7 +400,8 @@ fun parseTx(
                 ref,
                 msgId,
                 subject,
-                debtorPayto
+                debtorPayto,
+                creditorPayto
             )
         }
     }
@@ -440,7 +444,8 @@ private data class RawTx(
     val ref: String?,
     val msgId: String?,
     val subject: String?,
-    val debtorPayto: String?
+    val debtorPayto: String?,
+    val creditorPayto: String?
 )
 
 private class TxErr(val msg: String): Exception(msg)
@@ -478,7 +483,8 @@ private fun parseTxLogic(raw: RawTx): TxNotification {
             OutgoingPayment(
                 amount = raw.amount,
                 messageId = raw.msgId,
-                executionTime = raw.bookDate
+                executionTime = raw.bookDate,
+                creditPaytoUri = raw.creditorPayto
             )
         }
         else -> throw Exception("Unknown transaction notification kind '${raw.kind}'")

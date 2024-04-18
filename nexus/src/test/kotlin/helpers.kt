@@ -68,7 +68,7 @@ fun serverSetup(
     }
 }
 
-val grothoffPayto = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans"
+val grothoffPayto = "payto://iban/CH4189144589712575493?receiver-name=Grothoff%20Hans"
 
 val clientKeys = generateNewKeys()
 
@@ -91,7 +91,7 @@ fun genInitPay(
 ) = InitiatedPayment(
         id = -1,
         amount = TalerAmount(44, 0, "KUDOS"),
-        creditPaytoUri = "payto://iban/CH9300762011623852957?receiver-name=Test",
+        creditPaytoUri = "payto://iban/CH4189144589712575493?receiver-name=Test",
         wireTransferSubject = subject,
         initiationTime = Instant.now(),
         requestUid = requestUid
@@ -111,7 +111,7 @@ fun genInPay(subject: String) =
 fun genOutPay(subject: String, messageId: String) =
     OutgoingPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
-        creditPaytoUri = "payto://iban/CH9300762011623852957?receiver-name=Test",
+        creditPaytoUri = "payto://iban/CH4189144589712575493?receiver-name=Test",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
         messageId = messageId

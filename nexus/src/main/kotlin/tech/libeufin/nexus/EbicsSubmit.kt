@@ -174,7 +174,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
                 try {
                     submitBatch(ctx, db)
                 } catch (e: Exception) {
-                    throw Exception("Failed to submit payments")
+                    throw Exception("Failed to submit payments", e)
                 }
                 // TODO take submitBatch taken time in the delay
                 delay(frequency.toKotlinDuration())
