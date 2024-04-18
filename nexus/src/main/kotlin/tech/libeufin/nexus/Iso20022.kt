@@ -303,203 +303,184 @@ data class OutgoingPayment(
     }
 }
 
-/** Parse camt.054 XML file */
-fun parseTxNotif(
-    notifXml: InputStream,
-    acceptedCurrency: String
-): List<TxNotification> {
-    fun notificationForEachTx(
-        directionLambda: XmlDestructor.(Instant, Boolean, String?) -> Unit
-    ) {
-        XmlDestructor.fromStream(notifXml, "Document") {
-            opt("BkToCstmrDbtCdtNtfctn")?.each("Ntfctn") {
-                each("Ntry") {
-                    val reversal = opt("RvslInd")?.bool() ?: false
-                    val info = opt("AddtlNtryInf")?.text()
-                    one("Sts") {
-                        if (text() != "BOOK") {
-                            one("Cd") {
-                                if (text() != "BOOK")
-                                    throw Exception("Found non booked transaction, " +
-                                            "stop parsing.  Status was: ${text()}"
-                                    )
-                            }
-                        }
-                    }
-                    val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
-                    one("NtryDtls").each("TxDtls") {
-                        directionLambda(this, bookDate, reversal, info)
-                    }
-                }
-            }
+private fun XmlDestructor.payto(prefix: String): String? {
+    val iban = opt("${prefix}Acct")?.one("Id")?.one("IBAN")?.text()
+    return if (iban != null) {
+        val payto = StringBuilder("payto://iban/$iban")
+        val name = opt(prefix)?.opt("Pty")?.one("Nm")?.text()
+        if (name != null) {
+            val urlEncName = URLEncoder.encode(name, "utf-8")
+            payto.append("?receiver-name=$urlEncName")
         }
+        return payto.toString()
+    } else {
+        null
     }
-
-    val notifications = mutableListOf<TxNotification>()
-    notificationForEachTx { bookDate, reversal, info ->
-        val kind = one("CdtDbtInd").text()
-        val amount: TalerAmount = one("Amt") {
-            val currency = attr("Ccy")
-            /**
-             * FIXME: test by sending non-CHF to PoFi and see which currency gets here.
-             */
-            if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
-            TalerAmount("$currency:${text()}")
-        }
-        if (reversal) {
-            require("CRDT" == kind)
-            val msgId = one("Refs").opt("MsgId")?.text()
-            if (msgId == null) {
-                logger.debug("Unsupported reversal without message id")
-            } else {
-                notifications.add(TxNotification.Reversal(
-                    msgId = msgId,
-                    reason = info,
-                    executionTime = bookDate
-                ))
-            }
-            return@notificationForEachTx
-        }
-        when (kind) {
-            "CRDT" -> {
-                val bankId: String = one("Refs").one("AcctSvcrRef").text()
-                // Obtaining payment subject. 
-                val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
-                if (subject == null) {
-                    logger.debug("Skip notification '$bankId', missing subject")
-                    return@notificationForEachTx
-                }
-
-                // Obtaining the payer's details
-                val debtorPayto = StringBuilder("payto://iban/")
-                one("RltdPties") {
-                    one("DbtrAcct").one("Id").one("IBAN") {
-                        debtorPayto.append(text())
-                    }
-                    // warn: it might need the postal address too..
-                    one("Dbtr").opt("Pty")?.one("Nm") {
-                        val urlEncName = URLEncoder.encode(text(), "utf-8")
-                        debtorPayto.append("?receiver-name=$urlEncName")
-                    }
-                }
-                notifications.add(IncomingPayment(
-                    amount = amount,
-                    bankId = bankId,
-                    debitPaytoUri = debtorPayto.toString(),
-                    executionTime = bookDate,
-                    wireTransferSubject = subject.toString()
-                ))
-            }
-            "DBIT" -> {
-                val messageId = one("Refs").one("MsgId").text()
-                notifications.add(OutgoingPayment(
-                    amount = amount,
-                    messageId = messageId,
-                    executionTime = bookDate
-                ))
-            }
-            else -> throw Exception("Unknown transaction notification kind '$kind'")
-        }        
-    }
-    return notifications
 }
 
-/** Parse camt.053 XML file */
-fun parseTxStatement(
+/** Parse camt.054 or camt.053 file */
+fun parseTx(
     notifXml: InputStream,
     acceptedCurrency: String
 ): List<TxNotification> {
-    fun notificationForEachTx(
-        directionLambda: XmlDestructor.(Instant, Boolean, String?) -> Unit
-    ) {
-        XmlDestructor.fromStream(notifXml, "Document") {
-            one("BkToCstmrStmt").each("Stmt") {
-                one("Acct") {
-                    // Sanity check on currency and IBAN
-                }
-                each("Ntry") {
-                    val reversal = opt("RvslInd")?.bool() ?: false
-                    val info = opt("AddtlNtryInf")?.text()
-                    one("Sts") {
-                        if (text() != "BOOK") {
-                            throw Exception("Found non booked transaction, " +
-                                    "stop parsing.  Status was: ${text()}"
-                            )
-                        }
-                    }
-                    val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
-                    directionLambda(this, bookDate, reversal, info)
+    fun XmlDestructor.parseNotif(): List<RawTx> {
+        one("Sts") {
+            if (text() != "BOOK") {
+                one("Cd") {
+                    if (text() != "BOOK")
+                        throw Exception("Found non booked transaction, " +
+                                "stop parsing.  Status was: ${text()}"
+                        )
                 }
             }
         }
+        val reversal = opt("RvslInd")?.bool() ?: false
+        val info = opt("AddtlNtryInf")?.text()
+        val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
+        val ref = opt("AcctSvcrRef")?.text()
+        return one("NtryDtls").map("TxDtls") {
+            val kind = one("CdtDbtInd").text()
+            val amount: TalerAmount = one("Amt") {
+                val currency = attr("Ccy")
+                /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
+                if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+                TalerAmount("$currency:${text()}")
+            }
+            var msgId = opt("Refs")?.opt("MsgId")?.text()
+            val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
+            var debtorPayto = opt("RltdPties") { payto("Dbtr") }
+            RawTx(
+                kind,
+                bookDate,
+                amount,
+                reversal,
+                info,
+                ref,
+                msgId,
+                subject,
+                debtorPayto
+            )
+        }
     }
-
-    val notifications = mutableListOf<TxNotification>()
-    notificationForEachTx { bookDate, reversal, info ->
+    fun XmlDestructor.parseStatement(): RawTx {
+        one("Sts") {
+            if (text() != "BOOK") {
+                one("Cd") {
+                    if (text() != "BOOK")
+                        throw Exception("Found non booked transaction, " +
+                                "stop parsing.  Status was: ${text()}"
+                        )
+                }
+            }
+        }
+        val reversal = opt("RvslInd")?.bool() ?: false
+        val info = opt("AddtlNtryInf")?.text()
+        val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
         val kind = one("CdtDbtInd").text()
         val amount: TalerAmount = one("Amt") {
             val currency = attr("Ccy")
-            /**
-             * FIXME: test by sending non-CHF to PoFi and see which currency gets here.
-             */
+            /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
             if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
             TalerAmount("$currency:${text()}")
         }
-        if (reversal) {
-            throw Exception("Reversal !!")
-            require("CRDT" == kind)
-            val msgId = one("Refs").opt("MsgId")?.text()
-            if (msgId == null) {
-                logger.debug("Unsupported reversal without message id")
-            } else {
-                notifications.add(TxNotification.Reversal(
-                    msgId = msgId,
-                    reason = info,
-                    executionTime = bookDate
-                ))
-            }
-            return@notificationForEachTx
+        val ref = opt("AcctSvcrRef")?.text()
+        return one("NtryDtls").one("TxDtls") {
+            var msgId = opt("Refs")?.opt("MsgId")?.text()
+            val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
+            var debtorPayto = opt("RltdPties") { payto("Dbtr") }
+            RawTx(
+                kind,
+                bookDate,
+                amount,
+                reversal,
+                info,
+                ref,
+                msgId,
+                subject,
+                debtorPayto
+            )
         }
-        when (kind) {
-            "CRDT" -> {
-                val bankId: String = one("AcctSvcrRef").text()
-                one("NtryDtls").one("TxDtls") {
-                    // Obtaining payment subject. 
-                    val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
-                    if (subject == null) {
-                        logger.debug("Skip notification '$bankId', missing subject")
-                        //return@notificationForEachTx
-                    }
-                    // Obtaining the payer's details
-                    val debtorPayto = StringBuilder("payto://iban/")
-                    one("RltdPties") {
-                        one("DbtrAcct").one("Id").one("IBAN") {
-                            debtorPayto.append(text())
-                        }
-                        one("Dbtr").one("Nm") {
-                            val urlEncName = URLEncoder.encode(text(), "utf-8")
-                            debtorPayto.append("?receiver-name=$urlEncName")
-                        }
-                    }
-                    notifications.add(IncomingPayment(
-                        amount = amount,
-                        bankId = bankId,
-                        debitPaytoUri = debtorPayto.toString(),
-                        executionTime = bookDate,
-                        wireTransferSubject = subject.toString()
-                    ))
+    }
+    val raws = mutableListOf<RawTx>()
+    XmlDestructor.fromStream(notifXml, "Document") {
+        opt("BkToCstmrDbtCdtNtfctn") {
+            each("Ntfctn") {
+                each("Ntry") {
+                    raws.addAll(parseNotif())
                 }
             }
-            "DBIT" -> {
-                /*val messageId = one("Refs").one("MsgId").text()
-                notifications.add(OutgoingPayment(
-                    amount = amount,
-                    messageId = messageId,
-                    executionTime = bookDate
-                ))*/
+        } ?: opt("BkToCstmrStmt") {
+            each("Stmt") {
+                one("Acct") {
+                    // Sanity check on currency and IBAN ?
+                }
+                each("Ntry") {
+                    raws.add(parseStatement())
+                }
             }
-            else -> throw Exception("Unknown transaction notification kind '$kind'")
-        }        
+        } ?: throw Exception("Missing BkToCstmrDbtCdtNtfctn or BkToCstmrStmt")
     }
-    return notifications
+    return raws.mapNotNull { it ->  
+        try {
+            parseTxLogic(it)
+        } catch (e: TxErr) {
+            // TODO: add more info in doc or in log message?
+            logger.warn("skip incomplete tx: ${e.msg}")
+            null
+        }    
+    }
+}
+
+private data class RawTx(
+    val kind: String,
+    val bookDate: Instant,
+    val amount: TalerAmount,
+    val reversal: Boolean,
+    val info: String?,
+    val ref: String?,
+    val msgId: String?,
+    val subject: String?,
+    val debtorPayto: String?
+)
+
+private class TxErr(val msg: String): Exception(msg)
+
+private fun parseTxLogic(raw: RawTx): TxNotification {
+    if (raw.reversal) {
+        require("CRDT" == raw.kind) // TODO handle DBIT reversal
+        if (raw.msgId == null) 
+            throw TxErr("missing msg ID for Credit reversal ${raw.ref}")
+        return TxNotification.Reversal(
+            msgId = raw.msgId,
+            reason = raw.info,
+            executionTime = raw.bookDate
+        )
+    }
+    return when (raw.kind) {
+        "CRDT" -> {
+            if (raw.ref == null)
+                throw TxErr("missing subject for Credit ${raw.ref}")
+            if (raw.subject == null)
+                throw TxErr("missing subject for Credit ${raw.ref}")
+            if (raw.debtorPayto == null)
+                throw TxErr("missing debtor info for Credit ${raw.ref}")
+            IncomingPayment(
+                amount = raw.amount,
+                bankId = raw.ref,
+                debitPaytoUri = raw.debtorPayto,
+                executionTime = raw.bookDate,
+                wireTransferSubject = raw.subject
+            )
+        }
+        "DBIT" -> {
+            if (raw.msgId == null)
+                throw TxErr("missing msg ID for Debit ${raw.ref}")
+            OutgoingPayment(
+                amount = raw.amount,
+                messageId = raw.msgId,
+                executionTime = raw.bookDate
+            )
+        }
+        else -> throw Exception("Unknown transaction notification kind '${raw.kind}'")
+    }
 }

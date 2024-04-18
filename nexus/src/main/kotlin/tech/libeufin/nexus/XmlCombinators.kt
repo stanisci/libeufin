@@ -158,7 +158,7 @@ class XmlDestructor internal constructor(private val el: Element) {
         }
         val el = children.next()
         if (children.hasNext()) {
-            throw DestructionError("expected unique '${el.tagName}.$path', got ${children.asSequence() + 1}")
+            throw DestructionError("expected unique '${el.tagName}.$path', got ${children.asSequence().count() + 1}")
         }
         return XmlDestructor(el)
     }

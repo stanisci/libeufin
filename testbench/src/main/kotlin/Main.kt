@@ -147,6 +147,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                 put("ack", "Fetch CustomerAcknowledgement", "ebics-fetch $ebicsFlags acknowledgement")
                 put("status", "Fetch CustomerPaymentStatusReport", "ebics-fetch $ebicsFlags status")
                 put("notification", "Fetch BankToCustomerDebitCreditNotification", "ebics-fetch $ebicsFlags notification")
+                put("statement", "Fetch BankToCustomerStatement", "ebics-fetch $ebicsFlags statement")
                 put("submit", "Submit pending transactions", "ebics-submit $ebicsFlags")
                 put("setup", "Setup", "ebics-setup $flags")
                 put("reset-keys", suspend {

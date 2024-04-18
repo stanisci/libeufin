@@ -20,8 +20,8 @@
 import org.junit.Test
 import tech.libeufin.nexus.parseCustomerAck
 import tech.libeufin.nexus.parseCustomerPaymentStatusReport
-import tech.libeufin.nexus.parseTxNotif
-import tech.libeufin.nexus.parseTxStatement
+import tech.libeufin.nexus.parseTx
+import tech.libeufin.nexus.loadConfig
 import java.nio.file.Files
 import kotlin.io.path.Path
 import kotlin.io.path.exists
@@ -37,12 +37,10 @@ class Iso20022Test {
             println(name)
             if (name.contains("HAC")) {
                 parseCustomerAck(content)
-            } else if (name.contains("pain.002")) {
+            } else if (name.contains("pain.002") || name.contains("pain002") ) {
                 parseCustomerPaymentStatusReport(content)
-            } else if (name.contains("C53")) {
-                parseTxStatement(content, "EUR")
             } else {
-                parseTxNotif(content, "CHF")
+                parseTx(content, "CHF")
             }
         }
     }
@@ -55,6 +53,8 @@ class Iso20022Test {
             for (file in platform.listDirectoryEntries()) {
                 val fetch = file.resolve("fetch")
                 if (file.isDirectory() && fetch.exists()) {
+                    val cfg = loadConfig(platform.resolve("ebics.conf"))
+                    val currency = cfg.requireString("nexus-ebics", "currency")
                     for (log in fetch.listDirectoryEntries()) {
                         val content = Files.newInputStream(log)
                         val name = log.toString()
@@ -63,10 +63,8 @@ class Iso20022Test {
                             parseCustomerAck(content)
                         } else if (name.contains("pain.002")) {
                             parseCustomerPaymentStatusReport(content)
-                        } else if (name.contains("C53")) {
-                            parseTxStatement(content, "EUR")
-                        } else {
-                            parseTxNotif(content, "CHF")
+                        } else if (!name.contains("camt.052") && !name.contains("_C52_") && !name.contains("_Z01_")) {
+                            parseTx(content, currency)
                         }
                     }
                 }

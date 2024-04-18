@@ -156,9 +156,9 @@ private suspend fun ingestDocument(
     whichDocument: SupportedDocument
 ) {
     when (whichDocument) {
-        SupportedDocument.CAMT_054 -> {
+        SupportedDocument.CAMT_053, SupportedDocument.CAMT_054 -> {
             try {
-                parseTxNotif(xml, cfg.currency).forEach {
+                parseTx(xml, cfg.currency).forEach {
                     if (cfg.fetch.ignoreBefore != null && it.executionTime < cfg.fetch.ignoreBefore) {
                         logger.debug("IGNORE $it")
                     } else {
@@ -212,26 +212,6 @@ private suspend fun ingestDocument(
                 db.initiated.bankMessage(status.msgId, msg)
             }
         }
-        SupportedDocument.CAMT_053 -> {
-            try {
-                parseTxStatement(xml, cfg.currency).forEach {
-                    if (cfg.fetch.ignoreBefore != null && it.executionTime < cfg.fetch.ignoreBefore) {
-                        logger.debug("IGNORE $it")
-                    } else {
-                        when (it) {
-                            is IncomingPayment -> ingestIncomingPayment(db, it)
-                            is OutgoingPayment -> ingestOutgoingPayment(db, it)
-                            is TxNotification.Reversal -> {
-                                logger.error("BOUNCE '${it.msgId}': ${it.reason}")
-                                db.initiated.reversal(it.msgId, "Payment bounced: ${it.reason}")
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                throw Exception("Ingesting statements failed", e)
-            }
-        }
         SupportedDocument.CAMT_052 -> {
             // TODO parsing
             // TODO ingesting
@@ -246,10 +226,10 @@ private suspend fun ingestDocuments(
     whichDocument: SupportedDocument
 ) {
     when (whichDocument) {
-        SupportedDocument.CAMT_054,
         SupportedDocument.PAIN_002,
+        SupportedDocument.CAMT_052,
         SupportedDocument.CAMT_053, 
-        SupportedDocument.CAMT_052 -> {
+        SupportedDocument.CAMT_054 -> {
             try {
                 content.unzipEach { fileName, xmlContent ->
                     logger.trace("parse $fileName")
