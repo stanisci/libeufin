@@ -154,11 +154,11 @@ class XmlDestructor internal constructor(private val el: Element) {
     fun one(path: String): XmlDestructor {
         val children = el.childrenByTag(path).iterator()
         if (!children.hasNext()) {
-            throw DestructionError("expected a single $path child, got none instead at $el")
+            throw DestructionError("expected unique '${el.tagName}.$path', got none")
         }
         val el = children.next()
         if (children.hasNext()) {
-            throw DestructionError("expected a single $path child, got ${children.asSequence() + 1} instead at $el")
+            throw DestructionError("expected unique '${el.tagName}.$path', got ${children.asSequence() + 1}")
         }
         return XmlDestructor(el)
     }
@@ -169,7 +169,7 @@ class XmlDestructor internal constructor(private val el: Element) {
         }
         val el = children.next()
         if (children.hasNext()) {
-            throw DestructionError("expected an optional $path child, got ${children.asSequence().count() + 1} instead at $el")
+            throw DestructionError("expected optional '${el.tagName}.$path', got ${children.asSequence().count() + 1}")
         }
         return XmlDestructor(el)
     }

@@ -21,6 +21,7 @@ import org.junit.Test
 import tech.libeufin.nexus.parseCustomerAck
 import tech.libeufin.nexus.parseCustomerPaymentStatusReport
 import tech.libeufin.nexus.parseTxNotif
+import tech.libeufin.nexus.parseTxStatement
 import java.nio.file.Files
 import kotlin.io.path.Path
 import kotlin.io.path.exists
@@ -38,6 +39,8 @@ class Iso20022Test {
                 parseCustomerAck(content)
             } else if (name.contains("pain.002")) {
                 parseCustomerPaymentStatusReport(content)
+            } else if (name.contains("C53")) {
+                parseTxStatement(content, "EUR")
             } else {
                 parseTxNotif(content, "CHF")
             }
@@ -60,6 +63,8 @@ class Iso20022Test {
                             parseCustomerAck(content)
                         } else if (name.contains("pain.002")) {
                             parseCustomerPaymentStatusReport(content)
+                        } else if (name.contains("C53")) {
+                            parseTxStatement(content, "EUR")
                         } else {
                             parseTxNotif(content, "CHF")
                         }

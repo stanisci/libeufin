@@ -270,7 +270,9 @@ class EbicsBTS(
     private fun XmlBuilder.service(order: EbicsOrder.V3) {
         el("Service") {
             el("ServiceName", order.name!!)
-            el("Scope", order.scope!!)
+            if (order.scope != null) {
+                el("Scope", order.scope)
+            }
             if (order.option != null) {
                 el("ServiceOption", order.option)
             }

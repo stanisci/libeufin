@@ -86,23 +86,23 @@ object EbicsAdministrative {
                     OrderInfo(
                         one("AdminOrderType").text(),
                         opt("Service") {
-                            var params = ""
+                            var params = StringBuilder()
                             opt("ServiceName")?.run {
-                                params += " ${text()}"
+                                params.append(" ${text()}")
                             }
                             opt("Scope")?.run {
-                                params += " ${text()}"
+                                params.append(" ${text()}")
                             }
                             opt("ServiceOption")?.run {
-                                params += " ${text()}"
+                                params.append(" ${text()}")
                             }
                             opt("MsgName")?.run {
-                                params += " ${text()}"
+                                params.append(" ${text()}")
                             }
                             opt("Container")?.run {
-                                params += " ${attr("containerType")}"
+                                params.append(" ${attr("containerType")}")
                             }
-                            params
+                            params.toString()
                         } ?: "",
                         one("Description").text()
                     )

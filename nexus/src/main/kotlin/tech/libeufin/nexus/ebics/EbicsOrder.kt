@@ -75,7 +75,7 @@ enum class Dialect {
     fun directDebit(): EbicsOrder {
         return when (this) {
             postfinance -> EbicsOrder.V3("BTU", "MCT", "CH", "pain.001", "09")
-            gls -> EbicsOrder.V3("BTU", "SCT", "DE", "pain.001", null, "XML")
+            gls -> EbicsOrder.V3("BTU", "SCT", null, "pain.001")
         }
     }
 }

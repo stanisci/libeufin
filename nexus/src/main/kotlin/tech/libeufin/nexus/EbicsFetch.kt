@@ -212,7 +212,26 @@ private suspend fun ingestDocument(
                 db.initiated.bankMessage(status.msgId, msg)
             }
         }
-        SupportedDocument.CAMT_053, 
+        SupportedDocument.CAMT_053 -> {
+            try {
+                parseTxStatement(xml, cfg.currency).forEach {
+                    if (cfg.fetch.ignoreBefore != null && it.executionTime < cfg.fetch.ignoreBefore) {
+                        logger.debug("IGNORE $it")
+                    } else {
+                        when (it) {
+                            is IncomingPayment -> ingestIncomingPayment(db, it)
+                            is OutgoingPayment -> ingestOutgoingPayment(db, it)
+                            is TxNotification.Reversal -> {
+                                logger.error("BOUNCE '${it.msgId}': ${it.reason}")
+                                db.initiated.reversal(it.msgId, "Payment bounced: ${it.reason}")
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                throw Exception("Ingesting statements failed", e)
+            }
+        }
         SupportedDocument.CAMT_052 -> {
             // TODO parsing
             // TODO ingesting
@@ -313,7 +332,7 @@ enum class EbicsDocument {
     /// Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054
     notification,
     /// Account statements - BankToCustomerStatement camt.053
-    // statement, TODO add support
+    statement,
     ;
 
     fun shortDescription(): String = when (this) {
@@ -321,7 +340,7 @@ enum class EbicsDocument {
         status -> "Payment status"
         //Document.report -> "Account intraday reports"
         notification -> "Debit & credit notifications"
-        //Document.statement -> "Account statements"
+        statement -> "Account statements"
     }
 
     fun fullDescription(): String = when (this) {
@@ -329,7 +348,7 @@ enum class EbicsDocument {
         status -> "Payment status - CustomerPaymentStatusReport pain.002"
         //report -> "Account intraday reports - BankToCustomerAccountReport camt.052"
         notification -> "Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054"
-        //statement -> "Account statements - BankToCustomerStatement camt.053"
+        statement -> "Account statements - BankToCustomerStatement camt.053"
     }
 
     fun doc(): SupportedDocument = when (this) {
@@ -337,7 +356,14 @@ enum class EbicsDocument {
         status -> SupportedDocument.PAIN_002
         //Document.report -> SupportedDocument.CAMT_052
         notification -> SupportedDocument.CAMT_054
-        //Document.statement -> SupportedDocument.CAMT_053
+        statement -> SupportedDocument.CAMT_053
+    }
+
+    companion object {
+        fun defaults(dialect: Dialect) = when (dialect) {
+            Dialect.postfinance -> listOf(acknowledgement, status, notification)
+            Dialect.gls -> listOf(acknowledgement, status, statement)
+        }
     }
 }
 
@@ -387,7 +413,7 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
                 null,
                 FileLogger(ebicsLog)
             )
-            val docs = if (documents.isEmpty()) EbicsDocument.entries else documents.toList()
+            val docs = if (documents.isEmpty()) EbicsDocument.defaults(cfg.dialect) else documents.toList()
             if (transient) {
                 logger.info("Transient mode: fetching once and returning.")
                 val pinnedStartVal = pinnedStart

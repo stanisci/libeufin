@@ -113,9 +113,15 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         val bankKeysPath = cfg.requirePath("nexus-ebics", "bank_public_keys_file")
         val currency = cfg.requireString("nexus-ebics", "currency")
 
-        // Alternative payto ?
-        val payto = "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans"
-        
+        val payto = when (currency) {
+            "CHF" -> "payto://iban/CH6208704048981247126?receiver-name=Grothoff%20Hans"
+            "EUR" -> "payto://iban/GENODEM1GLS/DE76430609674126675300?receiver-name=Grothoff%20Hans"
+            else -> throw Exception("Missing test payto for $currency")
+        }
+        val recoverDoc = when (cfg.requireString("nexus-ebics", "bank_dialect")) {
+            "gls" -> "statement"
+            else -> "notification"
+        }
         runBlocking {
             step("Init ${kind.name}")
 
@@ -136,7 +142,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                     })
                 }
                 put("reset-db", "dbinit -r $flags")
-                put("recover", "Recover old transactions", "ebics-fetch $ebicsFlags --pinned-start 2024-01-01 notification")
+                put("recover", "Recover old transactions", "ebics-fetch $ebicsFlags --pinned-start 2024-01-01 $recoverDoc")
                 put("fetch", "Fetch all documents", "ebics-fetch $ebicsFlags")
                 put("ack", "Fetch CustomerAcknowledgement", "ebics-fetch $ebicsFlags acknowledgement")
                 put("status", "Fetch CustomerPaymentStatusReport", "ebics-fetch $ebicsFlags status")
@@ -153,7 +159,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                 if (kind.test) {
                     put("tx", suspend {
                         step("Submit one transaction")
-                        nexusCmd.run("initiate-payment $flags \"$payto&amount=CHF:42&message=single%20transaction%20test\"")
+                        nexusCmd.run("initiate-payment $flags \"$payto&amount=$currency:42&message=single%20transaction%20test\"")
                         nexusCmd.run("ebics-submit $ebicsFlags")
                         Unit
                     })

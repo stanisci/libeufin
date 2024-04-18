@@ -19,6 +19,7 @@
 package tech.libeufin.nexus
 
 import tech.libeufin.common.*
+import tech.libeufin.nexus.ebics.Dialect
 import java.io.InputStream
 import java.net.URLEncoder
 import java.time.*
@@ -74,18 +75,16 @@ fun createPain001(
     debitAccount: IbanAccountMetadata,
     amount: TalerAmount,
     wireTransferSubject: String,
-    creditAccount: IbanAccountMetadata
+    creditAccount: IbanAccountMetadata,
+    dialect: Dialect
 ): ByteArray {
-    val namespace = Pain001Namespaces(
-        fullNamespace = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.09",
-        xsdFilename = "pain.001.001.09.ch.03.xsd"
-    )
+    val version = "09"
     val zonedTimestamp = ZonedDateTime.ofInstant(initiationTimestamp, ZoneId.of("UTC"))
     val amountWithoutCurrency: String = getAmountNoCurrency(amount)
     return XmlBuilder.toBytes("Document") {
-        attr("xmlns", namespace.fullNamespace)
+        attr("xmlns", "urn:iso:std:iso:20022:tech:xsd:pain.001.001.$version")
         attr("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
-        attr("xsi:schemaLocation", "${namespace.fullNamespace} ${namespace.xsdFilename}")
+        attr("xsi:schemaLocation", "urn:iso:std:iso:20022:tech:xsd:pain.001.001.$version pain.001.001.$version.xsd")
         el("CstmrCdtTrfInitn") {
             el("GrpHdr") {
                 el("MsgId", requestUid)
@@ -97,12 +96,26 @@ fun createPain001(
             el("PmtInf") {
                 el("PmtInfId", "NOTPROVIDED")
                 el("PmtMtd", "TRF")
-                el("BtchBookg", "false")
+                el("BtchBookg", "true")
+                el("NbOfTxs", "1")
+                el("CtrlSum", amountWithoutCurrency)
+                el("PmtTpInf/SvcLvl/Cd", 
+                    when (dialect) {
+                        Dialect.postfinance -> "SDVA"
+                        Dialect.gls -> "SEPA"
+                    }
+                )
                 el("ReqdExctnDt/Dt", DateTimeFormatter.ISO_DATE.format(zonedTimestamp))
                 el("Dbtr/Nm", debitAccount.name)
                 el("DbtrAcct/Id/IBAN", debitAccount.iban)
-                if (debitAccount.bic != null) 
-                    el("DbtrAgt/FinInstnId/BICFI", debitAccount.bic)
+                el("DbtrAgt/FinInstnId") {
+                    if (debitAccount.bic != null) {
+                        el("BICFI", debitAccount.bic)
+                    } else {
+                        el("Othr/Id", "NOTPROVIDED")
+                    }
+                }
+                el("ChrgBr", "SLEV")
                 el("CdtTrfTxInf") {
                     el("PmtId") {
                         el("InstrId", "NOTPROVIDED")
@@ -112,8 +125,15 @@ fun createPain001(
                         attr("Ccy", amount.currency)
                         text(amountWithoutCurrency)
                     }
-                    el("Cdtr/Nm", creditAccount.name)
-                    // TODO write credit account bic if we have it
+                    if (creditAccount.bic != null) el("CdtrAgt/FinInstnId/BICFI", creditAccount.bic)
+                    el("Cdtr") {
+                        el("Nm", creditAccount.name)
+                        // Addr might become a requirement in the future
+                        /*el("PstlAdr") {
+                            el("TwnNm", "Bochum")
+                            el("Ctry", "DE")
+                        }*/
+                    }
                     el("CdtrAcct/Id/IBAN", creditAccount.iban)
                     el("RmtInf/Ustrd", wireTransferSubject)
                 }
@@ -126,20 +146,21 @@ data class CustomerAck(
     val actionType: HacAction,
     val orderId: String?,
     val code: ExternalStatusReasonCode?,
+    val info: String,
     val timestamp: Instant
 ) {
-    fun msg(): String {
-        var str = "${actionType}"
-        if (code != null) str += " ${code.isoCode}"
-        str += " - '${actionType.description}'"
-        if (code != null) str += " '${code.description}'"
-        return str
+    fun msg(): String = buildString {
+        append("${actionType}")
+        if (code != null) append(" ${code.isoCode}")
+        append(" - '${actionType.description}'")
+        if (code != null) append(" '${code.description}'")
+        if (info != "") append(" - '$info'")
     }
 
-    override fun toString(): String {
-        var str = "${timestamp.fmtDateTime()}"
-        if (orderId != null) str += " ${orderId}"
-        return str + " ${msg()}"
+    override fun toString(): String = buildString {
+        append("${timestamp.fmtDateTime()}")
+        if (orderId != null) append(" ${orderId}")
+        append(" ${msg()}")
     }
 }
 
@@ -163,7 +184,8 @@ fun parseCustomerAck(xml: InputStream): List<CustomerAck> {
                     }
                 }
                 val code = opt("Rsn")?.one("Cd")?.enum<ExternalStatusReasonCode>()
-                CustomerAck(actionType, orderId, code, timestamp!!)
+                val info = map("AddtlInf") { text() }.joinToString("")
+                CustomerAck(actionType, orderId, code, info, timestamp!!)
             }
         }
     }
@@ -194,11 +216,12 @@ data class PaymentStatus(
         } else if (reasons.size == 1) {
             "${code()} ${reasons[0].code.isoCode} - '${description()}' '${reasons[0].code.description}'"
         } else {
-            var str = "${code()} '${description()}' - "
-            for (reason in reasons) {
-                str += "${reason.code.isoCode} '${reason.code.description}' "
+            buildString {
+                append("${code()} '${description()}' - ")
+                for (reason in reasons) {
+                    append("${reason.code.isoCode} '${reason.code.description}' ")
+                }
             }
-            str
         }
     }
 
@@ -262,7 +285,7 @@ data class IncomingPayment(
     val bankId: String
 ): TxNotification {
     override fun toString(): String {
-        return "IN ${executionTime.fmtDate()} $amount '$bankId' debitor=$debitPaytoUri subject=$wireTransferSubject"
+        return "IN ${executionTime.fmtDate()} $amount '$bankId' debitor=$debitPaytoUri subject=\"$wireTransferSubject\""
     }
 }
 
@@ -276,7 +299,7 @@ data class OutgoingPayment(
     val wireTransferSubject: String? = null // not showing in camt.054
 ): TxNotification {
     override fun toString(): String {
-        return "OUT ${executionTime.fmtDate()} $amount '$messageId' creditor=$creditPaytoUri subject=$wireTransferSubject"
+        return "OUT ${executionTime.fmtDate()} $amount '$messageId' creditor=$creditPaytoUri subject=\"$wireTransferSubject\""
     }
 }
 
@@ -374,6 +397,106 @@ fun parseTxNotif(
                     messageId = messageId,
                     executionTime = bookDate
                 ))
+            }
+            else -> throw Exception("Unknown transaction notification kind '$kind'")
+        }        
+    }
+    return notifications
+}
+
+/** Parse camt.053 XML file */
+fun parseTxStatement(
+    notifXml: InputStream,
+    acceptedCurrency: String
+): List<TxNotification> {
+    fun notificationForEachTx(
+        directionLambda: XmlDestructor.(Instant, Boolean, String?) -> Unit
+    ) {
+        XmlDestructor.fromStream(notifXml, "Document") {
+            one("BkToCstmrStmt").each("Stmt") {
+                one("Acct") {
+                    // Sanity check on currency and IBAN
+                }
+                each("Ntry") {
+                    val reversal = opt("RvslInd")?.bool() ?: false
+                    val info = opt("AddtlNtryInf")?.text()
+                    one("Sts") {
+                        if (text() != "BOOK") {
+                            throw Exception("Found non booked transaction, " +
+                                    "stop parsing.  Status was: ${text()}"
+                            )
+                        }
+                    }
+                    val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
+                    directionLambda(this, bookDate, reversal, info)
+                }
+            }
+        }
+    }
+
+    val notifications = mutableListOf<TxNotification>()
+    notificationForEachTx { bookDate, reversal, info ->
+        val kind = one("CdtDbtInd").text()
+        val amount: TalerAmount = one("Amt") {
+            val currency = attr("Ccy")
+            /**
+             * FIXME: test by sending non-CHF to PoFi and see which currency gets here.
+             */
+            if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+            TalerAmount("$currency:${text()}")
+        }
+        if (reversal) {
+            throw Exception("Reversal !!")
+            require("CRDT" == kind)
+            val msgId = one("Refs").opt("MsgId")?.text()
+            if (msgId == null) {
+                logger.debug("Unsupported reversal without message id")
+            } else {
+                notifications.add(TxNotification.Reversal(
+                    msgId = msgId,
+                    reason = info,
+                    executionTime = bookDate
+                ))
+            }
+            return@notificationForEachTx
+        }
+        when (kind) {
+            "CRDT" -> {
+                val bankId: String = one("AcctSvcrRef").text()
+                one("NtryDtls").one("TxDtls") {
+                    // Obtaining payment subject. 
+                    val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
+                    if (subject == null) {
+                        logger.debug("Skip notification '$bankId', missing subject")
+                        //return@notificationForEachTx
+                    }
+                    // Obtaining the payer's details
+                    val debtorPayto = StringBuilder("payto://iban/")
+                    one("RltdPties") {
+                        one("DbtrAcct").one("Id").one("IBAN") {
+                            debtorPayto.append(text())
+                        }
+                        one("Dbtr").one("Nm") {
+                            val urlEncName = URLEncoder.encode(text(), "utf-8")
+                            debtorPayto.append("?receiver-name=$urlEncName")
+                        }
+                    }
+                    notifications.add(IncomingPayment(
+                        amount = amount,
+                        bankId = bankId,
+                        debitPaytoUri = debtorPayto.toString(),
+                        executionTime = bookDate,
+                        wireTransferSubject = subject.toString()
+                    ))
+                }
+            }
+            "DBIT" -> {
+                /*val messageId = one("Refs").one("MsgId").text()
+                notifications.add(OutgoingPayment(
+                    amount = amount,
+                    messageId = messageId,
+                    executionTime = bookDate
+                ))*/
             }
             else -> throw Exception("Unknown transaction notification kind '$kind'")
         }        

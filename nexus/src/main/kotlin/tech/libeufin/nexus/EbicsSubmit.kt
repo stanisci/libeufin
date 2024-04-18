@@ -84,7 +84,8 @@ private suspend fun submitInitiatedPayment(
         amount = payment.amount,
         creditAccount = creditAccount,
         debitAccount = ctx.cfg.account,
-        wireTransferSubject = payment.wireTransferSubject
+        wireTransferSubject = payment.wireTransferSubject,
+        dialect = ctx.cfg.dialect
     )
     ctx.fileLogger.logSubmit(xml)
     return doEbicsUpload(

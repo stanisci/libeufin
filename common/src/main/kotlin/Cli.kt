@@ -39,15 +39,14 @@ import org.slf4j.event.Level
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-config")
 
-fun Throwable.fmt(): String{
-    var msg = StringBuilder(message ?: this::class.simpleName)
+fun Throwable.fmt(): String = buildString {
+    append(message ?: this::class.simpleName)
     var cause = cause
     while (cause != null) {
-        msg.append(": ")
-        msg.append(cause.message ?: cause::class.simpleName)
+        append(": ")
+        append(cause.message ?: cause::class.simpleName)
         cause = cause.cause
     }
-    return msg.toString()
 }
 
 fun Throwable.fmtLog(logger: Logger) {

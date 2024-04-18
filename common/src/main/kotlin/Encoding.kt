@@ -32,8 +32,7 @@ object Base32Crockford {
 
     private var encTable = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
-    fun encode(data: ByteArray): String {
-        val sb = StringBuilder()
+    fun encode(data: ByteArray): String = buildString {
         var inputChunkBuffer = 0
         var pendingBitsCount = 0
         var inputCursor = 0
@@ -47,7 +46,7 @@ object Base32Crockford {
             // Write symbols
             while (pendingBitsCount >= 5) {
                 val symbolIndex = inputChunkBuffer.ushr(pendingBitsCount - 5) and 31
-                sb.append(encTable[symbolIndex])
+                append(encTable[symbolIndex])
                 pendingBitsCount -= 5
             }
         }
@@ -56,18 +55,16 @@ object Base32Crockford {
 
         if (pendingBitsCount > 0) {
             val symbolIndex = (inputChunkNumber shl (5 - pendingBitsCount)) and 31
-            sb.append(encTable[symbolIndex])
+            append(encTable[symbolIndex])
         }
-        val enc = sb.toString()
         val oneMore = ((data.size * 8) % 5) > 0
         val expectedLength = if (oneMore) {
             ((data.size * 8) / 5) + 1
         } else {
             (data.size * 8) / 5
         }
-        if (enc.length != expectedLength)
+        if (this.length != expectedLength)
             throw Exception("base32 encoding has wrong length")
-        return enc
     }
 
     /**
