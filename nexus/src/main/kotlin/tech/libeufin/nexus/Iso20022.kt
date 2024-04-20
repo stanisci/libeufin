@@ -334,7 +334,20 @@ fun parseTx(
                 }
             }
         }
-        val reversal = opt("RvslInd")?.bool() ?: false
+        var reversal = opt("RvslInd")?.bool() ?: false
+        opt("BkTxCd") {
+            opt("Domn") {
+                // TODO automate enum generation for all those code
+                val domainCode = one("Cd")
+                one("Fmly") {
+                    val familyCode = one("Cd")
+                    val subFamilyCode = one("SubFmlyCd").text()
+                    if (subFamilyCode == "RRTN" || subFamilyCode == "RPCR") {
+                        reversal = true
+                    }
+                }
+            }
+        }
         val info = opt("AddtlNtryInf")?.text()
         val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
         val ref = opt("AcctSvcrRef")?.text()
@@ -375,7 +388,7 @@ fun parseTx(
                 }
             }
         }
-        val reversal = opt("RvslInd")?.bool() ?: false
+        var reversal = opt("RvslInd")?.bool() ?: false
         val info = opt("AddtlNtryInf")?.text()
         val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
         val kind = one("CdtDbtInd").text()
@@ -387,6 +400,19 @@ fun parseTx(
         }
         val ref = opt("AcctSvcrRef")?.text()
         return one("NtryDtls").one("TxDtls") {
+            opt("BkTxCd") {
+                opt("Domn") {
+                    // TODO automate enum generation for all those code
+                    val domainCode = one("Cd")
+                    one("Fmly") {
+                        val familyCode = one("Cd")
+                        val subFamilyCode = one("SubFmlyCd").text()
+                        if (subFamilyCode == "RRTN" || subFamilyCode == "RPCR") {
+                            reversal = true
+                        }
+                    }
+                }
+            }
             var msgId = opt("Refs")?.opt("MsgId")?.text()
             val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
             var debtorPayto = opt("RltdPties") { payto("Dbtr") }
