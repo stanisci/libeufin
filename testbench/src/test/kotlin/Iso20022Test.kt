@@ -50,22 +50,23 @@ class Iso20022Test {
         val root = Path("test")
         if (!root.exists()) return
         for (platform in root.listDirectoryEntries()) {
+            if (!platform.isDirectory()) continue
             for (file in platform.listDirectoryEntries()) {
+                if (!file.isDirectory()) continue
                 val fetch = file.resolve("fetch")
-                if (file.isDirectory() && fetch.exists()) {
-                    val cfg = loadConfig(platform.resolve("ebics.conf"))
-                    val currency = cfg.requireString("nexus-ebics", "currency")
-                    for (log in fetch.listDirectoryEntries()) {
-                        val content = Files.newInputStream(log)
-                        val name = log.toString()
-                        println(name)
-                        if (name.contains("HAC")) {
-                            parseCustomerAck(content)
-                        } else if (name.contains("pain.002")) {
-                            parseCustomerPaymentStatusReport(content)
-                        } else if (!name.contains("camt.052") && !name.contains("_C52_") && !name.contains("_Z01_")) {
-                            parseTx(content, currency)
-                        }
+                if (!fetch.exists()) continue
+                val cfg = loadConfig(platform.resolve("ebics.conf"))
+                val currency = cfg.requireString("nexus-ebics", "currency")
+                for (log in fetch.listDirectoryEntries()) {
+                    val content = Files.newInputStream(log)
+                    val name = log.toString()
+                    println(name)
+                    if (name.contains("HAC")) {
+                        parseCustomerAck(content)
+                    } else if (name.contains("pain.002")) {
+                        parseCustomerPaymentStatusReport(content)
+                    } else if (!name.contains("camt.052") && !name.contains("_C52_") && !name.contains("_Z01_")) {
+                        parseTx(content, currency)
                     }
                 }
             }

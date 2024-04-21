@@ -26,15 +26,6 @@ import java.time.*
 import java.time.format.*
 
 /**
- * Collects details to define the pain.001 namespace
- * XML attributes.
- */
-data class Pain001Namespaces(
-    val fullNamespace: String,
-    val xsdFilename: String
-)
-
-/**
  * Gets the amount number, also converting it from the
  * Taler-friendly 8 fractional digits to the more bank
  * friendly with 2.
@@ -87,7 +78,9 @@ fun createPain001(
         attr("xsi:schemaLocation", "urn:iso:std:iso:20022:tech:xsd:pain.001.001.$version pain.001.001.$version.xsd")
         el("CstmrCdtTrfInitn") {
             el("GrpHdr") {
-                el("MsgId", requestUid)
+                // Use for idempotency as banks will refuse to process EBICS request with the same MsgId for a pre- agreed period
+                // This is especially important for bounces
+                el("MsgId", requestUid) 
                 el("CreDtTm", DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(zonedTimestamp))
                 el("NbOfTxs", "1")
                 el("CtrlSum", amountWithoutCurrency)
@@ -119,7 +112,8 @@ fun createPain001(
                 el("CdtTrfTxInf") {
                     el("PmtId") {
                         el("InstrId", "NOTPROVIDED")
-                        el("EndToEndId", "NOTPROVIDED")
+                        // Used to identify this transaction in CAMT files when MsgId is not present
+                        el("EndToEndId", requestUid)
                     }
                     el("Amt/InstdAmt") {
                         attr("Ccy", amount.currency)
@@ -291,7 +285,7 @@ data class IncomingPayment(
 
 /** ISO20022 outgoing payment */
 data class OutgoingPayment(
-    /** ISO20022 MessageIdentification */
+    /** ISO20022 MessageIdentification & EndToEndId */
     val messageId: String,
     val amount: TalerAmount,
     val wireTransferSubject: String? = null, // not showing in camt.054
@@ -323,18 +317,33 @@ fun parseTx(
     notifXml: InputStream,
     acceptedCurrency: String
 ): List<TxNotification> {
-    fun XmlDestructor.parseNotif(): List<RawTx> {
+    /*
+        In ISO 20022 specifications, most fields are optional and the same information 
+        can be written several times in different places. For libeufin, we're only 
+        interested in a subset of the available values that can be found in both camt.053 
+        and camt.054. As there are many similarities between these files, we use the same 
+        function to share as much code as possible. This function should not fail on 
+        legitimate files and should simply warn when available informations are insufficient.
+    */
+
+    /** Assert that transaction status is BOOK */
+    fun XmlDestructor.assertBooked() {
         one("Sts") {
-            if (text() != "BOOK") {
-                one("Cd") {
-                    if (text() != "BOOK")
-                        throw Exception("Found non booked transaction, " +
-                                "stop parsing.  Status was: ${text()}"
-                        )
-                }
+            val status = opt("Cd")?.text() ?: text()
+            require(status == "BOOK") {
+                "Found non booked transaction, stop parsing: expected BOOK got $status"
             }
         }
-        var reversal = opt("RvslInd")?.bool() ?: false
+    }
+    /** Parse information commonly founded a the top of the XML tree */
+    fun XmlDestructor.parseHead(): TxHead = TxHead(
+        reversal = opt("RvslInd")?.bool() ?: false,
+        entryInfo = opt("AddtlNtryInf")?.text(),
+        date = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC),
+        entryRef = opt("AcctSvcrRef")?.text()
+    )
+    /** Parse transaction code */
+    fun XmlDestructor.parseCode(head: TxHead) {
         opt("BkTxCd") {
             opt("Domn") {
                 // TODO automate enum generation for all those code
@@ -343,105 +352,67 @@ fun parseTx(
                     val familyCode = one("Cd")
                     val subFamilyCode = one("SubFmlyCd").text()
                     if (subFamilyCode == "RRTN" || subFamilyCode == "RPCR") {
-                        reversal = true
+                        head.reversal = true
                     }
                 }
             }
         }
-        val info = opt("AddtlNtryInf")?.text()
-        val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
-        val ref = opt("AcctSvcrRef")?.text()
-        return one("NtryDtls").map("TxDtls") {
-            val kind = one("CdtDbtInd").text()
-            val amount: TalerAmount = one("Amt") {
-                val currency = attr("Ccy")
-                /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
-                if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
-                TalerAmount("$currency:${text()}")
-            }
-            var msgId = opt("Refs")?.opt("MsgId")?.text()
-            val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
-            var debtorPayto = opt("RltdPties") { payto("Dbtr") }
-            var creditorPayto = opt("RltdPties") { payto("Cdtr") }
-            RawTx(
-                kind,
-                bookDate,
-                amount,
-                reversal,
-                info,
-                ref,
-                msgId,
-                subject,
-                debtorPayto,
-                creditorPayto
-            )
-        }
     }
-    fun XmlDestructor.parseStatement(): RawTx {
-        one("Sts") {
-            if (text() != "BOOK") {
-                one("Cd") {
-                    if (text() != "BOOK")
-                        throw Exception("Found non booked transaction, " +
-                                "stop parsing.  Status was: ${text()}"
-                        )
-                }
-            }
-        }
-        var reversal = opt("RvslInd")?.bool() ?: false
-        val info = opt("AddtlNtryInf")?.text()
-        val bookDate: Instant = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
-        val kind = one("CdtDbtInd").text()
-        val amount: TalerAmount = one("Amt") {
+    /** Parse information commonly founded a the bottom or the top of the XML tree */
+    fun XmlDestructor.parseMid(): TxMid = TxMid(
+        kind = one("CdtDbtInd").text(),
+        amount = one("Amt") {
             val currency = attr("Ccy")
             /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
             if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
             TalerAmount("$currency:${text()}")
         }
-        val ref = opt("AcctSvcrRef")?.text()
+    )
+    /** Parse information commonly founded a the bottom of the XML tree */
+    fun XmlDestructor.parseBtm(): TxBtm = TxBtm(
+        msgId = opt("Refs")?.opt("MsgId")?.text(),
+        ref = opt("Refs")?.opt("AcctSvcrRef")?.text(),
+        subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString(""),
+        // TODO RltdAgts can have more info on debtor and creditor
+        debtorPayto = opt("RltdPties") { payto("Dbtr") },
+        creditorPayto = opt("RltdPties") { payto("Cdtr") },
+    )
+    /** Parse camt.054 entry */
+    fun XmlDestructor.parseNotif(): List<RawTx> {
+        assertBooked()
+        val head = parseHead()
+        parseCode(head)
+        return one("NtryDtls").map("TxDtls") {
+            val mid = parseMid()
+            val btm = parseBtm()
+            RawTx(head, mid, btm)
+        }
+    }
+    /** Parse camt.053 entry */
+    fun XmlDestructor.parseStatement(): RawTx {
+        assertBooked()
+        val head = parseHead()
+        val mid = parseMid()
         return one("NtryDtls").one("TxDtls") {
-            opt("BkTxCd") {
-                opt("Domn") {
-                    // TODO automate enum generation for all those code
-                    val domainCode = one("Cd")
-                    one("Fmly") {
-                        val familyCode = one("Cd")
-                        val subFamilyCode = one("SubFmlyCd").text()
-                        if (subFamilyCode == "RRTN" || subFamilyCode == "RPCR") {
-                            reversal = true
-                        }
-                    }
-                }
-            }
-            var msgId = opt("Refs")?.opt("MsgId")?.text()
-            val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
-            var debtorPayto = opt("RltdPties") { payto("Dbtr") }
-            var creditorPayto = opt("RltdPties") { payto("Cdtr") }
-            RawTx(
-                kind,
-                bookDate,
-                amount,
-                reversal,
-                info,
-                ref,
-                msgId,
-                subject,
-                debtorPayto,
-                creditorPayto
-            )
+            parseCode(head)
+            val btm = parseBtm()
+            RawTx(head, mid, btm)
         }
     }
     val raws = mutableListOf<RawTx>()
     XmlDestructor.fromStream(notifXml, "Document") {
-        opt("BkToCstmrDbtCdtNtfctn") {
+        opt("BkToCstmrDbtCdtNtfctn") { // Camt.054
             each("Ntfctn") {
+                opt("Acct") {
+                    // Sanity check on currency and IBAN ?
+                }
                 each("Ntry") {
                     raws.addAll(parseNotif())
                 }
             }
-        } ?: opt("BkToCstmrStmt") {
+        } ?: opt("BkToCstmrStmt") { // Camt.053
             each("Stmt") {
-                one("Acct") {
+                opt("Acct") {
                     // Sanity check on currency and IBAN ?
                 }
                 each("Ntry") {
@@ -461,58 +432,78 @@ fun parseTx(
     }
 }
 
-private data class RawTx(
+
+private data class TxHead(
+    var reversal: Boolean,
+    val entryInfo: String?,
+    val date: Instant,
+    val entryRef: String?
+)
+
+private data class TxMid(
     val kind: String,
-    val bookDate: Instant,
     val amount: TalerAmount,
-    val reversal: Boolean,
-    val info: String?,
-    val ref: String?,
+)
+
+private data class TxBtm(
     val msgId: String?,
+    val ref: String?,
     val subject: String?,
     val debtorPayto: String?,
     val creditorPayto: String?
 )
 
+private data class RawTx(
+    val head: TxHead,
+    val mid: TxMid,
+    val btm: TxBtm
+)
+
 private class TxErr(val msg: String): Exception(msg)
 
 private fun parseTxLogic(raw: RawTx): TxNotification {
-    if (raw.reversal) {
-        require("CRDT" == raw.kind) // TODO handle DBIT reversal
-        if (raw.msgId == null) 
-            throw TxErr("missing msg ID for Credit reversal ${raw.ref}")
+    val (reversal, entryInfo, date, entryRef) = raw.head
+    val (kind, amount) = raw.mid
+    val (msgId, ref, subject, debtorPayto, creditorPayto) = raw.btm
+    val dbgRef = ref ?: entryRef
+    if (reversal) {
+        // TODO parse reason code if present
+        require("CRDT" == kind) // TODO handle DBIT reversal
+        if (msgId == null) 
+            throw TxErr("missing msg ID for Credit reversal $dbgRef")
         return TxNotification.Reversal(
-            msgId = raw.msgId,
-            reason = raw.info,
-            executionTime = raw.bookDate
+            msgId = msgId,
+            reason = entryInfo,
+            executionTime = date
         )
     }
-    return when (raw.kind) {
+    return when (kind) {
         "CRDT" -> {
-            if (raw.ref == null)
-                throw TxErr("missing subject for Credit ${raw.ref}")
-            if (raw.subject == null)
-                throw TxErr("missing subject for Credit ${raw.ref}")
-            if (raw.debtorPayto == null)
-                throw TxErr("missing debtor info for Credit ${raw.ref}")
+            if (dbgRef == null)
+                throw TxErr("missing ref for Credit $dbgRef")
+            if (subject == null)
+                throw TxErr("missing subject for Credit $dbgRef")
+            if (debtorPayto == null)
+                throw TxErr("missing debtor info for Credit $dbgRef")
             IncomingPayment(
-                amount = raw.amount,
-                bankId = raw.ref,
-                debitPaytoUri = raw.debtorPayto,
-                executionTime = raw.bookDate,
-                wireTransferSubject = raw.subject
+                amount = amount,
+                bankId = dbgRef,
+                debitPaytoUri = debtorPayto,
+                executionTime = date,
+                wireTransferSubject = subject
             )
         }
         "DBIT" -> {
-            if (raw.msgId == null)
-                throw TxErr("missing msg ID for Debit ${raw.ref}")
+            if (msgId == null)
+                throw TxErr("missing msg ID for Debit $dbgRef")
             OutgoingPayment(
-                amount = raw.amount,
-                messageId = raw.msgId,
-                executionTime = raw.bookDate,
-                creditPaytoUri = raw.creditorPayto
+                amount = amount,
+                messageId = msgId,
+                executionTime = date,
+                creditPaytoUri = creditorPayto,
+                wireTransferSubject = subject
             )
         }
-        else -> throw Exception("Unknown transaction notification kind '${raw.kind}'")
+        else -> throw Exception("Unknown transaction notification kind '$kind'")
     }
 }
