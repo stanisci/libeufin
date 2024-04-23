@@ -65,6 +65,9 @@ package tech.libeufin.nexus
 {extractCodeSet("ExternalPaymentGroupStatus1Code", "ExternalPaymentGroupStatusCode")}
 
 {extractCodeSet("ExternalPaymentTransactionStatus1Code", "ExternalPaymentTransactionStatusCode")}
+
+{extractCodeSet("ExternalReturnReason1Code", "ExternalReturnReasonCode")}
+
 """
     with open("src/main/kotlin/tech/libeufin/nexus/Iso20022CodeSets.kt", "w") as file1:
         file1.write(kt)

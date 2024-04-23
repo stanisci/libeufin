@@ -20,6 +20,7 @@
 import org.junit.Test
 import tech.libeufin.common.*
 import tech.libeufin.nexus.*
+import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.TxNotification.*
 import java.nio.file.Files
 import java.time.LocalDate
@@ -37,9 +38,9 @@ private fun instant(date: String): Instant =
 
 class Iso20022Test {
     @Test
-    fun postfinance() {
-        val content = Files.newInputStream(Path("sample/postfinance.xml"))
-        val txs = parseTx(content, "CHF")
+    fun postfinance_camt054() {
+        val content = Files.newInputStream(Path("sample/platform/postfinance_camt054.xml"))
+        val txs = parseTx(content, "CHF", Dialect.postfinance)
         assertEquals(
             listOf(
                 OutgoingPayment(
@@ -50,23 +51,39 @@ class Iso20022Test {
                     creditPaytoUri = null
                 ),
                 IncomingPayment(
-                    bankId = "231121CH0AZWCR9T",
+                    bankId = "62e2b511-7313-4ccd-8d40-c9d8e612cd71",
                     amount = TalerAmount("CHF:10"),
                     wireTransferSubject = "G1XTY6HGWGMVRM7E6XQ4JHJK561ETFDFTJZ7JVGV543XZCB27YBG",
                     executionTime = instant("2023-12-19"),
                     debitPaytoUri = "payto://iban/CH7389144832588726658?receiver-name=Mr+Test"
                 ),
                 IncomingPayment(
-                    bankId = "231121CH0AZWCVR1",
+                    bankId = "62e2b511-7313-4ccd-8d40-c9d8e612cd71",
                     amount = TalerAmount("CHF:2.53"),
                     wireTransferSubject = "G1XTY6HGWGMVRM7E6XQ4JHJK561ETFDFTJZ7JVGV543XZCB27YB",
                     executionTime = instant("2023-12-19"),
                     debitPaytoUri = "payto://iban/CH7389144832588726658?receiver-name=Mr+Test"
+                )
+            ),
+            txs
+        )
+    }
+
+    @Test
+    fun postfinance_camt053() {
+        val content = Files.newInputStream(Path("sample/platform/postfinance_camt053.xml"))
+        val txs = parseTx(content, "CHF", Dialect.postfinance)
+        assertEquals(
+            listOf(
+                Reversal(
+                    msgId = "889d1a80-1267-49bd-8fcc-85701a",
+                    reason = "InconsistenWithEndCustomer 'Identification of end customer is not consistent with associated account number, organisation ID or private ID.' - 'Keine Uebereinstimmung von Kontonummer und Kontoinhaber'",
+                    executionTime = instant("2023-11-22")
                 ),
                 Reversal(
-                    msgId = "50820f78-9024-44ff-978d-63a18c",
-                    reason = "RETOURE IHRER ZAHLUNG VOM 15.01.2024 ... GRUND: KEINE UEBEREINSTIMMUNG VON KONTONUMMER UND KONTOINHABER",
-                    executionTime = instant("2024-01-15")
+                    msgId = "4cc61cc7-6230-49c2-b5e2-b40bbb",
+                    reason = "MissingCreditorNameOrAddress 'Specification of the creditor’s name and/or address needed for regulatory requirements is insufficient or missing.' - 'Postadresse des Kreditors fehlt oder ist unvollständig'",
+                    executionTime = instant("2023-11-22")
                 )
             ),
             txs
@@ -75,8 +92,8 @@ class Iso20022Test {
 
     @Test
     fun gls() {
-        val content = Files.newInputStream(Path("sample/gls.xml"))
-        val txs = parseTx(content, "EUR")
+        val content = Files.newInputStream(Path("sample/platform/gls.xml"))
+        val txs = parseTx(content, "EUR", Dialect.gls)
         assertEquals(
             listOf(
                 OutgoingPayment(
@@ -94,7 +111,7 @@ class Iso20022Test {
                     creditPaytoUri = "payto://iban/DE20500105172419259181"
                 ),
                 IncomingPayment(
-                    bankId = "2024041210041357000",
+                    bankId = "BYLADEM1WOR-G2910276709458A2",
                     amount = TalerAmount("EUR:3"),
                     wireTransferSubject = "Taler FJDQ7W6G7NWX4H9M1MKA12090FRC9K7DA6N0FANDZZFXTR6QHX5G Test.,-",
                     executionTime = instant("2024-04-12"),

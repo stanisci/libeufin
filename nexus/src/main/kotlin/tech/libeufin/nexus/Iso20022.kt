@@ -89,7 +89,7 @@ fun createPain001(
             el("PmtInf") {
                 el("PmtInfId", "NOTPROVIDED")
                 el("PmtMtd", "TRF")
-                el("BtchBookg", "true")
+                el("BtchBookg", "false")
                 el("NbOfTxs", "1")
                 el("CtrlSum", amountWithoutCurrency)
                 el("PmtTpInf/SvcLvl/Cd", 
@@ -312,116 +312,218 @@ private fun XmlDestructor.payto(prefix: String): String? {
     }
 }
 
+private class TxErr(val msg: String): Exception(msg)
+
+private enum class Kind {
+    CRDT,
+    DBIT
+}
+
 /** Parse camt.054 or camt.053 file */
 fun parseTx(
     notifXml: InputStream,
-    acceptedCurrency: String
+    acceptedCurrency: String,
+    dialect: Dialect
 ): List<TxNotification> {
     /*
         In ISO 20022 specifications, most fields are optional and the same information 
         can be written several times in different places. For libeufin, we're only 
         interested in a subset of the available values that can be found in both camt.053 
         and camt.054. As there are many similarities between these files, we use the same 
-        function to share as much code as possible. This function should not fail on 
-        legitimate files and should simply warn when available informations are insufficient.
+        function to share code. This function should not fail on legitimate files and should
+        simply warn when available informations are insufficient.
     */
 
     /** Assert that transaction status is BOOK */
-    fun XmlDestructor.assertBooked() {
+    fun XmlDestructor.assertBooked(ref: String?) {
         one("Sts") {
             val status = opt("Cd")?.text() ?: text()
             require(status == "BOOK") {
-                "Found non booked transaction, stop parsing: expected BOOK got $status"
+                "Found non booked entry $ref, stop parsing: expected BOOK got $status"
             }
         }
     }
-    /** Parse information commonly founded a the top of the XML tree */
-    fun XmlDestructor.parseHead(): TxHead = TxHead(
-        reversal = opt("RvslInd")?.bool() ?: false,
-        entryInfo = opt("AddtlNtryInf")?.text(),
-        date = one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC),
-        entryRef = opt("AcctSvcrRef")?.text()
-    )
-    /** Parse transaction code */
-    fun XmlDestructor.parseCode(head: TxHead) {
-        opt("BkTxCd") {
-            opt("Domn") {
-                // TODO automate enum generation for all those code
-                val domainCode = one("Cd")
-                one("Fmly") {
-                    val familyCode = one("Cd")
-                    val subFamilyCode = one("SubFmlyCd").text()
-                    if (subFamilyCode == "RRTN" || subFamilyCode == "RPCR") {
-                        head.reversal = true
+
+    fun XmlDestructor.bookDate() =
+        one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
+
+    /** Check if transaction code is reversal */
+    fun XmlDestructor.isReversalCode(): Boolean {
+        return one("BkTxCd").one("Domn") {
+            // TODO automate enum generation for all those code
+            val domainCode = one("Cd").text()
+            one("Fmly") {
+                val familyCode = one("Cd").text()
+                val subFamilyCode = one("SubFmlyCd").text()
+                
+                subFamilyCode == "RRTN" || subFamilyCode == "RPCR"
+            }
+        }
+    }
+
+    val txsInfo = mutableListOf<TxInfo>()
+
+    XmlDestructor.fromStream(notifXml, "Document") { when (dialect) {
+        Dialect.gls -> {
+            opt("BkToCstmrStmt")?.each("Stmt") { // Camt.053
+                opt("Acct") {
+                    // Sanity check on currency and IBAN ?
+                }
+                each("Ntry") {
+                    val entryRef = opt("AcctSvcrRef")?.text()
+                    assertBooked(entryRef)
+                    val bookDate = bookDate()
+                    val kind = one("CdtDbtInd").enum<Kind>()
+                    val amount = one("Amt") {
+                        val currency = attr("Ccy")
+                        /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
+                        if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+                        TalerAmount("$currency:${text()}")
+                    }
+                    one("NtryDtls").one("TxDtls") {
+                        val txRef = opt("Refs")?.opt("AcctSvcrRef")?.text()
+                        val reversal = isReversalCode()
+                        val nexusId = opt("Refs")?.opt("MsgId")?.text() // TODO and end-to-end ID
+                        if (reversal) {
+                            if (kind == Kind.CRDT) {
+                                val reason = one("RtrInf") {
+                                    val code = one("Rsn").one("Cd").enum<ExternalReturnReasonCode>()
+                                    val info = opt("AddtlInf")?.text()
+                                    buildString {
+                                        append("${code.isoCode} '${code.description}'")
+                                        if (info != null) {
+                                            append(" - '$info'")
+                                        }
+                                    }
+                                }
+                                txsInfo.add(TxInfo.CreditReversal(
+                                    ref = nexusId ?: txRef ?: entryRef,
+                                    bookDate = bookDate,
+                                    nexusId = nexusId,
+                                    reason = reason
+                                ))
+                            }
+                        } else {
+                            val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
+                            when (kind) {
+                                Kind.CRDT -> {
+                                    val bankId = one("Refs").opt("TxId")?.text()
+                                    val debtorPayto = opt("RltdPties") { payto("Dbtr") }
+                                    txsInfo.add(TxInfo.Credit(
+                                        ref = bankId ?: txRef ?: entryRef,
+                                        bookDate = bookDate,
+                                        bankId = bankId,
+                                        amount = amount,
+                                        subject = subject,
+                                        debtorPayto = debtorPayto
+                                    ))
+                                }
+                                Kind.DBIT -> {
+                                    val creditorPayto = opt("RltdPties") { payto("Cdtr") }
+                                    txsInfo.add(TxInfo.Debit(
+                                        ref = nexusId ?: txRef ?: entryRef,
+                                        bookDate = bookDate,
+                                        nexusId = nexusId,
+                                        amount = amount,
+                                        subject = subject,
+                                        creditorPayto = creditorPayto
+                                    ))
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-    }
-    /** Parse information commonly founded a the bottom or the top of the XML tree */
-    fun XmlDestructor.parseMid(): TxMid = TxMid(
-        kind = one("CdtDbtInd").text(),
-        amount = one("Amt") {
-            val currency = attr("Ccy")
-            /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
-            if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
-            TalerAmount("$currency:${text()}")
-        }
-    )
-    /** Parse information commonly founded a the bottom of the XML tree */
-    fun XmlDestructor.parseBtm(): TxBtm = TxBtm(
-        msgId = opt("Refs")?.opt("MsgId")?.text(),
-        ref = opt("Refs")?.opt("AcctSvcrRef")?.text(),
-        subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString(""),
-        // TODO RltdAgts can have more info on debtor and creditor
-        debtorPayto = opt("RltdPties") { payto("Dbtr") },
-        creditorPayto = opt("RltdPties") { payto("Cdtr") },
-    )
-    /** Parse camt.054 entry */
-    fun XmlDestructor.parseNotif(): List<RawTx> {
-        assertBooked()
-        val head = parseHead()
-        parseCode(head)
-        return one("NtryDtls").map("TxDtls") {
-            val mid = parseMid()
-            val btm = parseBtm()
-            RawTx(head, mid, btm)
-        }
-    }
-    /** Parse camt.053 entry */
-    fun XmlDestructor.parseStatement(): RawTx {
-        assertBooked()
-        val head = parseHead()
-        val mid = parseMid()
-        return one("NtryDtls").one("TxDtls") {
-            parseCode(head)
-            val btm = parseBtm()
-            RawTx(head, mid, btm)
-        }
-    }
-    val raws = mutableListOf<RawTx>()
-    XmlDestructor.fromStream(notifXml, "Document") {
-        opt("BkToCstmrDbtCdtNtfctn") { // Camt.054
-            each("Ntfctn") {
+        Dialect.postfinance -> {
+            opt("BkToCstmrStmt")?.each("Stmt") { // Camt.053
                 opt("Acct") {
                     // Sanity check on currency and IBAN ?
                 }
                 each("Ntry") {
-                    raws.addAll(parseNotif())
+                    val entryRef = opt("AcctSvcrRef")?.text()
+                    assertBooked(entryRef)
+                    val bookDate = bookDate()
+                    if (isReversalCode()) {
+                        one("NtryDtls").one("TxDtls") {
+                            val kind = one("CdtDbtInd").enum<Kind>()
+                            if (kind == Kind.CRDT) {
+                                val txRef = opt("Refs")?.opt("AcctSvcrRef")?.text()
+                                val nexusId = opt("Refs")?.opt("MsgId")?.text() // TODO and end-to-end ID
+                                val reason = one("RtrInf") {
+                                    val code = one("Rsn").one("Cd").enum<ExternalReturnReasonCode>()
+                                    val info = opt("AddtlInf")?.text()
+                                    buildString {
+                                        append("${code.isoCode} '${code.description}'")
+                                        if (info != null) {
+                                            append(" - '$info'")
+                                        }
+                                    }
+                                }
+                                txsInfo.add(TxInfo.CreditReversal(
+                                    ref = nexusId ?: txRef ?: entryRef,
+                                    bookDate = bookDate,
+                                    nexusId = nexusId,
+                                    reason = reason
+                                ))
+                            }
+                        }
+                    }
                 }
             }
-        } ?: opt("BkToCstmrStmt") { // Camt.053
-            each("Stmt") {
+            opt("BkToCstmrDbtCdtNtfctn")?.each("Ntfctn") { // Camt.054
                 opt("Acct") {
                     // Sanity check on currency and IBAN ?
                 }
                 each("Ntry") {
-                    raws.add(parseStatement())
+                    val entryRef = opt("AcctSvcrRef")?.text()
+                    assertBooked(entryRef)
+                    val bookDate = bookDate()
+                    if (!isReversalCode()) {
+                        one("NtryDtls").each("TxDtls") {
+                            val kind = one("CdtDbtInd").enum<Kind>()
+                            val amount = one("Amt") {
+                                val currency = attr("Ccy")
+                                /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
+                                if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+                                TalerAmount("$currency:${text()}")
+                            }
+                            val txRef = one("Refs").opt("AcctSvcrRef")?.text()
+                            val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
+                            when (kind) {
+                                Kind.CRDT -> {
+                                    val bankId = one("Refs").opt("UETR")?.text()
+                                    val debtorPayto = opt("RltdPties") { payto("Dbtr") }
+                                    txsInfo.add(TxInfo.Credit(
+                                        ref = bankId ?: txRef ?: entryRef,
+                                        bookDate = bookDate,
+                                        bankId = bankId,
+                                        amount = amount,
+                                        subject = subject,
+                                        debtorPayto = debtorPayto
+                                    ))
+                                }
+                                Kind.DBIT -> {
+                                    val nexusId = opt("Refs")?.opt("MsgId")?.text() // TODO and end-to-end ID
+                                    val creditorPayto = opt("RltdPties") { payto("Cdtr") }
+                                    txsInfo.add(TxInfo.Debit(
+                                        ref = nexusId ?: txRef ?: entryRef,
+                                        bookDate = bookDate,
+                                        nexusId = nexusId,
+                                        amount = amount,
+                                        subject = subject,
+                                        creditorPayto = creditorPayto
+                                    ))
+                                }
+                            }
+                        }
+                    }
                 }
             }
-        } ?: throw Exception("Missing BkToCstmrDbtCdtNtfctn or BkToCstmrStmt")
-    }
-    return raws.mapNotNull { it ->  
+        }
+    }}
+    
+    return txsInfo.mapNotNull { it ->  
         try {
             parseTxLogic(it)
         } catch (e: TxErr) {
@@ -432,78 +534,74 @@ fun parseTx(
     }
 }
 
+private sealed interface TxInfo {
+    // Bank provider ref for debugging
+    val ref: String?
+    // When was this transaction booked
+    val bookDate: Instant
+    data class CreditReversal(
+        override val ref: String?,
+        override val bookDate: Instant,
+        // Unique ID generated by libeufin-nexus
+        val nexusId: String?,
+        val reason: String?
+    ): TxInfo
+    data class Credit(
+        override val ref: String?,
+        override val bookDate: Instant,
+        // Unique ID generated by payment provider
+        val bankId: String?,
+        val amount: TalerAmount,
+        val subject: String?,
+        val debtorPayto: String?
+    ): TxInfo
+    data class Debit(
+        override val ref: String?,
+        override val bookDate: Instant,
+        // Unique ID generated by libeufin-nexus
+        val nexusId: String?,
+        val amount: TalerAmount,
+        val subject: String?,
+        val creditorPayto: String?
+    ): TxInfo
+}
 
-private data class TxHead(
-    var reversal: Boolean,
-    val entryInfo: String?,
-    val date: Instant,
-    val entryRef: String?
-)
-
-private data class TxMid(
-    val kind: String,
-    val amount: TalerAmount,
-)
-
-private data class TxBtm(
-    val msgId: String?,
-    val ref: String?,
-    val subject: String?,
-    val debtorPayto: String?,
-    val creditorPayto: String?
-)
-
-private data class RawTx(
-    val head: TxHead,
-    val mid: TxMid,
-    val btm: TxBtm
-)
-
-private class TxErr(val msg: String): Exception(msg)
-
-private fun parseTxLogic(raw: RawTx): TxNotification {
-    val (reversal, entryInfo, date, entryRef) = raw.head
-    val (kind, amount) = raw.mid
-    val (msgId, ref, subject, debtorPayto, creditorPayto) = raw.btm
-    val dbgRef = ref ?: entryRef
-    if (reversal) {
-        // TODO parse reason code if present
-        require("CRDT" == kind) // TODO handle DBIT reversal
-        if (msgId == null) 
-            throw TxErr("missing msg ID for Credit reversal $dbgRef")
-        return TxNotification.Reversal(
-            msgId = msgId,
-            reason = entryInfo,
-            executionTime = date
-        )
-    }
-    return when (kind) {
-        "CRDT" -> {
-            if (dbgRef == null)
-                throw TxErr("missing ref for Credit $dbgRef")
-            if (subject == null)
-                throw TxErr("missing subject for Credit $dbgRef")
-            if (debtorPayto == null)
-                throw TxErr("missing debtor info for Credit $dbgRef")
+private fun parseTxLogic(info: TxInfo): TxNotification {
+    return when (info) {
+        is TxInfo.CreditReversal -> {
+            if (info.nexusId == null) 
+                throw TxErr("missing nexus ID for Credit reversal ${info.ref}")
+            TxNotification.Reversal(
+                msgId = info.nexusId,
+                reason = info.reason,
+                executionTime = info.bookDate
+            )
+        }
+        is TxInfo.Credit -> {
+            if (info.bankId == null)
+                throw TxErr("missing bank ID for Credit ${info.ref}")
+            if (info.subject == null)
+                throw TxErr("missing subject for Credit ${info.ref}")
+            if (info.debtorPayto == null)
+                throw TxErr("missing debtor info for Credit ${info.ref}")
             IncomingPayment(
-                amount = amount,
-                bankId = dbgRef,
-                debitPaytoUri = debtorPayto,
-                executionTime = date,
-                wireTransferSubject = subject
+                amount = info.amount,
+                bankId = info.bankId,
+                debitPaytoUri = info.debtorPayto,
+                executionTime = info.bookDate,
+                wireTransferSubject = info.subject
             )
         }
-        "DBIT" -> {
-            if (msgId == null)
-                throw TxErr("missing msg ID for Debit $dbgRef")
+        is TxInfo.Debit -> {
+            if (info.nexusId == null)
+                throw TxErr("missing nexus ID for Debit ${info.ref}")
             OutgoingPayment(
-                amount = amount,
-                messageId = msgId,
-                executionTime = date,
-                creditPaytoUri = creditorPayto,
-                wireTransferSubject = subject
+                amount = info.amount,
+                messageId = info.nexusId,
+                executionTime = info.bookDate,
+                creditPaytoUri = info.creditorPayto,
+                wireTransferSubject = info.subject
             )
         }
-        else -> throw Exception("Unknown transaction notification kind '$kind'")
     }
 }

@@ -65,6 +65,7 @@
                         <Refs>
                             <AcctSvcrRef>231121CH0AZWCR9T</AcctSvcrRef>
                             <EndToEndId>NOTPROVIDED</EndToEndId>
+                            <UETR>62e2b511-7313-4ccd-8d40-c9d8e612cd71</UETR>
                         </Refs>
                         <Amt Ccy="CHF">10.00</Amt>
                         <CdtDbtInd>CRDT</CdtDbtInd>
@@ -103,6 +104,7 @@
                         <Refs>
                             <AcctSvcrRef>231121CH0AZWCVR1</AcctSvcrRef>
                             <EndToEndId>NOTPROVIDED</EndToEndId>
+                            <UETR>62e2b511-7313-4ccd-8d40-c9d8e612cd71</UETR>
                         </Refs>
                         <Amt Ccy="CHF">2.53</Amt>
                         <CdtDbtInd>CRDT</CdtDbtInd>

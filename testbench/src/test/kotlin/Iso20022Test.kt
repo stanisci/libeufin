@@ -22,6 +22,7 @@ import tech.libeufin.nexus.parseCustomerAck
 import tech.libeufin.nexus.parseCustomerPaymentStatusReport
 import tech.libeufin.nexus.parseTx
 import tech.libeufin.nexus.loadConfig
+import tech.libeufin.nexus.ebics.Dialect
 import java.nio.file.Files
 import kotlin.io.path.Path
 import kotlin.io.path.exists
@@ -40,7 +41,7 @@ class Iso20022Test {
             } else if (name.contains("pain.002") || name.contains("pain002") ) {
                 parseCustomerPaymentStatusReport(content)
             } else {
-                parseTx(content, "CHF")
+                parseTx(content, "CHF", Dialect.postfinance)
             }
         }
     }
@@ -57,6 +58,7 @@ class Iso20022Test {
                 if (!fetch.exists()) continue
                 val cfg = loadConfig(platform.resolve("ebics.conf"))
                 val currency = cfg.requireString("nexus-ebics", "currency")
+                val dialect = Dialect.valueOf(cfg.requireString("nexus-ebics", "bank_dialect"))
                 for (log in fetch.listDirectoryEntries()) {
                     val content = Files.newInputStream(log)
                     val name = log.toString()
@@ -65,8 +67,10 @@ class Iso20022Test {
                         parseCustomerAck(content)
                     } else if (name.contains("pain.002")) {
                         parseCustomerPaymentStatusReport(content)
-                    } else if (!name.contains("camt.052") && !name.contains("_C52_") && !name.contains("_Z01_")) {
-                        parseTx(content, currency)
+                    } else if (
+                        !name.contains("camt.052") && !name.contains("_C52_") && !name.contains("_Z01_")
+                    ) {
+                        parseTx(content, currency, dialect)
                     }
                 }
             }

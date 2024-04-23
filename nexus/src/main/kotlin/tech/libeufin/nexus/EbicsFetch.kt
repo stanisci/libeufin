@@ -158,7 +158,7 @@ private suspend fun ingestDocument(
     when (whichDocument) {
         SupportedDocument.CAMT_053, SupportedDocument.CAMT_054 -> {
             try {
-                parseTx(xml, cfg.currency).forEach {
+                parseTx(xml, cfg.currency, cfg.dialect).forEach {
                     if (cfg.fetch.ignoreBefore != null && it.executionTime < cfg.fetch.ignoreBefore) {
                         logger.debug("IGNORE $it")
                     } else {
@@ -307,8 +307,6 @@ enum class EbicsDocument {
     acknowledgement,
     /// Payment status - CustomerPaymentStatusReport pain.002
     status,
-    /// Account intraday reports - BankToCustomerAccountReport camt.052
-    // report, TODO add support
     /// Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054
     notification,
     /// Account statements - BankToCustomerStatement camt.053
@@ -318,32 +316,22 @@ enum class EbicsDocument {
     fun shortDescription(): String = when (this) {
         acknowledgement -> "EBICS acknowledgement"
         status -> "Payment status"
-        //Document.report -> "Account intraday reports"
-        notification -> "Debit & credit notifications"
         statement -> "Account statements"
+        notification -> "Debit & credit notifications"
     }
 
     fun fullDescription(): String = when (this) {
         acknowledgement -> "EBICS acknowledgement - CustomerAcknowledgement HAC pain.002"
         status -> "Payment status - CustomerPaymentStatusReport pain.002"
-        //report -> "Account intraday reports - BankToCustomerAccountReport camt.052"
-        notification -> "Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054"
         statement -> "Account statements - BankToCustomerStatement camt.053"
+        notification -> "Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054"
     }
 
     fun doc(): SupportedDocument = when (this) {
         acknowledgement -> SupportedDocument.PAIN_002_LOGS
         status -> SupportedDocument.PAIN_002
-        //Document.report -> SupportedDocument.CAMT_052
-        notification -> SupportedDocument.CAMT_054
         statement -> SupportedDocument.CAMT_053
-    }
-
-    companion object {
-        fun defaults(dialect: Dialect) = when (dialect) {
-            Dialect.postfinance -> listOf(acknowledgement, status, notification)
-            Dialect.gls -> listOf(acknowledgement, status, statement)
-        }
+        notification -> SupportedDocument.CAMT_054
     }
 }
 
@@ -393,7 +381,7 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
                 null,
                 FileLogger(ebicsLog)
             )
-            val docs = if (documents.isEmpty()) EbicsDocument.defaults(cfg.dialect) else documents.toList()
+            val docs = if (documents.isEmpty()) EbicsDocument.entries else documents.toList()
             if (transient) {
                 logger.info("Transient mode: fetching once and returning.")
                 val pinnedStartVal = pinnedStart

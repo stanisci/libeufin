@@ -135,10 +135,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         val payto = benchCfg.payto[currency] ?: dummyPayto
                         ?: throw Exception("Missing test payto for $currency")
         
-        val recoverDoc = when (cfg.requireString("nexus-ebics", "bank_dialect")) {
-            "gls" -> "statement"
-            else -> "notification"
-        }
+        val recoverDoc = "notification statement"
         runBlocking {
             step("Init ${kind.name}")
 
