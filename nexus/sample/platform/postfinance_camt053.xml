@@ -49,7 +49,7 @@
                             <Rsn>
                                 <Cd>BE01</Cd>
                             </Rsn>
-                            <AddtlInf>Keine Uebereinstimmung von Kontonummer und Kontoinhaber</AddtlInf>
+                            <AddtlInf>more info here ...</AddtlInf>
                         </RtrInf>
                     </TxDtls>
                 </NtryDtls>
@@ -99,7 +99,7 @@
                             <Rsn>
                                 <Cd>RR03</Cd>
                             </Rsn>
-                            <AddtlInf>Postadresse des Kreditors fehlt oder ist unvollständig</AddtlInf>
+                            <AddtlInf>more info here ...</AddtlInf>
                         </RtrInf>
                     </TxDtls>
                 </NtryDtls>

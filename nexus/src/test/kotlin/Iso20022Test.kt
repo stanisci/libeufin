@@ -77,12 +77,12 @@ class Iso20022Test {
             listOf(
                 Reversal(
                     msgId = "889d1a80-1267-49bd-8fcc-85701a",
-                    reason = "InconsistenWithEndCustomer 'Identification of end customer is not consistent with associated account number, organisation ID or private ID.' - 'Keine Uebereinstimmung von Kontonummer und Kontoinhaber'",
+                    reason = "InconsistenWithEndCustomer 'Identification of end customer is not consistent with associated account number, organisation ID or private ID.' - 'more info here ...'",
                     executionTime = instant("2023-11-22")
                 ),
                 Reversal(
                     msgId = "4cc61cc7-6230-49c2-b5e2-b40bbb",
-                    reason = "MissingCreditorNameOrAddress 'Specification of the creditor’s name and/or address needed for regulatory requirements is insufficient or missing.' - 'Postadresse des Kreditors fehlt oder ist unvollständig'",
+                    reason = "MissingCreditorNameOrAddress 'Specification of the creditor’s name and/or address needed for regulatory requirements is insufficient or missing.' - 'more info here ...'",
                     executionTime = instant("2023-11-22")
                 )
             ),

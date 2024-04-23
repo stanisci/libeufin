@@ -329,9 +329,8 @@ fun parseTx(
         In ISO 20022 specifications, most fields are optional and the same information 
         can be written several times in different places. For libeufin, we're only 
         interested in a subset of the available values that can be found in both camt.053 
-        and camt.054. As there are many similarities between these files, we use the same 
-        function to share code. This function should not fail on legitimate files and should
-        simply warn when available informations are insufficient.
+        and camt.054. This function should not fail on legitimate files and should simply 
+        warn when available information are insufficient.
     */
 
     /** Assert that transaction status is BOOK */
