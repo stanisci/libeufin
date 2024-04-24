@@ -178,6 +178,7 @@ class XmlDestructor internal constructor(private val el: Element) {
     fun <T> opt(path: String, f: XmlDestructor.() -> T): T? = opt(path)?.run(f)
 
     fun text(): String = el.textContent
+    fun textProvided(): String? = if (el.textContent != "NOTPROVIDED") el.textContent else null
     fun bool(): Boolean = el.textContent.toBoolean()
     fun date(): LocalDate = LocalDate.parse(text(), DateTimeFormatter.ISO_DATE)
     fun dateTime(): LocalDateTime = LocalDateTime.parse(text(), DateTimeFormatter.ISO_DATE_TIME)

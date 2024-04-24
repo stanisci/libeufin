@@ -117,7 +117,11 @@ class Iso20022Test {
                     executionTime = instant("2024-04-12"),
                     debitPaytoUri = "payto://iban/DE84500105177118117964"
                 ),
-                // TODO add reversal
+                Reversal(
+                    msgId = "G27KNKZAR5DV7HRB085YMA9GB4",
+                    reason = "IncorrectAccountNumber 'Format of the account number specified is not correct' - 'IBAN ...'",
+                    executionTime = instant("2024-04-12")
+                )
             ),
             txs
         )

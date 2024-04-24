@@ -382,7 +382,7 @@ fun parseTx(
                     one("NtryDtls").one("TxDtls") {
                         val txRef = opt("Refs")?.opt("AcctSvcrRef")?.text()
                         val reversal = isReversalCode()
-                        val nexusId = opt("Refs")?.opt("MsgId")?.text() // TODO and end-to-end ID
+                        val nexusId = opt("Refs") { opt("EndToEndId")?.textProvided() ?: opt("MsgId")?.text() }
                         if (reversal) {
                             if (kind == Kind.CRDT) {
                                 val reason = one("RtrInf") {

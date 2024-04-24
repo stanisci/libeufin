@@ -166,70 +166,155 @@
                 <CdtDbtInd>CRDT</CdtDbtInd>
                 <Sts>BOOK</Sts>
                 <BookgDt>
-                  <Dt>2024-04-12</Dt>
+                    <Dt>2024-04-12</Dt>
                 </BookgDt>
                 <AcctSvcrRef>2024041210041357000</AcctSvcrRef>
                 <BkTxCd>
-                  <Domn>
-                    <Cd>PMNT</Cd>
-                    <Fmly>
-                      <Cd>RCDT</Cd>
-                      <SubFmlyCd>ESCT</SubFmlyCd>
-                    </Fmly>
-                  </Domn>
-                </BkTxCd>
-                <NtryDtls>
-                  <TxDtls>
-                    <Refs>
-                      <EndToEndId>NOTPROVIDED</EndToEndId>
-                      <TxId>BYLADEM1WOR-G2910276709458A2</TxId>
-                    </Refs>
-                    <AmtDtls>
-                      <TxAmt>
-                        <Amt Ccy="EUR">3.00</Amt>
-                      </TxAmt>
-                    </AmtDtls>
-                    <BkTxCd>
-                      <Domn>
+                    <Domn>
                         <Cd>PMNT</Cd>
                         <Fmly>
-                          <Cd>RCDT</Cd>
-                          <SubFmlyCd>ESCT</SubFmlyCd>
+                            <Cd>RCDT</Cd>
+                            <SubFmlyCd>ESCT</SubFmlyCd>
                         </Fmly>
-                      </Domn>
-                    </BkTxCd>
-                    <RltdPties>
-                      <Dbtr>
-                        <Nm>John Smith</Nm>
-                      </Dbtr>
-                      <DbtrAcct>
-                        <Id>
-                          <IBAN>DE84500105177118117964</IBAN>
-                        </Id>
-                      </DbtrAcct>
-                      <Cdtr>
-                        <Nm>Mr Test</Nm>
-                      </Cdtr>
-                      <CdtrAcct>
-                        <Id>
-                          <IBAN>DE20500105172419259181</IBAN>
-                        </Id>
-                      </CdtrAcct>
-                    </RltdPties>
-                    <RltdAgts>
-                      <DbtrAgt>
-                        <FinInstnId>
-                          <BIC>BYLADEM1WOR</BIC>
-                        </FinInstnId>
-                      </DbtrAgt>
-                    </RltdAgts>
-                    <RmtInf>
-                      <Ustrd>Taler FJDQ7W6G7NWX4H9M1MKA12090FRC9K7DA6N0FANDZZFXTR6QHX5G Test.,-</Ustrd>
-                    </RmtInf>
-                  </TxDtls>
+                    </Domn>
+                </BkTxCd>
+                <NtryDtls>
+                    <TxDtls>
+                        <Refs>
+                            <EndToEndId>NOTPROVIDED</EndToEndId>
+                            <TxId>BYLADEM1WOR-G2910276709458A2</TxId>
+                        </Refs>
+                        <AmtDtls>
+                            <TxAmt>
+                                <Amt Ccy="EUR">3.00</Amt>
+                            </TxAmt>
+                        </AmtDtls>
+                        <BkTxCd>
+                            <Domn>
+                                <Cd>PMNT</Cd>
+                                <Fmly>
+                                    <Cd>RCDT</Cd>
+                                    <SubFmlyCd>ESCT</SubFmlyCd>
+                                </Fmly>
+                            </Domn>
+                        </BkTxCd>
+                        <RltdPties>
+                            <Dbtr>
+                                <Nm>John Smith</Nm>
+                            </Dbtr>
+                            <DbtrAcct>
+                                <Id>
+                                    <IBAN>DE84500105177118117964</IBAN>
+                                </Id>
+                            </DbtrAcct>
+                            <Cdtr>
+                                <Nm>Mr Test</Nm>
+                            </Cdtr>
+                            <CdtrAcct>
+                                <Id>
+                                    <IBAN>DE20500105172419259181</IBAN>
+                                </Id>
+                            </CdtrAcct>
+                        </RltdPties>
+                        <RltdAgts>
+                            <DbtrAgt>
+                                <FinInstnId>
+                                    <BIC>BYLADEM1WOR</BIC>
+                                </FinInstnId>
+                            </DbtrAgt>
+                        </RltdAgts>
+                        <RmtInf>
+                            <Ustrd>Taler FJDQ7W6G7NWX4H9M1MKA12090FRC9K7DA6N0FANDZZFXTR6QHX5G Test.,-</Ustrd>
+                        </RmtInf>
+                    </TxDtls>
                 </NtryDtls>
                 <AddtlNtryInf>Überweisungsgutschr.</AddtlNtryInf>
-              </Ntry>
+            </Ntry>
+            <Ntry>
+                <Amt Ccy="EUR">1.10</Amt>
+                <CdtDbtInd>CRDT</CdtDbtInd>
+                <Sts>BOOK</Sts>
+                <BookgDt>
+                    <Dt>2024-04-12</Dt>
+                </BookgDt>
+                <AcctSvcrRef>2024041210041357000</AcctSvcrRef>
+                <BkTxCd>
+                    <Domn>
+                        <Cd>PMNT</Cd>
+                        <Fmly>
+                            <Cd>ICDT</Cd>
+                            <SubFmlyCd>RRTN</SubFmlyCd>
+                        </Fmly>
+                    </Domn>
+                </BkTxCd>
+                <NtryDtls>
+                    <TxDtls>
+                        <Refs>
+                            <EndToEndId>G27KNKZAR5DV7HRB085YMA9GB4</EndToEndId>
+                            <TxId>2024042288942205090200000010000001</TxId>
+                        </Refs>
+                        <AmtDtls>
+                            <TxAmt>
+                                <Amt Ccy="EUR">1.10</Amt>
+                            </TxAmt>
+                        </AmtDtls>
+                        <BkTxCd>
+                            <Domn>
+                                <Cd>PMNT</Cd>
+                                <Fmly>
+                                    <Cd>ICDT</Cd>
+                                    <SubFmlyCd>RRTN</SubFmlyCd>
+                                </Fmly>
+                            </Domn>
+                        </BkTxCd>
+                        <RltdPties>
+                            <Dbtr>
+                                <Nm>John Smith</Nm>
+                            </Dbtr>
+                            <DbtrAcct>
+                                <Id>
+                                    <IBAN>DE84500105177118117964</IBAN>
+                                </Id>
+                            </DbtrAcct>
+                            <Cdtr>
+                                <Nm>Mr Test</Nm>
+                            </Cdtr>
+                            <CdtrAcct>
+                                <Id>
+                                    <IBAN>DE20500105172419259181</IBAN>
+                                </Id>
+                            </CdtrAcct>
+                        </RltdPties>
+                        <RltdAgts>
+                            <DbtrAgt>
+                                <FinInstnId>
+                                    <BIC>BYLADEM1WOR</BIC>
+                                </FinInstnId>
+                            </DbtrAgt>
+                        </RltdAgts>
+                        <RtrInf>
+                            <OrgnlBkTxCd>
+                                <Prtry>
+                                    <Cd>116</Cd>
+                                    <Issr>DK</Issr>
+                                </Prtry>
+                            </OrgnlBkTxCd>
+                            <Orgtr>
+                                <Id>
+                                    <OrgId>
+                                        <BICOrBEI>GENODEM1GLS</BICOrBEI>
+                                    </OrgId>
+                                </Id>
+                            </Orgtr>
+                            <Rsn>
+                                <Cd>AC01</Cd>
+                            </Rsn>
+                            <AddtlInf>IBAN ...</AddtlInf>
+                        </RtrInf>
+                    </TxDtls>
+                </NtryDtls>
+                <AddtlNtryInf>Überweisungsgutschr.</AddtlNtryInf>
+            </Ntry>
         </Stmt>
     </BkToCstmrStmt>
 </Document>
