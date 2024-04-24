@@ -346,6 +346,27 @@ fun parseTx(
     fun XmlDestructor.bookDate() =
         one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
 
+    fun XmlDestructor.nexusId(): String? =
+        opt("Refs") { opt("EndToEndId")?.textProvided() ?: opt("MsgId")?.text() }
+    
+    fun XmlDestructor.returnReason(): String = one("RtrInf") {
+        val code = one("Rsn").one("Cd").enum<ExternalReturnReasonCode>()
+        val info = opt("AddtlInf")?.text()
+        buildString {
+            append("${code.isoCode} '${code.description}'")
+            if (info != null) {
+                append(" - '$info'")
+            }
+        }
+    }
+    
+    fun XmlDestructor.amount(acceptedCurrency: String) = one("Amt") {
+        val currency = attr("Ccy")
+        /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
+        if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
+        TalerAmount("$currency:${text()}")
+    }
+
     /** Check if transaction code is reversal */
     fun XmlDestructor.isReversalCode(): Boolean {
         return one("BkTxCd").one("Domn") {
@@ -373,28 +394,14 @@ fun parseTx(
                     assertBooked(entryRef)
                     val bookDate = bookDate()
                     val kind = one("CdtDbtInd").enum<Kind>()
-                    val amount = one("Amt") {
-                        val currency = attr("Ccy")
-                        /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
-                        if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
-                        TalerAmount("$currency:${text()}")
-                    }
-                    one("NtryDtls").one("TxDtls") {
+                    val amount = amount(acceptedCurrency)
+                    one("NtryDtls").one("TxDtls") { // TODO handle batches
                         val txRef = opt("Refs")?.opt("AcctSvcrRef")?.text()
                         val reversal = isReversalCode()
-                        val nexusId = opt("Refs") { opt("EndToEndId")?.textProvided() ?: opt("MsgId")?.text() }
+                        val nexusId = nexusId()
                         if (reversal) {
                             if (kind == Kind.CRDT) {
-                                val reason = one("RtrInf") {
-                                    val code = one("Rsn").one("Cd").enum<ExternalReturnReasonCode>()
-                                    val info = opt("AddtlInf")?.text()
-                                    buildString {
-                                        append("${code.isoCode} '${code.description}'")
-                                        if (info != null) {
-                                            append(" - '$info'")
-                                        }
-                                    }
-                                }
+                                val reason = returnReason()
                                 txsInfo.add(TxInfo.CreditReversal(
                                     ref = nexusId ?: txRef ?: entryRef,
                                     bookDate = bookDate,
@@ -448,17 +455,8 @@ fun parseTx(
                             val kind = one("CdtDbtInd").enum<Kind>()
                             if (kind == Kind.CRDT) {
                                 val txRef = opt("Refs")?.opt("AcctSvcrRef")?.text()
-                                val nexusId = opt("Refs")?.opt("MsgId")?.text() // TODO and end-to-end ID
-                                val reason = one("RtrInf") {
-                                    val code = one("Rsn").one("Cd").enum<ExternalReturnReasonCode>()
-                                    val info = opt("AddtlInf")?.text()
-                                    buildString {
-                                        append("${code.isoCode} '${code.description}'")
-                                        if (info != null) {
-                                            append(" - '$info'")
-                                        }
-                                    }
-                                }
+                                val nexusId = nexusId()
+                                val reason = returnReason()
                                 txsInfo.add(TxInfo.CreditReversal(
                                     ref = nexusId ?: txRef ?: entryRef,
                                     bookDate = bookDate,
@@ -481,12 +479,7 @@ fun parseTx(
                     if (!isReversalCode()) {
                         one("NtryDtls").each("TxDtls") {
                             val kind = one("CdtDbtInd").enum<Kind>()
-                            val amount = one("Amt") {
-                                val currency = attr("Ccy")
-                                /** FIXME: test by sending non-CHF to PoFi and see which currency gets here. */
-                                if (currency != acceptedCurrency) throw Exception("Currency $currency not supported")
-                                TalerAmount("$currency:${text()}")
-                            }
+                            val amount = amount(acceptedCurrency)
                             val txRef = one("Refs").opt("AcctSvcrRef")?.text()
                             val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
                             when (kind) {
@@ -503,7 +496,7 @@ fun parseTx(
                                     ))
                                 }
                                 Kind.DBIT -> {
-                                    val nexusId = opt("Refs")?.opt("MsgId")?.text() // TODO and end-to-end ID
+                                    val nexusId = nexusId()
                                     val creditorPayto = opt("RltdPties") { payto("Cdtr") }
                                     txsInfo.add(TxInfo.Debit(
                                         ref = nexusId ?: txRef ?: entryRef,
