@@ -1,3 +1,9 @@
+libeufin (0.10.2) unstable; urgency=low
+
+  * Package v0.10.2
+
+ -- Florian Dold <dold@taler.net>  Wed, 24 Apr 2024 09:18:26 +0200
+
 libeufin (0.10.1) unstable; urgency=low
 
   * Package v0.10.1
