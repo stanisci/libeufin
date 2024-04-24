@@ -1,6 +1,6 @@
 # This Makefile has been placed under the public domain
 
-include build-system/config.mk
+-include build-system/config.mk
 
 # Default target, must be at the top.
 # Should be changed with care to not break (Debian) packaging.
