@@ -275,7 +275,7 @@ sealed class Payto {
             }
             if (parsed.scheme != "payto") throw CommonError.Payto("expect a payto URI got '${parsed.scheme}'")
 
-            val params = (parsed.query ?: "").parseUrlEncodedParameters()
+            val params = parseQueryString(parsed.query ?: "")
             val amount = params["amount"]?.run { TalerAmount(this) }
             val message = params["message"]
             val receiverName = params["receiver-name"]
