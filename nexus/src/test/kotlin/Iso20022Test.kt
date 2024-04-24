@@ -101,21 +101,21 @@ class Iso20022Test {
                     amount = TalerAmount("EUR:2"),
                     wireTransferSubject = "TestABC123",
                     executionTime = instant("2024-04-18"),
-                    creditPaytoUri = "payto://iban/DE20500105172419259181"
+                    creditPaytoUri = "payto://iban/DE20500105172419259181?receiver-name=John+Smith"
                 ),
                 OutgoingPayment(
                     messageId = "YF5QBARGQ0MNY0VK59S477VDG4",
                     amount = TalerAmount("EUR:1.1"),
                     wireTransferSubject = "This should fail because dummy",
                     executionTime = instant("2024-04-18"),
-                    creditPaytoUri = "payto://iban/DE20500105172419259181"
+                    creditPaytoUri = "payto://iban/DE20500105172419259181?receiver-name=John+Smith"
                 ),
                 IncomingPayment(
                     bankId = "BYLADEM1WOR-G2910276709458A2",
                     amount = TalerAmount("EUR:3"),
                     wireTransferSubject = "Taler FJDQ7W6G7NWX4H9M1MKA12090FRC9K7DA6N0FANDZZFXTR6QHX5G Test.,-",
                     executionTime = instant("2024-04-12"),
-                    debitPaytoUri = "payto://iban/DE84500105177118117964"
+                    debitPaytoUri = "payto://iban/DE84500105177118117964?receiver-name=John+Smith"
                 ),
                 Reversal(
                     msgId = "G27KNKZAR5DV7HRB085YMA9GB4",
