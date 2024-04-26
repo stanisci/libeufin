@@ -52,6 +52,38 @@ class ExchangeDAO(private val db: Database) {
             )
         }
 
+    /** Query [exchangeId] history of taler outgoing transactions  */
+    suspend fun outgoingHistory(
+        params: HistoryParams
+    ): List<OutgoingTransaction> 
+        // Outgoing transactions can be initiated or recovered. We take the first data to
+        // reach database : the initiation first else the recovered transaction.
+        = db.poolHistoryGlobal(params, db::listenOutgoing,  """
+            SELECT
+                talerable_outgoing_transaction_id
+                ,COALESCE(iot.initiation_time, ot.execution_time) AS execution_time
+                ,(COALESCE(iot.amount, ot.amount)).val AS amount_val
+                ,(COALESCE(iot.amount, ot.amount)).frac AS amount_frac
+                ,COALESCE(iot.credit_payto_uri, ot.credit_payto_uri) AS credit_payto_uri
+                ,wtid
+                ,exchange_base_url
+            FROM talerable_outgoing_transactions AS tot
+                LEFT OUTER JOIN outgoing_transactions AS ot
+                    ON tot.outgoing_transaction_id=ot.outgoing_transaction_id
+                LEFT OUTER JOIN initiated_outgoing_transactions AS iot
+                    ON tot.initiated_outgoing_transaction_id=iot.initiated_outgoing_transaction_id
+            WHERE
+        """, "talerable_outgoing_transaction_id") {
+            OutgoingTransaction(
+                row_id = it.getLong("talerable_outgoing_transaction_id"),
+                date = it.getTalerTimestamp("execution_time"),
+                amount = it.getAmount("amount", db.bankCurrency),
+                credit_account = it.getString("credit_payto_uri"),
+                wtid = ShortHashCode(it.getBytes("wtid")),
+                exchange_base_url = it.getString("exchange_base_url")
+            )
+        }
+
     /** Result of taler transfer transaction creation */
     sealed interface TransferResult {
         /** Transaction [id] and wire transfer [timestamp] */

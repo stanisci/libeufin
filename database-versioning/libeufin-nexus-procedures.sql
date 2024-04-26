@@ -33,6 +33,8 @@ CREATE FUNCTION register_outgoing(
   ,IN in_execution_time INT8
   ,IN in_credit_payto_uri TEXT
   ,IN in_message_id TEXT
+  ,IN in_wtid BYTEA
+  ,IN in_exchange_url TEXT
   ,OUT out_tx_id INT8
   ,OUT out_found BOOLEAN
   ,OUT out_initiated BOOLEAN
@@ -40,6 +42,7 @@ CREATE FUNCTION register_outgoing(
 LANGUAGE plpgsql AS $$
 DECLARE
 init_id INT8;
+talerable_id INT8;
 BEGIN
 -- Check if already registered
 SELECT outgoing_transaction_id INTO out_tx_id
@@ -78,6 +81,20 @@ ELSE
       ,failure_message = null
     WHERE request_uid = in_message_id
     RETURNING true INTO out_initiated;
+END IF;
+
+-- Register as talerable if contains wtid and exchange URL
+IF in_wtid IS NOT NULL OR in_exchange_url IS NOT NULL THEN
+  INSERT INTO talerable_outgoing_transactions (
+    outgoing_transaction_id,
+    wtid,
+    exchange_base_url
+  ) VALUES (out_tx_id, in_wtid, in_exchange_url)
+    ON CONFLICT (wtid) DO NOTHING
+    RETURNING talerable_outgoing_transaction_id INTO talerable_id;
+  IF talerable_id IS NOT NULL THEN
+    PERFORM pg_notify('outgoing_tx', talerable_id::text);
+  END IF;
 END IF;
 END $$;
 COMMENT ON FUNCTION register_outgoing
@@ -307,5 +324,5 @@ INSERT INTO talerable_outgoing_transactions(
   ,in_exchange_base_url
 ) RETURNING talerable_outgoing_transaction_id INTO out_tx_row_id;
 out_timestamp = in_timestamp;
--- TODO notification
+PERFORM pg_notify('outgoing_tx', out_tx_row_id::text);
 END $$;

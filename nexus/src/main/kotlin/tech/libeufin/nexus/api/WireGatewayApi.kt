@@ -81,9 +81,9 @@ fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) {
     get("/taler-wire-gateway/history/incoming") {
         historyEndpoint(::IncomingHistory, ExchangeDAO::incomingHistory)
     }
-    /*get("/taler-wire-gateway/history/outgoing") {
+    get("/taler-wire-gateway/history/outgoing") {
         historyEndpoint(::OutgoingHistory, ExchangeDAO::outgoingHistory)
-    }*/
+    }
     post("/taler-wire-gateway/admin/add-incoming") {
         val req = call.receive<AddIncomingRequest>()
         cfg.checkCurrency(req.amount)

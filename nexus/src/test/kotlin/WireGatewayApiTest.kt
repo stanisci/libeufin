@@ -123,7 +123,7 @@ class WireGatewayApiTest {
                 },
                 { 
                     // Transactions using raw bank transaction logic
-                    ingestIncomingPayment(db, genInPay("history test with ${ShortHashCode.rand()} reserve pub"))
+                    talerableIn(db)
                 }
             ),
             ignored = listOf(
@@ -133,45 +133,45 @@ class WireGatewayApiTest {
                 },
                 {
                     // Ignore outgoing transaction
-                    ingestOutgoingPayment(db, genOutPay("ignored"))
+                    talerableOut(db)
                 }
             )
         )
     }
 
-    /*
     /**
      * Testing the /history/outgoing call from the TWG API.
      */
     @Test
-    fun historyOutgoing() = serverSetup {
-        setMaxDebt("exchange", "KUDOS:1000000")
-        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/history/outgoing")
+    fun historyOutgoing() = serverSetup { db ->
+        //authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/history/outgoing")
         historyRoutine<OutgoingHistory>(
-            url = "/accounts/exchange/taler-wire-gateway/history/outgoing",
+            url = "/taler-wire-gateway/history/outgoing",
             ids = { it.outgoing_transactions.map { it.row_id } },
             registered = listOf(
                 { 
-                    // Transactions using clean add incoming logic
-                    transfer("KUDOS:10")
+                    transfer()
+                },
+                {
+                    talerableOut(db)
                 }
             ),
             ignored = listOf(
                 { 
-                    // gnore manual incoming transaction
-                    tx("exchange", "KUDOS:10", "merchant", "${ShortHashCode.rand()} http://exchange.example.com/")
+                    // Ignore manual incoming transaction
+                    talerableIn(db)
                 },
                 {
                     // Ignore malformed incoming transaction
-                    tx("merchant", "KUDOS:10", "exchange", "ignored")
+                    ingestIncomingPayment(db, genInPay("ignored"))
                 },
                 {
                     // Ignore malformed outgoing transaction
-                    tx("exchange", "KUDOS:10", "merchant", "ignored")
+                    ingestOutgoingPayment(db, genOutPay("ignored"))
                 }
             )
         )
-    }*/
+    }
 
     // Testing the /admin/add-incoming call from the TWG API.
     @Test

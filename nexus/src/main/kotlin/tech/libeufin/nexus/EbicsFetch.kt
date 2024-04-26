@@ -95,7 +95,10 @@ suspend fun ingestOutgoingPayment(
     db: Database,
     payment: OutgoingPayment
 ) {
-    val result = db.payment.registerOutgoing(payment)
+    val metadata: Pair<ShortHashCode, ExchangeUrl>? = payment.wireTransferSubject?.let { 
+        runCatching { parseOutgoingTxMetadata(it) }.getOrNull()
+    }
+    val result = db.payment.registerOutgoing(payment, metadata?.first, metadata?.second)
     if (result.new) {
         if (result.initiated)
             logger.info("$payment")
@@ -105,8 +108,6 @@ suspend fun ingestOutgoingPayment(
         logger.debug("$payment already seen")
     }
 }
-
-private val PATTERN = Regex("[a-z0-9A-Z]{52}")
 
 /**
  * Ingests an incoming payment.  Stores the payment into valid talerable ones

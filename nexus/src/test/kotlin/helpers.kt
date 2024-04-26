@@ -126,3 +126,28 @@ fun genOutPay(subject: String, messageId: String? = null): OutgoingPayment {
         messageId = id
     )
 }
+
+/** Perform a taler outgoing transaction */
+suspend fun ApplicationTestBuilder.transfer() {
+    client.post("/taler-wire-gateway/transfer") {
+        json {
+            "request_uid" to HashCode.rand()
+            "amount" to "CHF:55"
+            "exchange_base_url" to "http://exchange.example.com/"
+            "wtid" to ShortHashCode.rand()
+            "credit_account" to grothoffPayto
+        }
+    }.assertOk()
+}
+
+/** Ingest a talerable outgoing transaction */
+suspend fun talerableOut(db: Database) {
+    val wtid = ShortHashCode.rand()
+    ingestOutgoingPayment(db, genOutPay("$wtid http://exchange.example.com/"))
+}
+
+/** Ingest a talerable incoming transaction */
+suspend fun talerableIn(db: Database) {
+    val reserve_pub = ShortHashCode.rand()
+    ingestIncomingPayment(db, genInPay("history test with $reserve_pub reserve pub"))
+}

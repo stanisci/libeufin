@@ -18,8 +18,9 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.*
 import tech.libeufin.nexus.db.InitiatedDAO.PaymentInitiationResult
+import tech.libeufin.nexus.*
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -31,29 +32,41 @@ class OutgoingPaymentsTest {
     @Test
     fun register() = setup { db, _ -> 
         // With reconciling
-        genOutPay("paid by nexus", "first").run {
+        genOutPay("paid by nexus").run {
             assertIs<PaymentInitiationResult.Success>(
-                db.initiated.create(genInitPay("waiting for reconciliation", "first"))
+                db.initiated.create(genInitPay("waiting for reconciliation", messageId))
             )
-            db.payment.registerOutgoing(this).run {
-                assertTrue(new,)
+            db.payment.registerOutgoing(this, null, null).run {
+                assertTrue(new)
                 assertTrue(initiated)
             }
-            db.payment.registerOutgoing(this).run {
+            db.payment.registerOutgoing(this, null, null).run {
                 assertFalse(new)
                 assertTrue(initiated)
             }
         }
         // Without reconciling
-        genOutPay("not paid by nexus", "second").run {
-            db.payment.registerOutgoing(this).run {
+        genOutPay("not paid by nexus").run {
+            db.payment.registerOutgoing(this, null, null).run {
                 assertTrue(new)
                 assertFalse(initiated)
             }
-            db.payment.registerOutgoing(this).run {
+            db.payment.registerOutgoing(this, null, null).run {
                 assertFalse(new)
                 assertFalse(initiated)
             }
+        }
+    }
+
+    @Test
+    fun talerable() = setup { db, _ -> 
+        val wtid = ShortHashCode.rand()
+        val url = "https://exchange.com"
+        genOutPay("$wtid $url").run {
+            assertIs<PaymentInitiationResult.Success>(
+                db.initiated.create(genInitPay("waiting for reconciliation", messageId))
+            )
+            ingestOutgoingPayment(db, this)
         }
     }
 }
