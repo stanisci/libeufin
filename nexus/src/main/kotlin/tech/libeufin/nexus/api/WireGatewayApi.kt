@@ -66,28 +66,23 @@ fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) {
             )
         }
     }
-    /*suspend fun <T> PipelineContext<Unit, ApplicationCall>.historyEndpoint(
+    /*
+    suspend fun <T> PipelineContext<Unit, ApplicationCall>.historyEndpoint(
         reduce: (List<T>, String) -> Any, 
         dbLambda: suspend ExchangeDAO.(HistoryParams, Long, BankPaytoCtx) -> List<T>
     ) {
         val params = HistoryParams.extract(context.request.queryParameters)
         val bankAccount = call.bankInfo(db, ctx.payto)
-        
-        if (!bankAccount.isTalerExchange)
-            throw conflict(
-                "$username is not an exchange account.",
-                TalerErrorCode.BANK_ACCOUNT_IS_NOT_EXCHANGE
-            )
 
         val items = db.exchange.dbLambda(params, bankAccount.bankAccountId, ctx.payto)
-
+        val 
         if (items.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
         } else {
             call.respond(reduce(items, bankAccount.payto))
         }
-    }*/
-    /*get("/taler-wire-gateway/history/incoming") {
+    }
+    get("/taler-wire-gateway/history/incoming") {
         historyEndpoint(::IncomingHistory, ExchangeDAO::incomingHistory)
     }
     get("/taler-wire-gateway/history/outgoing") {

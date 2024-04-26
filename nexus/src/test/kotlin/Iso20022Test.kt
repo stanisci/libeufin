@@ -55,14 +55,14 @@ class Iso20022Test {
                     amount = TalerAmount("CHF:10"),
                     wireTransferSubject = "G1XTY6HGWGMVRM7E6XQ4JHJK561ETFDFTJZ7JVGV543XZCB27YBG",
                     executionTime = instant("2023-12-19"),
-                    debitPaytoUri = "payto://iban/CH7389144832588726658?receiver-name=Mr+Test"
+                    debitPaytoUri = "payto://iban/CH7389144832588726658?receiver-name=Mr%20Test"
                 ),
                 IncomingPayment(
                     bankId = "62e2b511-7313-4ccd-8d40-c9d8e612cd71",
                     amount = TalerAmount("CHF:2.53"),
                     wireTransferSubject = "G1XTY6HGWGMVRM7E6XQ4JHJK561ETFDFTJZ7JVGV543XZCB27YB",
                     executionTime = instant("2023-12-19"),
-                    debitPaytoUri = "payto://iban/CH7389144832588726658?receiver-name=Mr+Test"
+                    debitPaytoUri = "payto://iban/CH7389144832588726658?receiver-name=Mr%20Test"
                 )
             ),
             txs
@@ -101,21 +101,21 @@ class Iso20022Test {
                     amount = TalerAmount("EUR:2"),
                     wireTransferSubject = "TestABC123",
                     executionTime = instant("2024-04-18"),
-                    creditPaytoUri = "payto://iban/DE20500105172419259181?receiver-name=John+Smith"
+                    creditPaytoUri = "payto://iban/DE20500105172419259181?receiver-name=John%20Smith"
                 ),
                 OutgoingPayment(
                     messageId = "YF5QBARGQ0MNY0VK59S477VDG4",
                     amount = TalerAmount("EUR:1.1"),
                     wireTransferSubject = "This should fail because dummy",
                     executionTime = instant("2024-04-18"),
-                    creditPaytoUri = "payto://iban/DE20500105172419259181?receiver-name=John+Smith"
+                    creditPaytoUri = "payto://iban/DE20500105172419259181?receiver-name=John%20Smith"
                 ),
                 IncomingPayment(
                     bankId = "BYLADEM1WOR-G2910276709458A2",
                     amount = TalerAmount("EUR:3"),
                     wireTransferSubject = "Taler FJDQ7W6G7NWX4H9M1MKA12090FRC9K7DA6N0FANDZZFXTR6QHX5G Test.,-",
                     executionTime = instant("2024-04-12"),
-                    debitPaytoUri = "payto://iban/DE84500105177118117964?receiver-name=John+Smith"
+                    debitPaytoUri = "payto://iban/DE84500105177118117964?receiver-name=John%20Smith"
                 ),
                 Reversal(
                     msgId = "G27KNKZAR5DV7HRB085YMA9GB4",
