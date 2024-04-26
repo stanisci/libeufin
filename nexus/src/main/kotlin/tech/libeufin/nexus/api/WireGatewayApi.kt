@@ -66,26 +66,22 @@ fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) {
             )
         }
     }
-    /*
     suspend fun <T> PipelineContext<Unit, ApplicationCall>.historyEndpoint(
         reduce: (List<T>, String) -> Any, 
-        dbLambda: suspend ExchangeDAO.(HistoryParams, Long, BankPaytoCtx) -> List<T>
+        dbLambda: suspend ExchangeDAO.(HistoryParams) -> List<T>
     ) {
         val params = HistoryParams.extract(context.request.queryParameters)
-        val bankAccount = call.bankInfo(db, ctx.payto)
-
-        val items = db.exchange.dbLambda(params, bankAccount.bankAccountId, ctx.payto)
-        val 
+        val items = db.exchange.dbLambda(params)
         if (items.isEmpty()) {
             call.respond(HttpStatusCode.NoContent)
         } else {
-            call.respond(reduce(items, bankAccount.payto))
+            call.respond(reduce(items, cfg.payto))
         }
     }
     get("/taler-wire-gateway/history/incoming") {
         historyEndpoint(::IncomingHistory, ExchangeDAO::incomingHistory)
     }
-    get("/taler-wire-gateway/history/outgoing") {
+    /*get("/taler-wire-gateway/history/outgoing") {
         historyEndpoint(::OutgoingHistory, ExchangeDAO::outgoingHistory)
     }*/
     post("/taler-wire-gateway/admin/add-incoming") {

@@ -19,16 +19,38 @@
 
 package tech.libeufin.nexus.db
 
-import tech.libeufin.common.db.one
-import tech.libeufin.common.db.getTalerTimestamp
-import tech.libeufin.common.micros
-import tech.libeufin.common.TalerProtocolTimestamp
-import tech.libeufin.common.TransferRequest
+import tech.libeufin.common.db.*
+import tech.libeufin.common.*
 import java.sql.ResultSet
 import java.time.Instant
 
 /** Data access logic for exchange specific logic */
 class ExchangeDAO(private val db: Database) {
+    /** Query history of taler incoming transactions  */
+    suspend fun incomingHistory(
+        params: HistoryParams
+    ): List<IncomingReserveTransaction> 
+        = db.poolHistoryGlobal(params, db::listenIncoming, """
+            SELECT
+                tit.incoming_transaction_id
+                ,execution_time
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,debit_payto_uri
+                ,reserve_public_key
+            FROM talerable_incoming_transactions AS tit
+                JOIN incoming_transactions AS it
+                    ON tit.incoming_transaction_id=it.incoming_transaction_id
+            WHERE
+        """, "tit.incoming_transaction_id") {
+            IncomingReserveTransaction(
+                row_id = it.getLong("incoming_transaction_id"),
+                date = it.getTalerTimestamp("execution_time"),
+                amount = it.getAmount("amount", db.bankCurrency),
+                debit_account = it.getString("debit_payto_uri"),
+                reserve_pub = EddsaPublicKey(it.getBytes("reserve_public_key")),
+            )
+        }
 
     /** Result of taler transfer transaction creation */
     sealed interface TransferResult {

@@ -130,7 +130,7 @@ class InitiatePayment: CliktCommand("Initiate an outgoing payment") {
             Base32Crockford.encode(bytes)
         }
 
-        Database(dbCfg).use { db ->
+        Database(dbCfg, currency).use { db ->
             db.initiated.create(
                 InitiatedPayment(
                     id = -1,
@@ -273,7 +273,7 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
             Base32Crockford.encode(bytes)
         }
 
-        Database(dbCfg).use { db ->
+        Database(dbCfg, currency).use { db ->
             ingestIncomingPayment(db, 
                 IncomingPayment(
                     amount = amount,

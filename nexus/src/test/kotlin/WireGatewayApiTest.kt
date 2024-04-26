@@ -24,6 +24,7 @@ import io.ktor.http.*
 import io.ktor.server.testing.*
 import org.junit.Test
 import tech.libeufin.common.*
+import tech.libeufin.nexus.*
 
 class WireGatewayApiTest {
     // GET /accounts/{USERNAME}/taler-wire-gateway/config
@@ -100,46 +101,45 @@ class WireGatewayApiTest {
             }
         }.assertBadRequest()
     }
-    /*
+    
     /**
      * Testing the /history/incoming call from the TWG API.
      */
     @Test
-    fun historyIncoming() = serverSetup { 
-        // Give Foo reasonable debt allowance:
-        setMaxDebt("merchant", "KUDOS:1000")
-        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-wire-gateway/history/incoming")
+    fun historyIncoming() = serverSetup { db ->
+        //authRoutine(HttpMethod.Get, "/taler-wire-gateway/history/incoming")
         historyRoutine<IncomingHistory>(
-            url = "/accounts/exchange/taler-wire-gateway/history/incoming",
+            url = "/taler-wire-gateway/history/incoming",
             ids = { it.incoming_transactions.map { it.row_id } },
             registered = listOf(
                 { 
-                    // Transactions using clean add incoming logic
-                    addIncoming("KUDOS:10") 
+                    client.post("/taler-wire-gateway/admin/add-incoming") {
+                        json {
+                            "amount" to "CHF:12"
+                            "reserve_pub" to EddsaPublicKey.rand()
+                            "debit_account" to grothoffPayto
+                        }
+                    }.assertOk()
                 },
                 { 
                     // Transactions using raw bank transaction logic
-                    tx("merchant", "KUDOS:10", "exchange", "history test with ${ShortHashCode.rand()} reserve pub")
-                },
-                {
-                    // Transaction using withdraw logic
-                    withdrawal("KUDOS:9")
+                    ingestIncomingPayment(db, genInPay("history test with ${ShortHashCode.rand()} reserve pub"))
                 }
             ),
             ignored = listOf(
                 {
                     // Ignore malformed incoming transaction
-                    tx("merchant", "KUDOS:10", "exchange", "ignored")
+                    ingestIncomingPayment(db, genInPay("ignored"))
                 },
                 {
-                    // Ignore malformed outgoing transaction
-                    tx("exchange", "KUDOS:10", "merchant", "ignored")
+                    // Ignore outgoing transaction
+                    ingestOutgoingPayment(db, genOutPay("ignored"))
                 }
             )
         )
     }
 
-    
+    /*
     /**
      * Testing the /history/outgoing call from the TWG API.
      */

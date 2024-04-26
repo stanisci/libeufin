@@ -30,7 +30,10 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 // SharedFlow that are manually counted for manual garbage collection
-class CountedSharedFlow<T>(val flow: MutableSharedFlow<T>, var count: Int)
+class CountedSharedFlow<T> {
+    val flow: MutableSharedFlow<T> = MutableSharedFlow()
+    var count: Int = 0
+}
 
 fun watchNotifications(
     pgSource: PGSimpleDataSource, 
@@ -73,7 +76,7 @@ fun watchNotifications(
 suspend fun <R, K, V> listen(map: ConcurrentHashMap<K, CountedSharedFlow<V>>, key: K, lambda: suspend (Flow<V>) -> R): R {
     // Register listener, create a new flow if missing
     val flow = map.compute(key) { _, v ->
-        val tmp = v ?: CountedSharedFlow(MutableSharedFlow(), 0)
+        val tmp = v ?: CountedSharedFlow()
         tmp.count++
         tmp
     }!!.flow

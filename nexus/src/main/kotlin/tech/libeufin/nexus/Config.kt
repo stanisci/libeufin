@@ -52,6 +52,8 @@ class NexusConfig(val config: TalerConfig) {
         bic = requireString("bic"),
         name = requireString("name")
     )
+    /** Bank account payto */
+    val payto = IbanPayto.build(account.iban, account.bic, account.name)
     /** Path where we store the bank public keys */
     val bankPublicKeysPath = requirePath("bank_public_keys_file")
     /** Path where we store our private keys */

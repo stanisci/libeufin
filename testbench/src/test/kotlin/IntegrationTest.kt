@@ -68,8 +68,10 @@ fun server(lambda: () -> Unit) {
 fun setup(conf: String, lambda: suspend (NexusDb) -> Unit) {
     try {
         runBlocking {
-            val cfg = loadConfig(Path(conf)).dbConfig()
-            NexusDb(cfg).use {
+            val cfg = loadConfig(Path(conf))
+            val dbCfg = cfg.dbConfig()
+            val currency = cfg.requireString("nexus-ebics", "currency")
+            NexusDb(dbCfg, currency).use {
                 lambda(it)
             }
         }

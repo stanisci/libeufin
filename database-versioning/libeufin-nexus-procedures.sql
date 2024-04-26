@@ -239,6 +239,7 @@ IF NOT EXISTS(SELECT 1 FROM talerable_incoming_transactions WHERE incoming_trans
     out_tx_id
     ,in_reserve_public_key
   );
+  PERFORM pg_notify('incoming_tx', out_tx_id::text);
 END IF;
 END $$;
 COMMENT ON FUNCTION register_incoming_and_talerable IS '

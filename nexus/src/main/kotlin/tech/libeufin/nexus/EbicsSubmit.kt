@@ -65,7 +65,7 @@ data class SubmissionContext(
 private suspend fun submitInitiatedPayment(
     ctx: SubmissionContext,
     payment: InitiatedPayment
-): String { 
+): String {
     val creditAccount = try {
         val payto = Payto.parse(payment.creditPaytoUri).expectIban()
         IbanAccountMetadata(
@@ -157,7 +157,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
             httpClient = HttpClient(),
             fileLogger = FileLogger(ebicsLog)
         )
-        Database(dbCfg).use { db -> 
+        Database(dbCfg, cfg.currency).use { db -> 
             val frequency: Duration = if (transient) {
                 logger.info("Transient mode: submitting what found and returning.")
                 Duration.ZERO
