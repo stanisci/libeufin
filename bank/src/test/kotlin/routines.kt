@@ -41,6 +41,17 @@ suspend fun ApplicationTestBuilder.authRoutine(
     allowAdmin: Boolean = false
 ) {
     // No body when authentication must happen before parsing the body
+
+    // No header
+    client.request(path) {
+        this.method = method
+    }.assertUnauthorized(TalerErrorCode.GENERIC_PARAMETER_MISSING)
+
+    // Bad header
+    client.request(path) {
+        this.method = method
+        headers["Authorization"] = "WTF"
+    }.assertBadRequest(TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED)
     
     // Unknown account
     client.request(path) {
@@ -61,7 +72,7 @@ suspend fun ApplicationTestBuilder.authRoutine(
     }.assertUnauthorized()
 
     if (requireAdmin) {
-         // Not exchange account
+        // Not exchange account
         client.request(path) {
             this.method = method
             pwAuth("merchant")
@@ -92,117 +103,11 @@ suspend inline fun <reified B> ApplicationTestBuilder.historyRoutine(
     polling: Boolean = true,
     auth: String? = null
 ) {
-    // Get history 
-    val history: suspend (String) -> HttpResponse = { params: String ->
+    abstractHistoryRoutine(ids, registered, ignored, polling) { params: String ->
         client.get("$url?$params") {
             pwAuth(auth)
         }
     }
-    // Check history is following specs
-    val assertHistory: suspend HttpResponse.(Int) -> Unit = { size: Int ->
-        assertHistoryIds<B>(size, ids)
-    }
-    // Get latest registered id
-    val latestId: suspend () -> Long = {
-        history("delta=-1").assertOkJson<B>().run { ids(this)[0] }
-    }
-
-    // Check error when no transactions
-    history("delta=7").assertNoContent()
-
-    // Run interleaved registered and ignore transactions
-    val registered_iter = registered.iterator()
-    val ignored_iter = ignored.iterator()
-    while (registered_iter.hasNext() || ignored_iter.hasNext()) {
-        if (registered_iter.hasNext()) registered_iter.next()()
-        if (ignored_iter.hasNext()) ignored_iter.next()()
-    }
-
-
-    val nbRegistered = registered.size
-    val nbIgnored = ignored.size
-    val nbTotal = nbRegistered + nbIgnored
-
-    // Check ignored
-    history("delta=$nbTotal").assertHistory(nbRegistered)
-    // Check skip ignored
-    history("delta=$nbRegistered").assertHistory(nbRegistered)
-
-    if (polling) {
-        // Check no polling when we cannot have more transactions
-        assertTime(0, 100) {
-            history("delta=-${nbRegistered+1}&long_poll_ms=1000")
-                .assertHistory(nbRegistered)
-        }
-        // Check no polling when already find transactions even if less than delta
-        assertTime(0, 100) {
-            history("delta=${nbRegistered+1}&long_poll_ms=1000")
-                .assertHistory(nbRegistered)
-        }
-
-        // Check polling
-        coroutineScope {
-            val id = latestId()
-            launch {  // Check polling succeed
-                assertTime(100, 200) {
-                    history("delta=2&start=$id&long_poll_ms=1000")
-                        .assertHistory(1)
-                }
-            }
-            launch {  // Check polling timeout
-                assertTime(200, 300) {
-                    history("delta=1&start=${id+nbTotal*3}&long_poll_ms=200")
-                        .assertNoContent()
-                }
-            }
-            delay(100)
-            registered[0]()
-        }
-
-        // Test triggers
-        for (register in registered) {
-            coroutineScope {
-                val id = latestId()
-                launch {
-                    assertTime(100, 200) {
-                        history("delta=7&start=$id&long_poll_ms=1000") 
-                            .assertHistory(1)
-                    }
-                }
-                delay(100)
-                register()
-            }
-        }
-
-        // Test doesn't trigger
-        coroutineScope {
-            val id = latestId()
-            launch {
-                assertTime(200, 300) {
-                    history("delta=7&start=$id&long_poll_ms=200") 
-                        .assertNoContent()
-                }
-            }
-            delay(100)
-            for (ignore in ignored) {
-                ignore()
-            }
-        }
-    }
-
-    // Testing ranges.
-    repeat(20) {
-        registered[0]()
-    }
-    val id = latestId()
-    // Default
-    history("").assertHistory(20)
-    // forward range:
-    history("delta=10").assertHistory(10)
-    history("delta=10&start=4").assertHistory(10)
-    // backward range:
-    history("delta=-10").assertHistory(10)
-    history("delta=-10&start=${id-4}").assertHistory(10)
 }
 
 suspend inline fun <reified B> ApplicationTestBuilder.statusRoutine(

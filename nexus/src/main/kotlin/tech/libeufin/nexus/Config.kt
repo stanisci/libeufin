@@ -31,6 +31,10 @@ class NexusFetchConfig(config: TalerConfig) {
     val ignoreBefore = config.lookupDate("nexus-fetch", "ignore_transactions_before")
 }
 
+class ApiConfig(config: TalerConfig, section: String) {
+    val authMethod = config.requireAuthMethod(section)
+}
+
 /** Configuration for libeufin-nexus */
 class NexusConfig(val config: TalerConfig) {
     private fun requireString(option: String): String = config.requireString("nexus-ebics", option)
@@ -65,6 +69,9 @@ class NexusConfig(val config: TalerConfig) {
         "gls" -> Dialect.gls
         else -> throw TalerConfigError.invalid("dialct", "libeufin-nexus", "bank_dialect", "expected 'postfinance' or 'gls' got '$type'")
     }
+
+    val wireGatewayApiCfg = config.apiConf("nexus-httpd-wire-gateway-api")
+    val revenueApiCfg = config.apiConf("nexus-httpd-revenue-api")
 }
 
 fun NexusConfig.checkCurrency(amount: TalerAmount) {
@@ -72,4 +79,29 @@ fun NexusConfig.checkCurrency(amount: TalerAmount) {
         "Wrong currency: expected regional $currency got ${amount.currency}",
         TalerErrorCode.GENERIC_CURRENCY_MISMATCH
     )
+}
+
+fun TalerConfig.requireAuthMethod(section: String): AuthMethod {
+    return when (val method = requireString(section, "auth_method", "auth method")) {
+        "none" -> AuthMethod.None
+        "token" -> {
+            val token = requireString(section, "auth_token")
+            AuthMethod.Basic(token)
+        }
+        else -> throw TalerConfigError.invalid("auth method target type", section, "auth_method", "expected 'token' or 'none' got '$method'")
+    }
+}
+
+fun TalerConfig.apiConf(section: String): ApiConfig? {
+    val enabled = requireBoolean(section, "enabled")
+    return if (enabled) {
+        return ApiConfig(this, section)
+    } else {
+        null
+    }
+}
+
+sealed interface AuthMethod {
+    data object None: AuthMethod
+    data class Basic(val token: String): AuthMethod
 }

@@ -352,22 +352,6 @@ fun assertException(msg: String, lambda: () -> Unit) {
     }
 }
 
-/* ----- Body helper ----- */
-
-suspend inline fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
-    assertOk()
-    val body = json<B>()
-    lambda(body)
-    return body
-}
-
-suspend inline fun <reified B> HttpResponse.assertAcceptedJson(lambda: (B) -> Unit = {}): B {
-    assertAccepted()
-    val body = json<B>()
-    lambda(body)
-    return body
-}
-
 /* ----- Auth ----- */
 
 /** Auto auth get request */
@@ -412,7 +396,6 @@ fun HttpRequestBuilder.pwAuth(username: String? = null) {
         val login = url.pathSegments[2]
         basicAuth("$login", "$login-password")
     }
-    
 }
 
 /* ----- Random data generation ----- */

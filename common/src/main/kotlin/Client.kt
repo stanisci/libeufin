@@ -63,7 +63,14 @@ suspend inline fun <reified B> HttpResponse.json(): B =
     Json.decodeFromString(kotlinx.serialization.serializer<B>(), bodyAsText())
 
 suspend inline fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
-    assertEquals(HttpStatusCode.OK, status)
+    assertOk()
+    val body = json<B>()
+    lambda(body)
+    return body
+}
+
+suspend inline fun <reified B> HttpResponse.assertAcceptedJson(lambda: (B) -> Unit = {}): B {
+    assertAccepted()
     val body = json<B>()
     lambda(body)
     return body

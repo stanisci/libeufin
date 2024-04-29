@@ -57,7 +57,7 @@ fun setup(
 fun serverSetup(
     conf: String = "test.conf",
     lambda: suspend ApplicationTestBuilder.(Database) -> Unit
-) = setup { db, cfg ->
+) = setup(conf) { db, cfg ->
     testApplication {
         application {
             nexusApi(db, cfg)
@@ -129,7 +129,7 @@ fun genOutPay(subject: String, messageId: String? = null): OutgoingPayment {
 
 /** Perform a taler outgoing transaction */
 suspend fun ApplicationTestBuilder.transfer() {
-    client.post("/taler-wire-gateway/transfer") {
+    client.postA("/taler-wire-gateway/transfer") {
         json {
             "request_uid" to HashCode.rand()
             "amount" to "CHF:55"
@@ -150,4 +150,43 @@ suspend fun talerableOut(db: Database) {
 suspend fun talerableIn(db: Database) {
     val reserve_pub = ShortHashCode.rand()
     ingestIncomingPayment(db, genInPay("history test with $reserve_pub reserve pub"))
+}
+
+
+/* ----- Auth ----- */
+
+/** Auto auth get request */
+suspend inline fun HttpClient.getA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return get(url) {
+        auth()
+        builder(this)
+    }
+}
+
+/** Auto auth post request */
+suspend inline fun HttpClient.postA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return post(url) {
+        auth()
+        builder(this)
+    }
+}
+
+/** Auto auth patch request */
+suspend inline fun HttpClient.patchA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return patch(url) {
+        auth()
+        builder(this)
+    }
+}
+
+/** Auto auth delete request */
+suspend inline fun HttpClient.deleteA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return delete(url) {
+        auth()
+        builder(this)
+    }
+}
+
+fun HttpRequestBuilder.auth() {
+    headers["Authorization"] = "Bearer secret-token"
 }

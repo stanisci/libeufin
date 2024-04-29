@@ -34,7 +34,7 @@ import tech.libeufin.nexus.db.ExchangeDAO.*
 import java.time.Instant
 
 
-fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) {
+fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) = authApi(cfg.wireGatewayApiCfg) {
     get("/taler-wire-gateway/config") {
         call.respond(WireGatewayConfig(
             currency = cfg.currency

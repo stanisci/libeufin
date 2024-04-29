@@ -28,6 +28,7 @@ import io.ktor.util.pipeline.*
 import tech.libeufin.bank.*
 import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
+import tech.libeufin.common.api.*
 import tech.libeufin.common.crypto.PwCrypto
 import java.time.Instant
 
