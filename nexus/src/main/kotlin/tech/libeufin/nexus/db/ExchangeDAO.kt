@@ -32,17 +32,16 @@ class ExchangeDAO(private val db: Database) {
     ): List<IncomingReserveTransaction> 
         = db.poolHistoryGlobal(params, db::listenIncoming, """
             SELECT
-                tit.incoming_transaction_id
+                incoming_transaction_id
                 ,execution_time
                 ,(amount).val AS amount_val
                 ,(amount).frac AS amount_frac
                 ,debit_payto_uri
                 ,reserve_public_key
-            FROM talerable_incoming_transactions AS tit
-                JOIN incoming_transactions AS it
-                    ON tit.incoming_transaction_id=it.incoming_transaction_id
+            FROM talerable_incoming_transactions
+                JOIN incoming_transactions USING(incoming_transaction_id)
             WHERE
-        """, "tit.incoming_transaction_id") {
+        """, "incoming_transaction_id") {
             IncomingReserveTransaction(
                 row_id = it.getLong("incoming_transaction_id"),
                 date = it.getTalerTimestamp("execution_time"),
@@ -60,22 +59,19 @@ class ExchangeDAO(private val db: Database) {
         // reach database : the initiation first else the recovered transaction.
         = db.poolHistoryGlobal(params, db::listenOutgoing,  """
             SELECT
-                talerable_outgoing_transaction_id
-                ,COALESCE(iot.initiation_time, ot.execution_time) AS execution_time
-                ,(COALESCE(iot.amount, ot.amount)).val AS amount_val
-                ,(COALESCE(iot.amount, ot.amount)).frac AS amount_frac
-                ,COALESCE(iot.credit_payto_uri, ot.credit_payto_uri) AS credit_payto_uri
+                outgoing_transaction_id
+                ,execution_time AS execution_time
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,credit_payto_uri AS credit_payto_uri
                 ,wtid
                 ,exchange_base_url
-            FROM talerable_outgoing_transactions AS tot
-                LEFT OUTER JOIN outgoing_transactions AS ot
-                    ON tot.outgoing_transaction_id=ot.outgoing_transaction_id
-                LEFT OUTER JOIN initiated_outgoing_transactions AS iot
-                    ON tot.initiated_outgoing_transaction_id=iot.initiated_outgoing_transaction_id
+            FROM talerable_outgoing_transactions
+                JOIN outgoing_transactions USING(outgoing_transaction_id)
             WHERE
-        """, "talerable_outgoing_transaction_id") {
+        """, "outgoing_transaction_id") {
             OutgoingTransaction(
-                row_id = it.getLong("talerable_outgoing_transaction_id"),
+                row_id = it.getLong("outgoing_transaction_id"),
                 date = it.getTalerTimestamp("execution_time"),
                 amount = it.getAmount("amount", db.bankCurrency),
                 credit_account = it.getString("credit_payto_uri"),

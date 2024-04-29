@@ -42,7 +42,6 @@ CREATE FUNCTION register_outgoing(
 LANGUAGE plpgsql AS $$
 DECLARE
 init_id INT8;
-talerable_id INT8;
 BEGIN
 -- Check if already registered
 SELECT outgoing_transaction_id INTO out_tx_id
@@ -90,10 +89,9 @@ IF in_wtid IS NOT NULL OR in_exchange_url IS NOT NULL THEN
     wtid,
     exchange_base_url
   ) VALUES (out_tx_id, in_wtid, in_exchange_url)
-    ON CONFLICT (wtid) DO NOTHING
-    RETURNING talerable_outgoing_transaction_id INTO talerable_id;
-  IF talerable_id IS NOT NULL THEN
-    PERFORM pg_notify('outgoing_tx', talerable_id::text);
+    ON CONFLICT (wtid) DO NOTHING;
+  IF FOUND THEN
+    PERFORM pg_notify('outgoing_tx', out_tx_id::text);
   END IF;
 END IF;
 END $$;
@@ -233,7 +231,7 @@ BEGIN
 -- Check conflict
 IF EXISTS (
   SELECT FROM talerable_incoming_transactions 
-  JOIN incoming_transactions ON talerable_incoming_transactions.incoming_transaction_id=incoming_transactions.incoming_transaction_id
+  JOIN incoming_transactions USING(incoming_transaction_id)
   WHERE reserve_public_key = in_reserve_public_key
   AND bank_id != in_bank_id
 ) THEN
@@ -280,20 +278,18 @@ CREATE FUNCTION taler_transfer(
   OUT out_timestamp INT8
 )
 LANGUAGE plpgsql AS $$
-DECLARE
-  initiated_id INT8;
 BEGIN
 -- Check for idempotence and conflict
 SELECT (amount != in_amount 
           OR credit_payto_uri != in_credit_account_payto
           OR exchange_base_url != in_exchange_base_url
           OR wtid != in_wtid)
-        ,talerable_outgoing_transaction_id, initiation_time
+        ,transfer_operations.initiated_outgoing_transaction_id, initiation_time
   INTO out_request_uid_reuse, out_tx_row_id, out_timestamp
-  FROM talerable_outgoing_transactions
+  FROM transfer_operations
       JOIN initiated_outgoing_transactions
-        ON talerable_outgoing_transactions.initiated_outgoing_transaction_id=initiated_outgoing_transactions.initiated_outgoing_transaction_id 
-  WHERE talerable_outgoing_transactions.request_uid = in_request_uid;
+        ON transfer_operations.initiated_outgoing_transaction_id=initiated_outgoing_transactions.initiated_outgoing_transaction_id 
+  WHERE transfer_operations.request_uid = in_request_uid;
 IF FOUND THEN
   RETURN;
 END IF;
@@ -310,19 +306,19 @@ INSERT INTO initiated_outgoing_transactions (
   ,in_credit_account_payto
   ,in_timestamp
   ,in_bank_id
-) RETURNING initiated_outgoing_transaction_id INTO initiated_id;
+) RETURNING initiated_outgoing_transaction_id INTO out_tx_row_id;
 -- Register outgoing transaction
-INSERT INTO talerable_outgoing_transactions(
+INSERT INTO transfer_operations(
   initiated_outgoing_transaction_id
   ,request_uid
   ,wtid
   ,exchange_base_url
 ) VALUES (
-  initiated_id
+  out_tx_row_id
   ,in_request_uid
   ,in_wtid
   ,in_exchange_base_url
-) RETURNING talerable_outgoing_transaction_id INTO out_tx_row_id;
+);
 out_timestamp = in_timestamp;
 PERFORM pg_notify('outgoing_tx', out_tx_row_id::text);
 END $$;

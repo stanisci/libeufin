@@ -149,14 +149,15 @@ class WireGatewayApiTest {
             url = "/taler-wire-gateway/history/outgoing",
             ids = { it.outgoing_transactions.map { it.row_id } },
             registered = listOf(
-                { 
-                    transfer()
-                },
                 {
                     talerableOut(db)
                 }
             ),
             ignored = listOf(
+                { 
+                    // Ignore pending transfers
+                    transfer()
+                },
                 { 
                     // Ignore manual incoming transaction
                     talerableIn(db)
