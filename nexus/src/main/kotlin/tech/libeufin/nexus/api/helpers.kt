@@ -39,9 +39,9 @@ fun Route.authApi(cfg: ApiConfig?, callback: Route.() -> Unit): Route =
         // Basic auth challenge
         when (cfg.authMethod) {
             AuthMethod.None -> {}
-            is AuthMethod.Basic -> {
+            is AuthMethod.Bearer -> {
                 if (header == null) {
-                    //response.header(HttpHeaders.WWWAuthenticate, "Basic") ?
+                    context.response.header(HttpHeaders.WWWAuthenticate, "Bearer")
                     throw unauthorized(
                         "Authorization header not found",
                         TalerErrorCode.GENERIC_PARAMETER_MISSING
@@ -52,7 +52,7 @@ fun Route.authApi(cfg: ApiConfig?, callback: Route.() -> Unit): Route =
                     TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
                 )
                 when (scheme) {
-                    "Basic", "Bearer" -> {
+                    "Bearer" -> {
                         // TODO choose between one of those
                         if (content != cfg.authMethod.token) {
                             throw unauthorized("Unknown token")

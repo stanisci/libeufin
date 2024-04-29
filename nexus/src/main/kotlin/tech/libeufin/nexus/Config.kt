@@ -84,11 +84,11 @@ fun NexusConfig.checkCurrency(amount: TalerAmount) {
 fun TalerConfig.requireAuthMethod(section: String): AuthMethod {
     return when (val method = requireString(section, "auth_method", "auth method")) {
         "none" -> AuthMethod.None
-        "token" -> {
-            val token = requireString(section, "auth_token")
-            AuthMethod.Basic(token)
+        "bearer-token" -> {
+            val token = requireString(section, "auth_bearer_token")
+            AuthMethod.Bearer(token)
         }
-        else -> throw TalerConfigError.invalid("auth method target type", section, "auth_method", "expected 'token' or 'none' got '$method'")
+        else -> throw TalerConfigError.invalid("auth method target type", section, "auth_method", "expected 'bearer-token' or 'none' got '$method'")
     }
 }
 
@@ -103,5 +103,5 @@ fun TalerConfig.apiConf(section: String): ApiConfig? {
 
 sealed interface AuthMethod {
     data object None: AuthMethod
-    data class Basic(val token: String): AuthMethod
+    data class Bearer(val token: String): AuthMethod
 }
