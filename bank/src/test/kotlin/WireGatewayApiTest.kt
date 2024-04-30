@@ -30,7 +30,7 @@ class WireGatewayApiTest {
         client.getA("/accounts/merchant/taler-wire-gateway/config").assertOk()
     }
 
-    // Testing the POST /transfer call from the TWG API.
+    // POST /accounts/{USERNAME}/taler-wire-gateway/transfer
     @Test
     fun transfer() = bankSetup { _ -> 
         val valid_req = obj {
@@ -121,9 +121,7 @@ class WireGatewayApiTest {
         }.assertBadRequest()
     }
     
-    /**
-     * Testing the /history/incoming call from the TWG API.
-     */
+    // GET /accounts/{USERNAME}/taler-wire-gateway/history/incoming
     @Test
     fun historyIncoming() = bankSetup { 
         // Give Foo reasonable debt allowance:
@@ -159,10 +157,7 @@ class WireGatewayApiTest {
         )
     }
 
-    
-    /**
-     * Testing the /history/outgoing call from the TWG API.
-     */
+    // GET /accounts/{USERNAME}/taler-wire-gateway/history/outgoing
     @Test
     fun historyOutgoing() = bankSetup {
         setMaxDebt("exchange", "KUDOS:1000000")
@@ -193,7 +188,7 @@ class WireGatewayApiTest {
         )
     }
 
-    // Testing the /admin/add-incoming call from the TWG API.
+    // POST /accounts/{USERNAME}/taler-wire-gateway/admin/add-incoming
     @Test
     fun addIncoming() = bankSetup { _ -> 
         val valid_req = obj {

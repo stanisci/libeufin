@@ -49,9 +49,14 @@ class Database(dbConfig: DatabaseConfig, val bankCurrency: String): DbPool(dbCon
 
     private val outgoingTxFlows: MutableSharedFlow<Long> = MutableSharedFlow()
     private val incomingTxFlows: MutableSharedFlow<Long> = MutableSharedFlow()
+    private val revenueTxFlows: MutableSharedFlow<Long> = MutableSharedFlow()
 
     init {
         watchNotifications(pgSource, "libeufin_nexus", LoggerFactory.getLogger("libeufin-nexus-db-watcher"), mapOf(
+            "revenue_tx" to {
+                val id = it.toLong()
+                revenueTxFlows.emit(id)
+            },
             "outgoing_tx" to {
                 val id = it.toLong()
                 outgoingTxFlows.emit(id)
@@ -65,8 +70,11 @@ class Database(dbConfig: DatabaseConfig, val bankCurrency: String): DbPool(dbCon
 
     /** Listen for new taler outgoing transactions */
     suspend fun <R> listenOutgoing(lambda: suspend (Flow<Long>) -> R): R
-        = lambda(outgoingTxFlows as Flow<Long>)
+        = lambda(outgoingTxFlows)
     /** Listen for new taler incoming transactions */
     suspend fun <R> listenIncoming(lambda: suspend (Flow<Long>) -> R): R
-        = lambda(incomingTxFlows as Flow<Long>)
+        = lambda(incomingTxFlows)
+    /** Listen for new incoming transactions */
+    suspend fun <R> listenRevenue(lambda: suspend (Flow<Long>) -> R): R
+        = lambda(revenueTxFlows)
 }

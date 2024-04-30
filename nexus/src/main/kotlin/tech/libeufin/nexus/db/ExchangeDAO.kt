@@ -54,9 +54,7 @@ class ExchangeDAO(private val db: Database) {
     /** Query [exchangeId] history of taler outgoing transactions  */
     suspend fun outgoingHistory(
         params: HistoryParams
-    ): List<OutgoingTransaction> 
-        // Outgoing transactions can be initiated or recovered. We take the first data to
-        // reach database : the initiation first else the recovered transaction.
+    ): List<OutgoingTransaction>
         = db.poolHistoryGlobal(params, db::listenOutgoing,  """
             SELECT
                 outgoing_transaction_id

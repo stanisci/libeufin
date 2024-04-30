@@ -27,7 +27,7 @@ import tech.libeufin.common.*
 import tech.libeufin.nexus.*
 
 class WireGatewayApiTest {
-    // GET /accounts/{USERNAME}/taler-wire-gateway/config
+    // GET /taler-wire-gateway/config
     @Test
     fun config() = serverSetup { _ ->
         authRoutine(HttpMethod.Get, "/taler-wire-gateway/config")
@@ -35,7 +35,7 @@ class WireGatewayApiTest {
         client.getA("/taler-wire-gateway/config").assertOk()
     }
 
-    // Testing the POST /transfer call from the TWG API.
+    // POST /taler-wire-gateway/transfer
     @Test
     fun transfer() = serverSetup { _ -> 
         val valid_req = obj {
@@ -102,9 +102,7 @@ class WireGatewayApiTest {
         }.assertBadRequest()
     }
     
-    /**
-     * Testing the /history/incoming call from the TWG API.
-     */
+    // GET /taler-wire-gateway/history/incoming
     @Test
     fun historyIncoming() = serverSetup { db ->
         authRoutine(HttpMethod.Get, "/taler-wire-gateway/history/incoming")
@@ -139,9 +137,7 @@ class WireGatewayApiTest {
         )
     }
 
-    /**
-     * Testing the /history/outgoing call from the TWG API.
-     */
+    // GET /taler-wire-gateway/history/outgoing
     @Test
     fun historyOutgoing() = serverSetup { db ->
         authRoutine(HttpMethod.Get, "/taler-wire-gateway/history/outgoing")
@@ -174,7 +170,7 @@ class WireGatewayApiTest {
         )
     }
 
-    // Testing the /admin/add-incoming call from the TWG API.
+    // POST /taler-wire-gateway/admin/add-incoming
     @Test
     fun addIncoming() = serverSetup { _ -> 
         val valid_req = obj {

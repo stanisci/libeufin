@@ -75,6 +75,7 @@ data class IncomingHistory(
     val credit_account: String
 )
 
+/** Inner request GET /taler-wire-gateway/history/incoming */
 @Serializable
 data class IncomingReserveTransaction(
     val type: String = "RESERVE",
@@ -92,6 +93,7 @@ data class OutgoingHistory(
     val debit_account: String
 )
 
+/** Inner request GET /taler-wire-gateway/history/outgoing */
 @Serializable
 data class OutgoingTransaction(
     val row_id: Long, // DB row ID of the payment.
@@ -100,4 +102,30 @@ data class OutgoingTransaction(
     val credit_account: String,
     val wtid: ShortHashCode,
     val exchange_base_url: String,
+)
+
+/** Response GET /taler-revenue/config */
+@Serializable
+data class RevenueConfig(
+    val currency: String
+) {
+    val name: String = "taler-revenue"
+    val version: String = REVENUE_API_VERSION
+}
+
+/** Request GET /taler-revenue/history */
+@Serializable
+data class RevenueIncomingHistory(
+    val incoming_transactions : List<RevenueIncomingBankTransaction>,
+    val credit_account: String
+)
+
+/** Inner request GET /taler-revenue/history */
+@Serializable
+data class RevenueIncomingBankTransaction(
+    val row_id: Long,
+    val date: TalerProtocolTimestamp,
+    val amount: TalerAmount,
+    val debit_account: String,
+    val subject: String
 )

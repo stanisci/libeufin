@@ -131,6 +131,7 @@ ELSE
     ,in_debit_payto_uri
     ,in_bank_id
   ) RETURNING incoming_transaction_id INTO out_tx_id;
+  PERFORM pg_notify('revenue_tx', out_tx_id::text);
 END IF;
 END $$;
 COMMENT ON FUNCTION register_incoming

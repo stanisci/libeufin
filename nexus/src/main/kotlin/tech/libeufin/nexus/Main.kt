@@ -73,6 +73,7 @@ fun Instant.fmtDateTime(): String =
 
 fun Application.nexusApi(db: Database, cfg: NexusConfig) = talerApi(logger) {
     wireGatewayApi(db, cfg)
+    revenueApi(db, cfg)
 }
 
 /**

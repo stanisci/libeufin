@@ -20,7 +20,7 @@
 package tech.libeufin.nexus.db
 
 import tech.libeufin.common.*
-import tech.libeufin.common.db.one
+import tech.libeufin.common.db.*
 import tech.libeufin.nexus.IncomingPayment
 import tech.libeufin.nexus.OutgoingPayment
 import java.time.Instant
@@ -141,4 +141,27 @@ class PaymentDAO(private val db: Database) {
             }
         }
     }
+
+    /** Query history of incoming transactions */
+    suspend fun revenueHistory(
+        params: HistoryParams
+    ): List<RevenueIncomingBankTransaction> 
+        = db.poolHistoryGlobal(params, db::listenRevenue, """
+            SELECT
+                incoming_transaction_id
+                ,execution_time
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,debit_payto_uri
+                ,wire_transfer_subject
+            FROM incoming_transactions WHERE
+        """, "incoming_transaction_id") {
+            RevenueIncomingBankTransaction(
+                row_id = it.getLong("incoming_transaction_id"),
+                date = it.getTalerTimestamp("execution_time"),
+                amount = it.getAmount("amount", db.bankCurrency),
+                debit_account = it.getString("debit_payto_uri"),
+                subject = it.getString("wire_transfer_subject")
+            )
+        }
 }

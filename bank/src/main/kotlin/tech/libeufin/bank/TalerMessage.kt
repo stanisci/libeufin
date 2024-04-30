@@ -327,14 +327,6 @@ data class TalerIntegrationConfigResponse(
     val version: String = INTEGRATION_API_VERSION
 }
 
-@Serializable
-data class RevenueConfig(
-    val currency: String
-) {
-    val name: String = "taler-revenue"
-    val version: String = REVENUE_API_VERSION
-}
-
 enum class CreditDebitInfo {
     credit, debit
 }
@@ -544,21 +536,6 @@ data class ChallengeSolve(
 data class ConversionResponse(
     val amount_debit: TalerAmount,
     val amount_credit: TalerAmount,
-)
-
-@Serializable
-data class RevenueIncomingHistory(
-    val incoming_transactions : List<RevenueIncomingBankTransaction>,
-    val credit_account: String
-)
-
-@Serializable
-data class RevenueIncomingBankTransaction(
-    val row_id: Long,
-    val date: TalerProtocolTimestamp,
-    val amount: TalerAmount,
-    val debit_account: String,
-    val subject: String
 )
 
 /**
