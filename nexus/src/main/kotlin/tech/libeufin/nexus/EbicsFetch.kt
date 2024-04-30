@@ -156,7 +156,7 @@ private suspend fun ingestDocument(
     whichDocument: SupportedDocument
 ) {
     when (whichDocument) {
-        SupportedDocument.CAMT_053, SupportedDocument.CAMT_054 -> {
+        SupportedDocument.CAMT_052, SupportedDocument.CAMT_053, SupportedDocument.CAMT_054 -> {
             try {
                 parseTx(xml, cfg.currency, cfg.dialect).forEach {
                     if (cfg.fetch.ignoreBefore != null && it.executionTime < cfg.fetch.ignoreBefore) {
@@ -211,10 +211,6 @@ private suspend fun ingestDocument(
             } else {
                 db.initiated.bankMessage(status.msgId, msg)
             }
-        }
-        SupportedDocument.CAMT_052 -> {
-            // TODO parsing
-            // TODO ingesting
         }
     }
 }
@@ -307,15 +303,18 @@ enum class EbicsDocument {
     acknowledgement,
     /// Payment status - CustomerPaymentStatusReport pain.002
     status,
-    /// Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054
-    notification,
+    /// Account intraday reports - BankToCustomerAccountReport camt.052
+    report,
     /// Account statements - BankToCustomerStatement camt.053
     statement,
+    /// Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054
+    notification,
     ;
 
     fun shortDescription(): String = when (this) {
         acknowledgement -> "EBICS acknowledgement"
         status -> "Payment status"
+        report -> "Account intraday reports"
         statement -> "Account statements"
         notification -> "Debit & credit notifications"
     }
@@ -323,6 +322,7 @@ enum class EbicsDocument {
     fun fullDescription(): String = when (this) {
         acknowledgement -> "EBICS acknowledgement - CustomerAcknowledgement HAC pain.002"
         status -> "Payment status - CustomerPaymentStatusReport pain.002"
+        report -> "Account intraday reports - BankToCustomerAccountReport camt.052"
         statement -> "Account statements - BankToCustomerStatement camt.053"
         notification -> "Debit & credit notifications - BankToCustomerDebitCreditNotification camt.054"
     }
@@ -330,6 +330,7 @@ enum class EbicsDocument {
     fun doc(): SupportedDocument = when (this) {
         acknowledgement -> SupportedDocument.PAIN_002_LOGS
         status -> SupportedDocument.PAIN_002
+        report -> SupportedDocument.CAMT_052
         statement -> SupportedDocument.CAMT_053
         notification -> SupportedDocument.CAMT_054
     }

@@ -385,7 +385,7 @@ fun parseTx(
 
     XmlDestructor.fromStream(notifXml, "Document") { when (dialect) {
         Dialect.gls -> {
-            opt("BkToCstmrStmt")?.each("Stmt") { // Camt.053
+            fun XmlDestructor.parseGlsInner() {
                 opt("Acct") {
                     // Sanity check on currency and IBAN ?
                 }
@@ -439,6 +439,12 @@ fun parseTx(
                         }
                     }
                 }
+            }
+            opt("BkToCstmrAcctRpt")?.each("Rpt") { // Camt.052
+                parseGlsInner()
+            }
+            opt("BkToCstmrStmt")?.each("Stmt") { // Camt.053
+                parseGlsInner()
             }
         }
         Dialect.postfinance -> {

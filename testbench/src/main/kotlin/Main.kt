@@ -135,7 +135,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
         val payto = benchCfg.payto[currency] ?: dummyPayto
                         ?: throw Exception("Missing test payto for $currency")
         
-        val recoverDoc = "notification statement"
+        val recoverDoc = "report statement notification"
         runBlocking {
             step("Init ${kind.name}")
 
@@ -160,6 +160,7 @@ class Cli : CliktCommand("Run integration tests on banks provider") {
                 put("fetch", "Fetch all documents", "ebics-fetch $ebicsFlags")
                 put("ack", "Fetch CustomerAcknowledgement", "ebics-fetch $ebicsFlags acknowledgement")
                 put("status", "Fetch CustomerPaymentStatusReport", "ebics-fetch $ebicsFlags status")
+                put("report", "Fetch BankToCustomerAccountReport", "ebics-fetch $ebicsFlags report")
                 put("notification", "Fetch BankToCustomerDebitCreditNotification", "ebics-fetch $ebicsFlags notification")
                 put("statement", "Fetch BankToCustomerStatement", "ebics-fetch $ebicsFlags statement")
                 put("submit", "Submit pending transactions", "ebics-submit $ebicsFlags")
