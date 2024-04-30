@@ -364,7 +364,7 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
      * mode when no flags are passed to the invocation.
      */
     override fun run() = cliCmd(logger, common.log) {
-        val cfg = extractEbicsConfig(common.config)
+        val cfg = loadNexusConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
 
         Database(dbCfg, cfg.currency).use { db ->

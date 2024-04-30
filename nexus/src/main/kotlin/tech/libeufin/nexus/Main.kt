@@ -146,6 +146,21 @@ class InitiatePayment: CliktCommand("Initiate an outgoing payment") {
     }
 }
 
+class Serve : CliktCommand("Run libeufin-nexus HTTP server", name = "serve") {
+    private val common by CommonOption()
+
+    override fun run() = cliCmd(logger, common.log) {
+        val cfg = loadNexusConfig(common.config)
+        val dbCfg = cfg.config.dbConfig()
+        val serverCfg = cfg.config.loadServerConfig("nexus-httpd")
+        Database(dbCfg, cfg.currency).use { db ->
+            serve(serverCfg) {
+                nexusApi(db, cfg)
+            }
+        }
+    }
+}
+
 class ConvertBackup: CliktCommand("Convert an old backup to the new config format") {
     private val backupPath by argument(
         "backup",
@@ -302,7 +317,7 @@ class TestingCmd : CliktCommand("Testing helper commands", name = "testing") {
 class LibeufinNexusCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(EbicsSetup(), DbInit(), EbicsSubmit(), EbicsFetch(), InitiatePayment(), CliConfigCmd(NEXUS_CONFIG_SOURCE), TestingCmd())
+        subcommands(EbicsSetup(), DbInit(), Serve(), EbicsSubmit(), EbicsFetch(), InitiatePayment(), CliConfigCmd(NEXUS_CONFIG_SOURCE), TestingCmd())
     }
     override fun run() = Unit
 }

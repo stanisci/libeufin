@@ -67,7 +67,6 @@ data class TalerProtocolTimestamp(
             } else {
                 encoder.encodeLong(value.epochSecond)
             }
-            
         }
     
         override fun deserialize(decoder: Decoder): Instant {

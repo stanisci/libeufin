@@ -147,7 +147,7 @@ class EbicsSubmit : CliktCommand("Submits any initiated payment found in the dat
      * FIXME: reduce code duplication with the fetch subcommand.
      */
     override fun run() = cliCmd(logger, common.log) {
-        val cfg = extractEbicsConfig(common.config)
+        val cfg = loadNexusConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
         val (clientKeys, bankKeys) = expectFullKeys(cfg)
         val ctx = SubmissionContext(

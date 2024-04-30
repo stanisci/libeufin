@@ -29,6 +29,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
+import tech.libeufin.common.api.engine
 import tech.libeufin.common.db.one
 import tech.libeufin.nexus.*
 import java.time.Instant
@@ -111,6 +112,11 @@ class IntegrationTest {
         }
 
         bankCmd.run("gc $flags")
+
+        server {
+            nexusCmd.run("serve $flags")
+        }
+        engine?.stop(0, 0) 
     }
 
     @Test

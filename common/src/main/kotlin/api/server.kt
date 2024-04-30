@@ -223,3 +223,27 @@ fun Application.talerApi(logger: Logger, routes: Routing.() -> Unit) {
     }
     routing { routes() }
 }
+
+// Dirty local variable to stop the server in test TODO remove this ugly hack
+var engine: ApplicationEngine? = null
+
+fun serve(cfg: ServerConfig, api: Application.() -> Unit) {
+    val env = applicationEngineEnvironment {
+        when (cfg) {
+            is ServerConfig.Tcp -> {
+                for (addr in InetAddress.getAllByName(cfg.addr)) {
+                    connector {
+                        port = cfg.port
+                        host = addr.hostAddress
+                    }
+                }
+            }
+            is ServerConfig.Unix ->
+                throw Exception("Can only serve via TCP")
+        }
+        module { api() }
+    }
+    val local = embeddedServer(Netty, env)
+    engine = local
+    local.start(wait = true)
+}
