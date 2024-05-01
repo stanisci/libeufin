@@ -27,6 +27,7 @@ package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.convert
 import com.github.ajalt.clikt.parameters.groups.provideDelegate
@@ -148,9 +149,32 @@ class InitiatePayment: CliktCommand("Initiate an outgoing payment") {
 
 class Serve : CliktCommand("Run libeufin-nexus HTTP server", name = "serve") {
     private val common by CommonOption()
+    private val check by option().flag()
 
     override fun run() = cliCmd(logger, common.log) {
         val cfg = loadNexusConfig(common.config)
+        
+        if (check) {
+            // Check if the server is to be started
+            val apis = listOf(
+                cfg.wireGatewayApiCfg to "Wire Gateway API",
+                cfg.revenueApiCfg to "Revenue API"
+            )
+            var startServer = false
+            for ((api, name) in apis) {
+                if (api != null) {
+                    startServer = true
+                    logger.info("$name is enabled: starting the server")
+                }
+            }
+            if (!startServer) {
+                logger.info("All APIs are disabled: not starting the server")
+                throw ProgramResult(1)
+            } else {
+                throw ProgramResult(0)
+            }
+        }
+
         val dbCfg = cfg.config.dbConfig()
         val serverCfg = cfg.config.loadServerConfig("nexus-httpd")
         Database(dbCfg, cfg.currency).use { db ->

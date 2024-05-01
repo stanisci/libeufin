@@ -118,4 +118,17 @@ class CliTest {
             nexusCmd.testErr("ebics-setup -c $conf", "Could not write client private keys at '$clientKeysPath': permission denied on '${clientKeysPath.parent}'")
         }
     }
+
+    /** Test server check */
+    @Test
+    fun serveCheck() {
+        val confs = listOf(
+            "mini" to 1,
+            "test" to 0
+        )
+        for ((conf, statusCode) in confs) {
+            val result = nexusCmd.test("serve --check -c conf/$conf.conf")
+            assertEquals(statusCode, result.statusCode)
+        }
+    }
 }

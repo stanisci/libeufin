@@ -1,0 +1,14 @@
+[Unit]
+Description=LibEuFin Nexus Server Service
+After=postgres.service network.target
+PartOf=libeufin-nexus.target
+
+[Service]
+User=libeufin-nexus
+ExecStart=/usr/bin/libeufin-nexus serve -c /etc/libeufin/libeufin-nexus.conf
+ExecCondition=/usr/bin/libeufin-nexus serve -c /etc/libeufin/libeufin-nexus.conf --check
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=multi-user.target

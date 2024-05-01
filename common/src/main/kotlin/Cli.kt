@@ -70,6 +70,8 @@ fun cliCmd(logger: Logger, level: Level, lambda: suspend () -> Unit) {
                 }
             })
         }
+    } catch (e: ProgramResult) {
+        throw e
     } catch (e: Throwable) {
         e.fmtLog(logger)
         throw ProgramResult(1)

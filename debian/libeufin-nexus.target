@@ -4,6 +4,7 @@ After=postgres.service network.target
 
 Wants=libeufin-nexus-ebics-fetch.service
 Wants=libeufin-nexus-ebics-submit.service
+Wants=libeufin-nexus-httpd.service
 
 [Install]
 WantedBy=multi-user.target
