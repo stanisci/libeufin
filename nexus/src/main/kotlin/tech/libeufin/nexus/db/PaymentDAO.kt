@@ -19,10 +19,8 @@
 
 package tech.libeufin.nexus.db
 
-import tech.libeufin.common.EddsaPublicKey
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.db.one
-import tech.libeufin.common.micros
+import tech.libeufin.common.db.*
+import tech.libeufin.common.*
 import tech.libeufin.nexus.IncomingPayment
 import tech.libeufin.nexus.OutgoingPayment
 import java.time.Instant
@@ -128,4 +126,120 @@ class PaymentDAO(private val db: Database) {
             }
         }
     }
+
+    /** List incoming transaction metadata for debugging */
+    suspend fun metadataIncoming(): List<IncomingTxMetadata> = db.conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT
+                (amount).val as amount_val
+                ,(amount).frac AS amount_frac
+                ,wire_transfer_subject
+                ,execution_time
+                ,debit_payto_uri
+                ,bank_id
+                ,reserve_public_key
+            FROM incoming_transactions
+                LEFT OUTER JOIN talerable_incoming_transactions using (incoming_transaction_id)
+            ORDER BY execution_time
+        """)
+        stmt.all {
+            IncomingTxMetadata(
+                date = it.getLong("execution_time").asInstant(),
+                amount = it.getDecimal("amount"),
+                subject = it.getString("wire_transfer_subject"),
+                debtor = it.getString("debit_payto_uri"),
+                id = it.getString("bank_id"),
+                reservePub = it.getBytes("reserve_public_key")?.run { EddsaPublicKey(this) }
+            )
+        }
+    }
+
+    /** List outgoing transaction metadata for debugging */
+    suspend fun metadataOutgoing(): List<OutgoingTxMetadata> = db.conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT
+                (amount).val as amount_val
+                ,(amount).frac AS amount_frac
+                ,wire_transfer_subject
+                ,execution_time
+                ,credit_payto_uri
+                ,message_id
+            FROM outgoing_transactions
+            ORDER BY execution_time
+        """)
+        stmt.all {
+            OutgoingTxMetadata(
+                date = it.getLong("execution_time").asInstant(),
+                amount = it.getDecimal("amount"),
+                subject = it.getString("wire_transfer_subject"),
+                creditor = it.getString("credit_payto_uri"),
+                id = it.getString("message_id")
+            )
+        }
+    }
+
+    /** List initiated transaction metadata for debugging */
+    suspend fun metadataInitiated(): List<InitiatedTxMetadata> = db.conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT
+                (amount).val as amount_val
+                ,(amount).frac AS amount_frac
+                ,wire_transfer_subject
+                ,initiation_time
+                ,last_submission_time
+                ,submission_counter
+                ,credit_payto_uri
+                ,submitted
+                ,request_uid
+                ,failure_message
+            FROM initiated_outgoing_transactions
+            ORDER BY initiation_time
+        """)
+        stmt.all {
+            InitiatedTxMetadata(
+                date = it.getLong("initiation_time").asInstant(),
+                amount = it.getDecimal("amount"),
+                subject = it.getString("wire_transfer_subject"),
+                creditor = it.getString("credit_payto_uri"),
+                id = it.getString("request_uid"),
+                status = it.getString("submitted"),
+                msg = it.getString("failure_message"),
+                submissionTime = it.getLong("last_submission_time").asInstant(),
+                submissionCounter = it.getInt("submission_counter")
+            )
+        }
+    }
 }
+
+/** Incoming transaction metadata for debugging */
+data class IncomingTxMetadata(
+    val date: Instant,
+    val amount: DecimalNumber,
+    val subject: String,
+    val debtor: String,
+    val id: String,
+    val reservePub: EddsaPublicKey?
+)
+
+/** Outgoing transaction metadata for debugging */
+data class OutgoingTxMetadata(
+    val date: Instant,
+    val amount: DecimalNumber,
+    val subject: String?,
+    val creditor: String?,
+    val id: String,
+    // TODO when merged with v11
+)
+
+/** Initiated metadata for debugging */
+data class InitiatedTxMetadata(
+    val date: Instant,
+    val amount: DecimalNumber,
+    val subject: String,
+    val creditor: String,
+    val id: String,
+    val status: String,
+    val msg: String?,
+    val submissionTime: Instant,
+    val submissionCounter: Int
+)

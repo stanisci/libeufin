@@ -22,6 +22,7 @@ package tech.libeufin.common.db
 import tech.libeufin.common.BankPaytoCtx
 import tech.libeufin.common.Payto
 import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.DecimalNumber
 import java.sql.ResultSet
 
 fun ResultSet.getAmount(name: String, currency: String): TalerAmount {
@@ -29,6 +30,13 @@ fun ResultSet.getAmount(name: String, currency: String): TalerAmount {
         getLong("${name}_val"),
         getInt("${name}_frac"),
         currency
+    )
+}
+
+fun ResultSet.getDecimal(name: String): DecimalNumber {
+    return DecimalNumber(
+        getLong("${name}_val"),
+        getInt("${name}_frac")
     )
 }
 

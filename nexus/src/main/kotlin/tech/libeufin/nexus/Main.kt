@@ -27,14 +27,14 @@ package tech.libeufin.nexus
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
-import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.arguments.convert
-import com.github.ajalt.clikt.parameters.groups.provideDelegate
+import com.github.ajalt.clikt.parameters.arguments.*
+import com.github.ajalt.clikt.parameters.groups.*
 import com.github.ajalt.clikt.parameters.options.*
-import com.github.ajalt.clikt.parameters.types.path
+import com.github.ajalt.clikt.parameters.types.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
 import kotlin.io.path.*
+import kotlin.math.max
 import io.ktor.server.application.*
 import org.slf4j.Logger
 import org.slf4j.event.Level
@@ -190,9 +190,142 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
     }
 }
 
+enum class ListKind {
+    incoming,
+    outgoing,
+    initiated;
+
+    fun description(): String = when (this) {
+        incoming -> "Incoming transactions"
+        outgoing -> "Outgoing transactions"
+        initiated -> "Initiated transactions"
+    }
+}
+
+class ListCmd: CliktCommand("List nexus transactions", name = "list") {
+    private val common by CommonOption()
+    private val kind: ListKind by argument(
+        help = "Which list to print",
+        helpTags = ListKind.entries.map { Pair(it.name, it.description()) }.toMap()
+    ).enum<ListKind>()
+
+    override fun run() = cliCmd(logger, common.log) {
+        val cfg = loadConfig(common.config)
+        val dbCfg = cfg.dbConfig()
+        val currency = cfg.requireString("nexus-ebics", "currency")
+
+        Database(dbCfg).use { db ->
+            fun fmtPayto(payto: String?): String {
+                if (payto == null) return ""
+                try {
+                    val parsed = Payto.parse(payto).expectIban()
+                    return buildString {
+                        append(parsed.iban.toString())
+                        if (parsed.bic != null) append(" ${parsed.bic}")
+                        if (parsed.receiverName != null) append(" ${parsed.receiverName}")
+                    }
+                } catch (e: Exception) {
+                    return payto
+                }
+            }
+            val (columnNames, rows) = when (kind) {
+                ListKind.incoming -> {
+                    val txs = db.payment.metadataIncoming()
+                    Pair(
+                        listOf(
+                            "transaction", "id", "reserve_pub", "debtor", "subject"
+                        ),
+                        txs.map {
+                            listOf(
+                                "${it.date} ${it.amount}",
+                                it.id,
+                                it.reservePub?.toString() ?: "",
+                                fmtPayto(it.debtor),
+                                it.subject
+                            )
+                        }
+                    )
+                }
+                ListKind.outgoing -> {
+                    val txs = db.payment.metadataOutgoing()
+                    Pair(
+                        listOf(
+                            "transaction", "id", "creditor", "subject"
+                        ),
+                        txs.map {
+                            listOf(
+                                "${it.date} ${it.amount}",
+                                it.id,
+                                fmtPayto(it.creditor),
+                                it.subject ?: ""
+                            )
+                        }
+                    )
+                }
+                ListKind.initiated -> {
+                    val txs = db.payment.metadataInitiated()
+                    Pair(
+                        listOf(
+                            "transaction", "id", "submission", "creditor", "status", "subject"
+                        ),
+                        txs.map {
+                            listOf(
+                                "${it.date} ${it.amount}",
+                                it.id,
+                                "${it.submissionTime} ${it.submissionCounter}",
+                                fmtPayto(it.creditor),
+                                "${it.status} ${it.msg ?: ""}".trim(),
+                                it.subject
+                            )
+                        }
+                    )
+                }
+            }
+            val cols: List<Pair<String, Int>> = columnNames.mapIndexed { i, name -> 
+                val maxRow: Int = rows.asSequence().map { it[i].length }.maxOrNull() ?: 0
+                Pair(name, max(name.length, maxRow))
+            }
+            val table = buildString {
+                fun padding(length: Int) {
+                    repeat(length) { append (" ") }
+                }
+                var first = true
+                for ((name, len) in cols) {
+                    if (!first) {
+                        append("|")
+                    } else {
+                        first = false
+                    }
+                    val pad = len - name.length
+                    padding(pad / 2)
+                    append(name)
+                    padding(pad / 2 + if (pad % 2 == 0) { 0 } else { 1 })
+                }
+                append("\n")
+                for (row in rows) {
+                    var first = true
+                    for ((met, str) in cols.zip(row)) {
+                        if (!first) {
+                            append("|")
+                        } else {
+                            first = false
+                        }
+                        val (name, len) = met
+                        val pad = len - str.length
+                        append(str)
+                        padding(pad)
+                    }
+                    append("\n")
+                }
+            }
+            print(table)
+        }
+    } 
+}
+
 class TestingCmd : CliktCommand("Testing helper commands", name = "testing") {
     init {
-        subcommands(FakeIncoming())
+        subcommands(FakeIncoming(), ListCmd())
     }
 
     override fun run() = Unit

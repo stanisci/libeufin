@@ -18,7 +18,6 @@
  */
 
 import org.junit.Test
-import tech.libeufin.bank.DecimalNumber
 import tech.libeufin.bank.db.TransactionDAO.BankTransactionResult
 import tech.libeufin.bank.db.WithdrawalDAO.WithdrawalCreationResult
 import tech.libeufin.common.*

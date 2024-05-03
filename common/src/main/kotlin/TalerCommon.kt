@@ -115,6 +115,64 @@ class ExchangeUrl {
     }
 }
 
+@Serializable(with = DecimalNumber.Serializer::class)
+class DecimalNumber {
+    val value: Long
+    val frac: Int
+
+    constructor(value: Long, frac: Int) {
+        this.value = value
+        this.frac = frac
+    }
+    constructor(encoded: String) {
+        val match = PATTERN.matchEntire(encoded) ?: throw badRequest("Invalid decimal number format")
+        val (value, frac) = match.destructured
+        this.value = value.toLongOrNull() ?: throw badRequest("Invalid value")
+        if (this.value > TalerAmount.MAX_VALUE) throw badRequest("Value specified in decimal number is too large")
+        this.frac = if (frac.isEmpty()) {
+            0
+        } else {
+            var tmp = frac.toIntOrNull() ?: throw badRequest("Invalid fractional value")
+            repeat(8 - frac.length) {
+                tmp *= 10
+            }
+            tmp
+        }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        return other is DecimalNumber &&
+                other.value == this.value &&
+                other.frac == this.frac
+    }
+
+    override fun toString(): String {
+        if (frac == 0) {
+            return "$value"
+        } else {
+            return "$value.${frac.toString().padStart(8, '0')}"
+                .dropLastWhile { it == '0' } // Trim useless fractional trailing 0
+        }
+    }
+
+    internal object Serializer : KSerializer<DecimalNumber> {
+        override val descriptor: SerialDescriptor =
+            PrimitiveSerialDescriptor("DecimalNumber", PrimitiveKind.STRING)
+    
+        override fun serialize(encoder: Encoder, value: DecimalNumber) {
+            encoder.encodeString(value.toString())
+        }
+    
+        override fun deserialize(decoder: Decoder): DecimalNumber {
+            return DecimalNumber(decoder.decodeString())
+        }
+    }
+
+    companion object {
+        private val PATTERN = Regex("([0-9]+)(?:\\.([0-9]{1,8}))?")
+    }
+}
+
 @Serializable(with = TalerAmount.Serializer::class)
 class TalerAmount {
     val value: Long
@@ -148,6 +206,8 @@ class TalerAmount {
             tmp
         }
     }
+
+    fun number(): DecimalNumber = DecimalNumber(value, frac)
 
     override fun equals(other: Any?): Boolean {
         return other is TalerAmount &&

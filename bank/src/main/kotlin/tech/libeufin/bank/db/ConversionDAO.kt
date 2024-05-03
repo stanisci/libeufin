@@ -20,7 +20,6 @@
 package tech.libeufin.bank.db
 
 import tech.libeufin.bank.ConversionRate
-import tech.libeufin.bank.DecimalNumber
 import tech.libeufin.bank.RoundingMode
 import tech.libeufin.common.*
 import tech.libeufin.common.db.*
