@@ -142,6 +142,29 @@ class PaymentDAO(private val db: Database) {
         }
     }
 
+    /** Register an incoming payment */
+    suspend fun registerIncoming(
+        paymentData: IncomingPayment
+    ): IncomingRegistrationResult.Success = db.conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT out_found, out_tx_id
+            FROM register_incoming((?,?)::taler_amount,?,?,?,?)
+        """)
+        val executionTime = paymentData.executionTime.micros()
+        stmt.setLong(1, paymentData.amount.value)
+        stmt.setInt(2, paymentData.amount.frac)
+        stmt.setString(3, paymentData.wireTransferSubject)
+        stmt.setLong(4, executionTime)
+        stmt.setString(5, paymentData.debitPaytoUri)
+        stmt.setString(6, paymentData.bankId)
+        stmt.one {
+            IncomingRegistrationResult.Success(
+                it.getLong("out_tx_id"),
+                !it.getBoolean("out_found")
+            )
+        }
+    }
+
     /** Query history of incoming transactions */
     suspend fun revenueHistory(
         params: HistoryParams

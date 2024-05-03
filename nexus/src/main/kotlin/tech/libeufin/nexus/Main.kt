@@ -297,15 +297,14 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
     ).convert { Payto.parse(it).expectIban() }
 
     override fun run() = cliCmd(logger, common.log) {
-        val cfg = loadConfig(common.config)
-        val dbCfg = cfg.dbConfig()
-        val currency = cfg.requireString("nexus-ebics", "currency")
+        val cfg = loadNexusConfig(common.config)
+        val dbCfg = cfg.config.dbConfig()
 
         val subject = payto.message ?: subject ?: throw Exception("Missing subject")
         val amount = payto.amount ?: amount ?: throw Exception("Missing amount")
 
-        if (amount.currency != currency)
-            throw Exception("Wrong currency: expected $currency got ${amount.currency}")
+        if (amount.currency != cfg.currency)
+            throw Exception("Wrong currency: expected ${cfg.currency} got ${amount.currency}")
 
         val bankId = run {
             val bytes = ByteArray(16)
@@ -313,7 +312,7 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
             Base32Crockford.encode(bytes)
         }
 
-        Database(dbCfg, currency).use { db ->
+        Database(dbCfg, amount.currency).use { db ->
             ingestIncomingPayment(db, 
                 IncomingPayment(
                     amount = amount,
@@ -321,7 +320,8 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
                     wireTransferSubject = subject,
                     executionTime = Instant.now(),
                     bankId = bankId
-                )
+                ),
+                cfg.accountType
             )
         }
     }

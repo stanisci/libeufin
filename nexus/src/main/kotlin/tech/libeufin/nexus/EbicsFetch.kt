@@ -118,18 +118,31 @@ suspend fun ingestOutgoingPayment(
  */
 suspend fun ingestIncomingPayment(
     db: Database,
-    payment: IncomingPayment
+    payment: IncomingPayment,
+    accountType: AccountType
 ) {
     suspend fun bounce(msg: String) {
-        val result = db.payment.registerMalformedIncoming(
-            payment,
-            payment.amount, 
-            Instant.now()
-        )
-        if (result.new) {
-            logger.info("$payment bounced in '${result.bounceId}': $msg")
-        } else {
-            logger.debug("$payment already seen and bounced in '${result.bounceId}': $msg")
+        when (accountType) {
+            AccountType.exchange -> {
+                val result = db.payment.registerMalformedIncoming(
+                    payment,
+                    payment.amount, 
+                    Instant.now()
+                )
+                if (result.new) {
+                    logger.info("$payment bounced in '${result.bounceId}': $msg")
+                } else {
+                    logger.debug("$payment already seen and bounced in '${result.bounceId}': $msg")
+                }
+            }
+            AccountType.normal -> {
+                val res = db.payment.registerIncoming(payment)
+                if (res.new) {
+                    logger.info("$payment")
+                } else {
+                    logger.debug("$payment already seen")
+                }
+            }
         }
     }
     runCatching { parseIncomingTxMetadata(payment.wireTransferSubject) }.fold(
@@ -164,7 +177,7 @@ private suspend fun ingestDocument(
                         logger.debug("IGNORE $it")
                     } else {
                         when (it) {
-                            is IncomingPayment -> ingestIncomingPayment(db, it)
+                            is IncomingPayment -> ingestIncomingPayment(db, it, cfg.accountType)
                             is OutgoingPayment -> ingestOutgoingPayment(db, it)
                             is TxNotification.Reversal -> {
                                 logger.error("BOUNCE '${it.msgId}': ${it.reason}")

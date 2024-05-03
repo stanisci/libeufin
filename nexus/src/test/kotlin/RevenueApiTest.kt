@@ -46,7 +46,7 @@ class RevenueApiTest {
                 },
                 { 
                     // Common credit transactions
-                    ingestIncomingPayment(db, genInPay("ignored"))
+                    ingestIn(db)
                 }
             ),
             ignored = listOf(

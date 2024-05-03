@@ -149,7 +149,12 @@ suspend fun talerableOut(db: Database) {
 /** Ingest a talerable incoming transaction */
 suspend fun talerableIn(db: Database) {
     val reserve_pub = ShortHashCode.rand()
-    ingestIncomingPayment(db, genInPay("history test with $reserve_pub reserve pub"))
+    ingestIncomingPayment(db, genInPay("history test with $reserve_pub reserve pub"), AccountType.exchange)
+}
+
+/** Ingest an incoming transaction */
+suspend fun ingestIn(db: Database) {
+    ingestIncomingPayment(db, genInPay("ignored"), AccountType.normal)
 }
 
 

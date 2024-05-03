@@ -37,7 +37,7 @@ class ApiConfig(config: TalerConfig, section: String) {
 
 /** Configuration for libeufin-nexus */
 class NexusConfig(val config: TalerConfig) {
-    private fun requireString(option: String): String = config.requireString("nexus-ebics", option)
+    private fun requireString(option: String, type: String? = null): String = config.requireString("nexus-ebics", option, type)
     private fun requirePath(option: String): Path = config.requirePath("nexus-ebics", option)
 
     /** The bank's currency */
@@ -64,12 +64,16 @@ class NexusConfig(val config: TalerConfig) {
     val clientPrivateKeysPath = requirePath("client_private_keys_file")
 
     val fetch = NexusFetchConfig(config)
-    val dialect = when (val type = requireString("bank_dialect")) {
+    val dialect = when (val type = requireString("bank_dialect", "dialect")) {
         "postfinance" -> Dialect.postfinance
         "gls" -> Dialect.gls
-        else -> throw TalerConfigError.invalid("dialct", "libeufin-nexus", "bank_dialect", "expected 'postfinance' or 'gls' got '$type'")
+        else -> throw TalerConfigError.invalid("bank dialect", "libeufin-nexus", "bank_dialect", "expected 'postfinance' or 'gls' got '$type'")
     }
-
+    val accountType = when (val type = requireString("account_type", "account type")) {
+        "normal" -> AccountType.normal
+        "exchange" -> AccountType.exchange
+        else -> throw TalerConfigError.invalid("account type", "libeufin-nexus", "account_type", "expected 'normal' or 'exchange' got '$type'")
+    }
     val wireGatewayApiCfg = config.apiConf("nexus-httpd-wire-gateway-api")
     val revenueApiCfg = config.apiConf("nexus-httpd-revenue-api")
 }
@@ -104,4 +108,9 @@ fun TalerConfig.apiConf(section: String): ApiConfig? {
 sealed interface AuthMethod {
     data object None: AuthMethod
     data class Bearer(val token: String): AuthMethod
+}
+
+enum class AccountType {
+    normal,
+    exchange
 }

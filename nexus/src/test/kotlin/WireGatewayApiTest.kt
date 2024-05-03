@@ -134,7 +134,7 @@ class WireGatewayApiTest {
             ignored = listOf(
                 {
                     // Ignore malformed incoming transaction
-                    ingestIncomingPayment(db, genInPay("ignored"))
+                    ingestIn(db)
                 },
                 {
                     // Ignore outgoing transaction
@@ -167,7 +167,7 @@ class WireGatewayApiTest {
                 },
                 {
                     // Ignore malformed incoming transaction
-                    ingestIncomingPayment(db, genInPay("ignored"))
+                    ingestIn(db)
                 },
                 {
                     // Ignore malformed outgoing transaction
