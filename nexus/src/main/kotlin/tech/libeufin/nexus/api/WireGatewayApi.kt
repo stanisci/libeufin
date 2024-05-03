@@ -43,6 +43,7 @@ fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) = authApi(cfg.wireGat
     post("/taler-wire-gateway/transfer") {
         val req = call.receive<TransferRequest>()
         cfg.checkCurrency(req.amount)
+        req.credit_account.expectRequestIban()
         val bankId = run {
             val bytes = ByteArray(16)
             kotlin.random.Random.nextBytes(bytes)
@@ -87,6 +88,7 @@ fun Routing.wireGatewayApi(db: Database, cfg: NexusConfig) = authApi(cfg.wireGat
     post("/taler-wire-gateway/admin/add-incoming") {
         val req = call.receive<AddIncomingRequest>()
         cfg.checkCurrency(req.amount)
+        req.debit_account.expectRequestIban()
         val timestamp = Instant.now()
         val bankId = run {
             val bytes = ByteArray(16)

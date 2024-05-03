@@ -100,6 +100,13 @@ class WireGatewayApiTest {
                 "request_uid" to Base32Crockford.encode(ByteArray(65).rand())
             }
         }.assertBadRequest()
+
+        // Bad payto kind
+        client.postA("/taler-wire-gateway/transfer") {
+            json(valid_req) { 
+                "credit_account" to "payto://x-taler-bank/bank.hostname.test/bar"
+            }
+        }.assertBadRequest()
     }
     
     // GET /taler-wire-gateway/history/incoming
@@ -207,6 +214,13 @@ class WireGatewayApiTest {
         client.postA("/taler-wire-gateway/admin/add-incoming") {
             json(valid_req) { 
                 "reserve_pub" to Base32Crockford.encode(ByteArray(31).rand())
+            }
+        }.assertBadRequest()
+
+        // Bad payto kind
+        client.postA("/taler-wire-gateway/admin/add-incoming") {
+            json(valid_req) { 
+                "debit_account" to "payto://x-taler-bank/bank.hostname.test/bar"
             }
         }.assertBadRequest()
     }

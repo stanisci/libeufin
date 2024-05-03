@@ -20,6 +20,7 @@
 package tech.libeufin.common
 
 import io.ktor.http.*
+import io.ktor.server.plugins.BadRequestException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -242,10 +243,26 @@ sealed class Payto {
         }
     }
 
+    fun expectRequestIban(): IbanPayto {
+        try {
+            return expectIban()
+        } catch (e: Exception) {
+            throw BadRequestException(e.message ?: "", e)
+        }
+    }
+
     fun expectXTalerBank(): XTalerBankPayto {
         return when (this) {
             is XTalerBankPayto -> this
             else -> throw CommonError.Payto("expected a x-taler-bank payto URI got '${parsed.host}'")
+        }
+    }
+
+    fun expectRequestXTalerBank(): XTalerBankPayto {
+        try {
+            return expectXTalerBank()
+        } catch (e: Exception) {
+            throw BadRequestException(e.message ?: "", e)
         }
     }
 
