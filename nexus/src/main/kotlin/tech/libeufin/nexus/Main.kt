@@ -31,6 +31,8 @@ import com.github.ajalt.clikt.parameters.arguments.*
 import com.github.ajalt.clikt.parameters.groups.*
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.*
+import io.ktor.client.*
+import io.ktor.client.plugins.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
 import kotlin.io.path.*
@@ -44,11 +46,11 @@ import tech.libeufin.common.api.*
 import tech.libeufin.common.crypto.*
 import tech.libeufin.common.db.DatabaseConfig
 import tech.libeufin.nexus.api.*
+import tech.libeufin.nexus.ebics.*
 import tech.libeufin.nexus.db.Database
 import tech.libeufin.nexus.db.InitiatedPayment
 import java.nio.file.Path
-import java.time.Instant
-import java.time.ZoneId
+import java.time.*
 import java.time.format.DateTimeFormatter
 import javax.crypto.EncryptedPrivateKeyInfo
 
@@ -202,6 +204,64 @@ enum class ListKind {
     }
 }
 
+class EbicsDownload: CliktCommand("Perform EBICS requests", name = "ebics-btd") {
+    private val common by CommonOption()
+    private val type by option().default("BTD")
+    private val name by option()
+    private val scope by option()
+    private val messageName by option()
+    private val messageVersion by option()
+    private val container by option()
+    private val option by option()
+    private val ebicsLog by option(
+        "--debug-ebics",
+        help = "Log EBICS content at SAVEDIR",
+    )
+    private val pinnedStart by option(
+        help = "Constant YYYY-MM-DD date for the earliest document" +
+                " to download (only consumed in --transient mode).  The" +
+                " latest document is always until the current time."
+    )
+
+    override fun run() = cliCmd(logger, common.log) {
+        val cfg = extractEbicsConfig(common.config)
+        val (clientKeys, bankKeys) = expectFullKeys(cfg)
+        val pinnedStartVal = pinnedStart
+        val pinnedStartArg = if (pinnedStartVal != null) {
+            logger.debug("Pinning start date to: $pinnedStartVal")
+            // Converting YYYY-MM-DD to Instant.
+            LocalDate.parse(pinnedStartVal).atStartOfDay(ZoneId.of("UTC")).toInstant()
+        } else null
+        val client = HttpClient {
+            install(HttpTimeout) {
+                // It can take a lot of time for the bank to generate documents
+                socketTimeoutMillis = 5 * 60 * 1000
+            }
+        }
+        val fileLogger = FileLogger(ebicsLog)
+        ebicsDownload(
+            client,
+            cfg,
+            clientKeys,
+            bankKeys,
+            EbicsOrder.V3(type, name, scope, messageName, messageVersion, container, option),
+            pinnedStartArg,
+            null
+        ) { stream ->
+            if (container == "ZIP") {
+                val stream = fileLogger.logFetch(stream, false)
+                stream.unzipEach { fileName, xmlContent ->
+                    println(fileName)
+                    println(xmlContent.readBytes().toString(Charsets.UTF_8))
+                }
+            } else {
+                val stream = fileLogger.logFetch(stream, true) // TODO better name
+                println(stream.readBytes().toString(Charsets.UTF_8))
+            }
+        }
+    }
+}
+
 class ListCmd: CliktCommand("List nexus transactions", name = "list") {
     private val common by CommonOption()
     private val kind: ListKind by argument(
@@ -325,7 +385,7 @@ class ListCmd: CliktCommand("List nexus transactions", name = "list") {
 
 class TestingCmd : CliktCommand("Testing helper commands", name = "testing") {
     init {
-        subcommands(FakeIncoming(), ListCmd())
+        subcommands(FakeIncoming(), ListCmd(), EbicsDownload())
     }
 
     override fun run() = Unit
