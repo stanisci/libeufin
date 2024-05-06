@@ -62,11 +62,12 @@ enum class Dialect {
                     }
                 }
             }
+            // TODO for GLS we might have to fetch the same kind of files from multiple orders
             gls -> when (doc) {
                 SupportedDocument.PAIN_002 -> EbicsOrder.V3("BTD", "REP", "DE", "pain.002", null, "ZIP", "SCT")
                 SupportedDocument.CAMT_052 -> EbicsOrder.V3("BTD", "STM", "DE", "camt.052", null, "ZIP")
                 SupportedDocument.CAMT_053 -> EbicsOrder.V3("BTD", "EOP", "DE", "camt.053", null, "ZIP")
-                SupportedDocument.CAMT_054 -> EbicsOrder.V3("BTD", "STM", "DE", "camt.054", null, "ZIP")
+                SupportedDocument.CAMT_054 -> EbicsOrder.V3("BTD", "STM", "DE", "camt.054", null, "ZIP", "SCI")
                 SupportedDocument.PAIN_002_LOGS -> EbicsOrder.V3("HAC")
             }
         }

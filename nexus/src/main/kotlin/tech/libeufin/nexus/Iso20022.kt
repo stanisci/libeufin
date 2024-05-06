@@ -343,8 +343,10 @@ fun parseTx(
         }
     }
 
-    fun XmlDestructor.bookDate() =
-        one("BookgDt").one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
+    fun XmlDestructor.executionDate(): Instant {
+        // Value date if present else booking date
+        return (opt("ValDt") ?: one("BookgDt")).one("Dt").date().atStartOfDay().toInstant(ZoneOffset.UTC)
+    }
 
     fun XmlDestructor.nexusId(): String? =
         opt("Refs") { opt("EndToEndId")?.textProvided() ?: opt("MsgId")?.text() }
@@ -392,7 +394,7 @@ fun parseTx(
                 each("Ntry") {
                     val entryRef = opt("AcctSvcrRef")?.text()
                     assertBooked(entryRef)
-                    val bookDate = bookDate()
+                    val bookDate = executionDate()
                     val kind = one("CdtDbtInd").enum<Kind>()
                     val amount = amount(acceptedCurrency)
                     one("NtryDtls").one("TxDtls") { // TODO handle batches
@@ -446,6 +448,36 @@ fun parseTx(
             opt("BkToCstmrStmt")?.each("Stmt") { // Camt.053
                 parseGlsInner()
             }
+            opt("BkToCstmrDbtCdtNtfctn")?.each("Ntfctn") { // Camt.054
+                opt("Acct") {
+                    // Sanity check on currency and IBAN ?
+                }
+                each("Ntry") {
+                    val entryRef = opt("AcctSvcrRef")?.text()
+                    assertBooked(entryRef)
+                    val bookDate = executionDate()
+                    val kind = one("CdtDbtInd").enum<Kind>()
+                    val amount = amount(acceptedCurrency)
+                    if (!isReversalCode()) {
+                        one("NtryDtls").one("TxDtls") {
+                            val txRef = one("Refs").opt("AcctSvcrRef")?.text()
+                            val subject = opt("RmtInf")?.map("Ustrd") { text() }?.joinToString("")
+                            if (kind == Kind.CRDT) {
+                                val bankId = one("Refs").opt("TxId")?.text()
+                                val debtorPayto = opt("RltdPties") { payto("Dbtr") }
+                                txsInfo.add(TxInfo.Credit(
+                                    ref = bankId ?: txRef ?: entryRef,
+                                    bookDate = bookDate,
+                                    bankId = bankId,
+                                    amount = amount,
+                                    subject = subject,
+                                    debtorPayto = debtorPayto
+                                ))
+                            }
+                        }
+                    }
+                }
+            }
         }
         Dialect.postfinance -> {
             opt("BkToCstmrStmt")?.each("Stmt") { // Camt.053
@@ -455,7 +487,7 @@ fun parseTx(
                 each("Ntry") {
                     val entryRef = opt("AcctSvcrRef")?.text()
                     assertBooked(entryRef)
-                    val bookDate = bookDate()
+                    val bookDate = executionDate()
                     if (isReversalCode()) {
                         one("NtryDtls").one("TxDtls") {
                             val kind = one("CdtDbtInd").enum<Kind>()
@@ -481,7 +513,7 @@ fun parseTx(
                 each("Ntry") {
                     val entryRef = opt("AcctSvcrRef")?.text()
                     assertBooked(entryRef)
-                    val bookDate = bookDate()
+                    val bookDate = executionDate()
                     if (!isReversalCode()) {
                         one("NtryDtls").each("TxDtls") {
                             val kind = one("CdtDbtInd").enum<Kind>()

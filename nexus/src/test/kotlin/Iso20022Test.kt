@@ -163,4 +163,22 @@ class Iso20022Test {
             txs
         )
     }
+
+    @Test
+    fun gls_camt054() {
+        val content = Files.newInputStream(Path("sample/platform/gls_camt054.xml"))
+        val txs = parseTx(content, "EUR", Dialect.gls)
+        assertEquals(
+            listOf(
+                IncomingPayment(
+                    bankId = "IS11PGENODEFF2DA8899900378806",
+                    amount = TalerAmount("EUR:2.5"),
+                    wireTransferSubject = "Test ICT",
+                    executionTime = instant("2024-05-05"),
+                    debitPaytoUri = "payto://iban/DE84500105177118117964?receiver-name=Mr+Test"
+                )
+            ),
+            txs
+        )
+    }
 }
