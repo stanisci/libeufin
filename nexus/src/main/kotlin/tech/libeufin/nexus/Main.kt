@@ -222,6 +222,9 @@ class EbicsDownload: CliktCommand("Perform EBICS requests", name = "ebics-btd") 
                 " to download (only consumed in --transient mode).  The" +
                 " latest document is always until the current time."
     )
+    private val dryRun by option().flag()
+
+    class DryRun: Exception()
 
     override fun run() = cliCmd(logger, common.log) {
         val cfg = extractEbicsConfig(common.config)
@@ -239,26 +242,31 @@ class EbicsDownload: CliktCommand("Perform EBICS requests", name = "ebics-btd") 
             }
         }
         val fileLogger = FileLogger(ebicsLog)
-        ebicsDownload(
-            client,
-            cfg,
-            clientKeys,
-            bankKeys,
-            EbicsOrder.V3(type, name, scope, messageName, messageVersion, container, option),
-            pinnedStartArg,
-            null
-        ) { stream ->
-            if (container == "ZIP") {
-                val stream = fileLogger.logFetch(stream, false)
-                stream.unzipEach { fileName, xmlContent ->
-                    println(fileName)
-                    println(xmlContent.readBytes().toString(Charsets.UTF_8))
+        try {
+            ebicsDownload(
+                client,
+                cfg,
+                clientKeys,
+                bankKeys,
+                EbicsOrder.V3(type, name, scope, messageName, messageVersion, container, option),
+                pinnedStartArg,
+                null
+            ) { stream ->
+                if (container == "ZIP") {
+                    val stream = fileLogger.logFetch(stream, false)
+                    stream.unzipEach { fileName, xmlContent ->
+                        println(fileName)
+                        println(xmlContent.readBytes().toString(Charsets.UTF_8))
+                    }
+                } else {
+                    val stream = fileLogger.logFetch(stream, true) // TODO better name
+                    println(stream.readBytes().toString(Charsets.UTF_8))
                 }
-            } else {
-                val stream = fileLogger.logFetch(stream, true) // TODO better name
-                println(stream.readBytes().toString(Charsets.UTF_8))
+                if (dryRun) throw DryRun()
             }
-        }
+        } catch (e: DryRun) {
+            // We throw DryRun to not consume files while testing
+        }        
     }
 }
 
