@@ -131,4 +131,25 @@ class CliTest {
             assertEquals(statusCode, result.statusCode)
         }
     }
+
+    /** Test list cmds */
+    @Test
+    fun listCheck() = setup { db, _ ->
+        fun check() {
+            for (list in listOf("incoming", "outgoing", "initiated")) {
+                val result = nexusCmd.test("testing list $list -c conf/test.conf")
+                assertEquals(0, result.statusCode)
+            }
+        }
+        // Check empty
+        check()
+        // Check with transactions
+        ingestIn(db)
+        ingestOut(db)
+        check()
+        // Check with taler transactions
+        talerableOut(db)
+        talerableIn(db)
+        check()
+    }
 }

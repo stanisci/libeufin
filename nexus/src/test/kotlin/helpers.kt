@@ -157,6 +157,10 @@ suspend fun ingestIn(db: Database) {
     ingestIncomingPayment(db, genInPay("ignored"), AccountType.normal)
 }
 
+/** Ingest an outgoing transaction */
+suspend fun ingestOut(db: Database) {
+    ingestOutgoingPayment(db, genOutPay("ignored"))
+}
 
 /* ----- Auth ----- */
 

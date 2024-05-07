@@ -225,7 +225,10 @@ class PaymentDAO(private val db: Database) {
                 ,execution_time
                 ,credit_payto_uri
                 ,message_id
+                ,wtid
+                ,exchange_base_url
             FROM outgoing_transactions
+                LEFT OUTER JOIN talerable_outgoing_transactions using (outgoing_transaction_id)
             ORDER BY execution_time
         """)
         stmt.all {
@@ -234,7 +237,9 @@ class PaymentDAO(private val db: Database) {
                 amount = it.getDecimal("amount"),
                 subject = it.getString("wire_transfer_subject"),
                 creditor = it.getString("credit_payto_uri"),
-                id = it.getString("message_id")
+                id = it.getString("message_id"),
+                wtid = it.getBytes("wtid")?.run { ShortHashCode(this) },
+                exchangeBaseUrl = it.getString("exchange_base_url")
             )
         }
     }
@@ -289,7 +294,8 @@ data class OutgoingTxMetadata(
     val subject: String?,
     val creditor: String?,
     val id: String,
-    // TODO when merged with v11
+    val wtid: ShortHashCode?,
+    val exchangeBaseUrl: String?
 )
 
 /** Initiated metadata for debugging */

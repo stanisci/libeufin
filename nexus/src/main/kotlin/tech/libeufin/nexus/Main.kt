@@ -358,14 +358,16 @@ class ListCmd: CliktCommand("List nexus transactions", name = "list") {
                     val txs = db.payment.metadataOutgoing()
                     Pair(
                         listOf(
-                            "transaction", "id", "creditor", "subject"
+                            "transaction", "id", "creditor", "wtid", "exchange URL", "subject"
                         ),
                         txs.map {
                             listOf(
                                 "${it.date} ${it.amount}",
                                 it.id,
                                 fmtPayto(it.creditor),
-                                it.subject ?: ""
+                                it.wtid?.toString() ?: "",
+                                it.exchangeBaseUrl ?: "",
+                                it.subject ?: "",
                             )
                         }
                     )
