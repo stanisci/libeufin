@@ -155,7 +155,7 @@ suspend fun doKeysRequestAndUpdateState(
  * @param configFile location of the configuration entry point.
  * @return internal representation of the configuration.
  */
-fun extractEbicsConfig(configFile: Path?): NexusConfig {
+fun loadNexusConfig(configFile: Path?): NexusConfig {
     val config = loadConfig(configFile)
     return NexusConfig(config)
 }
@@ -197,8 +197,8 @@ class EbicsSetup: CliktCommand("Set up the EBICS subscriber") {
      * This function collects the main steps of setting up an EBICS access.
      */
     override fun run() = cliCmd(logger, common.log) {
-        val cfg = extractEbicsConfig(common.config)
-        val client =  HttpClient {
+        val cfg = loadNexusConfig(common.config)
+        val client = HttpClient {
             install(HttpTimeout) {
                 // It can take a lot of time for the bank to generate documents
                 socketTimeoutMillis = 5 * 60 * 1000

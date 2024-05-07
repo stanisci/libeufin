@@ -23,6 +23,8 @@ import tech.libeufin.common.BankPaytoCtx
 import tech.libeufin.common.Payto
 import tech.libeufin.common.TalerAmount
 import tech.libeufin.common.DecimalNumber
+import tech.libeufin.common.TalerProtocolTimestamp
+import tech.libeufin.common.asInstant
 import java.sql.ResultSet
 
 fun ResultSet.getAmount(name: String, currency: String): TalerAmount {
@@ -44,6 +46,10 @@ fun ResultSet.getDecimal(name: String): DecimalNumber {
         getLong("${name}_val"),
         getInt("${name}_frac")
     )
+}
+
+fun ResultSet.getTalerTimestamp(name: String): TalerProtocolTimestamp{
+    return TalerProtocolTimestamp(getLong(name).asInstant())
 }
 
 fun ResultSet.getBankPayto(payto: String, name: String, ctx: BankPaytoCtx): String {

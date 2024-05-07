@@ -62,8 +62,7 @@ import kotlin.io.path.exists
 import kotlin.io.path.readText
 
 private val logger: Logger = LoggerFactory.getLogger("libeufin-bank")
-// Dirty local variable to stop the server in test TODO remove this ugly hack
-var engine: ApplicationEngine? = null
+
 
 
 /**
@@ -117,7 +116,7 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig()
         val dbCfg = cfg.loadDbConfig()
-        val serverCfg = cfg.loadServerConfig()
+        val serverCfg = cfg.loadServerConfig("libeufin-bank")
         Database(dbCfg, ctx.regionalCurrency, ctx.fiatCurrency).use { db ->
             if (ctx.allowConversion) {
                 logger.info("Ensure exchange account exists")
@@ -142,25 +141,9 @@ class ServeBank : CliktCommand("Run libeufin-bank HTTP server", name = "serve") 
                 db.conn { it.execSQLUpdate(sqlProcedures.readText()) }
                 // Remove conversion info from the database ?
             }
-            
-            val env = applicationEngineEnvironment {
-                when (serverCfg) {
-                    is ServerConfig.Tcp -> {
-                        for (addr in InetAddress.getAllByName(serverCfg.addr)) {
-                            connector {
-                                port = serverCfg.port
-                                host = addr.hostAddress
-                            }
-                        }
-                    }
-                    is ServerConfig.Unix ->
-                        throw Exception("Can only serve libeufin-bank via TCP")
-                }
-                module { corebankWebApp(db, ctx) }
+            serve(serverCfg) {
+                corebankWebApp(db, ctx)
             }
-            val local = embeddedServer(Netty, env)
-            engine = local
-            local.start(wait = true)
         }
     }
 }

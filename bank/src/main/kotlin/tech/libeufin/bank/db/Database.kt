@@ -96,13 +96,13 @@ class Database(dbConfig: DatabaseConfig, internal val bankCurrency: String, inte
     /** Listen for new bank transactions for [account] */
     suspend fun <R> listenBank(account: Long, lambda: suspend (Flow<Long>) -> R): R
         = listen(bankTxFlows, account, lambda)
-    /** Listen for new taler outgoing transactions from [account] */
+    /** Listen for new taler outgoing transactions from [exchange] */
     suspend fun <R> listenOutgoing(exchange: Long, lambda: suspend (Flow<Long>) -> R): R
         = listen(outgoingTxFlows, exchange, lambda)
-    /** Listen for new taler incoming transactions to [account] */
+    /** Listen for new taler incoming transactions to [exchange] */
     suspend fun <R> listenIncoming(exchange: Long, lambda: suspend (Flow<Long>) -> R): R
         = listen(incomingTxFlows, exchange, lambda)
-    /** Listen for new taler outgoing transactions to [account] */
+    /** Listen for new incoming transactions to [merchant] */
     suspend fun <R> listenRevenue(merchant: Long, lambda: suspend (Flow<Long>) -> R): R
         = listen(revenueTxFlows, merchant, lambda)
     /** Listen for new withdrawal confirmations */
@@ -163,8 +163,4 @@ enum class AbortResult {
     Success,
     UnknownOperation,
     AlreadyConfirmed
-}
-
-fun ResultSet.getTalerTimestamp(name: String): TalerProtocolTimestamp{
-    return TalerProtocolTimestamp(getLong(name).asInstant())
 }

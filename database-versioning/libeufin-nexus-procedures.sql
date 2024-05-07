@@ -33,6 +33,8 @@ CREATE FUNCTION register_outgoing(
   ,IN in_execution_time INT8
   ,IN in_credit_payto_uri TEXT
   ,IN in_message_id TEXT
+  ,IN in_wtid BYTEA
+  ,IN in_exchange_url TEXT
   ,OUT out_tx_id INT8
   ,OUT out_found BOOLEAN
   ,OUT out_initiated BOOLEAN
@@ -79,6 +81,19 @@ ELSE
     WHERE request_uid = in_message_id
     RETURNING true INTO out_initiated;
 END IF;
+
+-- Register as talerable if contains wtid and exchange URL
+IF in_wtid IS NOT NULL OR in_exchange_url IS NOT NULL THEN
+  INSERT INTO talerable_outgoing_transactions (
+    outgoing_transaction_id,
+    wtid,
+    exchange_base_url
+  ) VALUES (out_tx_id, in_wtid, in_exchange_url)
+    ON CONFLICT (wtid) DO NOTHING;
+  IF FOUND THEN
+    PERFORM pg_notify('outgoing_tx', out_tx_id::text);
+  END IF;
+END IF;
 END $$;
 COMMENT ON FUNCTION register_outgoing
   IS 'Register an outgoing transaction and optionally reconciles the related initiated transaction with it';
@@ -116,6 +131,7 @@ ELSE
     ,in_debit_payto_uri
     ,in_bank_id
   ) RETURNING incoming_transaction_id INTO out_tx_id;
+  PERFORM pg_notify('revenue_tx', out_tx_id::text);
 END IF;
 END $$;
 COMMENT ON FUNCTION register_incoming
@@ -216,7 +232,7 @@ BEGIN
 -- Check conflict
 IF EXISTS (
   SELECT FROM talerable_incoming_transactions 
-  JOIN incoming_transactions ON talerable_incoming_transactions.incoming_transaction_id=incoming_transactions.incoming_transaction_id
+  JOIN incoming_transactions USING(incoming_transaction_id)
   WHERE reserve_public_key = in_reserve_public_key
   AND bank_id != in_bank_id
 ) THEN
@@ -239,9 +255,71 @@ IF NOT EXISTS(SELECT 1 FROM talerable_incoming_transactions WHERE incoming_trans
     out_tx_id
     ,in_reserve_public_key
   );
+  PERFORM pg_notify('incoming_tx', out_tx_id::text);
 END IF;
 END $$;
 COMMENT ON FUNCTION register_incoming_and_talerable IS '
 Creates one row in the incoming transactions table and one row
 in the talerable transactions table.  The talerable row links the
 incoming one.';
+
+CREATE FUNCTION taler_transfer(
+  IN in_request_uid BYTEA,
+  IN in_wtid BYTEA,
+  IN in_subject TEXT,
+  IN in_amount taler_amount,
+  IN in_exchange_base_url TEXT,
+  IN in_credit_account_payto TEXT,
+  IN in_bank_id TEXT,
+  IN in_timestamp INT8,
+  -- Error status
+  OUT out_request_uid_reuse BOOLEAN,
+  -- Success return
+  OUT out_tx_row_id INT8,
+  OUT out_timestamp INT8
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+-- Check for idempotence and conflict
+SELECT (amount != in_amount 
+          OR credit_payto_uri != in_credit_account_payto
+          OR exchange_base_url != in_exchange_base_url
+          OR wtid != in_wtid)
+        ,transfer_operations.initiated_outgoing_transaction_id, initiation_time
+  INTO out_request_uid_reuse, out_tx_row_id, out_timestamp
+  FROM transfer_operations
+      JOIN initiated_outgoing_transactions
+        ON transfer_operations.initiated_outgoing_transaction_id=initiated_outgoing_transactions.initiated_outgoing_transaction_id 
+  WHERE transfer_operations.request_uid = in_request_uid;
+IF FOUND THEN
+  RETURN;
+END IF;
+-- Initiate bank transfer
+INSERT INTO initiated_outgoing_transactions (
+  amount
+  ,wire_transfer_subject
+  ,credit_payto_uri
+  ,initiation_time
+  ,request_uid
+) VALUES (
+  in_amount
+  ,in_subject
+  ,in_credit_account_payto
+  ,in_timestamp
+  ,in_bank_id
+) RETURNING initiated_outgoing_transaction_id INTO out_tx_row_id;
+-- Register outgoing transaction
+INSERT INTO transfer_operations(
+  initiated_outgoing_transaction_id
+  ,request_uid
+  ,wtid
+  ,exchange_base_url
+) VALUES (
+  out_tx_row_id
+  ,in_request_uid
+  ,in_wtid
+  ,in_exchange_base_url
+);
+out_timestamp = in_timestamp;
+PERFORM pg_notify('outgoing_tx', out_tx_row_id::text);
+END $$;

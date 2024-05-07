@@ -34,3 +34,16 @@ fun getVersion(): String {
         "version.txt", ClassLoader.getSystemClassLoader()
     ).readText()
 }
+
+sealed interface ServerConfig {
+    data class Unix(val path: String, val mode: Int): ServerConfig
+    data class Tcp(val addr: String, val port: Int): ServerConfig
+}
+
+fun TalerConfig.loadServerConfig(section: String): ServerConfig {
+    return when (val method = requireString(section, "serve")) {
+        "tcp" -> ServerConfig.Tcp(lookupString(section, "address") ?: requireString(section, "bind_to"), requireNumber(section, "port"))
+        "unix" -> ServerConfig.Unix(requireString(section, "unixpath"), requireNumber(section, "unixpath_mode"))
+        else -> throw TalerConfigError.invalid("server method", section, "serve", "expected 'tcp' or 'unix' got '$method'")
+    }
+}

@@ -444,8 +444,8 @@ class TalerConfig internal constructor(
         return str
     }
 
-    fun requireString(section: String, option: String): String  =
-        lookupString(section, option) ?: throw TalerConfigError.missing("string", section, option)
+    fun requireString(section: String, option: String, type: String? = null): String  =
+        lookupString(section, option) ?: throw TalerConfigError.missing(type ?: "string", section, option)
 
     fun requireNumber(section: String, option: String): Int {
         val raw = lookupString(section, option) ?: throw TalerConfigError.missing("number", section, option)

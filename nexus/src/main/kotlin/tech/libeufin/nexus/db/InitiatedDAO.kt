@@ -22,6 +22,7 @@ package tech.libeufin.nexus.db
 import tech.libeufin.common.asInstant
 import tech.libeufin.common.db.all
 import tech.libeufin.common.db.executeUpdateViolation
+import tech.libeufin.common.db.oneUniqueViolation
 import tech.libeufin.common.db.getAmount
 import tech.libeufin.common.db.oneOrNull
 import tech.libeufin.common.micros
@@ -32,9 +33,9 @@ import java.time.Instant
 class InitiatedDAO(private val db: Database) {
 
     /** Outgoing payments initiation result */
-    enum class PaymentInitiationResult {
-        REQUEST_UID_REUSE,
-        SUCCESS
+    sealed interface PaymentInitiationResult {
+        data class Success(val id: Long): PaymentInitiationResult
+        data object RequestUidReuse: PaymentInitiationResult
     }
 
     /** Register a new pending payment in the database */
@@ -47,16 +48,18 @@ class InitiatedDAO(private val db: Database) {
              ,initiation_time
              ,request_uid
            ) VALUES ((?,?)::taler_amount,?,?,?,?)
+           RETURNING initiated_outgoing_transaction_id
         """)
+        // TODO check payto uri
         stmt.setLong(1, paymentData.amount.value)
         stmt.setInt(2, paymentData.amount.frac)
         stmt.setString(3, paymentData.wireTransferSubject)
         stmt.setString(4, paymentData.creditPaytoUri.toString())
         stmt.setLong(5, paymentData.initiationTime.micros())
         stmt.setString(6, paymentData.requestUid)
-        if (stmt.executeUpdateViolation())
-            return@conn PaymentInitiationResult.SUCCESS
-        return@conn PaymentInitiationResult.REQUEST_UID_REUSE
+        stmt.oneUniqueViolation(PaymentInitiationResult.RequestUidReuse) {
+            PaymentInitiationResult.Success(it.getLong("initiated_outgoing_transaction_id"))
+        }
     }
 
     /** Register EBICS submission success */

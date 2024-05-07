@@ -20,6 +20,7 @@
 package tech.libeufin.common
 
 import io.ktor.http.*
+import io.ktor.server.plugins.BadRequestException
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -67,7 +68,6 @@ data class TalerProtocolTimestamp(
             } else {
                 encoder.encodeLong(value.epochSecond)
             }
-            
         }
     
         override fun deserialize(decoder: Decoder): Instant {
@@ -292,10 +292,7 @@ sealed class Payto {
 
     /** Transform a payto URI to its bank form, using [name] as the receiver-name and the bank [ctx] */
     fun bank(name: String, ctx: BankPaytoCtx): String = when (this) {
-        is IbanPayto -> {
-            val bic = if (ctx.bic != null) "${ctx.bic}/" else ""
-            "payto://iban/$bic$iban?receiver-name=${name.encodeURLParameter()}"
-        }
+        is IbanPayto -> IbanPayto.build(iban.toString(), ctx.bic, name)
         is XTalerBankPayto -> "payto://x-taler-bank/${ctx.hostname ?: "localhost"}/$username?receiver-name=${name.encodeURLParameter()}"
     }
 
@@ -306,10 +303,26 @@ sealed class Payto {
         }
     }
 
+    fun expectRequestIban(): IbanPayto {
+        try {
+            return expectIban()
+        } catch (e: Exception) {
+            throw BadRequestException(e.message ?: "", e)
+        }
+    }
+
     fun expectXTalerBank(): XTalerBankPayto {
         return when (this) {
             is XTalerBankPayto -> this
             else -> throw CommonError.Payto("expected a x-taler-bank payto URI got '${parsed.host}'")
+        }
+    }
+
+    fun expectRequestXTalerBank(): XTalerBankPayto {
+        try {
+            return expectXTalerBank()
+        } catch (e: Exception) {
+            throw BadRequestException(e.message ?: "", e)
         }
     }
 
@@ -393,10 +406,7 @@ class IbanPayto internal constructor(
     override fun toString(): String = parsed.toString()
 
     /** Transform an IBAN payto URI to its full form, using [defaultName] if receiver-name is missing */
-    fun full(defaultName: String): String {
-        val bic = if (this.bic != null) "$bic/" else ""
-        return "payto://iban/$bic$iban?receiver-name=${(receiverName ?: defaultName).encodeURLParameter()}"
-    }
+    fun full(defaultName: String): String = build(iban.toString(), bic, receiverName ?: defaultName)
 
     internal object Serializer : KSerializer<IbanPayto> {
         override val descriptor: SerialDescriptor =
@@ -412,6 +422,12 @@ class IbanPayto internal constructor(
     }
 
     companion object {
+        fun build(iban: String, bic: String?, name: String?): String {
+            val bic = if (bic != null) "$bic/" else ""
+            val name = if (name != null) "?receiver-name=${name.encodeURLParameter()}" else ""
+            return "payto://iban/$bic$iban$name"
+        }
+
         fun rand(): IbanPayto {
             return parse("payto://iban/SANDBOXX/${IBAN.rand()}").expectIban()
         }

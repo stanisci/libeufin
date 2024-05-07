@@ -24,10 +24,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlinx.coroutines.runBlocking
-import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.db.dbInit
-import tech.libeufin.common.db.pgDataSource
-import tech.libeufin.common.fromFile
+import tech.libeufin.common.*
+import tech.libeufin.common.db.*
 import tech.libeufin.nexus.*
 import tech.libeufin.nexus.db.Database
 import tech.libeufin.nexus.db.InitiatedPayment
@@ -49,17 +47,17 @@ fun setup(
 ) = runBlocking {
     val config = NEXUS_CONFIG_SOURCE.fromFile(Path("conf/$conf"))
     val dbCfg = config.dbConfig()
-    val ctx = NexusConfig(config)
+    val cfg = NexusConfig(config)
     pgDataSource(dbCfg.dbConnStr).dbInit(dbCfg, "libeufin-nexus", true)
-    Database(dbCfg).use {
-        lambda(it, ctx)
+    Database(dbCfg, cfg.currency).use {
+        lambda(it, cfg)
     }
 }
 
 fun serverSetup(
     conf: String = "test.conf",
     lambda: suspend ApplicationTestBuilder.(Database) -> Unit
-) = setup { db, cfg ->
+) = setup(conf) { db, cfg ->
     testApplication {
         application {
             nexusApi(db, cfg)
@@ -79,7 +77,7 @@ fun getMockedClient(
     followRedirects = false
     engine {
         addHandler {
-                request -> handler(request)
+            request -> handler(request)
         }
     }
 }
@@ -98,21 +96,102 @@ fun genInitPay(
     )
 
 // Generates an incoming payment, given its subject.
-fun genInPay(subject: String) =
-    IncomingPayment(
-        amount = TalerAmount(44, 0, "KUDOS"),
+fun genInPay(subject: String, amount: String = "KUDOS:44"): IncomingPayment {
+    val bankId = run {
+        val bytes = ByteArray(16)
+        kotlin.random.Random.nextBytes(bytes)
+        Base32Crockford.encode(bytes)
+    }
+    return IncomingPayment(
+        amount = TalerAmount(amount),
         debitPaytoUri = "payto://iban/not-used",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
-        bankId = "entropic"
+        bankId = bankId
     )
+}
 
 // Generates an outgoing payment, given its subject and messageId
-fun genOutPay(subject: String, messageId: String) =
-    OutgoingPayment(
+fun genOutPay(subject: String, messageId: String? = null): OutgoingPayment {
+    val id = messageId ?: run {
+        val bytes = ByteArray(16)
+        kotlin.random.Random.nextBytes(bytes)
+        Base32Crockford.encode(bytes)
+    }
+    return OutgoingPayment(
         amount = TalerAmount(44, 0, "KUDOS"),
         creditPaytoUri = "payto://iban/CH4189144589712575493?receiver-name=Test",
         wireTransferSubject = subject,
         executionTime = Instant.now(),
-        messageId = messageId
+        messageId = id
     )
+}
+
+/** Perform a taler outgoing transaction */
+suspend fun ApplicationTestBuilder.transfer() {
+    client.postA("/taler-wire-gateway/transfer") {
+        json {
+            "request_uid" to HashCode.rand()
+            "amount" to "CHF:55"
+            "exchange_base_url" to "http://exchange.example.com/"
+            "wtid" to ShortHashCode.rand()
+            "credit_account" to grothoffPayto
+        }
+    }.assertOk()
+}
+
+/** Ingest a talerable outgoing transaction */
+suspend fun talerableOut(db: Database) {
+    val wtid = ShortHashCode.rand()
+    ingestOutgoingPayment(db, genOutPay("$wtid http://exchange.example.com/"))
+}
+
+/** Ingest a talerable incoming transaction */
+suspend fun talerableIn(db: Database) {
+    val reserve_pub = ShortHashCode.rand()
+    ingestIncomingPayment(db, genInPay("history test with $reserve_pub reserve pub"), AccountType.exchange)
+}
+
+/** Ingest an incoming transaction */
+suspend fun ingestIn(db: Database) {
+    ingestIncomingPayment(db, genInPay("ignored"), AccountType.normal)
+}
+
+
+/* ----- Auth ----- */
+
+/** Auto auth get request */
+suspend inline fun HttpClient.getA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return get(url) {
+        auth()
+        builder(this)
+    }
+}
+
+/** Auto auth post request */
+suspend inline fun HttpClient.postA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return post(url) {
+        auth()
+        builder(this)
+    }
+}
+
+/** Auto auth patch request */
+suspend inline fun HttpClient.patchA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return patch(url) {
+        auth()
+        builder(this)
+    }
+}
+
+/** Auto auth delete request */
+suspend inline fun HttpClient.deleteA(url: String, builder: HttpRequestBuilder.() -> Unit = {}): HttpResponse {
+    return delete(url) {
+        auth()
+        builder(this)
+    }
+}
+
+fun HttpRequestBuilder.auth() {
+    headers["Authorization"] = "Bearer secret-token"
+}

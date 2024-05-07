@@ -18,10 +18,16 @@
  */
 package tech.libeufin.common
 
-private val PATTERN = Regex("[a-z0-9A-Z]{52}")
+private val BASE32_32B_PATTERN = Regex("[a-z0-9A-Z]{52}")
 
 /** Extract the reserve public key from an incoming Taler transaction subject */
 fun parseIncomingTxMetadata(subject: String): EddsaPublicKey {
-    val match = PATTERN.find(subject)?.value ?: throw Exception("Missing reserve public key")
+    val match = BASE32_32B_PATTERN.find(subject)?.value ?: throw Exception("Missing reserve public key")
     return EddsaPublicKey(match)
+}
+
+/** Extract the reserve public key from an incoming Taler transaction subject */
+fun parseOutgoingTxMetadata(subject: String): Pair<ShortHashCode, ExchangeUrl>  {
+    val (wtid, baseUrl) = subject.splitOnce(" ") ?: throw Exception("Malformed outgoing subject")
+    return Pair(EddsaPublicKey(wtid), ExchangeUrl(baseUrl))
 }

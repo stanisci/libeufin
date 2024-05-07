@@ -31,6 +31,7 @@ import com.github.ajalt.clikt.parameters.arguments.*
 import com.github.ajalt.clikt.parameters.groups.*
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.*
+import com.github.ajalt.clikt.core.ProgramResult
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import kotlinx.serialization.json.Json
@@ -75,6 +76,7 @@ fun Instant.fmtDateTime(): String =
 
 fun Application.nexusApi(db: Database, cfg: NexusConfig) = talerApi(logger) {
     wireGatewayApi(db, cfg)
+    revenueApi(db, cfg)
 }
 
 /**
@@ -132,7 +134,7 @@ class InitiatePayment: CliktCommand("Initiate an outgoing payment") {
             Base32Crockford.encode(bytes)
         }
 
-        Database(dbCfg).use { db ->
+        Database(dbCfg, currency).use { db ->
             db.initiated.create(
                 InitiatedPayment(
                     id = -1,
@@ -143,6 +145,44 @@ class InitiatePayment: CliktCommand("Initiate an outgoing payment") {
                     requestUid = requestUid
                 )
             )
+        }
+    }
+}
+
+class Serve : CliktCommand("Run libeufin-nexus HTTP server", name = "serve") {
+    private val common by CommonOption()
+    private val check by option().flag()
+
+    override fun run() = cliCmd(logger, common.log) {
+        val cfg = loadNexusConfig(common.config)
+        
+        if (check) {
+            // Check if the server is to be started
+            val apis = listOf(
+                cfg.wireGatewayApiCfg to "Wire Gateway API",
+                cfg.revenueApiCfg to "Revenue API"
+            )
+            var startServer = false
+            for ((api, name) in apis) {
+                if (api != null) {
+                    startServer = true
+                    logger.info("$name is enabled: starting the server")
+                }
+            }
+            if (!startServer) {
+                logger.info("All APIs are disabled: not starting the server")
+                throw ProgramResult(1)
+            } else {
+                throw ProgramResult(0)
+            }
+        }
+
+        val dbCfg = cfg.config.dbConfig()
+        val serverCfg = cfg.config.loadServerConfig("nexus-httpd")
+        Database(dbCfg, cfg.currency).use { db ->
+            serve(serverCfg) {
+                nexusApi(db, cfg)
+            }
         }
     }
 }
@@ -162,15 +202,14 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
     ).convert { Payto.parse(it).expectIban() }
 
     override fun run() = cliCmd(logger, common.log) {
-        val cfg = loadConfig(common.config)
-        val dbCfg = cfg.dbConfig()
-        val currency = cfg.requireString("nexus-ebics", "currency")
+        val cfg = loadNexusConfig(common.config)
+        val dbCfg = cfg.config.dbConfig()
 
         val subject = payto.message ?: subject ?: throw Exception("Missing subject")
         val amount = payto.amount ?: amount ?: throw Exception("Missing amount")
 
-        if (amount.currency != currency)
-            throw Exception("Wrong currency: expected $currency got ${amount.currency}")
+        if (amount.currency != cfg.currency)
+            throw Exception("Wrong currency: expected ${cfg.currency} got ${amount.currency}")
 
         val bankId = run {
             val bytes = ByteArray(16)
@@ -178,7 +217,7 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
             Base32Crockford.encode(bytes)
         }
 
-        Database(dbCfg).use { db ->
+        Database(dbCfg, amount.currency).use { db ->
             ingestIncomingPayment(db, 
                 IncomingPayment(
                     amount = amount,
@@ -186,7 +225,8 @@ class FakeIncoming: CliktCommand("Genere a fake incoming payment") {
                     wireTransferSubject = subject,
                     executionTime = Instant.now(),
                     bankId = bankId
-                )
+                ),
+                cfg.accountType
             )
         }
     }
@@ -227,7 +267,7 @@ class EbicsDownload: CliktCommand("Perform EBICS requests", name = "ebics-btd") 
     class DryRun: Exception()
 
     override fun run() = cliCmd(logger, common.log) {
-        val cfg = extractEbicsConfig(common.config)
+        val cfg = loadNexusConfig(common.config)
         val (clientKeys, bankKeys) = expectFullKeys(cfg)
         val pinnedStartVal = pinnedStart
         val pinnedStartArg = if (pinnedStartVal != null) {
@@ -282,7 +322,7 @@ class ListCmd: CliktCommand("List nexus transactions", name = "list") {
         val dbCfg = cfg.dbConfig()
         val currency = cfg.requireString("nexus-ebics", "currency")
 
-        Database(dbCfg).use { db ->
+        Database(dbCfg, currency).use { db ->
             fun fmtPayto(payto: String?): String {
                 if (payto == null) return ""
                 try {
@@ -405,7 +445,7 @@ class TestingCmd : CliktCommand("Testing helper commands", name = "testing") {
 class LibeufinNexusCommand : CliktCommand() {
     init {
         versionOption(getVersion())
-        subcommands(EbicsSetup(), DbInit(), EbicsSubmit(), EbicsFetch(), InitiatePayment(), CliConfigCmd(NEXUS_CONFIG_SOURCE), TestingCmd())
+        subcommands(EbicsSetup(), DbInit(), Serve(), EbicsSubmit(), EbicsFetch(), InitiatePayment(), CliConfigCmd(NEXUS_CONFIG_SOURCE), TestingCmd())
     }
     override fun run() = Unit
 }

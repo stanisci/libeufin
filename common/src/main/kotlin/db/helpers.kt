@@ -111,3 +111,54 @@ suspend fun <T> DbPool.poolHistory(
         load()
     }
 }
+
+/**
+* The following function returns the list of transactions, according
+* to the history parameters and perform long polling when necessary
+*/
+suspend fun <T> DbPool.poolHistoryGlobal(
+    params: HistoryParams, 
+    listen: suspend (suspend (Flow<Long>) -> List<T>) -> List<T>,
+    query: String,
+    idColumnValue: String,
+    map: (ResultSet) -> T
+): List<T> {
+
+    suspend fun load(): List<T> = page(
+        params.page, 
+        idColumnValue,
+        query,
+        map=map
+    )
+        
+
+    // TODO do we want to handle polling when going backward and there is no transactions yet ?
+    // When going backward there is always at least one transaction or none
+    return if (params.page.delta >= 0 && params.polling.poll_ms > 0) {
+        listen { flow ->
+            coroutineScope {
+                // Start buffering notification before loading transactions to not miss any
+                val polling = launch {
+                    withTimeoutOrNull(params.polling.poll_ms) {
+                        flow.first { it > params.page.start } // Always forward so >
+                    }
+                }    
+                // Initial loading
+                val init = load()
+                // Long polling if we found no transactions
+                if (init.isEmpty()) {
+                    if (polling.join() != null) {
+                        load()
+                    } else {
+                        init
+                    }
+                } else {
+                    polling.cancel()
+                    init
+                }
+            }
+        }
+    } else {
+        load()
+    }
+}

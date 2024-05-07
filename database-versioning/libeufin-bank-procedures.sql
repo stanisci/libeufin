@@ -1058,7 +1058,7 @@ SELECT
     custom_min_cashout.val, custom_min_cashout.frac,
     out_no_cashout_payto, out_tan_required
   FROM bank_accounts
-  JOIN customers ON bank_accounts.owning_customer_id = customers.customer_id
+  JOIN customers ON owning_customer_id=customer_id
   WHERE login=in_login;
 IF NOT FOUND THEN
   out_account_not_found=TRUE;

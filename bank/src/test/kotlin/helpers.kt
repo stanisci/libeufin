@@ -346,15 +346,6 @@ suspend fun HttpResponse.assertChallenge(
     }
 }
 
-suspend fun assertTime(min: Int, max: Int, lambda: suspend () -> Unit) {
-    val start = System.currentTimeMillis()
-    lambda()
-    val end = System.currentTimeMillis()
-    val time = end - start
-    assert(time >= min) { "Expected to last at least $min ms, lasted $time" }
-    assert(time <= max) { "Expected to last at most $max ms, lasted $time" }
-}
-
 fun assertException(msg: String, lambda: () -> Unit) {
     try {
         lambda()
@@ -362,47 +353,6 @@ fun assertException(msg: String, lambda: () -> Unit) {
     } catch (e: Exception) {
         assert(e.message!!.startsWith(msg)) { "${e.message}" }
     }
-}
-
-suspend inline fun <reified B> HttpResponse.assertHistoryIds(size: Int, ids: (B) -> List<Long>): B {
-    assertOk()
-    val body = json<B>()
-    val history = ids(body)
-    val params = PageParams.extract(call.request.url.parameters)
-
-    // testing the size is like expected.
-    assertEquals(size, history.size, "bad history length: $history")
-    if (params.delta < 0) {
-        // testing that the first id is at most the 'start' query param.
-        assert(history[0] <= params.start) { "bad history start: $params $history" }
-        // testing that the id decreases.
-        if (history.size > 1)
-            assert(history.windowed(2).all { (a, b) -> a > b }) { "bad history order: $history" }
-    } else {
-        // testing that the first id is at least the 'start' query param.
-        assert(history[0] >= params.start) { "bad history start: $params $history" }
-        // testing that the id increases.
-        if (history.size > 1)
-            assert(history.windowed(2).all { (a, b) -> a < b }) { "bad history order: $history" }
-    }
-
-    return body
-}
-
-/* ----- Body helper ----- */
-
-suspend inline fun <reified B> HttpResponse.assertOkJson(lambda: (B) -> Unit = {}): B {
-    assertOk()
-    val body = json<B>()
-    lambda(body)
-    return body
-}
-
-suspend inline fun <reified B> HttpResponse.assertAcceptedJson(lambda: (B) -> Unit = {}): B {
-    assertAccepted()
-    val body = json<B>()
-    lambda(body)
-    return body
 }
 
 /* ----- Auth ----- */
@@ -449,7 +399,6 @@ fun HttpRequestBuilder.pwAuth(username: String? = null) {
         val login = url.pathSegments[2]
         basicAuth("$login", "$login-password")
     }
-    
 }
 
 /* ----- Random data generation ----- */

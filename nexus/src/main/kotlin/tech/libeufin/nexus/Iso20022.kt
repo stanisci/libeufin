@@ -300,13 +300,9 @@ data class OutgoingPayment(
 private fun XmlDestructor.payto(prefix: String): String? {
     val iban = opt("${prefix}Acct")?.one("Id")?.one("IBAN")?.text()
     return if (iban != null) {
-        val payto = StringBuilder("payto://iban/$iban")
         val name = opt(prefix) { opt("Nm")?.text() ?: opt("Pty")?.one("Nm")?.text() }
-        if (name != null) {
-            val urlEncName = URLEncoder.encode(name, "utf-8")
-            payto.append("?receiver-name=$urlEncName")
-        }
-        return payto.toString()
+        // Parse bic ?
+        IbanPayto.build(iban, null, name)
     } else {
         null
     }

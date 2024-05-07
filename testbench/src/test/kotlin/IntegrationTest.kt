@@ -29,6 +29,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import tech.libeufin.bank.*
 import tech.libeufin.common.*
+import tech.libeufin.common.api.engine
 import tech.libeufin.common.db.one
 import tech.libeufin.nexus.*
 import java.time.Instant
@@ -68,8 +69,10 @@ fun server(lambda: () -> Unit) {
 fun setup(conf: String, lambda: suspend (NexusDb) -> Unit) {
     try {
         runBlocking {
-            val cfg = loadConfig(Path(conf)).dbConfig()
-            NexusDb(cfg).use {
+            val cfg = loadConfig(Path(conf))
+            val dbCfg = cfg.dbConfig()
+            val currency = cfg.requireString("nexus-ebics", "currency")
+            NexusDb(dbCfg, currency).use {
                 lambda(it)
             }
         }
@@ -109,6 +112,11 @@ class IntegrationTest {
         }
 
         bankCmd.run("gc $flags")
+
+        server {
+            nexusCmd.run("serve $flags")
+        }
+        engine?.stop(0, 0) 
     }
 
     @Test
@@ -127,7 +135,7 @@ class IntegrationTest {
             }
         }
 
-        setup("conf/integration.conf")  { db ->
+        setup("conf/integration.conf") { db ->
             val userPayTo = IbanPayto.rand()
             val fiatPayTo = IbanPayto.rand()
     
@@ -148,14 +156,14 @@ class IntegrationTest {
             )
 
             assertException("ERROR: cashin failed: missing exchange account") {
-                ingestIncomingPayment(db, payment)
+                ingestIncomingPayment(db, payment, AccountType.exchange)
             }
 
             // Create exchange account
             bankCmd.run("create-account $flags -u exchange -p password --name 'Mr Money' --exchange")
     
             assertException("ERROR: cashin currency conversion failed: missing conversion rates") {
-                ingestIncomingPayment(db, payment)
+                ingestIncomingPayment(db, payment, AccountType.exchange)
             }
 
             // Start server
@@ -191,7 +199,7 @@ class IntegrationTest {
             checkCount(db, 0, 0, 0)
             ingestIncomingPayment(db, payment.copy(
                 amount = TalerAmount("EUR:0.01"),
-            ))
+            ), AccountType.exchange)
             checkCount(db, 1, 1, 0)
             client.get("http://0.0.0.0:8080/accounts/exchange/transactions") {
                 basicAuth("exchange", "password")
@@ -205,14 +213,14 @@ class IntegrationTest {
                 executionTime = Instant.now(),
                 bankId = "success"
             )
-            ingestIncomingPayment(db, valid_payment)
+            ingestIncomingPayment(db, valid_payment, AccountType.exchange)
             checkCount(db, 2, 1, 1)
             client.get("http://0.0.0.0:8080/accounts/exchange/transactions") {
                 basicAuth("exchange", "password")
             }.assertOkJson<BankAccountTransactionsResponse>()
 
             // Check idempotency
-            ingestIncomingPayment(db, valid_payment)
+            ingestIncomingPayment(db, valid_payment, AccountType.exchange)
             checkCount(db, 2, 1, 1)
             // TODO check double insert cashin with different subject
         }

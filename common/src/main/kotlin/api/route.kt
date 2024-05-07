@@ -16,27 +16,26 @@
  * License along with LibEuFin; see the file COPYING.  If not, see
  * <http://www.gnu.org/licenses/>
  */
-package tech.libeufin.bank
 
-import tech.libeufin.common.ConfigSource
-import java.time.Duration
+package tech.libeufin.common.api
 
-// Config
-val BANK_CONFIG_SOURCE = ConfigSource("libeufin", "libeufin-bank", "libeufin-bank")
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import io.ktor.util.*
+import io.ktor.util.pipeline.*
 
-// TAN
-const val TAN_RETRY_COUNTER: Int = 3
-val TAN_VALIDITY_PERIOD: Duration = Duration.ofHours(1)
-val TAN_RETRANSMISSION_PERIOD: Duration = Duration.ofMinutes(1)
-
-// Token
-val TOKEN_DEFAULT_DURATION: Duration = Duration.ofDays(1L)
-
-// Account
-val RESERVED_ACCOUNTS = setOf("admin", "bank") 
-const val IBAN_ALLOCATION_RETRY_COUNTER: Int = 5
-
-// API version  
-const val COREBANK_API_VERSION: String = "4:8:0"
-const val CONVERSION_API_VERSION: String = "0:1:0"
-const val INTEGRATION_API_VERSION: String = "2:0:2"
+fun Route.intercept(callback: Route.() -> Unit, interceptor: suspend PipelineContext<Unit, ApplicationCall>.() -> Unit): Route {
+    val subRoute = createChild(object : RouteSelector() {
+        override fun evaluate(context: RoutingResolveContext, segmentIndex: Int): RouteSelectorEvaluation =
+            RouteSelectorEvaluation.Constant
+    })
+    subRoute.intercept(ApplicationCallPipeline.Plugins) {
+        interceptor()
+        proceed()
+    }
+    
+    callback(subRoute)
+    return subRoute
+}

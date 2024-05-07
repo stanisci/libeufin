@@ -95,7 +95,10 @@ suspend fun ingestOutgoingPayment(
     db: Database,
     payment: OutgoingPayment
 ) {
-    val result = db.payment.registerOutgoing(payment)
+    val metadata: Pair<ShortHashCode, ExchangeUrl>? = payment.wireTransferSubject?.let { 
+        runCatching { parseOutgoingTxMetadata(it) }.getOrNull()
+    }
+    val result = db.payment.registerOutgoing(payment, metadata?.first, metadata?.second)
     if (result.new) {
         if (result.initiated)
             logger.info("$payment")
@@ -106,8 +109,6 @@ suspend fun ingestOutgoingPayment(
     }
 }
 
-private val PATTERN = Regex("[a-z0-9A-Z]{52}")
-
 /**
  * Ingests an incoming payment.  Stores the payment into valid talerable ones
  * or bounces it, according to the subject.
@@ -117,18 +118,31 @@ private val PATTERN = Regex("[a-z0-9A-Z]{52}")
  */
 suspend fun ingestIncomingPayment(
     db: Database,
-    payment: IncomingPayment
+    payment: IncomingPayment,
+    accountType: AccountType
 ) {
     suspend fun bounce(msg: String) {
-        val result = db.payment.registerMalformedIncoming(
-            payment,
-            payment.amount, 
-            Instant.now()
-        )
-        if (result.new) {
-            logger.info("$payment bounced in '${result.bounceId}': $msg")
-        } else {
-            logger.debug("$payment already seen and bounced in '${result.bounceId}': $msg")
+        when (accountType) {
+            AccountType.exchange -> {
+                val result = db.payment.registerMalformedIncoming(
+                    payment,
+                    payment.amount, 
+                    Instant.now()
+                )
+                if (result.new) {
+                    logger.info("$payment bounced in '${result.bounceId}': $msg")
+                } else {
+                    logger.debug("$payment already seen and bounced in '${result.bounceId}': $msg")
+                }
+            }
+            AccountType.normal -> {
+                val res = db.payment.registerIncoming(payment)
+                if (res.new) {
+                    logger.info("$payment")
+                } else {
+                    logger.debug("$payment already seen")
+                }
+            }
         }
     }
     runCatching { parseIncomingTxMetadata(payment.wireTransferSubject) }.fold(
@@ -163,7 +177,7 @@ private suspend fun ingestDocument(
                         logger.debug("IGNORE $it")
                     } else {
                         when (it) {
-                            is IncomingPayment -> ingestIncomingPayment(db, it)
+                            is IncomingPayment -> ingestIncomingPayment(db, it, cfg.accountType)
                             is OutgoingPayment -> ingestOutgoingPayment(db, it)
                             is TxNotification.Reversal -> {
                                 logger.error("BOUNCE '${it.msgId}': ${it.reason}")
@@ -364,10 +378,10 @@ class EbicsFetch: CliktCommand("Fetches EBICS files") {
      * mode when no flags are passed to the invocation.
      */
     override fun run() = cliCmd(logger, common.log) {
-        val cfg = extractEbicsConfig(common.config)
+        val cfg = loadNexusConfig(common.config)
         val dbCfg = cfg.config.dbConfig()
 
-        Database(dbCfg).use { db ->
+        Database(dbCfg, cfg.currency).use { db ->
             val (clientKeys, bankKeys) = expectFullKeys(cfg)
             val ctx = FetchContext(
                 cfg,

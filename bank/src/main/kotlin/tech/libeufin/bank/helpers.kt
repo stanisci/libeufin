@@ -37,6 +37,7 @@ import tech.libeufin.bank.auth.username
 import tech.libeufin.bank.db.AccountDAO.AccountCreationResult
 import tech.libeufin.bank.db.Database
 import tech.libeufin.common.*
+import tech.libeufin.common.api.*
 import java.util.*
 
 fun ApplicationCall.uuidPath(name: String): UUID {
@@ -131,20 +132,6 @@ suspend fun createAdminAccount(db: Database, cfg: BankConfig, pw: String? = null
         minCashout = null,
         ctx = cfg.payto
     )
-}
-
-fun Route.intercept(callback: Route.() -> Unit, interceptor: suspend PipelineContext<Unit, ApplicationCall>.() -> Unit): Route {
-    val subRoute = createChild(object : RouteSelector() {
-        override fun evaluate(context: RoutingResolveContext, segmentIndex: Int): RouteSelectorEvaluation =
-            RouteSelectorEvaluation.Constant
-    })
-    subRoute.intercept(ApplicationCallPipeline.Plugins) {
-        interceptor()
-        proceed()
-    }
-    
-    callback(subRoute)
-    return subRoute
 }
 
 fun Route.conditional(implemented: Boolean, callback: Route.() -> Unit): Route =

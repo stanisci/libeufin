@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -20,40 +20,46 @@
 import io.ktor.http.*
 import org.junit.Test
 import tech.libeufin.common.*
+import tech.libeufin.nexus.*
 
 class RevenueApiTest {
-    // GET /accounts/{USERNAME}/taler-revenue/config
+    // GET /taler-revenue/config
     @Test
-    fun config() = bankSetup { _ ->
-        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-revenue/config")
+    fun config() = serverSetup {
+        authRoutine(HttpMethod.Get, "/taler-revenue/config")
 
-        client.getA("/accounts/merchant/taler-revenue/config").assertOk()
+        client.getA("/taler-revenue/config").assertOk()
     }
 
-    // GET /accounts/{USERNAME}/taler-revenue/history
+    // GET /taler-revenue/history
     @Test
-    fun history() = bankSetup {
-        setMaxDebt("exchange", "KUDOS:1000000")
-        authRoutine(HttpMethod.Get, "/accounts/merchant/taler-revenue/history")
+    fun history() = serverSetup { db ->
+        authRoutine(HttpMethod.Get, "/taler-revenue/history")
+
         historyRoutine<RevenueIncomingHistory>(
-            url = "/accounts/merchant/taler-revenue/history",
+            url = "/taler-revenue/history",
             ids = { it.incoming_transactions.map { it.row_id } },
             registered = listOf(
                 { 
                     // Transactions using clean transfer logic
-                    transfer("KUDOS:10")
+                    talerableIn(db)
                 },
                 { 
                     // Common credit transactions
-                    tx("exchange", "KUDOS:10", "merchant", "ignored")
+                    ingestIn(db)
                 }
             ),
             ignored = listOf(
                 {
                     // Ignore debit transactions
-                    tx("merchant", "KUDOS:10", "customer")
+                    talerableOut(db)
                 }
             )
         )
+    }
+
+    @Test
+    fun noApi() = serverSetup("mini.conf") {
+        client.getA("/taler-revenue/config").assertNotImplemented()
     }
 }

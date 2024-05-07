@@ -18,9 +18,12 @@
  */
 package tech.libeufin.nexus.db
 
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import tech.libeufin.common.TalerAmount
-import tech.libeufin.common.db.DatabaseConfig
-import tech.libeufin.common.db.DbPool
+import tech.libeufin.common.db.*
 import java.time.Instant
 
 /**
@@ -39,7 +42,39 @@ data class InitiatedPayment(
 /**
  * Collects database connection steps and any operation on the Nexus tables.
  */
-class Database(dbConfig: DatabaseConfig): DbPool(dbConfig, "libeufin_nexus") {
+class Database(dbConfig: DatabaseConfig, val bankCurrency: String): DbPool(dbConfig, "libeufin_nexus") {
     val payment = PaymentDAO(this)
     val initiated = InitiatedDAO(this)
+    val exchange = ExchangeDAO(this)
+
+    private val outgoingTxFlows: MutableSharedFlow<Long> = MutableSharedFlow()
+    private val incomingTxFlows: MutableSharedFlow<Long> = MutableSharedFlow()
+    private val revenueTxFlows: MutableSharedFlow<Long> = MutableSharedFlow()
+
+    init {
+        watchNotifications(pgSource, "libeufin_nexus", LoggerFactory.getLogger("libeufin-nexus-db-watcher"), mapOf(
+            "revenue_tx" to {
+                val id = it.toLong()
+                revenueTxFlows.emit(id)
+            },
+            "outgoing_tx" to {
+                val id = it.toLong()
+                outgoingTxFlows.emit(id)
+            },
+            "incoming_tx" to {
+                val id = it.toLong()
+                incomingTxFlows.emit(id)
+            }
+        ))
+    }
+
+    /** Listen for new taler outgoing transactions */
+    suspend fun <R> listenOutgoing(lambda: suspend (Flow<Long>) -> R): R
+        = lambda(outgoingTxFlows)
+    /** Listen for new taler incoming transactions */
+    suspend fun <R> listenIncoming(lambda: suspend (Flow<Long>) -> R): R
+        = lambda(incomingTxFlows)
+    /** Listen for new incoming transactions */
+    suspend fun <R> listenRevenue(lambda: suspend (Flow<Long>) -> R): R
+        = lambda(revenueTxFlows)
 }

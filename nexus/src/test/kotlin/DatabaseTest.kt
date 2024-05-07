@@ -18,10 +18,12 @@
  */
 
 import org.junit.Test
-import tech.libeufin.common.TalerAmount
+import tech.libeufin.common.*
 import tech.libeufin.nexus.db.InitiatedDAO.PaymentInitiationResult
+import tech.libeufin.nexus.*
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -30,30 +32,41 @@ class OutgoingPaymentsTest {
     @Test
     fun register() = setup { db, _ -> 
         // With reconciling
-        genOutPay("paid by nexus", "first").run {
-            assertEquals(
-                PaymentInitiationResult.SUCCESS,
-                db.initiated.create(genInitPay("waiting for reconciliation", "first"))
+        genOutPay("paid by nexus").run {
+            assertIs<PaymentInitiationResult.Success>(
+                db.initiated.create(genInitPay("waiting for reconciliation", messageId))
             )
-            db.payment.registerOutgoing(this).run {
-                assertTrue(new,)
+            db.payment.registerOutgoing(this, null, null).run {
+                assertTrue(new)
                 assertTrue(initiated)
             }
-            db.payment.registerOutgoing(this).run {
+            db.payment.registerOutgoing(this, null, null).run {
                 assertFalse(new)
                 assertTrue(initiated)
             }
         }
         // Without reconciling
-        genOutPay("not paid by nexus", "second").run {
-            db.payment.registerOutgoing(this).run {
+        genOutPay("not paid by nexus").run {
+            db.payment.registerOutgoing(this, null, null).run {
                 assertTrue(new)
                 assertFalse(initiated)
             }
-            db.payment.registerOutgoing(this).run {
+            db.payment.registerOutgoing(this, null, null).run {
                 assertFalse(new)
                 assertFalse(initiated)
             }
+        }
+    }
+
+    @Test
+    fun talerable() = setup { db, _ -> 
+        val wtid = ShortHashCode.rand()
+        val url = "https://exchange.com"
+        genOutPay("$wtid $url").run {
+            assertIs<PaymentInitiationResult.Success>(
+                db.initiated.create(genInitPay("waiting for reconciliation", messageId))
+            )
+            ingestOutgoingPayment(db, this)
         }
     }
 }
@@ -117,8 +130,7 @@ class PaymentInitiationsTest {
 
     @Test
     fun status() = setup { db, _ ->
-        assertEquals(
-            PaymentInitiationResult.SUCCESS,
+        assertIs<PaymentInitiationResult.Success>(
             db.initiated.create(genInitPay(requestUid = "PAY1"))
         )
         db.initiated.submissionFailure(1, Instant.now(), "First failure")
@@ -126,8 +138,7 @@ class PaymentInitiationsTest {
         db.initiated.submissionSuccess(1, Instant.now(), "ORDER1")
         assertEquals(Pair("PAY1", null), db.initiated.logFailure("ORDER1"))
 
-        assertEquals(
-            PaymentInitiationResult.SUCCESS,
+        assertIs<PaymentInitiationResult.Success>(
             db.initiated.create(genInitPay(requestUid = "PAY2"))
         )
         db.initiated.submissionFailure(2, Instant.now(), "First failure")
@@ -135,8 +146,7 @@ class PaymentInitiationsTest {
         db.initiated.logMessage("ORDER2", "status msg")
         assertEquals(Pair("PAY2", "status msg"), db.initiated.logFailure("ORDER2"))
 
-        assertEquals(
-            PaymentInitiationResult.SUCCESS,
+        assertIs<PaymentInitiationResult.Success>(
             db.initiated.create(genInitPay(requestUid = "PAY3"))
         )
         db.initiated.submissionSuccess(3, Instant.now(), "ORDER3")
@@ -146,15 +156,13 @@ class PaymentInitiationsTest {
         assertNull(db.initiated.logSuccess("ORDER_X"))
         assertNull(db.initiated.logFailure("ORDER_X"))
 
-        assertEquals(
-            PaymentInitiationResult.SUCCESS,
+        assertIs<PaymentInitiationResult.Success>(
             db.initiated.create(genInitPay(requestUid = "PAY4"))
         )
         db.initiated.bankMessage("PAY4", "status progress")
         db.initiated.bankFailure("PAY4", "status failure")
 
-        assertEquals(
-            PaymentInitiationResult.SUCCESS,
+        assertIs<PaymentInitiationResult.Success>(
             db.initiated.create(genInitPay(requestUid = "PAY5"))
         )
         db.initiated.bankMessage("PAY5", "status progress")
@@ -164,8 +172,7 @@ class PaymentInitiationsTest {
     @Test
     fun submittable() = setup { db, _ -> 
         for (i in 0..5) {
-            assertEquals(
-                PaymentInitiationResult.SUCCESS,
+            assertIs<PaymentInitiationResult.Success>(
                 db.initiated.create(genInitPay(requestUid = "PAY$i"))
             )
         }

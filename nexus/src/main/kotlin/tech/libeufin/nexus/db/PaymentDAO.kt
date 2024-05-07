@@ -35,10 +35,14 @@ class PaymentDAO(private val db: Database) {
     )
 
     /** Register an outgoing payment reconciling it with its initiated payment counterpart if present */
-    suspend fun registerOutgoing(paymentData: OutgoingPayment): OutgoingRegistrationResult = db.conn {        
+    suspend fun registerOutgoing(
+        paymentData: OutgoingPayment, 
+        wtid: ShortHashCode?,
+        baseUrl: ExchangeUrl?,
+    ): OutgoingRegistrationResult = db.conn {        
         val stmt = it.prepareStatement("""
             SELECT out_tx_id, out_initiated, out_found
-            FROM register_outgoing((?,?)::taler_amount,?,?,?,?)
+            FROM register_outgoing((?,?)::taler_amount,?,?,?,?,?,?)
         """)
         val executionTime = paymentData.executionTime.micros()
         stmt.setLong(1, paymentData.amount.value)
@@ -47,6 +51,17 @@ class PaymentDAO(private val db: Database) {
         stmt.setLong(4, executionTime)
         stmt.setString(5, paymentData.creditPaytoUri)
         stmt.setString(6, paymentData.messageId)
+        if (wtid != null) {
+            stmt.setBytes(7, wtid.raw)
+        } else {
+            stmt.setNull(7, java.sql.Types.NULL)
+        }
+        if (baseUrl != null) {
+            stmt.setString(8, baseUrl.url)
+        } else {
+            stmt.setNull(8, java.sql.Types.NULL)
+        }
+  
         stmt.one {
             OutgoingRegistrationResult(
                 it.getLong("out_tx_id"),
@@ -126,6 +141,52 @@ class PaymentDAO(private val db: Database) {
             }
         }
     }
+
+    /** Register an incoming payment */
+    suspend fun registerIncoming(
+        paymentData: IncomingPayment
+    ): IncomingRegistrationResult.Success = db.conn { conn ->
+        val stmt = conn.prepareStatement("""
+            SELECT out_found, out_tx_id
+            FROM register_incoming((?,?)::taler_amount,?,?,?,?)
+        """)
+        val executionTime = paymentData.executionTime.micros()
+        stmt.setLong(1, paymentData.amount.value)
+        stmt.setInt(2, paymentData.amount.frac)
+        stmt.setString(3, paymentData.wireTransferSubject)
+        stmt.setLong(4, executionTime)
+        stmt.setString(5, paymentData.debitPaytoUri)
+        stmt.setString(6, paymentData.bankId)
+        stmt.one {
+            IncomingRegistrationResult.Success(
+                it.getLong("out_tx_id"),
+                !it.getBoolean("out_found")
+            )
+        }
+    }
+
+    /** Query history of incoming transactions */
+    suspend fun revenueHistory(
+        params: HistoryParams
+    ): List<RevenueIncomingBankTransaction> 
+        = db.poolHistoryGlobal(params, db::listenRevenue, """
+            SELECT
+                incoming_transaction_id
+                ,execution_time
+                ,(amount).val AS amount_val
+                ,(amount).frac AS amount_frac
+                ,debit_payto_uri
+                ,wire_transfer_subject
+            FROM incoming_transactions WHERE
+        """, "incoming_transaction_id") {
+            RevenueIncomingBankTransaction(
+                row_id = it.getLong("incoming_transaction_id"),
+                date = it.getTalerTimestamp("execution_time"),
+                amount = it.getAmount("amount", db.bankCurrency),
+                debit_account = it.getString("debit_payto_uri"),
+                subject = it.getString("wire_transfer_subject")
+            )
+        }
 
     /** List incoming transaction metadata for debugging */
     suspend fun metadataIncoming(): List<IncomingTxMetadata> = db.conn { conn ->
