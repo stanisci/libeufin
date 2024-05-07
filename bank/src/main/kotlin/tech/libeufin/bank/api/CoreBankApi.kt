@@ -160,6 +160,12 @@ suspend fun createAccount(
                 "only admin account can choose the debit limit",
                 TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
             )
+        
+        if (req.min_cashout != null)
+            throw conflict(
+                "only admin account can choose the minimum cashout amount",
+                TalerErrorCode.BANK_NON_ADMIN_SET_MIN_CASHOUT
+            )
 
         if (req.tan_channel != null)
             throw conflict(
@@ -188,6 +194,25 @@ suspend fun createAccount(
             TalerErrorCode.END
         )
 
+    suspend fun doDb(internalPayto: Payto) = db.account.create(
+        login = req.username,
+        name = req.name,
+        email = req.contact_data?.email?.get(),
+        phone = req.contact_data?.phone?.get(),
+        cashoutPayto = req.cashout_payto_uri,
+        password = req.password,
+        internalPayto = internalPayto,
+        isPublic = req.is_public,
+        isTalerExchange = req.is_taler_exchange,
+        maxDebt = req.debit_threshold ?: cfg.defaultDebtLimit,
+        bonus = if (!req.is_taler_exchange) cfg.registrationBonus 
+                else TalerAmount(0, 0, cfg.regionalCurrency),
+        tanChannel = req.tan_channel,
+        checkPaytoIdempotent = req.payto_uri != null,
+        ctx = cfg.payto,
+        minCashout = req.min_cashout
+    )
+
     when (cfg.wireMethod) {
         WireMethod.IBAN -> {
             if (req.payto_uri != null && !(req.payto_uri is IbanPayto))
@@ -196,23 +221,7 @@ suspend fun createAccount(
 
             while (true) {
                 val internalPayto = req.payto_uri ?: IbanPayto.rand() as Payto
-                val res = db.account.create(
-                    login = req.username,
-                    name = req.name,
-                    email = req.contact_data?.email?.get(),
-                    phone = req.contact_data?.phone?.get(),
-                    cashoutPayto = req.cashout_payto_uri,
-                    password = req.password,
-                    internalPayto = internalPayto,
-                    isPublic = req.is_public,
-                    isTalerExchange = req.is_taler_exchange,
-                    maxDebt = req.debit_threshold ?: cfg.defaultDebtLimit,
-                    bonus = if (!req.is_taler_exchange) cfg.registrationBonus 
-                            else TalerAmount(0, 0, cfg.regionalCurrency),
-                    tanChannel = req.tan_channel,
-                    checkPaytoIdempotent = req.payto_uri != null,
-                    ctx = cfg.payto
-                )
+                val res = doDb(internalPayto)
                 // Retry with new IBAN
                 if (res == AccountCreationResult.PayToReuse && retry > 0) {
                     retry--
@@ -230,24 +239,7 @@ suspend fun createAccount(
             }
          
             val internalPayto = XTalerBankPayto.forUsername(req.username)
-        
-            return db.account.create(
-                login = req.username,
-                name = req.name,
-                email = req.contact_data?.email?.get(),
-                phone = req.contact_data?.phone?.get(),
-                cashoutPayto = req.cashout_payto_uri,
-                password = req.password,
-                internalPayto = internalPayto,
-                isPublic = req.is_public,
-                isTalerExchange = req.is_taler_exchange,
-                maxDebt = req.debit_threshold ?: cfg.defaultDebtLimit,
-                bonus = if (!req.is_taler_exchange) cfg.registrationBonus 
-                        else TalerAmount(0, 0, cfg.regionalCurrency),
-                tanChannel = req.tan_channel,
-                checkPaytoIdempotent = req.payto_uri != null,
-                ctx = cfg.payto
-            )
+            return doDb(internalPayto)
         }
     }
 }
@@ -283,6 +275,7 @@ suspend fun patchAccount(
         tan_channel = req.tan_channel,
         isPublic = req.is_public,
         debtLimit = req.debit_threshold,
+        minCashout = req.min_cashout,
         isAdmin = isAdmin,
         is2fa = is2fa,
         faChannel = channel,
@@ -366,6 +359,10 @@ private fun Routing.coreBankAccountsApi(db: Database, ctx: BankConfig) {
                 AccountPatchResult.NonAdminDebtLimit -> throw conflict(
                     "non-admin user cannot change their debt limit",
                     TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+                )
+                AccountPatchResult.NonAdminMinCashout -> throw conflict(
+                    "non-admin user cannot change their min cashout amount",
+                    TalerErrorCode.BANK_NON_ADMIN_SET_MIN_CASHOUT
                 )
                 AccountPatchResult.MissingTanInfo -> throw conflict(
                     "missing info for tan channel ${req.tan_channel.get()}",
@@ -594,6 +591,10 @@ private fun Routing.coreBankCashoutApi(db: Database, ctx: BankConfig) = conditio
                 CashoutCreationResult.BadConversion -> throw conflict(
                     "Wrong currency conversion",
                     TalerErrorCode.BANK_BAD_CONVERSION
+                )
+                CashoutCreationResult.UnderMin -> throw conflict(
+                    "Amount of currency conversion it less than the minimum allowed",
+                    TalerErrorCode.BANK_CONVERSION_AMOUNT_TO_SMALL
                 )
                 CashoutCreationResult.AccountIsExchange -> throw conflict(
                     "Exchange account cannot perform cashout operation",

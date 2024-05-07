@@ -33,6 +33,12 @@ fun ResultSet.getAmount(name: String, currency: String): TalerAmount {
     )
 }
 
+fun ResultSet.getOptAmount(name: String, currency: String): TalerAmount? {
+    val amount = getAmount(name, currency)
+    if (wasNull()) return null
+    return amount
+}
+
 fun ResultSet.getDecimal(name: String): DecimalNumber {
     return DecimalNumber(
         getLong("${name}_val"),

@@ -109,7 +109,7 @@ class ConversionDAO(private val db: Database) {
 
     /** Perform [direction] conversion of [amount] using in-db [function] */
     private suspend fun conversion(amount: TalerAmount, direction: String, function: String): ConversionResult = db.conn { conn ->
-        val stmt = conn.prepareStatement("SELECT too_small, no_config, (converted).val AS amount_val, (converted).frac AS amount_frac FROM $function((?, ?)::taler_amount, ?)")
+        val stmt = conn.prepareStatement("SELECT too_small, no_config, (converted).val AS amount_val, (converted).frac AS amount_frac FROM $function((?, ?)::taler_amount, ?, (0, 0)::taler_amount)")
         stmt.setLong(1, amount.value)
         stmt.setInt(2, amount.frac)
         stmt.setString(3, direction)

@@ -35,7 +35,7 @@ This files contains all the API changes for the current release:
 - POST /accounts/USERNAME/cashouts: remove tan_channel field
 - POST /accounts/USERNAME/cashouts/CASHOUT_ID: remove confirmation_time,
   tan_channel, tan_info and status fields
-- POST /accounts/$USERNAME/cashouts: remove status field
+- POST /accounts/USERNAME/cashouts: remove status field
 - POST /cashouts: remove status field
 - PATCH /accounts/USERNAME: add tan_channel
 - GET /accounts/USERNAME: add tan_channel
@@ -52,6 +52,10 @@ This files contains all the API changes for the current release:
 - GET /accounts/USERNAME: new status field
 - GET /monitor: new date_s params
 - GET /config: new base_url field for the advertised base URL
+- POST /accounts: add min_cashout field for the custom minimum cashout amount
+- PATCH /accounts/USERNAME: add min_cashout field for the custom minimum cashout amount
+- GET /accounts: add min_cashout field for the custom minimum cashout amount
+- GET /accounts/USERNAME: add min_cashout field for the custom minimum cashout amount
 
 ## bank cli
 

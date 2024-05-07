@@ -37,7 +37,7 @@ val RESERVED_ACCOUNTS = setOf("admin", "bank")
 const val IBAN_ALLOCATION_RETRY_COUNTER: Int = 5
 
 // API version  
-const val COREBANK_API_VERSION: String = "4:7:0"
-const val CONVERSION_API_VERSION: String = "0:0:0"
+const val COREBANK_API_VERSION: String = "4:8:0"
+const val CONVERSION_API_VERSION: String = "0:1:0"
 const val INTEGRATION_API_VERSION: String = "2:0:2"
 const val REVENUE_API_VERSION: String = "0:0:0"

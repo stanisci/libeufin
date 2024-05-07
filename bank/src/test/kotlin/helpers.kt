@@ -96,6 +96,7 @@ fun bankSetup(
         phone = null,
         cashoutPayto = null,
         tanChannel = null,
+        minCashout = null,
         ctx = cfg.payto  
     ))
     assertIs<AccountCreationResult.Success>(db.account.create(
@@ -112,6 +113,7 @@ fun bankSetup(
         phone = null,
         cashoutPayto = null,
         tanChannel = null,
+        minCashout = null,
         ctx = cfg.payto   
     ))
     assertIs<AccountCreationResult.Success>(db.account.create(
@@ -128,6 +130,7 @@ fun bankSetup(
         phone = null,
         cashoutPayto = null,
         tanChannel = null,
+        minCashout = null,
         ctx = cfg.payto
     ))
     // Create admin account

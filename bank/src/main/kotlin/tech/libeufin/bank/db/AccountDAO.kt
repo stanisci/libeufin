@@ -47,6 +47,7 @@ class AccountDAO(private val db: Database) {
         isPublic: Boolean,
         isTalerExchange: Boolean,
         maxDebt: TalerAmount,
+        minCashout: TalerAmount?,
         bonus: TalerAmount,
         tanChannel: TanChannel?,
         // Whether to check [internalPaytoUri] for idempotency
@@ -223,6 +224,7 @@ class AccountDAO(private val db: Database) {
         data object NonAdminName: AccountPatchResult
         data object NonAdminCashout: AccountPatchResult
         data object NonAdminDebtLimit: AccountPatchResult
+        data object NonAdminMinCashout: AccountPatchResult
         data object MissingTanInfo: AccountPatchResult
         data class TanRequired(val channel: TanChannel?, val info: String?): AccountPatchResult
         data object Success: AccountPatchResult
@@ -238,6 +240,7 @@ class AccountDAO(private val db: Database) {
         tan_channel: Option<TanChannel?>,
         isPublic: Boolean?,
         debtLimit: TalerAmount?,
+        minCashout: Option<TalerAmount?>,
         isAdmin: Boolean,
         is2fa: Boolean,
         faChannel: TanChannel?,
@@ -248,6 +251,7 @@ class AccountDAO(private val db: Database) {
         val checkName = !isAdmin && !allowEditName && name != null
         val checkCashout = !isAdmin && !allowEditCashout && cashoutPayto.isSome()
         val checkDebtLimit = !isAdmin && debtLimit != null
+        val checkMinCashout = !isAdmin && minCashout.isSome()
 
         data class CurrentAccount(
             val id: Long,
@@ -257,6 +261,7 @@ class AccountDAO(private val db: Database) {
             val name: String,
             val cashoutPayTo: String?,
             val debtLimit: TalerAmount,
+            val minCashout: TalerAmount?
         )
 
         // Get user ID and current data
@@ -265,6 +270,8 @@ class AccountDAO(private val db: Database) {
                 customer_id, tan_channel, phone, email, name, cashout_payto
                 ,(max_debt).val AS max_debt_val
                 ,(max_debt).frac AS max_debt_frac
+                ,(min_cashout).val AS min_cashout_val
+                ,(min_cashout).frac AS min_cashout_frac
             FROM customers
                 JOIN bank_accounts 
                 ON customer_id=owning_customer_id
@@ -280,6 +287,7 @@ class AccountDAO(private val db: Database) {
                     name = it.getString("name"),
                     cashoutPayTo = it.getString("cashout_payto"),
                     debtLimit = it.getAmount("max_debt", db.bankCurrency),
+                    minCashout = it.getOptAmount("min_cashout", db.bankCurrency),
                 )
             } ?: return@transaction AccountPatchResult.UnknownAccount
         }
@@ -310,9 +318,10 @@ class AccountDAO(private val db: Database) {
             return@transaction AccountPatchResult.NonAdminCashout
         if (checkDebtLimit && debtLimit != curr.debtLimit)
             return@transaction AccountPatchResult.NonAdminDebtLimit
+        if (checkMinCashout && minCashout.get() != curr.minCashout)
+            return@transaction AccountPatchResult.NonAdminMinCashout
         if (patchChannel != null && newInfo == null)
             return@transaction AccountPatchResult.MissingTanInfo
-
 
         // Tan channel verification
         if (!isAdmin) {
@@ -340,11 +349,24 @@ class AccountDAO(private val db: Database) {
             sequence {
                 if (isPublic != null) yield("is_public=?")
                 if (debtLimit != null) yield("max_debt=(?, ?)::taler_amount")
+                minCashout.some { 
+                    if (it != null) {
+                        yield("min_cashout=(?, ?)::taler_amount")
+                    } else {
+                        yield("min_cashout=null")
+                    }
+                }
             },
             "WHERE owning_customer_id = ?",
             sequence {
                 isPublic?.let { yield(it) }
                 debtLimit?.let { yield(it.value); yield(it.frac) }
+                minCashout.some { 
+                    if (it != null) {
+                        yield(it.value)
+                        yield(it.frac)
+                    }
+                }
                 yield(curr.id)
             }
         )
@@ -464,6 +486,8 @@ class AccountDAO(private val db: Database) {
                 ,has_debt
                 ,(max_debt).val AS max_debt_val
                 ,(max_debt).frac AS max_debt_frac
+                ,(min_cashout).val AS min_cashout_val
+                ,(min_cashout).frac AS min_cashout_frac
                 ,is_public
                 ,is_taler_exchange
                 ,CASE 
@@ -496,6 +520,7 @@ class AccountDAO(private val db: Database) {
                         }
                 ),
                 debit_threshold = it.getAmount("max_debt", db.bankCurrency),
+                min_cashout = it.getOptAmount("min_cashout", db.bankCurrency),
                 is_public = it.getBoolean("is_public"),
                 is_taler_exchange = it.getBoolean("is_taler_exchange"),
                 status = AccountStatus.valueOf(it.getString("status"))
@@ -557,6 +582,8 @@ class AccountDAO(private val db: Database) {
             has_debt AS balance_has_debt,
             (max_debt).val as max_debt_val,
             (max_debt).frac as max_debt_frac
+            ,(min_cashout).val AS min_cashout_val
+            ,(min_cashout).frac AS min_cashout_frac
             ,is_public
             ,is_taler_exchange
             ,internal_payto_uri
@@ -587,6 +614,7 @@ class AccountDAO(private val db: Database) {
                     }
                 ),
                 debit_threshold = it.getAmount("max_debt", db.bankCurrency),
+                min_cashout = it.getOptAmount("min_cashout", db.bankCurrency),
                 is_public = it.getBoolean("is_public"),
                 is_taler_exchange = it.getBoolean("is_taler_exchange"),
                 payto_uri = it.getBankPayto("internal_payto_uri", "name", ctx),

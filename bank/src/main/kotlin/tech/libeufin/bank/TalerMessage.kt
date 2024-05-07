@@ -182,6 +182,7 @@ data class RegisterAccountRequest(
     val cashout_payto_uri: IbanPayto? = null,
     val payto_uri: Payto? = null,
     val debit_threshold: TalerAmount? = null,
+    val min_cashout: TalerAmount? = null,
     val tan_channel: TanChannel? = null,
 ) {
     init {
@@ -209,6 +210,7 @@ data class AccountReconfiguration(
     val name: String? = null,
     val is_public: Boolean? = null,
     val debit_threshold: TalerAmount? = null,
+    val min_cashout: Option<TalerAmount?> = Option.None,
     val tan_channel: Option<TanChannel?> = Option.None,
     val is_taler_exchange: Boolean? = null,
 )
@@ -355,6 +357,7 @@ data class AccountMinimalData(
     val payto_uri: String,
     val balance: Balance,
     val debit_threshold: TalerAmount,
+    val min_cashout: TalerAmount? = null,
     val is_public: Boolean,
     val is_taler_exchange: Boolean,
     val row_id: Long,
@@ -378,6 +381,7 @@ data class AccountData(
     val balance: Balance,
     val payto_uri: String,
     val debit_threshold: TalerAmount,
+    val min_cashout: TalerAmount? = null,
     val contact_data: ChallengeContactData? = null,
     val cashout_payto_uri: String? = null,
     val tan_channel: TanChannel? = null,

@@ -1,6 +1,6 @@
 /*
      This file is part of GNU Taler
-     Copyright (C) 2012-2020 Taler Systems SA
+     Copyright (C) 2012-2024 Taler Systems SA
 
      GNU Taler is free software: you can redistribute it and/or modify it
      under the terms of the GNU Lesser General Public License as published
@@ -34,7 +34,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * A non-integer error code was returned in the JSON response.
+   * An error response did not include an error code in the format expected by the client. Most likely, the server does not speak the GNU Taler protocol. Check the URL and/or the network connection to the server.
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -42,7 +42,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * An internal failure happened on the client side.
+   * An internal failure happened on the client side. Details should be in the local logs. Check if you are using the latest available version or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -50,7 +50,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The response we got from the server was not even in JSON format.
+   * The response we got from the server was not in the expected format. Most likely, the server does not speak the GNU Taler protocol. Check the URL and/or the network connection to the server.
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -58,7 +58,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * An operation timed out.
+   * The operation timed out. Trying again might help. Check the network connection.
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -66,7 +66,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The version string given does not follow the expected CURRENT:REVISION:AGE Format.
+   * The protocol version given by the server does not follow the required format. Most likely, the server does not speak the GNU Taler protocol. Check the URL and/or the network connection to the server.
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -74,7 +74,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service responded with a reply that was in JSON but did not satsify the protocol. Note that invalid cryptographic signatures should have signature-specific error codes.
+   * The service responded with a reply that was in the right data format, but the content did not satisfy the protocol. Please file a bug report.
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -82,7 +82,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * There is an error in the client-side configuration, for example the base URL specified is malformed.
+   * There is an error in the client-side configuration, for example an option is set to an invalid value. Check the logs and fix the local configuration.
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -90,7 +90,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The client made a request to a service, but received an error response it does not know how to handle.
+   * The client made a request to a service, but received an error response it does not know how to handle. Please file a bug report.
    * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -98,7 +98,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The token used by the client to authorize the request does not grant the required permissions for the request.
+   * The token used by the client to authorize the request does not grant the required permissions for the request. Check the requirements and obtain a suitable authorization token to proceed.
    * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -106,7 +106,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The HTTP method used is invalid for this endpoint.
+   * The HTTP method used is invalid for this endpoint. This is likely a bug in the client implementation. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_METHOD_NOT_ALLOWED (405).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -114,7 +114,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * There is no endpoint defined for the URL provided by the client.
+   * There is no endpoint defined for the URL provided by the client. Check if you used the correct URL and/or file a report with the developers of the client software.
    * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -122,7 +122,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The JSON in the client's request was malformed (generic parse error).
+   * The JSON in the client's request was malformed. This is likely a bug in the client implementation. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -130,7 +130,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * Some of the HTTP headers provided by the client caused the server to not be able to handle the request.
+   * Some of the HTTP headers provided by the client were malformed and caused the server to not be able to handle the request. This is likely a bug in the client implementation. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -138,7 +138,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The payto:// URI provided by the client is malformed.
+   * The payto:// URI provided by the client is malformed. Check that you are using the correct syntax as of RFC 8905 and/or that you entered the bank account number correctly.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -146,7 +146,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * A required parameter in the request was missing.
+   * A required parameter in the request was missing. This is likely a bug in the client implementation. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -154,7 +154,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * A parameter in the request was malformed.
+   * A parameter in the request was malformed. This is likely a bug in the client implementation. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -162,7 +162,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The reserve public key given as part of a /reserves/ endpoint was malformed.
+   * The reserve public key was malformed.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -170,7 +170,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The body in the request could not be decompressed by the server.
+   * The body in the request could not be decompressed by the server. This is likely a bug in the client implementation. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -178,7 +178,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The currency involved in the operation is not acceptable for this backend.
+   * The currency involved in the operation is not acceptable for this server. Check your configuration and make sure the currency specified for a given service provider is one of the currencies supported by that provider.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -186,7 +186,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The URI is longer than the longest URI the HTTP server is willing to parse.
+   * The URI is longer than the longest URI the HTTP server is willing to parse. If you believe this was a legitimate request, contact the server administrators and/or the software developers to increase the limit.
    * Returned with an HTTP status code of #MHD_HTTP_URI_TOO_LONG (414).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -194,7 +194,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The body is too large to be permissible for the endpoint.
+   * The body is too large to be permissible for the endpoint. If you believe this was a legitimate request, contact the server administrators and/or the software developers to increase the limit.
    * Returned with an HTTP status code of #MHD_HTTP_CONTENT_TOO_LARGE (413).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -242,7 +242,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service failed initialize its connection to the database.
+   * The service failed initialize its connection to the database. The system administrator should check that the service has permissions to access the database and that the database is running.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -250,7 +250,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service encountered an error event to just start the database transaction.
+   * The service encountered an error event to just start the database transaction. The system administrator should check that the database is running.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -258,7 +258,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service failed to store information in its database.
+   * The service failed to store information in its database. The system administrator should check that the database is running and review the service logs.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -266,7 +266,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service failed to fetch information from its database.
+   * The service failed to fetch information from its database. The system administrator should check that the database is running and review the service logs.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -274,7 +274,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service encountered an error event to commit the database transaction (hard, unrecoverable error).
+   * The service encountered an unrecoverable error trying to commit a transaction to the database. The system administrator should check that the database is running and review the service logs.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -282,7 +282,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service encountered an error event to commit the database transaction, even after repeatedly retrying it there was always a conflicting transaction. (This indicates a repeated serialization error; should only happen if some client maliciously tries to create conflicting concurrent transactions.)
+   * The service encountered an error event to commit the database transaction, even after repeatedly retrying it there was always a conflicting transaction. This indicates a repeated serialization error; it should only happen if some client maliciously tries to create conflicting concurrent transactions. It could also be a sign of a missing index. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -290,7 +290,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service's database is inconsistent and violates service-internal invariants.
+   * The service's database is inconsistent and violates service-internal invariants. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -298,7 +298,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The HTTP server experienced an internal invariant failure (bug).
+   * The HTTP server experienced an internal invariant failure (bug). Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -306,7 +306,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service could not compute a cryptographic hash over some JSON value.
+   * The service could not compute a cryptographic hash over some JSON value. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -314,7 +314,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The service could not compute an amount.
+   * The service could not compute an amount. Check if you are using the latest available version and/or file a report with the developers.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -322,7 +322,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The HTTP server had insufficient memory to parse the request.
+   * The HTTP server had insufficient memory to parse the request. Restarting services periodically can help, especially if Postgres is using excessive amounts of memory. Check with the system administrator to investigate.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -330,7 +330,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The HTTP server failed to allocate memory.
+   * The HTTP server failed to allocate memory. Restarting services periodically can help, especially if Postgres is using excessive amounts of memory. Check with the system administrator to investigate.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -338,7 +338,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The HTTP server failed to allocate memory for building JSON reply.
+   * The HTTP server failed to allocate memory for building JSON reply. Restarting services periodically can help, especially if Postgres is using excessive amounts of memory. Check with the system administrator to investigate.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -346,7 +346,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The HTTP server failed to allocate memory for making a CURL request.
+   * The HTTP server failed to allocate memory for making a CURL request. Restarting services periodically can help, especially if Postgres is using excessive amounts of memory. Check with the system administrator to investigate.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -354,7 +354,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The backend could not locate a required template to generate an HTML reply.
+   * The backend could not locate a required template to generate an HTML reply. The system administrator should check if the resource files are installed in the correct location and are readable to the service.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -362,7 +362,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The backend could not expand the template to generate an HTML reply.
+   * The backend could not expand the template to generate an HTML reply. The system administrator should investigate the logs and check if the templates are well-formed.
    * Returned with an HTTP status code of #MHD_HTTP_INTERNAL_SERVER_ERROR (500).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2347,7 +2347,7 @@ enum class TalerErrorCode(val code: Int) {
 
   /**
    * After considering deposit and wire fees, the payment is insufficient to satisfy the required amount for the contract.  The client should revisit the logic used to calculate fees it must cover.
-   * Returned with an HTTP status code of #MHD_HTTP_NOT_ACCEPTABLE (406).
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
   MERCHANT_POST_ORDERS_ID_PAY_INSUFFICIENT_DUE_TO_FEES(2155),
@@ -2355,7 +2355,7 @@ enum class TalerErrorCode(val code: Int) {
 
   /**
    * Even if we do not consider deposit and wire fees, the payment is insufficient to satisfy the required amount for the contract.
-   * Returned with an HTTP status code of #MHD_HTTP_NOT_ACCEPTABLE (406).
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
   MERCHANT_POST_ORDERS_ID_PAY_PAYMENT_INSUFFICIENT(2156),
@@ -2506,6 +2506,62 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
+   * The payment requires the wallet to select a choice from the choices array and pass it in the 'choice_index' field of the request.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_POST_ORDERS_ID_PAY_CHOICE_INDEX_MISSING(2176),
+
+
+  /**
+   * The 'choice_index' field is invalid.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_POST_ORDERS_ID_PAY_CHOICE_INDEX_OUT_OF_BOUNDS(2177),
+
+
+  /**
+   * The provided 'tokens' array does not match with the required input tokens of the order.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_POST_ORDERS_ID_PAY_INPUT_TOKENS_MISMATCH(2178),
+
+
+  /**
+   * Invalid token issue signature (blindly signed by merchant) for provided token.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_POST_ORDERS_ID_PAY_TOKEN_ISSUE_SIG_INVALID(2179),
+
+
+  /**
+   * Invalid token use signature (EdDSA, signed by wallet) for provided token.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_POST_ORDERS_ID_PAY_TOKEN_USE_SIG_INVALID(2180),
+
+
+  /**
+   * The provided number of tokens does not match the required number.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_POST_ORDERS_ID_PAY_TOKEN_COUNT_MISMATCH(2181),
+
+
+  /**
+   * The provided number of token envelopes does not match the specified number.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_POST_ORDERS_ID_PAY_TOKEN_ENVELOPE_COUNT_MISMATCH(2182),
+
+
+  /**
    * The contract hash does not match the given order ID.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
@@ -2519,6 +2575,22 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   MERCHANT_POST_ORDERS_ID_PAID_COIN_SIGNATURE_INVALID(2201),
+
+
+  /**
+   * A token family with this ID but conflicting data exists.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_POST_TOKEN_FAMILY_CONFLICT(2225),
+
+
+  /**
+   * The backend is unaware of a token family with the given ID.
+   * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_PATCH_TOKEN_FAMILY_NOT_FOUND(2226),
 
 
   /**
@@ -2567,6 +2639,62 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   MERCHANT_POST_ORDERS_ID_ABORT_COINS_ARRAY_EMPTY(2256),
+
+
+  /**
+   * We are waiting for the exchange to provide us with key material before checking the wire transfer.
+   * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_EXCHANGE_TRANSFERS_AWAITING_KEYS(2258),
+
+
+  /**
+   * We are waiting for the exchange to provide us with the list of aggregated transactions.
+   * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_EXCHANGE_TRANSFERS_AWAITING_LIST(2259),
+
+
+  /**
+   * The endpoint indicated in the wire transfer does not belong to a GNU Taler exchange.
+   * Returned with an HTTP status code of #MHD_HTTP_OK (200).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_EXCHANGE_TRANSFERS_FATAL_NO_EXCHANGE(2260),
+
+
+  /**
+   * The exchange indicated in the wire transfer claims to know nothing about the wire transfer.
+   * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_EXCHANGE_TRANSFERS_FATAL_NOT_FOUND(2261),
+
+
+  /**
+   * The interaction with the exchange is delayed due to rate limiting.
+   * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_EXCHANGE_TRANSFERS_RATE_LIMITED(2262),
+
+
+  /**
+   * We experienced a transient failure in our interaction with the exchange.
+   * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_EXCHANGE_TRANSFERS_TRANSIENT_FAILURE(2263),
+
+
+  /**
+   * The response from the exchange was unacceptable and should be reviewed with an auditor.
+   * Returned with an HTTP status code of #MHD_HTTP_OK (200).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_EXCHANGE_TRANSFERS_HARD_FAILURE(2264),
 
 
   /**
@@ -2706,7 +2834,7 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
-   * The order ceration request is invalid because the given payment deadline is in the past.
+   * The order creation request is invalid because the given payment deadline is in the past.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
    * (A value of 0 indicates that the error is generated client-side).
    */
@@ -2786,6 +2914,14 @@ enum class TalerErrorCode(val code: Int) {
 
 
   /**
+   * The token family slug provided in this order could not be found in the merchant database.
+   * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  MERCHANT_PRIVATE_POST_ORDERS_TOKEN_FAMILY_SLUG_UNKNOWN(2533),
+
+
+  /**
    * The exchange says it does not know this transfer.
    * Returned with an HTTP status code of #MHD_HTTP_BAD_GATEWAY (502).
    * (A value of 0 indicates that the error is generated client-side).
@@ -2847,62 +2983,6 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   MERCHANT_PRIVATE_POST_TRANSFERS_CONFLICTING_SUBMISSION(2557),
-
-
-  /**
-   * We are waiting for the exchange to provide us with key material before checking the wire transfer.
-   * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
-   * (A value of 0 indicates that the error is generated client-side).
-   */
-  MERCHANT_EXCHANGE_TRANSFERS_AWAITING_KEYS(2258),
-
-
-  /**
-   * We are waiting for the exchange to provide us with the list of aggregated transactions.
-   * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
-   * (A value of 0 indicates that the error is generated client-side).
-   */
-  MERCHANT_EXCHANGE_TRANSFERS_AWAITING_LIST(2259),
-
-
-  /**
-   * The endpoint indicated in the wire transfer does not belong to a GNU Taler exchange.
-   * Returned with an HTTP status code of #MHD_HTTP_OK (200).
-   * (A value of 0 indicates that the error is generated client-side).
-   */
-  MERCHANT_EXCHANGE_TRANSFERS_FATAL_NO_EXCHANGE(2260),
-
-
-  /**
-   * The exchange indicated in the wire transfer claims to know nothing about the wire transfer.
-   * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
-   * (A value of 0 indicates that the error is generated client-side).
-   */
-  MERCHANT_EXCHANGE_TRANSFERS_FATAL_NOT_FOUND(2261),
-
-
-  /**
-   * The interaction with the exchange is delayed due to rate limiting.
-   * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
-   * (A value of 0 indicates that the error is generated client-side).
-   */
-  MERCHANT_EXCHANGE_TRANSFERS_RATE_LIMITED(2262),
-
-
-  /**
-   * We experienced a transient failure in our interaction with the exchange.
-   * Returned with an HTTP status code of #MHD_HTTP_ACCEPTED (202).
-   * (A value of 0 indicates that the error is generated client-side).
-   */
-  MERCHANT_EXCHANGE_TRANSFERS_TRANSIENT_FAILURE(2263),
-
-
-  /**
-   * The response from the exchange was unacceptable and should be reviewed with an auditor.
-   * Returned with an HTTP status code of #MHD_HTTP_OK (200).
-   * (A value of 0 indicates that the error is generated client-side).
-   */
-  MERCHANT_EXCHANGE_TRANSFERS_HARD_FAILURE(2264),
 
 
   /**
@@ -3167,6 +3247,22 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   AUDITOR_EXCHANGE_SIGNING_KEY_REVOKED(3101),
+
+
+  /**
+   * The requested resource could not be found.
+   * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  AUDITOR_RESOURCE_NOT_FOUND(3102),
+
+
+  /**
+   * The URI is missing a path component.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  AUDITOR_URI_MISSING_PATH_COMPONENT(3103),
 
 
   /**
@@ -3519,6 +3615,22 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   BANK_NON_ADMIN_SET_TAN_CHANNEL(5145),
+
+
+  /**
+   * A non-admin user has tried to set their minimum cashout amount.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_NON_ADMIN_SET_MIN_CASHOUT(5146),
+
+
+  /**
+   * Amount of currency conversion it less than the minimum allowed.
+   * Returned with an HTTP status code of #MHD_HTTP_CONFLICT (409).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  BANK_CONVERSION_AMOUNT_TO_SMALL(5147),
 
 
   /**
@@ -3895,6 +4007,46 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   WALLET_ORDER_ALREADY_PAID(7031),
+
+
+  /**
+   * An exchange that is required for some request is currently not available.
+   * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  WALLET_EXCHANGE_UNAVAILABLE(7032),
+
+
+  /**
+   * An exchange entry is still used by the exchange, thus it can't be deleted without purging.
+   * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  WALLET_EXCHANGE_ENTRY_USED(7033),
+
+
+  /**
+   * The wallet database is unavailable and the wallet thus is not operational.
+   * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  WALLET_DB_UNAVAILABLE(7034),
+
+
+  /**
+   * A taler:// URI is malformed and can't be parsed.
+   * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  WALLET_TALER_URI_MALFORMED(7035),
+
+
+  /**
+   * A wallet-core request was cancelled and thus can't provide a response.
+   * Returned with an HTTP status code of #MHD_HTTP_UNINITIALIZED (0).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  WALLET_CORE_REQUEST_CANCELLED(7036),
 
 
   /**
@@ -4423,6 +4575,38 @@ enum class TalerErrorCode(val code: Int) {
    * (A value of 0 indicates that the error is generated client-side).
    */
   ANASTASIS_REDUCER_PROVIDERS_ALREADY_SYNCED(8420),
+
+
+  /**
+   * The Donau failed to perform the operation as it could not find the private keys. This is a problem with the Donau setup, not with the client's request.
+   * Returned with an HTTP status code of #MHD_HTTP_SERVICE_UNAVAILABLE (503).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  DONAU_GENERIC_KEYS_MISSING(8607),
+
+
+  /**
+   * The signature of the charity key is not valid.
+   * Returned with an HTTP status code of #MHD_HTTP_FORBIDDEN (403).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  DONAU_CHARITY_SIGNATURE_INVALID(8608),
+
+
+  /**
+   * The charity is unknown.
+   * Returned with an HTTP status code of #MHD_HTTP_NOT_FOUND (404).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  DONAU_CHARITY_NOT_FOUND(8609),
+
+
+  /**
+   * The donation amount specified in the request exceeds the limit of the charity.
+   * Returned with an HTTP status code of #MHD_HTTP_BAD_REQUEST (400).
+   * (A value of 0 indicates that the error is generated client-side).
+   */
+  DONAU_EXCEEDING_DONATION_LIMIT(8610),
 
 
   /**

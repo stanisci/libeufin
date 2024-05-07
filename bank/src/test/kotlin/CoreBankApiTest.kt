@@ -1,6 +1,6 @@
 /*
  * This file is part of LibEuFin.
- * Copyright (C) 2023 Taler Systems S.A.
+ * Copyright (C) 2023-2024 Taler Systems S.A.
 
  * LibEuFin is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -226,9 +226,25 @@ class CoreBankAccountsApiTest {
             }.assertOk()
         }
 
-        // Check admin only tan_channel
+        // Check admin only min_cashout
         obj {
             "username" to "bat2"
+            "password" to "password"
+            "name" to "Bat"
+            "min_cashout" to "KUDOS:42"
+        }.let { req ->
+            client.post("/accounts") {
+                json(req)
+            }.assertConflict(TalerErrorCode.BANK_NON_ADMIN_SET_MIN_CASHOUT)
+            client.post("/accounts") {
+                json(req)
+                pwAuth("admin")
+            }.assertOk()
+        }
+
+        // Check admin only tan_channel
+        obj {
+            "username" to "bat3"
             "password" to "password"
             "name" to "Bat"
             "contact_data" to obj {
@@ -459,8 +475,6 @@ class CoreBankAccountsApiTest {
         }.assertNotFound(TalerErrorCode.BANK_UNKNOWN_ACCOUNT)
     }
 
-
-
     @Test
     fun softDelete() = bankSetup { db -> 
         // Create all kind of operations
@@ -599,6 +613,10 @@ class CoreBankAccountsApiTest {
         checkAdminOnly(
             obj(req) { "debit_threshold" to "KUDOS:100" },
             TalerErrorCode.BANK_NON_ADMIN_PATCH_DEBT_LIMIT
+        )
+        checkAdminOnly(
+            obj(req) { "min_cashout" to "KUDOS:100" },
+            TalerErrorCode.BANK_NON_ADMIN_SET_MIN_CASHOUT
         )
         
         // Check currency
@@ -1318,6 +1336,36 @@ class CoreBankCashoutApiTest {
                 "amount_credit" to convert("KUDOS:2")
             }
         }.assertConflict(TalerErrorCode.BANK_BAD_CONVERSION)
+
+        // Check min amount
+        client.postA("/accounts/customer/cashouts") {
+            json(req) {
+                "request_uid" to ShortHashCode.rand()
+                "amount_debit" to "KUDOS:0.09"
+                "amount_credit" to convert("KUDOS:0.09")
+            }
+        }.assertConflict(TalerErrorCode.BANK_CONVERSION_AMOUNT_TO_SMALL)
+
+        // Check custom min account
+        client.patch("/accounts/customer") {
+            pwAuth("admin")
+            json {
+                "min_cashout" to "KUDOS:10"
+            }
+        }.assertNoContent()
+        client.postA("/accounts/customer/cashouts") {
+            json(req) {
+                "request_uid" to ShortHashCode.rand()
+                "amount_debit" to "KUDOS:5"
+                "amount_credit" to convert("KUDOS:5")
+            }
+        }.assertConflict(TalerErrorCode.BANK_CONVERSION_AMOUNT_TO_SMALL)
+        client.patch("/accounts/customer") {
+            pwAuth("admin")
+            json {
+                "min_cashout" to (null as String?)
+            }
+        }.assertNoContent()
 
         // Check wrong currency
         client.postA("/accounts/customer/cashouts") {

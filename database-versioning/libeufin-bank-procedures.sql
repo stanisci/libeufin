@@ -984,7 +984,7 @@ SELECT bank_account_id
 -- Perform conversion
 SELECT (converted).val, (converted).frac, too_small, no_config
   INTO converted_amount.val, converted_amount.frac, out_too_small, out_no_config
-  FROM conversion_to(in_amount, 'cashin'::text);
+  FROM conversion_to(in_amount, 'cashin'::text, null);
 IF out_too_small OR out_no_config THEN
   RETURN;
 END IF;
@@ -1036,6 +1036,7 @@ CREATE FUNCTION cashout_create(
   OUT out_request_uid_reuse BOOLEAN,
   OUT out_no_cashout_payto BOOLEAN,
   OUT out_tan_required BOOLEAN,
+  OUT out_under_min BOOLEAN,
   -- Success return
   OUT out_cashout_id INT8
 )
@@ -1044,17 +1045,18 @@ DECLARE
 account_id INT8;
 admin_account_id INT8;
 tx_id INT8;
+custom_min_cashout taler_amount;
 BEGIN
--- check conversion
-SELECT too_small OR no_config OR in_amount_credit!=converted INTO out_bad_conversion FROM conversion_to(in_amount_debit, 'cashout'::text);
-IF out_bad_conversion THEN
-  RETURN;
-END IF;
 
 -- Check account exists, has all info and if 2FA is required
 SELECT 
-    bank_account_id, is_taler_exchange, cashout_payto IS NULL, (NOT in_is_tan AND tan_channel IS NOT NULL) 
-  INTO account_id, out_account_is_exchange, out_no_cashout_payto, out_tan_required
+    bank_account_id, is_taler_exchange, 
+    (min_cashout).val, (min_cashout).frac,
+    cashout_payto IS NULL, (NOT in_is_tan AND tan_channel IS NOT NULL) 
+  INTO 
+    account_id, out_account_is_exchange, 
+    custom_min_cashout.val, custom_min_cashout.frac,
+    out_no_cashout_payto, out_tan_required
   FROM bank_accounts
   JOIN customers ON bank_accounts.owning_customer_id = customers.customer_id
   WHERE login=in_login;
@@ -1062,6 +1064,17 @@ IF NOT FOUND THEN
   out_account_not_found=TRUE;
   RETURN;
 ELSIF out_account_is_exchange OR out_no_cashout_payto THEN
+  RETURN;
+END IF;
+
+-- check conversion TODO use custom min
+IF custom_min_cashout.val IS NULL THEN
+  custom_min_cashout = NULL;
+END IF;
+SELECT under_min, too_small OR no_config OR in_amount_credit!=converted
+  INTO out_under_min, out_bad_conversion 
+  FROM conversion_to(in_amount_debit, 'cashout'::text, custom_min_cashout);
+IF out_bad_conversion THEN
   RETURN;
 END IF;
 
@@ -1487,8 +1500,10 @@ COMMENT ON FUNCTION conversion_revert_ratio
 CREATE FUNCTION conversion_to(
   IN amount taler_amount,
   IN direction TEXT,
+  IN custom_min_amount taler_amount,
   OUT converted taler_amount,
   OUT too_small BOOLEAN,
+  OUT under_min BOOLEAN,
   OUT no_config BOOLEAN
 )
 LANGUAGE plpgsql AS $$
@@ -1505,8 +1520,13 @@ BEGIN
     no_config = true;
     RETURN;
   END IF;
+  IF custom_min_amount IS NOT NULL THEN
+    min_amount = custom_min_amount;
+  END IF;
+ 
   SELECT NOT ok INTO too_small FROM amount_left_minus_right(amount, min_amount);
   IF too_small THEN
+    under_min = true;
     converted = (0, 0);
     RETURN;
   END IF;
@@ -1528,8 +1548,10 @@ END $$;
 CREATE FUNCTION conversion_from(
   IN amount taler_amount,
   IN direction TEXT,
+  IN custom_min_amount taler_amount,
   OUT converted taler_amount,
   OUT too_small BOOLEAN,
+  OUT under_min BOOLEAN,
   OUT no_config BOOLEAN
 )
 LANGUAGE plpgsql AS $$
@@ -1554,8 +1576,12 @@ BEGIN
   
   -- Check min amount
   SELECT value['val']::int8, value['frac']::int4 INTO min_amount.val, min_amount.frac FROM config WHERE key=direction||'_min_amount';
+  IF custom_min_amount IS NOT NULL THEN
+    min_amount = custom_min_amount;
+  END IF;
   SELECT NOT ok INTO too_small FROM amount_left_minus_right(converted, min_amount);
   IF too_small THEN
+    under_min = true;
     converted = (0, 0);
   END IF;
 END $$;

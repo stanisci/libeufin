@@ -128,6 +128,7 @@ suspend fun createAdminAccount(db: Database, cfg: BankConfig, pw: String? = null
         phone = null,
         cashoutPayto = null,
         tanChannel = null,
+        minCashout = null,
         ctx = cfg.payto
     )
 }

@@ -216,7 +216,14 @@ class EditAccount : CliktCommand(
     private val tan_channel: String? by option(help = "which channel TAN challenges should be sent to")
     private val cashout_payto_uri: IbanPayto? by option(help = "Payto URI of a fiant account who receive cashout amount").convert { Payto.parse(it).expectIban() }
     private val debit_threshold: TalerAmount? by option(help = "Max debit allowed for this account").convert { TalerAmount(it) }
- 
+    private val min_cashout: Option<TalerAmount>? by option(help = "Custom minimum cashout amount for this account").convert {
+        if (it == "") {
+            Option.None
+        } else {
+            Option.Some(TalerAmount(it))
+        }
+    }
+
     override fun run() = cliCmd(logger, common.log) {
         val cfg = talerConfig(common.config)
         val ctx = cfg.loadBankConfig() 
@@ -232,7 +239,12 @@ class EditAccount : CliktCommand(
                     phone = if (phone == null) Option.None else Option.Some(if (phone != "") phone else null), 
                 ),
                 cashout_payto_uri = Option.Some(cashout_payto_uri),
-                debit_threshold = debit_threshold
+                debit_threshold = debit_threshold,
+                min_cashout = when (val tmp = min_cashout) {
+                    null -> Option.None
+                    is Option.None -> Option.Some(null)
+                    is Option.Some -> Option.Some(tmp.value)
+                }
             )
             when (patchAccount(db, ctx, req, username, true, true)) {
                 AccountPatchResult.Success -> 
@@ -244,6 +256,7 @@ class EditAccount : CliktCommand(
                 AccountPatchResult.NonAdminName,
                     AccountPatchResult.NonAdminCashout,
                     AccountPatchResult.NonAdminDebtLimit,
+                    AccountPatchResult.NonAdminMinCashout,
                     is AccountPatchResult.TanRequired  -> {
                         // Unreachable as we edit account as admin
                     }
@@ -282,6 +295,10 @@ class CreateAccountOption: OptionGroup() {
     val debit_threshold: TalerAmount? by option(
         help = "Max debit allowed for this account"
     ).convert { TalerAmount(it) }
+    val min_cashout: TalerAmount? by option(
+        help = "Custom minimum cashout amount for this account"
+    ).convert { TalerAmount(it) }
+
 }
 
 class CreateAccount : CliktCommand(
@@ -312,7 +329,8 @@ class CreateAccount : CliktCommand(
                     ),
                     cashout_payto_uri = cashout_payto_uri,
                     payto_uri = payto_uri,
-                    debit_threshold = debit_threshold
+                    debit_threshold = debit_threshold,
+                    min_cashout = min_cashout
                 ) 
             }
             req?.let {

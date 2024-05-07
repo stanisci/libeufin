@@ -45,7 +45,7 @@ class ConversionApiTest {
         }
 
         // Too small
-        client.get("/conversion-info/cashout-rate?amount_debit=KUDOS:0.08")
+        client.get("/conversion-info/cashout-rate?amount_debit=KUDOS:0.0008")
             .assertConflict(TalerErrorCode.BANK_BAD_CONVERSION)
         // No amount
         client.get("/conversion-info/cashout-rate")

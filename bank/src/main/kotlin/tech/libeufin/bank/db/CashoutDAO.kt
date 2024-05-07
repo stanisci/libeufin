@@ -29,6 +29,7 @@ class CashoutDAO(private val db: Database) {
     /** Result of cashout operation creation */
     sealed interface CashoutCreationResult {
         data class Success(val id: Long): CashoutCreationResult
+        data object UnderMin: CashoutCreationResult
         data object BadConversion: CashoutCreationResult
         data object AccountNotFound: CashoutCreationResult
         data object AccountIsExchange: CashoutCreationResult
@@ -57,7 +58,8 @@ class CashoutDAO(private val db: Database) {
                 out_request_uid_reuse,
                 out_no_cashout_payto,
                 out_tan_required,
-                out_cashout_id
+                out_cashout_id,
+                out_under_min
             FROM cashout_create(?,?,(?,?)::taler_amount,(?,?)::taler_amount,?,?,?)
         """)
         stmt.setString(1, login)
@@ -73,6 +75,7 @@ class CashoutDAO(private val db: Database) {
             when {
                 !it.next() ->
                     throw internalServerError("No result from DB procedure cashout_create")
+                it.getBoolean("out_under_min") -> CashoutCreationResult.UnderMin
                 it.getBoolean("out_bad_conversion") -> CashoutCreationResult.BadConversion
                 it.getBoolean("out_account_not_found") -> CashoutCreationResult.AccountNotFound
                 it.getBoolean("out_account_is_exchange") -> CashoutCreationResult.AccountIsExchange
