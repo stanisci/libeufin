@@ -71,7 +71,7 @@ class AccountDAO(private val db: Database) {
                         ON customer_id=owning_customer_id
                 WHERE login=?
             """).run {
-                // TODO check max debt
+                // TODO check max debt and min checkout ?
                 setString(1, name)
                 setString(2, email)
                 setString(3, phone)
@@ -142,7 +142,8 @@ class AccountDAO(private val db: Database) {
                         ,is_public
                         ,is_taler_exchange
                         ,max_debt
-                    ) VALUES (?, ?, ?, ?, (?, ?)::taler_amount)
+                        ,min_cashout
+                    ) VALUES (?, ?, ?, ?, (?, ?)::taler_amount, ${if (minCashout == null) "NULL" else "(?, ?)::taler_amount"})
                 """).run {
                     setString(1, internalPayto.canonical)
                     setLong(2, customerId)
@@ -150,6 +151,10 @@ class AccountDAO(private val db: Database) {
                     setBoolean(4, isTalerExchange)
                     setLong(5, maxDebt.value)
                     setInt(6, maxDebt.frac)
+                    if (minCashout != null) {
+                        setLong(7, minCashout.value)
+                        setInt(8, minCashout.frac)
+                    }
                     if (!executeUpdateViolation()) {
                         conn.rollback()
                         return@transaction AccountCreationResult.PayToReuse
