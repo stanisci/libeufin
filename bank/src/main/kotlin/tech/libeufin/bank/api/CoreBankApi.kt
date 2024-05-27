@@ -126,7 +126,7 @@ private fun Routing.coreBankTokenApi(db: Database) {
             }
             call.respond(
                 TokenSuccessResponse(
-                    access_token = token.encoded(),
+                    access_token = "$TOKEN_PREFIX$token",
                     expiration = TalerProtocolTimestamp(t_s = expirationTimestamp)
                 )
             )
