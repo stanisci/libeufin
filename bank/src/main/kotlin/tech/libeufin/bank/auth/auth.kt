@@ -38,6 +38,8 @@ private val AUTH_IS_ADMIN = AttributeKey<Boolean>("is_admin")
 /** Used to store used auth token */
 private val AUTH_TOKEN = AttributeKey<ByteArray>("auth_token")
 
+const val TOKEN_PREFIX = "secret-token:"
+
 /** Get username of the request account */
 val ApplicationCall.username: String get() = parameters.expect("USERNAME")
 /** Get username of the request account */
@@ -156,7 +158,7 @@ private suspend fun ApplicationCall.doTokenAuth(
     bearer: String,
     requiredScope: TokenScope,
 ): String {
-    if (!bearer.startsWith("secret-token:")) throw badRequest(
+    if (!bearer.startsWith(TOKEN_PREFIX)) throw badRequest(
         "Bearer token malformed",
         TalerErrorCode.GENERIC_HTTP_HEADERS_MALFORMED
     )

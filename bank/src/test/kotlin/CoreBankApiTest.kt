@@ -24,6 +24,7 @@ import io.ktor.server.testing.*
 import kotlinx.serialization.json.JsonElement
 import org.junit.Test
 import tech.libeufin.bank.*
+import tech.libeufin.bank.auth.*
 import tech.libeufin.common.*
 import java.time.Duration
 import java.time.Instant
@@ -64,7 +65,7 @@ class CoreBankTokenApiTest {
             json { "scope" to "readonly" }
         }.assertOkJson<TokenSuccessResponse> {
             // Checking that the token lifetime defaulted to 24 hours.
-            val token = db.token.get(Base32Crockford.decode(it.access_token))
+            val token = db.token.get(Base32Crockford.decode(it.access_token.removePrefix(TOKEN_PREFIX)))
             val lifeTime = Duration.between(token!!.creationTime, token.expirationTime)
             assertEquals(Duration.ofDays(1), lifeTime)
         }
@@ -74,7 +75,7 @@ class CoreBankTokenApiTest {
             json { "scope" to "readonly" }
         }.assertOkJson<TokenSuccessResponse> {
             // Checking that the token lifetime defaulted to 24 hours.
-            val token = db.token.get(Base32Crockford.decode(it.access_token))
+            val token = db.token.get(Base32Crockford.decode(it.access_token.removePrefix(TOKEN_PREFIX)))
             val lifeTime = Duration.between(token!!.creationTime, token.expirationTime)
             assertEquals(Duration.ofDays(1), lifeTime)
         }
@@ -88,7 +89,7 @@ class CoreBankTokenApiTest {
         }.assertOkJson<TokenSuccessResponse> {
             val token = it.access_token
             client.post("/accounts/merchant/token") {
-                headers["Authorization"] = "Bearer secret-token:$token"
+                headers["Authorization"] = "Bearer $token"
                 json { "scope" to "readonly" }
             }.assertOk()
         }
@@ -142,11 +143,11 @@ class CoreBankTokenApiTest {
         }.assertOkJson<TokenSuccessResponse>().access_token
         // Check OK
         client.delete("/accounts/merchant/token") {
-            headers["Authorization"] = "Bearer secret-token:$token"
+            headers["Authorization"] = "Bearer $token"
         }.assertNoContent()
         // Check token no longer work
         client.delete("/accounts/merchant/token") {
-            headers["Authorization"] = "Bearer secret-token:$token"
+            headers["Authorization"] = "Bearer $token"
         }.assertUnauthorized()
 
         // Checking merchant can still be served by basic auth, after token deletion.
@@ -515,7 +516,7 @@ class CoreBankAccountsApiTest {
         
         // Check account can no longer login
         client.delete("/accounts/customer/token") {
-            headers["Authorization"] = "Bearer secret-token:$token"
+            headers["Authorization"] = "Bearer $token"
         }.assertUnauthorized()
         client.getA("/accounts/customer/transactions/$tx_id").assertUnauthorized()
         client.getA("/accounts/customer/cashouts/$cashout_id").assertUnauthorized()
